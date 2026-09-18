@@ -13,6 +13,8 @@ export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker';
 export interface HandScoreAccumulator {
   hand: HandId;
   dieIds: number[];
+  basePips: number;
+  baseMultiplier: number;
   currentPips: number;
   currentMultiplier: number;
   bonusPips: number;
@@ -23,6 +25,8 @@ export interface HandScoreRecord {
   round: number;
   hand: HandId;
   dieIds: number[];
+  basePips: number;
+  baseMultiplier: number;
   pips: number;
   multiplier: number;
   score: number;
@@ -33,7 +37,6 @@ export interface HandScoreRecord {
 export interface Face {
   rank: Rank;
   workoutPips: number;
-  sustainableUsedThisRound: boolean;
   enhancements: Partial<Record<Enhancement, number>>;
 }
 export interface Die { id: number; value: Rank; faces: Face[] }
@@ -48,6 +51,8 @@ export interface Board {
   manualRerollsRemaining: number;
   dice: Die[];
   consumed: HandId[];
+  scoreByHand: Partial<Record<HandId, number>>;
+  effectScore: number;
   shop: Shop | null;
 }
 export interface RoundStats {
@@ -64,6 +69,8 @@ export interface RoundStats {
   manualRerollsRemainingAtClear: number | null;
   manualRerollActions: number;
   deadBoardRescues: number;
+  scoreByHand: Partial<Record<HandId, number>>;
+  effectScore: number;
 }
 export interface ManualRerollStats {
   round: number;
@@ -74,6 +81,12 @@ export interface ManualRerollStats {
   rescuedDeadBoard: boolean;
 }
 export interface Purchase { round: number; enhancement: Enhancement; dieId: number; face: Rank; cost: number }
+export interface ProbabilityProcStats {
+  checks: number;
+  successes: number;
+  failures: number;
+  stacksAtCheck: number[];
+}
 export interface RunStats {
   seed: string;
   roundReached: number;
@@ -90,7 +103,7 @@ export interface RunStats {
   goldEarned: number;
   goldSpent: number;
   triggers: Partial<Record<Enhancement, number>>;
-  sustainableActivations: { round: number; dieId: number; face: Rank; hand: HandId }[];
+  probabilityProcs: Record<'sticky' | 'sustainable', ProbabilityProcStats>;
   scoreBySource: Record<ScoreSource, number>;
   scoreByHand: Partial<Record<HandId, number>>;
   handScores: HandScoreRecord[];
@@ -102,7 +115,7 @@ export interface RunStats {
   resolutionError: string | null;
 }
 export type EventType =
-  | 'ROUND_STARTED' | 'HAND_STARTED' | 'ABILITY_TRIGGERED'
+  | 'ROUND_STARTED' | 'HAND_STARTED' | 'ABILITY_TRIGGERED' | 'ABILITY_CHECKED'
   | 'HAND_PIPS_CHANGED' | 'HAND_MULTIPLIER_CHANGED' | 'HITCHHIKER_ADDED_PIPS'
   | 'HAND_SCORE_FINALIZED' | 'STANDALONE_SCORE_CALCULATED'
   | 'POST_HAND_REROLLS_SKIPPED'
@@ -123,7 +136,7 @@ export interface EventRecord {
   amount?: number;
   source?: ScoreSource;
   face?: Rank;
-  sustainableSpent?: boolean;
+  probability?: { enhancement: 'sticky' | 'sustainable'; stacks: number; chance: number; succeeded: boolean };
   handScore?: HandScoreAccumulator;
 }
 export interface GameEvent extends EventRecord { board: Board }

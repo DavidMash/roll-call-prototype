@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { CONFIG, diceRerollCost, offerRerollCost, roundReward, targetForRound } from './config';
 import { activeFace, rollDie, rollWeights } from './dice';
 import { dispatch, newRun } from './engine';
-import { ENHANCEMENT_IDS } from './enhancements';
+import { enhancementCost, ENHANCEMENT_IDS } from './enhancements';
 import { handOptions } from './hands';
 import { hashSeed, SeededRng } from './rng';
 import { handScore, standaloneScore } from './scoring';
@@ -47,9 +47,9 @@ describe('scoring, Bonus and Multiplier', () => {
     enhance(game, 0, 'multiplier', 2);
     enhance(game, 1, 'multiplier');
     enhance(game, 4, 'multiplier', 10);
-    expect(handScore(game.dice, 'threeKind', [0, 1, 2])).toEqual({ pips: 26, multiplier: 4, score: 104 });
+    expect(handScore(game.dice, 'threeKind', [0, 1, 2])).toEqual({ pips: 36, multiplier: 4, score: 144 });
     expect(standaloneScore(activeFace(game.dice[0]))).toEqual({ pips: 22, multiplier: 2, score: 44 });
-    expect(play(game, 'threeKind', [0, 1, 2]).state.score).toBe(104);
+    expect(play(game, 'threeKind', [0, 1, 2]).state.score).toBe(144);
   });
   it('rejects mixed upper-hand sets without mutation or RNG consumption', () => {
     const game = state([2, 2, 2, 4, 5]);
@@ -75,7 +75,7 @@ describe('upper-hand subset resolution', () => {
     enhance(game, 1, 'bonus', 2);
     enhance(game, 1, 'multiplier', 2);
     enhance(game, 2, 'multiplier', 4);
-    const expectedPips = dieIds.reduce((sum, id) => sum + [14, 24, 4][id], 0);
+    const expectedPips = 10 + dieIds.reduce((sum, id) => sum + [14, 24, 4][id], 0);
     const expectedMultiplier = 1 + dieIds.reduce((sum, id) => sum + [0.5, 1, 2][id], 0);
     const result = play(game, 'fours', dieIds);
     expect(result.error).toBeUndefined();
@@ -87,7 +87,7 @@ describe('upper-hand subset resolution', () => {
   it('rerolls one duplicate, preserves the near-straight and consumes Fours', () => {
     const game = state([1, 2, 4, 4, 5]);
     const result = play(game, 'fours', [3], constant(0.4));
-    expect(result.state.score).toBe(4);
+    expect(result.state.score).toBe(14);
     expect(result.events.filter(event => event.type === 'DIE_ROLLED').map(event => event.dieIds)).toEqual([[3]]);
     expect(result.state.dice.map(die => die.value)).toEqual([1, 2, 4, 3, 5]);
     expect(handOptions(result.state.dice, result.state.consumed).some(option => option.id === 'smallStraight')).toBe(true);
@@ -100,7 +100,7 @@ describe('upper-hand subset resolution', () => {
       enhance(game, id, 'workout', id + 1);
     }
     const result = play(game, 'fours', [1]);
-    expect(result.state.score).toBe(4);
+    expect(result.state.score).toBe(14);
     expect(result.state.gold).toBe(2);
     expect(result.state.dice.slice(0, 3).map(die => die.faces[3].workoutPips)).toEqual([0, 2, 0]);
     expect(result.events.filter(event => event.enhancement === 'golden' || event.enhancement === 'workout').map(event => event.dieIds)).toEqual([[1], [1]]);
@@ -108,7 +108,7 @@ describe('upper-hand subset resolution', () => {
   it.each([true, false])('only selected Sustainable prevents upper consumption (selected=%s)', selected => {
     const game = state([4, 4, 4, 2, 6]);
     enhance(game, selected ? 1 : 0, 'sustainable');
-    expect(play(game, 'fours', [1]).state.consumed.includes('fours')).toBe(!selected);
+    expect(play(game, 'fours', [1], constant(0)).state.consumed.includes('fours')).toBe(!selected);
   });
   it('an unselected matching Hitchhiker adds hand pips with Golden and Workout', () => {
     const game = state([4, 4, 4, 2, 6]);
@@ -117,8 +117,8 @@ describe('upper-hand subset resolution', () => {
     enhance(game, 1, 'golden');
     enhance(game, 1, 'workout');
     enhance(game, 1, 'multiplier');
-    const result = play(game, 'fours', [0]);
-    expect(result.state.stats.scoreBySource).toEqual({ hand: 8, hitchhiker: 0, jumpingBean: 0 });
+    const result = play(game, 'fours', [0], sequence(0, 0.99));
+    expect(result.state.stats.scoreBySource).toEqual({ hand: 18, hitchhiker: 0, jumpingBean: 0 });
     expect(result.state.stats.hitchhikerPipsContributed).toBe(4);
     expect(result.state.gold).toBe(1);
     expect(result.state.dice[1].faces[3].workoutPips).toBe(1);
@@ -131,8 +131,8 @@ describe('upper-hand subset resolution', () => {
     enhance(game, 0, 'sticky');
     enhance(game, 1, 'sticky');
     enhance(game, 1, 'slippy');
-    const result = play(game, 'fours', [0]);
-    expect(result.state.score).toBe(4);
+    const result = play(game, 'fours', [0], sequence(0, 0.99));
+    expect(result.state.score).toBe(14);
     expect(result.state.dice.slice(0, 3).map(die => die.value)).toEqual([4, 6, 4]);
     expect(result.events.filter(event => event.enhancement === 'sticky').map(event => event.dieIds)).toEqual([[0]]);
     expect(result.events.filter(event => event.type === 'DICE_REROLL_STARTED').map(event => event.dieIds)).toEqual([[1]]);
@@ -146,12 +146,12 @@ describe('Golden and Workout', () => {
     enhance(game, 0, 'workout', 2);
     enhance(game, 0, 'sticky');
     enhance(game, 0, 'sustainable');
-    const first = play(game);
-    expect(first.state.score).toBe(1);
+    const first = play(game, 'ones', [0], sequence(0, 0));
+    expect(first.state.score).toBe(11);
     expect(first.state.gold).toBe(2);
     expect(first.state.dice[0].faces[0].workoutPips).toBe(2);
-    const second = play(first.state);
-    expect(second.state.score).toBe(4);
+    const second = play(first.state, 'ones', [0], sequence(0, 0));
+    expect(second.state.score).toBe(24);
     expect(second.state.gold).toBe(4);
     expect(second.state.dice[0].faces[0].workoutPips).toBe(4);
     expect(first.events.findIndex(e => e.type === 'WORKOUT_INCREMENTED')).toBeLessThan(first.events.findIndex(e => e.type === 'HAND_SCORE_FINALIZED'));
@@ -163,8 +163,8 @@ describe('Golden and Workout', () => {
     enhance(game, 0, 'workout', 2, 6);
     enhance(game, 0, 'multiplier', 2, 6);
     enhance(game, 0, 'sticky', 1, 6);
-    const result = play(game);
-    expect(result.state.score).toBe(13);
+    const result = play(game, 'ones', [0], sequence(0.99, 0));
+    expect(result.state.score).toBe(23);
     expect(result.state.gold).toBe(2);
     expect(result.state.dice[0].faces[5].workoutPips).toBe(2);
     expect(result.state.stats.scoreBySource.jumpingBean).toBe(12);
@@ -175,8 +175,8 @@ describe('Golden and Workout', () => {
     enhance(game, 4, 'golden', 2);
     enhance(game, 4, 'workout', 2);
     enhance(game, 4, 'multiplier');
-    const result = play(game);
-    expect(result.state.score).toBe(6);
+    const result = play(game, 'ones', [0], constant(0));
+    expect(result.state.score).toBe(16);
     expect(result.state.gold).toBe(2);
     expect(result.state.dice[4].faces[4].workoutPips).toBe(2);
     result.state.phase = 'shop';
@@ -192,7 +192,7 @@ describe('Sticky, Slippy and Sustainable', () => {
   it('Sticky prevents the ordinary scored reroll', () => {
     const game = state();
     enhance(game, 0, 'sticky');
-    const result = play(game);
+    const result = play(game, 'ones', [0], constant(0));
     expect(result.state.dice[0].value).toBe(1);
     expect(result.events.filter(e => e.type === 'DIE_ROLLED')).toHaveLength(0);
     expect(result.state.consumed).toContain('ones');
@@ -215,7 +215,7 @@ describe('Sticky, Slippy and Sustainable', () => {
   it('participating Sustainable prevents consumption', () => {
     const game = state();
     enhance(game, 0, 'sustainable');
-    expect(play(game).state.consumed).not.toContain('ones');
+    expect(play(game, 'ones', [0], constant(0)).state.consumed).not.toContain('ones');
   });
   it('Hitchhiker Sustainable does not prevent consumption', () => {
     const game = state();
@@ -231,8 +231,8 @@ describe('Hitchhiker', () => {
     enhance(game, 0, 'hitchhiker');
     enhance(game, 4, 'hitchhiker');
     const result = play(game);
-    expect(result.state.score).toBe(6);
-    expect(result.state.stats.scoreBySource).toEqual({ hand: 6, jumpingBean: 0, hitchhiker: 0 });
+    expect(result.state.score).toBe(16);
+    expect(result.state.stats.scoreBySource).toEqual({ hand: 16, jumpingBean: 0, hitchhiker: 0 });
     expect(result.state.stats.hitchhikerPipsContributed).toBe(5);
     expect(result.events.filter(e => e.type === 'DIE_ROLLED').map(e => e.dieIds)).toEqual([[0]]);
     expect(result.state.stats.triggers.hitchhiker).toBe(1);
@@ -240,19 +240,36 @@ describe('Hitchhiker', () => {
 });
 
 describe('Weighted', () => {
+  it('keeps baseline weights uniform and stacks linearly at 1 + stacks', () => {
+    const game = state();
+    expect(rollWeights(game.dice[0])).toEqual([1, 1, 1, 1, 1, 1]);
+    for (const [stackCount, expectedWeight] of [[1, 2], [2, 3], [3, 4]] as const) {
+      enhance(game, 0, 'weighted', stackCount, 2);
+      expect(rollWeights(game.dice[0])).toEqual([1, 1, 1, 1, expectedWeight, 1]);
+    }
+    expect(rollWeights(game.dice[0])[4]).not.toBe(8);
+  });
+  it.each([
+    [1, 6], [2, 5], [3, 4], [4, 3], [5, 2], [6, 1],
+  ] as const)('maps source face %s to opposite target %s', (source, target) => {
+    const game = state();
+    enhance(game, 0, 'weighted', 1, source);
+    expect(rollWeights(game.dice[0])[target - 1]).toBe(2);
+    expect(rollWeights(game.dice[0]).filter(weight => weight > 1)).toEqual([2]);
+  });
   it('weights opposite physical faces and supports different sources on the same die', () => {
     const game = state();
     enhance(game, 0, 'weighted', 1, 2);
-    expect(rollWeights(game.dice[0])).toEqual([1, 1, 1, 1, 3, 1]);
+    expect(rollWeights(game.dice[0])).toEqual([1, 1, 1, 1, 2, 1]);
     enhance(game, 0, 'weighted', 1, 1);
-    expect(rollWeights(game.dice[0])).toEqual([1, 1, 1, 1, 3, 3]);
+    expect(rollWeights(game.dice[0])).toEqual([1, 1, 1, 1, 2, 2]);
     expect(rollWeights(game.dice[1])).toEqual([1, 1, 1, 1, 1, 1]);
   });
   it('selects correctly at cumulative probability boundaries', () => {
     const game = state();
     enhance(game, 0, 'weighted', 1, 2);
-    expect(rollDie(game.dice[0], constant(0.5))).toEqual({ value: 5, weighted: true });
-    expect(rollDie(game.dice[0], constant(0.875))).toEqual({ value: 6, weighted: false });
+    expect(rollDie(game.dice[0], constant(0.6))).toEqual({ value: 5, weighted: true });
+    expect(rollDie(game.dice[0], constant(0.9))).toEqual({ value: 6, weighted: false });
   });
   it('has the expected seeded distribution over many rolls', () => {
     const game = state();
@@ -260,13 +277,13 @@ describe('Weighted', () => {
     const rng = new SeededRng(hashSeed('distribution'));
     let fives = 0;
     for (let i = 0; i < 16000; i++) if (rollDie(game.dice[0], rng).value === 5) fives++;
-    expect(fives / 16000).toBeGreaterThan(0.36);
-    expect(fives / 16000).toBeLessThan(0.39);
+    expect(fives / 16000).toBeGreaterThan(0.27);
+    expect(fives / 16000).toBeLessThan(0.30);
   });
   it('shop uses identical weights and still emits feedback', () => {
     const game = shop();
     enhance(game, 0, 'weighted', 1, 2);
-    const result = dispatch(game, { type: 'REROLL_DICE' }, constant(0.5));
+    const result = dispatch(game, { type: 'REROLL_DICE' }, constant(0.6));
     expect(result.state.dice[0].value).toBe(5);
     expect(result.events.filter(e => e.enhancement === 'weighted').map(e => e.dieIds)).toEqual([[0]]);
   });
@@ -316,9 +333,9 @@ describe('Magnetic and roll ordering', () => {
     enhance(game, 0, 'bonus', 1, 6);
     enhance(game, 0, 'golden', 1, 6);
     enhance(game, 0, 'workout', 1, 6);
-    const result = play(game, 'ones', [0], sequence(0.99, 0));
+    const result = play(game, 'ones', [0], sequence(0.99, 0, 0));
     expect(result.state.dice[0].value).toBe(2);
-    expect(result.state.score).toBe(17);
+    expect(result.state.score).toBe(27);
     expect(result.state.gold).toBe(1);
     expect(result.state.dice[0].faces[5].workoutPips).toBe(1);
     expect(result.events.findIndex(e => e.type === 'DIE_FLIPPED')).toBeLessThan(result.events.findIndex(e => e.enhancement === 'jumpingBean'));
@@ -331,7 +348,7 @@ describe('Jumping Bean', () => {
     const game = state();
     enhance(game, 0, 'jumpingBean', 1, 6);
     const result = play(game, 'ones', [0], sequence(0.99, 0.99, 0));
-    expect(result.state.score).toBe(13);
+    expect(result.state.score).toBe(23);
     expect(result.state.dice[0].value).toBe(1);
     expect(result.state.stats.triggers.jumpingBean).toBe(2);
     expect(result.events.filter(e => e.type === 'DIE_ROLLED')).toHaveLength(3);
@@ -340,8 +357,8 @@ describe('Jumping Bean', () => {
     const game = state();
     enhance(game, 0, 'jumpingBean', 1, 6);
     enhance(game, 0, 'sticky', 1, 6);
-    const result = play(game);
-    expect(result.state.score).toBe(7);
+    const result = play(game, 'ones', [0], sequence(0.99, 0));
+    expect(result.state.score).toBe(17);
     expect(result.state.dice[0].value).toBe(6);
     expect(result.events.filter(e => e.type === 'DIE_ROLLED')).toHaveLength(1);
   });
@@ -352,8 +369,8 @@ describe('Jumping Bean', () => {
     enhance(game, 0, 'weighted', 1, 2);
     enhance(game, 0, 'magnetic', 1, 5);
     enhance(game, 0, 'sticky', 1, 5);
-    const result = play(game, 'ones', [0], sequence(0.99, 0.5, 0));
-    expect(result.state.score).toBe(12);
+    const result = play(game, 'ones', [0], sequence(0.99, 0.6, 0, 0));
+    expect(result.state.score).toBe(22);
     expect(result.state.stats.triggers).toMatchObject({ jumpingBean: 2, magnetic: 1, weighted: 1 });
   });
   it('safety cap produces a clear diagnostic stop instead of a browser lock', () => {
@@ -383,8 +400,8 @@ describe('round boundaries and losing', () => {
       expect(result.state.stats.goldEarned).toBe(earned);
       expect(result.state.stats.goldSpent).toBe(0);
       expect(result.state.stats.rounds.at(-1)).toMatchObject({
-        round, target: targetForRound(round), firstCrossedScore: 150,
-        finalScore: 150, clearMargin: 150 - targetForRound(round), cleared: true,
+        round, target: targetForRound(round), firstCrossedScore: 200,
+        finalScore: 200, clearMargin: 200 - targetForRound(round), cleared: true,
       });
       const rewards = result.events.filter(event => event.type === 'GOLD_ADDED');
       expect(rewards).toHaveLength(1);
@@ -430,14 +447,14 @@ describe('round boundaries and losing', () => {
   });
   it('finishes a hand chain before consumption, clearance, reward and inert shop rolls', () => {
     const game = state();
-    game.target = 5;
+    game.target = 20;
     enhance(game, 0, 'jumpingBean', 1, 6);
     enhance(game, 0, 'golden', 1, 6);
     const result = play(game, 'ones', [0], sequence(0.99, 0.99, 0));
     expect(result.state.phase).toBe('shop');
-    expect(result.state.score).toBe(13);
+    expect(result.state.score).toBe(23);
     expect(result.state.gold).toBe(roundReward(1) + 2);
-    expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: 7, finalScore: 13, clearMargin: 8, cleared: true });
+    expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: 23, finalScore: 23, clearMargin: 3, cleared: true });
     expect(result.events.findIndex(e => e.type === 'HAND_CONSUMED')).toBeLessThan(result.events.findIndex(e => e.type === 'ROUND_CLEARED'));
     expect(result.state.stats.triggers.jumpingBean).toBe(2);
     expect(result.state.shop!.offers).toHaveLength(3);
@@ -497,7 +514,7 @@ describe('shop', () => {
     const bought = dispatch(game, { type: 'BUY', offerId: 0, dieId: 2 }).state;
     expect(dispatch(bought, { type: 'BUY', offerId: 0, dieId: 2 }).state).toBe(bought);
   });
-  it.each(ENHANCEMENT_IDS.filter(id => !['bonus', 'multiplier', 'golden', 'workout'].includes(id)))('rejects redundant %s without charging', enhancement => {
+  it.each(ENHANCEMENT_IDS.filter(id => !['bonus', 'multiplier', 'golden', 'workout', 'sticky', 'sustainable', 'weighted'].includes(id)))('rejects redundant %s without charging', enhancement => {
     const game = shop();
     game.shop!.offers[0].enhancement = enhancement;
     enhance(game, 0, enhancement);
@@ -506,11 +523,23 @@ describe('shop', () => {
     expect(result.state).toBe(game);
     expect(game.gold).toBe(100);
   });
-  it.each<Enhancement>(['bonus', 'multiplier', 'golden', 'workout'])('allows stacking %s', enhancement => {
+  it.each<Enhancement>(['bonus', 'multiplier', 'golden', 'workout', 'sticky', 'sustainable', 'weighted'])('allows stacking %s', enhancement => {
     const game = shop();
     game.shop!.offers[0].enhancement = enhancement;
     enhance(game, 0, enhancement);
     expect(dispatch(game, { type: 'BUY', offerId: 0, dieId: 0 }).state.dice[0].faces[0].enhancements[enhancement]).toBe(2);
+  });
+  it.each<Enhancement>(['sticky', 'sustainable', 'weighted'])('charges normally for repeated %s purchases on one physical face', enhancement => {
+    let game = shop();
+    game.shop!.offers[0].enhancement = enhancement;
+    game.shop!.offers[1].enhancement = enhancement;
+    enhance(game, 0, enhancement);
+    const startingGold = game.gold;
+    game = dispatch(game, { type: 'BUY', offerId: 0, dieId: 0 }).state;
+    game = dispatch(game, { type: 'BUY', offerId: 1, dieId: 0 }).state;
+    expect(game.dice[0].faces[0].enhancements[enhancement]).toBe(3);
+    expect(game.gold).toBe(startingGold - 2 * enhancementCost(enhancement));
+    expect(game.stats.purchases.filter(purchase => purchase.enhancement === enhancement)).toHaveLength(2);
   });
   it('shop reroll prices double, track spend, and prevent unaffordable rerolls', () => {
     let game = shop();
@@ -535,7 +564,7 @@ describe('shop', () => {
     enhance(game, 0, 'jumpingBean', 1, 6);
     enhance(game, 0, 'bonus', 10, 6);
     enhance(game, 0, 'sticky', 1, 6);
-    const result = dispatch(game, { type: 'NEXT_ROUND' }, constant());
+    const result = dispatch(game, { type: 'NEXT_ROUND' }, sequence(0.99, 0.99, 0.99, 0.99, 0.99, 0));
     expect(result.state.phase).toBe('shop');
     expect(result.state.shop).toMatchObject({ diceRerolls: 0, offerRerolls: 0 });
   });

@@ -18,7 +18,7 @@ describe('hand detection', () => {
     const dice = board([rank, rank, rank, rank, rank]);
     expect(combinationsForHand(dice, hand)).toHaveLength(31);
     expect(defaultCombination(dice, hand)).toEqual([0, 1, 2, 3, 4]);
-    expect(handScore(dice, hand, [0, 1, 2, 3, 4]).score).toBe(rank * 5);
+    expect(handScore(dice, hand, [0, 1, 2, 3, 4]).score).toBe(10 + rank * 5);
   });
   it('upper hands allow every non-empty matching physical subset', () => {
     const dice = board([2, 2, 2, 5, 6]);
@@ -28,7 +28,7 @@ describe('hand detection', () => {
     expect(isValidSelection(dice, 'twos', [0, 1, 2])).toBe(true);
     expect(isValidSelection(dice, 'twos', [])).toBe(false);
     expect(combinationsForHand(dice, 'ones')).toEqual([]);
-    expect(handScore(dice, 'twos', [0, 1, 2]).score).toBe(6);
+    expect(handScore(dice, 'twos', [0, 1, 2]).score).toBe(16);
   });
   it('rejects mixed upper selections, duplicate physical IDs and nonmatching wild faces', () => {
     const dice = board([4, 4, 2, 3, 5], [[2, 'mirror'], [2, 'missingLink']]);
@@ -38,10 +38,10 @@ describe('hand detection', () => {
     expect(handOptions(dice, [], [0, 2]).some(option => option.id === 'fours')).toBe(false);
   });
   it.each<[HandId, Rank[], number]>([
-    ['pair', [4, 4, 2, 5, 6], 12], ['twoPair', [2, 2, 5, 5, 6], 28],
-    ['threeKind', [2, 2, 2, 5, 6], 15], ['fullHouse', [2, 2, 2, 5, 5], 56],
-    ['fourKind', [3, 3, 3, 3, 6], 48], ['fiveKind', [6, 6, 6, 6, 6], 150],
-    ['smallStraight', [1, 2, 3, 4, 6], 25], ['largeStraight', [2, 3, 4, 5, 6], 80],
+    ['pair', [4, 4, 2, 5, 6], 27], ['twoPair', [2, 2, 5, 5, 6], 48],
+    ['threeKind', [2, 2, 2, 5, 6], 40], ['fullHouse', [2, 2, 2, 5, 5], 91],
+    ['fourKind', [3, 3, 3, 3, 6], 88], ['fiveKind', [6, 6, 6, 6, 6], 200],
+    ['smallStraight', [1, 2, 3, 4, 6], 50], ['largeStraight', [2, 3, 4, 5, 6], 120],
   ])('%s scores only its required participants', (hand, values, score) => {
     const dice = board(values);
     const ids = defaultCombination(dice, hand)!;
@@ -79,7 +79,7 @@ describe('physical subset choices and selection constraints', () => {
     expect(selection.dieIds).toEqual([]);
     expect(canPlay(dice, [], selection)).toBe(false);
   });
-  it('dice-first upper subsets stay compatible and are preserved when clicking the hand', () => {
+  it('dice-first upper subsets stay compatible and retain their inferred hand', () => {
     const dice = board([4, 4, 4, 2, 6]);
     let selection = emptySelection();
     for (const id of [0, 1, 2]) {
@@ -87,8 +87,13 @@ describe('physical subset choices and selection constraints', () => {
       expect(selection.hand).toBe('fours');
       expect(handOptions(dice, [], selection.dieIds).some(option => option.id === 'fours')).toBe(true);
       expect(canPlay(dice, [], selection)).toBe(true);
-      expect(selectHand(dice, [], selection, 'fours')).toEqual(selection);
     }
+  });
+  it('clicking the selected playable hand again clears the hand and every selected die', () => {
+    const dice = board([4, 4, 4, 4, 1]);
+    const selected = selectHand(dice, [], emptySelection(), 'threeKind');
+    expect(selected).toEqual({ hand: 'threeKind', dieIds: [0, 1, 2] });
+    expect(selectHand(dice, [], selected, 'threeKind')).toEqual(emptySelection());
   });
   it('consumed upper hands remain visible for matching subsets but cannot be played', () => {
     const dice = board([4, 4, 4, 2, 6]);
@@ -140,7 +145,7 @@ describe('Missing Link', () => {
   it('fills one gap, retaining real scoring pips', () => {
     const dice = board([1, 2, 3, 6, 6], [[3, 'missingLink']]);
     expect(isValidSelection(dice, 'smallStraight', [0, 1, 2, 3])).toBe(true);
-    expect(handScore(dice, 'smallStraight', [0, 1, 2, 3]).score).toBe(30);
+    expect(handScore(dice, 'smallStraight', [0, 1, 2, 3]).score).toBe(55);
   });
   it('fills multiple distinct gaps and permits a natural wild rank', () => {
     const dice = board([1, 2, 6, 6, 5], [[2, 'missingLink'], [3, 'missingLink']]);
@@ -160,10 +165,10 @@ describe('Missing Link', () => {
 
 describe('Mirror', () => {
   it.each<[HandId, Rank[], number[], number]>([
-    ['threeKind', [2, 2, 6, 4, 5], [2], 25],
-    ['fourKind', [2, 2, 6, 6, 5], [2, 3], 64],
-    ['fiveKind', [2, 2, 6, 6, 6], [2, 3, 4], 110],
-    ['fullHouse', [2, 2, 6, 5, 5], [2], 70],
+    ['threeKind', [2, 2, 6, 4, 5], [2], 50],
+    ['fourKind', [2, 2, 6, 6, 5], [2, 3], 104],
+    ['fiveKind', [2, 2, 6, 6, 6], [2, 3, 4], 160],
+    ['fullHouse', [2, 2, 6, 5, 5], [2], 105],
   ])('qualifies %s and scores actual pips', (hand, values, wildIds, score) => {
     const dice = board(values, wildIds.map(id => [id, 'mirror']));
     const ids = defaultCombination(dice, hand)!;

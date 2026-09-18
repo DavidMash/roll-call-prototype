@@ -27,27 +27,45 @@ async function reroll(page: Page, game: GameState, dieIds: number[]) {
 function deadBoardRun(rescue: boolean) {
   for (let i = 0; i < 1000; i++) {
     let game = newRun(`dead-manual-${i}`).state;
-    const actions: Extract<Action, { type: 'PLAY' }>[] = [];
-    for (let step = 0; step < 14; step++) {
-      const choices = handOptions(game.dice, game.consumed).filter(hand => !hand.consumed)
-        .flatMap(hand => hand.combinations.map(dieIds => ({ type: 'PLAY' as const, hand: hand.id, dieIds })))
-        .sort((a, b) => handScore(game.dice, a.hand, a.dieIds).score - handScore(game.dice, b.hand, b.dieIds).score);
-      const action = choices.find(choice => game.score + handScore(game.dice, choice.hand, choice.dieIds).score < game.target);
-      if (!action) break;
-      actions.push(action);
-      game = dispatch(game, action).state;
-    }
-    if (game.phase !== 'round' || hasPlayableHand(game.dice, game.consumed)) continue;
-    const original = game;
-    if (rescue) {
-      const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
-      if (next.phase === 'round' && hasPlayableHand(next.dice, next.consumed)) return { seed: game.seed, actions, game: original };
-    } else {
-      for (let step = 0; step < 3; step++) {
-        game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
-        if (hasPlayableHand(game.dice, game.consumed)) break;
+    const prefix: Action[] = [];
+    for (let round = 1; round <= 5 && game.phase !== 'lost'; round++) {
+      let attempt = structuredClone(game);
+      const attemptActions: Action[] = [];
+      while (attempt.phase === 'round') {
+        const choices = handOptions(attempt.dice, attempt.consumed).filter(hand => !hand.consumed)
+          .flatMap(hand => hand.combinations.map(dieIds => ({ type: 'PLAY' as const, hand: hand.id, dieIds })))
+          .sort((a, b) => handScore(attempt.dice, a.hand, a.dieIds).score - handScore(attempt.dice, b.hand, b.dieIds).score);
+        const action = choices.find(choice => attempt.score + handScore(attempt.dice, choice.hand, choice.dieIds).score < attempt.target);
+        if (!action) break;
+        attemptActions.push(action);
+        attempt = dispatch(attempt, action).state;
       }
-      if (game.phase === 'lost') return { seed: game.seed, actions, game: original };
+      if (attempt.phase === 'round' && !hasPlayableHand(attempt.dice, attempt.consumed)) {
+        const original = structuredClone(attempt);
+        let resolved = attempt;
+        if (rescue) {
+          resolved = dispatch(resolved, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+          if (resolved.phase === 'round' && hasPlayableHand(resolved.dice, resolved.consumed)) {
+            return { seed: game.seed, actions: [...prefix, ...attemptActions], game: original };
+          }
+        } else {
+          for (let step = 0; step < 3; step++) resolved = dispatch(resolved, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+          if (resolved.phase === 'lost') return { seed: game.seed, actions: [...prefix, ...attemptActions], game: original };
+        }
+      }
+      while (game.phase === 'round') {
+        const best = handOptions(game.dice, game.consumed).filter(hand => !hand.consumed)
+          .flatMap(hand => hand.combinations.map(dieIds => ({ type: 'PLAY' as const, hand: hand.id, dieIds })))
+          .sort((a, b) => handScore(game.dice, b.hand, b.dieIds).score - handScore(game.dice, a.hand, a.dieIds).score)[0];
+        const action: Action = best ?? { type: 'MANUAL_REROLL', dieIds: [0] };
+        prefix.push(action);
+        game = dispatch(game, action).state;
+      }
+      if (game.phase === 'shop') {
+        const action: Action = { type: 'NEXT_ROUND' };
+        prefix.push(action);
+        game = dispatch(game, action).state;
+      }
     }
   }
   throw new Error('No suitable deterministic dead-board run found');
@@ -57,9 +75,16 @@ async function reachDeadBoard(page: Page, rescue: boolean) {
   await page.goto(`/?seed=${fixture.seed}&speed=instant`);
   for (const action of fixture.actions) {
     await ready(page);
-    for (const id of action.dieIds) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
-    await page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) }).click();
-    await page.getByRole('button', { name: 'PLAY', exact: true }).click();
+    if (action.type === 'PLAY') {
+      for (const id of action.dieIds) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
+      await page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) }).click();
+      await page.getByRole('button', { name: 'PLAY', exact: true }).click();
+    } else if (action.type === 'MANUAL_REROLL') {
+      for (const id of action.dieIds) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
+      await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();
+    } else if (action.type === 'NEXT_ROUND') {
+      await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+    }
   }
   await matchRound(page, fixture.game);
   await expect(page.getByRole('heading', { name: 'Run over' })).toHaveCount(0);

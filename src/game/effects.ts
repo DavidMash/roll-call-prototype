@@ -1,13 +1,14 @@
 import { CONFIG, roundReward, targetForRound } from './config';
-import { activeFace, rollDie, scoringPips } from './dice';
-import { ENHANCEMENTS, ENHANCEMENT_IDS, stacks } from './enhancements';
+import { activeFace, oppositeFace, rollDie, scoringPips } from './dice';
+import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, stacks } from './enhancements';
 import { hasPlayableHand, HANDS } from './hands';
-import { randomIndex } from './rng';
+import { probabilityCheck, randomIndex } from './rng';
 import { applyHandContribution, createHandAccumulator, finalizeHandScore, handContributions, standaloneScore } from './scoring';
 import { boardSnapshot } from './telemetry';
 import type { Enhancement, EventRecord, Face, GameEvent, GameState, HandId, HandScoreAccumulator, RandomSource, ScoreSource } from './types';
 
-type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'magnetic' | 'jumpingBean' };
+type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'magnetic' | 'jumpingBean';
+  weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number };
 
 // Synchronous rules produce a complete ordered trace. UI playback only reads snapshots.
 export class Resolver {
@@ -24,11 +25,36 @@ export class Resolver {
     this.state.history.push(record);
     this.events.push({ ...record, board: boardSnapshot(this.state) });
   }
+  log(event: Omit<EventRecord, 'id' | 'round'>): void {
+    const record = { ...event, id: this.state.history.length, round: this.state.round };
+    this.state.history.push(record);
+  }
   trigger(enhancement: Enhancement, dieId: number, face?: Face, detail = '',
-    context: Pick<EventRecord, 'hand' | 'sustainableSpent'> = {}): void {
+    context: Pick<EventRecord, 'hand'> = {}): void {
+    this.triggerMany(enhancement, [dieId], face, detail, context);
+  }
+  triggerMany(enhancement: Enhancement, dieIds: number[], face?: Face, detail = '',
+    context: Pick<EventRecord, 'hand'> = {}, visible = true): void {
     this.state.stats.triggers[enhancement] = (this.state.stats.triggers[enhancement] ?? 0) + 1;
-    this.emit({ ...context, type: 'ABILITY_TRIGGERED', enhancement, dieIds: [dieId], face: face?.rank,
-      message: `D${dieId + 1} ${ENHANCEMENTS[enhancement].name}${detail ? `: ${detail}` : ''}` });
+    if (!visible) return;
+    this.emit({ ...context, type: 'ABILITY_TRIGGERED', enhancement, dieIds, face: face?.rank,
+      message: `${dieIds.map(id => `D${id + 1}`).join(', ')} ${ENHANCEMENTS[enhancement].name}${detail ? `: ${detail}` : ''}` });
+  }
+  checkProbability(enhancement: 'sticky' | 'sustainable', stackCount: number, dieIds: number[], hand?: HandId): boolean {
+    const chance = diminishingHalfChance(stackCount);
+    const succeeded = probabilityCheck(this.rng, chance);
+    const stats = this.state.stats.probabilityProcs[enhancement];
+    stats.checks++;
+    stats[succeeded ? 'successes' : 'failures']++;
+    stats.stacksAtCheck.push(stackCount);
+    const percentage = chance * 100;
+    const subject = enhancement === 'sticky'
+      ? `${dieIds.map(id => `D${id + 1}`).join(', ')} Sticky x${stackCount} check: ${percentage}%`
+      : `${HANDS[hand!].name} Sustainable stacks: ${stackCount}. Preserve chance: ${percentage}%`;
+    this.log({ type: 'ABILITY_CHECKED', dieIds, hand,
+      probability: { enhancement, stacks: stackCount, chance, succeeded },
+      message: `${subject}. ${ENHANCEMENTS[enhancement].name} ${succeeded ? 'succeeded' : 'failed'}.` });
+    return succeeded;
   }
   addGold(amount: number, message: string, dieId?: number): void {
     this.state.gold += amount;
@@ -43,7 +69,14 @@ export class Resolver {
   addScore(amount: number, source: Exclude<ScoreSource, 'hitchhiker'>, message: string, dieIds: number[], hand?: HandId): void {
     this.state.score += amount;
     this.state.stats.scoreBySource[source] += amount;
-    if (hand) this.state.stats.scoreByHand[hand] = (this.state.stats.scoreByHand[hand] ?? 0) + amount;
+    if (hand) {
+      this.state.scoreByHand[hand] = (this.state.scoreByHand[hand] ?? 0) + amount;
+      this.state.stats.scoreByHand[hand] = (this.state.stats.scoreByHand[hand] ?? 0) + amount;
+      this.state.stats.rounds.at(-1)!.scoreByHand[hand] = this.state.scoreByHand[hand];
+    } else {
+      this.state.effectScore += amount;
+      this.state.stats.rounds.at(-1)!.effectScore = this.state.effectScore;
+    }
     const round = this.state.stats.rounds.at(-1)!;
     if (round.firstCrossedScore === null && this.state.score >= this.state.target) round.firstCrossedScore = this.state.score;
     round.finalScore = this.state.score;
@@ -91,20 +124,29 @@ export class Resolver {
       die.value = result.value;
       const face = structuredClone(activeFace(die));
       this.emit({ type: 'DIE_ROLLED', dieIds: [die.id], face: die.value, message: `D${die.id + 1} rolled: ${result.before} → ${die.value}` });
-      if (result.weighted) triggers.push({ dieId: die.id, face, enhancement: 'weighted' });
+      if (result.weighted) {
+        const weightedSourceFace = oppositeFace(result.value);
+        const weightedStacks = stacks(die.faces[weightedSourceFace - 1], 'weighted');
+        triggers.push({ dieId: die.id, face, enhancement: 'weighted', weightedSourceFace,
+          weightedStacks, rollWeight: 1 + weightedStacks });
+      }
       if (gameplay) {
         if (stacks(face, 'magnetic')) triggers.push({ dieId: die.id, face, enhancement: 'magnetic' });
         if (stacks(face, 'jumpingBean')) triggers.push({ dieId: die.id, face, enhancement: 'jumpingBean' });
       }
     }
     if (gameplay) this.queue.push(...triggers);
-    else for (const item of triggers) this.trigger('weighted', item.dieId, item.face, 'opposite face influenced this roll');
+    else for (const item of triggers) this.trigger('weighted', item.dieId, item.face,
+      `source face ${item.weightedSourceFace} has Weighted x${item.weightedStacks}; face ${item.face.rank} roll weight ${item.rollWeight}; influenced result`);
   }
   drain(): void {
     let cursor = 0;
     while (cursor < this.queue.length) {
-      const { dieId, face, enhancement } = this.queue[cursor++];
-      this.trigger(enhancement, dieId, face);
+      const item = this.queue[cursor++];
+      const { dieId, face, enhancement } = item;
+      this.trigger(enhancement, dieId, face, enhancement === 'weighted'
+        ? `source face ${item.weightedSourceFace} has Weighted x${item.weightedStacks}; face ${face.rank} roll weight ${item.rollWeight}; influenced result`
+        : '');
       if (enhancement === 'magnetic') {
         for (const die of this.state.dice) {
           const destinations = die.faces.filter(candidate => stacks(candidate, 'magnetic'));
@@ -116,8 +158,10 @@ export class Resolver {
       } else if (enhancement === 'jumpingBean') {
         // Use the landed snapshot even if preceding Magnetic effects changed the die.
         this.standalone(dieId, face);
-        if (stacks(face, 'sticky')) this.trigger('sticky', dieId, face, 'prevented Jumping Bean reroll');
-        else this.rollBatch([dieId], 'Jumping Bean reroll', true);
+        const stickyStacks = stacks(face, 'sticky');
+        if (stickyStacks && this.checkProbability('sticky', stickyStacks, [dieId])) {
+          this.trigger('sticky', dieId, face, `x${stickyStacks} succeeded; prevented Jumping Bean reroll`);
+        } else this.rollBatch([dieId], 'Jumping Bean reroll', true);
       }
     }
     this.queue = [];
@@ -131,7 +175,7 @@ export class Resolver {
     this.state.stats.rounds.at(-1)!.lastHand = hand;
     this.state.stats.rounds.at(-1)!.lastAction = 'PLAY';
     this.emit({ type: 'HAND_STARTED', hand, dieIds: ids,
-      message: `Played ${HANDS[hand].name}: ${ids.map(id => `D${id + 1}`).join(', ')}. Base hand multiplier: x${this.handAccumulator.currentMultiplier}` });
+      message: `Played ${HANDS[hand].name}: ${ids.map(id => `D${id + 1}`).join(', ')}. Hand Base Pips: ${this.handAccumulator.basePips}. Base Multiplier: x${this.handAccumulator.baseMultiplier}` });
     for (const { id, face } of participants) {
       const wild: Enhancement | null = hand === 'smallStraight' || hand === 'largeStraight' ? 'missingLink'
         : HANDS[hand].rank ? null : 'mirror';
@@ -160,23 +204,26 @@ export class Resolver {
       this.whenScored(contribution.dieId, contribution.face);
     }
     const { pips, multiplier, score } = finalizeHandScore(this.handAccumulator);
-    this.state.stats.handScores.push({ round: this.state.round, hand, dieIds: ids, pips, multiplier, score,
+    this.state.stats.handScores.push({ round: this.state.round, hand, dieIds: ids,
+      basePips: this.handAccumulator.basePips, baseMultiplier: this.handAccumulator.baseMultiplier,
+      pips, multiplier, score,
       bonusPips: this.handAccumulator.bonusPips, hitchhikerPips: this.handAccumulator.hitchhikerPips });
     this.state.stats.handBonusPips += this.handAccumulator.bonusPips;
     this.state.stats.hitchhikerPipsContributed += this.handAccumulator.hitchhikerPips;
     this.emit({ type: 'HAND_SCORE_FINALIZED', hand, dieIds: ids, pips, multiplier, amount: score, source: 'hand',
       message: `Final hand score: ${pips} × ${multiplier} = ${score}` });
-    this.addScore(score, 'hand', `${HANDS[hand].name}: round score +${score}`, ids, hand);
+    this.addScore(score, 'hand',
+      `${HANDS[hand].name}: round score +${score}; ${HANDS[hand].name} round total: ${(this.state.scoreByHand[hand] ?? 0) + score}`,
+      ids, hand);
     this.handAccumulator = null;
-    // Spend only the first available selected physical face, in ascending die order.
-    const sustainable = participants.find(item => stacks(item.face, 'sustainable') && !item.face.sustainableUsedThisRound);
-    if (sustainable) {
-      const { id, face } = sustainable;
-      this.state.dice[id].faces[face.rank - 1].sustainableUsedThisRound = true;
-      this.state.stats.sustainableActivations.push({ round: this.state.round, dieId: id, face: face.rank, hand });
-      this.trigger('sustainable', id, face,
-        `face ${face.rank} prevented ${HANDS[hand].name} from being consumed; now spent for round ${this.state.round}`,
-        { hand, sustainableSpent: true });
+    const sustainableParticipants = participants.filter(item => stacks(item.face, 'sustainable'));
+    const sustainableStacks = sustainableParticipants.reduce((sum, item) => sum + stacks(item.face, 'sustainable'), 0);
+    const sustainableSucceeded = sustainableStacks > 0
+      && this.checkProbability('sustainable', sustainableStacks, sustainableParticipants.map(item => item.id), hand);
+    if (sustainableSucceeded) {
+      const winning = this.state.score >= this.state.target;
+      this.triggerMany('sustainable', sustainableParticipants.map(item => item.id), undefined,
+        `x${sustainableStacks} succeeded; ${HANDS[hand].name} remains available`, { hand }, !winning);
     } else {
       this.state.consumed.push(hand);
       this.emit({ type: 'HAND_CONSUMED', hand, message: `${HANDS[hand].name} consumed for round ${this.state.round}` });
@@ -190,8 +237,10 @@ export class Resolver {
     }
     const rerolls = new Set<number>();
     for (const { id, face } of participants) {
-      if (stacks(face, 'sticky')) this.trigger('sticky', id, face, 'stayed after scoring');
-      else rerolls.add(id);
+      const stickyStacks = stacks(face, 'sticky');
+      if (stickyStacks && this.checkProbability('sticky', stickyStacks, [id])) {
+        this.trigger('sticky', id, face, `x${stickyStacks} succeeded; stayed after scoring`);
+      } else rerolls.add(id);
     }
     for (const die of this.state.dice) {
       if (stacks(activeFace(die), 'slippy')) {
@@ -233,18 +282,18 @@ export class Resolver {
   startRound(): void {
     this.state.phase = 'round';
     this.state.score = 0;
+    this.state.scoreByHand = {};
+    this.state.effectScore = 0;
     this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound;
     this.state.target = targetForRound(this.state.round);
     this.state.consumed = [];
     this.state.shop = null;
-    for (const die of this.state.dice) {
-      for (const face of die.faces) face.sustainableUsedThisRound = false;
-    }
     this.state.stats.roundReached = this.state.round;
     this.state.stats.rounds.push({ round: this.state.round, target: this.state.target, firstCrossedScore: null,
       finalScore: 0, clearMargin: null, cleared: false, lastHand: null, lastAction: null,
       manualRerollsGranted: CONFIG.manualRerollsPerRound, manualRerollChargesSpent: 0,
-      manualRerollsRemainingAtClear: null, manualRerollActions: 0, deadBoardRescues: 0 });
+      manualRerollsRemainingAtClear: null, manualRerollActions: 0, deadBoardRescues: 0,
+      scoreByHand: {}, effectScore: 0 });
     this.emit({ type: 'ROUND_STARTED', message: `Round ${this.state.round} — goal ${this.state.target}; ${this.state.manualRerollsRemaining} manual die rerolls granted` });
     this.rollBatch(this.state.dice.map(die => die.id), 'Initial round roll', true);
     this.drain();

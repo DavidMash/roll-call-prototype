@@ -10,14 +10,17 @@ export const ENHANCEMENTS: Record<Enhancement, { name: string; description: stri
   missingLink: { name: 'Missing Link', description: 'Wild rank for straights. Scores its actual pips.', stackable: false },
   mirror: { name: 'Mirror', description: 'Wild matching rank for Pair, Two Pair, kind hands, and Full House. Scores actual pips.', stackable: false },
   magnetic: { name: 'Magnetic', description: 'When rolled, flip every magnetic die to a random magnetic face.', stackable: false },
-  sticky: { name: 'Sticky', description: 'Stay after scoring or Jumping Bean. Slippy can still reroll this die.', stackable: false },
+  sticky: { name: 'Sticky', description: '50% chance to prevent a scoring or Jumping Bean reroll. Additional stacks have diminishing returns. Manual and Slippy rerolls are unaffected.', stackable: true },
   slippy: { name: 'Slippy', description: 'Reroll this die after a played hand if the round continues, even if it did not score.', stackable: false },
-  sustainable: { name: 'Sustainable', description: 'Once per physical face per round, preserve a hand this face participates in, then become spent. If several are available, only the lowest-index die spends its charge. Resets next round.', stackable: false },
+  sustainable: { name: 'Sustainable', description: '50% chance to preserve a hand this face participates in. Stacks across all selected participants combine with diminishing returns.', stackable: true },
   hitchhiker: { name: 'Hitchhiker', description: 'When not selected, add this face’s scoring pips to the active hand before multiplication. Its own Multiplier does not apply.', stackable: false },
-  weighted: { name: 'Weighted', description: `The opposite face is ${CONFIG.weightedFactor}× as likely to roll, including in the shop.`, stackable: false },
+  weighted: { name: 'Weighted', description: 'Adds +1 roll weight to this face\'s opposite side per stack, including in the shop.', stackable: true },
 };
 export const ENHANCEMENT_IDS = Object.keys(ENHANCEMENTS) as Enhancement[];
 export const stacks = (face: Face, enhancement: Enhancement) => face.enhancements[enhancement] ?? 0;
 export const canAttach = (face: Face, enhancement: Enhancement) =>
   ENHANCEMENTS[enhancement].stackable || stacks(face, enhancement) === 0;
 export const enhancementCost = (enhancement: Enhancement) => CONFIG.enhancementCosts[enhancement];
+export const diminishingHalfChance = (stackCount: number) => stackCount <= 0
+  ? 0
+  : Math.min(1 - Number.EPSILON, 1 - 0.5 ** stackCount);

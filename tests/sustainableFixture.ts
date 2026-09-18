@@ -4,7 +4,7 @@ import { HANDS, handOptions } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, HandId } from '../src/game/types';
 
-// Reproduce the exploit through real seeded plays and purchases, without state injection.
+// Reach a repeatable probabilistic Sticky + Sustainable success through real seeded plays and purchases.
 export function stickySustainableRun() {
   // Try the verified short replay first, retaining discovery if rules change later.
   const indices = [17, ...Array.from({ length: 1500 }, (_, index) => index).filter(index => index !== 17)];
@@ -36,7 +36,13 @@ export function stickySustainableRun() {
             const play: Action = { type: 'PLAY', hand, dieIds: [die.id] };
             const first = dispatch(game, play);
             const second = dispatch(first.state, play);
-            if (game.phase === 'round' && first.state.phase === 'round' && second.state.phase === 'round') {
+            const firstSucceeded = first.events.some(event => event.enhancement === 'sustainable')
+              && first.events.some(event => event.enhancement === 'sticky');
+            const secondSucceeded = second.events.some(event => event.enhancement === 'sustainable')
+              && second.events.some(event => event.enhancement === 'sticky');
+            if (game.phase === 'round' && first.state.phase === 'round' && second.state.phase === 'round'
+              && firstSucceeded && secondSucceeded && first.state.dice[die.id].value === die.value
+              && second.state.dice[die.id].value === die.value) {
               return { seed, actions, game, dieId: die.id, face: die.value, hand, play, first, second };
             }
             break;
@@ -55,5 +61,5 @@ export function stickySustainableRun() {
       game = result.state;
     }
   }
-  throw new Error('No seeded Sticky + Sustainable exploit fixture found');
+  throw new Error('No seeded repeatable Sticky + Sustainable probability fixture found');
 }

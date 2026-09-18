@@ -56,6 +56,10 @@ test('live Pips and Mult build through Bonus, Multiplier and Hitchhiker before o
       await expect(page.getByTestId('hand-multiplier')).toHaveText(`x${event.handScore.currentMultiplier}`);
       await expect(page.getByTestId('stat-score').getByText(String(event.board.score), { exact: true })).toBeVisible();
       if (event.type !== 'SCORE_ADDED') expect(event.board.score).toBe(game.score);
+      if (event.type === 'HAND_STARTED') {
+        expect(event.handScore.basePips).toBe(10);
+        await expect(page.getByTestId('hand-pips')).toHaveText('10');
+      }
       if (event.type === 'HAND_PIPS_CHANGED' && event.enhancement === 'bonus') {
         await expect(page.locator('.score-tick')).toHaveText('BONUS');
         observed.push(['Bonus', event.handScore.currentPips, event.handScore.currentMultiplier]);

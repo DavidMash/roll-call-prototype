@@ -1,6 +1,7 @@
 import { CONFIG } from './config';
 import { activeFace, baseScoringPips, scoringPips } from './dice';
 import { stacks } from './enhancements';
+import { HANDS } from './hands';
 import type { Die, Face, HandId, HandScoreAccumulator } from './types';
 
 export interface HandScoreContribution {
@@ -11,8 +12,11 @@ export interface HandScoreContribution {
 }
 
 export function createHandAccumulator(hand: HandId, dieIds: number[]): HandScoreAccumulator {
-  return { hand, dieIds: [...dieIds].sort((a, b) => a - b), currentPips: 0,
-    currentMultiplier: CONFIG.handMultipliers[hand], bonusPips: 0, hitchhikerPips: 0, finalScore: null };
+  const definition = HANDS[hand];
+  return { hand, dieIds: [...dieIds].sort((a, b) => a - b),
+    basePips: definition.basePips, baseMultiplier: definition.baseMultiplier,
+    currentPips: definition.basePips, currentMultiplier: definition.baseMultiplier,
+    bonusPips: 0, hitchhikerPips: 0, finalScore: null };
 }
 
 // Capture all scoring faces before Workout changes any physical face.

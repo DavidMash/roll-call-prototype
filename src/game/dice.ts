@@ -9,12 +9,11 @@ export const baseScoringPips = (face: Face) => face.rank + face.workoutPips;
 export const scoringPips = (face: Face) => baseScoringPips(face) + stacks(face, 'bonus') * CONFIG.bonusPips;
 export function createDice(): Die[] {
   return Array.from({ length: CONFIG.diceCount }, (_, id) => ({
-    id, value: 1, faces: RANKS.map(rank => ({ rank, workoutPips: 0, sustainableUsedThisRound: false, enhancements: {} })),
+    id, value: 1, faces: RANKS.map(rank => ({ rank, workoutPips: 0, enhancements: {} })),
   }));
 }
-export function rollWeights(die: Die): number[] {
-  return RANKS.map(rank => stacks(die.faces[oppositeFace(rank) - 1], 'weighted') > 0 ? CONFIG.weightedFactor : 1);
-}
+export const rollWeights = (die: Die): number[] =>
+  RANKS.map(rank => 1 + stacks(die.faces[oppositeFace(rank) - 1], 'weighted'));
 export function rollDie(die: Die, rng: RandomSource): { value: Rank; weighted: boolean } {
   const weights = rollWeights(die);
   const random = rng.next();

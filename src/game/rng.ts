@@ -23,3 +23,9 @@ export function randomIndex(rng: RandomSource, size: number): number {
   if (!Number.isFinite(value) || value < 0 || value >= 1) throw new Error('RNG must return a number in [0, 1).');
   return Math.floor(value * size);
 }
+
+export function probabilityCheck(rng: RandomSource, chance: number): boolean {
+  const value = rng.next();
+  if (!Number.isFinite(value) || value < 0 || value >= 1) throw new Error('RNG must return a number in [0, 1).');
+  return value < chance;
+}

@@ -6,7 +6,7 @@ import { canPlay, emptySelection, selectHand, toggleDie } from '../game/selectio
 import type { Selection } from '../game/selection';
 import type { Action, Board, GameEvent } from '../game/types';
 import { DiceRow } from './DiceRow';
-import { HandList } from './HandList';
+import { HandScorecard } from './HandList';
 import { ScoreResolution } from './ScoreResolution';
 
 export function RoundScreen({ board, event, busy, progress, selection, setSelection, submit, skip }: {
@@ -24,7 +24,7 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
       Use your remaining rerolls. Select any dice below to try to make a new hand.
     </Alert>}
     <Paper withBorder p="lg">
-      <HandList board={board} selection={selection} busy={busy}
+      <HandScorecard board={board} selection={selection} busy={busy}
         onSelect={hand => setSelection(selectHand(board.dice, board.consumed, selection, hand))}
         onClear={() => setSelection(emptySelection())} />
       <Group justify="space-between" mt="lg" align="center">
@@ -36,7 +36,7 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
       </Group>
     </Paper>
     <div>
-      <DiceRow dice={board.dice} event={event} disabled={busy} selected={selection.dieIds} showSustainableSpent
+      <DiceRow dice={board.dice} event={event} disabled={busy} selected={selection.dieIds}
         onClick={id => setSelection(toggleDie(board.dice, board.consumed, selection, id))} />
       <Text ta="center" size="xs" c="dimmed" mt="sm">Each number identifies the active physical face. Badges belong to that face of that die.</Text>
     </div>

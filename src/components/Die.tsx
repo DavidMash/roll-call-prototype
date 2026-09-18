@@ -13,9 +13,8 @@ interface Props {
   eligible?: boolean;
   onClick: () => void;
   onDropOffer?: (offerId: number) => void;
-  showSustainableSpent?: boolean;
 }
-export function Die({ die, selected, highlighted, rolling, ability, disabled, eligible, onClick, onDropOffer, showSustainableSpent }: Props) {
+export function Die({ die, selected, highlighted, rolling, ability, disabled, eligible, onClick, onDropOffer }: Props) {
   const face = activeFace(die);
   const enhancements = ENHANCEMENT_IDS.filter(id => face.enhancements[id]);
   return (
@@ -40,10 +39,8 @@ export function Die({ die, selected, highlighted, rolling, ability, disabled, el
         <Text size="xs" c="dimmed">{scoringPips(face)} scoring pips</Text>
         <div className="die-badges">
           {enhancements.map(id => <Tooltip key={id} label={ENHANCEMENTS[id].description} withArrow>
-            <Badge size="xs" variant="light" color={id === 'golden' ? 'yellow' : 'teal'}
-              className={showSustainableSpent && id === 'sustainable' && face.sustainableUsedThisRound ? 'sustainable-spent' : undefined}>
+            <Badge size="xs" variant="light" color={id === 'golden' ? 'yellow' : 'teal'}>
               {ENHANCEMENTS[id].name}{face.enhancements[id]! > 1 ? ` ×${face.enhancements[id]}` : ''}
-              {showSustainableSpent && id === 'sustainable' && face.sustainableUsedThisRound ? ' · spent' : ''}
             </Badge>
           </Tooltip>)}
         </div>

@@ -25,7 +25,7 @@ async function perform(page: Page, game: GameState, action: Action) {
   return dispatch(game, action).state;
 }
 
-test('Sticky + Sustainable preserves once, visibly spends the face, then consumes the hand', async ({ page }) => {
+test('Sticky + Sustainable can succeed repeatedly without any spent-state presentation', async ({ page }) => {
   const fixture = stickySustainableRun();
   let game = newRun(fixture.seed).state;
   await page.goto(`/?seed=${fixture.seed}&speed=instant`);
@@ -36,7 +36,7 @@ test('Sticky + Sustainable preserves once, visibly spends the face, then consume
   await expect(physical).toHaveAccessibleName(new RegExp(`face ${fixture.face},`));
   await expect(physical).toContainText('Sticky');
   await expect(physical).toContainText('Sustainable');
-  await expect(physical.locator('.sustainable-spent')).toHaveCount(0);
+  await expect(physical).not.toContainText('spent');
 
   // Select just the enhanced die even if other dice show the same upper face.
   await physical.click();
@@ -54,24 +54,23 @@ test('Sticky + Sustainable preserves once, visibly spends the face, then consume
   }
   await expect(page.locator('.score-tick')).toHaveText('SUSTAINABLE');
   await expect(page.locator('.ability-label').nth(fixture.dieId)).toHaveText('SUSTAINABLE');
-  await expect(physical.locator('.sustainable-spent')).toHaveText('Sustainable · spent');
+  await expect(physical).not.toContainText('spent');
   await page.getByRole('button', { name: 'Skip playback' }).click();
   await ready(page);
   await expect(hand).toBeEnabled();
+  await expect(page.getByTestId(`scorecard-score-${fixture.hand}`)).toHaveText(String(fixture.first.state.scoreByHand[fixture.hand]));
   await expect(physical).toHaveAccessibleName(new RegExp(`face ${fixture.face},`));
-  await expect(physical.locator('.sustainable-spent')).toBeVisible();
+  await expect(physical).not.toContainText('spent');
   await page.getByText('INSTANT', { exact: true }).click();
 
   game = await perform(page, fixture.first.state, fixture.play);
   expect(game).toEqual(fixture.second.state);
-  await expect(hand).toBeDisabled();
-  await expect(hand).toContainText('used');
+  await expect(hand).toBeEnabled();
+  await expect(page.getByTestId(`scorecard-score-${fixture.hand}`)).toHaveText(String(fixture.second.state.scoreByHand[fixture.hand]));
   await expect(physical).toHaveAccessibleName(new RegExp(`face ${fixture.face},`));
-  await physical.click();
-  await expect(hand).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
-  expect(game.stats.triggers.sustainable).toBe(1);
-  expect(game.stats.sustainableActivations).toHaveLength(1);
+  expect(game.stats.triggers.sustainable).toBe(2);
+  expect(game.stats.probabilityProcs.sustainable).toMatchObject({ checks: 2, successes: 2, failures: 0 });
   await page.getByRole('button', { name: /^Run data & event history/ }).click();
-  await expect(page.locator('.log-entry').filter({ hasText: 'now spent for round' })).toHaveCount(1);
+  await expect(page.locator('.log-entry').filter({ hasText: 'Sustainable succeeded' })).toHaveCount(2);
+  await expect(page.locator('.log-entry').filter({ hasText: 'spent' })).toHaveCount(0);
 });

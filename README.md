@@ -22,7 +22,9 @@ The browser tests use Playwright with installed Google Chrome. If Chrome is unav
 
 ## Playing
 
-- Choose a hand to select a deterministic participating set, or click dice to constrain the available hands. Press **PLAY** to resolve it.
+- The persistent scorecard shows all 14 categories for the entire round. Playable rows are active, currently impossible rows are muted, the selected row is highlighted, and consumed rows remain visible and disabled with their earned score.
+- Choose a scorecard row to select a deterministic participating set, or click dice first to constrain which rows are actionable. Press **PLAY** to resolve it; selecting a row never scores immediately.
+- A row's score is the cumulative round score actually earned through that category. If Sustainable preserves a category, its row remains available and later awards are added to the same value. **Effect Score** separately totals standalone scoring such as Jumping Bean, so hand rows plus Effect Score reconcile to Round Total.
 - Upper-section hands may contain any non-empty subset of dice currently showing that number. Clicking the hand initially selects all matching dice, but the player may deselect individual matching dice before pressing Play. A dice-first matching subset is preserved when choosing its upper hand.
 - This lets the player preserve useful board structure—for example, keeping one duplicate 4 while rerolling another to pursue a straight. The chosen subset determines normal hand contributions, participating Multiplier, Sustainable, and scored-die rerolls. Unselected Hitchhikers can contribute pips and trigger their own Golden/Workout; unselected dice can also act through Slippy or roll effects. The upper category is normally consumed after one play, regardless of subset size.
 - For ambiguous lower hands, deselect a chosen die and select a replacement. Lower hands still require exactly their prescribed number of participants. The play button requires a valid participating set.
@@ -39,49 +41,55 @@ The browser tests use Playwright with installed Google Chrome. If Chrome is unav
 
 All 13 enhancements are implemented: Bonus, Multiplier, Jumping Bean, Golden, Workout, Missing Link, Mirror, Magnetic, Sticky, Slippy, Sustainable, Hitchhiker, and Weighted. The in-app reference describes each.
 
+Bonus, Multiplier, Golden, Workout, and Weighted are numerical stackers. Sticky and Sustainable are probability stackers. Jumping Bean, Missing Link, Mirror, Magnetic, Slippy, and Hitchhiker remain binary on each physical face. Stackable badges show one readable count such as **Sticky ×2**.
+
 Prototype balance uses a **50-point base target**, **1.35x target growth per round**, and the round-clear gold progression above. These values reflect early playtesting and are expected to continue changing. They live in `src/game/config.ts` for tuning.
 
 ## Scoring categories
 
-There are **14 categories** and no Chance hand. Ones through Sixes are upper-section categories at **x1**, using any non-empty selected natural matching subset.
+There are **14 categories** and no Chance hand. Every category begins with **10 intrinsic Base Pips**. Ones through Sixes are upper-section categories at **x1**, using any non-empty selected natural matching subset.
 
-| Lower hand | Participating dice | Base multiplier |
-| --- | --- | --- |
-| Pair | Exactly 2 assignable to one rank | x1.5 |
-| Two Pair | Exactly 4 assignable to two distinct pairs | x2 |
-| Three of a Kind | Exactly 3 assignable to one rank | x2.5 |
-| Small Straight | Exactly 4 consecutive assigned ranks | x2.5 |
-| Full House | Exactly 5 assignable to distinct 3/2 rank groups | x3.5 |
-| Four of a Kind | Exactly 4 assignable to one rank | x4 |
-| Large Straight | Exactly 5 consecutive assigned ranks | x4 |
-| Five of a Kind | Exactly 5 assignable to one rank | x5 |
+| Lower hand | Participating dice | Base Pips | Base multiplier |
+| --- | --- | ---: | ---: |
+| Pair | Exactly 2 assignable to one rank | 10 | x1.5 |
+| Two Pair | Exactly 4 assignable to two distinct pairs | 10 | x2 |
+| Three of a Kind | Exactly 3 assignable to one rank | 10 | x2.5 |
+| Small Straight | Exactly 4 consecutive assigned ranks | 10 | x2.5 |
+| Full House | Exactly 5 assignable to distinct 3/2 rank groups | 10 | x3.5 |
+| Four of a Kind | Exactly 4 assignable to one rank | 10 | x4 |
+| Large Straight | Exactly 5 consecutive assigned ranks | 10 | x4 |
+| Five of a Kind | Exactly 5 assignable to one rank | 10 | x5 |
 
 Pair and Two Pair use the same live scoring engine, consumption, Sustainable, and selection rules as other hands. Hand-first selection chooses the existing stable physical-index default; the player can deselect a die and choose a replacement. Dice-first selection keeps all compatible hands available, including upper/Pair ambiguity. Only selected participants contribute their Multiplier and normal scored-die rerolls; unselected Hitchhikers retain their usual pip contributions.
 
 Mirror supports **Pair, Two Pair, Three of a Kind, Full House, Four of a Kind, and Five of a Kind**. Each physical Mirror fills one matching slot and scores its actual physical pips. Two Pair still needs two different assigned ranks: `3, Mirror-6, 5, 5` qualifies, while `3, 4, 5, Mirror-6` does not. Multiple Mirrors can fill different slots, including two distinct all-wild pairs. Missing Link remains straight-specific.
 
-## Sustainable
+## Probability and roll-weight enhancements
 
-**Sustainable:** The first time this physical face would cause a played hand to be consumed each round, the hand is preserved instead. That Sustainable face is then spent until the next gameplay round.
+**Sticky:** When this face would reroll because it scored, it has a 50% chance to remain instead. Additional Sticky stacks increase the chance with diminishing returns: 50%, 75%, 87.5%, 93.75%, and so on, using `1 − 0.5^stacks`. One combined seeded check is made per qualifying face. Sticky can prevent the normal scored-die reroll and Jumping Bean's automatic reroll, but it does not prevent manual, shop, or Slippy rerolls. Slippy remains a separate cause and each physical die still rolls at most once in the shared post-hand batch.
 
-Each physical die/face has its own once-per-round use. Only selected participating faces qualify; an unselected face, including a scoring Hitchhiker, neither preserves the hand nor spends a charge. If several available Sustainable faces participate, only the one on the lowest-index physical die is spent. Already-spent faces are ignored, leaving other available selected faces able to preserve later plays.
+**Sustainable:** When a hand containing this participating face would be consumed, Sustainable has a chance to preserve the hand. All Sustainable stacks on selected participating dice combine into one seeded check using `1 − 0.5^stacks`; unselected matching dice and Hitchhiker-only dice do not contribute. Sustainable never becomes spent and may check again later in the same round. A successful winning-hand check is retained in audit data but is not shown as prominent playback because the round is already ending. The [Sustainable audit](docs/sustainable-audit.md) records the updated state and event boundary.
 
-The charge remains spent when the die rolls away and back, when Magnetic flips it, and throughout the shop. All physical faces reset before the next round's initial roll. The exposed badge dims and says **Sustainable · spent** during gameplay; the face inspector also shows spent charges. The shop continues to show Sustainable normally, and its price and non-stackable purchase rule are unchanged.
+**Weighted:** Each stack adds +1 roll weight to this physical face's opposite side, so the target weight is `1 + stacks`. One stack changes the opposite side from weight 1 to 2 (a `2/7` chance); two stacks produce weight 3 (`3/8`), rather than multiplying weights. Opposite pairs remain 1/6, 2/5, and 3/4. Weighted applies to every real gameplay or shop roll, but Magnetic flips are not rolls.
 
-Sticky still keeps the die in place: the first play may preserve both the face and category, but a second play using the same spent face consumes the category. This keeps their synergy while preventing infinite repeatable hands. Winning hands record and spend Sustainable consistently after the final score award, before clearance, without any post-hand rerolls. The [Sustainable audit](docs/sustainable-audit.md) describes the domain state and event boundary.
+Only successful Sticky and Sustainable checks show prominent **STICKY** or **SUSTAINABLE** feedback. Both successful and failed checks remain available in event history and proc telemetry with their stack count and chance. **WEIGHTED** appears once when a roll lands on a face whose probability was increased, regardless of stack count.
 
 ## Hand scoring
 
-A played hand has two live scoring values: **Pips** and **Multiplier**. Scoring faces and effects modify those values during resolution. Once all hand-bound effects finish, the hand scores **Pips × Multiplier**, adding that result to round score exactly once.
+A played hand has two live scoring values: **Pips** and **Multiplier**. The accumulator starts at the selected definition's **10 Base Pips** and base multiplier. Scoring faces and effects then modify those live values. Once all hand-bound effects finish, the hand adds exactly one result using:
+
+**(Base Hand Pips + participating face Pips + Pip effects) × (Base Hand Multiplier + Multiplier effects)**
+
+Base Pips are hand stats, not physical-face pips. They do not trigger Golden, Workout, Sticky, Sustainable, Hitchhiker, Jumping Bean, Magnetic, or any other face effect. Keeping them on centralized hand definitions makes future hand-stat upgrades possible without changing the accumulator; no upgrade system is implemented yet.
 
 - Selected faces contribute printed pips plus previously earned Workout growth. Bonus adds **10 Pips per stack** before multiplication. Each selected Multiplier stack adds **0.5** to the hand's base multiplier.
 - Each currently showing, unselected Hitchhiker adds its full scoring-pip value, including Bonus and prior Workout growth, to the active hand before multiplication. A selected Hitchhiker does not contribute twice. A Hitchhiker-only face's own Multiplier does not affect the hand because that die was not selected as a participant.
 - Golden adds gold once whenever a selected or Hitchhiker face scores, without multiplication. Workout increases that physical face after its current contribution, before hand finalization; the current hand keeps the pre-increment pips.
-- After finalization, spend one available selected Sustainable charge to preserve the category, or record consumption, then check the round target. If a played hand reaches or exceeds the target, its hand-bound scoring effects finish and the round immediately clears. The dice do not perform normal post-hand rerolls; Sticky/Slippy and Weighted/Magnetic/Jumping Bean effects that would only result from those skipped rolls do not occur.
+- After finalization, combine Sustainable stacks across selected participants and make one preservation check, or consume the category when the check fails or no stacks participate. If a played hand reaches or exceeds the target, its hand-bound scoring effects finish and the round immediately clears. The dice do not perform normal post-hand rerolls; Sticky/Slippy and Weighted/Magnetic/Jumping Bean effects that would only result from those skipped rolls do not occur.
 - If the hand leaves the round below target, normal Sticky/Slippy rerolls and their complete roll-effect chains proceed before clearance/loss is checked. Initial-roll, manual-reroll, and active Jumping Bean chains still finish completely even if they cross the target. The existing free five-die shop exposure roll happens separately after `ROUND_CLEARED`; it is not a post-hand gameplay reroll.
 - Jumping Bean remains independent scoring for initial, manual, post-hand, and chained rolls: its scoring pips × (1 + its own Multiplier stacks × 0.5). It does not change a finalized hand accumulator. Its Golden and Workout trigger as usual.
 
-The center playback displays persistent **PIPS / MULT** values as contributions build, then the final multiplication and score addition. The [scoring audit](docs/scoring-audit.md) records the previous behavior and the domain/event changes.
+The center playback begins at the hand's Base Pips and Base Multiplier, displays persistent **PIPS / MULT** values as dice and effects build, then shows the final multiplication and score addition. The [scoring audit](docs/scoring-audit.md) records the previous behavior and the domain/event changes.
 
 ## Architecture
 
@@ -89,11 +97,11 @@ The center playback displays persistent **PIPS / MULT** values as contributions 
 
 | Module | Responsibility |
 | --- | --- |
-| `config.ts` | Targets, rewards, costs, multipliers, enhancement strengths, timing, safety cap |
+| `config.ts` | Targets, rewards, costs, enhancement strengths, timing, safety cap |
 | `types.ts` | Physical faces/dice, board, actions, events, statistics |
 | `rng.ts` | Serializable Mulberry32 random stream and seed hashing |
 | `dice.ts` | Face pips, opposite faces, weighted gameplay/shop rolls |
-| `hands.ts` | Physical subsets, distinct matching-group assignments, straight wilds, deterministic defaults |
+| `hands.ts` | Central hand Base Pips/Multiplier definitions, physical subsets, matching groups, straight wilds, deterministic defaults |
 | `selection.ts` | Selection in both directions; constraints never decide loss |
 | `scoring.ts` | Selected-hand and standalone pip/multiplier calculations |
 | `enhancements.ts` | Complete catalog, stacks, placement eligibility |
@@ -111,18 +119,18 @@ For programmatic reproduction with the same rules version, call `newRun(data.see
 - Batch dice draw all outcomes before roll effects consume RNG. Dice, face lists, and default subsets use ascending physical index. Triggers from each die are queued Weighted → Magnetic → Jumping Bean; chains append to the FIFO queue. When a Magnetic trigger flips multiple dice, destinations are drawn in physical-die order, including a draw for a die with only one magnetic face.
 - Jumping Bean uses the complete landed-face snapshot, including pips and Sticky, even if a queued Magnetic effect changed its visible face. Workout increments the triggering physical face after scoring. Magnetic destinations are never rolls and do not create roll triggers.
 - A stack activation counts once per enhancement per relevant face/event; its numeric effect includes all stacks. Wild feedback is shown for participating wild faces in the relevant hand family, including when their natural rank could qualify. This explains qualification without changing actual pips.
-- Hitchhiker contributes pips to the selected hand without adding a scored reroll; its die may still reroll through Slippy. Sustainable applies only to selected-hand participants, once per physical face per round. Successful activations retain the existing trigger count and add `sustainableActivations` records with round, die, face, and hand; per-round counts and distinct activated faces can be derived from these records. `ABILITY_TRIGGERED` identifies the spent face explicitly with `sustainableSpent: true`. Slippy is deduplicated into the ordinary post-hand batch and can override Sticky's scoring suppression.
+- Hitchhiker contributes pips to the selected hand without adding a scored reroll; its die may still reroll through Slippy. Sustainable counts only selected-hand participants and has no spent or round-reset state. Sticky and Sustainable each use one centralized seeded probability draw per check and record checks, successes, failures, and stack counts. Slippy is deduplicated into the ordinary post-hand batch and remains independent of Sticky's scoring suppression.
 - A winning played hand emits `POST_HAND_REROLLS_SKIPPED` and bypasses the entire gameplay reroll scheduler. No skipped reroll draws, Slippy activations, or resulting roll chains are recorded. Pair/Two Pair counts and multiplied scores use the existing per-hand telemetry maps and final hand records.
 - Manual rerolls reject empty, duplicate-ID, invalid-ID, over-budget, and outside-round requests without changing state or consuming RNG. Accepted batches use ascending physical-die order, charge once for the initial selected dice, and clear dice/hand selection immediately. No extra charges or refunds arise from subsequent effects. A dead-board rescue is counted once per manual action if the pre-action gameplay board had no playable hand and the completed chain creates one or reaches the target, evaluated before shop exposure rolls.
 - Run exports record per-round manual grants, charges spent, action count, rescue count, and charges left at clearance. Run totals include manual actions, physical-die reroll count (including repeats), rescue count, and each manual batch's physical IDs, cost, remaining budget, and rescue flags. Loss records distinguish a manual reroll from the most recent hand play. The action sequence remains replayable from the seed.
-- Export schema **2**, scoring model **hand-accumulator-v1**, preserves existing fields and adds final hand arithmetic, hand Bonus pips, and Hitchhiker pips contributed. All final multiplied hand score belongs to `scoreBySource.hand` and the selected category. The legacy `scoreBySource.hitchhiker` key remains present at zero; schema 1 used it for separate standalone Hitchhiker score. Historical exports retain their original semantics.
+- Export schema **4**, scoring model **hand-base-pips-accumulator-v2**, includes Sticky/Sustainable probability-proc telemetry in addition to hand Base Pips/Base Multiplier and per-round hand-category/effect-score breakdowns. All final multiplied hand score belongs to `scoreBySource.hand` and the selected category. The legacy `scoreBySource.hitchhiker` key remains present at zero; schema 1 used it for separate standalone Hitchhiker score. Historical exports retain their original semantics.
 - A resolution exceeding 10,000 emitted events stops in a diagnostic state, writes a development error, preserves its trace, and permits restart. This is an exceptional guard, not a gameplay loss. There is no finite-round win condition.
 
 ## Validation
 
 Unit tests cover every hand family, upper-hand subsets and their participation-based enhancement effects, subset ambiguity, both wilds, enhancement stacking and interactions, shop legality and costs, weighted distributions, magnetic snapshots, roll chains, safety diagnostics, round clearance/loss, telemetry totals, and seeded replay. Manual reroll tests cover per-die charging, repeated dice, rejection without RNG use, every currently showing enhancement, initial-effect resets, hand/ability independence, roll-trigger chains, final-charge rescues/clears/losses, telemetry, and shop separation. A multi-seed engine audit plays complete runs through purchases, manual rerolls and eventual loss. Browser tests cover the actual play/shop/loss/export flow, drag-and-drop, offer refreshes, physical-subset changes, playback skipping, and a narrow viewport. Both hand-first and dice-first browser cases verify that playing one 4 on a 1/2/4/4/5 board scores and rerolls only that physical die, preserves the duplicate, and still consumes Fours. Browser tests also cover single/multi-die manual spending, disabled controls during playback, cleared selection, deterministic dead-board guidance, rescue, and loss only after the final roll completes. Dead-board browser states are produced by seeded legal player actions; there is no test-state injection into the game UI.
 
-Validation commands: `npm.cmd test` (225 unit tests), `npm.cmd run test:browser` (sixteen browser checks), `npm.cmd run typecheck` (also invoked by the build), and `npm.cmd run build`. `npm` works equivalently in shells where PowerShell does not intercept it with a blocked script. Sustainable coverage includes the Sticky exploit, independent physical charges, stable single-charge selection, reroll/Magnetic/shop persistence, round reset, winning-hand bookkeeping, and an actual seeded shop-purchase browser reproduction with visible spent feedback.
+Validation commands: `npm.cmd test`, `npm.cmd run test:browser`, `npm.cmd run typecheck` (also invoked by the build), and `npm.cmd run build`. `npm` works equivalently in shells where PowerShell does not intercept it with a blocked script. Probability coverage uses controlled RNG values for Sticky and Sustainable success/failure, multi-stack formulas, participation boundaries, same-round reuse, winning-hand bookkeeping, and interactions with Slippy and Jumping Bean. Weighted coverage verifies linear weights, every opposite mapping, real roll paths, shop use, and Magnetic exclusion. Browser coverage includes repeated Sustainable attempts without spent presentation and a visible stacked Sticky badge.
 
 No known gameplay blockers. Browser automation exercises a real pointer drag onto an exposed die face and visible Jumping Bean feedback on the next round's initial roll. Clipboard access depends on the browser; the manual-copy fallback is included. The prototype intentionally has no persistence, backend, deployment, audio, or elaborate art.
 

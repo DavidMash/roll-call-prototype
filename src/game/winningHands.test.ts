@@ -4,7 +4,11 @@ import { activeFace } from './dice';
 import { dispatch, newRun } from './engine';
 import type { Enhancement, GameState, Rank } from './types';
 
-const constant = () => ({ next: () => 0.99 });
+const constant = (value = 0.99) => ({ next: () => value });
+function sequence(...values: number[]) {
+  let index = 0;
+  return { next: () => values[index++] ?? 0.99 };
+}
 function board(values: Rank[] = [4, 4, 4, 2, 6], score = 40, target = 50): GameState {
   const game = newRun('winning-hand', constant()).state;
   game.dice.forEach((die, index) => { die.value = values[index]; });
@@ -19,8 +23,8 @@ function enhance(game: GameState, id: number, enhancement: Enhancement, rank?: R
 
 describe('winning-hand boundary', () => {
   it.each([
-    { hand: 'pair' as const, values: [4, 4, 4, 2, 6] as Rank[], handScore: 12, finalScore: 52 },
-    { hand: 'fives' as const, values: [5, 5, 4, 2, 6] as Rank[], handScore: 10, finalScore: 50 },
+    { hand: 'pair' as const, values: [4, 4, 4, 2, 6] as Rank[], handScore: 27, finalScore: 67 },
+    { hand: 'fives' as const, values: [5, 5, 4, 2, 6] as Rank[], handScore: 20, finalScore: 60 },
   ])('$hand clears at/above target without scheduling Sticky, Slippy or gameplay rolls', ({ hand, values, handScore, finalScore }) => {
     const game = board(values);
     enhance(game, 0, 'sticky');
@@ -60,11 +64,11 @@ describe('winning-hand boundary', () => {
     for (const enhancement of ['hitchhiker', 'bonus', 'golden', 'workout', 'slippy'] as Enhancement[]) enhance(game, 4, enhancement);
     activeFace(game.dice[4]).workoutPips = 2;
     const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant());
-    expect(result.state.score).toBe(82); // (8 + 10 + 18) × 2 + existing 10
+    expect(result.state.score).toBe(102); // (10 base + 8 + 10 + 18) × 2 + existing 10
     expect(result.state.gold).toBe(roundReward(1) + 2);
     expect(result.state.dice[0].faces[3].workoutPips).toBe(1);
     expect(result.state.dice[4].faces[5].workoutPips).toBe(3);
-    expect(result.state.stats.handScores[0]).toMatchObject({ pips: 36, multiplier: 2, score: 72, hitchhikerPips: 18 });
+    expect(result.state.stats.handScores[0]).toMatchObject({ basePips: 10, pips: 46, multiplier: 2, score: 92, hitchhikerPips: 18 });
     const finalIndex = result.events.findIndex(event => event.type === 'HAND_SCORE_FINALIZED');
     const clearIndex = result.events.findIndex(event => event.type === 'ROUND_CLEARED');
     expect(result.events.slice(0, finalIndex).filter(event => event.type === 'WORKOUT_INCREMENTED')).toHaveLength(2);
@@ -76,9 +80,9 @@ describe('winning-hand boundary', () => {
   });
 
   it('can win specifically through Hitchhiker pips and skip subsequent gameplay rerolls', () => {
-    const game = board(undefined, 30);
+    const game = board(undefined, 15);
     enhance(game, 4, 'hitchhiker');
-    expect(30 + 8 * 1.5).toBeLessThan(game.target);
+    expect(15 + (10 + 8) * 1.5).toBeLessThan(game.target);
     const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant());
     expect(result.state.score).toBe(51);
     expect(result.state.phase).toBe('shop');
@@ -87,20 +91,20 @@ describe('winning-hand boundary', () => {
   });
 
   it('can win specifically through Bonus and selected Multiplier before skipping rerolls', () => {
-    const game = board(undefined, 30);
+    const game = board(undefined, 10);
     enhance(game, 0, 'bonus');
     enhance(game, 1, 'multiplier');
     const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant());
     expect(result.state.score).toBe(66);
     expect(result.state.phase).toBe('shop');
-    expect(result.events.find(event => event.type === 'HAND_SCORE_FINALIZED')).toMatchObject({ pips: 18, multiplier: 2, amount: 36 });
+    expect(result.events.find(event => event.type === 'HAND_SCORE_FINALIZED')).toMatchObject({ pips: 28, multiplier: 2, amount: 56 });
     expect(result.events.some(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Post-hand'))).toBe(false);
   });
 
   it.each([true, false])('records Sustainable consumption normally on a winning hand (sustainable=%s)', sustainable => {
     const game = board();
     if (sustainable) enhance(game, 0, 'sustainable');
-    const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant());
+    const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(sustainable ? 0 : 0.99));
     expect(result.state.phase).toBe('shop');
     expect(result.state.consumed.includes('pair')).toBe(!sustainable);
     expect(result.events.some(event => event.type === 'POST_HAND_REROLLS_SKIPPED')).toBe(true);
@@ -108,20 +112,20 @@ describe('winning-hand boundary', () => {
   });
 
   it('preserves non-winning Sticky/Slippy batches and Weighted/Magnetic/Bean ordering', () => {
-    const game = board([5, 5, 4, 2, 6], 30);
+    const game = board([5, 5, 4, 2, 6], 20);
     enhance(game, 0, 'sticky');
     enhance(game, 3, 'slippy');
     enhance(game, 1, 'weighted', 1);
     for (const enhancement of ['magnetic', 'jumpingBean', 'sticky'] as Enhancement[]) enhance(game, 1, enhancement, 6);
-    const result = dispatch(game, { type: 'PLAY', hand: 'fives', dieIds: [0, 1] }, constant());
+    const result = dispatch(game, { type: 'PLAY', hand: 'fives', dieIds: [0, 1] }, sequence(0, 0.99, 0.99, 0, 0));
     expect(result.state.phase).toBe('round');
-    expect(result.state.score).toBe(46); // Hand 10, then standalone Bean 6.
+    expect(result.state.score).toBe(46); // Hand 20 (10 base + dice), then standalone Bean 6.
     expect(result.state.dice[0].value).toBe(5);
     expect(result.events.filter(event => event.type === 'DICE_REROLL_STARTED').map(event => event.dieIds)).toEqual([[1, 3]]);
     expect(result.events.filter(event => ['weighted', 'magnetic', 'jumpingBean'].includes(event.enhancement ?? '')).map(event => event.enhancement))
       .toEqual(['weighted', 'magnetic', 'jumpingBean']);
     expect(result.events.filter(event => event.type === 'SCORE_ADDED').map(event => [event.source, event.amount]))
-      .toEqual([['hand', 10], ['jumpingBean', 6]]);
+      .toEqual([['hand', 20], ['jumpingBean', 6]]);
     expect(result.events.some(event => event.type === 'POST_HAND_REROLLS_SKIPPED')).toBe(false);
     expect(result.state.manualRerollsRemaining).toBe(3);
   });

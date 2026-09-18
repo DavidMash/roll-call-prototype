@@ -26,16 +26,16 @@ const play = (game: GameState, rng = constant()) =>
 
 describe('live hand scoring', () => {
   it.each([
-    { name: 'basic hand', bonus: 0, multiplier: 0, hitch: false, hitchBonus: 0, hitchMultiplier: 0, growth: 0, pips: 12, mult: 2.5, score: 30 },
-    { name: 'Bonus before multiplication', bonus: 1, multiplier: 0, hitch: false, hitchBonus: 0, hitchMultiplier: 0, growth: 0, pips: 22, mult: 2.5, score: 55 },
-    { name: 'selected Multiplier before finalization', bonus: 0, multiplier: 1, hitch: false, hitchBonus: 0, hitchMultiplier: 0, growth: 0, pips: 12, mult: 3, score: 36 },
-    { name: 'Bonus and Multiplier synergy', bonus: 1, multiplier: 1, hitch: false, hitchBonus: 0, hitchMultiplier: 0, growth: 0, pips: 22, mult: 3, score: 66 },
-    { name: 'Hitchhiker is multiplied', bonus: 0, multiplier: 0, hitch: true, hitchBonus: 0, hitchMultiplier: 0, growth: 0, pips: 18, mult: 2.5, score: 45 },
-    { name: 'Hitchhiker with selected Multiplier', bonus: 0, multiplier: 1, hitch: true, hitchBonus: 0, hitchMultiplier: 0, growth: 0, pips: 18, mult: 3, score: 54 },
-    { name: 'Hitchhiker own Multiplier is ignored', bonus: 0, multiplier: 0, hitch: true, hitchBonus: 0, hitchMultiplier: 5, growth: 0, pips: 18, mult: 2.5, score: 45 },
-    { name: 'Hitchhiker includes Bonus', bonus: 0, multiplier: 0, hitch: true, hitchBonus: 1, hitchMultiplier: 0, growth: 0, pips: 28, mult: 2.5, score: 70 },
-    { name: 'Hitchhiker includes prior Workout and Bonus', bonus: 0, multiplier: 0, hitch: true, hitchBonus: 1, hitchMultiplier: 0, growth: 2, pips: 30, mult: 2.5, score: 75 },
-    { name: 'stacked Bonus and selected Multiplier', bonus: 2, multiplier: 2, hitch: false, hitchBonus: 0, hitchMultiplier: 0, growth: 0, pips: 32, mult: 3.5, score: 112 },
+    { name: 'basic hand', bonus: 0, multiplier: 0, hitch: false, hitchBonus: 0, hitchMultiplier: 0, growth: 0, pips: 22, mult: 2.5, score: 55 },
+    { name: 'Bonus before multiplication', bonus: 1, multiplier: 0, hitch: false, hitchBonus: 0, hitchMultiplier: 0, growth: 0, pips: 32, mult: 2.5, score: 80 },
+    { name: 'selected Multiplier before finalization', bonus: 0, multiplier: 1, hitch: false, hitchBonus: 0, hitchMultiplier: 0, growth: 0, pips: 22, mult: 3, score: 66 },
+    { name: 'Bonus and Multiplier synergy', bonus: 1, multiplier: 1, hitch: false, hitchBonus: 0, hitchMultiplier: 0, growth: 0, pips: 32, mult: 3, score: 96 },
+    { name: 'Hitchhiker is multiplied', bonus: 0, multiplier: 0, hitch: true, hitchBonus: 0, hitchMultiplier: 0, growth: 0, pips: 28, mult: 2.5, score: 70 },
+    { name: 'Hitchhiker with selected Multiplier', bonus: 0, multiplier: 1, hitch: true, hitchBonus: 0, hitchMultiplier: 0, growth: 0, pips: 28, mult: 3, score: 84 },
+    { name: 'Hitchhiker own Multiplier is ignored', bonus: 0, multiplier: 0, hitch: true, hitchBonus: 0, hitchMultiplier: 5, growth: 0, pips: 28, mult: 2.5, score: 70 },
+    { name: 'Hitchhiker includes Bonus', bonus: 0, multiplier: 0, hitch: true, hitchBonus: 1, hitchMultiplier: 0, growth: 0, pips: 38, mult: 2.5, score: 95 },
+    { name: 'Hitchhiker includes prior Workout and Bonus', bonus: 0, multiplier: 0, hitch: true, hitchBonus: 1, hitchMultiplier: 0, growth: 2, pips: 40, mult: 2.5, score: 100 },
+    { name: 'stacked Bonus and selected Multiplier', bonus: 2, multiplier: 2, hitch: false, hitchBonus: 0, hitchMultiplier: 0, growth: 0, pips: 42, mult: 3.5, score: 147 },
   ])('$name', testCase => {
     const game = board();
     enhance(game, 0, 'bonus', testCase.bonus);
@@ -69,14 +69,14 @@ describe('live hand scoring', () => {
       'HAND_STARTED', 'HAND_PIPS_CHANGED', 'HAND_MULTIPLIER_CHANGED', 'HITCHHIKER_ADDED_PIPS', 'HAND_SCORE_FINALIZED',
     ].includes(event.type));
     expect(live.map(event => [event.handScore!.currentPips, event.handScore!.currentMultiplier]))
-      .toEqual([[0, 2.5], [4, 2.5], [8, 2.5], [12, 2.5], [22, 2.5], [22, 3], [28, 3], [28, 3]]);
+      .toEqual([[10, 2.5], [14, 2.5], [18, 2.5], [22, 2.5], [32, 2.5], [32, 3], [38, 3], [38, 3]]);
     const addition = result.events.findIndex(event => event.type === 'SCORE_ADDED');
     expect(result.events.slice(0, addition).every(event => event.board.score === 17)).toBe(true);
-    expect(result.events[addition]).toMatchObject({ amount: 84, source: 'hand', board: { score: 101 } });
+    expect(result.events[addition]).toMatchObject({ amount: 114, source: 'hand', board: { score: 131 } });
     expect(live[0].handScore!.finalScore).toBeNull();
-    expect(live.at(-1)!.handScore!.finalScore).toBe(84);
+    expect(live.at(-1)!.handScore!.finalScore).toBe(114);
     expect(result.events.filter(event => event.type === 'SCORE_ADDED')).toHaveLength(1);
-    expect(result.state.score).toBe(101);
+    expect(result.state.score).toBe(131);
   });
 
   it('triggers Golden once per selected or Hitchhiker face before finalization without multiplying gold', () => {
@@ -85,14 +85,14 @@ describe('live hand scoring', () => {
     enhance(game, 4, 'hitchhiker');
     enhance(game, 4, 'golden');
     const result = play(game);
-    expect(result.state.score).toBe(45);
+    expect(result.state.score).toBe(70);
     expect(result.state.gold).toBe(2);
     expect(result.state.stats.triggers.golden).toBe(2);
     const finalIndex = result.events.findIndex(event => event.type === 'HAND_SCORE_FINALIZED');
     const income = result.events.filter(event => event.type === 'GOLD_ADDED');
     expect(income.map(event => event.dieIds)).toEqual([[0], [4]]);
     expect(income.every(event => result.events.indexOf(event) < finalIndex && event.board.score === 0)).toBe(true);
-    expect(income.every(event => event.handScore?.currentPips === 18 && event.handScore.currentMultiplier === 2.5)).toBe(true);
+    expect(income.every(event => event.handScore?.currentPips === 28 && event.handScore.currentMultiplier === 2.5)).toBe(true);
   });
 
   it('uses old Workout values for selected and Hitchhiker faces, then grows them before finalization', () => {
@@ -103,21 +103,21 @@ describe('live hand scoring', () => {
     enhance(game, 4, 'workout');
     enhance(game, 4, 'hitchhiker');
     const result = play(game);
-    expect(result.state.score).toBe(55); // (6 + 4 + 4 + 8) × 2.5
+    expect(result.state.score).toBe(80); // (10 base + 6 + 4 + 4 + 8) × 2.5
     expect(result.state.dice[0].faces[3].workoutPips).toBe(3);
     expect(result.state.dice[4].faces[5].workoutPips).toBe(3);
     const growth = result.events.filter(event => event.type === 'WORKOUT_INCREMENTED');
     expect(growth).toHaveLength(2);
     const finalIndex = result.events.findIndex(event => event.type === 'HAND_SCORE_FINALIZED');
-    expect(growth.every(event => result.events.indexOf(event) < finalIndex && event.handScore?.currentPips === 22)).toBe(true);
-    expect(handScore(result.state.dice, 'sixes', [4]).pips).toBe(9);
+    expect(growth.every(event => result.events.indexOf(event) < finalIndex && event.handScore?.currentPips === 32)).toBe(true);
+    expect(handScore(result.state.dice, 'sixes', [4]).pips).toBe(19);
   });
 
   it('adds multiple Hitchhikers to the same accumulator and never adds a selected Hitchhiker twice', () => {
     const game = board();
     for (const id of [0, 3, 4]) enhance(game, id, 'hitchhiker');
     const result = play(game);
-    expect(result.state.score).toBe(50); // (12 + 2 + 6) × 2.5
+    expect(result.state.score).toBe(75); // (10 base + 12 + 2 + 6) × 2.5
     expect(result.state.stats.triggers.hitchhiker).toBe(2);
     expect(result.events.filter(event => event.type === 'HITCHHIKER_ADDED_PIPS').map(event => event.dieIds)).toEqual([[3], [4]]);
     expect(result.events.filter(event => event.type === 'SCORE_ADDED')).toHaveLength(1);
@@ -128,7 +128,7 @@ describe('live hand scoring', () => {
     const game = board();
     activeFace(game.dice[0]).workoutPips = 1;
     enhance(game, 0, 'multiplier', 2);
-    expect(play(game).state.score).toBe(45.5);
+    expect(play(game).state.score).toBe(80.5);
   });
 
   it('exports final hand arithmetic and pip contributions without double-counting scoring sources', () => {
@@ -139,11 +139,11 @@ describe('live hand scoring', () => {
     enhance(game, 4, 'bonus');
     const result = play(game);
     const data = exportRun(result.state);
-    expect(data).toMatchObject({ schemaVersion: 2, scoringModel: 'hand-accumulator-v1',
+    expect(data).toMatchObject({ schemaVersion: 4, scoringModel: 'hand-base-pips-accumulator-v2',
       handBonusPips: 20, hitchhikerPipsContributed: 16,
-      scoreByHand: { threeKind: 114 }, scoreBySource: { hand: 114, jumpingBean: 0, hitchhiker: 0 } });
+      scoreByHand: { threeKind: 144 }, scoreBySource: { hand: 144, jumpingBean: 0, hitchhiker: 0 } });
     expect(data.handScores).toEqual([{ round: 1, hand: 'threeKind', dieIds: [0, 1, 2],
-      pips: 38, multiplier: 3, score: 114, bonusPips: 20, hitchhikerPips: 16 }]);
+      basePips: 10, baseMultiplier: 2.5, pips: 48, multiplier: 3, score: 144, bonusPips: 20, hitchhikerPips: 16 }]);
     expect(Object.values(data.scoreBySource).reduce((sum, score) => sum + score, 0)).toBe(result.state.score);
     expect(data).toHaveProperty('manualRerolls');
     expect(data).toHaveProperty('goldEarned');
@@ -160,10 +160,10 @@ describe('standalone scoring boundary', () => {
     enhance(game, 0, 'jumpingBean', 1, 6);
     enhance(game, 0, 'multiplier', 2, 6);
     enhance(game, 0, 'sticky', 1, 6);
-    const result = play(game);
-    expect(result.state.score).toBe(96);
+    const result = play(game, sequence(0.99, 0.99, 0.99, 0));
+    expect(result.state.score).toBe(126);
     expect(result.events.filter(event => event.type === 'SCORE_ADDED').map(event => [event.source, event.amount]))
-      .toEqual([['hand', 84], ['jumpingBean', 12]]);
+      .toEqual([['hand', 114], ['jumpingBean', 12]]);
     const finalIndex = result.events.findIndex(event => event.type === 'HAND_SCORE_FINALIZED');
     const consumedIndex = result.events.findIndex(event => event.type === 'HAND_CONSUMED');
     const rollIndex = result.events.findIndex(event => event.type === 'DICE_REROLL_STARTED');
@@ -172,8 +172,8 @@ describe('standalone scoring boundary', () => {
     expect(consumedIndex).toBeLessThan(rollIndex);
     expect(rollIndex).toBeLessThan(beanIndex);
     expect(result.events.slice(consumedIndex).every(event => event.handScore === undefined)).toBe(true);
-    expect(result.state.stats.handScores[0].score).toBe(84);
-    expect(result.state.stats.scoreBySource).toEqual({ hand: 84, jumpingBean: 12, hitchhiker: 0 });
+    expect(result.state.stats.handScores[0].score).toBe(114);
+    expect(result.state.stats.scoreBySource).toEqual({ hand: 114, jumpingBean: 12, hitchhiker: 0 });
   });
 
   it.each(['manual', 'initial'])('%s roll Jumping Bean retains its own Multiplier and independent scoring', mode => {
@@ -184,7 +184,8 @@ describe('standalone scoring boundary', () => {
     enhance(game, 4, 'hitchhiker');
     if (mode === 'initial') { game.phase = 'shop'; game.shop = { offers: [], diceRerolls: 0, offerRerolls: 0 }; }
     const result = dispatch(game, mode === 'manual'
-      ? { type: 'MANUAL_REROLL', dieIds: [0] } : { type: 'NEXT_ROUND' }, constant());
+      ? { type: 'MANUAL_REROLL', dieIds: [0] } : { type: 'NEXT_ROUND' },
+      mode === 'manual' ? sequence(0.99, 0) : sequence(0.99, 0.99, 0.99, 0.99, 0.99, 0));
     expect(result.state.score).toBe(9);
     expect(result.state.gold).toBe(1);
     expect(result.state.dice[0].faces[5].workoutPips).toBe(1);
@@ -198,13 +199,13 @@ describe('standalone scoring boundary', () => {
 
   it('finishes independent post-hand chains before clearing after the target is crossed', () => {
     const game = board();
-    game.target = 35;
+    game.target = 60;
     enhance(game, 0, 'jumpingBean', 1, 6);
     const result = play(game, sequence(0.99, 0, 0, 0.99, 0));
     expect(result.state.phase).toBe('shop');
-    expect(result.state.score).toBe(42);
-    expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: 36, finalScore: 42, clearMargin: 7 });
-    expect(result.events.filter(event => event.type === 'SCORE_ADDED').map(event => event.amount)).toEqual([30, 6, 6]);
+    expect(result.state.score).toBe(67);
+    expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: 61, finalScore: 67, clearMargin: 7 });
+    expect(result.events.filter(event => event.type === 'SCORE_ADDED').map(event => event.amount)).toEqual([55, 6, 6]);
     expect(result.events.findIndex(event => event.type === 'ROUND_CLEARED'))
       .toBeGreaterThan(result.events.map(event => event.type).lastIndexOf('STANDALONE_SCORE_CALCULATED'));
   });

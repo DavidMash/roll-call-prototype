@@ -4,6 +4,7 @@ The audit traced `Resolver.play`, `handScore`, `standaloneScore`, `scoringPips`,
 
 | Stage | Previous behavior | Current behavior |
 | --- | --- | --- |
+| Hand Base Pips | No intrinsic hand pips | Every definition contributes 10 Pips when its accumulator is created; this is not a face-scoring event |
 | Selected base pips | Collected by `handScore` from printed rank, prior Workout growth, and Bonus | Captured face snapshots contribute printed rank and prior Workout growth into the live hand accumulator |
 | Bonus | Already included before multiplication; never a separate score addition | Explicit pip contribution before finalization; Hitchhiker Bonus is included in its contribution |
 | Selected Multiplier | Already included before multiplication | Explicit increment to the live hand multiplier |
@@ -17,7 +18,7 @@ The suspected early finalization existed for Hitchhiker and hand-bound trigger t
 
 ## Domain boundary and snapshots
 
-`HandScoreAccumulator` holds the selected category/physical IDs, `currentPips`, `currentMultiplier`, Bonus pips, Hitchhiker pips, and a nullable final result. Pure contribution helpers are shared by score previews and resolution. Capturing all faces before contributions prevents current Workout increments from changing the current score.
+`HandScoreAccumulator` holds the selected category/physical IDs, definition-owned `basePips`/`baseMultiplier`, live `currentPips`/`currentMultiplier`, Bonus pips, Hitchhiker pips, and a nullable final result. It is initialized from the hand definition before face contributions. Pure contribution helpers are shared by score previews and resolution. Capturing all faces before contributions prevents current Workout increments from changing the current score.
 
 Every event emitted while the accumulator is active carries an immutable `handScore` snapshot, including Golden/Workout ticks. `HAND_PIPS_CHANGED`, `HAND_MULTIPLIER_CHANGED`, and `HITCHHIKER_ADDED_PIPS` expose changes directly. `HAND_SCORE_FINALIZED` exposes the multiplication result while round score is still unchanged; the following hand `SCORE_ADDED` awards it once.
 
@@ -27,7 +28,7 @@ Later playtesting added Pair/Two Pair and updated lower multipliers in centraliz
 
 ## Telemetry compatibility
 
-Export schema 2 declares `scoringModel: hand-accumulator-v1` and retains all existing telemetry fields. Final multiplied hand score is attributed to the selected category and `scoreBySource.hand`. `handScores` records final arithmetic and Bonus/Hitchhiker pip contributions; `handBonusPips` and `hitchhikerPipsContributed` record run totals. Bonus pips include Bonus carried by Hitchhikers.
+Export schema 3 declares `scoringModel: hand-base-pips-accumulator-v2` and retains the existing telemetry fields. Final multiplied hand score is attributed to the selected category and `scoreBySource.hand`. `handScores` records Base Pips/Base Multiplier, final arithmetic, and Bonus/Hitchhiker pip contributions; `handBonusPips` and `hitchhikerPipsContributed` record run totals. Each round also records `scoreByHand` and `effectScore`, matching the authoritative current-round board breakdown used by the scorecard. Bonus pips include Bonus carried by Hitchhikers.
 
 `scoreBySource.hitchhiker` remains a legacy key at zero for current runs, preventing score double-counting. Schema 1 exports used that field for standalone Hitchhiker score, including the Hitchhiker face's own multiplier. Existing historical exports are not rewritten; replay requires the matching rules version.
 

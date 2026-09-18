@@ -13,6 +13,7 @@ export function toggleDie(dice: Die[], consumed: HandId[], selection: Selection,
   return { dieIds, hand: retained ?? (completed.length === 1 ? completed[0].id : null) };
 }
 export function selectHand(dice: Die[], consumed: HandId[], selection: Selection, hand: HandId): Selection {
+  if (selection.hand === hand) return emptySelection();
   if (consumed.includes(hand)) return selection;
   const dieIds = defaultCombination(dice, hand, selection.dieIds) ?? defaultCombination(dice, hand);
   return dieIds ? { dieIds, hand } : selection;

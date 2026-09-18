@@ -1,20 +1,35 @@
-import { CONFIG } from './config';
 import { activeFace, RANKS } from './dice';
 import { stacks } from './enhancements';
 import type { Die, HandId, HandOption, Rank } from './types';
 
-export const HANDS: Record<HandId, { name: string; size?: number; rank?: Rank; groups?: readonly number[] }> = {
-  ones: { name: 'Ones', rank: 1 }, twos: { name: 'Twos', rank: 2 }, threes: { name: 'Threes', rank: 3 },
-  fours: { name: 'Fours', rank: 4 }, fives: { name: 'Fives', rank: 5 }, sixes: { name: 'Sixes', rank: 6 },
-  pair: { name: 'Pair', size: 2, groups: [2] }, twoPair: { name: 'Two Pair', size: 4, groups: [2, 2] },
-  threeKind: { name: 'Three of a Kind', size: 3, groups: [3] },
-  smallStraight: { name: 'Small Straight', size: 4 },
-  fullHouse: { name: 'Full House', size: 5, groups: [3, 2] },
-  fourKind: { name: 'Four of a Kind', size: 4, groups: [4] },
-  largeStraight: { name: 'Large Straight', size: 5 },
-  fiveKind: { name: 'Five of a Kind', size: 5, groups: [5] },
+export interface HandDefinition {
+  name: string;
+  basePips: number;
+  baseMultiplier: number;
+  size?: number;
+  rank?: Rank;
+  groups?: readonly number[];
+}
+
+export const HANDS: Record<HandId, HandDefinition> = {
+  ones: { name: 'Ones', rank: 1, basePips: 10, baseMultiplier: 1 },
+  twos: { name: 'Twos', rank: 2, basePips: 10, baseMultiplier: 1 },
+  threes: { name: 'Threes', rank: 3, basePips: 10, baseMultiplier: 1 },
+  fours: { name: 'Fours', rank: 4, basePips: 10, baseMultiplier: 1 },
+  fives: { name: 'Fives', rank: 5, basePips: 10, baseMultiplier: 1 },
+  sixes: { name: 'Sixes', rank: 6, basePips: 10, baseMultiplier: 1 },
+  pair: { name: 'Pair', size: 2, groups: [2], basePips: 10, baseMultiplier: 1.5 },
+  twoPair: { name: 'Two Pair', size: 4, groups: [2, 2], basePips: 10, baseMultiplier: 2 },
+  threeKind: { name: 'Three of a Kind', size: 3, groups: [3], basePips: 10, baseMultiplier: 2.5 },
+  smallStraight: { name: 'Small Straight', size: 4, basePips: 10, baseMultiplier: 2.5 },
+  fullHouse: { name: 'Full House', size: 5, groups: [3, 2], basePips: 10, baseMultiplier: 3.5 },
+  fourKind: { name: 'Four of a Kind', size: 4, groups: [4], basePips: 10, baseMultiplier: 4 },
+  largeStraight: { name: 'Large Straight', size: 5, basePips: 10, baseMultiplier: 4 },
+  fiveKind: { name: 'Five of a Kind', size: 5, groups: [5], basePips: 10, baseMultiplier: 5 },
 };
 export const HAND_IDS = Object.keys(HANDS) as HandId[];
+export const UPPER_HAND_IDS = HAND_IDS.filter(id => HANDS[id].rank) as HandId[];
+export const LOWER_HAND_IDS = HAND_IDS.filter(id => !HANDS[id].rank) as HandId[];
 
 function subsets<T>(items: T[], size: number): T[][] {
   if (size === 0) return [[]];
@@ -69,4 +84,4 @@ export function defaultCombination(dice: Die[], hand: HandId, selected: number[]
 export function isValidSelection(dice: Die[], hand: HandId, selected: number[]): boolean {
   return new Set(selected).size === selected.length && combinationsForHand(dice, hand).some(set => sameDice(set, selected));
 }
-export const handMultiplier = (hand: HandId) => CONFIG.handMultipliers[hand];
+export const handMultiplier = (hand: HandId) => HANDS[hand].baseMultiplier;

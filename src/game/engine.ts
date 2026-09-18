@@ -61,6 +61,7 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
   const state: GameState = {
     phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: CONFIG.baseTarget,
     score: 0, gold: CONFIG.startingGold, dice: createDice(), consumed: [], shop: null,
+    scoreByHand: {}, effectScore: 0,
     manualRerollsRemaining: CONFIG.manualRerollsPerRound,
     nextOfferId: 0, stats: createStats(seed), history: [],
   };

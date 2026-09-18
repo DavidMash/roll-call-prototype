@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { newRun, dispatch } from '../src/game/engine';
-import { handOptions, HANDS } from '../src/game/hands';
+import { handOptions, HANDS, HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import { ENHANCEMENTS } from '../src/game/enhancements';
 import { CONFIG, roundReward } from '../src/game/config';
@@ -55,6 +55,24 @@ function findShopSeed(required?: Enhancement) {
   }
   throw new Error('No suitable shop seed found');
 }
+function findStickyStackSeed() {
+  for (let i = 0; i < 3000; i++) {
+    const seed = `sticky-stack-${i}`;
+    let game = newRun(seed).state;
+    for (let step = 0; step < 12 && game.phase === 'round'; step++) {
+      const choice = bestHand(game);
+      game = dispatch(game, choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
+        : { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+    }
+    if (game.phase !== 'shop') continue;
+    const first = game.shop!.offers.find(offer => offer.enhancement === 'sticky');
+    if (!first) continue;
+    game = dispatch(game, { type: 'BUY', offerId: first.id, dieId: 0 }).state;
+    game = dispatch(game, { type: 'REROLL_OFFERS' }).state;
+    if (game.shop!.offers.some(offer => offer.enhancement === 'sticky')) return seed;
+  }
+  throw new Error('No shop seed found for a repeated Sticky purchase');
+}
 function nearStraightRun() {
   for (let i = 0; i < 5000; i++) {
     const game = newRun(`upper-subset-${i}`).state;
@@ -73,6 +91,34 @@ async function reachShop(page: Page, seed: string) {
   expect(game.phase).toBe('shop');
   return game;
 }
+
+test('scorecard keeps all fourteen categories visible with base stats and actionable states', async ({ page }) => {
+  await page.goto('/?seed=persistent-scorecard&speed=instant');
+  await ready(page);
+  await expect(page.locator('[data-testid^="scorecard-row-"]')).toHaveCount(14);
+  for (const hand of HAND_IDS) {
+    const row = page.getByTestId(`scorecard-row-${hand}`);
+    await expect(row).toBeVisible();
+    await expect(row).toContainText('10 Pips');
+    await expect(page.getByTestId(`scorecard-score-${hand}`)).toHaveText('—');
+  }
+  await expect(page.locator('[data-state="playable"]')).not.toHaveCount(0);
+  await expect(page.locator('[data-state="unavailable"]')).not.toHaveCount(0);
+  await expect(page.getByTestId('scorecard-effect-score')).toHaveText('0');
+  await expect(page.getByTestId('scorecard-round-total')).toHaveText('0 / 50');
+
+  const playable = page.locator('[data-state="playable"]').first();
+  const playableTestId = await playable.getAttribute('data-testid');
+  const playableRow = page.getByTestId(playableTestId!);
+  await playableRow.click();
+  await expect(playableRow).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.locator('.die[aria-pressed="true"]').count()).toBeGreaterThan(0);
+  await playableRow.click();
+  await expect(playableRow).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.die[aria-pressed="true"]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
+  await expect(page.getByTestId('stat-score').getByText('0', { exact: true })).toBeVisible();
+});
 
 test('full seeded run: select/play, clear, buy onto a face, reroll dice, next round, lose and export', async ({ page, context }) => {
   const errors: string[] = [];
@@ -151,6 +197,29 @@ test('native drag-and-drop purchase and enhancement refresh', async ({ page }) =
   for (const item of game.shop!.offers) await expect(page.getByTestId(`offer-${item.enhancement}`).getByText(ENHANCEMENTS[item.enhancement].name, { exact: true })).toBeVisible();
 });
 
+test('stackable enhancement purchases show a single readable count badge', async ({ page }) => {
+  let game = await reachShop(page, findStickyStackSeed());
+  const first = game.shop!.offers.find(offer => offer.enhancement === 'sticky')!;
+  await page.getByTestId('offer-sticky').getByRole('button').click();
+  const physical = page.getByRole('button', { name: /^Die 1,/ });
+  await physical.click();
+  game = dispatch(game, { type: 'BUY', offerId: first.id, dieId: 0 }).state;
+  await matchBoard(page, game);
+
+  await page.getByRole('button', { name: 'Reroll Enhancements · 3 gold', exact: true }).click();
+  game = dispatch(game, { type: 'REROLL_OFFERS' }).state;
+  await matchBoard(page, game);
+  const second = game.shop!.offers.find(offer => offer.enhancement === 'sticky')!;
+  await page.getByTestId('offer-sticky').getByRole('button').click();
+  await physical.click();
+  game = dispatch(game, { type: 'BUY', offerId: second.id, dieId: 0 }).state;
+  await matchBoard(page, game);
+
+  await expect(physical).toContainText('Sticky ×2');
+  expect(game.dice[0].faces[game.dice[0].value - 1].enhancements.sticky).toBe(2);
+  expect(game.gold).toBe(0);
+});
+
 test('ambiguous physical dice can be changed and filtering never ends the run', async ({ page }) => {
   let seed = '';
   let game: GameState | undefined;
@@ -202,13 +271,13 @@ for (const direction of ['hand-first', 'dice-first'] as const) {
     await expect(preservedDie).toHaveAttribute('aria-pressed', 'false');
     await expect(playedDie).toHaveAttribute('aria-pressed', 'true');
     await expect(fours).toHaveAttribute('aria-pressed', 'true');
-    await expect(fours).toHaveAccessibleName(/^Fours 4 /);
-    await expect(page.getByText('4 pips × 1 = 4 points', { exact: true })).toBeVisible();
+    await expect(fours).toHaveAccessibleName(/^Fours 10 Pips · ×1 /);
+    await expect(page.getByText('14 pips × 1 = 14 points', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeEnabled();
     await matchBoard(page, game); // Selection alone never scores or rolls.
     await page.getByRole('button', { name: 'PLAY', exact: true }).click();
     await matchBoard(page, next.state);
-    expect(next.state.score).toBe(4);
+    expect(next.state.score).toBe(14);
     expect(next.state.dice[preserved].value).toBe(4);
     expect(next.state.dice[played].value).toBe(3);
     expect(next.events.filter(event => event.type === 'DIE_ROLLED').map(event => event.dieIds)).toEqual([[played]]);
@@ -274,6 +343,8 @@ test('purchased Jumping Bean visibly triggers and rerolls on the next initial ga
   await expect(page.locator('.ability-label').first()).toHaveText('JUMPING BEAN');
   await page.getByRole('button', { name: 'Skip playback' }).click();
   await matchBoard(page, next.state);
+  await expect(page.getByTestId('scorecard-effect-score')).toHaveText(String(next.state.effectScore));
+  await expect(page.getByTestId('scorecard-round-total')).toHaveText(`${next.state.score} / ${next.state.target}`);
   expect(next.state.stats.scoreBySource.jumpingBean).toBeGreaterThan(0);
   expect(next.events.filter(event => event.type === 'DIE_ROLLED' && event.dieIds?.includes(0)).length).toBeGreaterThan(1);
 });
