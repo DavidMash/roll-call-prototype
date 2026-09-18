@@ -100,7 +100,7 @@ async function reachDeadBoard(page: Page, rescue: boolean) {
   }
   await matchRound(page, fixture.game);
   await expect(page.getByRole('heading', { name: 'Run over' })).toHaveCount(0);
-  await expect(page.getByText('Use your remaining rerolls. Select any dice below to try to make a new hand.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Select dice and use a reroll.', { exact: true })).toBeVisible();
   return fixture.game;
 }
 
@@ -145,7 +145,7 @@ test('dead board remains playable with rerolls and loses only after the final co
     game = (await reroll(page, game, [0])).state;
     expect(game.manualRerollsRemaining).toBe(remaining);
     await expect(page.getByRole('heading', { name: 'Run over' })).toHaveCount(0);
-    await expect(page.getByText('Use your remaining rerolls. Select any dice below to try to make a new hand.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Select dice and use a reroll.', { exact: true })).toBeVisible();
   }
   await page.getByText('NORMAL', { exact: true }).click();
   await page.getByRole('button', { name: /^Die 1,/ }).click();
@@ -163,7 +163,7 @@ test('a manual reroll rescues a dead board and restores legal hand controls', as
   const game = await reachDeadBoard(page, true);
   const result = await reroll(page, game, [0]);
   expect(result.state.stats.deadBoardRescues).toBe(1);
-  await expect(page.getByText('Use your remaining rerolls. Select any dice below to try to make a new hand.', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Select dice and use a reroll.', { exact: true })).toHaveCount(0);
   const option = handOptions(result.state.dice, result.state.consumed).find(hand => !hand.consumed)!;
   await page.getByRole('button', { name: new RegExp(`^${HANDS[option.id].name} `) }).click();
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeEnabled();

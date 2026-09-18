@@ -91,7 +91,7 @@ test('winning hand shows final award and ROUND CLEARED without gameplay roll or 
       await expect(page.getByRole('button', { name: new RegExp(`^Die ${physical.id + 1}, face ${physical.value},`) })).toBeVisible();
     }
     if (event.type === 'HAND_SCORE_FINALIZED') {
-      await expect(page.locator('.score-tick')).toHaveText(`${event.pips} × ${event.multiplier} = ${event.amount}`);
+      await expect(page.locator('.score-tick')).toHaveText(`+${event.amount}`);
       observed.push(event.type);
     }
     if (event.type === 'SCORE_ADDED') {
@@ -109,6 +109,6 @@ test('winning hand shows final award and ROUND CLEARED without gameplay roll or 
   expect(observed).toEqual(['HAND_SCORE_FINALIZED', 'SCORE_ADDED', 'ROUND_CLEARED']);
   await page.getByRole('button', { name: 'Skip playback' }).click();
   await ready(page);
-  await expect(page.getByRole('heading', { name: 'Build your dice' })).toBeVisible();
+  await expect(page.getByText('Enhancements', { exact: true })).toBeVisible();
   await expect(page.getByTestId('stat-score').getByText(String(fixture.result.state.score), { exact: true })).toBeVisible();
 });

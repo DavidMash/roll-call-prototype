@@ -47,8 +47,8 @@ describe('scoring, Bonus and Multiplier', () => {
     enhance(game, 0, 'multiplier', 2);
     enhance(game, 1, 'multiplier');
     enhance(game, 4, 'multiplier', 10);
-    expect(handScore(game.dice, 'threeKind', [0, 1, 2])).toEqual({ pips: 36, multiplier: 4, score: 144 });
-    expect(standaloneScore(activeFace(game.dice[0]))).toEqual({ pips: 22, multiplier: 2, score: 44 });
+    expect(handScore(game.dice, 'threeKind', [0, 1, 2])).toEqual({ pips: 36, multiplier: 4, rawScore: 144, score: 144 });
+    expect(standaloneScore(activeFace(game.dice[0]))).toEqual({ pips: 22, multiplier: 2, rawScore: 44, score: 44 });
     expect(play(game, 'threeKind', [0, 1, 2]).state.score).toBe(144);
   });
   it('rejects mixed upper-hand sets without mutation or RNG consumption', () => {
@@ -79,9 +79,10 @@ describe('upper-hand subset resolution', () => {
     const expectedMultiplier = 1 + dieIds.reduce((sum, id) => sum + [0.5, 1, 2][id], 0);
     const result = play(game, 'fours', dieIds);
     expect(result.error).toBeUndefined();
-    expect(result.state.score).toBe(expectedPips * expectedMultiplier);
+    expect(result.state.score).toBe(Math.round(expectedPips * expectedMultiplier));
     expect(result.events.find(event => event.type === 'HAND_SCORE_FINALIZED')).toMatchObject({
-      dieIds, pips: expectedPips, multiplier: expectedMultiplier, source: 'hand',
+      dieIds, pips: expectedPips, multiplier: expectedMultiplier,
+      rawScore: expectedPips * expectedMultiplier, amount: Math.round(expectedPips * expectedMultiplier), source: 'hand',
     });
   });
   it('rerolls one duplicate, preserves the near-straight and consumes Fours', () => {

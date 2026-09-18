@@ -65,7 +65,7 @@ describe('authoritative current-round scorecard totals', () => {
     expect(first.state.scoreByHand.pair).toBe(24);
     expect(first.state.consumed).not.toContain('pair');
     const second = dispatch(first.state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant());
-    expect(second.state.scoreByHand.pair).toBe(49.5);
+    expect(second.state.scoreByHand.pair).toBe(50);
     expect(second.state.consumed).toContain('pair');
   });
 

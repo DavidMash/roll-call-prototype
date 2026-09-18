@@ -16,7 +16,12 @@ export function createHandAccumulator(hand: HandId, dieIds: number[], level = 1)
   return { hand, handLevel: level, dieIds: [...dieIds].sort((a, b) => a - b),
     basePips: stats.basePips, baseMultiplier: stats.baseMultiplier,
     currentPips: stats.basePips, currentMultiplier: stats.baseMultiplier,
-    bonusPips: 0, hitchhikerPips: 0, finalScore: null };
+    bonusPips: 0, hitchhikerPips: 0, rawScore: null, finalScore: null };
+}
+
+export function finalizeScore(pips: number, multiplier: number) {
+  const rawScore = pips * multiplier;
+  return { rawScore, finalScore: Math.round(rawScore) };
 }
 
 // Capture all scoring faces before Workout changes any physical face.
@@ -51,8 +56,10 @@ export function applyHandContribution(accumulator: HandScoreAccumulator, contrib
 
 export function finalizeHandScore(accumulator: HandScoreAccumulator) {
   if (accumulator.finalScore !== null) throw new Error('Hand score already finalized.');
-  accumulator.finalScore = accumulator.currentPips * accumulator.currentMultiplier;
-  return { pips: accumulator.currentPips, multiplier: accumulator.currentMultiplier, score: accumulator.finalScore };
+  const { rawScore, finalScore } = finalizeScore(accumulator.currentPips, accumulator.currentMultiplier);
+  accumulator.rawScore = rawScore;
+  accumulator.finalScore = finalScore;
+  return { pips: accumulator.currentPips, multiplier: accumulator.currentMultiplier, rawScore, score: finalScore };
 }
 
 export function handScore(dice: Die[], hand: HandId, dieIds: number[], level = 1) {
@@ -63,5 +70,6 @@ export function handScore(dice: Die[], hand: HandId, dieIds: number[], level = 1
 export function standaloneScore(face: Face) {
   const pips = scoringPips(face);
   const multiplier = CONFIG.standaloneMultiplier + stacks(face, 'multiplier') * CONFIG.multiplierIncrement;
-  return { pips, multiplier, score: pips * multiplier };
+  const { rawScore, finalScore } = finalizeScore(pips, multiplier);
+  return { pips, multiplier, rawScore, score: finalScore };
 }

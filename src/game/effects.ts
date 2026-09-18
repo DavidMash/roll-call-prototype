@@ -69,6 +69,9 @@ export class Resolver {
     this.emit({ type: 'GOLD_SPENT', amount, message, goldSpendSource });
   }
   addScore(amount: number, source: Exclude<ScoreSource, 'hitchhiker'>, message: string, dieIds: number[], hand?: HandId): void {
+    if (!Number.isInteger(amount) || !Number.isInteger(this.state.score)) {
+      throw new Error(`Score awards and the authoritative round score must be integers (award ${amount}, current ${this.state.score}).`);
+    }
     this.state.score += amount;
     this.state.stats.scoreBySource[source] += amount;
     if (hand) {
@@ -107,9 +110,11 @@ export class Resolver {
   standalone(dieId: number, face: Face): void {
     const source = 'jumpingBean';
     this.modifiers(dieId, face);
-    const { pips, multiplier, score } = standaloneScore(face);
-    this.emit({ type: 'STANDALONE_SCORE_CALCULATED', dieIds: [dieId], face: face.rank, pips, multiplier, source,
-      message: `D${dieId + 1} ${ENHANCEMENTS[source].name}: ${pips} × ${multiplier} = ${score}` });
+    const { pips, multiplier, rawScore, score } = standaloneScore(face);
+    this.log({ type: 'SCORE_ROUNDING_AUDIT', dieIds: [dieId], face: face.rank, pips, multiplier, rawScore,
+      amount: score, source, message: `D${dieId + 1} ${ENHANCEMENTS[source].name} calculation: ${pips} × ${multiplier} = ${rawScore}. Rounded Score: ${score}` });
+    this.emit({ type: 'STANDALONE_SCORE_CALCULATED', dieIds: [dieId], face: face.rank, pips, multiplier, rawScore,
+      amount: score, source, message: `D${dieId + 1} ${ENHANCEMENTS[source].name}: ${pips} Pips × ${multiplier} Mult. Awarded ${score}` });
     this.addScore(score, source, `D${dieId + 1} ${ENHANCEMENTS[source].name} scored ${score}`, [dieId]);
     this.whenScored(dieId, face);
   }
@@ -236,15 +241,17 @@ export class Resolver {
     for (const contribution of contributions.filter(item => item.kind === 'hitchhiker')) {
       this.whenScored(contribution.dieId, contribution.face);
     }
-    const { pips, multiplier, score } = finalizeHandScore(this.handAccumulator);
+    const { pips, multiplier, rawScore, score } = finalizeHandScore(this.handAccumulator);
     this.state.stats.handScores.push({ round: this.state.round, hand, handLevel, dieIds: ids,
       basePips: this.handAccumulator.basePips, baseMultiplier: this.handAccumulator.baseMultiplier,
-      pips, multiplier, score,
+      pips, multiplier, rawScore, score,
       bonusPips: this.handAccumulator.bonusPips, hitchhikerPips: this.handAccumulator.hitchhikerPips });
     this.state.stats.handBonusPips += this.handAccumulator.bonusPips;
     this.state.stats.hitchhikerPipsContributed += this.handAccumulator.hitchhikerPips;
-    this.emit({ type: 'HAND_SCORE_FINALIZED', hand, dieIds: ids, pips, multiplier, amount: score, source: 'hand',
-      message: `Final hand score: ${pips} × ${multiplier} = ${score}` });
+    this.log({ type: 'SCORE_ROUNDING_AUDIT', hand, dieIds: ids, pips, multiplier, rawScore, amount: score, source: 'hand',
+      message: `Final hand calculation: ${pips} × ${multiplier} = ${rawScore}. Rounded Score: ${score}` });
+    this.emit({ type: 'HAND_SCORE_FINALIZED', hand, dieIds: ids, pips, multiplier, rawScore, amount: score, source: 'hand',
+      message: `Final awarded hand score: ${score}` });
     this.addScore(score, 'hand',
       `${HANDS[hand].name}: round score +${score}; ${HANDS[hand].name} round total: ${(this.state.scoreByHand[hand] ?? 0) + score}`,
       ids, hand);

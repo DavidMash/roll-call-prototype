@@ -79,7 +79,8 @@ test('Sticky + Sustainable can succeed repeatedly without any spent-state presen
   await expect(physical).toHaveAccessibleName(new RegExp(`face ${fixture.face},`));
   expect(game.stats.triggers.sustainable).toBe(2);
   expect(game.stats.probabilityProcs.sustainable).toMatchObject({ checks: 2, successes: 2, failures: 0 });
-  await page.getByRole('button', { name: /^Run data & event history/ }).click();
+  await page.getByRole('button', { name: 'Run Info', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Run Info' }).getByRole('tab', { name: /History/ }).click();
   await expect(page.locator('.log-entry').filter({ hasText: 'Sustainable succeeded' })).toHaveCount(2);
   await expect(page.locator('.log-entry').filter({ hasText: 'spent' })).toHaveCount(0);
 });

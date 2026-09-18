@@ -23,6 +23,7 @@ export interface HandScoreAccumulator {
   currentMultiplier: number;
   bonusPips: number;
   hitchhikerPips: number;
+  rawScore: number | null;
   finalScore: number | null;
 }
 export interface HandScoreRecord {
@@ -34,6 +35,7 @@ export interface HandScoreRecord {
   baseMultiplier: number;
   pips: number;
   multiplier: number;
+  rawScore: number;
   score: number;
   bonusPips: number;
   hitchhikerPips: number;
@@ -130,7 +132,7 @@ export interface RunStats {
 export type EventType =
   | 'ROUND_STARTED' | 'HAND_STARTED' | 'ABILITY_TRIGGERED' | 'ABILITY_CHECKED' | 'ABILITY_EVALUATED'
   | 'HAND_PIPS_CHANGED' | 'HAND_MULTIPLIER_CHANGED' | 'HITCHHIKER_ADDED_PIPS'
-  | 'HAND_SCORE_FINALIZED' | 'STANDALONE_SCORE_CALCULATED'
+  | 'HAND_SCORE_FINALIZED' | 'STANDALONE_SCORE_CALCULATED' | 'SCORE_ROUNDING_AUDIT'
   | 'POST_HAND_REROLLS_SKIPPED'
   | 'SCORE_ADDED' | 'GOLD_ADDED' | 'WORKOUT_INCREMENTED' | 'DICE_REROLL_STARTED'
   | 'DIE_ROLLED' | 'DIE_FLIPPED' | 'HAND_CONSUMED' | 'ROUND_CLEARED'
@@ -146,6 +148,7 @@ export interface EventRecord {
   hand?: HandId;
   pips?: number;
   multiplier?: number;
+  rawScore?: number;
   amount?: number;
   source?: ScoreSource;
   goldSource?: GoldSource;

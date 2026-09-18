@@ -80,7 +80,7 @@ test('live Pips and Mult build through Bonus, Multiplier and Hitchhiker before o
         await expect(page.locator('.score-tick')).toHaveText('HITCHHIKER');
         observed.push(['Hitchhiker', event.handScore.currentPips, event.handScore.currentMultiplier]);
       }
-      if (event.type === 'HAND_SCORE_FINALIZED') await expect(page.locator('.score-tick')).toHaveText(`${final.pips} × ${final.multiplier} = ${final.amount}`);
+      if (event.type === 'HAND_SCORE_FINALIZED') await expect(page.locator('.score-tick')).toHaveText(`+${final.amount}`);
     }
     if (event.type === 'SCORE_ADDED' && event.source === 'hand') {
       await expect(page.locator('.score-tick')).toHaveText(`+${final.amount}`);

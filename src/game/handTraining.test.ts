@@ -77,7 +77,7 @@ describe('derived hand levels', () => {
     const values: Rank[] = [4, 4, 2, 3, 6];
     game.dice.forEach((die, index) => { die.value = values[index]; });
     game.handLevels.pair = 3;
-    expect(handScore(game.dice, 'pair', [0, 1], 3)).toEqual({ pips: 22, multiplier: 2, score: 44 });
+    expect(handScore(game.dice, 'pair', [0, 1], 3)).toEqual({ pips: 22, multiplier: 2, rawScore: 44, score: 44 });
 
     activeFace(game.dice[0]).enhancements.bonus = 1;
     activeFace(game.dice[1]).enhancements.multiplier = 1;
@@ -86,7 +86,7 @@ describe('derived hand levels', () => {
     expect(result.state.score).toBe(95);
     expect(result.state.stats.handScores[0]).toMatchObject({
       hand: 'pair', handLevel: 3, basePips: 14, baseMultiplier: 2,
-      pips: 38, multiplier: 2.5, score: 95, bonusPips: 10, hitchhikerPips: 6,
+      pips: 38, multiplier: 2.5, rawScore: 95, score: 95, bonusPips: 10, hitchhikerPips: 6,
     });
     expect(result.events.find(event => event.type === 'HAND_STARTED')?.handScore).toMatchObject({
       handLevel: 3, basePips: 14, baseMultiplier: 2, currentPips: 14, currentMultiplier: 2,

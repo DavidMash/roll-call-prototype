@@ -21,6 +21,6 @@ export function boardSnapshot(state: GameState): Board {
   return structuredClone({ phase, round, target, score, gold, manualRerollsRemaining, dice, consumed, scoreByHand, effectScore, handLevels, shop });
 }
 export function exportRun(state: GameState) {
-  return { schemaVersion: 6, scoringModel: 'trained-hand-accumulator-v3', ...state.stats,
+  return { schemaVersion: 7, scoringModel: 'rounded-score-accumulator-v4', ...state.stats,
     finalHandLevels: structuredClone(state.handLevels), rngState: state.rngState, board: boardSnapshot(state) };
 }

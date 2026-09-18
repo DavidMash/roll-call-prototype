@@ -38,7 +38,7 @@ describe('Pair and Two Pair qualification', () => {
   it('allows natural plus Mirror and uses actual physical pips', () => {
     const board = dice([3, 6, 4, 2, 5], [1]);
     expect(isValidSelection(board, 'pair', [0, 1])).toBe(true);
-    expect(handScore(board, 'pair', [0, 1])).toEqual({ pips: 17, multiplier: 1.5, score: 25.5 });
+    expect(handScore(board, 'pair', [0, 1])).toEqual({ pips: 17, multiplier: 1.5, rawScore: 25.5, score: 26 });
     expect(isValidSelection(board, 'pair', [0, 2])).toBe(false);
     expect(isValidSelection(board, 'pair', [0, 1, 2])).toBe(false);
   });
@@ -54,7 +54,7 @@ describe('Pair and Two Pair qualification', () => {
   it('uses one Mirror for one missing pair slot and preserves its scoring pips', () => {
     const board = dice([3, 6, 5, 5, 2], [1]);
     expect(isValidSelection(board, 'twoPair', [0, 1, 2, 3])).toBe(true);
-    expect(handScore(board, 'twoPair', [0, 1, 2, 3])).toEqual({ pips: 28, multiplier: 2, score: 56 });
+    expect(handScore(board, 'twoPair', [0, 1, 2, 3])).toEqual({ pips: 28, multiplier: 2, rawScore: 56, score: 56 });
     expect(isValidSelection(dice([3, 4, 5, 6, 2], [3]), 'twoPair', [0, 1, 2, 3])).toBe(false);
     expect(isValidSelection(dice([3, 3, 3, 6, 2], [3]), 'twoPair', [0, 1, 2, 3])).toBe(false);
   });
@@ -158,7 +158,7 @@ describe('Pair resolution and loss integration', () => {
   });
   it.each([
     { hand: 'pair' as const, values: [4, 4, 4, 2, 6] as Rank[], ids: [0, 1], pips: 44, mult: 2, score: 88, rerolls: [1, 4] },
-    { hand: 'twoPair' as const, values: [2, 2, 5, 5, 6] as Rank[], ids: [0, 1, 2, 3], pips: 51, mult: 2.5, score: 127.5, rerolls: [1, 2, 3, 4] },
+    { hand: 'twoPair' as const, values: [2, 2, 5, 5, 6] as Rank[], ids: [0, 1, 2, 3], pips: 51, mult: 2.5, score: 128, rerolls: [1, 2, 3, 4] },
   ])('$hand shares all participation and scoring enhancement rules', ({ hand, values, ids, pips, mult, score, rerolls }) => {
     const state = game(values);
     for (const enhancement of ['bonus', 'golden', 'workout', 'sticky', 'sustainable'] as Enhancement[]) enhance(state, 0, enhancement);

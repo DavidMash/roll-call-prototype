@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { activeFace } from './dice';
 import { dispatch, newRun } from './engine';
-import { handScore } from './scoring';
+import { finalizeScore, handScore } from './scoring';
 import { exportRun } from './telemetry';
 import type { Enhancement, GameState, RandomSource, Rank } from './types';
 
@@ -24,6 +24,39 @@ function enhance(game: GameState, id: number, enhancement: Enhancement, count = 
 const play = (game: GameState, rng = constant()) =>
   dispatch(game, { type: 'PLAY', hand: 'threeKind', dieIds: [0, 1, 2] }, rng);
 
+describe('score finalization', () => {
+  it.each([
+    { pips: 32, multiplier: 3, rawScore: 96, finalScore: 96 },
+    { pips: 13, multiplier: 1.25, rawScore: 16.25, finalScore: 16 },
+    { pips: 13, multiplier: 1.5, rawScore: 19.5, finalScore: 20 },
+    { pips: 23, multiplier: 2.25, rawScore: 51.75, finalScore: 52 },
+  ])('rounds $pips × $multiplier once from $rawScore to $finalScore', testCase => {
+    expect(finalizeScore(testCase.pips, testCase.multiplier)).toEqual({
+      rawScore: testCase.rawScore, finalScore: testCase.finalScore,
+    });
+  });
+
+  it('preserves Bonus, Multiplier, and Hitchhiker inputs until finalization', () => {
+    const bonus = board();
+    bonus.dice.forEach((die, index) => { die.value = [1, 2, 3, 4, 5][index] as Rank; });
+    bonus.handLevels.ones = 2;
+    enhance(bonus, 0, 'bonus');
+    expect(handScore(bonus.dice, 'ones', [0], 2)).toEqual({ pips: 21, multiplier: 1.25, rawScore: 26.25, score: 26 });
+
+    const multiplier = board();
+    multiplier.dice[0].value = 1;
+    activeFace(multiplier.dice[0]).workoutPips = 1;
+    enhance(multiplier, 0, 'multiplier');
+    expect(handScore(multiplier.dice, 'ones', [0])).toEqual({ pips: 9, multiplier: 1.5, rawScore: 13.5, score: 14 });
+
+    const hitchhiker = board();
+    hitchhiker.dice.forEach((die, index) => { die.value = [2, 2, 3, 4, 6][index] as Rank; });
+    hitchhiker.handLevels.pair = 2;
+    enhance(hitchhiker, 4, 'hitchhiker');
+    expect(handScore(hitchhiker.dice, 'pair', [0, 1], 2)).toEqual({ pips: 21, multiplier: 1.75, rawScore: 36.75, score: 37 });
+  });
+});
+
 describe('live hand scoring', () => {
   it.each([
     { name: 'basic hand', bonus: 0, multiplier: 0, hitch: false, hitchBonus: 0, hitchMultiplier: 0, growth: 0, pips: 22, mult: 2.5, score: 55 },
@@ -44,15 +77,17 @@ describe('live hand scoring', () => {
     enhance(game, 4, 'bonus', testCase.hitchBonus);
     enhance(game, 4, 'multiplier', testCase.hitchMultiplier);
     activeFace(game.dice[4]).workoutPips = testCase.growth;
-    const expected = { pips: testCase.pips, multiplier: testCase.mult, score: testCase.score };
+    const expected = { pips: testCase.pips, multiplier: testCase.mult,
+      rawScore: testCase.pips * testCase.mult, score: testCase.score };
     expect(handScore(game.dice, 'threeKind', [0, 1, 2])).toEqual(expected);
     const result = play(game);
     expect(result.error).toBeUndefined();
     expect(result.state.score).toBe(testCase.score);
     expect(result.events.filter(event => event.type === 'SCORE_ADDED')).toHaveLength(1);
     expect(result.events.find(event => event.type === 'HAND_SCORE_FINALIZED')).toMatchObject({
-      pips: testCase.pips, multiplier: testCase.mult, amount: testCase.score,
-      handScore: { currentPips: testCase.pips, currentMultiplier: testCase.mult, finalScore: testCase.score },
+      pips: testCase.pips, multiplier: testCase.mult, rawScore: testCase.pips * testCase.mult, amount: testCase.score,
+      handScore: { currentPips: testCase.pips, currentMultiplier: testCase.mult,
+        rawScore: testCase.pips * testCase.mult, finalScore: testCase.score },
     });
     expect(result.state.stats.scoreBySource).toEqual({ hand: testCase.score, jumpingBean: 0, hitchhiker: 0 });
     if (testCase.hitchMultiplier) expect(result.state.stats.triggers.multiplier).toBeUndefined();
@@ -74,6 +109,9 @@ describe('live hand scoring', () => {
     expect(result.events.slice(0, addition).every(event => event.board.score === 17)).toBe(true);
     expect(result.events[addition]).toMatchObject({ amount: 114, source: 'hand', board: { score: 131 } });
     expect(live[0].handScore!.finalScore).toBeNull();
+    expect(live[0].handScore!.rawScore).toBeNull();
+    expect(live.slice(0, -1).every(event => event.handScore!.rawScore === null)).toBe(true);
+    expect(live.at(-1)!.handScore!.rawScore).toBe(114);
     expect(live.at(-1)!.handScore!.finalScore).toBe(114);
     expect(result.events.filter(event => event.type === 'SCORE_ADDED')).toHaveLength(1);
     expect(result.state.score).toBe(131);
@@ -124,11 +162,16 @@ describe('live hand scoring', () => {
     expect(result.state.stats.hitchhikerPipsContributed).toBe(8);
   });
 
-  it('preserves fractional scores without introducing rounding', () => {
+  it('preserves fractional Pips × Mult until the one final rounding step', () => {
     const game = board();
     activeFace(game.dice[0]).workoutPips = 1;
     enhance(game, 0, 'multiplier', 2);
-    expect(play(game).state.score).toBe(80.5);
+    const result = play(game);
+    expect(result.state.score).toBe(81);
+    expect(result.state.stats.handScores[0]).toMatchObject({ pips: 23, multiplier: 3.5, rawScore: 80.5, score: 81 });
+    expect(result.state.history.find(event => event.type === 'SCORE_ROUNDING_AUDIT')).toMatchObject({
+      rawScore: 80.5, amount: 81,
+    });
   });
 
   it('exports final hand arithmetic and pip contributions without double-counting scoring sources', () => {
@@ -139,11 +182,12 @@ describe('live hand scoring', () => {
     enhance(game, 4, 'bonus');
     const result = play(game);
     const data = exportRun(result.state);
-    expect(data).toMatchObject({ schemaVersion: 6, scoringModel: 'trained-hand-accumulator-v3',
+    expect(data).toMatchObject({ schemaVersion: 7, scoringModel: 'rounded-score-accumulator-v4',
       handBonusPips: 20, hitchhikerPipsContributed: 16,
       scoreByHand: { threeKind: 144 }, scoreBySource: { hand: 144, jumpingBean: 0, hitchhiker: 0 } });
     expect(data.handScores).toEqual([{ round: 1, hand: 'threeKind', handLevel: 1, dieIds: [0, 1, 2],
-      basePips: 10, baseMultiplier: 2.5, pips: 48, multiplier: 3, score: 144, bonusPips: 20, hitchhikerPips: 16 }]);
+      basePips: 10, baseMultiplier: 2.5, pips: 48, multiplier: 3, rawScore: 144,
+      score: 144, bonusPips: 20, hitchhikerPips: 16 }]);
     expect(Object.values(data.scoreBySource).reduce((sum, score) => sum + score, 0)).toBe(result.state.score);
     expect(data).toHaveProperty('manualRerolls');
     expect(data).toHaveProperty('goldEarned');
@@ -152,6 +196,59 @@ describe('live hand scoring', () => {
 });
 
 describe('standalone scoring boundary', () => {
+  it('rounds Jumping Bean through the shared finalizer and awards Effect Score as an integer', () => {
+    const game = board();
+    game.dice[0].faces[2].enhancements = { jumpingBean: 1, bonus: 1, multiplier: 1, sticky: 1 };
+    const result = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }, sequence(0.4, 0));
+    expect(result.state.score).toBe(20);
+    expect(result.state.effectScore).toBe(20);
+    expect(Object.values(result.state.scoreByHand).reduce((sum, score) => sum + score, 0)
+      + result.state.effectScore).toBe(result.state.score);
+    expect([result.state.score, result.state.effectScore, ...Object.values(result.state.scoreByHand)]
+      .every(Number.isInteger)).toBe(true);
+    expect(result.events.find(event => event.type === 'STANDALONE_SCORE_CALCULATED')).toMatchObject({
+      pips: 13, multiplier: 1.5, rawScore: 19.5, amount: 20,
+    });
+    expect(result.state.history.find(event => event.type === 'SCORE_ROUNDING_AUDIT')).toMatchObject({
+      rawScore: 19.5, amount: 20,
+    });
+  });
+
+  it('rounds every Sustainable-reused hand separately before accumulating its scorecard row', () => {
+    const game = board();
+    game.dice[4].value = 6;
+    game.handLevels.sixes = 2;
+    activeFace(game.dice[4]).workoutPips = 1;
+    enhance(game, 4, 'sustainable');
+    enhance(game, 4, 'sticky');
+    const action = { type: 'PLAY' as const, hand: 'sixes' as const, dieIds: [4] };
+    const first = dispatch(game, action, constant(0));
+    const second = dispatch(first.state, action, constant(0));
+    expect(first.state.stats.handScores[0]).toMatchObject({ rawScore: 21.25, score: 21 });
+    expect(second.state.stats.handScores[1]).toMatchObject({ rawScore: 21.25, score: 21 });
+    expect(second.state.scoreByHand.sixes).toBe(42);
+    expect(second.state.score).toBe(42);
+    expect([second.state.score, second.state.scoreByHand.sixes].every(Number.isInteger)).toBe(true);
+    expect(second.state.score).not.toBe(Math.round(21.25 + 21.25));
+  });
+
+  it('checks the target against the rounded award rather than the raw result', () => {
+    const game = board();
+    game.dice[0].value = 5;
+    game.handLevels.fives = 2;
+    game.score = 31;
+    game.target = 50;
+    game.stats.rounds[0].target = 50;
+    game.stats.rounds[0].finalScore = 31;
+    const result = dispatch(game, { type: 'PLAY', hand: 'fives', dieIds: [0] }, constant());
+    expect(result.events.find(event => event.type === 'HAND_SCORE_FINALIZED')).toMatchObject({
+      pips: 15, multiplier: 1.25, rawScore: 18.75, amount: 19,
+    });
+    expect(result.state.score).toBe(50);
+    expect(result.state.phase).toBe('shop');
+    expect(result.state.stats.rounds[0].firstCrossedScore).toBe(50);
+  });
+
   it('finalizes and consumes the hand before post-hand Jumping Bean scores independently', () => {
     const game = board();
     enhance(game, 0, 'bonus');

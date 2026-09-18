@@ -1,4 +1,4 @@
-import { Badge, Button, Group, Paper, Stack, Text, Title } from '@mantine/core';
+import { Badge, Button, Group, Paper, Stack, Text, Tooltip } from '@mantine/core';
 import { diceRerollCost, offerRerollCost, roundReward } from '../game/config';
 import { activeFace } from '../game/dice';
 import { canAttach, enhancementCost, ENHANCEMENTS } from '../game/enhancements';
@@ -16,48 +16,48 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
   const offer = shop.offers.find(item => item.id === selectedOffer && !item.purchased);
   const eligibleIds = offer && board.gold >= enhancementCost(offer.enhancement)
     ? board.dice.filter(die => canAttach(activeFace(die), offer.enhancement)).map(die => die.id) : [];
-  return <Stack gap="lg">
-    <Paper withBorder p="lg">
-      <Group justify="space-between">
-        <div><Title order={2} size="h3">Hand Training</Title><Text size="sm" c="dimmed">Three fixed offers for this shop. Train any or all that you can afford.</Text></div>
-        <Badge color="violet" variant="light">Permanent this run</Badge>
+  return <Stack gap="xs" className="shop-screen">
+    <Group justify="space-between" className="shop-summary">
+      <Text size="sm"><strong>Round {board.round} cleared</strong> · +{roundReward(board.round)} gold · {board.score - board.target} points above goal</Text>
+      <Badge color="teal" variant="light">SHOP</Badge>
+    </Group>
+    {busy && <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} />}
+    <Paper p="xs" className="shop-section">
+      <Group justify="space-between" className="section-heading">
+        <Text fw={700} size="sm" tt="uppercase" lts=".08em">Hand Training</Text>
+        <Tooltip label="Permanent Base Pips and Base Mult upgrades for this run" withArrow><Text size="xs" c="violet">ⓘ 4 gold each</Text></Tooltip>
       </Group>
-      <div className="offers">{shop.trainingOffers.map(item => <TrainingCard key={item.hand} offer={item}
+      <div className="shop-grid training-grid">{shop.trainingOffers.map(item => <TrainingCard key={item.hand} offer={item}
         level={board.handLevels[item.hand]} gold={board.gold} busy={busy}
         onTrain={() => submit({ type: 'TRAIN_HAND', hand: item.hand })} />)}</div>
-      <Text size="xs" c="dimmed" mt="md">Training offers do not reroll. Each purchase raises that hand by one level.</Text>
     </Paper>
-    <Paper withBorder p="lg">
-      <Group justify="space-between">
-        <div><Title order={2} size="h3">Build your dice</Title><Text size="sm" c="dimmed">Round {board.round} cleared · +{roundReward(board.round)} gold · {board.score - board.target} points above goal</Text></div>
-        <Badge color="teal" variant="light">Permanent face enhancements</Badge>
+    <Paper p="xs" className="shop-section">
+      <Group justify="space-between" className="section-heading">
+        <Text fw={700} size="sm" tt="uppercase" lts=".08em">Enhancements</Text>
+        <Button size="compact-xs" variant="default" disabled={busy || board.gold < offerRerollCost(shop.offerRerolls)}
+          aria-label={`Reroll Enhancements · ${offerRerollCost(shop.offerRerolls)} gold`}
+          onClick={() => submit({ type: 'REROLL_OFFERS' })}>↻ Reroll · {offerRerollCost(shop.offerRerolls)} gold</Button>
       </Group>
-      <Text size="sm" mt="md">Drag an offer onto a die, or select an offer and click a die. Only its exposed physical face receives the enhancement.</Text>
-      <div className="offers">{shop.offers.map(item => <EnhancementCard key={item.id} offer={item} selected={selectedOffer === item.id}
+      <div className="shop-grid enhancement-grid">{shop.offers.map(item => <EnhancementCard key={item.id} offer={item} selected={selectedOffer === item.id}
         gold={board.gold} busy={busy} onSelect={() => setSelectedOffer(selectedOffer === item.id ? null : item.id)} />)}</div>
-      <Group justify="space-between" mt="md">
-        <Button variant="default" disabled={busy || board.gold < offerRerollCost(shop.offerRerolls)} onClick={() => submit({ type: 'REROLL_OFFERS' })}>
-          Reroll Enhancements · {offerRerollCost(shop.offerRerolls)} gold
-        </Button>
-        <Text size="xs" c="dimmed">Purchased slots stay empty until you refresh.</Text>
-      </Group>
     </Paper>
-    {busy && <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} />}
-    <div>
-      <Group justify="space-between" mb="xs">
-        <Text fw={600}>Exposed faces</Text>
-        {offer && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setSelectedOffer(null)}>Cancel placement</Button>}
+    <Paper p="xs" className="shop-section exposed-section">
+      <Group justify="space-between" className="section-heading">
+        <Group gap="xs"><Text fw={700} size="sm" tt="uppercase" lts=".08em">Exposed Faces</Text>{offer && <Badge size="xs" color="teal">{ENHANCEMENTS[offer.enhancement].name} selected</Badge>}</Group>
+        <Group gap="xs">
+          {offer && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setSelectedOffer(null)}>Cancel placement</Button>}
+          <Button size="compact-xs" variant="default" disabled={busy || board.gold < diceRerollCost(shop.diceRerolls)}
+            aria-label={`Reroll Dice · ${diceRerollCost(shop.diceRerolls)} gold`}
+            onClick={() => submit({ type: 'REROLL_DICE' })}>↻ Dice · {diceRerollCost(shop.diceRerolls)} gold</Button>
+        </Group>
       </Group>
-      <Text size="sm" c="dimmed">{offer ? `${ENHANCEMENTS[offer.enhancement].name} selected. Outlined dice accept this enhancement.` : 'Reroll to expose a different face. Weighted works here; other abilities wait for the round.'}</Text>
       <DiceRow dice={board.dice} event={event} disabled={busy} eligibleIds={eligibleIds}
         onClick={dieId => { if (offer) submit({ type: 'BUY', offerId: offer.id, dieId }); }}
         onDropOffer={(offerId, dieId) => submit({ type: 'BUY', offerId, dieId })} />
-      <Group justify="space-between" mt="lg">
-        <Button variant="default" disabled={busy || board.gold < diceRerollCost(shop.diceRerolls)} onClick={() => submit({ type: 'REROLL_DICE' })}>
-          Reroll Dice · {diceRerollCost(shop.diceRerolls)} gold
-        </Button>
-        <Button size="lg" disabled={busy} onClick={() => submit({ type: 'NEXT_ROUND' })}>NEXT ROUND</Button>
-      </Group>
+    </Paper>
+    <div className="shop-action-dock">
+      <Text size="xs" c="dimmed">Upgrades are permanent for this run.</Text>
+      <Button size="sm" disabled={busy} aria-label="NEXT ROUND" onClick={() => submit({ type: 'NEXT_ROUND' })}>NEXT ROUND →</Button>
     </div>
   </Stack>;
 }

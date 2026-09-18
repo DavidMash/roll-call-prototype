@@ -1,4 +1,4 @@
-import { Badge, Button, Group, Stack, Text } from '@mantine/core';
+import { Badge, Button, Group, Text, Tooltip } from '@mantine/core';
 import { combinationsForHand, handStats, HANDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from '../game/hands';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
@@ -19,12 +19,16 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
         const selected = selection.hand === hand;
         const score = board.scoreByHand[hand];
         const state = consumed ? 'consumed' : selected ? 'selected' : playable ? 'playable' : 'unavailable';
+        const scoreLabel = score === undefined ? 'no score' : `${score} points`;
         return <Button key={hand} variant={selected ? 'light' : 'subtle'} color={selected ? 'teal' : 'gray'}
           className={`scorecard-row ${state}`} data-testid={`scorecard-row-${hand}`} data-state={state}
-          disabled={busy || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}>
+          disabled={busy || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}
+          aria-label={`${definition.name} · Lv. ${stats.level} ${stats.basePips} Pips · ×${stats.baseMultiplier} ${scoreLabel}${consumed ? ' used' : ''}`}>
           <span className="scorecard-row-copy">
-            <span className="scorecard-hand-name">{definition.name} · Lv. {stats.level}</span>
-            <span className="scorecard-base" data-testid={`scorecard-stats-${hand}`}>{stats.basePips} Pips · ×{stats.baseMultiplier}</span>
+            <span className="scorecard-hand-name">{definition.name} <span>· Lv. {stats.level}</span></span>
+            <Tooltip label={`${stats.basePips} Base Pips · ×${stats.baseMultiplier} Base Mult`} position="right" withArrow>
+              <span className="scorecard-base" data-testid={`scorecard-stats-${hand}`}>{stats.basePips} · ×{stats.baseMultiplier}</span>
+            </Tooltip>
           </span>
           <span className="scorecard-row-result">
             <span data-testid={`scorecard-score-${hand}`}>{score ?? '—'}</span>
@@ -41,22 +45,19 @@ export function HandScorecard({ board, selection, busy, onSelect, onClear }: {
 }) {
   const hasCompatibleHand = [...UPPER_HAND_IDS, ...LOWER_HAND_IDS].some(hand => !board.consumed.includes(hand)
     && combinationsForHand(board.dice, hand).some(set => selection.dieIds.every(id => set.includes(id))));
-  return <Stack gap="sm">
-    <Group justify="space-between">
-      <div><Text fw={600}>Scorecard</Text><Text size="xs" c="dimmed">Select a playable row, then press Play.</Text></div>
+  return <div className="scorecard">
+    <Group justify="space-between" className="scorecard-header">
+      <Text fw={700} size="sm" tt="uppercase" lts=".08em">Scorecard</Text>
       <Button size="compact-xs" variant="subtle" color="gray" onClick={onClear} disabled={busy || !selection.dieIds.length}>Clear selection</Button>
     </Group>
     <div className="scorecard-grid">
       <ScorecardSection title="Upper" hands={UPPER_HAND_IDS} {...{ board, selection, busy, onSelect }} />
       <ScorecardSection title="Lower" hands={LOWER_HAND_IDS} {...{ board, selection, busy, onSelect }} />
     </div>
-    {selection.dieIds.length > 0 && !hasCompatibleHand && <Text size="sm" c="dimmed">No available hand contains all selected dice. Deselect a die or clear the selection.</Text>}
-    {selection.hand && combinationsForHand(board.dice, selection.hand).length > 1 && <Text size="xs" c="dimmed">{HANDS[selection.hand].rank
-      ? 'Upper hands may use any non-empty matching subset. Deselect dice to preserve them for another hand.'
-      : 'Other physical-die combinations are available. Deselect a die, then choose its replacement.'}</Text>}
+    {selection.dieIds.length > 0 && !hasCompatibleHand && <Text size="xs" c="orange" className="scorecard-hint">No available hand contains all selected dice.</Text>}
     <div className="scorecard-totals" aria-label="Round score breakdown">
-      <Group justify="space-between"><Text size="sm" c="dimmed">Effect Score</Text><Text fw={600} data-testid="scorecard-effect-score">{board.effectScore}</Text></Group>
-      <Group justify="space-between"><Text fw={700}>Round Total</Text><Text fw={700} data-testid="scorecard-round-total">{board.score} / {board.target}</Text></Group>
+      <Group gap="xs"><Text size="xs" c="dimmed">Effects</Text><Text size="sm" fw={600} data-testid="scorecard-effect-score">{board.effectScore}</Text></Group>
+      <Group gap="xs"><Text size="xs" c="dimmed">Total</Text><Text size="sm" fw={700} data-testid="scorecard-round-total">{board.score} / {board.target}</Text></Group>
     </div>
-  </Stack>;
+  </div>;
 }
