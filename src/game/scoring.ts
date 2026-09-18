@@ -1,7 +1,7 @@
 import { CONFIG } from './config';
 import { activeFace, baseScoringPips, scoringPips } from './dice';
 import { stacks } from './enhancements';
-import { HANDS } from './hands';
+import { handStats } from './hands';
 import type { Die, Face, HandId, HandScoreAccumulator } from './types';
 
 export interface HandScoreContribution {
@@ -11,11 +11,11 @@ export interface HandScoreContribution {
   amount: number;
 }
 
-export function createHandAccumulator(hand: HandId, dieIds: number[]): HandScoreAccumulator {
-  const definition = HANDS[hand];
-  return { hand, dieIds: [...dieIds].sort((a, b) => a - b),
-    basePips: definition.basePips, baseMultiplier: definition.baseMultiplier,
-    currentPips: definition.basePips, currentMultiplier: definition.baseMultiplier,
+export function createHandAccumulator(hand: HandId, dieIds: number[], level = 1): HandScoreAccumulator {
+  const stats = handStats(hand, level);
+  return { hand, handLevel: level, dieIds: [...dieIds].sort((a, b) => a - b),
+    basePips: stats.basePips, baseMultiplier: stats.baseMultiplier,
+    currentPips: stats.basePips, currentMultiplier: stats.baseMultiplier,
     bonusPips: 0, hitchhikerPips: 0, finalScore: null };
 }
 
@@ -55,8 +55,8 @@ export function finalizeHandScore(accumulator: HandScoreAccumulator) {
   return { pips: accumulator.currentPips, multiplier: accumulator.currentMultiplier, score: accumulator.finalScore };
 }
 
-export function handScore(dice: Die[], hand: HandId, dieIds: number[]) {
-  const accumulator = createHandAccumulator(hand, dieIds);
+export function handScore(dice: Die[], hand: HandId, dieIds: number[], level = 1) {
+  const accumulator = createHandAccumulator(hand, dieIds, level);
   for (const contribution of handContributions(dice, dieIds)) applyHandContribution(accumulator, contribution);
   return finalizeHandScore(accumulator);
 }

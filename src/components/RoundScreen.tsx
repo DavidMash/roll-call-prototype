@@ -14,7 +14,7 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
   selection: Selection; setSelection: (selection: Selection) => void; submit: (action: Action) => void; skip: () => void;
 }) {
   const valid = canPlay(board.dice, board.consumed, selection);
-  const preview = valid ? handScore(board.dice, selection.hand!, selection.dieIds) : null;
+  const preview = valid ? handScore(board.dice, selection.hand!, selection.dieIds, board.handLevels[selection.hand!]) : null;
   const manualAction: Action = { type: 'MANUAL_REROLL', dieIds: selection.dieIds };
   const canReroll = validateAction(board, manualAction) === null;
   const deadBoard = !hasPlayableHand(board.dice, board.consumed);

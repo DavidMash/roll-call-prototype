@@ -11,7 +11,8 @@ export function ScoreResolution({ event, busy, current, total, onSkip, deadBoard
   else if (event?.type === 'STANDALONE_SCORE_CALCULATED') heading = `${event.pips} × ${event.multiplier}`;
   else if (event?.type === 'SCORE_ADDED') heading = `+${event.amount}`;
   else if (event?.enhancement) heading = ENHANCEMENTS[event.enhancement].name.toUpperCase();
-  else if (event?.type === 'HAND_STARTED' && event.hand) heading = HANDS[event.hand].name;
+  else if (event?.type === 'HAND_STARTED' && event.hand) heading = `${HANDS[event.hand].name} — LV. ${event.handScore?.handLevel ?? event.board.handLevels[event.hand]}`;
+  else if (event?.type === 'TRAINING_PURCHASED' && event.hand) heading = `${HANDS[event.hand].name} — LV. ${event.board.handLevels[event.hand]}`;
   else if (event?.type === 'GOLD_ADDED') heading = `+${event.amount} gold`;
   else if (event?.type === 'MANUAL_REROLL_STARTED') heading = 'Manual reroll';
   else if (event?.type === 'DEAD_BOARD') heading = 'Use your rerolls';

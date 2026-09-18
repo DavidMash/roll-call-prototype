@@ -123,7 +123,7 @@ describe('Sustainable probability', () => {
     enhance(game, 0, 'sustainable', 2);
     const first = play(game, sequence(0, 0)).state;
     first.phase = 'shop';
-    first.shop = { offers: [], diceRerolls: 0, offerRerolls: 0 };
+    first.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
     const next = dispatch(first, { type: 'NEXT_ROUND' }, constant(0.55));
     expect(next.state.dice[0].faces[3].enhancements.sustainable).toBe(2);
     expect(next.state.dice.flatMap(die => die.faces).every(face => !('sustainableUsedThisRound' in face))).toBe(true);
@@ -131,7 +131,7 @@ describe('Sustainable probability', () => {
 
   it('audits but does not prominently animate a successful check on a winning hand', () => {
     const game = board();
-    game.target = 14;
+    game.target = 11;
     enhance(game, 0, 'sustainable');
     const result = play(game, constant(0));
     expect(result.state.phase).toBe('shop');

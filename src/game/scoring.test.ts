@@ -110,7 +110,7 @@ describe('live hand scoring', () => {
     expect(growth).toHaveLength(2);
     const finalIndex = result.events.findIndex(event => event.type === 'HAND_SCORE_FINALIZED');
     expect(growth.every(event => result.events.indexOf(event) < finalIndex && event.handScore?.currentPips === 32)).toBe(true);
-    expect(handScore(result.state.dice, 'sixes', [4]).pips).toBe(19);
+    expect(handScore(result.state.dice, 'sixes', [4]).pips).toBe(16);
   });
 
   it('adds multiple Hitchhikers to the same accumulator and never adds a selected Hitchhiker twice', () => {
@@ -139,10 +139,10 @@ describe('live hand scoring', () => {
     enhance(game, 4, 'bonus');
     const result = play(game);
     const data = exportRun(result.state);
-    expect(data).toMatchObject({ schemaVersion: 5, scoringModel: 'hand-base-pips-accumulator-v2',
+    expect(data).toMatchObject({ schemaVersion: 6, scoringModel: 'trained-hand-accumulator-v3',
       handBonusPips: 20, hitchhikerPipsContributed: 16,
       scoreByHand: { threeKind: 144 }, scoreBySource: { hand: 144, jumpingBean: 0, hitchhiker: 0 } });
-    expect(data.handScores).toEqual([{ round: 1, hand: 'threeKind', dieIds: [0, 1, 2],
+    expect(data.handScores).toEqual([{ round: 1, hand: 'threeKind', handLevel: 1, dieIds: [0, 1, 2],
       basePips: 10, baseMultiplier: 2.5, pips: 48, multiplier: 3, score: 144, bonusPips: 20, hitchhikerPips: 16 }]);
     expect(Object.values(data.scoreBySource).reduce((sum, score) => sum + score, 0)).toBe(result.state.score);
     expect(data).toHaveProperty('manualRerolls');
@@ -182,7 +182,7 @@ describe('standalone scoring boundary', () => {
       enhance(game, 0, enhancement, 1, 6);
     }
     enhance(game, 4, 'hitchhiker');
-    if (mode === 'initial') { game.phase = 'shop'; game.shop = { offers: [], diceRerolls: 0, offerRerolls: 0 }; }
+    if (mode === 'initial') { game.phase = 'shop'; game.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 }; }
     const result = dispatch(game, mode === 'manual'
       ? { type: 'MANUAL_REROLL', dieIds: [0] } : { type: 'NEXT_ROUND' },
       mode === 'manual' ? sequence(0.99, 0) : sequence(0.99, 0.99, 0.99, 0.99, 0.99, 0));

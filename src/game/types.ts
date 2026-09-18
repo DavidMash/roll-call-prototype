@@ -10,9 +10,12 @@ export type Phase = 'round' | 'shop' | 'lost' | 'error';
 // Hitchhiker remains a legacy telemetry key; new scores belong to the selected hand.
 export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker';
 export type GoldSource = 'golden' | 'jackpot' | 'roundClear';
+export type GoldSpendSource = 'enhancement' | 'shopDiceReroll' | 'enhancementReroll' | 'handTraining';
+export type HandLevels = Record<HandId, number>;
 
 export interface HandScoreAccumulator {
   hand: HandId;
+  handLevel: number;
   dieIds: number[];
   basePips: number;
   baseMultiplier: number;
@@ -25,6 +28,7 @@ export interface HandScoreAccumulator {
 export interface HandScoreRecord {
   round: number;
   hand: HandId;
+  handLevel: number;
   dieIds: number[];
   basePips: number;
   baseMultiplier: number;
@@ -42,7 +46,8 @@ export interface Face {
 }
 export interface Die { id: number; value: Rank; faces: Face[] }
 export interface Offer { id: number; enhancement: Enhancement; purchased: boolean }
-export interface Shop { offers: Offer[]; diceRerolls: number; offerRerolls: number }
+export interface TrainingOffer { hand: HandId; purchased: boolean }
+export interface Shop { offers: Offer[]; trainingOffers: TrainingOffer[]; diceRerolls: number; offerRerolls: number }
 export interface Board {
   phase: Phase;
   round: number;
@@ -54,6 +59,7 @@ export interface Board {
   consumed: HandId[];
   scoreByHand: Partial<Record<HandId, number>>;
   effectScore: number;
+  handLevels: HandLevels;
   shop: Shop | null;
 }
 export interface RoundStats {
@@ -82,6 +88,7 @@ export interface ManualRerollStats {
   rescuedDeadBoard: boolean;
 }
 export interface Purchase { round: number; enhancement: Enhancement; dieId: number; face: Rank; cost: number }
+export interface TrainingPurchase { round: number; hand: HandId; fromLevel: number; toLevel: number; cost: number }
 export interface ProbabilityProcStats {
   checks: number;
   successes: number;
@@ -94,6 +101,9 @@ export interface RunStats {
   rounds: RoundStats[];
   handsPlayed: Partial<Record<HandId, number>>;
   purchases: Purchase[];
+  trainingPurchases: TrainingPurchase[];
+  trainingPurchasesTotal: number;
+  trainingGoldSpent: number;
   enhancedFaces: string[];
   enhancementShopRerolls: number;
   shopDiceRerolls: number;
@@ -104,6 +114,7 @@ export interface RunStats {
   goldEarned: number;
   goldBySource: Record<GoldSource, number>;
   goldSpent: number;
+  goldSpentBySource: Record<GoldSpendSource, number>;
   triggers: Partial<Record<Enhancement, number>>;
   probabilityProcs: Record<'sticky' | 'sustainable', ProbabilityProcStats>;
   scoreBySource: Record<ScoreSource, number>;
@@ -123,7 +134,7 @@ export type EventType =
   | 'POST_HAND_REROLLS_SKIPPED'
   | 'SCORE_ADDED' | 'GOLD_ADDED' | 'WORKOUT_INCREMENTED' | 'DICE_REROLL_STARTED'
   | 'DIE_ROLLED' | 'DIE_FLIPPED' | 'HAND_CONSUMED' | 'ROUND_CLEARED'
-  | 'SHOP_OPENED' | 'OFFER_PURCHASED' | 'OFFERS_REFRESHED' | 'GOLD_SPENT'
+  | 'SHOP_OPENED' | 'OFFER_PURCHASED' | 'TRAINING_PURCHASED' | 'OFFERS_REFRESHED' | 'GOLD_SPENT'
   | 'RUN_LOST' | 'RESOLUTION_ERROR' | 'MANUAL_REROLL_STARTED' | 'DEAD_BOARD' | 'DEAD_BOARD_RESCUED';
 export interface EventRecord {
   id: number;
@@ -138,6 +149,7 @@ export interface EventRecord {
   amount?: number;
   source?: ScoreSource;
   goldSource?: GoldSource;
+  goldSpendSource?: GoldSpendSource;
   face?: Rank;
   probability?: { enhancement: 'sticky' | 'sustainable'; stacks: number; chance: number; succeeded: boolean };
   handScore?: HandScoreAccumulator;
@@ -154,6 +166,7 @@ export type Action =
   | { type: 'PLAY'; hand: HandId; dieIds: number[] }
   | { type: 'MANUAL_REROLL'; dieIds: number[] }
   | { type: 'BUY'; offerId: number; dieId: number }
+  | { type: 'TRAIN_HAND'; hand: HandId }
   | { type: 'REROLL_DICE' }
   | { type: 'REROLL_OFFERS' }
   | { type: 'NEXT_ROUND' };

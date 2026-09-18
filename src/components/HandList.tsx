@@ -1,5 +1,5 @@
 import { Badge, Button, Group, Stack, Text } from '@mantine/core';
-import { combinationsForHand, HANDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from '../game/hands';
+import { combinationsForHand, handStats, HANDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from '../game/hands';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
 
@@ -11,6 +11,7 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
     <div className="scorecard-rows">
       {hands.map(hand => {
         const definition = HANDS[hand];
+        const stats = handStats(hand, board.handLevels[hand]);
         const consumed = board.consumed.includes(hand);
         const compatible = combinationsForHand(board.dice, hand)
           .some(set => selection.dieIds.every(dieId => set.includes(dieId)));
@@ -22,8 +23,8 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
           className={`scorecard-row ${state}`} data-testid={`scorecard-row-${hand}`} data-state={state}
           disabled={busy || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}>
           <span className="scorecard-row-copy">
-            <span className="scorecard-hand-name">{definition.name}</span>
-            <span className="scorecard-base">{definition.basePips} Pips · ×{definition.baseMultiplier}</span>
+            <span className="scorecard-hand-name">{definition.name} · Lv. {stats.level}</span>
+            <span className="scorecard-base" data-testid={`scorecard-stats-${hand}`}>{stats.basePips} Pips · ×{stats.baseMultiplier}</span>
           </span>
           <span className="scorecard-row-result">
             <span data-testid={`scorecard-score-${hand}`}>{score ?? '—'}</span>

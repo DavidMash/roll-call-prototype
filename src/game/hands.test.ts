@@ -18,7 +18,7 @@ describe('hand detection', () => {
     const dice = board([rank, rank, rank, rank, rank]);
     expect(combinationsForHand(dice, hand)).toHaveLength(31);
     expect(defaultCombination(dice, hand)).toEqual([0, 1, 2, 3, 4]);
-    expect(handScore(dice, hand, [0, 1, 2, 3, 4]).score).toBe(10 + rank * 5);
+    expect(handScore(dice, hand, [0, 1, 2, 3, 4]).score).toBe(7 + rank * 5);
   });
   it('upper hands allow every non-empty matching physical subset', () => {
     const dice = board([2, 2, 2, 5, 6]);
@@ -28,7 +28,7 @@ describe('hand detection', () => {
     expect(isValidSelection(dice, 'twos', [0, 1, 2])).toBe(true);
     expect(isValidSelection(dice, 'twos', [])).toBe(false);
     expect(combinationsForHand(dice, 'ones')).toEqual([]);
-    expect(handScore(dice, 'twos', [0, 1, 2]).score).toBe(16);
+    expect(handScore(dice, 'twos', [0, 1, 2]).score).toBe(13);
   });
   it('rejects mixed upper selections, duplicate physical IDs and nonmatching wild faces', () => {
     const dice = board([4, 4, 2, 3, 5], [[2, 'mirror'], [2, 'missingLink']]);
@@ -38,10 +38,10 @@ describe('hand detection', () => {
     expect(handOptions(dice, [], [0, 2]).some(option => option.id === 'fours')).toBe(false);
   });
   it.each<[HandId, Rank[], number]>([
-    ['pair', [4, 4, 2, 5, 6], 27], ['twoPair', [2, 2, 5, 5, 6], 48],
-    ['threeKind', [2, 2, 2, 5, 6], 40], ['fullHouse', [2, 2, 2, 5, 5], 91],
-    ['fourKind', [3, 3, 3, 3, 6], 88], ['fiveKind', [6, 6, 6, 6, 6], 200],
-    ['smallStraight', [1, 2, 3, 4, 6], 50], ['largeStraight', [2, 3, 4, 5, 6], 120],
+    ['pair', [4, 4, 2, 5, 6], 24], ['twoPair', [2, 2, 5, 5, 6], 46],
+    ['threeKind', [2, 2, 2, 5, 6], 40], ['fullHouse', [2, 2, 2, 5, 5], 98],
+    ['fourKind', [3, 3, 3, 3, 6], 100], ['fiveKind', [6, 6, 6, 6, 6], 225],
+    ['smallStraight', [1, 2, 3, 4, 6], 50], ['largeStraight', [2, 3, 4, 5, 6], 132],
   ])('%s scores only its required participants', (hand, values, score) => {
     const dice = board(values);
     const ids = defaultCombination(dice, hand)!;
@@ -166,9 +166,9 @@ describe('Missing Link', () => {
 describe('Mirror', () => {
   it.each<[HandId, Rank[], number[], number]>([
     ['threeKind', [2, 2, 6, 4, 5], [2], 50],
-    ['fourKind', [2, 2, 6, 6, 5], [2, 3], 104],
-    ['fiveKind', [2, 2, 6, 6, 6], [2, 3, 4], 160],
-    ['fullHouse', [2, 2, 6, 5, 5], [2], 105],
+    ['fourKind', [2, 2, 6, 6, 5], [2, 3], 116],
+    ['fiveKind', [2, 2, 6, 6, 6], [2, 3, 4], 185],
+    ['fullHouse', [2, 2, 6, 5, 5], [2], 112],
   ])('qualifies %s and scores actual pips', (hand, values, wildIds, score) => {
     const dice = board(values, wildIds.map(id => [id, 'mirror']));
     const ids = defaultCombination(dice, hand)!;

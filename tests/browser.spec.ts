@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { newRun, dispatch } from '../src/game/engine';
-import { handOptions, HANDS, HAND_IDS } from '../src/game/hands';
+import { handOptions, handStats, HANDS, HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import { ENHANCEMENTS } from '../src/game/enhancements';
 import { CONFIG, roundReward } from '../src/game/config';
@@ -9,7 +9,8 @@ import type { Enhancement, GameState } from '../src/game/types';
 
 function bestHand(game: GameState) {
   return handOptions(game.dice, game.consumed).filter(option => !option.consumed)
-    .flatMap(option => option.combinations.map(dieIds => ({ hand: option.id, dieIds, score: handScore(game.dice, option.id, dieIds).score })))
+    .flatMap(option => option.combinations.map(dieIds => ({ hand: option.id, dieIds,
+      score: handScore(game.dice, option.id, dieIds, game.handLevels[option.id]).score })))
     .sort((a, b) => b.score - a.score)[0];
 }
 async function ready(page: Page) { await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0); }
@@ -55,6 +56,26 @@ function findShopSeed(required?: Enhancement) {
   }
   throw new Error('No suitable shop seed found');
 }
+function findTrainingSeed() {
+  for (let i = 0; i < 1000; i++) {
+    const seed = `training-browser-${i}`;
+    let game = newRun(seed).state;
+    for (let step = 0; step < 12 && game.phase === 'round'; step++) {
+      const choice = bestHand(game);
+      game = dispatch(game, choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
+        : { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+    }
+    if (game.phase !== 'shop') continue;
+    for (const offer of game.shop!.trainingOffers) {
+      const trained = dispatch(game, { type: 'TRAIN_HAND', hand: offer.hand }).state;
+      const next = dispatch(trained, { type: 'NEXT_ROUND' }).state;
+      if (handOptions(next.dice, next.consumed).some(option => option.id === offer.hand && !option.consumed)) {
+        return { seed, hand: offer.hand };
+      }
+    }
+  }
+  throw new Error('No suitable Hand Training seed found');
+}
 function findStickyStackSeed() {
   for (let i = 0; i < 3000; i++) {
     const seed = `sticky-stack-${i}`;
@@ -98,8 +119,10 @@ test('scorecard keeps all fourteen categories visible with base stats and action
   await expect(page.locator('[data-testid^="scorecard-row-"]')).toHaveCount(14);
   for (const hand of HAND_IDS) {
     const row = page.getByTestId(`scorecard-row-${hand}`);
+    const stats = handStats(hand, 1);
     await expect(row).toBeVisible();
-    await expect(row).toContainText('10 Pips');
+    await expect(row).toContainText(`Lv. ${stats.level}`);
+    await expect(page.getByTestId(`scorecard-stats-${hand}`)).toHaveText(`${stats.basePips} Pips · ×${stats.baseMultiplier}`);
     await expect(page.getByTestId(`scorecard-score-${hand}`)).toHaveText('—');
   }
   await expect(page.locator('[data-state="playable"]')).not.toHaveCount(0);
@@ -118,6 +141,43 @@ test('scorecard keeps all fourteen categories visible with base stats and action
   await expect(page.locator('.die[aria-pressed="true"]')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
   await expect(page.getByTestId('stat-score').getByText('0', { exact: true })).toBeVisible();
+});
+
+test('Hand Training purchase persists into scorecard and trained scoring playback', async ({ page }) => {
+  const fixture = findTrainingSeed();
+  let game = await reachShop(page, fixture.seed);
+  const hand = fixture.hand;
+  const level1 = handStats(hand, 1);
+  const level2 = handStats(hand, 2);
+  await expect(page.locator('[data-testid^="training-offer-"]')).toHaveCount(3);
+  await expect(page.getByTestId(`training-pips-${hand}`)).toHaveText(`${level1.basePips} → ${level2.basePips} Pips`);
+  await expect(page.getByTestId(`training-mult-${hand}`)).toHaveText(`×${level1.baseMultiplier} → ×${level2.baseMultiplier} Mult`);
+
+  const goldBefore = game.gold;
+  await page.getByTestId(`train-${hand}`).click();
+  game = dispatch(game, { type: 'TRAIN_HAND', hand }).state;
+  await matchBoard(page, game);
+  expect(game.gold).toBe(goldBefore - CONFIG.handTrainingCost);
+  expect(game.handLevels[hand]).toBe(2);
+  await expect(page.getByTestId(`train-${hand}`)).toBeDisabled();
+  await expect(page.getByTestId(`training-offer-${hand}`)).toContainText('Purchased');
+
+  await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+  game = dispatch(game, { type: 'NEXT_ROUND' }).state;
+  await matchBoard(page, game);
+  const row = page.getByTestId(`scorecard-row-${hand}`);
+  await expect(row).toContainText(`Lv. 2`);
+  await expect(page.getByTestId(`scorecard-stats-${hand}`)).toHaveText(`${level2.basePips} Pips · ×${level2.baseMultiplier}`);
+
+  await page.clock.install({ time: new Date('2026-09-18T12:00:00Z') });
+  await page.getByText('NORMAL', { exact: true }).click();
+  await row.click();
+  await page.getByRole('button', { name: 'PLAY', exact: true }).click();
+  await expect(page.locator('.score-tick')).toHaveText(`${HANDS[hand].name} — LV. 2`);
+  await expect(page.getByTestId('hand-pips')).toHaveText(String(level2.basePips));
+  await expect(page.getByTestId('hand-multiplier')).toHaveText(`x${level2.baseMultiplier}`);
+  await page.getByRole('button', { name: 'Skip playback' }).click();
+  await ready(page);
 });
 
 test('full seeded run: select/play, clear, buy onto a face, reroll dice, next round, lose and export', async ({ page, context }) => {
@@ -270,13 +330,13 @@ for (const direction of ['hand-first', 'dice-first'] as const) {
     await expect(preservedDie).toHaveAttribute('aria-pressed', 'false');
     await expect(playedDie).toHaveAttribute('aria-pressed', 'true');
     await expect(fours).toHaveAttribute('aria-pressed', 'true');
-    await expect(fours).toHaveAccessibleName(/^Fours 10 Pips · ×1 /);
-    await expect(page.getByText('14 pips × 1 = 14 points', { exact: true })).toBeVisible();
+    await expect(fours).toHaveAccessibleName(/^Fours · Lv\. 1 7 Pips · ×1 /);
+    await expect(page.getByText('11 pips × 1 = 11 points', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeEnabled();
     await matchBoard(page, game); // Selection alone never scores or rolls.
     await page.getByRole('button', { name: 'PLAY', exact: true }).click();
     await matchBoard(page, next.state);
-    expect(next.state.score).toBe(14);
+    expect(next.state.score).toBe(11);
     expect(next.state.dice[preserved].value).toBe(4);
     expect(next.state.dice[played].value).toBe(3);
     expect(next.events.filter(event => event.type === 'DIE_ROLLED').map(event => event.dieIds)).toEqual([[played]]);

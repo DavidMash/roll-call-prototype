@@ -9,7 +9,7 @@ function sequence(...values: number[]): RandomSource {
   let index = 0;
   return { next: () => values[index++] ?? 0.99 };
 }
-function board(values: Rank[] = [4, 4, 2, 5, 6], score = 23, target = 50): GameState {
+function board(values: Rank[] = [4, 4, 2, 5, 6], score = 26, target = 50): GameState {
   const game = newRun('jackpot-unit', constant()).state;
   game.dice.forEach((die, index) => { die.value = values[index]; });
   game.score = score;
@@ -78,7 +78,7 @@ describe('Jackpot', () => {
   });
 
   it('pays when the played hand lands exactly on the target and skips post-hand rerolls', () => {
-    const game = board(); // 23 + Pair's 27 = 50 exactly.
+    const game = board(); // 26 + Pair's Level 1 score of 24 = 50 exactly.
     enhance(game, 4, 'jackpot');
     const result = playPair(game);
     expect(result.state.score).toBe(result.state.target);
@@ -93,7 +93,7 @@ describe('Jackpot', () => {
   });
 
   it('still pays when the held Jackpot face contributes through Hitchhiker', () => {
-    const game = board(undefined, 14); // (10 base + 4 + 4 + Hitchhiker 6) × 1.5 = 36; total 50.
+    const game = board(undefined, 17); // (8 base + 4 + 4 + Hitchhiker 6) × 1.5 = 33; total 50.
     enhance(game, 4, 'hitchhiker');
     enhance(game, 4, 'jackpot');
     const result = playPair(game);
@@ -127,19 +127,19 @@ describe('Jackpot', () => {
   });
 
   it('does not pay when a post-hand Jumping Bean chain reaches the target', () => {
-    const game = board([1, 2, 3, 4, 5], 33);
+    const game = board([1, 2, 3, 4, 5], 36);
     enhance(game, 0, 'jumpingBean', 1, 6);
     enhance(game, 1, 'jackpot');
     const result = dispatch(game, { type: 'PLAY', hand: 'ones', dieIds: [0] }, sequence(0.99, 0));
     expect(result.state.phase).toBe('shop');
-    expect(result.state.score).toBe(50); // Ones scores 11, then Jumping Bean scores 6.
+    expect(result.state.score).toBe(50); // Level 1 Ones scores 8, then Jumping Bean scores 6.
     expect(result.state.stats.goldBySource.jackpot).toBe(0);
   });
 
   it('does not pay when an initial-roll Jumping Bean reaches the target', () => {
     const game = board();
     game.phase = 'shop';
-    game.shop = { offers: [], diceRerolls: 0, offerRerolls: 0 };
+    game.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
     enhance(game, 0, 'jumpingBean', 1, 6);
     enhance(game, 0, 'bonus', 7, 6);
     enhance(game, 1, 'jackpot', 1, 1);

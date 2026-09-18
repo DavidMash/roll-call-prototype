@@ -4,7 +4,7 @@ import type { Die, HandId, HandOption, Rank } from './types';
 
 export interface HandDefinition {
   name: string;
-  basePips: number;
+  // Level 1 multiplier. All current hand stats derive from this and hand level.
   baseMultiplier: number;
   size?: number;
   rank?: Rank;
@@ -12,24 +12,51 @@ export interface HandDefinition {
 }
 
 export const HANDS: Record<HandId, HandDefinition> = {
-  ones: { name: 'Ones', rank: 1, basePips: 10, baseMultiplier: 1 },
-  twos: { name: 'Twos', rank: 2, basePips: 10, baseMultiplier: 1 },
-  threes: { name: 'Threes', rank: 3, basePips: 10, baseMultiplier: 1 },
-  fours: { name: 'Fours', rank: 4, basePips: 10, baseMultiplier: 1 },
-  fives: { name: 'Fives', rank: 5, basePips: 10, baseMultiplier: 1 },
-  sixes: { name: 'Sixes', rank: 6, basePips: 10, baseMultiplier: 1 },
-  pair: { name: 'Pair', size: 2, groups: [2], basePips: 10, baseMultiplier: 1.5 },
-  twoPair: { name: 'Two Pair', size: 4, groups: [2, 2], basePips: 10, baseMultiplier: 2 },
-  threeKind: { name: 'Three of a Kind', size: 3, groups: [3], basePips: 10, baseMultiplier: 2.5 },
-  smallStraight: { name: 'Small Straight', size: 4, basePips: 10, baseMultiplier: 2.5 },
-  fullHouse: { name: 'Full House', size: 5, groups: [3, 2], basePips: 10, baseMultiplier: 3.5 },
-  fourKind: { name: 'Four of a Kind', size: 4, groups: [4], basePips: 10, baseMultiplier: 4 },
-  largeStraight: { name: 'Large Straight', size: 5, basePips: 10, baseMultiplier: 4 },
-  fiveKind: { name: 'Five of a Kind', size: 5, groups: [5], basePips: 10, baseMultiplier: 5 },
+  ones: { name: 'Ones', rank: 1, baseMultiplier: 1 },
+  twos: { name: 'Twos', rank: 2, baseMultiplier: 1 },
+  threes: { name: 'Threes', rank: 3, baseMultiplier: 1 },
+  fours: { name: 'Fours', rank: 4, baseMultiplier: 1 },
+  fives: { name: 'Fives', rank: 5, baseMultiplier: 1 },
+  sixes: { name: 'Sixes', rank: 6, baseMultiplier: 1 },
+  pair: { name: 'Pair', size: 2, groups: [2], baseMultiplier: 1.5 },
+  twoPair: { name: 'Two Pair', size: 4, groups: [2, 2], baseMultiplier: 2 },
+  threeKind: { name: 'Three of a Kind', size: 3, groups: [3], baseMultiplier: 2.5 },
+  smallStraight: { name: 'Small Straight', size: 4, baseMultiplier: 2.5 },
+  fullHouse: { name: 'Full House', size: 5, groups: [3, 2], baseMultiplier: 3.5 },
+  fourKind: { name: 'Four of a Kind', size: 4, groups: [4], baseMultiplier: 4 },
+  largeStraight: { name: 'Large Straight', size: 5, baseMultiplier: 4 },
+  fiveKind: { name: 'Five of a Kind', size: 5, groups: [5], baseMultiplier: 5 },
 };
 export const HAND_IDS = Object.keys(HANDS) as HandId[];
 export const UPPER_HAND_IDS = HAND_IDS.filter(id => HANDS[id].rank) as HandId[];
 export const LOWER_HAND_IDS = HAND_IDS.filter(id => !HANDS[id].rank) as HandId[];
+
+export interface HandStats {
+  level: number;
+  basePips: number;
+  baseMultiplier: number;
+  pipsGrowth: number;
+  multiplierGrowth: number;
+}
+export const roundToNearestQuarter = (value: number) => Math.round(value * 4) / 4;
+export const startingBasePips = (hand: HandId) => 5 + 2 * HANDS[hand].baseMultiplier;
+export const pipsGrowthPerLevel = (hand: HandId) => Math.round(startingBasePips(hand) * 0.4);
+export const multiplierGrowthPerLevel = (hand: HandId) =>
+  Math.max(0.25, roundToNearestQuarter(HANDS[hand].baseMultiplier * 0.2));
+export function handStats(hand: HandId, level: number): HandStats {
+  if (!Number.isInteger(level) || level < 1) throw new Error('Hand level must be a positive integer.');
+  const pipsGrowth = pipsGrowthPerLevel(hand);
+  const multiplierGrowth = multiplierGrowthPerLevel(hand);
+  return {
+    level,
+    basePips: startingBasePips(hand) + (level - 1) * pipsGrowth,
+    baseMultiplier: HANDS[hand].baseMultiplier + (level - 1) * multiplierGrowth,
+    pipsGrowth,
+    multiplierGrowth,
+  };
+}
+export const initialHandLevels = (): Record<HandId, number> =>
+  Object.fromEntries(HAND_IDS.map(hand => [hand, 1])) as Record<HandId, number>;
 
 function subsets<T>(items: T[], size: number): T[][] {
   if (size === 0) return [[]];
@@ -84,4 +111,4 @@ export function defaultCombination(dice: Die[], hand: HandId, selected: number[]
 export function isValidSelection(dice: Die[], hand: HandId, selected: number[]): boolean {
   return new Set(selected).size === selected.length && combinationsForHand(dice, hand).some(set => sameDice(set, selected));
 }
-export const handMultiplier = (hand: HandId) => HANDS[hand].baseMultiplier;
+export const handMultiplier = (hand: HandId, level = 1) => handStats(hand, level).baseMultiplier;

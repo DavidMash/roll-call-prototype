@@ -49,8 +49,16 @@ function deadBoardRun(rescue: boolean) {
             return { seed: game.seed, actions: [...prefix, ...attemptActions], game: original };
           }
         } else {
-          for (let step = 0; step < 3; step++) resolved = dispatch(resolved, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
-          if (resolved.phase === 'lost') return { seed: game.seed, actions: [...prefix, ...attemptActions], game: original };
+          let remainsDeadUntilLoss = true;
+          for (let step = 0; step < 3; step++) {
+            resolved = dispatch(resolved, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+            if (step < 2 && (resolved.phase !== 'round' || hasPlayableHand(resolved.dice, resolved.consumed))) {
+              remainsDeadUntilLoss = false;
+            }
+          }
+          if (remainsDeadUntilLoss && resolved.phase === 'lost') {
+            return { seed: game.seed, actions: [...prefix, ...attemptActions], game: original };
+          }
         }
       }
       while (game.phase === 'round') {

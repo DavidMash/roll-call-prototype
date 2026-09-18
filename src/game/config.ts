@@ -11,6 +11,7 @@ export const CONFIG = {
   roundRewardGrowth: 1,
   diceRerollBase: 1,
   offerRerollBase: 3,
+  handTrainingCost: 4,
   rerollCostGrowth: 2,
   bonusPips: 10,
   multiplierIncrement: 0.5,

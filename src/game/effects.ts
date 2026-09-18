@@ -1,11 +1,11 @@
 import { CONFIG, roundReward, targetForRound } from './config';
 import { activeFace, oppositeFace, rollDie, scoringPips } from './dice';
 import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, stacks } from './enhancements';
-import { hasPlayableHand, HANDS } from './hands';
+import { hasPlayableHand, HANDS, HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
 import { applyHandContribution, createHandAccumulator, finalizeHandScore, handContributions, standaloneScore } from './scoring';
 import { boardSnapshot } from './telemetry';
-import type { Enhancement, EventRecord, Face, GameEvent, GameState, GoldSource, HandId, HandScoreAccumulator, RandomSource, ScoreSource } from './types';
+import type { Enhancement, EventRecord, Face, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandScoreAccumulator, RandomSource, ScoreSource } from './types';
 
 type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'magnetic' | 'jumpingBean';
   weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number };
@@ -62,10 +62,11 @@ export class Resolver {
     this.state.stats.goldBySource[goldSource] += amount;
     this.emit({ type: 'GOLD_ADDED', amount, message, goldSource, dieIds: dieId === undefined ? undefined : [dieId] });
   }
-  spendGold(amount: number, message: string): void {
+  spendGold(amount: number, message: string, goldSpendSource: GoldSpendSource): void {
     this.state.gold -= amount;
     this.state.stats.goldSpent += amount;
-    this.emit({ type: 'GOLD_SPENT', amount, message });
+    this.state.stats.goldSpentBySource[goldSpendSource] += amount;
+    this.emit({ type: 'GOLD_SPENT', amount, message, goldSpendSource });
   }
   addScore(amount: number, source: Exclude<ScoreSource, 'hitchhiker'>, message: string, dieIds: number[], hand?: HandId): void {
     this.state.score += amount;
@@ -201,12 +202,13 @@ export class Resolver {
     const ids = [...dieIds].sort((a, b) => a - b);
     const participants = ids.map(id => ({ id, face: structuredClone(activeFace(this.state.dice[id])) }));
     const contributions = handContributions(this.state.dice, ids);
-    this.handAccumulator = createHandAccumulator(hand, ids);
+    const handLevel = this.state.handLevels[hand];
+    this.handAccumulator = createHandAccumulator(hand, ids, handLevel);
     this.state.stats.handsPlayed[hand] = (this.state.stats.handsPlayed[hand] ?? 0) + 1;
     this.state.stats.rounds.at(-1)!.lastHand = hand;
     this.state.stats.rounds.at(-1)!.lastAction = 'PLAY';
     this.emit({ type: 'HAND_STARTED', hand, dieIds: ids,
-      message: `Played ${HANDS[hand].name}: ${ids.map(id => `D${id + 1}`).join(', ')}. Hand Base Pips: ${this.handAccumulator.basePips}. Base Multiplier: x${this.handAccumulator.baseMultiplier}` });
+      message: `Played ${HANDS[hand].name} Lv. ${handLevel}: ${ids.map(id => `D${id + 1}`).join(', ')}. Hand Base Pips: ${this.handAccumulator.basePips}. Base Multiplier: x${this.handAccumulator.baseMultiplier}` });
     for (const { id, face } of participants) {
       const wild: Enhancement | null = hand === 'smallStraight' || hand === 'largeStraight' ? 'missingLink'
         : HANDS[hand].rank ? null : 'mirror';
@@ -235,7 +237,7 @@ export class Resolver {
       this.whenScored(contribution.dieId, contribution.face);
     }
     const { pips, multiplier, score } = finalizeHandScore(this.handAccumulator);
-    this.state.stats.handScores.push({ round: this.state.round, hand, dieIds: ids,
+    this.state.stats.handScores.push({ round: this.state.round, hand, handLevel, dieIds: ids,
       basePips: this.handAccumulator.basePips, baseMultiplier: this.handAccumulator.baseMultiplier,
       pips, multiplier, score,
       bonusPips: this.handAccumulator.bonusPips, hitchhikerPips: this.handAccumulator.hitchhikerPips });
@@ -338,6 +340,13 @@ export class Resolver {
       return { id: this.state.nextOfferId++, enhancement, purchased: false };
     });
   }
+  freshTrainingOffers(): void {
+    const pool = [...HAND_IDS];
+    this.state.shop!.trainingOffers = Array.from({ length: 3 }, () => {
+      const [hand] = pool.splice(randomIndex(this.rng, pool.length), 1);
+      return { hand, purchased: false };
+    });
+  }
   evaluate(): void {
     const current = this.state.stats.rounds.at(-1)!;
     current.finalScore = this.state.score;
@@ -348,9 +357,10 @@ export class Resolver {
       this.emit({ type: 'ROUND_CLEARED', message: `Round ${this.state.round} cleared with ${this.state.score} / ${this.state.target} (+${current.clearMargin})` });
       this.addGold(roundReward(this.state.round), `Round reward: +${roundReward(this.state.round)} gold`, 'roundClear');
       this.state.phase = 'shop';
-      this.state.shop = { offers: [], diceRerolls: 0, offerRerolls: 0 };
+      this.state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
       this.rollBatch(this.state.dice.map(die => die.id), 'Free shop roll', false);
       this.freshOffers();
+      this.freshTrainingOffers();
       this.emit({ type: 'SHOP_OPENED', message: 'Shop opened — enhance only the currently exposed physical faces' });
     } else if (!hasPlayableHand(this.state.dice, this.state.consumed)) {
       if (this.state.manualRerollsRemaining > 0) {

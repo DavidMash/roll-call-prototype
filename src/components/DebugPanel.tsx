@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { scoringPips } from '../game/dice';
 import { CONFIG } from '../game/config';
 import { ENHANCEMENTS, ENHANCEMENT_IDS } from '../game/enhancements';
-import { HANDS } from '../game/hands';
+import { handStats, HANDS, HAND_IDS } from '../game/hands';
 import { exportRun } from '../game/telemetry';
 import type { GameState } from '../game/types';
 
@@ -30,6 +30,8 @@ export function DebugPanel({ state, visibleEventId, busy }: { state: GameState; 
           {copied && <Text size="xs" c="teal" role="status">{copied}</Text>}
           <Text size="sm" mb="md">Gold earned {state.stats.goldEarned} · spent {state.stats.goldSpent} · Hands {Object.values(state.stats.handsPlayed).reduce((sum, n) => sum + n, 0)}</Text>
           <Text size="sm" mb="md">Gold sources: Golden {state.stats.goldBySource.golden} · Jackpot {state.stats.goldBySource.jackpot} · round clears {state.stats.goldBySource.roundClear}</Text>
+          <Text size="sm" mb="md">Hand training: {state.stats.trainingPurchasesTotal} purchases · {state.stats.trainingGoldSpent} gold spent</Text>
+          <Text size="sm" mb="md">Hand levels: {HAND_IDS.map(hand => `${HANDS[hand].name} ${state.handLevels[hand]}`).join(' · ')}</Text>
           <Text size="sm" mb="md">Manual reroll actions {state.stats.manualRerollActions} · dice rerolled {state.stats.manualDiceRerolled} · dead-board rescues {state.stats.deadBoardRescues}</Text>
           <Text size="sm" mb="md">Probability procs: Sticky {state.stats.probabilityProcs.sticky.successes}/{state.stats.probabilityProcs.sticky.checks} · Sustainable {state.stats.probabilityProcs.sustainable.successes}/{state.stats.probabilityProcs.sustainable.checks}</Text>
           <Text size="sm" mb="md">Hand Bonus pips {state.stats.handBonusPips} · Hitchhiker pips contributed {state.stats.hitchhikerPipsContributed}. Final hand scores include those contributions.</Text>
@@ -67,7 +69,7 @@ export function DebugPanel({ state, visibleEventId, busy }: { state: GameState; 
       <Accordion.Item value="rules">
         <Accordion.Control>Quick rules & enhancement reference</Accordion.Control>
         <Accordion.Panel>
-          <Text size="sm" mb="md">Each round gives {CONFIG.manualRerollsPerRound} manual die rerolls, one charge per selected die. You may spend them with or without a playable hand. They use real rolls and their ability chains; Sticky does not prevent a manual reroll. The run ends only below the goal with no playable hand and zero manual rerolls. Shop rerolls remain separate and cost gold. Every scorecard category stays visible. Its row accumulates score from that hand for the current round; Effect Score contains standalone scoring. Upper hands may use any non-empty subset showing that number. Clicking an upper hand initially selects all matching dice; deselect individual dice to preserve useful board structure while rerolling a duplicate to pursue a straight. The category is still consumed after one play unless a selected Sustainable face prevents it. Lower hands use exactly their required dice. Every hand starts with 10 intrinsic hand Base Pips. Score = (Base Pips + face/effect pips) × (base multiplier + participating Multiplier stacks). Base Pips are not a face event. Played dice reroll, unless an ability changes that. Every category, scorecard breakdown, and manual reroll budget resets each round. The complete effect chain finishes before clearance or loss.</Text>
+          <Text size="sm" mb="md">Each round gives {CONFIG.manualRerollsPerRound} manual die rerolls, one charge per selected die. You may spend them with or without a playable hand. They use real rolls and their ability chains; Sticky does not prevent a manual reroll. The run ends only below the goal with no playable hand and zero manual rerolls. Shop rerolls remain separate and cost gold. Every scorecard category stays visible. Its row accumulates score from that hand for the current round; Effect Score contains standalone scoring. Upper hands may use any non-empty subset showing that number. Clicking an upper hand initially selects all matching dice; deselect individual dice to preserve useful board structure while rerolling a duplicate to pursue a straight. The category is still consumed after one play unless a selected Sustainable face prevents it. Lower hands use exactly their required dice. Hand Base Pips and base multipliers derive from the hand's permanent training level: {HAND_IDS.map(hand => `${HANDS[hand].name} starts ${handStats(hand, 1).basePips} × ${handStats(hand, 1).baseMultiplier}`).join('; ')}. Score = (Base Pips + face/effect pips) × (base multiplier + participating Multiplier stacks). Base Pips are not a face event. Played dice reroll, unless an ability changes that. Every category, scorecard breakdown, and manual reroll budget resets each round; training levels persist for the run. The complete effect chain finishes before clearance or loss.</Text>
           {ENHANCEMENT_IDS.map(id => <Text key={id} size="sm" mb="xs"><strong>{ENHANCEMENTS[id].name}:</strong> {ENHANCEMENTS[id].description}</Text>)}
         </Accordion.Panel>
       </Accordion.Item>

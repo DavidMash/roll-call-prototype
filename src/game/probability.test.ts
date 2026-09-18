@@ -102,7 +102,7 @@ describe('Sticky probability', () => {
     enhance(game, 'sticky', 4);
     game.phase = 'shop';
     game.gold = 10;
-    game.shop = { offers: [], diceRerolls: 0, offerRerolls: 0 };
+    game.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
     const result = dispatch(game, { type: 'REROLL_DICE' }, constant(0.99));
     expect(result.state.dice[0].value).toBe(6);
     expect(result.state.stats.probabilityProcs.sticky.checks).toBe(0);

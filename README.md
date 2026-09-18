@@ -31,7 +31,8 @@ The browser tests use Playwright with installed Google Chrome. If Chrome is unav
 - Each round gives the player **3 manual die rerolls**. A manual reroll charge rerolls one selected physical die. Multiple dice may be rerolled at once by spending one charge per die; the same die can be rerolled again in a later action. Select dice and press **Reroll Selected — N**. No hand is required, and selections clear when the action starts.
 - Manual rerolls are real gameplay rolls: Weighted, Magnetic, and Jumping Bean use the existing effect queue. Sticky cannot block the player-requested roll. Manual rolls do not play or consume a hand, activate Slippy/Sustainable/Hitchhiker, or grant direct hand points. Automatic initial rolls, hand rerolls, ability rerolls, and flips spend no manual charges and never replenish them.
 - The player cannot lose while manual rerolls remain. If no hand can be played, the player must use their remaining rerolls before the run can end. Loss requires **below goal + no legal unconsumed hand on the complete board + zero manual rerolls**. The whole current chain finishes before clearance or loss; an effect chain reaching the goal clears the round even on the final charge. Categories and the manual budget reset at the beginning of each gameplay round, before initial effects.
-- Clearing grants **5 gold on Round 1, increasing by 1 each round**, and opens a shop with three distinct enhancement offers and a free roll of all five dice. Runs still begin with 0 gold; Golden income is separate from the round-clear reward.
+- Clearing grants **5 gold on Round 1, increasing by 1 each round**, and opens a shop with three distinct enhancement offers, three distinct Hand Training offers, and a free roll of all five dice. Runs still begin with 0 gold; Golden income is separate from the round-clear reward.
+- Every scoring hand starts at **Level 1**. A Hand Training card costs **4 gold** and permanently raises its named hand by one level for the current run. Any or all three cards may be purchased directly; they stay fixed for that shop and have no reroll action. A new run resets every hand to Level 1.
 - Drag an offer onto a die, or click **Select or drag** then click a die. Only its exposed physical face receives the purchase. A purchased offer stays unavailable until a paid refresh.
 - Shop dice rerolls cost 1/2/4/8… gold; offer refreshes cost 3/6/12/24… gold. Both reset every shop and are separate from manual gameplay rerolls. The shop does not display, spend, or reset manual rerolls. Leave with **NEXT ROUND** whenever you want.
 - **NORMAL / FAST / INSTANT** and **Skip playback** affect only visualization. Rules have already resolved synchronously.
@@ -47,18 +48,21 @@ Prototype balance uses a **50-point base target**, **1.35x target growth per rou
 
 ## Scoring categories
 
-There are **14 categories** and no Chance hand. Every category begins with **10 intrinsic Base Pips**. Ones through Sixes are upper-section categories at **x1**, using any non-empty selected natural matching subset.
+There are **14 categories** and no Chance hand. Level 1 Base Pips now derive from starting multiplier as `5 + (2 × starting multiplier)`, rather than every hand receiving 10. Ones through Sixes use any non-empty selected natural matching subset.
 
-| Lower hand | Participating dice | Base Pips | Base multiplier |
-| --- | --- | ---: | ---: |
-| Pair | Exactly 2 assignable to one rank | 10 | x1.5 |
-| Two Pair | Exactly 4 assignable to two distinct pairs | 10 | x2 |
-| Three of a Kind | Exactly 3 assignable to one rank | 10 | x2.5 |
-| Small Straight | Exactly 4 consecutive assigned ranks | 10 | x2.5 |
-| Full House | Exactly 5 assignable to distinct 3/2 rank groups | 10 | x3.5 |
-| Four of a Kind | Exactly 4 assignable to one rank | 10 | x4 |
-| Large Straight | Exactly 5 consecutive assigned ranks | 10 | x4 |
-| Five of a Kind | Exactly 5 assignable to one rank | 10 | x5 |
+| Hand | Participating dice | Level 1 Pips | Level 1 Mult | Pips / level | Mult / level |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Ones–Sixes | Any non-empty matching subset | 7 | ×1 | +3 | +0.25 |
+| Pair | Exactly 2 assignable to one rank | 8 | ×1.5 | +3 | +0.25 |
+| Two Pair | Exactly 4 assignable to two distinct pairs | 9 | ×2 | +4 | +0.5 |
+| Three of a Kind | Exactly 3 assignable to one rank | 10 | ×2.5 | +4 | +0.5 |
+| Small Straight | Exactly 4 consecutive assigned ranks | 10 | ×2.5 | +4 | +0.5 |
+| Full House | Exactly 5 assignable to distinct 3/2 rank groups | 12 | ×3.5 | +5 | +0.75 |
+| Four of a Kind | Exactly 4 assignable to one rank | 13 | ×4 | +5 | +0.75 |
+| Large Straight | Exactly 5 consecutive assigned ranks | 13 | ×4 | +5 | +0.75 |
+| Five of a Kind | Exactly 5 assignable to one rank | 15 | ×5 | +6 | +1 |
+
+Pips growth is the fixed value `round(Level 1 Base Pips × 0.40)`. Mult growth is `max(0.25, roundToNearestQuarter(Level 1 Mult × 0.20))`. Current stats add those fixed increments once for every level above 1; growth never compounds. This intentionally makes difficult hands start stronger and scale faster.
 
 Pair and Two Pair use the same live scoring engine, consumption, Sustainable, and selection rules as other hands. Hand-first selection chooses the existing stable physical-index default; the player can deselect a die and choose a replacement. Dice-first selection keeps all compatible hands available, including upper/Pair ambiguity. Only selected participants contribute their Multiplier and normal scored-die rerolls; unselected Hitchhikers retain their usual pip contributions.
 
@@ -78,11 +82,11 @@ Only successful Sticky and Sustainable checks show prominent **STICKY** or **SUS
 
 ## Hand scoring
 
-A played hand has two live scoring values: **Pips** and **Multiplier**. The accumulator starts at the selected definition's **10 Base Pips** and base multiplier. Scoring faces and effects then modify those live values. Once all hand-bound effects finish, the hand adds exactly one result using:
+A played hand has two live scoring values: **Pips** and **Multiplier**. The accumulator starts from the selected hand's current level-derived Base Pips and Base Multiplier. Scoring faces and effects then modify those live values. Once all hand-bound effects finish, the hand adds exactly one result using:
 
 **(Base Hand Pips + participating face Pips + Pip effects) × (Base Hand Multiplier + Multiplier effects)**
 
-Base Pips are hand stats, not physical-face pips. They do not trigger Golden, Workout, Sticky, Sustainable, Hitchhiker, Jumping Bean, Magnetic, or any other face effect. Keeping them on centralized hand definitions makes future hand-stat upgrades possible without changing the accumulator; no upgrade system is implemented yet.
+Base Pips are hand stats, not physical-face pips. They do not trigger Golden, Workout, Sticky, Sustainable, Hitchhiker, Jumping Bean, Magnetic, or any other face effect. Hand level is the authoritative persistent run state; current Base Pips and Mult are derived rather than independently mutated. Training never changes historical round scores.
 
 - Selected faces contribute printed pips plus previously earned Workout growth. Bonus adds **10 Pips per stack** before multiplication. Each selected Multiplier stack adds **0.5** to the hand's base multiplier.
 - Each currently showing, unselected Hitchhiker adds its full scoring-pip value, including Bonus and prior Workout growth, to the active hand before multiplication. A selected Hitchhiker does not contribute twice. A Hitchhiker-only face's own Multiplier does not affect the hand because that die was not selected as a participant.
@@ -103,7 +107,7 @@ The center playback begins at the hand's Base Pips and Base Multiplier, displays
 | `types.ts` | Physical faces/dice, board, actions, events, statistics |
 | `rng.ts` | Serializable Mulberry32 random stream and seed hashing |
 | `dice.ts` | Face pips, opposite faces, weighted gameplay/shop rolls |
-| `hands.ts` | Central hand Base Pips/Multiplier definitions, physical subsets, matching groups, straight wilds, deterministic defaults |
+| `hands.ts` | Central Level 1 multipliers, derived level stats/growth, physical subsets, matching groups, straight wilds, deterministic defaults |
 | `selection.ts` | Selection in both directions; constraints never decide loss |
 | `scoring.ts` | Selected-hand and standalone pip/multiplier calculations |
 | `enhancements.ts` | Complete catalog, stacks, placement eligibility |
@@ -111,7 +115,7 @@ The center playback begins at the hand's Base Pips and Base Multiplier, displays
 | `engine.ts` | Validated immutable commands, new runs, injectable randomness |
 | `telemetry.ts` | Round/run statistics, board snapshots, structured exports |
 
-`newRun(seed)` and `dispatch(state, action)` return `{ state, events, error? }`. They clone the input, resolve synchronously, and produce ordered events with board snapshots. Rejected commands preserve the input and consume no randomness. `useGame.ts` plays the snapshots; it never determines a roll, score, purchase, or phase transition. One serialized RNG stream supplies dice rolls, magnetic destinations, shop exposure, and offer selection. Tests can inject a `RandomSource` with `next()` in `[0, 1)`.
+`newRun(seed)` and `dispatch(state, action)` return `{ state, events, error? }`. They clone the input, resolve synchronously, and produce ordered events with board snapshots. Rejected commands preserve the input and consume no randomness. `useGame.ts` plays the snapshots; it never determines a roll, score, purchase, or phase transition. One serialized RNG stream supplies dice rolls, magnetic destinations, shop exposure, enhancement offers, and Hand Training offers. Tests can inject a `RandomSource` with `next()` in `[0, 1)`.
 
 For programmatic reproduction with the same rules version, call `newRun(data.seed)`, then dispatch each item in exported `data.actions`. Engine tests verify entire states and traces, and browser tests compare the visible board with the pure engine after actions.
 
@@ -126,7 +130,7 @@ For programmatic reproduction with the same rules version, call `newRun(data.see
 - Jackpot eligibility is evaluated after the played hand's final score has reached the target and before `POST_HAND_REROLLS_SKIPPED` and round clearance. It uses selected participant IDs, not scoring contributions, so held Hitchhikers qualify. Standalone score paths call round evaluation without passing through Jackpot resolution.
 - Manual rerolls reject empty, duplicate-ID, invalid-ID, over-budget, and outside-round requests without changing state or consuming RNG. Accepted batches use ascending physical-die order, charge once for the initial selected dice, and clear dice/hand selection immediately. No extra charges or refunds arise from subsequent effects. A dead-board rescue is counted once per manual action if the pre-action gameplay board had no playable hand and the completed chain creates one or reaches the target, evaluated before shop exposure rolls.
 - Run exports record per-round manual grants, charges spent, action count, rescue count, and charges left at clearance. Run totals include manual actions, physical-die reroll count (including repeats), rescue count, and each manual batch's physical IDs, cost, remaining budget, and rescue flags. Loss records distinguish a manual reroll from the most recent hand play. The action sequence remains replayable from the seed.
-- Export schema **5**, scoring model **hand-base-pips-accumulator-v2**, includes Sticky/Sustainable probability-proc telemetry and separates Golden, Jackpot, and round-clear gold income. All final multiplied hand score belongs to `scoreBySource.hand` and the selected category. The legacy `scoreBySource.hitchhiker` key remains present at zero; schema 1 used it for separate standalone Hitchhiker score. Historical exports retain their original semantics.
+- Export schema **6**, scoring model **trained-hand-accumulator-v3**, includes every final hand level, Hand Training purchases and spend, each scored hand's level, Sticky/Sustainable probability-proc telemetry, and separate Golden, Jackpot, and round-clear gold income. All final multiplied hand score belongs to `scoreBySource.hand` and the selected category. The legacy `scoreBySource.hitchhiker` key remains present at zero; schema 1 used it for separate standalone Hitchhiker score. Historical exports retain their original semantics.
 - A resolution exceeding 10,000 emitted events stops in a diagnostic state, writes a development error, preserves its trace, and permits restart. This is an exceptional guard, not a gameplay loss. There is no finite-round win condition.
 
 ## Validation

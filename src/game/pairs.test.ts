@@ -38,7 +38,7 @@ describe('Pair and Two Pair qualification', () => {
   it('allows natural plus Mirror and uses actual physical pips', () => {
     const board = dice([3, 6, 4, 2, 5], [1]);
     expect(isValidSelection(board, 'pair', [0, 1])).toBe(true);
-    expect(handScore(board, 'pair', [0, 1])).toEqual({ pips: 19, multiplier: 1.5, score: 28.5 });
+    expect(handScore(board, 'pair', [0, 1])).toEqual({ pips: 17, multiplier: 1.5, score: 25.5 });
     expect(isValidSelection(board, 'pair', [0, 2])).toBe(false);
     expect(isValidSelection(board, 'pair', [0, 1, 2])).toBe(false);
   });
@@ -54,14 +54,14 @@ describe('Pair and Two Pair qualification', () => {
   it('uses one Mirror for one missing pair slot and preserves its scoring pips', () => {
     const board = dice([3, 6, 5, 5, 2], [1]);
     expect(isValidSelection(board, 'twoPair', [0, 1, 2, 3])).toBe(true);
-    expect(handScore(board, 'twoPair', [0, 1, 2, 3])).toEqual({ pips: 29, multiplier: 2, score: 58 });
+    expect(handScore(board, 'twoPair', [0, 1, 2, 3])).toEqual({ pips: 28, multiplier: 2, score: 56 });
     expect(isValidSelection(dice([3, 4, 5, 6, 2], [3]), 'twoPair', [0, 1, 2, 3])).toBe(false);
     expect(isValidSelection(dice([3, 3, 3, 6, 2], [3]), 'twoPair', [0, 1, 2, 3])).toBe(false);
   });
   it('assigns multiple Mirrors to separate slots, including two distinct all-wild pairs', () => {
     const board = dice([3, 4, 6, 6, 2], [2, 3]);
     expect(isValidSelection(board, 'twoPair', [0, 1, 2, 3])).toBe(true);
-    expect(handScore(board, 'twoPair', [0, 1, 2, 3]).pips).toBe(29);
+    expect(handScore(board, 'twoPair', [0, 1, 2, 3]).pips).toBe(28);
     expect(isValidSelection(dice([6, 6, 6, 6, 2], [0, 1, 2, 3]), 'twoPair', [0, 1, 2, 3])).toBe(true);
   });
   it('keeps Missing Link straight-specific', () => {
@@ -132,15 +132,15 @@ describe('Pair resolution and loss integration', () => {
     enhance(state, 0, 'bonus');
     enhance(state, 1, 'multiplier');
     const result = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, rng());
-    expect(result.state.score).toBe(56);
+    expect(result.state.score).toBe(52);
     expect(result.events.filter(event => event.type === 'SCORE_ADDED')).toHaveLength(1);
-    expect(result.state.stats.handScores[0]).toMatchObject({ hand: 'pair', basePips: 10, pips: 28, multiplier: 2, score: 56 });
+    expect(result.state.stats.handScores[0]).toMatchObject({ hand: 'pair', handLevel: 1, basePips: 8, pips: 26, multiplier: 2, score: 52 });
     expect(result.events.filter(event => event.type === 'DIE_ROLLED').map(event => event.dieIds)).toEqual([[0], [1]]);
     expect(result.state.dice[2].value).toBe(4);
   });
   it.each([
-    { hand: 'pair' as const, values: [4, 4, 4, 2, 6] as Rank[], ids: [0, 1], score: 27 },
-    { hand: 'twoPair' as const, values: [2, 2, 5, 5, 6] as Rank[], ids: [0, 1, 2, 3], score: 48 },
+    { hand: 'pair' as const, values: [4, 4, 4, 2, 6] as Rank[], ids: [0, 1], score: 24 },
+    { hand: 'twoPair' as const, values: [2, 2, 5, 5, 6] as Rank[], ids: [0, 1, 2, 3], score: 46 },
   ])('consumes $hand once and restores it for the next round', ({ hand, values, ids, score }) => {
     const state = game(values);
     state.target = score;
@@ -157,8 +157,8 @@ describe('Pair resolution and loss integration', () => {
     expect(next.state.manualRerollsRemaining).toBe(3);
   });
   it.each([
-    { hand: 'pair' as const, values: [4, 4, 4, 2, 6] as Rank[], ids: [0, 1], pips: 46, mult: 2, score: 92, rerolls: [1, 4] },
-    { hand: 'twoPair' as const, values: [2, 2, 5, 5, 6] as Rank[], ids: [0, 1, 2, 3], pips: 52, mult: 2.5, score: 130, rerolls: [1, 2, 3, 4] },
+    { hand: 'pair' as const, values: [4, 4, 4, 2, 6] as Rank[], ids: [0, 1], pips: 44, mult: 2, score: 88, rerolls: [1, 4] },
+    { hand: 'twoPair' as const, values: [2, 2, 5, 5, 6] as Rank[], ids: [0, 1, 2, 3], pips: 51, mult: 2.5, score: 127.5, rerolls: [1, 2, 3, 4] },
   ])('$hand shares all participation and scoring enhancement rules', ({ hand, values, ids, pips, mult, score, rerolls }) => {
     const state = game(values);
     for (const enhancement of ['bonus', 'golden', 'workout', 'sticky', 'sustainable'] as Enhancement[]) enhance(state, 0, enhancement);

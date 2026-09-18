@@ -6,6 +6,7 @@ import type { Action, Board, GameEvent } from '../game/types';
 import { DiceRow } from './DiceRow';
 import { EnhancementCard } from './EnhancementCard';
 import { ScoreResolution } from './ScoreResolution';
+import { TrainingCard } from './TrainingCard';
 
 export function ShopScreen({ board, event, busy, progress, selectedOffer, setSelectedOffer, submit, skip }: {
   board: Board; event: GameEvent | null; busy: boolean; progress: { current: number; total: number };
@@ -16,6 +17,16 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
   const eligibleIds = offer && board.gold >= enhancementCost(offer.enhancement)
     ? board.dice.filter(die => canAttach(activeFace(die), offer.enhancement)).map(die => die.id) : [];
   return <Stack gap="lg">
+    <Paper withBorder p="lg">
+      <Group justify="space-between">
+        <div><Title order={2} size="h3">Hand Training</Title><Text size="sm" c="dimmed">Three fixed offers for this shop. Train any or all that you can afford.</Text></div>
+        <Badge color="violet" variant="light">Permanent this run</Badge>
+      </Group>
+      <div className="offers">{shop.trainingOffers.map(item => <TrainingCard key={item.hand} offer={item}
+        level={board.handLevels[item.hand]} gold={board.gold} busy={busy}
+        onTrain={() => submit({ type: 'TRAIN_HAND', hand: item.hand })} />)}</div>
+      <Text size="xs" c="dimmed" mt="md">Training offers do not reroll. Each purchase raises that hand by one level.</Text>
+    </Paper>
     <Paper withBorder p="lg">
       <Group justify="space-between">
         <div><Title order={2} size="h3">Build your dice</Title><Text size="sm" c="dimmed">Round {board.round} cleared · +{roundReward(board.round)} gold · {board.score - board.target} points above goal</Text></div>

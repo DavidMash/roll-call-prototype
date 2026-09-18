@@ -2,7 +2,7 @@ import { CONFIG, diceRerollCost, offerRerollCost } from './config';
 import { activeFace, createDice } from './dice';
 import { Resolver } from './effects';
 import { canAttach, enhancementCost, ENHANCEMENTS } from './enhancements';
-import { isValidSelection } from './hands';
+import { HANDS, initialHandLevels, isValidSelection } from './hands';
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
 import type { Action, Board, GameState, RandomSource, Resolution } from './types';
@@ -31,6 +31,11 @@ export function validateAction(state: Board, action: Action): string | null {
     if (!offer || offer.purchased || !die) return 'Choose an available offer and a physical die.';
     if (state.gold < enhancementCost(offer.enhancement)) return 'Not enough gold for this enhancement.';
     if (!canAttach(activeFace(die), offer.enhancement)) return `${ENHANCEMENTS[offer.enhancement].name} is already on this physical face.`;
+  }
+  if (action.type === 'TRAIN_HAND') {
+    const offer = state.shop.trainingOffers.find(item => item.hand === action.hand);
+    if (!offer || offer.purchased) return 'Choose an available hand training offer.';
+    if (state.gold < CONFIG.handTrainingCost) return 'Not enough gold to train this hand.';
   }
   if (action.type === 'REROLL_DICE' && state.gold < diceRerollCost(state.shop.diceRerolls)) return 'Not enough gold to reroll the shop dice.';
   if (action.type === 'REROLL_OFFERS' && state.gold < offerRerollCost(state.shop.offerRerolls)) return 'Not enough gold to reroll enhancements.';
@@ -61,6 +66,7 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
   const state: GameState = {
     phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: CONFIG.baseTarget,
     score: 0, gold: CONFIG.startingGold, dice: createDice(), consumed: [], shop: null,
+    handLevels: initialHandLevels(),
     scoreByHand: {}, effectScore: 0,
     manualRerollsRemaining: CONFIG.manualRerollsPerRound,
     nextOfferId: 0, stats: createStats(seed), history: [],
@@ -82,7 +88,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const die = next.dice[action.dieId];
         const face = activeFace(die);
         const cost = enhancementCost(offer.enhancement);
-        resolver.spendGold(cost, `Bought ${ENHANCEMENTS[offer.enhancement].name}: −${cost} gold`);
+        resolver.spendGold(cost, `Bought ${ENHANCEMENTS[offer.enhancement].name}: −${cost} gold`, 'enhancement');
         face.enhancements[offer.enhancement] = (face.enhancements[offer.enhancement] ?? 0) + 1;
         offer.purchased = true;
         next.stats.purchases.push({ round: next.round, enhancement: offer.enhancement, dieId: die.id, face: face.rank, cost });
@@ -93,18 +99,42 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         break;
       }
       case 'REROLL_DICE':
-        resolver.spendGold(diceRerollCost(next.shop!.diceRerolls), 'Paid for shop dice reroll');
+        resolver.spendGold(diceRerollCost(next.shop!.diceRerolls), 'Paid for shop dice reroll', 'shopDiceReroll');
         next.shop!.diceRerolls++;
         next.stats.shopDiceRerolls++;
         resolver.rollBatch(next.dice.map(die => die.id), 'Shop dice reroll', false);
         break;
       case 'REROLL_OFFERS':
-        resolver.spendGold(offerRerollCost(next.shop!.offerRerolls), 'Paid for enhancement reroll');
+        resolver.spendGold(offerRerollCost(next.shop!.offerRerolls), 'Paid for enhancement reroll', 'enhancementReroll');
         next.shop!.offerRerolls++;
         next.stats.enhancementShopRerolls++;
         resolver.freshOffers();
         resolver.emit({ type: 'OFFERS_REFRESHED', message: 'Three fresh distinct enhancement offers' });
         break;
+      case 'TRAIN_HAND': {
+        const offer = next.shop!.trainingOffers.find(item => item.hand === action.hand)!;
+        const fromLevel = next.handLevels[action.hand];
+        const toLevel = fromLevel + 1;
+        resolver.spendGold(CONFIG.handTrainingCost, `Trained ${HANDS[action.hand].name} to level ${toLevel}: −${CONFIG.handTrainingCost} gold`, 'handTraining');
+        next.handLevels[action.hand] = toLevel;
+        offer.purchased = true;
+        next.stats.trainingPurchases.push({
+          round: next.round,
+          hand: action.hand,
+          fromLevel,
+          toLevel,
+          cost: CONFIG.handTrainingCost,
+        });
+        next.stats.trainingPurchasesTotal++;
+        next.stats.trainingGoldSpent += CONFIG.handTrainingCost;
+        resolver.emit({
+          type: 'TRAINING_PURCHASED',
+          hand: action.hand,
+          goldSpendSource: 'handTraining',
+          message: `${HANDS[action.hand].name} trained to level ${toLevel}`,
+        });
+        break;
+      }
       case 'NEXT_ROUND': next.round++; resolver.startRound(); break;
     }
   }, random);
