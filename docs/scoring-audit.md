@@ -28,7 +28,7 @@ Later playtesting added Pair/Two Pair and updated lower multipliers in centraliz
 
 ## Telemetry compatibility
 
-Export schema 3 declares `scoringModel: hand-base-pips-accumulator-v2` and retains the existing telemetry fields. Final multiplied hand score is attributed to the selected category and `scoreBySource.hand`. `handScores` records Base Pips/Base Multiplier, final arithmetic, and Bonus/Hitchhiker pip contributions; `handBonusPips` and `hitchhikerPipsContributed` record run totals. Each round also records `scoreByHand` and `effectScore`, matching the authoritative current-round board breakdown used by the scorecard. Bonus pips include Bonus carried by Hitchhikers.
+Export schema 5 declares `scoringModel: hand-base-pips-accumulator-v2` and retains the existing scoring telemetry fields while adding current enhancement telemetry. Final multiplied hand score is attributed to the selected category and `scoreBySource.hand`. `handScores` records Base Pips/Base Multiplier, final arithmetic, and Bonus/Hitchhiker pip contributions; `handBonusPips` and `hitchhikerPipsContributed` record run totals. Each round also records `scoreByHand` and `effectScore`, matching the authoritative current-round board breakdown used by the scorecard. Bonus pips include Bonus carried by Hitchhikers.
 
 `scoreBySource.hitchhiker` remains a legacy key at zero for current runs, preventing score double-counting. Schema 1 exports used that field for standalone Hitchhiker score, including the Hitchhiker face's own multiplier. Existing historical exports are not rewritten; replay requires the matching rules version.
 

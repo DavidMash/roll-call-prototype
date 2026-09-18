@@ -16,13 +16,14 @@ export const CONFIG = {
   multiplierIncrement: 0.5,
   standaloneMultiplier: 1,
   goldenGold: 1,
+  jackpotGold: 3,
   workoutIncrement: 1,
   tickMs: { normal: 350, fast: 90, instant: 0 },
   resolutionEventCap: 10000,
   enhancementCosts: {
     bonus: 3, multiplier: 5, jumpingBean: 2, golden: 2, workout: 3,
     missingLink: 2, mirror: 2, magnetic: 3, sticky: 1, slippy: 1,
-    sustainable: 5, hitchhiker: 2, weighted: 3,
+    sustainable: 5, hitchhiker: 2, weighted: 3, jackpot: 3,
   } satisfies Record<Enhancement, number>,
 } as const;
 

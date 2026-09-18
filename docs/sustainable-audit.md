@@ -8,6 +8,6 @@ After the complete hand accumulator finalizes and awards its score, `Resolver.pl
 
 `ABILITY_CHECKED` is history-only audit feedback for both outcomes and includes the participating die IDs, hand, stack total, chance, and result. Successful non-winning checks additionally emit the normal visible `ABILITY_TRIGGERED` event. Winning hands still perform the check for deterministic history and telemetry, but successful playback is suppressed because category availability no longer matters after clearance. Post-hand rerolls remain skipped on a winning hand.
 
-`stats.probabilityProcs.sustainable` records checks, successes, failures, and the stack count used by each check. `stats.triggers.sustainable` continues to count successful activations. The exported schema is version 4.
+`stats.probabilityProcs.sustainable` records checks, successes, failures, and the stack count used by each check. `stats.triggers.sustainable` continues to count successful activations. The exported schema is version 5.
 
 Unit coverage verifies the formula directly, one-stack success and failure, combined participating stacks, unselected/Hitchhiker exclusion, repeated same-round success, failure after prior success, independent Sticky/Sustainable draws, absence of reset state, winning-hand behavior, and seeded reproducibility. Browser coverage reaches Sticky + Sustainable through real seeded actions, demonstrates two successful uses in one round, and verifies that no spent presentation exists.

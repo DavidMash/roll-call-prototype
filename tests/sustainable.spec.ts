@@ -9,12 +9,17 @@ import { stickySustainableRun } from './sustainableFixture';
 const die = (page: Page, id: number) => page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) });
 async function ready(page: Page) { await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0); }
 async function perform(page: Page, game: GameState, action: Action) {
-  if (action.type === 'PLAY' || action.type === 'MANUAL_REROLL') {
+  if (action.type === 'PLAY') {
+    await page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) }).click();
+    for (const physical of game.dice) {
+      const shouldSelect = action.dieIds.includes(physical.id);
+      const selected = await die(page, physical.id).getAttribute('aria-pressed') === 'true';
+      if (selected !== shouldSelect) await die(page, physical.id).click();
+    }
+    await page.getByRole('button', { name: 'PLAY', exact: true }).click();
+  } else if (action.type === 'MANUAL_REROLL') {
     for (const id of action.dieIds) await die(page, id).click();
-    if (action.type === 'PLAY') {
-      await page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) }).click();
-      await page.getByRole('button', { name: 'PLAY', exact: true }).click();
-    } else await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();
+    await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();
   } else if (action.type === 'BUY') {
     const offer = game.shop!.offers.find(offer => offer.id === action.offerId)!;
     await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button').click();
@@ -39,9 +44,13 @@ test('Sticky + Sustainable can succeed repeatedly without any spent-state presen
   await expect(physical).not.toContainText('spent');
 
   // Select just the enhanced die even if other dice show the same upper face.
-  await physical.click();
   const hand = page.getByRole('button', { name: new RegExp(`^${HANDS[fixture.hand].name} `) });
   await hand.click();
+  for (const candidate of fixture.game.dice) {
+    const shouldSelect = candidate.id === fixture.dieId;
+    const selected = await die(page, candidate.id).getAttribute('aria-pressed') === 'true';
+    if (selected !== shouldSelect) await die(page, candidate.id).click();
+  }
   await page.clock.install({ time: new Date('2026-09-18T12:00:00Z') });
   await page.clock.pauseAt(new Date('2026-09-18T12:00:01Z'));
   await page.getByText('NORMAL', { exact: true }).click();

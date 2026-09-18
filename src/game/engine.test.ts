@@ -514,7 +514,7 @@ describe('shop', () => {
     const bought = dispatch(game, { type: 'BUY', offerId: 0, dieId: 2 }).state;
     expect(dispatch(bought, { type: 'BUY', offerId: 0, dieId: 2 }).state).toBe(bought);
   });
-  it.each(ENHANCEMENT_IDS.filter(id => !['bonus', 'multiplier', 'golden', 'workout', 'sticky', 'sustainable', 'weighted'].includes(id)))('rejects redundant %s without charging', enhancement => {
+  it.each(ENHANCEMENT_IDS.filter(id => !['bonus', 'multiplier', 'golden', 'workout', 'sticky', 'sustainable', 'weighted', 'jackpot'].includes(id)))('rejects redundant %s without charging', enhancement => {
     const game = shop();
     game.shop!.offers[0].enhancement = enhancement;
     enhance(game, 0, enhancement);
@@ -523,13 +523,13 @@ describe('shop', () => {
     expect(result.state).toBe(game);
     expect(game.gold).toBe(100);
   });
-  it.each<Enhancement>(['bonus', 'multiplier', 'golden', 'workout', 'sticky', 'sustainable', 'weighted'])('allows stacking %s', enhancement => {
+  it.each<Enhancement>(['bonus', 'multiplier', 'golden', 'workout', 'sticky', 'sustainable', 'weighted', 'jackpot'])('allows stacking %s', enhancement => {
     const game = shop();
     game.shop!.offers[0].enhancement = enhancement;
     enhance(game, 0, enhancement);
     expect(dispatch(game, { type: 'BUY', offerId: 0, dieId: 0 }).state.dice[0].faces[0].enhancements[enhancement]).toBe(2);
   });
-  it.each<Enhancement>(['sticky', 'sustainable', 'weighted'])('charges normally for repeated %s purchases on one physical face', enhancement => {
+  it.each<Enhancement>(['sticky', 'sustainable', 'weighted', 'jackpot'])('charges normally for repeated %s purchases on one physical face', enhancement => {
     let game = shop();
     game.shop!.offers[0].enhancement = enhancement;
     game.shop!.offers[1].enhancement = enhancement;

@@ -29,6 +29,7 @@ export function DebugPanel({ state, visibleEventId, busy }: { state: GameState; 
           </Group>
           {copied && <Text size="xs" c="teal" role="status">{copied}</Text>}
           <Text size="sm" mb="md">Gold earned {state.stats.goldEarned} · spent {state.stats.goldSpent} · Hands {Object.values(state.stats.handsPlayed).reduce((sum, n) => sum + n, 0)}</Text>
+          <Text size="sm" mb="md">Gold sources: Golden {state.stats.goldBySource.golden} · Jackpot {state.stats.goldBySource.jackpot} · round clears {state.stats.goldBySource.roundClear}</Text>
           <Text size="sm" mb="md">Manual reroll actions {state.stats.manualRerollActions} · dice rerolled {state.stats.manualDiceRerolled} · dead-board rescues {state.stats.deadBoardRescues}</Text>
           <Text size="sm" mb="md">Probability procs: Sticky {state.stats.probabilityProcs.sticky.successes}/{state.stats.probabilityProcs.sticky.checks} · Sustainable {state.stats.probabilityProcs.sustainable.successes}/{state.stats.probabilityProcs.sustainable.checks}</Text>
           <Text size="sm" mb="md">Hand Bonus pips {state.stats.handBonusPips} · Hitchhiker pips contributed {state.stats.hitchhikerPipsContributed}. Final hand scores include those contributions.</Text>

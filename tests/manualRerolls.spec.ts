@@ -76,8 +76,12 @@ async function reachDeadBoard(page: Page, rescue: boolean) {
   for (const action of fixture.actions) {
     await ready(page);
     if (action.type === 'PLAY') {
-      for (const id of action.dieIds) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
       await page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) }).click();
+      for (let id = 0; id < 5; id++) {
+        const physical = page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) });
+        const selected = await physical.getAttribute('aria-pressed') === 'true';
+        if (selected !== action.dieIds.includes(id)) await physical.click();
+      }
       await page.getByRole('button', { name: 'PLAY', exact: true }).click();
     } else if (action.type === 'MANUAL_REROLL') {
       for (const id of action.dieIds) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();

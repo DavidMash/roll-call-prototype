@@ -2,13 +2,14 @@ export type Rank = 1 | 2 | 3 | 4 | 5 | 6;
 export type Enhancement =
   | 'bonus' | 'multiplier' | 'jumpingBean' | 'golden' | 'workout'
   | 'missingLink' | 'mirror' | 'magnetic' | 'sticky' | 'slippy'
-  | 'sustainable' | 'hitchhiker' | 'weighted';
+  | 'sustainable' | 'hitchhiker' | 'weighted' | 'jackpot';
 export type HandId =
   | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes'
   | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
 export type Phase = 'round' | 'shop' | 'lost' | 'error';
 // Hitchhiker remains a legacy telemetry key; new scores belong to the selected hand.
 export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker';
+export type GoldSource = 'golden' | 'jackpot' | 'roundClear';
 
 export interface HandScoreAccumulator {
   hand: HandId;
@@ -101,6 +102,7 @@ export interface RunStats {
   manualRerolls: ManualRerollStats[];
   deadBoardRescues: number;
   goldEarned: number;
+  goldBySource: Record<GoldSource, number>;
   goldSpent: number;
   triggers: Partial<Record<Enhancement, number>>;
   probabilityProcs: Record<'sticky' | 'sustainable', ProbabilityProcStats>;
@@ -115,7 +117,7 @@ export interface RunStats {
   resolutionError: string | null;
 }
 export type EventType =
-  | 'ROUND_STARTED' | 'HAND_STARTED' | 'ABILITY_TRIGGERED' | 'ABILITY_CHECKED'
+  | 'ROUND_STARTED' | 'HAND_STARTED' | 'ABILITY_TRIGGERED' | 'ABILITY_CHECKED' | 'ABILITY_EVALUATED'
   | 'HAND_PIPS_CHANGED' | 'HAND_MULTIPLIER_CHANGED' | 'HITCHHIKER_ADDED_PIPS'
   | 'HAND_SCORE_FINALIZED' | 'STANDALONE_SCORE_CALCULATED'
   | 'POST_HAND_REROLLS_SKIPPED'
@@ -135,6 +137,7 @@ export interface EventRecord {
   multiplier?: number;
   amount?: number;
   source?: ScoreSource;
+  goldSource?: GoldSource;
   face?: Rank;
   probability?: { enhancement: 'sticky' | 'sustainable'; stacks: number; chance: number; succeeded: boolean };
   handScore?: HandScoreAccumulator;

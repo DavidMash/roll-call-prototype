@@ -12,8 +12,11 @@ const die = (page: Page, id: number) => page.getByRole('button', { name: new Reg
 async function select(page: Page, ids: number[]) { for (const id of ids) await die(page, id).click(); }
 async function perform(page: Page, game: GameState, action: Action) {
   if (action.type === 'PLAY') {
-    await select(page, action.dieIds);
     await page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) }).click();
+    for (const physical of game.dice) {
+      const selected = await die(page, physical.id).getAttribute('aria-pressed') === 'true';
+      if (selected !== action.dieIds.includes(physical.id)) await die(page, physical.id).click();
+    }
     await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   } else if (action.type === 'BUY') {
     const offer = game.shop!.offers.find(item => item.id === action.offerId)!;
@@ -69,8 +72,11 @@ test('winning hand shows final award and ROUND CLEARED without gameplay roll or 
   await ready(page);
   for (const action of fixture.actions) game = await perform(page, game, action);
   expect(game).toEqual(fixture.game);
-  await select(page, fixture.action.dieIds);
   await page.getByRole('button', { name: new RegExp(`^${HANDS[fixture.action.hand].name} `) }).click();
+  for (const physical of game.dice) {
+    const selected = await die(page, physical.id).getAttribute('aria-pressed') === 'true';
+    if (selected !== fixture.action.dieIds.includes(physical.id)) await die(page, physical.id).click();
+  }
   await page.clock.install({ time: new Date('2026-09-17T12:00:00Z') });
   await page.clock.pauseAt(new Date('2026-09-17T12:00:01Z'));
   await page.getByText('NORMAL', { exact: true }).click();

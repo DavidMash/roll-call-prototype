@@ -33,4 +33,9 @@ describe('prototype balance progression', () => {
     expect(result.state.gold).toBe(0);
     expect(result.state.stats.goldEarned).toBe(0);
   });
+
+  it('prices Jackpot at three gold and pays three gold per stack', () => {
+    expect(CONFIG.enhancementCosts.jackpot).toBe(3);
+    expect(CONFIG.jackpotGold).toBe(3);
+  });
 });

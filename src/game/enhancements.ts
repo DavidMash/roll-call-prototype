@@ -15,6 +15,7 @@ export const ENHANCEMENTS: Record<Enhancement, { name: string; description: stri
   sustainable: { name: 'Sustainable', description: '50% chance to preserve a hand this face participates in. Stacks across all selected participants combine with diminishing returns.', stackable: true },
   hitchhiker: { name: 'Hitchhiker', description: 'When not selected, add this face’s scoring pips to the active hand before multiplication. Its own Multiplier does not apply.', stackable: false },
   weighted: { name: 'Weighted', description: 'Adds +1 roll weight to this face\'s opposite side per stack, including in the shop.', stackable: true },
+  jackpot: { name: 'Jackpot', description: `Gain ${CONFIG.jackpotGold} gold per stack if this face is showing on a die held out of the played hand that clears the round.`, stackable: true },
 };
 export const ENHANCEMENT_IDS = Object.keys(ENHANCEMENTS) as Enhancement[];
 export const stacks = (face: Face, enhancement: Enhancement) => face.enhancements[enhancement] ?? 0;

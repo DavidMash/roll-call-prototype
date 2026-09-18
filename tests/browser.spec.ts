@@ -266,7 +266,6 @@ for (const direction of ['hand-first', 'dice-first'] as const) {
     } else {
       await playedDie.click();
       await expect(fours).toBeEnabled();
-      await fours.click();
     }
     await expect(preservedDie).toHaveAttribute('aria-pressed', 'false');
     await expect(playedDie).toHaveAttribute('aria-pressed', 'true');

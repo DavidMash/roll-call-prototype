@@ -5,7 +5,7 @@ import { hasPlayableHand, HANDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
 import { applyHandContribution, createHandAccumulator, finalizeHandScore, handContributions, standaloneScore } from './scoring';
 import { boardSnapshot } from './telemetry';
-import type { Enhancement, EventRecord, Face, GameEvent, GameState, HandId, HandScoreAccumulator, RandomSource, ScoreSource } from './types';
+import type { Enhancement, EventRecord, Face, GameEvent, GameState, GoldSource, HandId, HandScoreAccumulator, RandomSource, ScoreSource } from './types';
 
 type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'magnetic' | 'jumpingBean';
   weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number };
@@ -56,10 +56,11 @@ export class Resolver {
       message: `${subject}. ${ENHANCEMENTS[enhancement].name} ${succeeded ? 'succeeded' : 'failed'}.` });
     return succeeded;
   }
-  addGold(amount: number, message: string, dieId?: number): void {
+  addGold(amount: number, message: string, goldSource: GoldSource, dieId?: number): void {
     this.state.gold += amount;
     this.state.stats.goldEarned += amount;
-    this.emit({ type: 'GOLD_ADDED', amount, message, dieIds: dieId === undefined ? undefined : [dieId] });
+    this.state.stats.goldBySource[goldSource] += amount;
+    this.emit({ type: 'GOLD_ADDED', amount, message, goldSource, dieIds: dieId === undefined ? undefined : [dieId] });
   }
   spendGold(amount: number, message: string): void {
     this.state.gold -= amount;
@@ -90,7 +91,7 @@ export class Resolver {
     const golden = stacks(snapshot, 'golden');
     if (golden) {
       this.trigger('golden', dieId, snapshot, `+${golden * CONFIG.goldenGold} gold`);
-      this.addGold(golden * CONFIG.goldenGold, `D${dieId + 1} Golden: +${golden * CONFIG.goldenGold} gold`, dieId);
+      this.addGold(golden * CONFIG.goldenGold, `D${dieId + 1} Golden: +${golden * CONFIG.goldenGold} gold`, 'golden', dieId);
     }
     const workout = stacks(snapshot, 'workout');
     if (workout) {
@@ -110,6 +111,36 @@ export class Resolver {
       message: `D${dieId + 1} ${ENHANCEMENTS[source].name}: ${pips} × ${multiplier} = ${score}` });
     this.addScore(score, source, `D${dieId + 1} ${ENHANCEMENTS[source].name} scored ${score}`, [dieId]);
     this.whenScored(dieId, face);
+  }
+
+  resolveJackpot(participantIds: number[], hand: HandId): void {
+    const participants = new Set(participantIds);
+    const showing = [...this.state.dice].sort((a, b) => a.id - b.id)
+      .filter(die => stacks(activeFace(die), 'jackpot'));
+    if (!showing.length) return;
+    this.log({ type: 'ABILITY_EVALUATED', enhancement: 'jackpot', hand,
+      message: `Winning hand: ${HANDS[hand].name}` });
+    this.log({ type: 'ABILITY_EVALUATED', enhancement: 'jackpot', hand,
+      message: `Round score: ${this.state.score} / ${this.state.target}` });
+    let total = 0;
+    for (const die of showing) {
+      const face = activeFace(die);
+      const stackCount = stacks(face, 'jackpot');
+      if (!stackCount) continue;
+      if (participants.has(die.id)) {
+        this.log({ type: 'ABILITY_EVALUATED', enhancement: 'jackpot', dieIds: [die.id], face: face.rank, hand,
+          message: `D${die.id + 1} Jackpot x${stackCount} did not trigger: die participated in winning hand` });
+        continue;
+      }
+      const payout = stackCount * CONFIG.jackpotGold;
+      this.log({ type: 'ABILITY_EVALUATED', enhancement: 'jackpot', dieIds: [die.id], face: face.rank, hand,
+        message: `D${die.id + 1} Jackpot x${stackCount} eligible: not participating` });
+      this.trigger('jackpot', die.id, face, `x${stackCount} +${payout} gold`, { hand });
+      this.addGold(payout, `D${die.id + 1} Jackpot x${stackCount}: +${payout} gold`, 'jackpot', die.id);
+      total += payout;
+    }
+    if (total) this.log({ type: 'ABILITY_EVALUATED', enhancement: 'jackpot', hand,
+      message: `Total Jackpot payout: +${total} gold` });
   }
 
   rollBatch(dieIds: number[], reason: string, gameplay: boolean): void {
@@ -230,6 +261,7 @@ export class Resolver {
     }
     // Winning hands finish all hand-bound effects, then bypass gameplay reroll scheduling.
     if (this.state.score >= this.state.target) {
+      this.resolveJackpot(ids, hand);
       this.emit({ type: 'POST_HAND_REROLLS_SKIPPED', hand,
         message: `Round score: ${this.state.score} / ${this.state.target}. Post-hand rerolls skipped because target was reached.` });
       this.evaluate();
@@ -314,7 +346,7 @@ export class Resolver {
       current.clearMargin = this.state.score - this.state.target;
       current.manualRerollsRemainingAtClear = this.state.manualRerollsRemaining;
       this.emit({ type: 'ROUND_CLEARED', message: `Round ${this.state.round} cleared with ${this.state.score} / ${this.state.target} (+${current.clearMargin})` });
-      this.addGold(roundReward(this.state.round), `Round reward: +${roundReward(this.state.round)} gold`);
+      this.addGold(roundReward(this.state.round), `Round reward: +${roundReward(this.state.round)} gold`, 'roundClear');
       this.state.phase = 'shop';
       this.state.shop = { offers: [], diceRerolls: 0, offerRerolls: 0 };
       this.rollBatch(this.state.dice.map(die => die.id), 'Free shop roll', false);

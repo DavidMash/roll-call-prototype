@@ -14,8 +14,12 @@ async function selectDice(page: Page, dieIds: number[]) {
 }
 async function perform(page: Page, game: GameState, action: Action) {
   if (action.type === 'PLAY') {
-    await selectDice(page, action.dieIds);
     await page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) }).click();
+    for (const physical of game.dice) {
+      const target = page.getByRole('button', { name: new RegExp(`^Die ${physical.id + 1},`) });
+      const selected = await target.getAttribute('aria-pressed') === 'true';
+      if (selected !== action.dieIds.includes(physical.id)) await target.click();
+    }
     await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   } else if (action.type === 'BUY') {
     const offer = game.shop!.offers.find(item => item.id === action.offerId)!;
@@ -40,8 +44,12 @@ test('live Pips and Mult build through Bonus, Multiplier and Hitchhiker before o
   for (const action of fixture.actions) game = await perform(page, game, action);
   expect(game).toEqual(fixture.game);
   await expect(page.getByTestId('stat-score').getByText(String(game.score), { exact: true })).toBeVisible();
-  await selectDice(page, fixture.action.dieIds);
   await page.getByRole('button', { name: new RegExp(`^${HANDS[fixture.action.hand].name} `) }).click();
+  for (const physical of game.dice) {
+    const target = page.getByRole('button', { name: new RegExp(`^Die ${physical.id + 1},`) });
+    const selected = await target.getAttribute('aria-pressed') === 'true';
+    if (selected !== fixture.action.dieIds.includes(physical.id)) await target.click();
+  }
   await expect(page.getByText(`${final.pips} pips × ${final.multiplier} = ${final.amount} points`, { exact: true })).toBeVisible();
 
   await page.clock.install({ time: new Date('2026-09-17T12:00:00Z') });
