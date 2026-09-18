@@ -1,0 +1,44 @@
+:root { color: #21302d; background: #faf9f6; font-synthesis: none; }
+body { margin: 0; }
+button { font: inherit; }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.stats-row.with-rerolls { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.stats-row > div + div { border-left: 1px solid #e9ecef; padding-left: 1rem; }
+.resolution { min-height: 165px; text-align: center; background: #fff; }
+.resolution.active { background: #f1faf7; border-color: #a0d6c8; }
+.resolution-meta { min-height: 20px; }
+.score-tick { font-size: clamp(1.7rem, 4vw, 2.3rem); margin: 8px 0; animation: score-in 180ms ease-out; }
+.hand-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; }
+.hand-button { height: 44px; padding: 0 .7rem; }
+.hand-button .mantine-Button-label { display: flex; justify-content: space-between; gap: .4rem; width: 100%; font-size: .82rem; }
+.hand-button .mantine-Button-inner { width: 100%; }
+.hand-button.consumed { opacity: .7; }
+.dice-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .75rem; }
+.die-wrap { min-width: 0; }
+.ability-label { height: 32px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: .68rem; font-weight: 750; color: #087f5b; }
+.die { width: 100%; min-height: 166px; display: flex; flex-direction: column; align-items: center; padding: 12px 6px; color: #21302d; background: white; cursor: pointer; border: 2px solid #dee2e6; transition: border-color 100ms, background 100ms; }
+.die:disabled { cursor: default; }
+.die:focus-visible, .offer:focus-visible { outline: 3px solid #0ca678; outline-offset: 3px; }
+.die.selected { background: #e6fcf5; border-color: #099268; }
+.die.scoring { background: #fff9db; border-color: #e9c46a; }
+.die.eligible { border-color: #099268; }
+.die-number { font-size: 3.2rem; line-height: 1.15; font-weight: 750; }
+.die-badges { display: flex; justify-content: center; flex-wrap: wrap; gap: 3px; margin-top: 9px; }
+.die-badges .sustainable-spent { opacity: .55; }
+.die.pulse { animation: pulse 300ms ease-in-out; }
+.die.rolling { animation: shake 180ms ease-in-out 2; }
+.offers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
+.offer { border-width: 2px; }
+.offer[draggable="true"] { cursor: grab; user-select: none; }
+.offer.selected { border-color: #099268; background: #f1faf7; }
+.offer.purchased { opacity: .55; }
+.offer-description { min-height: 65px; }
+.event-log { background: #f8f9fa; padding: 8px; border: 1px solid #e9ecef; border-radius: 6px; }
+.log-entry { font-family: ui-monospace, Consolas, monospace; padding: 3px 0; }
+.log-entry span { color: #6d7674; }
+@keyframes pulse { 50% { transform: translateY(-3px); } }
+@keyframes shake { 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
+@keyframes score-in { from { opacity: .4; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 720px) { .hand-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } .offers { grid-template-columns: 1fr; } .offer-description { min-height: auto; } .dice-row { gap: .3rem; } .die-number { font-size: 2.5rem; } .die { padding: 10px 3px; } .die-badges .mantine-Badge-root { font-size: .5rem; padding: 0 3px; } .ability-label { font-size: .52rem; height: 38px; } }
+@media (max-width: 480px) { .hand-list { grid-template-columns: 1fr; } .stats-row.with-rerolls { grid-template-columns: repeat(3, minmax(0, 1fr)); } .stats-row.with-rerolls > div { border-left: none; padding-left: 0; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
