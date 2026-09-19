@@ -11,6 +11,7 @@ export const CONFIG = {
   roundRewardGrowth: 1,
   diceRerollBase: 1,
   offerRerollBase: 3,
+  flameRerollBase: 5,
   handTrainingCost: 4,
   rerollCostGrowth: 2,
   bonusPips: 10,
@@ -33,3 +34,4 @@ export const targetForRound = (round: number) =>
 export const roundReward = (round: number) => CONFIG.roundRewardBase + (round - 1) * CONFIG.roundRewardGrowth;
 export const diceRerollCost = (count: number) => CONFIG.diceRerollBase * CONFIG.rerollCostGrowth ** count;
 export const offerRerollCost = (count: number) => CONFIG.offerRerollBase * CONFIG.rerollCostGrowth ** count;
+export const flameRerollCost = (count: number) => CONFIG.flameRerollBase * CONFIG.rerollCostGrowth ** count;

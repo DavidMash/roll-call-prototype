@@ -16,7 +16,7 @@ export function DiceRow({ dice, selected = [], event, disabled, eligibleIds, onC
     return <Die key={`${die.id}:${involved && event?.enhancement ? event.id : 'idle'}`} die={die}
       selected={selected.includes(die.id)} highlighted={involved && event?.type !== 'DIE_ROLLED'}
       rolling={involved && (event?.type === 'DICE_REROLL_STARTED' || event?.type === 'DIE_ROLLED')}
-      ability={involved ? event?.enhancement : undefined} disabled={disabled}
+      ability={involved ? event?.enhancement : undefined} flameAbility={involved ? event?.flame : undefined} disabled={disabled}
       eligible={eligibleIds?.includes(die.id)} onClick={() => onClick(die.id)}
       onDropOffer={onDropOffer ? offerId => onDropOffer(offerId, die.id) : undefined} />;
   })}</div>;

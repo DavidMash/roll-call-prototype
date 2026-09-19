@@ -82,7 +82,7 @@ describe('derived hand levels', () => {
     activeFace(game.dice[0]).enhancements.bonus = 1;
     activeFace(game.dice[1]).enhancements.multiplier = 1;
     activeFace(game.dice[4]).enhancements.hitchhiker = 1;
-    const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant());
+    const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0));
     expect(result.state.score).toBe(95);
     expect(result.state.stats.handScores[0]).toMatchObject({
       hand: 'pair', handLevel: 3, basePips: 14, baseMultiplier: 2,

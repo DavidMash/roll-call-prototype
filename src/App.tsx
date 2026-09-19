@@ -2,6 +2,7 @@ import { Alert, Button, Container, Group, Paper, Stack, Text, Title } from '@man
 import { useState } from 'react';
 import { RunInfoModal } from './components/DebugPanel';
 import { DiceRow } from './components/DiceRow';
+import { FlameRewardScreen } from './components/FlameRewardScreen';
 import { HelpModal } from './components/HelpModal';
 import { RoundScreen } from './components/RoundScreen';
 import { ShopScreen } from './components/ShopScreen';
@@ -21,6 +22,7 @@ export default function App() {
   const [speed, setSpeed] = useState<PlaybackSpeed>(initialSpeed);
   const [selection, setSelection] = useState(emptySelection);
   const [selectedOffer, setSelectedOffer] = useState<number | null>(null);
+  const [selectedFlameOffer, setSelectedFlameOffer] = useState<number | null>(null);
   const [runInfoOpen, setRunInfoOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const game = useGame(initialSeed, speed);
@@ -29,12 +31,14 @@ export default function App() {
     if (busy) return;
     game.submit(action);
     if (action.type !== 'BUY') setSelectedOffer(null);
+    setSelectedFlameOffer(null);
     setSelection(emptySelection());
   }
   function restart(seed: string) {
     setSeedInput(seed);
     setSelection(emptySelection());
     setSelectedOffer(null);
+    setSelectedFlameOffer(null);
     setRunInfoOpen(false);
     game.restart(seed);
   }
@@ -42,7 +46,9 @@ export default function App() {
     <TopHud board={board} speed={speed} setSpeed={setSpeed} openRunInfo={() => setRunInfoOpen(true)} openHelp={() => setHelpOpen(true)} />
     {game.error && <Alert color="orange" withCloseButton onClose={game.clearError} my="xs" py={5} title="Action unavailable">{game.error}</Alert>}
     <main className="main-content">
-      {board.phase === 'shop' && board.shop ? <ShopScreen board={board} event={event} busy={busy} progress={progress}
+      {board.phase === 'flameReward' && board.flameReward ? <FlameRewardScreen board={board} event={event} busy={busy} progress={progress}
+        selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} />
+        : board.phase === 'shop' && board.shop ? <ShopScreen board={board} event={event} busy={busy} progress={progress}
         selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} submit={submit} skip={game.skip} />
         : board.phase === 'lost' || board.phase === 'error' ? <Stack gap="sm">
           <Paper p="xl" ta="center" className="end-state">

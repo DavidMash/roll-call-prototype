@@ -119,7 +119,7 @@ describe('upper-hand subset resolution', () => {
     enhance(game, 1, 'workout');
     enhance(game, 1, 'multiplier');
     const result = play(game, 'fours', [0], sequence(0, 0.99));
-    expect(result.state.stats.scoreBySource).toEqual({ hand: 15, hitchhiker: 0, jumpingBean: 0 });
+    expect(result.state.stats.scoreBySource).toEqual({ hand: 23, hitchhiker: 0, jumpingBean: 0 });
     expect(result.state.stats.hitchhikerPipsContributed).toBe(4);
     expect(result.state.gold).toBe(1);
     expect(result.state.dice[1].faces[3].workoutPips).toBe(1);
@@ -177,7 +177,7 @@ describe('Golden and Workout', () => {
     enhance(game, 4, 'workout', 2);
     enhance(game, 4, 'multiplier');
     const result = play(game, 'ones', [0], constant(0));
-    expect(result.state.score).toBe(13);
+    expect(result.state.score).toBe(20);
     expect(result.state.gold).toBe(2);
     expect(result.state.dice[4].faces[4].workoutPips).toBe(2);
     result.state.phase = 'shop';
@@ -218,11 +218,13 @@ describe('Sticky, Slippy and Sustainable', () => {
     enhance(game, 0, 'sustainable');
     expect(play(game, 'ones', [0], constant(0)).state.consumed).not.toContain('ones');
   });
-  it('Hitchhiker Sustainable does not prevent consumption', () => {
+  it('successful Hitchhiker Sustainable participates in the preservation check', () => {
     const game = state();
     enhance(game, 4, 'sustainable');
     enhance(game, 4, 'hitchhiker');
-    expect(play(game).state.consumed).toContain('ones');
+    const result = play(game, 'ones', [0], constant(0));
+    expect(result.state.consumed).not.toContain('ones');
+    expect(result.state.stats.probabilityProcs.sustainable.stacksAtCheck).toEqual([1]);
   });
 });
 
@@ -231,7 +233,7 @@ describe('Hitchhiker', () => {
     const game = state();
     enhance(game, 0, 'hitchhiker');
     enhance(game, 4, 'hitchhiker');
-    const result = play(game);
+    const result = play(game, 'ones', [0], constant(0));
     expect(result.state.score).toBe(13);
     expect(result.state.stats.scoreBySource).toEqual({ hand: 13, jumpingBean: 0, hitchhiker: 0 });
     expect(result.state.stats.hitchhikerPipsContributed).toBe(5);
@@ -396,7 +398,7 @@ describe('round boundaries and losing', () => {
       const result = play(game, 'fiveKind', [0, 1, 2, 3, 4]);
       expect(result.error).toBeUndefined();
       earned += roundReward(round);
-      expect(result.state.phase).toBe('shop');
+      expect(result.state.phase).toBe(round % 3 === 0 ? 'flameReward' : 'shop');
       expect(result.state.gold).toBe(earned);
       expect(result.state.stats.goldEarned).toBe(earned);
       expect(result.state.stats.goldSpent).toBe(0);
@@ -412,10 +414,15 @@ describe('round boundaries and losing', () => {
       });
       const rewardIndex = result.events.indexOf(rewards[0]);
       expect(result.events.findIndex(event => event.type === 'ROUND_CLEARED')).toBeLessThan(rewardIndex);
-      expect(rewardIndex).toBeLessThan(result.events.findIndex(event => event.type === 'SHOP_OPENED'));
+      const destinationIndex = result.events.findIndex(event => event.type === (round % 3 === 0 ? 'FLAME_REWARD_OPENED' : 'SHOP_OPENED'));
+      expect(rewardIndex).toBeLessThan(destinationIndex);
       expect(play(result.state, 'fiveKind', [0, 1, 2, 3, 4]).state).toBe(result.state);
 
-      const next = dispatch(result.state, { type: 'NEXT_ROUND' }, constant());
+      const postReward = result.state.phase === 'flameReward'
+        ? dispatch(result.state, { type: 'CHOOSE_FLAME', offerId: result.state.flameReward!.offers[0].id, dieId: 0 }, constant()).state
+        : result.state;
+      expect(postReward.phase).toBe('shop');
+      const next = dispatch(postReward, { type: 'NEXT_ROUND' }, constant());
       expect(next.state.phase).toBe('round');
       expect(next.state.round).toBe(round + 1);
       expect(next.state.target).toBe(targetForRound(round + 1));
@@ -515,7 +522,7 @@ describe('shop', () => {
     const bought = dispatch(game, { type: 'BUY', offerId: 0, dieId: 2 }).state;
     expect(dispatch(bought, { type: 'BUY', offerId: 0, dieId: 2 }).state).toBe(bought);
   });
-  it.each(ENHANCEMENT_IDS.filter(id => !['bonus', 'multiplier', 'golden', 'workout', 'sticky', 'sustainable', 'weighted', 'jackpot'].includes(id)))('rejects redundant %s without charging', enhancement => {
+  it.each(ENHANCEMENT_IDS.filter(id => !['bonus', 'multiplier', 'golden', 'workout', 'sticky', 'sustainable', 'weighted', 'jackpot', 'hitchhiker'].includes(id)))('rejects redundant %s without charging', enhancement => {
     const game = shop();
     game.shop!.offers[0].enhancement = enhancement;
     enhance(game, 0, enhancement);
@@ -524,7 +531,7 @@ describe('shop', () => {
     expect(result.state).toBe(game);
     expect(game.gold).toBe(100);
   });
-  it.each<Enhancement>(['bonus', 'multiplier', 'golden', 'workout', 'sticky', 'sustainable', 'weighted', 'jackpot'])('allows stacking %s', enhancement => {
+  it.each<Enhancement>(['bonus', 'multiplier', 'golden', 'workout', 'sticky', 'sustainable', 'weighted', 'jackpot', 'hitchhiker'])('allows stacking %s', enhancement => {
     const game = shop();
     game.shop!.offers[0].enhancement = enhancement;
     enhance(game, 0, enhancement);
@@ -595,7 +602,10 @@ describe('reproducibility and end-to-end domain flow', () => {
         const ar = dispatch(a, action), br = dispatch(b, action);
         expect(ar.events).toEqual(br.events);
         a = ar.state; b = br.state;
-      } else if (a.phase === 'shop') {
+        } else if (a.phase === 'flameReward') {
+          const action = { type: 'CHOOSE_FLAME' as const, offerId: a.flameReward!.offers[0].id, dieId: 0 };
+          a = dispatch(a, action).state; b = dispatch(b, action).state;
+        } else if (a.phase === 'shop') {
         const action = { type: 'NEXT_ROUND' as const };
         a = dispatch(a, action).state; b = dispatch(b, action).state;
       } else break;
@@ -618,6 +628,8 @@ describe('reproducibility and end-to-end domain flow', () => {
             expect(game.manualRerollsRemaining).toBeGreaterThan(0);
             game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
           }
+        } else if (game.phase === 'flameReward') {
+          game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: game.flameReward!.offers[0].id, dieId: seed % 5 }).state;
         } else if (game.phase === 'shop') {
           clears++;
           for (const offer of game.shop!.offers) {

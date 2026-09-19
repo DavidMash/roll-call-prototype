@@ -25,8 +25,8 @@ export function TopHud({ board, speed, setSpeed, openRunInfo, openHelp }: {
         <HudStat testId="stat-goal" icon="◎" label="Goal" value={board.target} />
         <HudStat testId="stat-score" icon="★" label="Score" value={board.score} />
         <HudStat testId="stat-gold" icon="●" label="Gold" value={board.gold} />
-        {board.phase === 'shop'
-          ? <div className="hud-phase" aria-label="Shop phase">SHOP</div>
+        {board.phase === 'shop' || board.phase === 'flameReward'
+          ? <div className="hud-phase" aria-label={board.phase === 'shop' ? 'Shop phase' : 'Flame Reward phase'}>{board.phase === 'shop' ? 'SHOP' : 'FLAME'}</div>
           : <HudStat testId="stat-rerolls" icon="↻" label="Rerolls" value={board.manualRerollsRemaining} />}
       </Group>
       <Group className="hud-actions" gap={6} wrap="nowrap">

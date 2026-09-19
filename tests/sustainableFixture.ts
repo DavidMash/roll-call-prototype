@@ -15,7 +15,9 @@ export function stickySustainableRun() {
     for (let step = 0; step < 60 && game.round <= 4; step++) {
       if (game.phase === 'lost' || game.phase === 'error') break;
       let action: Action;
-      if (game.phase === 'shop') {
+      if (game.phase === 'flameReward') {
+        action = { type: 'CHOOSE_FLAME', offerId: game.flameReward!.offers[0].id, dieId: Math.floor(game.round / 3 - 1) % 5 };
+      } else if (game.phase === 'shop') {
         const sticky = game.shop!.offers.find(offer => offer.enhancement === 'sticky');
         const sustainable = game.shop!.offers.find(offer => offer.enhancement === 'sustainable');
         if (sticky && sustainable && game.gold >= enhancementCost('sticky') + enhancementCost('sustainable')) {

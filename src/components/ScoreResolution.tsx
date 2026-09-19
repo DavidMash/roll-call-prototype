@@ -1,9 +1,10 @@
 import { Badge, Button, Group, Paper, Text } from '@mantine/core';
 import { ENHANCEMENTS } from '../game/enhancements';
+import { FLAMES } from '../game/flames';
 import { HANDS } from '../game/hands';
 import type { GameEvent } from '../game/types';
 
-export function ScoreResolution({ event, busy, current, total, onSkip, deadBoard = false, idleText }: {
+export function ScoreResolution({ event, busy, current, total, onSkip, deadBoard = false, idleText, showXMult = false }: {
   event: GameEvent | null;
   busy: boolean;
   current: number;
@@ -11,10 +12,13 @@ export function ScoreResolution({ event, busy, current, total, onSkip, deadBoard
   onSkip: () => void;
   deadBoard?: boolean;
   idleText?: string;
+  showXMult?: boolean;
 }) {
   let heading = idleText ?? (deadBoard ? 'No playable hands — use a reroll' : 'Choose a hand or select dice');
   if (event?.type === 'HAND_SCORE_FINALIZED' || event?.type === 'STANDALONE_SCORE_CALCULATED') heading = `+${event.amount}`;
   else if (event?.type === 'SCORE_ADDED') heading = `+${event.amount}`;
+  else if (event?.type === 'HITCHHIKER_ADDED_PIPS') heading = 'HITCHHIKER';
+  else if (event?.flame) heading = FLAMES[event.flame].name.toUpperCase();
   else if (event?.enhancement) heading = ENHANCEMENTS[event.enhancement].name.toUpperCase();
   else if (event?.type === 'HAND_STARTED' && event.hand) heading = `${HANDS[event.hand].name} — LV. ${event.handScore?.handLevel ?? event.board.handLevels[event.hand]}`;
   else if (event?.type === 'TRAINING_PURCHASED' && event.hand) heading = `${HANDS[event.hand].name} — LV. ${event.board.handLevels[event.hand]}`;
@@ -34,6 +38,12 @@ export function ScoreResolution({ event, busy, current, total, onSkip, deadBoard
       <div><Text size="xs" c="dimmed">PIPS</Text><Text size="xl" fw={700} data-testid="hand-pips">{event.handScore.currentPips}</Text></div>
       <Text c="dimmed">×</Text>
       <div><Text size="xs" c="dimmed">MULT</Text><Text size="xl" fw={700} data-testid="hand-multiplier">x{event.handScore.currentMultiplier}</Text></div>
+      {showXMult && <><Text c="dimmed">×</Text><div><Text size="xs" c="dimmed">XMULT</Text><Text size="xl" fw={700} data-testid="hand-xmult">x{event.handScore.currentXMult}</Text></div></>}
+    </Group>}
+    {!event?.handScore && showXMult && event?.type === 'STANDALONE_SCORE_CALCULATED' && <Group justify="center" gap="xl" className="score-accumulator" data-testid="standalone-accumulator">
+      <div><Text size="xs" c="dimmed">PIPS</Text><Text size="xl" fw={700}>{event.pips}</Text></div><Text c="dimmed">×</Text>
+      <div><Text size="xs" c="dimmed">MULT</Text><Text size="xl" fw={700}>x{event.multiplier}</Text></div><Text c="dimmed">×</Text>
+      <div><Text size="xs" c="dimmed">XMULT</Text><Text size="xl" fw={700} data-testid="standalone-xmult">x{event.xMult ?? 1}</Text></div>
     </Group>}
     <Text key={event?.id ?? 'ready'} className="score-tick" fw={700}>{heading}</Text>
     {busy && event?.message && <Text size="xs" c="dimmed" className="resolution-message">{event.message}</Text>}

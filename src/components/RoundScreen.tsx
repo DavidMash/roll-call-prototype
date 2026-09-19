@@ -1,7 +1,8 @@
 import { Alert, Button, Group, Paper, Stack, Text } from '@mantine/core';
 import { validateAction } from '../game/engine';
+import { captureHandStart, composeXMult, handXMultContributions, hasXMultFlame } from '../game/flames';
 import { hasPlayableHand, HANDS } from '../game/hands';
-import { handScore } from '../game/scoring';
+import { finalizeScore, handScore } from '../game/scoring';
 import { canPlay, emptySelection, selectHand, toggleDie } from '../game/selection';
 import type { Selection } from '../game/selection';
 import type { Action, Board, GameEvent } from '../game/types';
@@ -14,7 +15,16 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
   selection: Selection; setSelection: (selection: Selection) => void; submit: (action: Action) => void; skip: () => void;
 }) {
   const valid = canPlay(board.dice, board.consumed, selection);
-  const preview = valid ? handScore(board.dice, selection.hand!, selection.dieIds, board.handLevels[selection.hand!]) : null;
+  const showXMult = hasXMultFlame(board.dice);
+  const preview = valid ? (() => {
+    const hand = selection.hand!;
+    const base = handScore(board.dice, hand, selection.dieIds, board.handLevels[hand]);
+    const contributions = handXMultContributions(captureHandStart(board, hand), hand, board.handLevels[hand], selection.dieIds);
+    const additive = contributions.filter(item => item.mode === 'additive').reduce((sum, item) => sum + item.value, 0);
+    const multiplicative = contributions.filter(item => item.mode === 'multiplicative').reduce((product, item) => product * item.value, 1);
+    const xMult = composeXMult(additive, multiplicative);
+    return { ...base, xMult, score: finalizeScore(base.pips, base.multiplier, xMult).finalScore };
+  })() : null;
   const manualAction: Action = { type: 'MANUAL_REROLL', dieIds: selection.dieIds };
   const canReroll = validateAction(board, manualAction) === null;
   const deadBoard = !hasPlayableHand(board.dice, board.consumed);
@@ -22,7 +32,7 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
     ? `${HANDS[selection.hand].name} · ${selection.dieIds.length} ${selection.dieIds.length === 1 ? 'die' : 'dice'} selected`
     : selection.dieIds.length ? `${selection.dieIds.length} ${selection.dieIds.length === 1 ? 'die' : 'dice'} selected` : undefined;
   return <Stack gap="xs" className="round-screen">
-    <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} deadBoard={deadBoard} idleText={idleText} />
+    <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} deadBoard={deadBoard} idleText={idleText} showXMult={showXMult} />
     {!busy && deadBoard && board.manualRerollsRemaining > 0 && <Alert color="orange" py={5} title="No playable hands" role="status">
       Select dice and use a reroll.
     </Alert>}
@@ -37,7 +47,7 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
           onClick={id => setSelection(toggleDie(board.dice, board.consumed, selection, id))} />
         <div className="gameplay-actions">
           <Text size="xs" c="dimmed" className="selection-preview">{preview
-            ? `${preview.pips} pips × ${preview.multiplier} = ${preview.score} points`
+            ? `${preview.pips} pips × ${preview.multiplier}${showXMult ? ` × ${preview.xMult} XMult` : ''} = ${preview.score} points`
             : selection.dieIds.length ? 'Select a complete participating set' : 'Choose a hand or select dice'}</Text>
           <Group gap="xs" wrap="nowrap">
             <Button size="sm" variant="default" disabled={busy || !canReroll} aria-label={`Reroll Selected — ${selection.dieIds.length}`} onClick={() => submit(manualAction)}>↻ Reroll Selected — {selection.dieIds.length}</Button>

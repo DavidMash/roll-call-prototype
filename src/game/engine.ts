@@ -1,8 +1,9 @@
-import { CONFIG, diceRerollCost, offerRerollCost } from './config';
+import { CONFIG, diceRerollCost, flameRerollCost, offerRerollCost } from './config';
 import { activeFace, createDice } from './dice';
 import { Resolver } from './effects';
 import { canAttach, enhancementCost, ENHANCEMENTS } from './enhancements';
-import { HANDS, initialHandLevels, isValidSelection } from './hands';
+import { FLAMES } from './flames';
+import { HANDS, initialHandLevels, initialHandPlayCounts, isValidSelection } from './hands';
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
 import type { Action, Board, GameState, RandomSource, Resolution } from './types';
@@ -22,6 +23,15 @@ export function validateAction(state: Board, action: Action): string | null {
     if (state.phase !== 'round') return 'Hands can only be played during a round.';
     if (state.consumed.includes(action.hand)) return 'That hand has already been consumed.';
     if (!isValidSelection(state.dice, action.hand, action.dieIds)) return 'Select a complete valid set of participating dice.';
+    return null;
+  }
+  if (action.type === 'CHOOSE_FLAME' || action.type === 'REROLL_FLAMES') {
+    if (state.phase !== 'flameReward' || !state.flameReward) return 'This action requires an open Flame Reward.';
+    if (action.type === 'CHOOSE_FLAME') {
+      if (!state.flameReward.offers.some(offer => offer.id === action.offerId) || !state.dice.some(die => die.id === action.dieId)) {
+        return 'Choose an available Flame and a physical die.';
+      }
+    } else if (state.gold < flameRerollCost(state.flameReward.offerRerolls)) return 'Not enough gold to reroll Flame offers.';
     return null;
   }
   if (state.phase !== 'shop' || !state.shop) return 'This action requires an open shop.';
@@ -66,8 +76,10 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
   const state: GameState = {
     phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: CONFIG.baseTarget,
     score: 0, gold: CONFIG.startingGold, dice: createDice(), consumed: [], shop: null,
-    handLevels: initialHandLevels(),
+    handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(),
+    bonusHandUses: {}, doubleEncoreUsedDieIds: [], targetPracticeHand: null,
     scoreByHand: {}, effectScore: 0,
+    flameReward: null,
     manualRerollsRemaining: CONFIG.manualRerollsPerRound,
     nextOfferId: 0, stats: createStats(seed), history: [],
   };
@@ -89,20 +101,45 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const face = activeFace(die);
         const cost = enhancementCost(offer.enhancement);
         resolver.spendGold(cost, `Bought ${ENHANCEMENTS[offer.enhancement].name}: −${cost} gold`, 'enhancement');
-        face.enhancements[offer.enhancement] = (face.enhancements[offer.enhancement] ?? 0) + 1;
+        const stacksApplied = die.flame === 'tripleUp' && ENHANCEMENTS[offer.enhancement].stackable ? 3 : 1;
+        face.enhancements[offer.enhancement] = (face.enhancements[offer.enhancement] ?? 0) + stacksApplied;
+        if (stacksApplied === 3) resolver.triggerFlame('tripleUp', die.id, `${ENHANCEMENTS[offer.enhancement].name} applied as 3 stacks`);
         offer.purchased = true;
-        next.stats.purchases.push({ round: next.round, enhancement: offer.enhancement, dieId: die.id, face: face.rank, cost });
+        next.stats.purchases.push({ round: next.round, enhancement: offer.enhancement, dieId: die.id, face: face.rank, cost, stacksApplied });
         const key = `D${die.id + 1}:${face.rank}`;
         if (!next.stats.enhancedFaces.includes(key)) next.stats.enhancedFaces.push(key);
         resolver.emit({ type: 'OFFER_PURCHASED', enhancement: offer.enhancement, dieIds: [die.id], face: face.rank,
-          message: `${ENHANCEMENTS[offer.enhancement].name} attached to D${die.id + 1}, physical face ${face.rank}` });
+          message: `${ENHANCEMENTS[offer.enhancement].name} x${stacksApplied} attached to D${die.id + 1}, physical face ${face.rank}${stacksApplied === 3 ? ' by Triple-Up' : ''}` });
+        break;
+      }
+      case 'CHOOSE_FLAME': {
+        const offer = next.flameReward!.offers.find(item => item.id === action.offerId)!;
+        const die = next.dice[action.dieId];
+        const replaced = die.flame;
+        die.flame = offer.flame;
+        next.stats.flameAcquisitions.push({ round: next.round, dieId: die.id, flame: offer.flame, replaced });
+        resolver.emit({ type: replaced ? 'FLAME_REPLACED' : 'FLAME_ACQUIRED', flame: offer.flame, dieIds: [die.id],
+          message: replaced
+            ? `D${die.id + 1} replaced ${FLAMES[replaced].name} with ${FLAMES[offer.flame].name}`
+            : `D${die.id + 1} acquired ${FLAMES[offer.flame].name}` });
+        resolver.openShop(false);
+        break;
+      }
+      case 'REROLL_FLAMES': {
+        const cost = flameRerollCost(next.flameReward!.offerRerolls);
+        resolver.spendGold(cost, `Paid for Flame offer reroll: −${cost} gold`, 'flameReroll');
+        next.flameReward!.offerRerolls++;
+        next.stats.flameOfferRerolls++;
+        next.stats.flameRerollGoldSpent += cost;
+        resolver.freshFlameOffers();
+        resolver.emit({ type: 'FLAME_OFFERS_REFRESHED', message: 'Three fresh distinct Flame offers' });
         break;
       }
       case 'REROLL_DICE':
         resolver.spendGold(diceRerollCost(next.shop!.diceRerolls), 'Paid for shop dice reroll', 'shopDiceReroll');
         next.shop!.diceRerolls++;
         next.stats.shopDiceRerolls++;
-        resolver.rollBatch(next.dice.map(die => die.id), 'Shop dice reroll', false);
+        resolver.rollBatch(next.dice.map(die => die.id), 'Shop dice reroll', 'shop');
         break;
       case 'REROLL_OFFERS':
         resolver.spendGold(offerRerollCost(next.shop!.offerRerolls), 'Paid for enhancement reroll', 'enhancementReroll');

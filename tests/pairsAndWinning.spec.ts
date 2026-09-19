@@ -23,6 +23,12 @@ async function perform(page: Page, game: GameState, action: Action) {
     await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button').click();
     await die(page, action.dieId).click();
   } else if (action.type === 'NEXT_ROUND') await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+  else if (action.type === 'CHOOSE_FLAME') {
+    const offer = game.flameReward!.offers.find(item => item.id === action.offerId)!;
+    await page.getByTestId(`flame-offer-${offer.flame}`).getByRole('button', { name: 'Select Flame' }).click();
+    await die(page, action.dieId).click();
+    if (game.dice[action.dieId].flame) await page.getByRole('button', { name: 'Replace Flame', exact: true }).click();
+  }
   else if (action.type === 'MANUAL_REROLL') {
     await select(page, action.dieIds);
     await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();
@@ -109,6 +115,7 @@ test('winning hand shows final award and ROUND CLEARED without gameplay roll or 
   expect(observed).toEqual(['HAND_SCORE_FINALIZED', 'SCORE_ADDED', 'ROUND_CLEARED']);
   await page.getByRole('button', { name: 'Skip playback' }).click();
   await ready(page);
-  await expect(page.getByText('Enhancements', { exact: true })).toBeVisible();
+  if (fixture.result.state.phase === 'flameReward') await expect(page.getByText('FLAME REWARD', { exact: true })).toBeVisible();
+  else await expect(page.getByText('Enhancements', { exact: true })).toBeVisible();
   await expect(page.getByTestId('stat-score').getByText(String(fixture.result.state.score), { exact: true })).toBeVisible();
 });

@@ -17,7 +17,9 @@ export function scoringPlaybackRun() {
     for (let step = 0; step < 80 && game.round <= 6; step++) {
       if (game.phase === 'lost' || game.phase === 'error') break;
       let action: Action;
-      if (game.phase === 'shop') {
+      if (game.phase === 'flameReward') {
+        action = { type: 'CHOOSE_FLAME', offerId: game.flameReward!.offers[0].id, dieId: Math.floor(game.round / 3 - 1) % 5 };
+      } else if (game.phase === 'shop') {
         const offer = game.shop!.offers.find(item => !item.purchased && !purchased.has(item.enhancement)
           && ['bonus', 'multiplier', 'hitchhiker'].includes(item.enhancement)
           && game.gold >= enhancementCost(item.enhancement));
@@ -34,7 +36,10 @@ export function scoringPlaybackRun() {
           choice.dieIds.some(id => stacks(activeFace(game.dice[id]), 'bonus'))
           && choice.dieIds.some(id => stacks(activeFace(game.dice[id]), 'multiplier'))
           && game.dice.some(die => !choice.dieIds.includes(die.id) && stacks(activeFace(die), 'hitchhiker')));
-        if (scoringAction) return { seed, actions, game, action: scoringAction, result: dispatch(game, scoringAction) };
+        if (scoringAction) {
+          const result = dispatch(game, scoringAction);
+          if (result.events.some(event => event.enhancement === 'hitchhiker')) return { seed, actions, game, action: scoringAction, result };
+        }
         action = choices[0] ?? { type: 'MANUAL_REROLL', dieIds: [0] };
       }
       const result = dispatch(game, action);

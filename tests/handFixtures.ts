@@ -34,7 +34,9 @@ export function winningSlippyRun() {
     for (let step = 0; step < 80 && game.round <= 4; step++) {
       if (game.phase === 'lost' || game.phase === 'error') break;
       let action: Action;
-      if (game.phase === 'shop') {
+      if (game.phase === 'flameReward') {
+        action = { type: 'CHOOSE_FLAME', offerId: game.flameReward!.offers[0].id, dieId: Math.floor(game.round / 3 - 1) % 5 };
+      } else if (game.phase === 'shop') {
         const offer = game.shop!.offers.find(item => item.enhancement === 'slippy' && !item.purchased);
         if (offer && !boughtSlippy) {
           action = { type: 'BUY', offerId: offer.id, dieId: 4 };

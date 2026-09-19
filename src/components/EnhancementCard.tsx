@@ -14,7 +14,7 @@ const SHORT_DESCRIPTION: Record<Enhancement, string> = {
   sticky: 'Chance to prevent a scored reroll.',
   slippy: 'Rerolls after a played hand continues.',
   sustainable: 'Chance to keep the played hand available.',
-  hitchhiker: 'Adds its Pips when held out of the hand.',
+  hitchhiker: 'Chance to join as a scorer when held out.',
   weighted: 'Raises the roll weight of the opposite face.',
   jackpot: 'Earns Gold when held out of the winning hand.',
 };

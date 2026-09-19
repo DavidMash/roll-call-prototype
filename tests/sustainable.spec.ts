@@ -25,6 +25,12 @@ async function perform(page: Page, game: GameState, action: Action) {
     await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button').click();
     await die(page, action.dieId).click();
   } else if (action.type === 'NEXT_ROUND') await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+  else if (action.type === 'CHOOSE_FLAME') {
+    const offer = game.flameReward!.offers.find(item => item.id === action.offerId)!;
+    await page.getByTestId(`flame-offer-${offer.flame}`).getByRole('button', { name: 'Select Flame' }).click();
+    await die(page, action.dieId).click();
+    if (game.dice[action.dieId].flame) await page.getByRole('button', { name: 'Replace Flame', exact: true }).click();
+  }
   else throw new Error(`Unexpected fixture action ${action.type}`);
   await ready(page);
   return dispatch(game, action).state;

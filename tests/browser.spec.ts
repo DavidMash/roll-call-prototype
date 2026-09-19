@@ -19,8 +19,8 @@ async function matchBoard(page: Page, game: GameState) {
   for (const [stat, value] of [['round', game.round], ['goal', game.target], ['score', game.score], ['gold', game.gold]] as const) {
     await expect(page.getByTestId(`stat-${stat}`).getByText(String(value), { exact: true })).toBeVisible();
   }
-  if (game.phase === 'shop') {
-    await expect(page.getByText(`Round ${game.round} cleared · +${roundReward(game.round)} gold · ${game.score - game.target} points above goal`, { exact: true })).toBeVisible();
+  if (game.phase === 'shop' || game.phase === 'flameReward') {
+    if (game.phase === 'shop') await expect(page.getByText(`Round ${game.round} cleared · +${roundReward(game.round)} gold · ${game.score - game.target} points above goal`, { exact: true })).toBeVisible();
     await expect(page.getByTestId('stat-rerolls')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^Reroll Selected/ })).toHaveCount(0);
   } else await expect(page.getByTestId('stat-rerolls').getByText(String(game.manualRerollsRemaining), { exact: true })).toBeVisible();
@@ -36,8 +36,11 @@ async function playBest(page: Page, game: GameState): Promise<GameState> {
     return next;
   }
   await page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) }).click();
-  const selected = game.dice.filter(die => choice.dieIds.includes(die.id));
-  for (const die of selected) await expect(page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},`) })).toHaveAttribute('aria-pressed', 'true');
+  for (const die of game.dice) {
+    const target = page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},`) });
+    const selected = await target.getAttribute('aria-pressed') === 'true';
+    if (selected !== choice.dieIds.includes(die.id)) await target.click();
+  }
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   const next = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }).state;
   await matchBoard(page, next);
@@ -260,6 +263,13 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
     else if (game.phase === 'shop') {
       await page.getByRole('button', { name: 'NEXT ROUND' }).click();
       game = dispatch(game, { type: 'NEXT_ROUND' }).state;
+      await matchBoard(page, game);
+    } else if (game.phase === 'flameReward') {
+      const offer = game.flameReward!.offers[0];
+      const dieId = game.dice.find(die => !die.flame)?.id ?? 0;
+      await page.getByTestId(`flame-offer-${offer.flame}`).getByRole('button', { name: 'Select Flame' }).click();
+      await page.getByRole('button', { name: new RegExp(`^Die ${dieId + 1},`) }).click();
+      game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId }).state;
       await matchBoard(page, game);
     } else throw new Error(`Unexpected phase: ${game.phase}`);
   }

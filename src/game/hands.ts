@@ -57,6 +57,8 @@ export function handStats(hand: HandId, level: number): HandStats {
 }
 export const initialHandLevels = (): Record<HandId, number> =>
   Object.fromEntries(HAND_IDS.map(hand => [hand, 1])) as Record<HandId, number>;
+export const initialHandPlayCounts = (): Record<HandId, number> =>
+  Object.fromEntries(HAND_IDS.map(hand => [hand, 0])) as Record<HandId, number>;
 
 function subsets<T>(items: T[], size: number): T[][] {
   if (size === 0) return [[]];

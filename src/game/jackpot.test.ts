@@ -53,7 +53,7 @@ describe('Jackpot', () => {
     expect(result.events.some(event => event.enhancement === 'jackpot')).toBe(false);
     expect(result.state.history.find(event => event.type === 'ABILITY_EVALUATED'
       && event.enhancement === 'jackpot' && event.dieIds?.includes(0))?.message)
-      .toContain('did not trigger: die participated');
+      .toContain('did not trigger: die scored');
   });
 
   it('pays multiple held Jackpot dice in stable physical-die order', () => {
@@ -92,16 +92,16 @@ describe('Jackpot', () => {
     expect(skipIndex).toBeLessThan(clearIndex);
   });
 
-  it('still pays when the held Jackpot face contributes through Hitchhiker', () => {
+  it('does not pay when successful Hitchhiker makes the held face a scoring die', () => {
     const game = board(undefined, 17); // (8 base + 4 + 4 + Hitchhiker 6) × 1.5 = 33; total 50.
     enhance(game, 4, 'hitchhiker');
     enhance(game, 4, 'jackpot');
-    const result = playPair(game);
+    const result = playPair(game, constant(0));
     expect(result.state.score).toBe(50);
     expect(result.state.stats.hitchhikerPipsContributed).toBe(6);
     expect(result.state.stats.triggers.hitchhiker).toBe(1);
-    expect(result.state.stats.triggers.jackpot).toBe(1);
-    expect(result.state.stats.goldBySource.jackpot).toBe(3);
+    expect(result.state.stats.triggers.jackpot).toBeUndefined();
+    expect(result.state.stats.goldBySource.jackpot).toBe(0);
   });
 
   it('keeps Golden independent when a held Jackpot face does not score', () => {

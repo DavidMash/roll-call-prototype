@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test';
 import { CONFIG } from '../src/game/config';
 import { dispatch, newRun } from '../src/game/engine';
 import { HANDS } from '../src/game/hands';
+import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
 import { scoringPlaybackRun } from './scoringFixture';
 
@@ -27,6 +28,11 @@ async function perform(page: Page, game: GameState, action: Action) {
     await selectDice(page, [action.dieId]);
   } else if (action.type === 'NEXT_ROUND') {
     await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+  } else if (action.type === 'CHOOSE_FLAME') {
+    const offer = game.flameReward!.offers.find(item => item.id === action.offerId)!;
+    await page.getByTestId(`flame-offer-${offer.flame}`).getByRole('button', { name: 'Select Flame' }).click();
+    await page.getByRole('button', { name: new RegExp(`^Die ${action.dieId + 1},`) }).click();
+    if (game.dice[action.dieId].flame) await page.getByRole('button', { name: 'Replace Flame', exact: true }).click();
   } else if (action.type === 'MANUAL_REROLL') {
     await selectDice(page, action.dieIds);
     await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();
@@ -38,6 +44,7 @@ async function perform(page: Page, game: GameState, action: Action) {
 test('live Pips and Mult build through Bonus, Multiplier and Hitchhiker before one final award', async ({ page }) => {
   const fixture = scoringPlaybackRun();
   const final = fixture.result.events.find(event => event.type === 'HAND_SCORE_FINALIZED')!;
+  const started = fixture.result.events.find(event => event.type === 'HAND_STARTED')!;
   let game = newRun(fixture.seed).state;
   await page.goto(`/?seed=${fixture.seed}&speed=instant`);
   await ready(page);
@@ -50,7 +57,8 @@ test('live Pips and Mult build through Bonus, Multiplier and Hitchhiker before o
     const selected = await target.getAttribute('aria-pressed') === 'true';
     if (selected !== fixture.action.dieIds.includes(physical.id)) await target.click();
   }
-  await expect(page.getByText(`${final.pips} pips × ${final.multiplier} = ${final.amount} points`, { exact: true })).toBeVisible();
+  const deterministicPreview = handScore(game.dice, fixture.action.hand, fixture.action.dieIds, game.handLevels[fixture.action.hand]);
+  await expect(page.locator('.selection-preview')).toContainText(`${deterministicPreview.pips} pips × ${deterministicPreview.multiplier}`);
 
   await page.clock.install({ time: new Date('2026-09-17T12:00:00Z') });
   await page.clock.pauseAt(new Date('2026-09-17T12:00:01Z'));
@@ -65,8 +73,8 @@ test('live Pips and Mult build through Bonus, Multiplier and Hitchhiker before o
       await expect(page.getByTestId('stat-score').getByText(String(event.board.score), { exact: true })).toBeVisible();
       if (event.type !== 'SCORE_ADDED') expect(event.board.score).toBe(game.score);
       if (event.type === 'HAND_STARTED') {
-        expect(event.handScore.basePips).toBe(10);
-        await expect(page.getByTestId('hand-pips')).toHaveText('10');
+        expect(event.handScore.basePips).toBe(started.handScore!.basePips);
+        await expect(page.getByTestId('hand-pips')).toHaveText(String(started.handScore!.basePips));
       }
       if (event.type === 'HAND_PIPS_CHANGED' && event.enhancement === 'bonus') {
         await expect(page.locator('.score-tick')).toHaveText('BONUS');

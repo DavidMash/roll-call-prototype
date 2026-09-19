@@ -17,21 +17,27 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
           .some(set => selection.dieIds.every(dieId => set.includes(dieId)));
         const playable = !consumed && compatible;
         const selected = selection.hand === hand;
+        const targeted = board.targetPracticeHand === hand;
+        const selectedWellTrained = selected
+          ? selection.dieIds.filter(id => board.dice[id].flame === 'wellTrained').length : 0;
+        const wellTrainedBonus = selectedWellTrained * board.handPlayCounts[hand] * 0.1;
         const score = board.scoreByHand[hand];
         const state = consumed ? 'consumed' : selected ? 'selected' : playable ? 'playable' : 'unavailable';
         const scoreLabel = score === undefined ? 'no score' : `${score} points`;
         return <Button key={hand} variant={selected ? 'light' : 'subtle'} color={selected ? 'teal' : 'gray'}
-          className={`scorecard-row ${state}`} data-testid={`scorecard-row-${hand}`} data-state={state}
+          className={`scorecard-row ${state} ${targeted ? 'targeted' : ''}`} data-testid={`scorecard-row-${hand}`} data-state={state}
           disabled={busy || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}
           aria-label={`${definition.name} · Lv. ${stats.level} ${stats.basePips} Pips · ×${stats.baseMultiplier} ${scoreLabel}${consumed ? ' used' : ''}`}>
           <span className="scorecard-row-copy">
-            <span className="scorecard-hand-name">{definition.name} <span>· Lv. {stats.level}</span></span>
+            <span className="scorecard-hand-name">{targeted && <span className="target-marker" title="Target Practice target">◎ TARGET </span>}{definition.name} <span>· Lv. {stats.level}</span></span>
             <Tooltip label={`${stats.basePips} Base Pips · ×${stats.baseMultiplier} Base Mult`} position="right" withArrow>
               <span className="scorecard-base" data-testid={`scorecard-stats-${hand}`}>{stats.basePips} · ×{stats.baseMultiplier}</span>
             </Tooltip>
+            {selectedWellTrained > 0 && <span className="well-trained-preview" data-testid={`well-trained-preview-${hand}`}>WELL TRAINED +{Number(wellTrainedBonus.toFixed(12))} XMULT</span>}
           </span>
           <span className="scorecard-row-result">
             <span data-testid={`scorecard-score-${hand}`}>{score ?? '—'}</span>
+            {(board.bonusHandUses[hand] ?? 0) > 0 && <Badge size="xs" color="violet" variant="light">+{board.bonusHandUses[hand]} use</Badge>}
             {consumed && <Badge size="xs" color="gray" variant="light">used</Badge>}
           </span>
         </Button>;

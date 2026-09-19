@@ -2,6 +2,7 @@ import { Badge, Button, Group, Paper, Stack, Text, Tooltip } from '@mantine/core
 import { diceRerollCost, offerRerollCost, roundReward } from '../game/config';
 import { activeFace } from '../game/dice';
 import { canAttach, enhancementCost, ENHANCEMENTS } from '../game/enhancements';
+import { hasXMultFlame } from '../game/flames';
 import type { Action, Board, GameEvent } from '../game/types';
 import { DiceRow } from './DiceRow';
 import { EnhancementCard } from './EnhancementCard';
@@ -21,7 +22,7 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
       <Text size="sm"><strong>Round {board.round} cleared</strong> · +{roundReward(board.round)} gold · {board.score - board.target} points above goal</Text>
       <Badge color="teal" variant="light">SHOP</Badge>
     </Group>
-    {busy && <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} />}
+    {busy && <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} showXMult={hasXMultFlame(board.dice)} />}
     <Paper p="xs" className="shop-section">
       <Group justify="space-between" className="section-heading">
         <Text fw={700} size="sm" tt="uppercase" lts=".08em">Hand Training</Text>

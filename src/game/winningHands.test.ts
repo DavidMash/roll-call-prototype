@@ -63,7 +63,7 @@ describe('winning-hand boundary', () => {
     enhance(game, 1, 'multiplier');
     for (const enhancement of ['hitchhiker', 'bonus', 'golden', 'workout', 'slippy'] as Enhancement[]) enhance(game, 4, enhancement);
     activeFace(game.dice[4]).workoutPips = 2;
-    const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant());
+    const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0));
     expect(result.state.score).toBe(98); // (8 base + 8 + 10 + 18) × 2 + existing 10
     expect(result.state.gold).toBe(roundReward(1) + 2);
     expect(result.state.dice[0].faces[3].workoutPips).toBe(1);
@@ -83,7 +83,7 @@ describe('winning-hand boundary', () => {
     const game = board(undefined, 18);
     enhance(game, 4, 'hitchhiker');
     expect(18 + (8 + 8) * 1.5).toBeLessThan(game.target);
-    const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant());
+    const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0));
     expect(result.state.score).toBe(51);
     expect(result.state.phase).toBe('shop');
     expect(result.events.some(event => event.type === 'POST_HAND_REROLLS_SKIPPED')).toBe(true);

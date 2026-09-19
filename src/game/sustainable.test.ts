@@ -69,14 +69,14 @@ describe('Sustainable probability', () => {
     expect(rng.next).toHaveBeenCalledTimes(3); // One combined proc check, then two ordinary die rolls.
   });
 
-  it.each([false, true])('ignores unselected Sustainable, including Hitchhikers (hitchhiker=%s)', hitchhiker => {
+  it.each([false, true])('only lets unselected Sustainable contribute after Hitchhiker succeeds (hitchhiker=%s)', hitchhiker => {
     const game = board();
     enhance(game, 2, 'sustainable', 3);
     if (hitchhiker) enhance(game, 2, 'hitchhiker');
     const result = play(game, constant(0));
-    expect(result.state.consumed).toContain('fours');
-    expect(result.state.stats.probabilityProcs.sustainable.checks).toBe(0);
-    expect(result.events.some(event => event.enhancement === 'sustainable')).toBe(false);
+    expect(result.state.consumed.includes('fours')).toBe(!hitchhiker);
+    expect(result.state.stats.probabilityProcs.sustainable.checks).toBe(hitchhiker ? 1 : 0);
+    expect(result.events.some(event => event.enhancement === 'sustainable')).toBe(hitchhiker);
   });
 
   it('can succeed repeatedly on the same physical face in one round without spent state', () => {

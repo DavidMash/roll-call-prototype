@@ -3,24 +3,32 @@ import type { Board, GameState, RunStats } from './types';
 export function createStats(seed: string): RunStats {
   return {
     seed, roundReached: 1, rounds: [], handsPlayed: {}, purchases: [],
-    trainingPurchases: [], trainingPurchasesTotal: 0, trainingGoldSpent: 0, enhancedFaces: [],
+    trainingPurchases: [], trainingPurchasesTotal: 0, trainingGoldSpent: 0,
+    flameAcquisitions: [], flameOfferRerolls: 0, flameRerollGoldSpent: 0, flameTriggers: {},
+    additiveXMultByFlame: {}, multiplicativeXMultByFlame: {}, targetPracticeTargets: [],
+    chargeAccumulated: 0, chargeConsumed: 0, doubleEncoreUsesGranted: 0, personalTrainerLevelsGranted: 0,
+    enhancedFaces: [],
     enhancementShopRerolls: 0, shopDiceRerolls: 0, goldEarned: 0,
     goldBySource: { golden: 0, jackpot: 0, roundClear: 0 }, goldSpent: 0,
-    goldSpentBySource: { enhancement: 0, shopDiceReroll: 0, enhancementReroll: 0, handTraining: 0 },
+    goldSpentBySource: { enhancement: 0, shopDiceReroll: 0, enhancementReroll: 0, handTraining: 0, flameReroll: 0 },
     manualRerollActions: 0, manualDiceRerolled: 0, manualRerolls: [], deadBoardRescues: 0,
     triggers: {}, probabilityProcs: {
       sticky: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
       sustainable: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
+      hitchhiker: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
     }, scoreBySource: { hand: 0, jumpingBean: 0, hitchhiker: 0 }, scoreByHand: {},
-    handScores: [], handBonusPips: 0, hitchhikerPipsContributed: 0,
+    handScores: [], standaloneScores: [], handBonusPips: 0, hitchhikerPipsContributed: 0,
     loss: null, actions: [], resolutionError: null,
   };
 }
 export function boardSnapshot(state: GameState): Board {
-  const { phase, round, target, score, gold, manualRerollsRemaining, dice, consumed, scoreByHand, effectScore, handLevels, shop } = state;
-  return structuredClone({ phase, round, target, score, gold, manualRerollsRemaining, dice, consumed, scoreByHand, effectScore, handLevels, shop });
+  const { phase, round, target, score, gold, manualRerollsRemaining, dice, consumed, scoreByHand, effectScore,
+    handLevels, handPlayCounts, bonusHandUses, doubleEncoreUsedDieIds, targetPracticeHand, shop, flameReward } = state;
+  return structuredClone({ phase, round, target, score, gold, manualRerollsRemaining, dice, consumed, scoreByHand, effectScore,
+    handLevels, handPlayCounts, bonusHandUses, doubleEncoreUsedDieIds, targetPracticeHand, shop, flameReward });
 }
 export function exportRun(state: GameState) {
-  return { schemaVersion: 7, scoringModel: 'rounded-score-accumulator-v4', ...state.stats,
-    finalHandLevels: structuredClone(state.handLevels), rngState: state.rngState, board: boardSnapshot(state) };
+  return { schemaVersion: 8, scoringModel: 'flame-xmult-accumulator-v5', ...state.stats,
+    finalHandLevels: structuredClone(state.handLevels), finalFlames: state.dice.map(die => ({ dieId: die.id, flame: die.flame })),
+    rngState: state.rngState, board: boardSnapshot(state) };
 }
