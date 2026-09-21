@@ -9,14 +9,14 @@ export const baseScoringPips = (face: Face) => face.rank + face.workoutPips;
 export const scoringPips = (face: Face) => baseScoringPips(face) + stacks(face, 'bonus') * CONFIG.bonusPips;
 export function createDice(): Die[] {
   return Array.from({ length: CONFIG.diceCount }, (_, id) => ({
-    id, value: 1, flame: null, chargeXMult: 0,
+    id, value: 1, flame: null,
     faces: RANKS.map(rank => ({ rank, workoutPips: 0, enhancements: {} })),
   }));
 }
 export const rollWeights = (die: Die): number[] =>
   RANKS.map(rank => 1 + stacks(die.faces[oppositeFace(rank) - 1], 'weighted'));
 export function rollDie(die: Die, rng: RandomSource): { value: Rank; weighted: boolean } {
-  if (die.flame === 'clockwork') return { value: (die.value === 6 ? 1 : die.value + 1) as Rank, weighted: false };
+  if (stacks(activeFace(die), 'bump')) return { value: (die.value === 6 ? 1 : die.value + 1) as Rank, weighted: false };
   const weights = rollWeights(die);
   const random = rng.next();
   if (!Number.isFinite(random) || random < 0 || random >= 1) throw new Error('RNG must return a number in [0, 1).');

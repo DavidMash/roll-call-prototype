@@ -35,7 +35,9 @@ export function winningSlippyRun() {
       if (game.phase === 'lost' || game.phase === 'error') break;
       let action: Action;
       if (game.phase === 'flameReward') {
-        action = { type: 'CHOOSE_FLAME', offerId: game.flameReward!.offers[0].id, dieId: Math.floor(game.round / 3 - 1) % 5 };
+        action = game.flameReward!.acquired
+          ? { type: 'CONTINUE_FLAME_REWARD' }
+          : { type: 'CHOOSE_FLAME', offerId: game.flameReward!.offers[0].id, dieId: Math.floor(game.round / 3 - 1) % 5 };
       } else if (game.phase === 'shop') {
         const offer = game.shop!.offers.find(item => item.enhancement === 'slippy' && !item.purchased);
         if (offer && !boughtSlippy) {

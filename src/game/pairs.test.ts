@@ -161,7 +161,7 @@ describe('Pair resolution and loss integration', () => {
     { hand: 'twoPair' as const, values: [2, 2, 5, 5, 6] as Rank[], ids: [0, 1, 2, 3], pips: 51, mult: 12.5, score: 638, rerolls: [1, 2, 3, 4] },
   ])('$hand shares all participation and scoring enhancement rules', ({ hand, values, ids, pips, mult, score, rerolls }) => {
     const state = game(values);
-    for (const enhancement of ['bonus', 'golden', 'workout', 'sticky', 'sustainable'] as Enhancement[]) enhance(state, 0, enhancement);
+    for (const enhancement of ['bonus', 'golden', 'workout', 'sticky'] as Enhancement[]) enhance(state, 0, enhancement);
     enhance(state, 1, 'multiplier');
     for (const enhancement of ['hitchhiker', 'bonus', 'golden', 'workout', 'slippy'] as Enhancement[]) enhance(state, 4, enhancement);
     enhance(state, 4, 'multiplier', 20);
@@ -169,7 +169,7 @@ describe('Pair resolution and loss integration', () => {
     const result = dispatch(state, { type: 'PLAY', hand, dieIds: ids }, { next: () => 0 });
     expect(result.state.score).toBe(score);
     expect(result.state.gold).toBe(2);
-    expect(result.state.consumed).not.toContain(hand);
+    expect(result.state.consumed).toContain(hand);
     expect(result.state.dice[0].faces[values[0] - 1].workoutPips).toBe(1);
     expect(result.state.dice[4].faces[5].workoutPips).toBe(3);
     expect(result.state.stats.handScores[0]).toMatchObject({ hand, pips, multiplier: mult, score, hitchhikerPips: 18 });

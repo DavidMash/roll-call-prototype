@@ -1,5 +1,6 @@
-import { ActionIcon, Box, Group, Progress, SegmentedControl, Text, Tooltip } from '@mantine/core';
+import { ActionIcon, Badge, Box, Group, Progress, SegmentedControl, Text, Tooltip } from '@mantine/core';
 import type { Board } from '../game/types';
+import { FLAMES } from '../game/flames';
 import type { PlaybackSpeed } from '../useGame';
 
 function HudStat({ testId, icon, label, value }: { testId: string; icon: string; label: string; value: number }) {
@@ -42,5 +43,8 @@ export function TopHud({ board, speed, setSpeed, openRunInfo, openHelp }: {
       </Group>
     </Group>
     <Progress value={Math.min(100, board.score / board.target * 100)} size={4} radius={0} aria-label="Round goal progress" />
+    {board.bonfires.length > 0 && <Group gap={4} px="xs" py={3} className="bonfire-strip" aria-label="Active Bonfires">
+      <Text size="xs" fw={700} c="orange">BONFIRES</Text>{board.bonfires.map(id => <Tooltip key={id} label={FLAMES[id].bonfireDescription} withArrow><Badge size="xs" color="red" variant="light">🔥 {FLAMES[id].shortName}</Badge></Tooltip>)}
+    </Group>}
   </Box>;
 }

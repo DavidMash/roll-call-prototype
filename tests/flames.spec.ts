@@ -88,7 +88,7 @@ test('Flame Reward rerolls offers, preserves faces, reveals XMult, and previews 
   await expect(page.locator('[data-testid^="flame-offer-"]')).toHaveCount(3);
   const rewardFaces = game.dice.map(die => die.value);
 
-  await page.getByRole('button', { name: '↻ Reroll · 5 gold', exact: true }).click();
+  await page.getByRole('button', { name: '↻ Reroll · 5 Gold', exact: true }).click();
   game = dispatch(game, { type: 'REROLL_FLAMES' }).state;
   await ready(page);
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
@@ -101,10 +101,15 @@ test('Flame Reward rerolls offers, preserves faces, reveals XMult, and previews 
   game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId: 0 }).state;
   await ready(page);
 
+  expect(game.phase).toBe('flameReward');
+  await expect(page.getByTestId('active-flame-wellTrained')).toContainText('0 / 100 Gold');
+  await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
+  game = dispatch(game, { type: 'CONTINUE_FLAME_REWARD' }).state;
+  await ready(page);
   expect(game.phase).toBe('shop');
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
   await expect(page.getByRole('button', { name: new RegExp(`^Die 1, face ${rewardFaces[0]},.*Flame ${FLAMES.wellTrained.name}`) })).toBeVisible();
-  await expect(page.getByText(`🔥 ${FLAMES.wellTrained.shortName}`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`🔥 ${FLAMES.wellTrained.shortName} 0`, { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
@@ -116,10 +121,40 @@ test('Flame Reward rerolls offers, preserves faces, reveals XMult, and previews 
     const selected = await target.getAttribute('aria-pressed') === 'true';
     if (selected !== choice.dieIds.includes(die.id)) await target.click();
   }
-  const expectedBonus = Number((game.handPlayCounts[choice.hand] * 0.1).toFixed(12));
-  await expect(page.getByTestId(`well-trained-preview-${choice.hand}`)).toHaveText(`WELL TRAINED +${expectedBonus} XMULT`);
+  await expect(page.getByTestId(`well-trained-preview-${choice.hand}`)).toHaveText('WELL TRAINED ×1');
   await expect(page.locator('.selection-preview')).toContainText('XMult');
 
   await page.getByRole('button', { name: /^Die 1,/ }).click();
   await expect(page.getByTestId(`well-trained-preview-${choice.hand}`)).toHaveCount(0);
+});
+
+test('unified Flame screen supports arbitrary investment and optional acquisition', async ({ page }) => {
+  const seed = flameSeed();
+  let game = await reachReward(page, seed);
+  const rewardFaces = game.dice.map(die => die.value);
+  const offer = game.flameReward!.offers[0];
+  await page.getByTestId(`flame-offer-${offer.flame}`).getByRole('button', { name: 'Select Flame' }).click();
+  await page.getByRole('button', { name: /^Die 1,/ }).click();
+  game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId: 0 }).state;
+  await ready(page);
+  const active = page.getByTestId(`active-flame-${offer.flame}`);
+  await expect(active).toContainText('0 / 100 Gold');
+  await active.getByLabel(`Donation for ${FLAMES[offer.flame].name}`).fill('7');
+  await active.getByRole('button', { name: 'Donate', exact: true }).click();
+  game = dispatch(game, { type: 'DONATE_FLAME', dieId: 0, amount: 7 }).state;
+  await ready(page);
+  await expect(page.getByTestId(`active-flame-${offer.flame}`)).toContainText('7 / 100 Gold');
+  await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
+  game = dispatch(game, { type: 'CONTINUE_FLAME_REWARD' }).state;
+  await ready(page);
+  expect(game.phase).toBe('shop');
+  expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
+
+  // A separate deterministic run can use the same primary action without taking an offer.
+  game = await reachReward(page, seed);
+  await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
+  game = dispatch(game, { type: 'CONTINUE_FLAME_REWARD' }).state;
+  await ready(page);
+  expect(game.phase).toBe('shop');
+  expect(game.stats.flameSkips).toContain(game.round);
 });

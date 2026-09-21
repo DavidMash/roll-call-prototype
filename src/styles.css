@@ -87,6 +87,9 @@ button { font: inherit; }
 .shop-section { min-width: 0; }
 .section-heading { min-height: 27px; margin-bottom: 6px; }
 .shop-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.scrap-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.bonfire-strip { border-top: 1px solid rgba(255, 120, 60, .18); background: rgba(90, 24, 12, .18); }
+.flame-goals { border-color: rgba(255, 140, 70, .28); }
 .training-card, .offer { min-width: 0; background: var(--mantine-color-dark-8); border: 1px solid rgba(255,255,255,.045); }
 .training-card { min-height: 100px; }
 .offer { min-height: 102px; }
@@ -128,6 +131,7 @@ button { font: inherit; }
 @media (max-width: 720px) {
   .scorecard-grid { grid-template-columns: 1fr; }
   .shop-grid { grid-template-columns: 1fr; }
+  .scrap-grid { grid-template-columns: 1fr; }
   .scorecard-row-copy { gap: 5px; }
   .scorecard-base { margin-left: auto; }
   .well-trained-preview { display: block; max-width: 105px; overflow: hidden; text-overflow: ellipsis; }

@@ -11,7 +11,7 @@ The audit traced `Resolver.play`, `handScore`, `standaloneScore`, `scoringPips`,
 | Hitchhiker | After awarding selected-hand score, each unselected Hitchhiker scored separately with its own Bonus and Multiplier | Adds full scoring pips to the active hand; its own Multiplier is ignored |
 | Golden | Triggered after the selected or standalone score was added | Selected and Hitchhiker Golden resolve before hand finalization; independent Bean timing remains unchanged |
 | Workout | Used old pips, then grew after the selected or standalone score was added | Current contributions use old pips, then grow before hand finalization; independent Bean timing remains unchanged |
-| Final hand score | `HAND_SCORE_CALCULATED`, then immediate `SCORE_ADDED`, before Golden/Workout/Hitchhiker | `HAND_SCORE_FINALIZED` after every hand-bound contribution and trigger; one shared finalizer records raw Pips × Mult, rounds it once, then exactly one hand `SCORE_ADDED` awards the integer |
+| Final hand score | `HAND_SCORE_CALCULATED`, then immediate `SCORE_ADDED`, before Golden/Workout/Hitchhiker | `HAND_SCORE_FINALIZED` after every hand-bound contribution and trigger; one shared finalizer records raw Pips × Mult × the product of XMult factors, rounds it once, then exactly one hand `SCORE_ADDED` awards the integer |
 | Consumption and rerolls | Post-hand rolls and effects finished before consumption | Consume after final hand award, check target, then reroll only if below target |
 
 The suspected early finalization existed for Hitchhiker and hand-bound trigger timing. Selected Bonus and Multiplier arithmetic was already correct. For 12 selected pips at x2 with an unselected 6-pip Hitchhiker, the previous score was 24 + 6 = 30; the current score is (12 + 6) × 2 = 36.
@@ -28,12 +28,12 @@ Later playtesting added Pair/Two Pair and updated lower multipliers in centraliz
 
 ## Telemetry compatibility
 
-Export schema 7 declares `scoringModel: rounded-score-accumulator-v4`. Final rounded hand score is attributed to the selected category and `scoreBySource.hand`. `handScores` records Base Pips/Base Multiplier, raw and rounded final arithmetic, and Bonus/Hitchhiker pip contributions; `handBonusPips` and `hitchhikerPipsContributed` record run totals. Each round also records integer `scoreByHand` and `effectScore`, matching the authoritative current-round board breakdown used by the scorecard. Bonus pips include Bonus carried by Hitchhikers.
+Export schema 9 declares `scoringModel: multiplicative-xmult-flame-investment-v1`. Final rounded hand score is attributed to the selected category and `scoreBySource.hand`. `handScores` records Base Pips/Base Multiplier, every multiplicative XMult factor, raw and rounded final arithmetic, and Bonus/Hitchhiker pip contributions; `handBonusPips` and `hitchhikerPipsContributed` record run totals. Each round also records integer `scoreByHand` and `effectScore`, matching the authoritative current-round board breakdown used by the scorecard. Bonus pips include Bonus carried by Hitchhikers.
 
 `scoreBySource.hitchhiker` remains a legacy key at zero for current runs, preventing score double-counting. Schema 1 exports used that field for standalone Hitchhiker score, including the Hitchhiker face's own multiplier. Existing historical exports are not rewritten; replay requires the matching rules version.
 
 ## Validation coverage
 
-Engine tests assert below-half, exact-half, above-half, and exact-integer rounding; unchanged round score during accumulation; immutable event snapshots; Bonus/Multiplier/Hitchhiker ordering; per-play Sustainable rounding; rounded target crossing; independent Bean rounding; telemetry totals; and deterministic replay.
+Engine tests assert below-half, exact-half, above-half, and exact-integer rounding; unchanged round score during accumulation; immutable event snapshots; Bonus/Multiplier/Hitchhiker ordering; rounded target crossing; independent Bean rounding; multiplicative XMult factors; telemetry totals; and deterministic replay.
 
 Browser fixtures reach enhanced and trained boards through seeded legal plays and shop purchases. A controlled playback clock checks literal Pips, fractional Mult, the whole-number final award, integer scorecard/round totals, and the single award in order using the existing playback system. No production fixture hooks or alternate scoring engine were added.

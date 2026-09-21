@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { CONFIG, roundReward } from '../src/game/config';
+import { CONFIG } from '../src/game/config';
 import { dispatch, newRun } from '../src/game/engine';
 import { HANDS } from '../src/game/hands';
 import type { Action, GameState } from '../src/game/types';
@@ -62,6 +62,6 @@ test('held Jackpot pays on a played-hand clear before the no-reroll transition',
   await page.getByRole('button', { name: 'Skip playback' }).click();
   await ready(page);
   await expect(page.getByText(new RegExp(`^Round ${game.round} cleared`))).toBeVisible();
-  expect(fixture.result.state.gold).toBe(goldBefore + CONFIG.jackpotGold + roundReward(game.round));
+  expect(fixture.result.state.gold).toBe(goldBefore + CONFIG.jackpotGold + fixture.result.state.lastRoundPayout!.total);
   expect(fixture.result.events.some(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Post-hand'))).toBe(false);
 });

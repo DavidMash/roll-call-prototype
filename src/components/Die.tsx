@@ -1,7 +1,7 @@
 import { Badge, Paper, Text, Tooltip } from '@mantine/core';
 import { activeFace, scoringPips } from '../game/dice';
 import { ENHANCEMENTS, ENHANCEMENT_IDS } from '../game/enhancements';
-import { FLAMES } from '../game/flames';
+import { activeFlameId, activeFlameInvestment, FLAMES } from '../game/flames';
 import type { Die as PhysicalDie, Enhancement, Flame } from '../game/types';
 
 interface Props {
@@ -31,6 +31,8 @@ export function Die({ die, selected, highlighted, rolling, ability, flameAbility
   const visibleEnhancements = enhancements.slice(0, 3);
   const hiddenEnhancements = enhancements.slice(3);
   const pips = scoringPips(face);
+  const flameId = activeFlameId(die.flame);
+  const flameInvestment = activeFlameInvestment(die.flame);
   const enhancementSummary = enhancements.map(id => `${ENHANCEMENTS[id].name} ×${face.enhancements[id]}`).join(', ');
   const activeAbility = flameAbility ? FLAMES[flameAbility].name : ability ? ENHANCEMENTS[ability].name : '';
   return <div className="die-wrap">
@@ -38,7 +40,7 @@ export function Die({ die, selected, highlighted, rolling, ability, flameAbility
     <Paper component="button" type="button" withBorder
       className={`die ${selected ? 'selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${ability || flameAbility ? 'pulse' : ''} ${eligible ? 'eligible' : ''}`}
       disabled={disabled} aria-pressed={selected}
-      aria-label={`Die ${die.id + 1}, face ${die.value}, ${pips} scoring pips${die.flame ? `, Flame ${FLAMES[die.flame].name}` : ''}${enhancementSummary ? `, ${enhancementSummary}` : ''}`}
+      aria-label={`Die ${die.id + 1}, face ${die.value}, ${pips} scoring pips${flameId ? `, Flame ${FLAMES[flameId].name}, ${flameInvestment} of 100 Gold` : ''}${enhancementSummary ? `, ${enhancementSummary}` : ''}`}
       onClick={onClick}
       onDragOver={event => { if (!disabled && onDropOffer) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }}
       onDrop={event => {
@@ -48,8 +50,8 @@ export function Die({ die, selected, highlighted, rolling, ability, flameAbility
         if (raw !== '' && Number.isInteger(Number(raw))) onDropOffer(Number(raw));
       }}>
       <Text size="xs" c="dimmed" className="die-id">D{die.id + 1}</Text>
-      {die.flame && <Tooltip label={`${FLAMES[die.flame].name}: ${FLAMES[die.flame].description}`} multiline maw={320} withArrow>
-        <Badge className="flame-badge" size="xs" color="orange" variant="light">🔥 {FLAMES[die.flame].shortName}</Badge>
+      {flameId && <Tooltip label={`${FLAMES[flameId].name}: ${flameInvestment}/100 Gold. ${FLAMES[flameId].description}`} multiline maw={320} withArrow>
+        <Badge className="flame-badge" size="xs" color="orange" variant="light">🔥 {FLAMES[flameId].shortName} {flameInvestment}</Badge>
       </Tooltip>}
       <span className="die-number">{die.value}</span>
       {pips !== face.rank && <Text size="xs" c="teal" fw={700} className="die-pips">{pips} Pips</Text>}

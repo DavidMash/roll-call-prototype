@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CONFIG, diceRerollCost, offerRerollCost, roundReward, targetForRound } from './config';
+import { CONFIG, diceRerollCost, offerRerollCost, targetForRound } from './config';
 import { activeFace, rollDie, rollWeights } from './dice';
 import { dispatch, newRun } from './engine';
 import { enhancementCost, ENHANCEMENT_IDS } from './enhancements';
@@ -104,12 +104,7 @@ describe('upper-hand subset resolution', () => {
     expect(result.state.score).toBe(11);
     expect(result.state.gold).toBe(2);
     expect(result.state.dice.slice(0, 3).map(die => die.faces[3].workoutPips)).toEqual([0, 2, 0]);
-    expect(result.events.filter(event => event.enhancement === 'golden' || event.enhancement === 'workout').map(event => event.dieIds)).toEqual([[1], [1]]);
-  });
-  it.each([true, false])('only selected Sustainable prevents upper consumption (selected=%s)', selected => {
-    const game = state([4, 4, 4, 2, 6]);
-    enhance(game, selected ? 1 : 0, 'sustainable');
-    expect(play(game, 'fours', [1], constant(0)).state.consumed.includes('fours')).toBe(!selected);
+    expect(result.events.filter(event => event.enhancement === 'golden' || event.enhancement === 'workout').map(event => event.dieIds)).toEqual([[1]]);
   });
   it('an unselected matching Hitchhiker adds hand pips with Golden and Workout', () => {
     const game = state([4, 4, 4, 2, 6]);
@@ -141,20 +136,15 @@ describe('upper-hand subset resolution', () => {
 });
 
 describe('Golden and Workout', () => {
-  it('stack on hand scoring, increment after contribution before finalization, and persist', () => {
+  it('stack on hand scoring and increment after contribution before finalization', () => {
     const game = state();
     enhance(game, 0, 'golden', 2);
     enhance(game, 0, 'workout', 2);
     enhance(game, 0, 'sticky');
-    enhance(game, 0, 'sustainable');
     const first = play(game, 'ones', [0], sequence(0, 0));
     expect(first.state.score).toBe(8);
     expect(first.state.gold).toBe(2);
     expect(first.state.dice[0].faces[0].workoutPips).toBe(2);
-    const second = play(first.state, 'ones', [0], sequence(0, 0));
-    expect(second.state.score).toBe(18);
-    expect(second.state.gold).toBe(4);
-    expect(second.state.dice[0].faces[0].workoutPips).toBe(4);
     expect(first.events.findIndex(e => e.type === 'WORKOUT_INCREMENTED')).toBeLessThan(first.events.findIndex(e => e.type === 'HAND_SCORE_FINALIZED'));
   });
   it('trigger through Jumping Bean, including stacks and standalone Multiplier', () => {
@@ -189,7 +179,7 @@ describe('Golden and Workout', () => {
   });
 });
 
-describe('Sticky, Slippy and Sustainable', () => {
+describe('Sticky and Slippy', () => {
   it('Sticky prevents the ordinary scored reroll', () => {
     const game = state();
     enhance(game, 0, 'sticky');
@@ -212,19 +202,6 @@ describe('Sticky, Slippy and Sustainable', () => {
     const game = state();
     enhance(game, 0, 'slippy');
     expect(play(game).events.filter(e => e.type === 'DIE_ROLLED')).toHaveLength(1);
-  });
-  it('participating Sustainable prevents consumption', () => {
-    const game = state();
-    enhance(game, 0, 'sustainable');
-    expect(play(game, 'ones', [0], constant(0)).state.consumed).not.toContain('ones');
-  });
-  it('successful Hitchhiker Sustainable participates in the preservation check', () => {
-    const game = state();
-    enhance(game, 4, 'sustainable');
-    enhance(game, 4, 'hitchhiker');
-    const result = play(game, 'ones', [0], constant(0));
-    expect(result.state.consumed).not.toContain('ones');
-    expect(result.state.stats.probabilityProcs.sustainable.stacksAtCheck).toEqual([1]);
   });
 });
 
@@ -293,56 +270,39 @@ describe('Weighted', () => {
 });
 
 describe('Magnetic and roll ordering', () => {
-  it('flips every die with Magnetic faces, without recursive rolls or Bean/Weighted feedback', () => {
-    const game = state();
-    enhance(game, 0, 'magnetic', 1, 6);
-    enhance(game, 1, 'magnetic', 1, 3);
-    enhance(game, 1, 'jumpingBean', 1, 3);
-    enhance(game, 1, 'weighted', 1, 4);
-    const result = play(game);
-    expect(result.state.dice[1].value).toBe(3);
-    expect(result.state.stats.triggers.magnetic).toBe(1);
-    expect(result.state.stats.triggers.jumpingBean).toBeUndefined();
-    expect(result.state.stats.triggers.weighted).toBeUndefined();
-    expect(result.events.filter(e => e.type === 'DIE_FLIPPED')).toHaveLength(2);
+  it('a held Magnetic face attracts a rolled die to its Magnetic face', () => {
+    const game = state([1, 2, 3, 4, 6]);
+    enhance(game, 4, 'magnetic', 1, 6);
+    enhance(game, 0, 'magnetic', 1, 3);
+    const result = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(0.99));
+    expect(result.state.dice[0].value).toBe(3);
+    expect(result.state.stats.magneticAnchorBatches).toBe(1);
+    expect(result.state.stats.magneticAttractions).toBe(1);
   });
-  it.each([0, 0.49, 0.5, 0.99])('uniformly selects among multiple magnetic faces (RNG %s)', random => {
-    const game = state();
-    enhance(game, 0, 'magnetic', 1, 6);
-    enhance(game, 1, 'magnetic', 1, 2);
-    enhance(game, 1, 'magnetic', 1, 5);
-    const result = play(game, 'ones', [0], sequence(0.99, 0, random));
-    expect(result.state.dice[1].value).toBe(random < 0.5 ? 2 : 5);
+  it('an anchor included in the roll batch does not attract', () => {
+    const game = state([1, 2, 3, 4, 6]);
+    enhance(game, 4, 'magnetic', 1, 6);
+    enhance(game, 0, 'magnetic', 1, 3);
+    const result = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0, 4] }, constant(0.99));
+    expect(result.state.stats.magneticAttractions).toBe(0);
+    expect(result.state.dice[0].value).toBe(6);
   });
-  it('draws every batch roll before effects consume RNG and retains all landed triggers', () => {
-    const game = state([1, 1, 3, 4, 5]);
-    enhance(game, 0, 'magnetic', 1, 6);
-    enhance(game, 1, 'magnetic', 1, 6);
-    enhance(game, 1, 'magnetic', 1, 2);
-    const result = play(game, 'ones', [0, 1], sequence(0.99, 0.99, 0, 0, 0, 0.99));
-    expect(result.events.filter(e => e.type === 'DIE_ROLLED').map(e => e.face)).toEqual([6, 6]);
-    expect(result.state.stats.triggers.magnetic).toBe(2);
-    expect(result.state.dice[1].value).toBe(6);
-    const lastRoll = result.events.map(e => e.type).lastIndexOf('DIE_ROLLED');
-    const firstMagnetic = result.events.findIndex(e => e.enhancement === 'magnetic');
-    expect(firstMagnetic).toBeGreaterThan(lastRoll);
-  });
-  it('Magnetic precedes Bean; Bean scores and Sticky checks the original landed snapshot', () => {
-    const game = state();
-    enhance(game, 0, 'magnetic', 1, 6);
+  it.each([[0.1, 2], [0.9, 5]] as const)('seed-selects among multiple Magnetic destinations (%s)', (random, expected) => {
+    const game = state([1, 2, 3, 4, 6]);
+    enhance(game, 4, 'magnetic', 1, 6);
     enhance(game, 0, 'magnetic', 1, 2);
-    enhance(game, 0, 'jumpingBean', 1, 6);
-    enhance(game, 0, 'sticky', 1, 6);
-    enhance(game, 0, 'bonus', 1, 6);
-    enhance(game, 0, 'golden', 1, 6);
-    enhance(game, 0, 'workout', 1, 6);
-    const result = play(game, 'ones', [0], sequence(0.99, 0, 0));
+    enhance(game, 0, 'magnetic', 1, 5);
+    expect(dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(random)).state.dice[0].value).toBe(expected);
+  });
+  it('Bump takes priority over a held Magnetic anchor', () => {
+    const game = state([1, 2, 3, 4, 6]);
+    enhance(game, 4, 'magnetic', 1, 6);
+    enhance(game, 0, 'bump', 1, 1);
+    enhance(game, 0, 'magnetic', 1, 5);
+    const result = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(0.99));
     expect(result.state.dice[0].value).toBe(2);
-    expect(result.state.score).toBe(24);
-    expect(result.state.gold).toBe(1);
-    expect(result.state.dice[0].faces[5].workoutPips).toBe(1);
-    expect(result.events.findIndex(e => e.type === 'DIE_FLIPPED')).toBeLessThan(result.events.findIndex(e => e.enhancement === 'jumpingBean'));
-    expect(result.events.filter(e => e.type === 'DIE_ROLLED')).toHaveLength(1);
+    expect(result.state.stats.bumpControlledRolls).toBe(1);
+    expect(result.state.stats.magneticAttractions).toBe(0);
   });
 });
 
@@ -365,7 +325,7 @@ describe('Jumping Bean', () => {
     expect(result.state.dice[0].value).toBe(6);
     expect(result.events.filter(e => e.type === 'DIE_ROLLED')).toHaveLength(1);
   });
-  it('new rerolls can trigger Weighted, Magnetic and another Bean', () => {
+  it('new rerolls can trigger Weighted and another Bean without self-anchoring Magnetic', () => {
     const game = state();
     enhance(game, 0, 'jumpingBean', 1, 6);
     enhance(game, 0, 'jumpingBean', 1, 5);
@@ -374,7 +334,8 @@ describe('Jumping Bean', () => {
     enhance(game, 0, 'sticky', 1, 5);
     const result = play(game, 'ones', [0], sequence(0.99, 0.6, 0, 0));
     expect(result.state.score).toBe(19);
-    expect(result.state.stats.triggers).toMatchObject({ jumpingBean: 2, magnetic: 1, weighted: 1 });
+    expect(result.state.stats.triggers).toMatchObject({ jumpingBean: 2, weighted: 1 });
+    expect(result.state.stats.magneticAttractions).toBe(0);
   });
   it('safety cap produces a clear diagnostic stop instead of a browser lock', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -391,13 +352,15 @@ describe('Jumping Bean', () => {
 });
 
 describe('round boundaries and losing', () => {
-  it('awards each updated round reward once before the shop, retaining gold on the next round', () => {
+  it('awards flat base, unused-reroll Gold, and capped interest before the shop', () => {
     let game = newRun('balance-flow', constant()).state;
     let earned = 0;
     for (let round = 1; round <= 4; round++) {
       const result = play(game, 'fiveKind', [0, 1, 2, 3, 4]);
       expect(result.error).toBeUndefined();
-      earned += roundReward(round);
+      const held = earned;
+      const expectedPayout = 5 + 3 + Math.min(5, Math.floor(held / 5));
+      earned += expectedPayout;
       expect(result.state.phase).toBe(round % 3 === 0 ? 'flameReward' : 'shop');
       expect(result.state.gold).toBe(earned);
       expect(result.state.stats.goldEarned).toBe(earned);
@@ -406,21 +369,19 @@ describe('round boundaries and losing', () => {
         round, target: targetForRound(round), firstCrossedScore: 225,
         finalScore: 225, clearMargin: 225 - targetForRound(round), cleared: true,
       });
+      expect(result.state.lastRoundPayout).toEqual({ base: 5, unusedRerolls: 3,
+        interest: Math.min(5, Math.floor(held / 5)), heldGoldSnapshot: held, total: expectedPayout });
       const rewards = result.events.filter(event => event.type === 'GOLD_ADDED');
-      expect(rewards).toHaveLength(1);
-      expect(rewards[0]).toMatchObject({
-        amount: roundReward(round), message: `Round reward: +${roundReward(round)} gold`,
-        board: { phase: 'round', gold: earned },
-      });
       const rewardIndex = result.events.indexOf(rewards[0]);
       expect(result.events.findIndex(event => event.type === 'ROUND_CLEARED')).toBeLessThan(rewardIndex);
       const destinationIndex = result.events.findIndex(event => event.type === (round % 3 === 0 ? 'FLAME_REWARD_OPENED' : 'SHOP_OPENED'));
       expect(rewardIndex).toBeLessThan(destinationIndex);
       expect(play(result.state, 'fiveKind', [0, 1, 2, 3, 4]).state).toBe(result.state);
 
-      const postReward = result.state.phase === 'flameReward'
-        ? dispatch(result.state, { type: 'CHOOSE_FLAME', offerId: result.state.flameReward!.offers[0].id, dieId: 0 }, constant()).state
-        : result.state;
+      const postReward = result.state.phase === 'flameReward' ? (() => {
+        const chosen = dispatch(result.state, { type: 'CHOOSE_FLAME', offerId: result.state.flameReward!.offers[0].id, dieId: 0 }, constant()).state;
+        return dispatch(chosen, { type: 'CONTINUE_FLAME_REWARD' }, constant()).state;
+      })() : result.state;
       expect(postReward.phase).toBe('shop');
       const next = dispatch(postReward, { type: 'NEXT_ROUND' }, constant());
       expect(next.state.phase).toBe('round');
@@ -434,7 +395,7 @@ describe('round boundaries and losing', () => {
     const data = exportRun(game);
     expect(data.roundReached).toBe(5);
     expect(data.rounds.map(round => round.target)).toEqual([50, 70, 90, 125, 165]);
-    expect(data.goldEarned).toBe(26);
+    expect(data.goldEarned).toBe(41);
     expect(data.goldSpent).toBe(0);
   });
   it('keeps Golden income separate from the updated baseline reward', () => {
@@ -443,13 +404,14 @@ describe('round boundaries and losing', () => {
     const result = play(game, 'fiveKind', [0, 1, 2, 3, 4]);
     const goldenIncome = 2 * CONFIG.goldenGold;
     expect(result.state.phase).toBe('shop');
-    expect(result.state.gold).toBe(roundReward(1) + goldenIncome);
-    expect(result.state.stats.goldEarned).toBe(roundReward(1) + goldenIncome);
+    expect(result.state.gold).toBe(10);
+    expect(result.state.stats.goldEarned).toBe(10);
     expect(result.events.filter(event => event.type === 'GOLD_ADDED').map(event => ({
       amount: event.amount, dieIds: event.dieIds,
     }))).toEqual([
       { amount: goldenIncome, dieIds: [0] },
-      { amount: roundReward(1), dieIds: undefined },
+      { amount: 5, dieIds: undefined },
+      { amount: 3, dieIds: undefined },
     ]);
     expect(result.state.stats.triggers.golden).toBe(1);
   });
@@ -461,7 +423,7 @@ describe('round boundaries and losing', () => {
     const result = play(game, 'ones', [0], sequence(0.99, 0.99, 0));
     expect(result.state.phase).toBe('shop');
     expect(result.state.score).toBe(20);
-    expect(result.state.gold).toBe(roundReward(1) + 2);
+    expect(result.state.gold).toBe(10);
     expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: 20, finalScore: 20, clearMargin: 0, cleared: true });
     expect(result.events.findIndex(e => e.type === 'HAND_CONSUMED')).toBeLessThan(result.events.findIndex(e => e.type === 'ROUND_CLEARED'));
     expect(result.state.stats.triggers.jumpingBean).toBe(2);
@@ -476,7 +438,7 @@ describe('round boundaries and losing', () => {
     expect(result.state.round).toBe(2);
     expect(result.state.phase).toBe('shop');
     expect(result.state.score).toBe(106);
-    expect(result.state.gold).toBe(100 + roundReward(2));
+    expect(result.state.gold).toBe(113);
     expect(result.state.consumed).toEqual([]);
     expect(result.state.stats.rounds.at(-1)!.firstCrossedScore).toBe(106);
   });
@@ -522,7 +484,7 @@ describe('shop', () => {
     const bought = dispatch(game, { type: 'BUY', offerId: 0, dieId: 2 }).state;
     expect(dispatch(bought, { type: 'BUY', offerId: 0, dieId: 2 }).state).toBe(bought);
   });
-  it.each(ENHANCEMENT_IDS.filter(id => !['bonus', 'multiplier', 'golden', 'workout', 'sticky', 'sustainable', 'weighted', 'jackpot', 'hitchhiker'].includes(id)))('rejects redundant %s without charging', enhancement => {
+  it.each(ENHANCEMENT_IDS.filter(id => !['bonus', 'multiplier', 'golden', 'workout', 'sticky', 'weighted', 'jackpot', 'hitchhiker'].includes(id)))('rejects redundant %s without charging', enhancement => {
     const game = shop();
     game.shop!.offers[0].enhancement = enhancement;
     enhance(game, 0, enhancement);
@@ -531,13 +493,13 @@ describe('shop', () => {
     expect(result.state).toBe(game);
     expect(game.gold).toBe(100);
   });
-  it.each<Enhancement>(['bonus', 'multiplier', 'golden', 'workout', 'sticky', 'sustainable', 'weighted', 'jackpot', 'hitchhiker'])('allows stacking %s', enhancement => {
+  it.each<Enhancement>(['bonus', 'multiplier', 'golden', 'workout', 'sticky', 'weighted', 'jackpot', 'hitchhiker'])('allows stacking %s', enhancement => {
     const game = shop();
     game.shop!.offers[0].enhancement = enhancement;
     enhance(game, 0, enhancement);
     expect(dispatch(game, { type: 'BUY', offerId: 0, dieId: 0 }).state.dice[0].faces[0].enhancements[enhancement]).toBe(2);
   });
-  it.each<Enhancement>(['sticky', 'sustainable', 'weighted', 'jackpot'])('charges normally for repeated %s purchases on one physical face', enhancement => {
+  it.each<Enhancement>(['sticky', 'weighted', 'jackpot'])('charges normally for repeated %s purchases on one physical face', enhancement => {
     let game = shop();
     game.shop!.offers[0].enhancement = enhancement;
     game.shop!.offers[1].enhancement = enhancement;
@@ -555,9 +517,9 @@ describe('shop', () => {
     game = dispatch(game, { type: 'REROLL_DICE' }, constant()).state;
     game = dispatch(game, { type: 'REROLL_OFFERS' }, constant()).state;
     game = dispatch(game, { type: 'REROLL_OFFERS' }, constant()).state;
-    expect(game.gold).toBe(88);
-    expect(game.stats.goldSpent).toBe(12);
-    expect(diceRerollCost(game.shop!.diceRerolls)).toBe(4);
+    expect(game.gold).toBe(85);
+    expect(game.stats.goldSpent).toBe(15);
+    expect(diceRerollCost(game.shop!.diceRerolls)).toBe(8);
     expect(offerRerollCost(game.shop!.offerRerolls)).toBe(12);
     expect(game.stats.shopDiceRerolls).toBe(2);
     expect(game.stats.enhancementShopRerolls).toBe(2);
@@ -582,7 +544,7 @@ describe('shop', () => {
     enhance(game, 0, 'weighted', 1, 1);
     const result = dispatch(game, { type: 'REROLL_DICE' }, constant());
     expect(result.state.score).toBe(0);
-    expect(result.state.gold).toBe(99);
+    expect(result.state.gold).toBe(98);
     expect(result.state.dice[0].faces[5].workoutPips).toBe(0);
     expect(result.state.stats.triggers).toEqual({ weighted: 1 });
     expect(result.events.filter(e => e.type === 'DIE_ROLLED')).toHaveLength(5);
@@ -603,7 +565,9 @@ describe('reproducibility and end-to-end domain flow', () => {
         expect(ar.events).toEqual(br.events);
         a = ar.state; b = br.state;
         } else if (a.phase === 'flameReward') {
-          const action = { type: 'CHOOSE_FLAME' as const, offerId: a.flameReward!.offers[0].id, dieId: 0 };
+          const action = a.flameReward!.acquired
+            ? { type: 'CONTINUE_FLAME_REWARD' as const }
+            : { type: 'CHOOSE_FLAME' as const, offerId: a.flameReward!.offers[0].id, dieId: 0 };
           a = dispatch(a, action).state; b = dispatch(b, action).state;
         } else if (a.phase === 'shop') {
         const action = { type: 'NEXT_ROUND' as const };
@@ -629,7 +593,9 @@ describe('reproducibility and end-to-end domain flow', () => {
             game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
           }
         } else if (game.phase === 'flameReward') {
-          game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: game.flameReward!.offers[0].id, dieId: seed % 5 }).state;
+          game = game.flameReward!.acquired
+            ? dispatch(game, { type: 'CONTINUE_FLAME_REWARD' }).state
+            : dispatch(game, { type: 'CHOOSE_FLAME', offerId: game.flameReward!.offers[0].id, dieId: seed % 5 }).state;
         } else if (game.phase === 'shop') {
           clears++;
           for (const offer of game.shop!.offers) {

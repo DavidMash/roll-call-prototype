@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CONFIG, roundReward } from './config';
+import { CONFIG } from './config';
 import { dispatch, newRun } from './engine';
 import { ENHANCEMENT_IDS } from './enhancements';
 import { HAND_IDS, hasPlayableHand } from './hands';
@@ -84,7 +84,7 @@ describe('manual reroll resource', () => {
     expect(reroll(game, [0]).state).toBe(game);
     expect(reroll(game, [0]).error).toContain('gameplay round');
   });
-  it('resets on next round before Weighted, Magnetic and Bean initial-roll effects', () => {
+  it('resets on next round before Weighted and Bean initial-roll effects; landed Magnetic does not self-anchor', () => {
     const game = reroll(board(), [0, 1]).state;
     enhance(game, 0, 'weighted', 1);
     enhance(game, 0, 'magnetic', 6);
@@ -95,26 +95,26 @@ describe('manual reroll resource', () => {
     const result = dispatch(game, { type: 'NEXT_ROUND' }, sequence(0.99, 0.99, 0.99, 0.99, 0.99, 0, 0));
     expect(result.events[0].board.manualRerollsRemaining).toBe(3);
     expect(result.state.manualRerollsRemaining).toBe(3);
-    expect(result.state.stats.triggers).toMatchObject({ weighted: 1, magnetic: 1, jumpingBean: 1 });
+    expect(result.state.stats.triggers).toMatchObject({ weighted: 1, jumpingBean: 1 });
+    expect(result.state.stats.magneticAttractions).toBe(0);
     expect(result.state.stats.rounds[1]).toMatchObject({ manualRerollsGranted: 3, manualRerollChargesSpent: 0 });
     expect(result.state.stats.manualDiceRerolled).toBe(2);
   });
-  it('hand, Sticky/Slippy, Sustainable, Magnetic and Bean effects never replenish or spend charges', () => {
+  it('hand, Sticky/Slippy, Magnetic and Bean effects never replenish or spend charges', () => {
     let game = reroll(board(), [4]).state;
-    for (const enhancement of ['sticky', 'slippy', 'sustainable'] as Enhancement[]) enhance(game, 0, enhancement, 1);
+    for (const enhancement of ['sticky', 'slippy'] as Enhancement[]) enhance(game, 0, enhancement, 1);
     for (const enhancement of ['magnetic', 'jumpingBean', 'sticky'] as Enhancement[]) enhance(game, 0, enhancement, 6);
     game = dispatch(game, { type: 'PLAY', hand: 'ones', dieIds: [0] }, sequence(0, 0, 0.99, 0, 0)).state;
     expect(game.manualRerollsRemaining).toBe(2);
     expect(game.stats.manualDiceRerolled).toBe(1);
     expect(game.stats.rounds[0].manualRerollChargesSpent).toBe(1);
-    expect(game.stats.triggers).toMatchObject({ sticky: 2, slippy: 1, sustainable: 1, magnetic: 1, jumpingBean: 1 });
+    expect(game.stats.triggers).toMatchObject({ sticky: 1, slippy: 1 });
   });
 });
 
 describe('manual roll effects and hand independence', () => {
-  it('does not score or consume a hand, trigger Sustainable, Slippy or Hitchhiker, or spend gold', () => {
+  it('does not score or consume a hand, trigger Slippy or Hitchhiker, or spend gold', () => {
     const game = board();
-    enhance(game, 0, 'sustainable');
     enhance(game, 0, 'slippy');
     enhance(game, 0, 'golden');
     enhance(game, 0, 'workout');
@@ -134,7 +134,7 @@ describe('manual roll effects and hand independence', () => {
     enhance(game, 0, enhancement);
     const result = reroll(game, [0]);
     expect(result.error).toBeUndefined();
-    expect(result.state.dice[0].value).toBe(6);
+    expect(result.state.dice[0].value).toBe(enhancement === 'bump' ? 2 : 6);
     expect(result.state.manualRerollsRemaining).toBe(2);
   });
   it('uses Weighted probability and produces the usual feedback', () => {
@@ -144,22 +144,22 @@ describe('manual roll effects and hand independence', () => {
     const result = reroll(game, [0], constant(0.6));
     expect(result.state.dice[0].value).toBe(5);
     expect(result.events.find(event => event.enhancement === 'weighted')).toMatchObject({ dieIds: [0], face: 5 });
-    expect(result.events.find(event => event.enhancement === 'weighted')?.message).toContain('Weighted x2');
-    expect(result.events.find(event => event.enhancement === 'weighted')?.message).toContain('roll weight 3');
+    expect(result.events.find(event => event.enhancement === 'weighted')?.message).toContain('Weighted');
+    expect(result.events.find(event => event.enhancement === 'weighted')?.message).toContain('destination weight 3');
     expect(result.state.manualRerollsRemaining).toBe(2);
   });
-  it('resolves Weighted then Magnetic then Bean from its original snapshot, without flip roll triggers', () => {
+  it('resolves Weighted then Bean; a newly landed Magnetic face does not self-anchor', () => {
     const game = board();
     enhance(game, 0, 'weighted', 1);
     enhance(game, 0, 'magnetic', 2);
     for (const enhancement of ['magnetic', 'jumpingBean', 'sticky', 'bonus', 'golden', 'workout'] as Enhancement[]) enhance(game, 0, enhancement, 6);
     const result = reroll(game, [0], sequence(0.99, 0, 0));
-    expect(result.state.dice[0].value).toBe(2);
+    expect(result.state.dice[0].value).toBe(6);
     expect(result.state.score).toBe(16);
     expect(result.state.gold).toBe(1);
     expect(result.state.dice[0].faces[5].workoutPips).toBe(1);
     expect(result.events.filter(event => ['weighted', 'magnetic', 'jumpingBean'].includes(event.enhancement ?? '')).map(event => event.enhancement))
-      .toEqual(['weighted', 'magnetic', 'jumpingBean']);
+      .toEqual(['weighted', 'jumpingBean']);
     expect(result.events.filter(event => event.type === 'DIE_ROLLED')).toHaveLength(1);
     expect(result.state.manualRerollsRemaining).toBe(2);
   });
@@ -170,7 +170,7 @@ describe('manual roll effects and hand independence', () => {
     const result = reroll(game, [0], sequence(0.99, 0.99, 0));
     expect(result.state.phase).toBe('shop');
     expect(result.state.score).toBe(13);
-    expect(result.state.gold).toBe(roundReward(1) + 2);
+    expect(result.state.gold).toBe(9);
     expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: 6, finalScore: 13,
       manualRerollChargesSpent: 1, manualRerollsRemainingAtClear: 2 });
     const clearIndex = result.events.findIndex(event => event.type === 'ROUND_CLEARED');
@@ -250,7 +250,7 @@ describe('loss, rescue and shop separation', () => {
     game.gold = 10;
     game.manualRerollsRemaining = 1;
     const result = dispatch(game, { type: 'REROLL_DICE' }, constant());
-    expect(result.state.gold).toBe(9);
+    expect(result.state.gold).toBe(8);
     expect(result.state.shop!.diceRerolls).toBe(1);
     expect(result.state.manualRerollsRemaining).toBe(1);
     expect(result.state.stats.manualRerollActions).toBe(0);

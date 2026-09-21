@@ -57,18 +57,6 @@ describe('authoritative current-round scorecard totals', () => {
     expect(result.state.stats.rounds[0].scoreByHand).toEqual({ pair: 24 });
   });
 
-  it('adds Sustainable replays to the same category instead of overwriting it', () => {
-    const game = board([4, 4, 2, 5, 6]);
-    for (const enhancement of ['sticky', 'sustainable', 'workout'] as const) activeFace(game.dice[0]).enhancements[enhancement] = 1;
-    activeFace(game.dice[1]).enhancements.sticky = 1;
-    const first = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0));
-    expect(first.state.scoreByHand.pair).toBe(24);
-    expect(first.state.consumed).not.toContain('pair');
-    const second = dispatch(first.state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant());
-    expect(second.state.scoreByHand.pair).toBe(50);
-    expect(second.state.consumed).toContain('pair');
-  });
-
   it('keeps categories separate and resets the round-local breakdown next round', () => {
     let game = board([4, 4, 2, 5, 6]);
     activeFace(game.dice[0]).enhancements.sticky = 1;

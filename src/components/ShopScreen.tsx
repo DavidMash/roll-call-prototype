@@ -1,7 +1,7 @@
 import { Badge, Button, Group, Paper, Stack, Text, Tooltip } from '@mantine/core';
 import { diceRerollCost, offerRerollCost, roundReward } from '../game/config';
 import { activeFace } from '../game/dice';
-import { canAttach, enhancementCost, ENHANCEMENTS } from '../game/enhancements';
+import { canAttach, enhancementCost, ENHANCEMENTS, ENHANCEMENT_IDS } from '../game/enhancements';
 import { hasXMultFlame } from '../game/flames';
 import type { Action, Board, GameEvent } from '../game/types';
 import { DiceRow } from './DiceRow';
@@ -19,10 +19,11 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
     ? board.dice.filter(die => canAttach(activeFace(die), offer.enhancement)).map(die => die.id) : [];
   return <Stack gap="xs" className="shop-screen">
     <Group justify="space-between" className="shop-summary">
-      <Text size="sm"><strong>Round {board.round} cleared</strong> · +{roundReward(board.round)} gold · {board.score - board.target} points above goal</Text>
+      <Text size="sm"><strong>Round {board.round} cleared</strong> · +{board.lastRoundPayout?.total ?? roundReward()} Gold
+        {board.lastRoundPayout ? ` (${board.lastRoundPayout.base} base + ${board.lastRoundPayout.unusedRerolls} rerolls + ${board.lastRoundPayout.interest} interest)` : ''} · {board.score - board.target} above goal</Text>
       <Badge color="teal" variant="light">SHOP</Badge>
     </Group>
-    {busy && <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} showXMult={hasXMultFlame(board.dice)} />}
+    {busy && <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} showXMult={hasXMultFlame(board.dice, board.bonfires)} />}
     <Paper p="xs" className="shop-section">
       <Group justify="space-between" className="section-heading">
         <Text fw={700} size="sm" tt="uppercase" lts=".08em">Hand Training</Text>
@@ -31,6 +32,14 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
       <div className="shop-grid training-grid">{shop.trainingOffers.map(item => <TrainingCard key={item.hand} offer={item}
         level={board.handLevels[item.hand]} gold={board.gold} busy={busy}
         onTrain={() => submit({ type: 'TRAIN_HAND', hand: item.hand })} />)}</div>
+    </Paper>
+    <Paper p="xs" className="shop-section" data-testid="enhancement-scrap-manager">
+      <Group justify="space-between" className="section-heading"><Text fw={700} size="sm" tt="uppercase">Manage faces</Text><Text size="xs" c="dimmed">Scrap all stacks of a type · no refund</Text></Group>
+      <div className="scrap-grid">{board.dice.map(die => <div key={die.id} className="help-item"><Text size="xs" fw={700}>D{die.id + 1}</Text>
+        {die.faces.map(face => { const ids = ENHANCEMENT_IDS.filter(id => face.enhancements[id]); return ids.length ? <Group key={face.rank} gap={4} mt={3} wrap="wrap"><Text size="xs">Face {face.rank}:</Text>{ids.map(id => <Button key={id} size="compact-xs" variant="subtle" color="red" disabled={busy}
+          aria-label={`Scrap ${ENHANCEMENTS[id].name} from D${die.id + 1} face ${face.rank}`}
+          onClick={() => submit({ type: 'SCRAP_ENHANCEMENT', dieId: die.id, face: face.rank, enhancement: id })}>{ENHANCEMENTS[id].name} ×{face.enhancements[id]} ✕</Button>)}</Group> : null; })}
+      </div>)}</div>
     </Paper>
     <Paper p="xs" className="shop-section">
       <Group justify="space-between" className="section-heading">

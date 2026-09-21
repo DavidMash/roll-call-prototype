@@ -1,5 +1,6 @@
 import { Badge, Button, Group, Text, Tooltip } from '@mantine/core';
 import { combinationsForHand, handStats, HANDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from '../game/hands';
+import { activeFlameId, activeFlameInvestment, wellTrainedMultiplier } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
 
@@ -18,9 +19,11 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
         const playable = !consumed && compatible;
         const selected = selection.hand === hand;
         const targeted = board.targetPracticeHand === hand;
-        const selectedWellTrained = selected
-          ? selection.dieIds.filter(id => board.dice[id].flame === 'wellTrained').length : 0;
-        const wellTrainedBonus = selectedWellTrained * board.handPlayCounts[hand] * 0.1;
+        const selectedWellTrained = selected ? selection.dieIds.find(id => activeFlameId(board.dice[id].flame) === 'wellTrained') : undefined;
+        const wellTrained = board.bonfires.includes('wellTrained') ? wellTrainedMultiplier(100, board.handPlayCounts[hand])
+          : selectedWellTrained === undefined ? 1 : wellTrainedMultiplier(activeFlameInvestment(board.dice[selectedWellTrained].flame), board.handPlayCounts[hand]);
+        const showWellTrained = selected && (board.bonfires.includes('wellTrained') || selectedWellTrained !== undefined);
+        const hotTarget = board.hotStreakGoal === hand;
         const score = board.scoreByHand[hand];
         const state = consumed ? 'consumed' : selected ? 'selected' : playable ? 'playable' : 'unavailable';
         const scoreLabel = score === undefined ? 'no score' : `${score} points`;
@@ -29,15 +32,14 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
           disabled={busy || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}
           aria-label={`${definition.name} · Lv. ${stats.level} ${stats.basePips} Pips · ×${stats.baseMultiplier} ${scoreLabel}${consumed ? ' used' : ''}`}>
           <span className="scorecard-row-copy">
-            <span className="scorecard-hand-name">{targeted && <span className="target-marker" title="Target Practice target">◎ TARGET </span>}{definition.name} <span>· Lv. {stats.level}</span></span>
+            <span className="scorecard-hand-name">{targeted && <span className="target-marker" title="Target Practice target">◎ TARGET </span>}{hotTarget && <span className="target-marker" title="Hot Streak goal">🔥 NEXT </span>}{definition.name} <span>· Lv. {stats.level}</span></span>
             <Tooltip label={`${stats.basePips} Base Pips · ×${stats.baseMultiplier} Base Mult`} position="right" withArrow>
               <span className="scorecard-base" data-testid={`scorecard-stats-${hand}`}>{stats.basePips} · ×{stats.baseMultiplier}</span>
             </Tooltip>
-            {selectedWellTrained > 0 && <span className="well-trained-preview" data-testid={`well-trained-preview-${hand}`}>WELL TRAINED +{Number(wellTrainedBonus.toFixed(12))} XMULT</span>}
+            {showWellTrained && <span className="well-trained-preview" data-testid={`well-trained-preview-${hand}`}>WELL TRAINED ×{Number(wellTrained.toFixed(4))}</span>}
           </span>
           <span className="scorecard-row-result">
             <span data-testid={`scorecard-score-${hand}`}>{score ?? '—'}</span>
-            {(board.bonusHandUses[hand] ?? 0) > 0 && <Badge size="xs" color="violet" variant="light">+{board.bonusHandUses[hand]} use</Badge>}
             {consumed && <Badge size="xs" color="gray" variant="light">used</Badge>}
           </span>
         </Button>;

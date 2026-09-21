@@ -1,6 +1,6 @@
 import { Alert, Button, Group, Paper, Stack, Text } from '@mantine/core';
 import { validateAction } from '../game/engine';
-import { captureHandStart, composeXMult, handXMultContributions, hasXMultFlame } from '../game/flames';
+import { activeFlameInvestment, captureHandStart, composeXMult, flameProgress, handXMultContributions, hasXMultFlame, targetPracticeMultiplier } from '../game/flames';
 import { hasPlayableHand, HANDS } from '../game/hands';
 import { finalizeScore, handScore } from '../game/scoring';
 import { canPlay, emptySelection, selectHand, toggleDie } from '../game/selection';
@@ -15,19 +15,21 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
   selection: Selection; setSelection: (selection: Selection) => void; submit: (action: Action) => void; skip: () => void;
 }) {
   const valid = canPlay(board.dice, board.consumed, selection);
-  const showXMult = hasXMultFlame(board.dice);
+  const showXMult = hasXMultFlame(board.dice, board.bonfires);
   const preview = valid ? (() => {
     const hand = selection.hand!;
     const base = handScore(board.dice, hand, selection.dieIds, board.handLevels[hand]);
     const contributions = handXMultContributions(captureHandStart(board, hand), hand, board.handLevels[hand], selection.dieIds);
-    const additive = contributions.filter(item => item.mode === 'additive').reduce((sum, item) => sum + item.value, 0);
-    const multiplicative = contributions.filter(item => item.mode === 'multiplicative').reduce((product, item) => product * item.value, 1);
-    const xMult = composeXMult(additive, multiplicative);
+    const xMult = composeXMult(contributions);
     return { ...base, xMult, score: finalizeScore(base.pips, base.multiplier, xMult).finalScore };
   })() : null;
   const manualAction: Action = { type: 'MANUAL_REROLL', dieIds: selection.dieIds };
   const canReroll = validateAction(board, manualAction) === null;
   const deadBoard = !hasPlayableHand(board.dice, board.consumed);
+  const hotFlame = board.dice.find(die => die.flame?.id === 'hotStreak')?.flame;
+  const hotProgress = board.bonfires.includes('hotStreak') ? 1 : flameProgress(activeFlameInvestment(hotFlame));
+  const targetFlame = board.dice.find(die => die.flame?.id === 'targetPractice')?.flame;
+  const targetInvestment = board.bonfires.includes('targetPractice') ? 100 : activeFlameInvestment(targetFlame);
   const idleText = selection.hand
     ? `${HANDS[selection.hand].name} · ${selection.dieIds.length} ${selection.dieIds.length === 1 ? 'die' : 'dice'} selected`
     : selection.dieIds.length ? `${selection.dieIds.length} ${selection.dieIds.length === 1 ? 'die' : 'dice'} selected` : undefined;
@@ -36,6 +38,10 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
     {!busy && deadBoard && board.manualRerollsRemaining > 0 && <Alert color="orange" py={5} title="No playable hands" role="status">
       Select dice and use a reroll.
     </Alert>}
+    {(board.hotStreakGoal || board.targetPracticeHand) && <Paper p="xs" className="flame-goals"><Group gap="lg">
+      {board.hotStreakGoal && <Text size="xs"><strong>🔥 HOT STREAK</strong> · Next: {HANDS[board.hotStreakGoal].name} · Charges: {board.hotStreakCharges} · Hit now: ×{Number((1 + (board.hotStreakCharges + 1) * 0.5 * hotProgress).toFixed(4))}</Text>}
+      {board.targetPracticeHand && <Text size="xs"><strong>◎ TARGET</strong> · {HANDS[board.targetPracticeHand].name} · ×{Number(targetPracticeMultiplier(targetInvestment).toFixed(4))}</Text>}
+    </Group></Paper>}
     <Paper className="scorecard-panel" p="xs">
       <HandScorecard board={board} selection={selection} busy={busy}
         onSelect={hand => setSelection(selectHand(board.dice, board.consumed, selection, hand))}
@@ -46,6 +52,13 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
         <DiceRow dice={board.dice} event={event} disabled={busy} selected={selection.dieIds}
           onClick={id => setSelection(toggleDie(board.dice, board.consumed, selection, id))} />
         <div className="gameplay-actions">
+          {(board.bonfires.includes('charge') || board.dice.some(die => die.flame?.id === 'charge')) && <Group gap="xs" justify="flex-end" mb={4}>
+            <Text size="xs" fw={700}>⚡ Charge ×{Number(board.chargeXMult.toFixed(4))}</Text>
+            <Button size="compact-xs" color={board.chargeArmed ? 'orange' : 'yellow'} variant={board.chargeArmed ? 'filled' : 'light'}
+              disabled={busy || (!board.chargeArmed && board.chargeXMult <= 1)} onClick={() => submit({ type: 'TOGGLE_CHARGE' })}>
+              {board.chargeArmed ? 'ARMED — cancel' : `Use Charge ×${Number(board.chargeXMult.toFixed(4))}`}
+            </Button>
+          </Group>}
           <Text size="xs" c="dimmed" className="selection-preview">{preview
             ? `${preview.pips} pips × ${preview.multiplier}${showXMult ? ` × ${preview.xMult} XMult` : ''} = ${preview.score} points`
             : selection.dieIds.length ? 'Select a complete participating set' : 'Choose a hand or select dice'}</Text>

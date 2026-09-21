@@ -33,6 +33,8 @@ async function perform(page: Page, game: GameState, action: Action) {
     await page.getByTestId(`flame-offer-${offer.flame}`).getByRole('button', { name: 'Select Flame' }).click();
     await page.getByRole('button', { name: new RegExp(`^Die ${action.dieId + 1},`) }).click();
     if (game.dice[action.dieId].flame) await page.getByRole('button', { name: 'Replace Flame', exact: true }).click();
+  } else if (action.type === 'CONTINUE_FLAME_REWARD') {
+    await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
   } else if (action.type === 'MANUAL_REROLL') {
     await selectDice(page, action.dieIds);
     await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();

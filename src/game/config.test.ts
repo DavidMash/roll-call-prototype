@@ -18,12 +18,11 @@ describe('prototype balance progression', () => {
     }
   });
 
-  it('grants five gold for Round 1 and one more for each subsequent round', () => {
+  it('grants a flat five-gold base reward in every round', () => {
     expect(CONFIG.roundRewardBase).toBe(5);
-    expect(CONFIG.roundRewardGrowth).toBe(1);
     expect(Array.from({ length: 8 }, (_, index) => roundReward(index + 1)))
-      .toEqual([5, 6, 7, 8, 9, 10, 11, 12]);
-    expect(roundReward(20)).toBe(24);
+      .toEqual([5, 5, 5, 5, 5, 5, 5, 5]);
+    expect(roundReward(20)).toBe(5);
   });
 
   it('still starts a run with zero gold', () => {

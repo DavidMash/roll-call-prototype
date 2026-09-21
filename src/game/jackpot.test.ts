@@ -37,8 +37,9 @@ describe('Jackpot', () => {
     enhance(game, 4, 'jackpot', stackCount);
     const result = playPair(game);
     expect(result.state.phase).toBe('shop');
-    expect(result.state.gold).toBe(payout + roundReward(1));
-    expect(result.state.stats.goldBySource).toEqual({ golden: 0, jackpot: payout, roundClear: roundReward(1) });
+    const interest = Math.min(5, Math.floor(payout / 5));
+    expect(result.state.gold).toBe(payout + roundReward(1) + 3 + interest);
+    expect(result.state.stats.goldBySource).toEqual({ golden: 0, jackpot: payout, roundBase: 5, unusedRerolls: 3, interest });
     expect(result.state.stats.triggers.jackpot).toBe(1);
     expect(result.events.find(event => event.enhancement === 'jackpot')).toMatchObject({ dieIds: [4], face: 6 });
     expect(result.events.find(event => event.goldSource === 'jackpot')).toMatchObject({ amount: payout, dieIds: [4] });

@@ -185,11 +185,11 @@ describe('live hand scoring', () => {
     enhance(game, 4, 'bonus');
     const result = play(game, constant(0));
     const data = exportRun(result.state);
-    expect(data).toMatchObject({ schemaVersion: 8, scoringModel: 'flame-xmult-accumulator-v5',
+    expect(data).toMatchObject({ schemaVersion: 9, scoringModel: 'multiplicative-xmult-flame-investment-v1',
       handBonusPips: 20, hitchhikerPipsContributed: 16,
       scoreByHand: { threeKind: 144 }, scoreBySource: { hand: 144, jumpingBean: 0, hitchhiker: 0 } });
     expect(data.handScores).toEqual([{ round: 1, hand: 'threeKind', handLevel: 1, dieIds: [0, 1, 2, 4],
-      basePips: 10, baseMultiplier: 2.5, pips: 48, multiplier: 3, xMult: 1, rawScore: 144,
+      basePips: 10, baseMultiplier: 2.5, pips: 48, multiplier: 3, xMult: 1, xMultFactors: [], rawScore: 144,
       score: 144, bonusPips: 20, hitchhikerPips: 16 }]);
     expect(Object.values(data.scoreBySource).reduce((sum, score) => sum + score, 0)).toBe(result.state.score);
     expect(data).toHaveProperty('manualRerolls');
@@ -213,28 +213,10 @@ describe('standalone scoring boundary', () => {
       pips: 13, multiplier: 1.5, rawScore: 19.5, amount: 20,
     });
     expect(result.state.stats.standaloneScores).toEqual([{ round: 1, dieId: 0, pips: 13,
-      multiplier: 1.5, xMult: 1, rawScore: 19.5, score: 20 }]);
+      multiplier: 1.5, xMult: 1, xMultFactors: [], rawScore: 19.5, score: 20 }]);
     expect(result.state.history.find(event => event.type === 'SCORE_ROUNDING_AUDIT')).toMatchObject({
       rawScore: 19.5, amount: 20,
     });
-  });
-
-  it('rounds every Sustainable-reused hand separately before accumulating its scorecard row', () => {
-    const game = board();
-    game.dice[4].value = 6;
-    game.handLevels.sixes = 2;
-    activeFace(game.dice[4]).workoutPips = 1;
-    enhance(game, 4, 'sustainable');
-    enhance(game, 4, 'sticky');
-    const action = { type: 'PLAY' as const, hand: 'sixes' as const, dieIds: [4] };
-    const first = dispatch(game, action, constant(0));
-    const second = dispatch(first.state, action, constant(0));
-    expect(first.state.stats.handScores[0]).toMatchObject({ rawScore: 21.25, score: 21 });
-    expect(second.state.stats.handScores[1]).toMatchObject({ rawScore: 21.25, score: 21 });
-    expect(second.state.scoreByHand.sixes).toBe(42);
-    expect(second.state.score).toBe(42);
-    expect([second.state.score, second.state.scoreByHand.sixes].every(Number.isInteger)).toBe(true);
-    expect(second.state.score).not.toBe(Math.round(21.25 + 21.25));
   });
 
   it('checks the target against the rounded award rather than the raw result', () => {

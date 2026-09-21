@@ -8,8 +8,7 @@ export const CONFIG = {
   startingGold: 0,
   manualRerollsPerRound: 3,
   roundRewardBase: 5,
-  roundRewardGrowth: 1,
-  diceRerollBase: 1,
+  diceRerollBase: 2,
   offerRerollBase: 3,
   flameRerollBase: 5,
   handTrainingCost: 4,
@@ -25,13 +24,13 @@ export const CONFIG = {
   enhancementCosts: {
     bonus: 3, multiplier: 5, jumpingBean: 2, golden: 2, workout: 3,
     missingLink: 2, mirror: 2, magnetic: 3, sticky: 1, slippy: 1,
-    sustainable: 5, hitchhiker: 2, weighted: 3, jackpot: 3,
+    hitchhiker: 2, weighted: 3, jackpot: 3, bump: 3,
   } satisfies Record<Enhancement, number>,
 } as const;
 
 export const targetForRound = (round: number) =>
   Math.round(CONFIG.baseTarget * CONFIG.targetGrowth ** (round - 1) / CONFIG.targetRounding) * CONFIG.targetRounding;
-export const roundReward = (round: number) => CONFIG.roundRewardBase + (round - 1) * CONFIG.roundRewardGrowth;
+export const roundReward = (_round?: number) => CONFIG.roundRewardBase;
 export const diceRerollCost = (count: number) => CONFIG.diceRerollBase * CONFIG.rerollCostGrowth ** count;
 export const offerRerollCost = (count: number) => CONFIG.offerRerollBase * CONFIG.rerollCostGrowth ** count;
 export const flameRerollCost = (count: number) => CONFIG.flameRerollBase * CONFIG.rerollCostGrowth ** count;

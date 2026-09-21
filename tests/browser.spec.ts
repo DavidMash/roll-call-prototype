@@ -4,7 +4,7 @@ import { newRun, dispatch } from '../src/game/engine';
 import { handOptions, handStats, HANDS, HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import { ENHANCEMENTS } from '../src/game/enhancements';
-import { CONFIG, roundReward } from '../src/game/config';
+import { CONFIG } from '../src/game/config';
 import type { Enhancement, GameState } from '../src/game/types';
 
 function bestHand(game: GameState) {
@@ -20,7 +20,7 @@ async function matchBoard(page: Page, game: GameState) {
     await expect(page.getByTestId(`stat-${stat}`).getByText(String(value), { exact: true })).toBeVisible();
   }
   if (game.phase === 'shop' || game.phase === 'flameReward') {
-    if (game.phase === 'shop') await expect(page.getByText(`Round ${game.round} cleared · +${roundReward(game.round)} gold · ${game.score - game.target} points above goal`, { exact: true })).toBeVisible();
+    if (game.phase === 'shop') await expect(page.getByText(new RegExp(`Round ${game.round} cleared.*\\+${game.lastRoundPayout?.total ?? 5} Gold`))).toBeVisible();
     await expect(page.getByTestId('stat-rerolls')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^Reroll Selected/ })).toHaveCount(0);
   } else await expect(page.getByTestId('stat-rerolls').getByText(String(game.manualRerollsRemaining), { exact: true })).toBeVisible();
@@ -171,7 +171,7 @@ test('compact HUD, Run Info and Help keep secondary information off the gameplay
   await expect(help).toBeVisible();
   await help.getByRole('tab', { name: 'Enhancements' }).click();
   await expect(help.getByText('Jackpot', { exact: true })).toBeVisible();
-  await expect(help.getByText(/held out of the played hand that clears the round/)).toBeVisible();
+  await expect(help.getByText(/held out of the winning hand/)).toBeVisible();
 });
 
 test('Hand Training purchase persists into scorecard and trained scoring playback', async ({ page }) => {
@@ -251,10 +251,10 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
   await matchBoard(page, game);
   await expect(page.getByTestId('offer-sticky').getByRole('button', { name: 'Purchased' })).toBeDisabled();
   expect(game.dice[0].faces[physicalFace - 1].enhancements.sticky).toBe(1);
-  await page.getByRole('button', { name: 'Reroll Dice · 1 gold', exact: true }).click();
+  await page.getByRole('button', { name: 'Reroll Dice · 2 gold', exact: true }).click();
   game = dispatch(game, { type: 'REROLL_DICE' }).state;
   await matchBoard(page, game);
-  await expect(page.getByRole('button', { name: 'Reroll Dice · 2 gold', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reroll Dice · 4 gold', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await matchBoard(page, game);
@@ -265,11 +265,16 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
       game = dispatch(game, { type: 'NEXT_ROUND' }).state;
       await matchBoard(page, game);
     } else if (game.phase === 'flameReward') {
-      const offer = game.flameReward!.offers[0];
-      const dieId = game.dice.find(die => !die.flame)?.id ?? 0;
-      await page.getByTestId(`flame-offer-${offer.flame}`).getByRole('button', { name: 'Select Flame' }).click();
-      await page.getByRole('button', { name: new RegExp(`^Die ${dieId + 1},`) }).click();
-      game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId }).state;
+      if (game.flameReward!.acquired) {
+        await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
+        game = dispatch(game, { type: 'CONTINUE_FLAME_REWARD' }).state;
+      } else {
+        const offer = game.flameReward!.offers[0];
+        const dieId = game.dice.find(die => !die.flame)?.id ?? 0;
+        await page.getByTestId(`flame-offer-${offer.flame}`).getByRole('button', { name: 'Select Flame' }).click();
+        await page.getByRole('button', { name: new RegExp(`^Die ${dieId + 1},`) }).click();
+        game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId }).state;
+      }
       await matchBoard(page, game);
     } else throw new Error(`Unexpected phase: ${game.phase}`);
   }
@@ -325,6 +330,7 @@ test('native drag-and-drop purchase and enhancement refresh', async ({ page }) =
 
 test('stackable enhancement purchases show a single readable count badge', async ({ page }) => {
   let game = await reachShop(page, findStickyStackSeed());
+  const startingGold = game.gold;
   const first = game.shop!.offers.find(offer => offer.enhancement === 'sticky')!;
   await page.getByTestId('offer-sticky').getByRole('button').click();
   const physical = page.getByRole('button', { name: /^Die 1,/ });
@@ -343,7 +349,13 @@ test('stackable enhancement purchases show a single readable count badge', async
 
   await expect(physical).toContainText('Sticky ×2');
   expect(game.dice[0].faces[game.dice[0].value - 1].enhancements.sticky).toBe(2);
-  expect(game.gold).toBe(0);
+  expect(game.gold).toBe(startingGold - 5); // two 1-Gold Sticky stacks and one 3-Gold offer reroll
+  const face = game.dice[0].value;
+  await page.getByRole('button', { name: `Scrap Sticky from D1 face ${face}`, exact: true }).click();
+  game = dispatch(game, { type: 'SCRAP_ENHANCEMENT', dieId: 0, face, enhancement: 'sticky' }).state;
+  await matchBoard(page, game);
+  await expect(physical).not.toContainText('Sticky');
+  expect(game.gold).toBe(startingGold - 5);
 });
 
 test('ambiguous physical dice can be changed and filtering never ends the run', async ({ page }) => {

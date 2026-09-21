@@ -1,27 +1,46 @@
 import { CONFIG } from './config';
 import type { Enhancement, Face } from './types';
 
-export const ENHANCEMENTS: Record<Enhancement, { name: string; description: string; stackable: boolean }> = {
-  bonus: { name: 'Bonus', description: `+${CONFIG.bonusPips} scoring pips each time this face scores.`, stackable: true },
-  multiplier: { name: 'Multiplier', description: `+${CONFIG.multiplierIncrement} to a hand this die participates in; also applies to its standalone Jumping Bean scoring.`, stackable: true },
-  jumpingBean: { name: 'Jumping Bean', description: 'When rolled, score this face, then reroll this die. Can chain.', stackable: false },
-  golden: { name: 'Golden', description: `+${CONFIG.goldenGold} gold whenever this face scores.`, stackable: true },
-  workout: { name: 'Workout', description: `After scoring, this face permanently gains +${CONFIG.workoutIncrement} scoring pip.`, stackable: true },
-  missingLink: { name: 'Missing Link', description: 'Wild rank for straights. Scores its actual pips.', stackable: false },
-  mirror: { name: 'Mirror', description: 'Wild matching rank for Pair, Two Pair, kind hands, and Full House. Scores actual pips.', stackable: false },
-  magnetic: { name: 'Magnetic', description: 'When rolled, flip every magnetic die to a random magnetic face.', stackable: false },
-  sticky: { name: 'Sticky', description: '50% chance to prevent a scoring or Jumping Bean reroll. Additional stacks have diminishing returns. Manual and Slippy rerolls are unaffected.', stackable: true },
-  slippy: { name: 'Slippy', description: 'Reroll this die after a played hand if the round continues, even if it did not score.', stackable: false },
-  sustainable: { name: 'Sustainable', description: '50% chance to preserve a hand this face participates in. Stacks across all selected participants combine with diminishing returns.', stackable: true },
-  hitchhiker: { name: 'Hitchhiker', description: 'When held out of a played hand, has a 50% chance to join as a scoring die. Additional stacks increase the chance with diminishing returns.', stackable: true },
-  weighted: { name: 'Weighted', description: 'Adds +1 roll weight to this face\'s opposite side per stack, including in the shop.', stackable: true },
-  jackpot: { name: 'Jackpot', description: `Gain ${CONFIG.jackpotGold} gold per stack if this face is showing on a die held out of the played hand that clears the round.`, stackable: true },
+export interface EnhancementDefinition {
+  name: string;
+  description: string;
+  stackable: boolean;
+  maxStacks: number | null;
+  countsTowardFaceTypeLimit: boolean;
+}
+const definition = (name: string, description: string, stackable: boolean, maxStacks: number | null = null): EnhancementDefinition =>
+  ({ name, description, stackable, maxStacks, countsTowardFaceTypeLimit: true });
+
+export const ENHANCEMENTS: Record<Enhancement, EnhancementDefinition> = {
+  bonus: definition('Bonus', `+${CONFIG.bonusPips} scoring pips each time this face scores.`, true),
+  multiplier: definition('Multiplier', `+${CONFIG.multiplierIncrement} to a hand this die participates in; also applies to its standalone Jumping Bean scoring.`, true),
+  jumpingBean: definition('Jumping Bean', 'When rolled, score this face, then reroll this die. Can chain.', false, 1),
+  golden: definition('Golden', `+${CONFIG.goldenGold} gold whenever this face scores.`, true),
+  workout: definition('Workout', `After scoring, this face permanently gains +${CONFIG.workoutIncrement} scoring pip.`, true),
+  missingLink: definition('Missing Link', 'Wild rank for straights. Scores its actual pips.', false, 1),
+  mirror: definition('Mirror', 'Wild matching rank for Pair, Two Pair, kind hands, and Full House. Scores actual pips.', false, 1),
+  magnetic: definition('Magnetic', 'A held Magnetic face attracts rerolled dice to one of their Magnetic faces. Bump takes priority.', false, 1),
+  sticky: definition('Sticky', '50% chance to prevent a scoring or Jumping Bean reroll. Stacks cap at 3 (87.5%).', true, 3),
+  slippy: definition('Slippy', 'Reroll this die after a played hand if the round continues, even if it did not score.', false, 1),
+  hitchhiker: definition('Hitchhiker', 'When held out of a played hand, may join as a scoring die. Stacks cap at 3 (87.5%).', true, 3),
+  weighted: definition('Weighted', 'Adds +1 roll weight to this face\'s opposite side per stack, including in the shop.', true),
+  jackpot: definition('Jackpot', `Gain ${CONFIG.jackpotGold} gold per stack if showing on a die held out of the winning hand.`, true),
+  bump: definition('Bump', 'While showing, this die\'s next actual roll advances one face (6 wraps to 1).', false, 1),
 };
 export const ENHANCEMENT_IDS = Object.keys(ENHANCEMENTS) as Enhancement[];
+export const FACE_TYPE_LIMIT = 3;
 export const stacks = (face: Face, enhancement: Enhancement) => face.enhancements[enhancement] ?? 0;
-export const canAttach = (face: Face, enhancement: Enhancement) =>
-  ENHANCEMENTS[enhancement].stackable || stacks(face, enhancement) === 0;
+export const faceEnhancementTypes = (face: Face) => ENHANCEMENT_IDS.filter(id => stacks(face, id) > 0 && ENHANCEMENTS[id].countsTowardFaceTypeLimit);
+export function attachmentError(face: Face, enhancement: Enhancement): string | null {
+  const metadata = ENHANCEMENTS[enhancement];
+  const current = stacks(face, enhancement);
+  if (!metadata.stackable && current > 0) return `${metadata.name} is already on this physical face.`;
+  if (metadata.maxStacks !== null && current >= metadata.maxStacks) return `${metadata.name} is capped at ${metadata.maxStacks} stacks.`;
+  if (current === 0 && metadata.countsTowardFaceTypeLimit && faceEnhancementTypes(face).length >= FACE_TYPE_LIMIT) {
+    return `This face already has ${FACE_TYPE_LIMIT} enhancement types. Scrap one before adding ${metadata.name}.`;
+  }
+  return null;
+}
+export const canAttach = (face: Face, enhancement: Enhancement) => attachmentError(face, enhancement) === null;
 export const enhancementCost = (enhancement: Enhancement) => CONFIG.enhancementCosts[enhancement];
-export const diminishingHalfChance = (stackCount: number) => stackCount <= 0
-  ? 0
-  : Math.min(1 - Number.EPSILON, 1 - 0.5 ** stackCount);
+export const diminishingHalfChance = (stackCount: number) => stackCount <= 0 ? 0 : Math.min(1 - Number.EPSILON, 1 - 0.5 ** stackCount);

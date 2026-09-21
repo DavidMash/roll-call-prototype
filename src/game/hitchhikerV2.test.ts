@@ -49,15 +49,14 @@ describe('revised Hitchhiker', () => {
     expect(isValidSelection(game.dice, 'threeKind', [0, 1, 2])).toBe(true);
   });
 
-  it('success applies Bonus, Multiplier, Golden, Workout, and Sustainable', () => {
+  it('success applies Bonus, Multiplier, Golden, and Workout before normal hand consumption', () => {
     const game = state();
-    for (const enhancement of ['hitchhiker', 'bonus', 'multiplier', 'golden', 'workout', 'sustainable'] as Enhancement[]) enhance(game, 4, enhancement);
+    for (const enhancement of ['hitchhiker', 'bonus', 'multiplier', 'golden', 'workout'] as Enhancement[]) enhance(game, 4, enhancement);
     const result = play(game, constant(0));
     expect(result.state.stats.handScores[0]).toMatchObject({ pips: 38, multiplier: 3, xMult: 1, score: 114, hitchhikerPips: 16 });
     expect(result.state.gold).toBe(1);
     expect(result.state.dice[4].faces[5].workoutPips).toBe(1);
-    expect(result.state.consumed).not.toContain('threeKind');
-    expect(result.state.stats.probabilityProcs.sustainable.checks).toBe(1);
+    expect(result.state.consumed).toContain('threeKind');
   });
 
   it('does not receive the normal scoring reroll, while its Slippy still rerolls it', () => {

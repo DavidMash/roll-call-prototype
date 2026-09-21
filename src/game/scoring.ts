@@ -1,7 +1,6 @@
 import { CONFIG } from './config';
 import { activeFace, baseScoringPips, scoringPips } from './dice';
 import { stacks } from './enhancements';
-import { composeXMult } from './flames';
 import { handStats } from './hands';
 import type { Die, Face, HandId, HandScoreAccumulator } from './types';
 
@@ -19,7 +18,7 @@ export function createHandAccumulator(hand: HandId, dieIds: number[], level = 1)
     hand, handLevel: level, dieIds: [...dieIds].sort((a, b) => a - b),
     basePips: stats.basePips, baseMultiplier: stats.baseMultiplier,
     currentPips: stats.basePips, currentMultiplier: stats.baseMultiplier,
-    additiveXMult: 0, multiplicativeXMult: 1, currentXMult: 1,
+    xMultFactors: [], currentXMult: 1,
     bonusPips: 0, hitchhikerPips: 0, rawScore: null, finalScore: null,
   };
 }
@@ -55,11 +54,11 @@ export function applyHandContribution(accumulator: HandScoreAccumulator, contrib
   if (contribution.role === 'hitchhiker' && contribution.kind !== 'multiplier') accumulator.hitchhikerPips += contribution.amount;
 }
 
-export function applyXMult(accumulator: HandScoreAccumulator, mode: 'additive' | 'multiplicative', value: number): void {
+export function applyXMult(accumulator: HandScoreAccumulator, factor: import('./types').XMultFactor): void {
   if (accumulator.finalScore !== null) throw new Error('Cannot change a finalized hand score.');
-  if (mode === 'additive') accumulator.additiveXMult += value;
-  else accumulator.multiplicativeXMult *= value;
-  accumulator.currentXMult = composeXMult(accumulator.additiveXMult, accumulator.multiplicativeXMult);
+  accumulator.xMultFactors.push(structuredClone(factor));
+  accumulator.currentXMult = Number(accumulator.xMultFactors.map(item => item.value).sort((a, b) => a - b)
+    .reduce((product, value) => product * value, 1).toFixed(12));
 }
 
 export function finalizeHandScore(accumulator: HandScoreAccumulator) {
