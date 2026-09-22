@@ -1,14 +1,15 @@
-import { Alert, Badge, Button, Group, Modal, Paper, SimpleGrid, Stack, Text, Tooltip } from '@mantine/core';
+import { Alert, Badge, Button, Group, Modal, Paper, Progress, SimpleGrid, Stack, Text, Tooltip } from '@mantine/core';
 import { useState } from 'react';
 import { diceRerollCost, offerRerollCost } from '../game/config';
 import { activeFace } from '../game/dice';
 import { attachmentError, enhancementCost, ENHANCEMENTS, ENHANCEMENT_IDS, FACE_TYPE_LIMIT, faceEnhancementTypes } from '../game/enhancements';
-import { activeFlameId, activeFlameInvestment, FLAMES, hasXMultFlame } from '../game/flames';
+import { activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasXMultFlame } from '../game/flames';
 import type { Action, Board, Enhancement, GameEvent, Rank } from '../game/types';
 import { DiceRow } from './DiceRow';
 import { EnhancementCard } from './EnhancementCard';
 import { RoundPayoutSummary } from './RoundPayoutSummary';
 import { ScoreResolution } from './ScoreResolution';
+import { StokeFlameModal } from './StokeFlameModal';
 import { TrainingCard } from './TrainingCard';
 
 interface ScrapTarget { face: Rank; enhancement: Enhancement; stacks: number }
@@ -22,6 +23,7 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
   const [managedDieId, setManagedDieId] = useState<number | null>(null);
   const [focusedFace, setFocusedFace] = useState<Rank | null>(null);
   const [scrapTarget, setScrapTarget] = useState<ScrapTarget | null>(null);
+  const [stokeDieId, setStokeDieId] = useState<number | null>(null);
   const managedDie = managedDieId === null ? null : board.dice.find(die => die.id === managedDieId) ?? null;
 
   const placementErrors = Object.fromEntries(board.dice.map(die => {
@@ -57,7 +59,7 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
     else if (managedDie) submit({ type: 'SCRAP_ENHANCEMENT', dieId: managedDie.id, face, enhancement });
   }
   function closeManager() {
-    setManagedDieId(null); setFocusedFace(null); setScrapTarget(null);
+    setManagedDieId(null); setFocusedFace(null); setScrapTarget(null); setStokeDieId(null);
   }
 
   const managedFlame = activeFlameId(managedDie?.flame);
@@ -113,10 +115,15 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
 
     <Modal opened={managedDie !== null} onClose={closeManager} title={managedDie ? `D${managedDie.id + 1} — Manage Faces` : 'Manage Die'} size="lg" centered transitionProps={{ duration: 0 }}>
       {managedDie && <Stack gap="sm">
-        <Group justify="space-between">
-          <Text size="sm" c="dimmed">Scrap all stacks of one enhancement type for no refund.</Text>
-          {managedFlame && <Badge color="orange" variant="light">🔥 {FLAMES[managedFlame].name} · {activeFlameInvestment(managedDie.flame)}/100</Badge>}
-        </Group>
+        <Text size="sm" c="dimmed">Scrap all stacks of one enhancement type for no refund.</Text>
+        {managedFlame && <Paper withBorder p="sm" className="shop-flame-context" data-testid="shop-flame-context">
+          <Group justify="space-between" align="flex-start"><div><Group gap={5}><Badge color="orange" variant="light">🔥 EMBER</Badge><Text fw={800}>{FLAMES[managedFlame].name}</Text></Group>
+            <Text size="xs" c="dimmed" mt={5}>{flameEffectText(managedFlame, activeFlameInvestment(managedDie.flame), board)}</Text></div>
+            <Button color="orange" variant="light" disabled={busy || board.gold < 1} onClick={() => setStokeDieId(managedDie.id)}>Stoke Flame</Button>
+          </Group>
+          <Group justify="space-between" mt="xs"><Text size="xs" fw={700}>{activeFlameInvestment(managedDie.flame)} / 100 → BONFIRE</Text><Text size="xs" c="dimmed">{board.gold} Gold held</Text></Group>
+          <Progress value={activeFlameInvestment(managedDie.flame)} color="orange" size="sm" mt={4} />
+        </Paper>}
         {offer && focused && managedActiveFace?.rank === focused.rank && focusedError?.includes(`${FACE_TYPE_LIMIT} enhancement types`) && <Alert color="orange" title={`Face ${focused.rank} is full`}>
           Face {focused.rank} already has {FACE_TYPE_LIMIT} enhancement types. Scrap one to make room for {ENHANCEMENTS[offer.enhancement].name}.
         </Alert>}
@@ -160,5 +167,7 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
         }}>Scrap {scrapTarget.stacks} stacks</Button></Group>
       </>}
     </Modal>
+    <StokeFlameModal board={board} dieId={stokeDieId} opened={stokeDieId !== null} busy={busy}
+      onClose={() => setStokeDieId(null)} submit={submit} />
   </>;
 }

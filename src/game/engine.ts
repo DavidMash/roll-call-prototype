@@ -2,7 +2,7 @@ import { CONFIG, diceRerollCost, flameRerollCost, offerRerollCost } from './conf
 import { activeFace, createDice } from './dice';
 import { Resolver } from './effects';
 import { attachmentError, enhancementCost, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, stacks } from './enhancements';
-import { activeFlameId, activeFlameInvestment, FLAMES, hasOwnedFlame, isFlame } from './flames';
+import { activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasOwnedFlame, isFlame } from './flames';
 import { HANDS, initialHandLevels, initialHandPlayCounts, isValidSelection } from './hands';
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
@@ -31,6 +31,8 @@ function normalizedState(state: GameState): GameState {
   if (next.flameReward) next.flameReward.offers = next.flameReward.offers.filter(offer => isFlame(offer.flame));
   next.stats.jumpingBeanFreePlays ??= [];
   next.stats.flameStokes ??= ((next.stats as unknown as { flameDonations?: GameState['stats']['flameStokes'] }).flameDonations ?? []);
+  next.stats.flameStokes = next.stats.flameStokes.map(stoke => ({ ...stoke,
+    from: stoke.from ?? Math.max(0, stoke.total - stoke.amount), source: stoke.source ?? 'flame_reward' }));
   next.stats.goldBySource.flameBonus ??= 0;
   return next;
 }
@@ -57,7 +59,18 @@ export function validateAction(state: Board, action: Action): string | null {
     if (!state.chargeArmed && state.chargeXMult <= 1) return 'Charge has no stored bonus yet.';
     return null;
   }
-  if (action.type === 'CHOOSE_FLAME' || action.type === 'REROLL_FLAMES' || action.type === 'STOKE_FLAME' || action.type === 'CONTINUE_FLAME_REWARD') {
+  if (action.type === 'STOKE_FLAME') {
+    if (!((state.phase === 'flameReward' && state.flameReward) || (state.phase === 'shop' && state.shop))) {
+      return 'Stoking requires an open shop or Flame Reward.';
+    }
+    const die = state.dice.find(item => item.id === action.dieId);
+    if (!die?.flame || !activeFlameId(die.flame)) return 'Choose an active Flame to invest in.';
+    if (!Number.isInteger(action.amount) || action.amount <= 0) return 'Stoking requires a positive whole Gold amount.';
+    if (action.amount > state.gold) return 'Not enough gold to stoke that Ember.';
+    if (activeFlameInvestment(die.flame) + action.amount > 100) return 'A Flame cannot hold more than 100 invested Gold.';
+    return null;
+  }
+  if (action.type === 'CHOOSE_FLAME' || action.type === 'REROLL_FLAMES' || action.type === 'CONTINUE_FLAME_REWARD') {
     if (state.phase !== 'flameReward' || !state.flameReward) return 'This action requires an open Flame Reward.';
     if (action.type === 'CHOOSE_FLAME') {
       if (state.flameReward.acquired) return 'Only one new Flame may be acquired per reward.';
@@ -67,12 +80,6 @@ export function validateAction(state: Board, action: Action): string | null {
     } else if (action.type === 'REROLL_FLAMES') {
       if (state.flameReward.acquired) return 'A Flame has already been acquired on this reward screen.';
       if (state.gold < flameRerollCost(state.flameReward.offerRerolls)) return 'Not enough gold to reroll Flame offers.';
-    } else if (action.type === 'STOKE_FLAME') {
-      const die = state.dice.find(item => item.id === action.dieId);
-      if (!die?.flame || !activeFlameId(die.flame)) return 'Choose an active Flame to invest in.';
-      if (!Number.isInteger(action.amount) || action.amount <= 0) return 'Stoking requires a positive whole Gold amount.';
-      if (action.amount > state.gold) return 'Not enough gold to stoke that Ember.';
-      if (activeFlameInvestment(die.flame) + action.amount > 100) return 'A Flame cannot hold more than 100 invested Gold.';
     }
     return null;
   }
@@ -186,12 +193,15 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const die = next.dice[action.dieId];
         const id = activeFlameId(die.flame)!;
         const flame = die.flame = { id, investedGold: activeFlameInvestment(die.flame) };
-        resolver.spendGold(action.amount, `Stoked ${FLAMES[flame.id].name} with ${action.amount} Gold`, 'flameInvestment');
+        const source = next.phase === 'shop' ? 'shop' as const : 'flame_reward' as const;
+        const from = flame.investedGold;
+        resolver.spendGold(action.amount, `Stoked ${FLAMES[flame.id].name}: −${action.amount} Gold (${source === 'shop' ? 'shop' : 'Flame Reward'})`, 'flameInvestment');
         flame.investedGold += action.amount;
-        next.stats.flameStokes.push({ round: next.round, dieId: die.id, flame: flame.id, amount: action.amount, total: flame.investedGold });
+        next.stats.flameStokes.push({ round: next.round, dieId: die.id, flame: flame.id, amount: action.amount,
+          from, total: flame.investedGold, source });
         next.stats.totalFlameInvestment += action.amount;
         resolver.emit({ type: 'FLAME_INVESTED', flame: flame.id, dieIds: [die.id], amount: action.amount,
-          message: `${FLAMES[flame.id].name}: ${flame.investedGold} / 100 Gold invested` });
+          message: `Stoked ${FLAMES[flame.id].name}: ${from} → ${flame.investedGold} / 100 · ${flameEffectText(flame.id, flame.investedGold, next)}` });
         if (flame.investedGold === 100) {
           const id = flame.id;
           die.flame = null;

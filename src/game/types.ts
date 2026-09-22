@@ -142,7 +142,16 @@ export interface Purchase { round: number; enhancement: Enhancement; dieId: numb
 export interface ScrapRecord { round: number; enhancement: Enhancement; dieId: number; face: Rank; stacksRemoved: number }
 export interface TrainingPurchase { round: number; hand: HandId; fromLevel: number; toLevel: number; cost: number }
 export interface FlameAcquisition { round: number; dieId: number; flame: Flame; replaced: Flame | null }
-export interface FlameStoke { round: number; dieId: number; flame: Flame; amount: number; total: number }
+export type FlameStokeSource = 'flame_reward' | 'shop';
+export interface FlameStoke {
+  round: number;
+  dieId: number;
+  flame: Flame;
+  amount: number;
+  from: number;
+  total: number;
+  source: FlameStokeSource;
+}
 export interface ProbabilityProcStats { checks: number; successes: number; failures: number; stacksAtCheck: number[] }
 export interface JumpingBeanPlayRecord {
   round: number;

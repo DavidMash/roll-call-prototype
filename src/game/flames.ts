@@ -1,5 +1,5 @@
 import { HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
-import type { ActiveFlame, Die, Flame, GameState, HandId, XMultFactor } from './types';
+import type { ActiveFlame, Board, Die, Flame, GameState, HandId, XMultFactor } from './types';
 
 export interface FlameDefinition {
   name: string;
@@ -9,31 +9,32 @@ export interface FlameDefinition {
   affectsXMult: boolean;
 }
 export const FLAMES: Record<Flame, FlameDefinition> = {
-  ultimate: { name: 'Ultimate', shortName: 'ULT', affectsXMult: true, description: 'Scores in a highest-level hand: scale XMult from ×1 to ×3.', bonfireDescription: 'Every highest-level hand receives ×3.' },
-  minigun: { name: 'Minigun', shortName: 'MINI', affectsXMult: true, description: 'Scores in an Upper hand: scale XMult from ×1 to ×3.', bonfireDescription: 'Every Upper hand receives ×3.' },
-  hailMary: { name: 'Hail Mary', shortName: 'HAIL', affectsXMult: true, description: 'Scores with 0 manual rerolls left: scale XMult from ×1 to ×3.', bonfireDescription: 'Every hand played with 0 rerolls receives ×3.' },
-  charge: { name: 'Charge', shortName: 'CHG', affectsXMult: true, description: 'This die’s gameplay rolls store up to +0.5 XMult each; arm it for a hand.', bonfireDescription: 'Every gameplay die roll adds +0.5 to the global meter.' },
-  personalTrainer: { name: 'Personal Trainer', shortName: 'TRAIN', affectsXMult: false, description: 'When this die scores, up to a 75% chance to train the hand after scoring.', bonfireDescription: 'Every played hand gets one 75% training check.' },
-  dragonsHoard: { name: "Dragon's Hoard", shortName: 'HOARD', affectsXMult: true, description: 'When this die scores, held Gold and investment scale XMult up to ×3.', bonfireDescription: 'Every hand receives the held-Gold factor, capped at ×3.' },
-  wellTrained: { name: 'Well Trained', shortName: 'WELL', affectsXMult: true, description: 'When this die scores, previous plays scale XMult up to ×3.', bonfireDescription: 'Every hand receives its play-history factor, capped at ×3.' },
-  targetPractice: { name: 'Target Practice', shortName: 'TARGET', affectsXMult: true, description: 'Scores in the round target: scale XMult from ×1 to ×5.', bonfireDescription: 'The round target globally receives ×5.' },
-  hotStreak: { name: 'Hot Streak', shortName: 'STREAK', affectsXMult: true, description: 'Complete the Lower-hand sequence with this die to build a per-round chain.', bonfireDescription: 'The Lower-hand sequence no longer requires a particular die.' },
-  moneyToBurn: { name: 'Money to Burn', shortName: 'BURN', affectsXMult: true, description: 'When this die scores, lifetime normal-shop spend scales XMult up to ×3.', bonfireDescription: 'Every hand receives the shop-spend factor.' },
-  lowball: { name: 'Lowball', shortName: 'LOW', affectsXMult: true, description: 'When this die scores, low printed values average into up to ×3.', bonfireDescription: 'Every normal hand receives its printed-value tier.' },
-  straightShooter: { name: 'Straight Shooter', shortName: 'STR8', affectsXMult: true, description: 'Scores in Small or Large Straight: scale XMult from ×1 to ×3.', bonfireDescription: 'Every Small or Large Straight receives ×3.' },
-  doubleDown: { name: 'Double Down', shortName: 'DBL', affectsXMult: true, description: 'Scores in Pair or Two Pair: scale XMult from ×1 to ×3.', bonfireDescription: 'Every Pair and Two Pair receives ×3.' },
+  ultimate: { name: 'Ultimate', shortName: 'ULT', affectsXMult: true, description: 'Scores in a highest-level hand: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Every highest-level hand multiplies XMult by ×5.' },
+  minigun: { name: 'Minigun', shortName: 'MINI', affectsXMult: true, description: 'Scores in an Upper hand: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Every Upper hand multiplies XMult by ×5.' },
+  hailMary: { name: 'Hail Mary', shortName: 'HAIL', affectsXMult: true, description: 'Scores with 0 manual rerolls left: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Every hand played with 0 rerolls multiplies XMult by ×5.' },
+  charge: { name: 'Charge', shortName: 'CHG', affectsXMult: true, description: 'This die’s gameplay rolls grow its stored factor by up to +1; arm it to multiply a hand’s XMult.', bonfireDescription: 'Every gameplay die roll grows the global stored factor by +1.' },
+  personalTrainer: { name: 'Personal Trainer', shortName: 'TRAIN', affectsXMult: false, description: 'When this die scores, its training chance rises twice as fast, capped at 75%.', bonfireDescription: 'Every played hand gets one 75% training check.' },
+  dragonsHoard: { name: "Dragon's Hoard", shortName: 'HOARD', affectsXMult: true, description: 'When this die scores, held Gold and investment multiply XMult by up to ×5.', bonfireDescription: 'Every hand receives the held-Gold factor, capped at ×5.' },
+  wellTrained: { name: 'Well Trained', shortName: 'WELL', affectsXMult: true, description: 'When this die scores, previous plays and investment multiply XMult by up to ×5.', bonfireDescription: 'Every hand receives its play-history factor, capped at ×5.' },
+  targetPractice: { name: 'Target Practice', shortName: 'TARGET', affectsXMult: true, description: 'Scores in the round target: multiplies XMult by ×1 to ×9.', bonfireDescription: 'The round target globally multiplies XMult by ×9.' },
+  hotStreak: { name: 'Hot Streak', shortName: 'STREAK', affectsXMult: true, description: 'Complete the Lower-hand sequence with this die; each charge adds up to +1 inside its multiplicative factor.', bonfireDescription: 'The sequence no longer requires a particular die; each charge adds +1 inside its factor.' },
+  moneyToBurn: { name: 'Money to Burn', shortName: 'BURN', affectsXMult: true, description: 'When this die scores, normal-shop spend and investment multiply XMult by up to ×5.', bonfireDescription: 'Every hand receives the shop-spend factor, capped at ×5.' },
+  lowball: { name: 'Lowball', shortName: 'LOW', affectsXMult: true, description: 'When this die scores, low printed values multiply XMult by up to ×5.', bonfireDescription: 'Every normal hand receives its printed-value factor, up to ×5.' },
+  straightShooter: { name: 'Straight Shooter', shortName: 'STR8', affectsXMult: true, description: 'Scores in Small or Large Straight: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Every Small or Large Straight multiplies XMult by ×5.' },
+  doubleDown: { name: 'Double Down', shortName: 'DBL', affectsXMult: true, description: 'Scores in Pair or Two Pair: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Every Pair and Two Pair multiplies XMult by ×5.' },
 };
 export const FLAME_IDS = Object.keys(FLAMES) as Flame[];
 export const XMult_FLAME_IDS = FLAME_IDS.filter(flame => FLAMES[flame].affectsXMult);
 export const HOT_STREAK_SEQUENCE: HandId[] = ['pair', 'twoPair', 'threeKind', 'smallStraight', 'fullHouse', 'fourKind', 'largeStraight', 'fiveKind'];
 export const flameProgress = (investedGold: number) => Math.max(0, Math.min(100, investedGold)) / 100;
-export const standardFlameMultiplier = (investedGold: number) => 1 + 2 * flameProgress(investedGold);
-export const targetPracticeMultiplier = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
-export const trainerChance = (investedGold: number) => 0.75 * flameProgress(investedGold);
-export const chargeGainPerRoll = (investedGold: number) => 0.5 * flameProgress(investedGold);
-export const dragonsHoardMultiplier = (investedGold: number, gold: number) => 1 + 2 * flameProgress(investedGold) * Math.min(Math.max(gold, 0) / 100, 1);
-export const wellTrainedMultiplier = (investedGold: number, previousPlays: number) => Math.min(3, 1 + previousPlays * 0.1 * flameProgress(investedGold));
-export const moneyToBurnMultiplier = (investedGold: number, lifetimeSpend: number) => 1 + 2 * flameProgress(investedGold) * Math.min(Math.max(lifetimeSpend, 0) / 100, 1);
+export const standardFlameMultiplier = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
+export const targetPracticeMultiplier = (investedGold: number) => 1 + 8 * flameProgress(investedGold);
+export const trainerChance = (investedGold: number) => Math.min(0.75, 1.5 * flameProgress(investedGold));
+export const chargeGainPerRoll = (investedGold: number) => flameProgress(investedGold);
+export const dragonsHoardMultiplier = (investedGold: number, gold: number) => 1 + 4 * flameProgress(investedGold) * Math.min(Math.max(gold, 0) / 100, 1);
+export const wellTrainedMultiplier = (investedGold: number, previousPlays: number) => Math.min(5, 1 + previousPlays * 0.2 * flameProgress(investedGold));
+export const moneyToBurnMultiplier = (investedGold: number, lifetimeSpend: number) => 1 + 4 * flameProgress(investedGold) * Math.min(Math.max(lifetimeSpend, 0) / 100, 1);
+export const hotStreakMultiplier = (investedGold: number, charges: number) => 1 + Math.max(0, charges) * flameProgress(investedGold);
 export function lowballFullMultiplier(averageFace: number): number {
   if (averageFace <= 2) return 3;
   if (averageFace <= 3) return 2.5;
@@ -42,7 +43,35 @@ export function lowballFullMultiplier(averageFace: number): number {
   return 1;
 }
 export const lowballMultiplier = (investedGold: number, averageFace: number) =>
-  1 + (lowballFullMultiplier(averageFace) - 1) * flameProgress(investedGold);
+  1 + 2 * (lowballFullMultiplier(averageFace) - 1) * flameProgress(investedGold);
+const displayNumber = (value: number) => Number(value.toFixed(4));
+type FlameDisplayContext = Pick<Board, 'gold' | 'lifetimeNormalShopGoldSpent'>;
+export function flameEffectText(id: Flame, investedGold: number, board: FlameDisplayContext): string {
+  switch (id) {
+    case 'personalTrainer': return `${displayNumber(trainerChance(investedGold) * 100)}% training chance`;
+    case 'charge': return `Stored factor +${displayNumber(chargeGainPerRoll(investedGold))} per gameplay roll`;
+    case 'targetPractice': return `×${displayNumber(targetPracticeMultiplier(investedGold))} XMult on the round target`;
+    case 'dragonsHoard': return `×${displayNumber(dragonsHoardMultiplier(investedGold, board.gold))} XMult at ${board.gold} held Gold`;
+    case 'wellTrained': return `×(1 + ${displayNumber(0.2 * flameProgress(investedGold))} per previous play) XMult, cap ×5`;
+    case 'hotStreak': return `×(1 + charges × ${displayNumber(flameProgress(investedGold))}) XMult`;
+    case 'moneyToBurn': return `×${displayNumber(moneyToBurnMultiplier(investedGold, board.lifetimeNormalShopGoldSpent))} XMult at ${board.lifetimeNormalShopGoldSpent} shop Gold`;
+    case 'lowball': return `×1–×${displayNumber(lowballMultiplier(investedGold, 2))} XMult from printed-face average`;
+    default: return `×${displayNumber(standardFlameMultiplier(investedGold))} XMult when its condition is met`;
+  }
+}
+export function flameFullEffectText(id: Flame): string {
+  switch (id) {
+    case 'personalTrainer': return '75% training chance';
+    case 'charge': return 'Stored factor +1 per gameplay roll';
+    case 'targetPractice': return '×9 XMult on the round target';
+    case 'hotStreak': return '×(1 + charges) XMult';
+    case 'dragonsHoard': return '×1–×5 XMult from held Gold';
+    case 'wellTrained': return '×(1 + 0.2 per previous play) XMult, cap ×5';
+    case 'moneyToBurn': return '×1–×5 XMult from normal-shop spend';
+    case 'lowball': return '×1–×5 XMult from printed-face average';
+    default: return '×5 XMult when its condition is met';
+  }
+}
 export const isFlame = (value: unknown): value is Flame => typeof value === 'string' && Object.hasOwn(FLAMES, value);
 export const activeFlameId = (flame: ActiveFlame | null | unknown): Flame | null => {
   if (!flame) return null;
@@ -115,7 +144,7 @@ function factorValue(id: Flame, investedGold: number, snapshot: HandStartSnapsho
       const average = scorers.reduce((sum, die) => sum + die.faceValue, 0) / Math.max(1, scorers.length);
       return lowballMultiplier(investedGold, average);
     }
-    case 'hotStreak': return 1 + (snapshot.hotStreakCharges + 1) * 0.5 * flameProgress(investedGold);
+    case 'hotStreak': return hotStreakMultiplier(investedGold, snapshot.hotStreakCharges + 1);
     default: return standardFlameMultiplier(investedGold);
   }
 }

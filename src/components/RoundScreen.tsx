@@ -1,6 +1,6 @@
 import { Alert, Button, Group, Paper, Stack, Text } from '@mantine/core';
 import { validateAction } from '../game/engine';
-import { activeFlameInvestment, captureHandStart, composeXMult, flameProgress, handXMultContributions, hasXMultFlame, targetPracticeMultiplier } from '../game/flames';
+import { activeFlameInvestment, captureHandStart, composeXMult, handXMultContributions, hasXMultFlame, hotStreakMultiplier, targetPracticeMultiplier } from '../game/flames';
 import { hasPlayableHand, HANDS } from '../game/hands';
 import { finalizeScore, handScore } from '../game/scoring';
 import { canPlay, emptySelection, selectHand, toggleDie } from '../game/selection';
@@ -27,7 +27,7 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
   const canReroll = validateAction(board, manualAction) === null;
   const deadBoard = !hasPlayableHand(board.dice, board.consumed);
   const hotFlame = board.dice.find(die => die.flame?.id === 'hotStreak')?.flame;
-  const hotProgress = board.bonfires.includes('hotStreak') ? 1 : flameProgress(activeFlameInvestment(hotFlame));
+  const hotInvestment = board.bonfires.includes('hotStreak') ? 100 : activeFlameInvestment(hotFlame);
   const targetFlame = board.dice.find(die => die.flame?.id === 'targetPractice')?.flame;
   const targetInvestment = board.bonfires.includes('targetPractice') ? 100 : activeFlameInvestment(targetFlame);
   const idleText = selection.hand
@@ -39,7 +39,7 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
       Select dice and use a reroll.
     </Alert>}
     {(board.hotStreakGoal || board.targetPracticeHand) && <Paper p="xs" className="flame-goals"><Group gap="lg">
-      {board.hotStreakGoal && <Text size="xs"><strong>🔥 HOT STREAK</strong> · Next: {HANDS[board.hotStreakGoal].name} · Charges: {board.hotStreakCharges} · Hit now: ×{Number((1 + (board.hotStreakCharges + 1) * 0.5 * hotProgress).toFixed(4))}</Text>}
+      {board.hotStreakGoal && <Text size="xs"><strong>🔥 HOT STREAK</strong> · Next: {HANDS[board.hotStreakGoal].name} · Charges: {board.hotStreakCharges} · Hit now: ×{Number(hotStreakMultiplier(hotInvestment, board.hotStreakCharges + 1).toFixed(4))}</Text>}
       {board.targetPracticeHand && <Text size="xs"><strong>◎ TARGET</strong> · {HANDS[board.targetPracticeHand].name} · ×{Number(targetPracticeMultiplier(targetInvestment).toFixed(4))}</Text>}
     </Group></Paper>}
     <Paper className="scorecard-panel" p="xs">

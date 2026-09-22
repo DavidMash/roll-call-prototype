@@ -131,7 +131,7 @@ export class Resolver {
   private addChargeForRoll(dieId: number): void {
     let gain = 0;
     let sourceDie: number | null = dieId;
-    if (this.state.bonfires.includes('charge')) { gain = 0.5; sourceDie = null; }
+    if (this.state.bonfires.includes('charge')) { gain = 1; sourceDie = null; }
     else {
       const flame = this.state.dice[dieId].flame;
       if (activeFlameId(flame) === 'charge') gain = chargeGainPerRoll(activeFlameInvestment(flame));
@@ -139,9 +139,9 @@ export class Resolver {
     if (gain <= 0) return;
     this.state.chargeXMult = Number((this.state.chargeXMult + gain).toFixed(12));
     this.state.stats.chargeGained = Number((this.state.stats.chargeGained + gain).toFixed(12));
-    this.triggerFlame('charge', sourceDie, `+${this.format(gain)}; stored ×${this.format(this.state.chargeXMult)}`);
+    this.triggerFlame('charge', sourceDie, `stored factor +${this.format(gain)} → ×${this.format(this.state.chargeXMult)}`);
     this.emit({ type: 'CHARGE_CHANGED', flame: 'charge', dieIds: [dieId], xMult: this.state.chargeXMult,
-      message: `Charge gained +${this.format(gain)} from D${dieId + 1}; stored ×${this.format(this.state.chargeXMult)}` });
+      message: `Charge stored factor grew by ${this.format(gain)} from D${dieId + 1}: ×${this.format(this.state.chargeXMult)}` });
   }
   rollBatch(dieIds: number[], reason: string, context: RollContext): void {
     const ids = [...new Set(dieIds)].sort((a, b) => a - b);
@@ -299,13 +299,14 @@ export class Resolver {
     }
     for (const { id, face } of scoringParticipants) this.whenScored(id, face);
     for (const factor of handXMultContributions(handStart, hand, handLevel, scoringIds)) {
+      const beforeXMult = this.handAccumulator.currentXMult;
       applyXMult(this.handAccumulator, factor);
       if (factor.source === 'moneyToBurn') this.state.stats.moneyToBurnMultipliers.push(factor.value);
       if (factor.source === 'lowball' && factor.input !== undefined) this.state.stats.lowballAverages.push(factor.input);
-      if (factor.source !== 'charge') this.triggerFlame(factor.source, factor.dieId, `×${this.format(factor.value)} XMult`, hand, factor.value);
+      if (factor.source !== 'charge') this.triggerFlame(factor.source, factor.dieId, `factor ×${this.format(factor.value)}`, hand, factor.value);
       this.emit({ type: 'HAND_XMULT_CHANGED', flame: factor.source === 'charge' ? 'charge' : factor.source, hand,
         dieIds: factor.dieId === null ? undefined : [factor.dieId], xMult: this.handAccumulator.currentXMult, xMultFactor: factor,
-        message: `${factor.source === 'charge' ? 'Charge' : FLAMES[factor.source].name}: ×${this.format(factor.value)}; hand XMult ×${this.format(this.handAccumulator.currentXMult)}` });
+        message: `${factor.source === 'charge' ? 'Charge' : FLAMES[factor.source].name}: XMult ×${this.format(beforeXMult)} × factor ×${this.format(factor.value)} = ×${this.format(this.handAccumulator.currentXMult)}` });
     }
     const { pips, multiplier, xMult, rawScore, score } = finalizeHandScore(this.handAccumulator);
     this.state.stats.handScores.push({ round: this.state.round, hand, handLevel, dieIds: scoringIds,

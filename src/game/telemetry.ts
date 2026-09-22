@@ -34,7 +34,7 @@ export function boardSnapshot(state: GameState): Board {
     handLevels, handPlayCounts, targetPracticeHand, lastRoundPayout, shop, flameReward });
 }
 export function exportRun(state: GameState) {
-  return { schemaVersion: 11, scoringModel: 'free-upper-jumping-bean-v1', ...state.stats,
+  return { schemaVersion: 12, scoringModel: 'multiplicative-flames-v2', ...state.stats,
     bonfires: [...state.bonfires], finalHandLevels: structuredClone(state.handLevels),
     finalFlames: state.dice.map(die => ({ dieId: die.id, flame: activeFlameId(die.flame), investedGold: die.flame?.investedGold ?? 0 })),
     rngState: state.rngState, board: boardSnapshot(state) };

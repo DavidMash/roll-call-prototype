@@ -180,13 +180,13 @@ describe('Jumping Bean effects and Flames', () => {
   });
 
   it.each([
-    { flame: 'ultimate' as const, rank: 4 as Rank, expected: 3 },
-    { flame: 'minigun' as const, rank: 4 as Rank, expected: 3 },
-    { flame: 'hailMary' as const, rank: 4 as Rank, expected: 3, zeroRerolls: true },
-    { flame: 'dragonsHoard' as const, rank: 4 as Rank, expected: 3, gold: 100 },
-    { flame: 'wellTrained' as const, rank: 4 as Rank, expected: 2, previous: 10 },
-    { flame: 'moneyToBurn' as const, rank: 4 as Rank, expected: 3, spend: 100 },
-    { flame: 'lowball' as const, rank: 2 as Rank, expected: 3 },
+    { flame: 'ultimate' as const, rank: 4 as Rank, expected: 5 },
+    { flame: 'minigun' as const, rank: 4 as Rank, expected: 5 },
+    { flame: 'hailMary' as const, rank: 4 as Rank, expected: 5, zeroRerolls: true },
+    { flame: 'dragonsHoard' as const, rank: 4 as Rank, expected: 5, gold: 100 },
+    { flame: 'wellTrained' as const, rank: 4 as Rank, expected: 3, previous: 10 },
+    { flame: 'moneyToBurn' as const, rank: 4 as Rank, expected: 5, spend: 100 },
+    { flame: 'lowball' as const, rank: 2 as Rank, expected: 5 },
   ])('$flame applies as a normal hand-based factor', testCase => {
     const result = deterministicBean(testCase.rank, game => {
       game.dice[0].flame = { id: testCase.flame, investedGold: 100 };
@@ -212,7 +212,7 @@ describe('Jumping Bean effects and Flames', () => {
       game.dice[0].flame = { id: 'wellTrained', investedGold: 100 };
       game.handPlayCounts.fives = 10;
     });
-    expect(well.state.stats.handScores[0].xMult).toBe(2);
+    expect(well.state.stats.handScores[0].xMult).toBe(3);
     expect(well.state.handPlayCounts.fives).toBe(11);
   });
 
@@ -238,7 +238,7 @@ describe('Jumping Bean effects and Flames', () => {
     });
     expect(result.state.stats.handScores[0].xMultFactors.some(factor => factor.source === 'charge')).toBe(false);
     expect(result.state.chargeArmed).toBe(true);
-    expect(result.state.chargeXMult).toBe(3.5);
+    expect(result.state.chargeXMult).toBe(4);
     expect(result.state.stats.chargeConsumed).toBe(0);
   });
 });

@@ -22,4 +22,4 @@ If the free play does not clear the round, Sticky may prevent its one follow-up 
 
 ## Telemetry
 
-Export schema 10 uses `free-upper-jumping-bean-v1`. Hand records include play source and consumption semantics. Bean records include category, scoring die, trained Base Pips/Mult, score, XMult factors, history before/after, Sticky/follow-up outcome, round clearance, and Jackpot payout. Jumping Bean does not add Effect Score or standalone-score records.
+Export schema 12 uses `multiplicative-flames-v2`. Hand records include play source and consumption semantics. Every Flame XMult contribution is an `XMultFactor` and the accumulator recomputes the canonical product after each factor; event playback reports `prior XMult × factor = result`. Stoke records identify `flame_reward` versus `shop`, the previous and resulting investment, amount, Flame, die, and round. Bean records include category, scoring die, trained Base Pips/Mult, score, XMult factors, history before/after, Sticky/follow-up outcome, round clearance, and Jackpot payout. Jumping Bean does not add Effect Score or standalone-score records.

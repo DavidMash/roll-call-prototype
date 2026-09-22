@@ -115,6 +115,25 @@ test('Flame Reward rerolls offers, preserves faces, reveals XMult, and previews 
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
   await expect(page.getByRole('button', { name: new RegExp(`^Die 1, face ${rewardFaces[0]},.*Flame ${FLAMES.wellTrained.name}`) })).toBeVisible();
   await expect(page.getByText(`🔥 ${FLAMES.wellTrained.shortName} 0`, { exact: true })).toBeVisible();
+  await expect(page.locator('[data-testid^="flame-offer-"]')).toHaveCount(0);
+
+  const goldBeforeStoke = game.gold;
+  await page.getByRole('button', { name: /^Die 1,/ }).click();
+  const manager = page.getByRole('dialog', { name: 'D1 — Manage Faces' });
+  await expect(manager.getByTestId('shop-flame-context')).toContainText('0 / 100 → BONFIRE');
+  await manager.getByRole('button', { name: 'Stoke Flame', exact: true }).click();
+  const shopStoke = page.getByRole('dialog', { name: `D1 — Stoke ${FLAMES.wellTrained.name}` });
+  await shopStoke.getByLabel(`Stoke amount for ${FLAMES.wellTrained.name}`).fill('2');
+  await expect(shopStoke.getByText(/After Stoke · 2\/100/)).toBeVisible();
+  await shopStoke.getByRole('button', { name: 'Stoke 2 Gold', exact: true }).click();
+  game = dispatch(game, { type: 'STOKE_FLAME', dieId: 0, amount: 2 }).state;
+  await ready(page);
+  expect(game.gold).toBe(goldBeforeStoke - 2);
+  expect(game.dice[0].flame?.investedGold).toBe(2);
+  expect(game.stats.flameStokes.at(-1)?.source).toBe('shop');
+  await expect(shopStoke).toContainText('2 / 100 → BONFIRE');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;

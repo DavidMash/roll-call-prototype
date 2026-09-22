@@ -115,7 +115,7 @@ describe('live hand scoring', () => {
     enhance(game, 4, 'bonus');
     const result = play(game, constant(0));
     const data = exportRun(result.state);
-    expect(data).toMatchObject({ schemaVersion: 11, scoringModel: 'free-upper-jumping-bean-v1',
+    expect(data).toMatchObject({ schemaVersion: 12, scoringModel: 'multiplicative-flames-v2',
       handBonusPips: 20, hitchhikerPipsContributed: 16,
       scoreByHand: { threeKind: 120 }, scoreBySource: { hand: 120, jumpingBean: 0, hitchhiker: 0 } });
     expect(data.handScores[0]).toMatchObject({ hand: 'threeKind', pips: 48, multiplier: 2.5,

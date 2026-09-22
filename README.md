@@ -47,7 +47,7 @@ A Magnetic anchor must already be showing Magnetic before a roll batch and must 
 
 ## Flames, embers, and Bonfires
 
-Every third clear opens one unified Flame Reward screen before the shop. The rolled faces carry into the shop without another free roll. The player may:
+Every third clear opens the special Flame Reward screen before the shop. New Flames remain exclusive to this cadence. The rolled faces carry into the shop without another free roll. On the reward screen the player may:
 
 - Stoke arbitrary whole Gold amounts into active Flames by selecting their physical dice;
 - acquire at most one offered Flame;
@@ -55,25 +55,27 @@ Every third clear opens one unified Flame Reward screen before the shop. The rol
 - reroll offers for 5/10/20/40… Gold;
 - skip acquisition and continue.
 
-New Flames are 0-Gold Embers with neutral effects. Flame acquisition and development share the dice-centered Flame Reward screen: each die shows its Ember, progress, and current effect, and selecting it opens Stoke controls. Investment is limited to 100. At 100 the Flame becomes a Bonfire: it detaches from its die, frees the slot, appears in the global Bonfire strip, and applies once globally. Active and Bonfire types are unique and are excluded from future offers.
+New Flames are 0-Gold Embers with neutral effects. Owned Flames can be Stoked through their physical die on every normal shop as well as on Flame Rewards; normal shops never acquire or replace Flames. Investment is limited to 100. At 100 the Flame becomes a Bonfire: it detaches from its die, frees the slot, appears in the global Bonfire strip, and applies once globally. Active and Bonfire types are unique and are excluded from future offers.
+
+Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a factor and scoring applies `XMult *= factor`. Multiple factors multiply; no Flame adds a bonus directly to global XMult.
 
 The final roster is:
 
 | Flame | Active rule | Bonfire rule |
 |---|---|---|
-| Ultimate | Scoring die in a highest-level hand; ×1→×3 | Every highest-level hand ×3 |
-| Minigun | Scoring die in an Upper hand; ×1→×3 | Every Upper hand ×3 |
-| Hail Mary | Scoring die with 0 rerolls left; ×1→×3 | Every such hand ×3 |
-| Charge | Its gameplay rolls add `0.5 × progress` to stored Charge | Every gameplay die roll adds 0.5 |
-| Personal Trainer | Scoring die gives `75% × progress` chance to train after scoring | One 75% check per hand |
-| Dragon's Hoard | `1 + 2 × progress × min(heldGold/100, 1)` | Global full-progress formula |
-| Well Trained | `min(3, 1 + previousPlays × 0.1 × progress)` | Global full-progress formula |
-| Target Practice | Targeted Lower hand ×1→×5 | Targeted hand ×5 globally |
-| Hot Streak | In-order Lower sequence, +`0.5 × progress` per successful charge | Removes the die requirement |
-| Money to Burn | `1 + 2 × progress × min(shopSpend/100, 1)` | Global full-progress formula |
-| Lowball | Printed-face average tier, interpolated toward ×1 | Global printed-face tier |
-| Straight Shooter | Small/Large Straight ×1→×3 | Those Straights ×3 globally |
-| Double Down | Pair/Two Pair ×1→×3 | Pair/Two Pair ×3 globally |
+| Ultimate | Highest-level hand: factor `1 + 4p` (×1→×5) | Every qualifying hand gets ×5 |
+| Minigun | Upper hand: factor `1 + 4p` (×1→×5) | Every Upper hand gets ×5 |
+| Hail Mary | Zero rerolls: factor `1 + 4p` (×1→×5) | Every qualifying hand gets ×5 |
+| Charge | Each gameplay roll grows the stored factor by `p`; armed Charge contributes that factor | Every gameplay die roll grows it by 1 |
+| Personal Trainer | `min(75%, 150% × p)` training chance; no XMult factor | One 75% check per hand |
+| Dragon's Hoard | `1 + 4p × min(heldGold/100, 1)`, capped at ×5 | Global full-progress formula |
+| Well Trained | `min(5, 1 + previousPlays × 0.2p)` | Global full-progress formula |
+| Target Practice | Targeted Lower hand: factor `1 + 8p` (×1→×9) | Targeted hand gets ×9 globally |
+| Hot Streak | Factor `1 + successfulCharges × p` on the current sequence hand | Removes the die requirement; full coefficient |
+| Money to Burn | `1 + 4p × min(shopSpend/100, 1)`, capped at ×5 | Global full-progress formula |
+| Lowball | `1 + 2 × (printedFaceTier − 1) × p`, up to ×5 | Global full-progress printed-face factor |
+| Straight Shooter | Small/Large Straight: factor `1 + 4p` (×1→×5) | Those Straights get ×5 globally |
+| Double Down | Pair/Two Pair: factor `1 + 4p` (×1→×5) | Pair and Two Pair get ×5 globally |
 
 Charge must be armed explicitly. It resets after use and at round start. Post-hand gameplay rerolls can immediately begin charging the next hand.
 
@@ -83,7 +85,7 @@ Target Practice chooses from the three least-played Lower hands using seeded RNG
 
 ## Telemetry and validation
 
-Run Info exports schema 11 / `free-upper-jumping-bean-v1`, including source-aware hand scores, Jumping Bean free-play records, XMult factors, Flame progression and Stoke records, Charge, Trainer, Hot Streak, shop spending, Magnetic anchors, Bump rolls, scraps, and clear-payout components including the every-third-round Flame Bonus.
+Run Info exports schema 12 / `multiplicative-flames-v2`, including source-aware hand scores, ordered XMult factor records, Flame Reward/shop Stoke sources, Flame progression, Charge, Trainer, Hot Streak, shop spending, and clear-payout components.
 
 Validation commands:
 

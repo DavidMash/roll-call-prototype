@@ -108,6 +108,7 @@ button { font: inherit; }
 .manage-face-tile { min-height: 132px; cursor: pointer; background: var(--mantine-color-dark-7); transition: border-color 100ms, background 100ms; }
 .manage-face-tile.focused { border-color: var(--mantine-color-teal-5); background: rgba(18,184,134,.08); }
 .manage-face-tile.exposed-face { box-shadow: inset 3px 0 var(--mantine-color-teal-6); }
+.shop-flame-context { background: rgba(230,119,0,.07); border-color: rgba(255,146,43,.24); }
 .shop-action-dock { position: sticky; bottom: 6px; z-index: 10; display: flex; justify-content: space-between; align-items: center; min-height: 42px; padding: 5px 7px; border-radius: var(--mantine-radius-md); background: rgba(20,26,30,.97); box-shadow: 0 -8px 24px rgba(0,0,0,.24); }
 .flame-reward-screen { min-width: 0; }
 .flame-payout { background: rgba(230,119,0,.07); border: 1px solid rgba(255,146,43,.16); }
@@ -122,6 +123,7 @@ button { font: inherit; }
 .ember-details { min-height: 76px; margin-top: 6px; padding: 6px; border-radius: 6px; background: rgba(230,119,0,.07); }
 .ember-details.empty { display: grid; place-items: center; }
 .stoke-effects { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.stoke-preview { grid-column: span 2; border: 1px solid rgba(18,184,134,.28); background: rgba(18,184,134,.08); }
 .stoke-input { width: 92px; }
 
 .modal-stat, .help-item { padding: 8px 10px; border-radius: 7px; background: var(--mantine-color-dark-7); }
@@ -151,6 +153,7 @@ button { font: inherit; }
   .scrap-grid { grid-template-columns: 1fr; }
   .flame-dice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stoke-effects { grid-template-columns: 1fr; }
+  .stoke-preview { grid-column: auto; }
   .scorecard-row-copy { gap: 5px; }
   .scorecard-base { margin-left: auto; }
   .well-trained-preview { display: block; max-width: 105px; overflow: hidden; text-overflow: ellipsis; }
