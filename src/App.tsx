@@ -30,7 +30,7 @@ export default function App() {
   function submit(action: Action) {
     if (busy) return;
     game.submit(action);
-    if (action.type !== 'BUY') setSelectedOffer(null);
+    if (action.type !== 'BUY' && action.type !== 'SCRAP_ENHANCEMENT') setSelectedOffer(null);
     setSelectedFlameOffer(null);
     setSelection(emptySelection());
   }

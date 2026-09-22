@@ -355,7 +355,8 @@ describe('round boundaries and losing', () => {
       const result = play(game, 'fiveKind', [0, 1, 2, 3, 4]);
       expect(result.error).toBeUndefined();
       const held = earned;
-      const expectedPayout = 5 + 3 + Math.min(5, Math.floor(held / 5));
+      const flameBonus = round % 3 === 0 ? 5 : 0;
+      const expectedPayout = 5 + 3 + Math.min(5, Math.floor(held / 5)) + flameBonus;
       earned += expectedPayout;
       expect(result.state.phase).toBe(round % 3 === 0 ? 'flameReward' : 'shop');
       expect(result.state.gold).toBe(earned);
@@ -365,8 +366,9 @@ describe('round boundaries and losing', () => {
         round, target: targetForRound(round), firstCrossedScore: 225,
         finalScore: 225, clearMargin: 225 - targetForRound(round), cleared: true,
       });
-      expect(result.state.lastRoundPayout).toEqual({ base: 5, unusedRerolls: 3,
-        interest: Math.min(5, Math.floor(held / 5)), heldGoldSnapshot: held, total: expectedPayout });
+      expect(result.state.lastRoundPayout).toEqual({ baseGold: 5, unusedRerollGold: 3,
+        interestGold: Math.min(5, Math.floor(held / 5)), flameBonusGold: flameBonus,
+        heldGoldSnapshot: held, totalRoundRewardGold: expectedPayout });
       const rewards = result.events.filter(event => event.type === 'GOLD_ADDED');
       const rewardIndex = result.events.indexOf(rewards[0]);
       expect(result.events.findIndex(event => event.type === 'ROUND_CLEARED')).toBeLessThan(rewardIndex);
@@ -391,7 +393,7 @@ describe('round boundaries and losing', () => {
     const data = exportRun(game);
     expect(data.roundReached).toBe(5);
     expect(data.rounds.map(round => round.target)).toEqual([50, 70, 90, 125, 165]);
-    expect(data.goldEarned).toBe(41);
+    expect(data.goldEarned).toBe(46);
     expect(data.goldSpent).toBe(0);
   });
   it('keeps Golden income separate from the updated baseline reward', () => {

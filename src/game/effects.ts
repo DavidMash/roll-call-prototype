@@ -449,7 +449,7 @@ export class Resolver {
     this.state.flameReward = { offers: [], offerRerolls: 0, acquired: false };
     this.rollBatch(this.state.dice.map(die => die.id), 'Flame Reward roll', 'flameReward');
     this.freshFlameOffers();
-    this.emit({ type: 'FLAME_REWARD_OPENED', message: 'Flame Reward — optionally acquire one Flame and invest in active embers' });
+    this.emit({ type: 'FLAME_REWARD_OPENED', message: 'Flame Reward — choose a new Flame or stoke an existing Ember' });
   }
   evaluate(): void {
     const current = this.state.stats.rounds.at(-1)!;
@@ -459,13 +459,15 @@ export class Resolver {
       current.manualRerollsRemainingAtClear = this.state.manualRerollsRemaining;
       this.emit({ type: 'ROUND_CLEARED', message: `Round ${this.state.round} cleared with ${this.state.score} / ${this.state.target}` });
       const heldGoldSnapshot = this.state.gold;
-      const payout = { base: roundReward(), unusedRerolls: this.state.manualRerollsRemaining,
-        interest: Math.min(5, Math.floor(heldGoldSnapshot / 5)), heldGoldSnapshot, total: 0 };
-      payout.total = payout.base + payout.unusedRerolls + payout.interest;
+      const payout = { baseGold: roundReward(), unusedRerollGold: this.state.manualRerollsRemaining,
+        interestGold: Math.min(5, Math.floor(heldGoldSnapshot / 5)),
+        flameBonusGold: this.state.round % 3 === 0 ? 5 : 0, heldGoldSnapshot, totalRoundRewardGold: 0 };
+      payout.totalRoundRewardGold = payout.baseGold + payout.unusedRerollGold + payout.interestGold + payout.flameBonusGold;
       current.payout = payout; this.state.lastRoundPayout = payout;
-      this.addGold(payout.base, `Round clear base: +${payout.base} gold`, 'roundBase');
-      if (payout.unusedRerolls) this.addGold(payout.unusedRerolls, `Unused rerolls: +${payout.unusedRerolls} gold`, 'unusedRerolls');
-      if (payout.interest) this.addGold(payout.interest, `Interest on ${heldGoldSnapshot} held Gold: +${payout.interest}`, 'interest');
+      this.addGold(payout.baseGold, `Round clear base: +${payout.baseGold} gold`, 'roundBase');
+      if (payout.unusedRerollGold) this.addGold(payout.unusedRerollGold, `Unused rerolls: +${payout.unusedRerollGold} gold`, 'unusedRerolls');
+      if (payout.interestGold) this.addGold(payout.interestGold, `Interest on ${heldGoldSnapshot} held Gold: +${payout.interestGold}`, 'interest');
+      if (payout.flameBonusGold) this.addGold(payout.flameBonusGold, `Flame Bonus: +${payout.flameBonusGold} gold`, 'flameBonus');
       if (this.state.round % 3 === 0) this.openFlameReward(); else this.openShop();
     } else if (!hasPlayableHand(this.state.dice, this.state.consumed)) {
       if (this.state.manualRerollsRemaining > 0) { this.emit({ type: 'DEAD_BOARD', message: `No playable hands — ${this.state.manualRerollsRemaining} rerolls remain` }); return; }

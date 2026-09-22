@@ -8,18 +8,23 @@ interface Props {
   disabled: boolean;
   eligibleIds?: number[];
   restrictToEligible?: boolean;
+  ineligibleReasons?: Record<number, string>;
+  actionableIneligibleIds?: number[];
+  showCapacity?: boolean;
   onClick: (dieId: number) => void;
   onDropOffer?: (offerId: number, dieId: number) => void;
 }
-export function DiceRow({ dice, selected = [], event, disabled, eligibleIds, restrictToEligible = false, onClick, onDropOffer }: Props) {
+export function DiceRow({ dice, selected = [], event, disabled, eligibleIds, restrictToEligible = false,
+  ineligibleReasons = {}, actionableIneligibleIds = [], showCapacity = false, onClick, onDropOffer }: Props) {
   return <div className="dice-row">{dice.map(die => {
     const involved = event?.dieIds?.includes(die.id) ?? false;
     return <Die key={`${die.id}:${involved && event?.enhancement ? event.id : 'idle'}`} die={die}
       selected={selected.includes(die.id)} highlighted={involved && event?.type !== 'DIE_ROLLED'}
       rolling={involved && (event?.type === 'DICE_REROLL_STARTED' || event?.type === 'DIE_ROLLED')}
       ability={involved ? event?.enhancement : undefined} flameAbility={involved ? event?.flame : undefined}
-      disabled={disabled || (restrictToEligible && !eligibleIds?.includes(die.id))}
-      eligible={eligibleIds?.includes(die.id)} onClick={() => onClick(die.id)}
+      disabled={disabled} eligible={eligibleIds?.includes(die.id)}
+      ineligibleReason={restrictToEligible && !eligibleIds?.includes(die.id) ? ineligibleReasons[die.id] ?? 'This face is not eligible.' : undefined}
+      allowIneligibleClick={actionableIneligibleIds.includes(die.id)} showCapacity={showCapacity} onClick={() => onClick(die.id)}
       onDropOffer={onDropOffer ? offerId => onDropOffer(offerId, die.id) : undefined} />;
   })}</div>;
 }

@@ -74,24 +74,26 @@ describe('investment, uniqueness, and reward lifecycle', () => {
     state.flameReward = { offers: [{ id: 1, flame: 'ultimate' }, { id: 2, flame: 'charge' }, { id: 3, flame: 'lowball' }], offerRerolls: 0, acquired: false };
     return state;
   }
-  it('acquires a neutral ember, permits arbitrary donations, and converts at 100', () => {
+  it('acquires a neutral ember, permits arbitrary stoking, and converts at 100', () => {
     let state = dispatch(reward(), { type: 'CHOOSE_FLAME', offerId: 1, dieId: 0 }).state;
     expect(state.dice[0].flame).toEqual({ id: 'ultimate', investedGold: 0 });
-    state = dispatch(state, { type: 'DONATE_FLAME', dieId: 0, amount: 23 }).state;
+    state = dispatch(state, { type: 'STOKE_FLAME', dieId: 0, amount: 23 }).state;
     expect(state.dice[0].flame?.investedGold).toBe(23);
-    state = dispatch(state, { type: 'DONATE_FLAME', dieId: 0, amount: 77 }).state;
+    expect(state.stats.flameStokes).toEqual([{ round: 1, dieId: 0, flame: 'ultimate', amount: 23, total: 23 }]);
+    state = dispatch(state, { type: 'STOKE_FLAME', dieId: 0, amount: 77 }).state;
     expect(state.dice[0].flame).toBeNull(); expect(state.bonfires).toEqual(['ultimate']); expect(state.gold).toBe(100);
+    expect(state.stats.flameStokes.at(-1)).toMatchObject({ amount: 77, total: 100 });
     expect(validateAction(state, { type: 'CHOOSE_FLAME', offerId: 2, dieId: 0 })).toContain('Only one');
   });
   it('rejects fractions, overspend, over-cap, duplicates, and investment outside rewards', () => {
     const state = reward(); flame(state, 0, 'charge', 95); state.gold = 4;
-    expect(validateAction(state, { type: 'DONATE_FLAME', dieId: 0, amount: 1.5 })).toContain('whole');
-    expect(validateAction(state, { type: 'DONATE_FLAME', dieId: 0, amount: 5 })).toContain('Not enough');
+    expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 0, amount: 1.5 })).toContain('whole');
+    expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 0, amount: 5 })).toContain('Not enough');
     state.gold = 100;
-    expect(validateAction(state, { type: 'DONATE_FLAME', dieId: 0, amount: 6 })).toContain('more than 100');
+    expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 0, amount: 6 })).toContain('more than 100');
     state.flameReward!.offers[0].flame = 'charge';
     expect(validateAction(state, { type: 'CHOOSE_FLAME', offerId: 1, dieId: 1 })).toContain('already owned');
-    state.phase = 'round'; expect(validateAction(state, { type: 'DONATE_FLAME', dieId: 0, amount: 1 })).toContain('requires');
+    state.phase = 'round'; expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 0, amount: 1 })).toContain('requires');
   });
   it('can skip acquisition and preserve reward faces into shop', () => {
     const state = reward(); const values = state.dice.map(die => die.value);
@@ -103,7 +105,7 @@ describe('investment, uniqueness, and reward lifecycle', () => {
     deprecated.phase = 'round'; deprecated.flameReward = null;
     expect(play(deprecated).state.phase).not.toBe('error');
     const legacy = reward(); legacy.dice[0].flame = 'ultimate' as unknown as GameState['dice'][number]['flame'];
-    const invested = dispatch(legacy, { type: 'DONATE_FLAME', dieId: 0, amount: 7 }).state;
+    const invested = dispatch(legacy, { type: 'STOKE_FLAME', dieId: 0, amount: 7 }).state;
     expect(invested.dice[0].flame).toEqual({ id: 'ultimate', investedGold: 7 });
   });
 });

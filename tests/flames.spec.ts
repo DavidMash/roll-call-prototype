@@ -85,7 +85,12 @@ test('Flame Reward rerolls offers, preserves faces, reveals XMult, and previews 
   const seed = flameSeed();
   let game = await reachReward(page, seed);
   await expect(page.getByText('FLAME REWARD', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('round-payout-breakdown')).toContainText('5 Flame Bonus');
+  await expect(page.getByText('Active Embers', { exact: true })).toHaveCount(0);
   await expect(page.locator('[data-testid^="flame-offer-"]')).toHaveCount(3);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await expect(page.getByTestId('flame-die-4')).toBeVisible();
   const rewardFaces = game.dice.map(die => die.value);
 
   await page.getByRole('button', { name: '↻ Reroll · 5 Gold', exact: true }).click();
@@ -102,7 +107,7 @@ test('Flame Reward rerolls offers, preserves faces, reveals XMult, and previews 
   await ready(page);
 
   expect(game.phase).toBe('flameReward');
-  await expect(page.getByTestId('active-flame-wellTrained')).toContainText('0 / 100 Gold');
+  await expect(page.getByTestId('active-flame-wellTrained')).toContainText('0 / 100 → BONFIRE');
   await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
   game = dispatch(game, { type: 'CONTINUE_FLAME_REWARD' }).state;
   await ready(page);
@@ -138,12 +143,18 @@ test('unified Flame screen supports arbitrary investment and optional acquisitio
   game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId: 0 }).state;
   await ready(page);
   const active = page.getByTestId(`active-flame-${offer.flame}`);
-  await expect(active).toContainText('0 / 100 Gold');
-  await active.getByLabel(`Donation for ${FLAMES[offer.flame].name}`).fill('7');
-  await active.getByRole('button', { name: 'Donate', exact: true }).click();
-  game = dispatch(game, { type: 'DONATE_FLAME', dieId: 0, amount: 7 }).state;
+  await expect(active).toContainText('0 / 100 → BONFIRE');
+  await expect(page.getByText(/Donate/i)).toHaveCount(0);
+  await page.getByTestId('flame-die-0').getByRole('button', { name: /^Die 1,/ }).click();
+  const stoke = page.getByRole('dialog', { name: new RegExp(`Stoke ${FLAMES[offer.flame].name}`) });
+  await expect(stoke).toContainText('Current');
+  await expect(stoke).toContainText('At Bonfire');
+  await stoke.getByLabel(`Stoke amount for ${FLAMES[offer.flame].name}`).fill('7');
+  await stoke.getByRole('button', { name: 'Stoke 7 Gold', exact: true }).click();
+  game = dispatch(game, { type: 'STOKE_FLAME', dieId: 0, amount: 7 }).state;
   await ready(page);
-  await expect(page.getByTestId(`active-flame-${offer.flame}`)).toContainText('7 / 100 Gold');
+  await expect(page.getByTestId(`active-flame-${offer.flame}`)).toContainText('7 / 100 → BONFIRE');
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
   game = dispatch(game, { type: 'CONTINUE_FLAME_REWARD' }).state;
   await ready(page);

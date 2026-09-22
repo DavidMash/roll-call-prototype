@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 import { newRun, dispatch } from '../src/game/engine';
 import { handOptions, handStats, HANDS, HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
-import { ENHANCEMENTS } from '../src/game/enhancements';
+import { enhancementCost, ENHANCEMENTS } from '../src/game/enhancements';
 import { CONFIG } from '../src/game/config';
 import type { Enhancement, GameState } from '../src/game/types';
 
@@ -20,7 +20,7 @@ async function matchBoard(page: Page, game: GameState) {
     await expect(page.getByTestId(`stat-${stat}`).getByText(String(value), { exact: true })).toBeVisible();
   }
   if (game.phase === 'shop' || game.phase === 'flameReward') {
-    if (game.phase === 'shop') await expect(page.getByText(new RegExp(`Round ${game.round} cleared.*\\+${game.lastRoundPayout?.total ?? 5} Gold`))).toBeVisible();
+    if (game.phase === 'shop') await expect(page.getByText(new RegExp(`\\+${game.lastRoundPayout?.totalRoundRewardGold ?? 5} Gold`))).toBeVisible();
     await expect(page.getByTestId('stat-rerolls')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^Reroll Selected/ })).toHaveCount(0);
   } else await expect(page.getByTestId('stat-rerolls').getByText(String(game.manualRerollsRemaining), { exact: true })).toBeVisible();
@@ -98,6 +98,30 @@ function findStickyStackSeed() {
     if (game.shop!.offers.some(offer => offer.enhancement === 'sticky')) return seed;
   }
   throw new Error('No shop seed found for a repeated Sticky purchase');
+}
+function findCapacitySeed() {
+  for (let i = 0; i < 2000; i++) {
+    const seed = `capacity-browser-${i}`;
+    let game = newRun(seed).state;
+    for (let round = 1; round <= 2; round++) {
+      for (let step = 0; step < 12 && game.phase === 'round'; step++) {
+        const choice = bestHand(game);
+        game = dispatch(game, choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
+          : { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+      }
+      if (game.phase !== 'shop') break;
+      if (round === 1) game = dispatch(game, { type: 'NEXT_ROUND' }).state;
+    }
+    if (game.phase !== 'shop' || game.round !== 2) continue;
+    const startingGold = game.gold;
+    const initial = [...game.shop!.offers];
+    for (const offer of initial) game = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 0 }).state;
+    if (game.shop!.offers.some(offer => !offer.purchased)) continue;
+    game = dispatch(game, { type: 'REROLL_OFFERS' }).state;
+    const next = game.shop!.offers.find(item => !initial.some(old => old.enhancement === item.enhancement));
+    if (next && game.gold >= enhancementCost(next.enhancement)) return { seed, startingGold };
+  }
+  throw new Error('No deterministic capacity workflow seed found');
 }
 function nearStraightRun() {
   for (let i = 0; i < 5000; i++) {
@@ -356,11 +380,67 @@ test('stackable enhancement purchases show a single readable count badge', async
   expect(game.dice[0].faces[game.dice[0].value - 1].enhancements.sticky).toBe(2);
   expect(game.gold).toBe(startingGold - 5); // two 1-Gold Sticky stacks and one 3-Gold offer reroll
   const face = game.dice[0].value;
-  await page.getByRole('button', { name: `Scrap Sticky from D1 face ${face}`, exact: true }).click();
+  await expect(page.getByText('Manage faces', { exact: true })).toHaveCount(0);
+  await physical.click();
+  const manager = page.getByRole('dialog', { name: 'D1 — Manage Faces' });
+  await expect(manager).toBeVisible();
+  await expect(manager.locator('[data-testid^="manage-face-"]')).toHaveCount(6);
+  await expect(manager.getByTestId(`manage-face-${face}`)).toContainText('1 / 3 TYPES');
+  await manager.getByRole('button', { name: `Scrap Sticky from D1 face ${face}`, exact: true }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Scrap enhancement stacks?' });
+  await expect(confirmation).toContainText('2 stacks');
+  await confirmation.getByRole('button', { name: 'Scrap 2 stacks', exact: true }).click();
   game = dispatch(game, { type: 'SCRAP_ENHANCEMENT', dieId: 0, face, enhancement: 'sticky' }).state;
+  await manager.getByRole('button', { name: 'Close', exact: true }).click();
   await matchBoard(page, game);
   await expect(physical).not.toContainText('Sticky');
   expect(game.gold).toBe(startingGold - 5);
+});
+
+test('a fourth enhancement type opens Manage Die and preserves the offer through scrap and apply', async ({ page }) => {
+  const fixture = findCapacitySeed();
+  let game = await reachShop(page, fixture.seed);
+  await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+  game = dispatch(game, { type: 'NEXT_ROUND' }).state;
+  await matchBoard(page, game);
+  while (game.phase === 'round') game = await playBest(page, game);
+  expect(game.round).toBe(2);
+  const initial = [...game.shop!.offers];
+  for (const offer of initial) {
+    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button').click();
+    await page.getByRole('button', { name: /^Die 1,/ }).click();
+    game = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 0 }).state;
+    await matchBoard(page, game);
+  }
+  const face = game.dice[0].value;
+  await expect(page.getByRole('button', { name: /^Die 1,/ })).toContainText('3 / 3');
+  await page.getByRole('button', { name: 'Reroll Enhancements · 3 gold', exact: true }).click();
+  game = dispatch(game, { type: 'REROLL_OFFERS' }).state;
+  await matchBoard(page, game);
+  const pending = game.shop!.offers.find(item => !initial.some(old => old.enhancement === item.enhancement))!;
+  await page.getByTestId(`offer-${pending.enhancement}`).getByRole('button').click();
+  const target = page.getByRole('button', { name: /^Die 1,/ });
+  await expect(target).toHaveAttribute('aria-disabled', 'false');
+  await expect(target).toHaveAttribute('title', /already has 3 enhancement types/);
+  await target.click();
+  const manager = page.getByRole('dialog', { name: 'D1 — Manage Faces' });
+  await expect(manager).toContainText(`Scrap one to make room for ${ENHANCEMENTS[pending.enhancement].name}`);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await expect(manager.getByTestId('manage-face-6')).toBeVisible();
+  const removed = initial[0].enhancement;
+  await manager.getByRole('button', { name: `Scrap ${ENHANCEMENTS[removed].name} from D1 face ${face}`, exact: true }).click();
+  game = dispatch(game, { type: 'SCRAP_ENHANCEMENT', dieId: 0, face, enhancement: removed }).state;
+  const apply = manager.getByRole('button', { name: `Apply ${ENHANCEMENTS[pending.enhancement].name}`, exact: true });
+  await expect(apply).toBeEnabled();
+  await expect(page.getByText(`${ENHANCEMENTS[pending.enhancement].name} selected`, { exact: true })).toBeVisible();
+  await apply.click();
+  game = dispatch(game, { type: 'BUY', offerId: pending.id, dieId: 0 }).state;
+  await matchBoard(page, game);
+  expect(game.dice[0].faces[face - 1].enhancements[removed]).toBeUndefined();
+  expect(game.dice[0].faces[face - 1].enhancements[pending.enhancement]).toBe(1);
+  const spent = initial.reduce((total, item) => total + enhancementCost(item.enhancement), 0) + 3 + enhancementCost(pending.enhancement);
+  expect(game.gold).toBe(fixture.startingGold - spent);
 });
 
 test('ambiguous physical dice can be changed and filtering never ends the run', async ({ page }) => {

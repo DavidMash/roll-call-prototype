@@ -20,11 +20,12 @@ Every clear pays:
 
 - 5 base Gold;
 - 1 Gold per unused manual reroll (0–3);
-- `min(5, floor(heldGold / 5))` interest, using held Gold after scoring effects.
+- `min(5, floor(heldGold / 5))` interest, using held Gold after scoring effects;
+- an additional +5 Flame Bonus on rounds divisible by three.
 
-The clear payout is at most 13 before enhancement income. Shop dice rerolls cost 2/4/8/16… and enhancement rerolls cost 3/6/12/24…. Hand Training costs 4 Gold. Lifetime normal-shop spending includes enhancements, training, and both shop reroll types.
+Interest is snapshotted before the Flame Bonus is awarded. The ordinary clear payout is at most 13 and an every-third-round payout is at most 18 before enhancement income. Shop dice rerolls cost 2/4/8/16… and enhancement rerolls cost 3/6/12/24…. Hand Training costs 4 Gold. Lifetime normal-shop spending includes enhancements, training, and both shop reroll types.
 
-Enhancements attach to an exposed physical face. A face holds at most three distinct enhancement types; more stacks of an existing type use no additional type slot. Sticky, Hitchhiker, Golden, and Jackpot cap at three stacks. Any enhancement type can be scrapped from any face during a shop, removing all its stacks with no refund.
+Enhancements attach to an exposed physical face. A face holds at most three distinct enhancement types; more stacks of an existing type use no additional type slot. Sticky, Hitchhiker, Golden, and Jackpot cap at three stacks. With no offer selected, selecting an exposed die opens Manage Die with all six faces and their capacities. Any enhancement type can be scrapped there, removing all its stacks with no refund. A fourth-type attempt opens the same modal focused on the full face and preserves the pending offer so it can be applied after room is made.
 
 The enhancement roster is Bonus, Jumping Bean, Golden, Workout, Missing Link, Mirror, Magnetic, Sticky, Slippy, Hitchhiker, Weighted, Jackpot, and Bump. Sustainable and Multiplier have been removed. Ordinary Mult comes exclusively from each hand’s trained Base Mult. Bump costs 2 Gold.
 
@@ -48,13 +49,13 @@ A Magnetic anchor must already be showing Magnetic before a roll batch and must 
 
 Every third clear opens one unified Flame Reward screen before the shop. The rolled faces carry into the shop without another free roll. The player may:
 
-- invest arbitrary whole Gold amounts into active Flames;
+- Stoke arbitrary whole Gold amounts into active Flames by selecting their physical dice;
 - acquire at most one offered Flame;
 - replace an active Flame and lose its investment;
 - reroll offers for 5/10/20/40… Gold;
 - skip acquisition and continue.
 
-New Flames are 0-Gold embers with neutral effects. Investment is limited to 100 and can occur only on Flame Reward screens. At 100 the Flame becomes a Bonfire: it detaches from its die, frees the slot, and applies once globally. Active and Bonfire types are unique and are excluded from future offers.
+New Flames are 0-Gold Embers with neutral effects. Flame acquisition and development share the dice-centered Flame Reward screen: each die shows its Ember, progress, and current effect, and selecting it opens Stoke controls. Investment is limited to 100. At 100 the Flame becomes a Bonfire: it detaches from its die, frees the slot, appears in the global Bonfire strip, and applies once globally. Active and Bonfire types are unique and are excluded from future offers.
 
 The final roster is:
 
@@ -82,7 +83,7 @@ Target Practice chooses from the three least-played Lower hands using seeded RNG
 
 ## Telemetry and validation
 
-Run Info exports schema 10 / `free-upper-jumping-bean-v1`, including source-aware hand scores, Jumping Bean free-play records, XMult factors, Flame progression, Charge, Trainer, Hot Streak, shop spending, Magnetic anchors, Bump rolls, scraps, and clear-payout components.
+Run Info exports schema 11 / `free-upper-jumping-bean-v1`, including source-aware hand scores, Jumping Bean free-play records, XMult factors, Flame progression and Stoke records, Charge, Trainer, Hot Streak, shop spending, Magnetic anchors, Bump rolls, scraps, and clear-payout components including the every-third-round Flame Bonus.
 
 Validation commands:
 

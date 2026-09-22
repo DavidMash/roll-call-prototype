@@ -13,7 +13,7 @@ export type HandId =
 export type Phase = 'round' | 'flameReward' | 'shop' | 'lost' | 'error';
 export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker';
 export type HandPlaySource = 'manual' | 'jumpingBean';
-export type GoldSource = 'golden' | 'jackpot' | 'roundBase' | 'unusedRerolls' | 'interest';
+export type GoldSource = 'golden' | 'jackpot' | 'roundBase' | 'unusedRerolls' | 'interest' | 'flameBonus';
 export type GoldSpendSource = 'enhancement' | 'shopDiceReroll' | 'enhancementReroll' | 'handTraining' | 'flameReroll' | 'flameInvestment';
 export type HandLevels = Record<HandId, number>;
 
@@ -80,7 +80,14 @@ export interface TrainingOffer { hand: HandId; purchased: boolean }
 export interface Shop { offers: Offer[]; trainingOffers: TrainingOffer[]; diceRerolls: number; offerRerolls: number }
 export interface FlameOffer { id: number; flame: Flame }
 export interface FlameReward { offers: FlameOffer[]; offerRerolls: number; acquired: boolean }
-export interface RoundPayout { base: number; unusedRerolls: number; interest: number; heldGoldSnapshot: number; total: number }
+export interface RoundPayout {
+  baseGold: number;
+  unusedRerollGold: number;
+  interestGold: number;
+  flameBonusGold: number;
+  heldGoldSnapshot: number;
+  totalRoundRewardGold: number;
+}
 export interface Board {
   phase: Phase;
   round: number;
@@ -135,7 +142,7 @@ export interface Purchase { round: number; enhancement: Enhancement; dieId: numb
 export interface ScrapRecord { round: number; enhancement: Enhancement; dieId: number; face: Rank; stacksRemoved: number }
 export interface TrainingPurchase { round: number; hand: HandId; fromLevel: number; toLevel: number; cost: number }
 export interface FlameAcquisition { round: number; dieId: number; flame: Flame; replaced: Flame | null }
-export interface FlameDonation { round: number; dieId: number; flame: Flame; amount: number; total: number }
+export interface FlameStoke { round: number; dieId: number; flame: Flame; amount: number; total: number }
 export interface ProbabilityProcStats { checks: number; successes: number; failures: number; stacksAtCheck: number[] }
 export interface JumpingBeanPlayRecord {
   round: number;
@@ -168,7 +175,7 @@ export interface RunStats {
   trainingGoldSpent: number;
   flameAcquisitions: FlameAcquisition[];
   flameSkips: number[];
-  flameDonations: FlameDonation[];
+  flameStokes: FlameStoke[];
   totalFlameInvestment: number;
   bonfiresCreated: { round: number; flame: Flame }[];
   flameOfferRerolls: number;
@@ -269,7 +276,7 @@ export type Action =
   | { type: 'SCRAP_ENHANCEMENT'; dieId: number; face: Rank; enhancement: Enhancement }
   | { type: 'TRAIN_HAND'; hand: HandId }
   | { type: 'CHOOSE_FLAME'; offerId: number; dieId: number }
-  | { type: 'DONATE_FLAME'; dieId: number; amount: number }
+  | { type: 'STOKE_FLAME'; dieId: number; amount: number }
   | { type: 'REROLL_FLAMES' }
   | { type: 'CONTINUE_FLAME_REWARD' }
   | { type: 'REROLL_DICE' }

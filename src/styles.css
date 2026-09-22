@@ -74,16 +74,21 @@ button { font: inherit; }
 .flame-badge { position: absolute; top: 3px; right: 3px; max-width: 64px; height: 15px; padding-inline: 3px; font-size: .48rem; text-transform: none; }
 .die-number { font-size: 2.45rem; line-height: .95; font-weight: 800; }
 .die-pips { line-height: 1; margin-top: 2px; }
+.die-capacity { position: absolute; right: 5px; bottom: 3px; font-size: .52rem; font-weight: 750; }
 .die-badges { max-height: 34px; display: flex; justify-content: center; flex-wrap: wrap; gap: 2px; margin-top: 4px; overflow: hidden; }
 .die-badges .mantine-Badge-root { height: 15px; padding-inline: 4px; font-size: .5rem; text-transform: none; }
 .die.selected { background: rgba(18, 184, 134, .16); border-color: var(--mantine-color-teal-5); box-shadow: inset 0 0 0 1px var(--mantine-color-teal-7); }
 .die.scoring { background: rgba(250, 176, 5, .12); border-color: var(--mantine-color-yellow-6); }
 .die.eligible { border-color: var(--mantine-color-teal-4); box-shadow: 0 0 0 1px var(--mantine-color-teal-6); }
+.die.ineligible { opacity: .42; filter: saturate(.55); cursor: not-allowed; }
+.die.ineligible:not([aria-disabled="true"]) { cursor: pointer; }
 .die.pulse { animation: pulse 300ms ease-in-out; }
 .die.rolling { animation: shake 180ms ease-in-out 2; }
 .die:focus-visible, .offer:focus-visible, .scorecard-row:focus-visible { outline: 2px solid var(--mantine-color-teal-4); outline-offset: -2px; }
 
 .shop-summary { min-height: 27px; padding: 0 5px; }
+.round-payout-summary { min-width: 0; font-variant-numeric: tabular-nums; }
+.round-payout-summary .mantine-Text-root { line-height: 1.25; }
 .shop-section { min-width: 0; }
 .section-heading { min-height: 27px; margin-bottom: 6px; }
 .shop-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -98,14 +103,26 @@ button { font: inherit; }
 .offer.purchased { opacity: .5; }
 .offer-icon { width: 21px; height: 21px; display: inline-grid; place-items: center; border-radius: 6px; color: var(--mantine-color-teal-3); background: var(--mantine-color-teal-9); font-weight: 850; }
 .offer-description { min-height: 29px; line-height: 1.2; }
-.exposed-section .dice-row { margin: 0 auto; }
+.exposed-section .dice-row { grid-template-columns: repeat(5, minmax(86px, 122px)); margin: 0 auto; }
+.exposed-section .die { min-height: 96px; max-height: 122px; }
+.manage-face-tile { min-height: 132px; cursor: pointer; background: var(--mantine-color-dark-7); transition: border-color 100ms, background 100ms; }
+.manage-face-tile.focused { border-color: var(--mantine-color-teal-5); background: rgba(18,184,134,.08); }
+.manage-face-tile.exposed-face { box-shadow: inset 3px 0 var(--mantine-color-teal-6); }
 .shop-action-dock { position: sticky; bottom: 6px; z-index: 10; display: flex; justify-content: space-between; align-items: center; min-height: 42px; padding: 5px 7px; border-radius: var(--mantine-radius-md); background: rgba(20,26,30,.97); box-shadow: 0 -8px 24px rgba(0,0,0,.24); }
 .flame-reward-screen { min-width: 0; }
+.flame-payout { background: rgba(230,119,0,.07); border: 1px solid rgba(255,146,43,.16); }
 .flame-offer { min-height: 128px; background: var(--mantine-color-dark-8); border: 1px solid rgba(255, 146, 43, .16); }
 .flame-offer.selected { border-color: var(--mantine-color-orange-5); background: rgba(230, 119, 0, .11); }
 .flame-card-icon { width: 25px; height: 25px; display: inline-grid; place-items: center; border-radius: 7px; background: rgba(230,119,0,.16); }
 .flame-description { min-height: 45px; line-height: 1.25; }
-.flame-dice-section .dice-row { margin: 0 auto; }
+.flame-dice-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.flame-die-card { min-width: 0; background: var(--mantine-color-dark-8); border: 1px solid rgba(255,146,43,.12); }
+.flame-die-card.offer-target { border-color: rgba(18,184,134,.25); }
+.flame-die-card .die-wrap { max-width: 112px; margin: 0 auto; }
+.ember-details { min-height: 76px; margin-top: 6px; padding: 6px; border-radius: 6px; background: rgba(230,119,0,.07); }
+.ember-details.empty { display: grid; place-items: center; }
+.stoke-effects { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.stoke-input { width: 92px; }
 
 .modal-stat, .help-item { padding: 8px 10px; border-radius: 7px; background: var(--mantine-color-dark-7); }
 .modal-stat { min-width: 0; }
@@ -132,10 +149,13 @@ button { font: inherit; }
   .scorecard-grid { grid-template-columns: 1fr; }
   .shop-grid { grid-template-columns: 1fr; }
   .scrap-grid { grid-template-columns: 1fr; }
+  .flame-dice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stoke-effects { grid-template-columns: 1fr; }
   .scorecard-row-copy { gap: 5px; }
   .scorecard-base { margin-left: auto; }
   .well-trained-preview { display: block; max-width: 105px; overflow: hidden; text-overflow: ellipsis; }
   .dice-row { width: 100%; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .exposed-section .dice-row { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .die { min-height: 68px; max-height: 86px; padding: 3px 2px; }
   .die-number { font-size: 2rem; }
   .ability-label { height: 17px; font-size: .46rem; }
@@ -156,5 +176,9 @@ button { font: inherit; }
   .gameplay-actions .mantine-Button-root:first-child { flex: 1; }
   .selection-preview { min-height: 0; }
   .section-heading { align-items: flex-start; }
+  .flame-reward-header { align-items: flex-start; }
+  .flame-dice-grid { grid-template-columns: 1fr 1fr; gap: 5px; }
+  .stoke-controls .mantine-Button-root { flex: 1 1 54px; }
+  .stoke-input { flex: 1 1 100%; width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

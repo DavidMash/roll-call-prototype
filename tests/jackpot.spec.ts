@@ -63,6 +63,6 @@ test('scoring Jackpot pays on a played-hand clear before the no-reroll transitio
   await ready(page);
   if (fixture.result.state.phase === 'flameReward') await expect(page.getByText('FLAME REWARD', { exact: true })).toBeVisible();
   else await expect(page.getByText(new RegExp(`^Round ${game.round} cleared`))).toBeVisible();
-  expect(fixture.result.state.gold).toBe(goldBefore + CONFIG.jackpotGold + fixture.result.state.lastRoundPayout!.total);
+  expect(fixture.result.state.gold).toBe(goldBefore + CONFIG.jackpotGold + fixture.result.state.lastRoundPayout!.totalRoundRewardGold);
   expect(fixture.result.events.some(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Post-hand'))).toBe(false);
 });
