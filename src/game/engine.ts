@@ -1,12 +1,37 @@
 import { CONFIG, diceRerollCost, flameRerollCost, offerRerollCost } from './config';
 import { activeFace, createDice } from './dice';
 import { Resolver } from './effects';
-import { attachmentError, enhancementCost, ENHANCEMENTS, stacks } from './enhancements';
-import { activeFlameId, activeFlameInvestment, FLAMES, hasOwnedFlame } from './flames';
+import { attachmentError, enhancementCost, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, stacks } from './enhancements';
+import { activeFlameId, activeFlameInvestment, FLAMES, hasOwnedFlame, isFlame } from './flames';
 import { HANDS, initialHandLevels, initialHandPlayCounts, isValidSelection } from './hands';
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
 import type { Action, Board, GameState, RandomSource, Resolution } from './types';
+
+function normalizedState(state: GameState): GameState {
+  const next = structuredClone(state);
+  for (const die of next.dice) {
+    for (const face of die.faces) {
+      delete (face.enhancements as Record<string, number | undefined>).multiplier;
+      for (const id of ENHANCEMENT_IDS) {
+        const value = face.enhancements[id];
+        if (value === undefined) continue;
+        const normalized = Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
+        const cap = ENHANCEMENTS[id].maxStacks;
+        const clamped = cap === null ? normalized : Math.min(normalized, cap);
+        if (clamped > 0) face.enhancements[id] = clamped;
+        else delete face.enhancements[id];
+      }
+    }
+    const id = activeFlameId(die.flame);
+    die.flame = id ? { id, investedGold: activeFlameInvestment(die.flame) } : null;
+  }
+  next.bonfires = next.bonfires.filter(isFlame);
+  if (next.shop) next.shop.offers = next.shop.offers.filter(offer => isEnhancement(offer.enhancement));
+  if (next.flameReward) next.flameReward.offers = next.flameReward.offers.filter(offer => isFlame(offer.flame));
+  next.stats.jumpingBeanFreePlays ??= [];
+  return next;
+}
 
 export function validateAction(state: Board, action: Action): string | null {
   if (action.type === 'MANUAL_REROLL') {
@@ -102,9 +127,11 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
 }
 
 export function dispatch(state: GameState, action: Action, random?: RandomSource): Resolution {
-  const error = validateAction(state, action);
-  if (error) return { state, events: [], error };
-  return execute(state, resolver => {
+  const normalized = normalizedState(state);
+  const normalizationChangedState = JSON.stringify(normalized) !== JSON.stringify(state);
+  const error = validateAction(normalized, action);
+  if (error) return { state: normalizationChangedState ? normalized : state, events: [], error };
+  return execute(normalized, resolver => {
     const next = resolver.state;
     next.stats.actions.push(structuredClone(action));
     switch (action.type) {

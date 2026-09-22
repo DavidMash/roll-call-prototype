@@ -5,7 +5,7 @@ import { handStats } from './hands';
 import type { Die, Face, HandId, HandScoreAccumulator } from './types';
 
 export interface HandScoreContribution {
-  kind: 'base' | 'bonus' | 'multiplier';
+  kind: 'base' | 'bonus';
   role: 'selected' | 'hitchhiker';
   dieId: number;
   face: Face;
@@ -40,18 +40,14 @@ export function handContributions(dice: Die[], selectedIds: number[], hitchhiker
     ...scorers.filter(item => stacks(item.face, 'bonus')).map(item => ({
       ...item, kind: 'bonus' as const, amount: stacks(item.face, 'bonus') * CONFIG.bonusPips,
     })),
-    ...scorers.filter(item => stacks(item.face, 'multiplier')).map(item => ({
-      ...item, kind: 'multiplier' as const, amount: stacks(item.face, 'multiplier') * CONFIG.multiplierIncrement,
-    })),
   ];
 }
 
 export function applyHandContribution(accumulator: HandScoreAccumulator, contribution: HandScoreContribution): void {
   if (accumulator.finalScore !== null) throw new Error('Cannot change a finalized hand score.');
-  if (contribution.kind === 'multiplier') accumulator.currentMultiplier += contribution.amount;
-  else accumulator.currentPips += contribution.amount;
+  accumulator.currentPips += contribution.amount;
   if (contribution.kind === 'bonus') accumulator.bonusPips += contribution.amount;
-  if (contribution.role === 'hitchhiker' && contribution.kind !== 'multiplier') accumulator.hitchhikerPips += contribution.amount;
+  if (contribution.role === 'hitchhiker') accumulator.hitchhikerPips += contribution.amount;
 }
 
 export function applyXMult(accumulator: HandScoreAccumulator, factor: import('./types').XMultFactor): void {
@@ -77,7 +73,7 @@ export function handScore(dice: Die[], hand: HandId, dieIds: number[], level = 1
 }
 export function standaloneScore(face: Face, xMult = 1) {
   const pips = scoringPips(face);
-  const multiplier = CONFIG.standaloneMultiplier + stacks(face, 'multiplier') * CONFIG.multiplierIncrement;
+  const multiplier = CONFIG.standaloneMultiplier;
   const { rawScore, finalScore } = finalizeScore(pips, multiplier, xMult);
   return { pips, multiplier, rawScore, score: finalScore };
 }

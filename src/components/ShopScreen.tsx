@@ -61,7 +61,7 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
             onClick={() => submit({ type: 'REROLL_DICE' })}>↻ Dice · {diceRerollCost(shop.diceRerolls)} gold</Button>
         </Group>
       </Group>
-      <DiceRow dice={board.dice} event={event} disabled={busy} eligibleIds={eligibleIds}
+      <DiceRow dice={board.dice} event={event} disabled={busy} eligibleIds={eligibleIds} restrictToEligible={!!offer}
         onClick={dieId => { if (offer) submit({ type: 'BUY', offerId: offer.id, dieId }); }}
         onDropOffer={(offerId, dieId) => submit({ type: 'BUY', offerId, dieId })} />
     </Paper>

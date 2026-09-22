@@ -3,16 +3,16 @@ import { enhancementCost, ENHANCEMENTS } from '../game/enhancements';
 import type { Enhancement, Offer } from '../game/types';
 
 const SHORT_DESCRIPTION: Record<Enhancement, string> = {
-  bonus: 'Adds Pips whenever this face scores.', multiplier: 'Raises Mult when this face participates.',
-  jumpingBean: 'Scores and rerolls whenever this face is rolled.', golden: 'Earns Gold whenever this face scores.',
+  bonus: 'Adds Pips whenever this face scores.',
+  jumpingBean: 'Free-plays its matching Upper hand, then rerolls.', golden: 'Earns Gold whenever this face scores; max 3.',
   workout: 'Permanently gains a Pip after scoring.', missingLink: 'Acts as a wild rank for straights.',
   mirror: 'Acts as a wild rank for matching hands.', magnetic: 'Held anchors attract rerolled magnetic dice.',
   sticky: 'Chance to prevent a scored reroll.', slippy: 'Rerolls after a played hand continues.',
   hitchhiker: 'Chance to join as a scorer when held out.', weighted: 'Raises the roll weight of the opposite face.',
-  jackpot: 'Earns Gold when held out of the winning hand.', bump: 'Advances one face on this die’s next roll.',
+  jackpot: 'Earns Gold when this face scores in the winning hand; max 3.', bump: 'Advances one face on this die’s next roll.',
 };
 const ICON: Record<Enhancement, string> = {
-  bonus: '+', multiplier: '×', jumpingBean: '↯', golden: '●', workout: '▲', missingLink: '⛓', mirror: '◇',
+  bonus: '+', jumpingBean: '↯', golden: '●', workout: '▲', missingLink: '⛓', mirror: '◇',
   magnetic: '∩', sticky: '⚓', slippy: '↻', hitchhiker: '♟', weighted: '▼', jackpot: '★', bump: '↑',
 };
 export function EnhancementCard({ offer, selected, gold, busy, onSelect }: {

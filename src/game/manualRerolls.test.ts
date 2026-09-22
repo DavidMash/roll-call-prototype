@@ -155,29 +155,29 @@ describe('manual roll effects and hand independence', () => {
     for (const enhancement of ['magnetic', 'jumpingBean', 'sticky', 'bonus', 'golden', 'workout'] as Enhancement[]) enhance(game, 0, enhancement, 6);
     const result = reroll(game, [0], sequence(0.99, 0, 0));
     expect(result.state.dice[0].value).toBe(6);
-    expect(result.state.score).toBe(16);
+    expect(result.state.score).toBe(23);
     expect(result.state.gold).toBe(1);
     expect(result.state.dice[0].faces[5].workoutPips).toBe(1);
-    expect(result.events.filter(event => ['weighted', 'magnetic', 'jumpingBean'].includes(event.enhancement ?? '')).map(event => event.enhancement))
+    expect(result.events.filter(event => event.type === 'ABILITY_TRIGGERED' && ['weighted', 'magnetic', 'jumpingBean'].includes(event.enhancement ?? '')).map(event => event.enhancement))
       .toEqual(['weighted', 'jumpingBean']);
     expect(result.events.filter(event => event.type === 'DIE_ROLLED')).toHaveLength(1);
     expect(result.state.manualRerollsRemaining).toBe(2);
   });
-  it('Bean chains score, Golden/Workout activate, and the full chain finishes before clearance', () => {
+  it('Bean face effects resolve and its follow-up is skipped on clearance', () => {
     const game = board();
     game.target = 5;
     for (const enhancement of ['jumpingBean', 'golden', 'workout'] as Enhancement[]) enhance(game, 0, enhancement, 6);
     const result = reroll(game, [0], sequence(0.99, 0.99, 0));
     expect(result.state.phase).toBe('shop');
     expect(result.state.score).toBe(13);
-    expect(result.state.gold).toBe(9);
-    expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: 6, finalScore: 13,
+    expect(result.state.gold).toBe(8);
+    expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: 13, finalScore: 13,
       manualRerollChargesSpent: 1, manualRerollsRemainingAtClear: 2 });
     const clearIndex = result.events.findIndex(event => event.type === 'ROUND_CLEARED');
-    expect(result.events.slice(0, clearIndex).filter(event => event.type === 'DIE_ROLLED').map(event => event.face)).toEqual([6, 6, 1]);
+    expect(result.events.slice(0, clearIndex).filter(event => event.type === 'DIE_ROLLED').map(event => event.face)).toEqual([6]);
     expect(result.state.stats.manualDiceRerolled).toBe(1);
     expect(result.state.manualRerollsRemaining).toBe(2);
-    expect(result.state.stats.triggers.jumpingBean).toBe(2);
+    expect(result.state.stats.triggers.jumpingBean).toBe(1);
   });
 });
 
@@ -237,11 +237,11 @@ describe('loss, rescue and shop separation', () => {
     enhance(game, 0, 'jumpingBean', 6);
     const result = reroll(game, [0], sequence(0.99, 0.99, 0));
     expect(result.state.phase).toBe('shop');
-    expect(result.state.score).toBe(12);
+    expect(result.state.score).toBe(13);
     expect(result.state.manualRerollsRemaining).toBe(0);
     expect(result.state.stats.loss).toBeNull();
     expect(result.state.stats.deadBoardRescues).toBe(1);
-    expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: 6, finalScore: 12, manualRerollsRemainingAtClear: 0 });
+    expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: 13, finalScore: 13, manualRerollsRemainingAtClear: 0 });
   });
   it('shop dice rerolls remain gold-paid and do not spend or reset the manual budget', () => {
     const game = board();

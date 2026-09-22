@@ -72,15 +72,15 @@ describe('authoritative current-round scorecard totals', () => {
     expect(next.effectScore).toBe(0);
   });
 
-  it('attributes standalone Jumping Bean score only to Effect Score and reconciles the round total', () => {
+  it('attributes Jumping Bean free-play score to its Upper category, not Effect Score', () => {
     const game = board([1, 2, 3, 4, 5]);
     game.dice[0].faces[5].enhancements.jumpingBean = 1;
     game.dice[0].faces[5].enhancements.sticky = 1;
     const result = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }, sequence(0.99, 0));
-    expect(result.state.scoreByHand).toEqual({});
-    expect(result.state.effectScore).toBe(6);
-    expect(result.state.score).toBe(6);
+    expect(result.state.scoreByHand).toEqual({ sixes: 13 });
+    expect(result.state.effectScore).toBe(0);
+    expect(result.state.score).toBe(13);
     expect(handTotal(result.state) + result.state.effectScore).toBe(result.state.score);
-    expect(result.state.stats.rounds[0].effectScore).toBe(6);
+    expect(result.state.stats.rounds[0].effectScore).toBe(0);
   });
 });

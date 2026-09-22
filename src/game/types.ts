@@ -1,17 +1,18 @@
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6;
 export type Enhancement =
-  | 'bonus' | 'multiplier' | 'jumpingBean' | 'golden' | 'workout'
+  | 'bonus' | 'jumpingBean' | 'golden' | 'workout'
   | 'missingLink' | 'mirror' | 'magnetic' | 'sticky' | 'slippy'
   | 'hitchhiker' | 'weighted' | 'jackpot' | 'bump';
 export type Flame =
   | 'ultimate' | 'minigun' | 'hailMary' | 'charge' | 'personalTrainer'
-  | 'looseCannon' | 'dragonsHoard' | 'wellTrained' | 'targetPractice'
+  | 'dragonsHoard' | 'wellTrained' | 'targetPractice'
   | 'hotStreak' | 'moneyToBurn' | 'lowball' | 'straightShooter' | 'doubleDown';
 export type HandId =
   | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes'
   | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
 export type Phase = 'round' | 'flameReward' | 'shop' | 'lost' | 'error';
 export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker';
+export type HandPlaySource = 'manual' | 'jumpingBean';
 export type GoldSource = 'golden' | 'jackpot' | 'roundBase' | 'unusedRerolls' | 'interest';
 export type GoldSpendSource = 'enhancement' | 'shopDiceReroll' | 'enhancementReroll' | 'handTraining' | 'flameReroll' | 'flameInvestment';
 export type HandLevels = Record<HandId, number>;
@@ -53,6 +54,8 @@ export interface HandScoreRecord {
   score: number;
   bonusPips: number;
   hitchhikerPips: number;
+  playSource: HandPlaySource;
+  consumedHand: boolean;
 }
 
 export interface Face {
@@ -110,7 +113,7 @@ export interface RoundStats {
   clearMargin: number | null;
   cleared: boolean;
   lastHand: HandId | null;
-  lastAction: 'PLAY' | 'MANUAL_REROLL' | null;
+  lastAction: 'PLAY' | 'MANUAL_REROLL' | 'JUMPING_BEAN' | null;
   manualRerollsGranted: number;
   manualRerollChargesSpent: number;
   manualRerollsRemainingAtClear: number | null;
@@ -134,6 +137,25 @@ export interface TrainingPurchase { round: number; hand: HandId; fromLevel: numb
 export interface FlameAcquisition { round: number; dieId: number; flame: Flame; replaced: Flame | null }
 export interface FlameDonation { round: number; dieId: number; flame: Flame; amount: number; total: number }
 export interface ProbabilityProcStats { checks: number; successes: number; failures: number; stacksAtCheck: number[] }
+export interface JumpingBeanPlayRecord {
+  round: number;
+  dieId: number;
+  face: Rank;
+  hand: HandId;
+  handLevel: number;
+  basePips: number;
+  baseMultiplier: number;
+  score: number;
+  xMultFactors: XMultFactor[];
+  previousPlayCount: number;
+  handPlayCountAfter: number;
+  consumedHand: false;
+  stickyPreventedReroll: boolean;
+  followupRerolled: boolean;
+  roundCleared: boolean;
+  jackpotPayout: number;
+  personalTrainerSucceeded: boolean | null;
+}
 export interface RunStats {
   seed: string;
   roundReached: number;
@@ -185,10 +207,11 @@ export interface RunStats {
   scoreBySource: Record<ScoreSource, number>;
   scoreByHand: Partial<Record<HandId, number>>;
   handScores: HandScoreRecord[];
+  jumpingBeanFreePlays: JumpingBeanPlayRecord[];
   standaloneScores: StandaloneScoreRecord[];
   handBonusPips: number;
   hitchhikerPipsContributed: number;
-  loss: null | { round: number; afterHand: HandId | null; afterAction: 'PLAY' | 'MANUAL_REROLL' | null;
+  loss: null | { round: number; afterHand: HandId | null; afterAction: 'PLAY' | 'MANUAL_REROLL' | 'JUMPING_BEAN' | null;
     score: number; values: Rank[]; consumed: HandId[]; manualRerollsRemaining: number };
   actions: Action[];
   resolutionError: string | null;
@@ -204,6 +227,7 @@ export type EventType =
   | 'FLAME_SKIPPED' | 'FLAME_INVESTED' | 'BONFIRE_CREATED' | 'FLAME_TRIGGERED' | 'HAND_XMULT_CHANGED'
   | 'TARGET_PRACTICE_SELECTED' | 'CHARGE_CHANGED' | 'CHARGE_ARMED' | 'HOT_STREAK_CHANGED'
   | 'ENHANCEMENT_SCRAPPED' | 'MAGNETIC_ATTRACTION' | 'BUMP_ROLL'
+  | 'JUMPING_BEAN_FREE_PLAY' | 'JUMPING_BEAN_FOLLOWUP'
   | 'RUN_LOST' | 'RESOLUTION_ERROR' | 'MANUAL_REROLL_STARTED' | 'DEAD_BOARD' | 'DEAD_BOARD_RESCUED';
 export interface EventRecord {
   id: number;
@@ -214,6 +238,8 @@ export interface EventRecord {
   enhancement?: Enhancement;
   flame?: Flame;
   hand?: HandId;
+  playSource?: HandPlaySource;
+  handConsumed?: boolean;
   pips?: number;
   multiplier?: number;
   xMult?: number;

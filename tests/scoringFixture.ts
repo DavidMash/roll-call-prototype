@@ -23,10 +23,10 @@ export function scoringPlaybackRun() {
           : { type: 'CHOOSE_FLAME', offerId: game.flameReward!.offers[0].id, dieId: Math.floor(game.round / 3 - 1) % 5 };
       } else if (game.phase === 'shop') {
         const offer = game.shop!.offers.find(item => !item.purchased && !purchased.has(item.enhancement)
-          && ['bonus', 'multiplier', 'hitchhiker'].includes(item.enhancement)
+          && ['bonus', 'hitchhiker'].includes(item.enhancement)
           && game.gold >= enhancementCost(item.enhancement));
         if (offer) {
-          const dieId = offer.enhancement === 'bonus' ? 0 : offer.enhancement === 'multiplier' ? 1 : 4;
+          const dieId = offer.enhancement === 'bonus' ? 0 : 4;
           action = { type: 'BUY', offerId: offer.id, dieId };
           purchased.add(offer.enhancement);
         } else action = { type: 'NEXT_ROUND' };
@@ -36,7 +36,6 @@ export function scoringPlaybackRun() {
           .sort((a, b) => handScore(game.dice, b.hand, b.dieIds).score - handScore(game.dice, a.hand, a.dieIds).score);
         const scoringAction = choices.find(choice =>
           choice.dieIds.some(id => stacks(activeFace(game.dice[id]), 'bonus'))
-          && choice.dieIds.some(id => stacks(activeFace(game.dice[id]), 'multiplier'))
           && game.dice.some(die => !choice.dieIds.includes(die.id) && stacks(activeFace(die), 'hitchhiker')));
         if (scoringAction) {
           const result = dispatch(game, scoringAction);
@@ -50,5 +49,5 @@ export function scoringPlaybackRun() {
       game = result.state;
     }
   }
-  throw new Error('No seeded Bonus/Multiplier/Hitchhiker playback fixture found');
+  throw new Error('No seeded Bonus/Hitchhiker playback fixture found');
 }

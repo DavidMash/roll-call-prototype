@@ -24,9 +24,13 @@ Every clear pays:
 
 The clear payout is at most 13 before enhancement income. Shop dice rerolls cost 2/4/8/16… and enhancement rerolls cost 3/6/12/24…. Hand Training costs 4 Gold. Lifetime normal-shop spending includes enhancements, training, and both shop reroll types.
 
-Enhancements attach to an exposed physical face. A face holds at most three distinct enhancement types; more stacks of an existing type use no additional type slot. Sticky and Hitchhiker cap at three stacks (87.5%). Any enhancement type can be scrapped from any face during a shop, removing all its stacks with no refund.
+Enhancements attach to an exposed physical face. A face holds at most three distinct enhancement types; more stacks of an existing type use no additional type slot. Sticky, Hitchhiker, Golden, and Jackpot cap at three stacks. Any enhancement type can be scrapped from any face during a shop, removing all its stacks with no refund.
 
-The enhancement roster is Bonus, Multiplier, Jumping Bean, Golden, Workout, Missing Link, Mirror, Magnetic, Sticky, Slippy, Hitchhiker, Weighted, Jackpot, and Bump. Sustainable has been removed.
+The enhancement roster is Bonus, Jumping Bean, Golden, Workout, Missing Link, Mirror, Magnetic, Sticky, Slippy, Hitchhiker, Weighted, Jackpot, and Bump. Sustainable and Multiplier have been removed. Ordinary Mult comes exclusively from each hand’s trained Base Mult. Bump costs 2 Gold.
+
+Jumping Bean is a real free Upper-hand play rather than an independent score. Rolling one free-plays the matching Ones–Sixes category using only that die and its trained Base Pips/Base Mult, records the score in that category, increments hand history, and then rerolls the die. It works even if the category is already consumed and never consumes or reopens its normal use. Relevant face effects and hand-based Flames apply; Hitchhiker, generic Slippy/post-hand batches, Lower-only Flames, and automatic Charge consumption do not. Sticky may block the follow-up roll, Bump may control it, and another Bean landing can chain.
+
+Golden pays +1 Gold per stack whenever its scoring face participates, up to +3. Jackpot pays +3 Gold per stack only when its face scores in the hand that clears the round, up to +9 per face.
 
 ### Roll control
 
@@ -61,7 +65,6 @@ The final roster is:
 | Hail Mary | Scoring die with 0 rerolls left; ×1→×3 | Every such hand ×3 |
 | Charge | Its gameplay rolls add `0.5 × progress` to stored Charge | Every gameplay die roll adds 0.5 |
 | Personal Trainer | Scoring die gives `75% × progress` chance to train after scoring | One 75% check per hand |
-| Loose Cannon | Its independent scores ×1→×3 | All independent scores ×3 |
 | Dragon's Hoard | `1 + 2 × progress × min(heldGold/100, 1)` | Global full-progress formula |
 | Well Trained | `min(3, 1 + previousPlays × 0.1 × progress)` | Global full-progress formula |
 | Target Practice | Targeted Lower hand ×1→×5 | Targeted hand ×5 globally |
@@ -75,11 +78,11 @@ Charge must be armed explicitly. It resets after use and at round start. Post-ha
 
 Hot Streak resets to Pair and zero charges each round. Its sequence is Pair → Two Pair → Three of a Kind → Small Straight → Full House → Four of a Kind → Large Straight → Five of a Kind. Playing a future sequence hand early does not reset the current goal; when reached later, that already-consumed hand is skipped without retroactive charge.
 
-Target Practice chooses from the three least-played Lower hands using seeded RNG and remains fixed for the round. Lowball uses printed/current face values, including successful Hitchhikers, never Bonus or Workout pips. Jumping Bean retains its existing independent scoring behavior.
+Target Practice chooses from the three least-played Lower hands using seeded RNG and remains fixed for the round. Lowball uses printed/current face values, including successful Hitchhikers, never Bonus or Workout pips.
 
 ## Telemetry and validation
 
-Run Info exports schema 9 / `multiplicative-xmult-flame-investment-v1`, including XMult factors, Flame acquisitions/skips/replacements/donations, Bonfires, Charge, Trainer, Hot Streak, shop spending, Lowball and Money to Burn inputs, Magnetic anchors, Bump rolls, scraps, and clear-payout components.
+Run Info exports schema 10 / `free-upper-jumping-bean-v1`, including source-aware hand scores, Jumping Bean free-play records, XMult factors, Flame progression, Charge, Trainer, Hot Streak, shop spending, Magnetic anchors, Bump rolls, scraps, and clear-payout components.
 
 Validation commands:
 

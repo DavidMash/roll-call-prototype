@@ -28,6 +28,7 @@ export function RunInfoModal({ state, visibleEventId, busy, opened, onClose, see
             <OverviewStat label="Score / goal" value={`${state.score} / ${state.target}`} /><OverviewStat label="Gold" value={state.gold} />
             <OverviewStat label="Shop spend" value={state.lifetimeNormalShopGoldSpent} /><OverviewStat label="Flame investment" value={state.stats.totalFlameInvestment} />
             <OverviewStat label="Charge" value={`×${Number(state.chargeXMult.toFixed(4))}${state.chargeArmed ? ' armed' : ''}`} /><OverviewStat label="Bonfires" value={state.bonfires.length} />
+            <OverviewStat label="Bean free plays" value={state.stats.jumpingBeanFreePlays.length} /><OverviewStat label="Jackpot Gold" value={state.stats.goldBySource.jackpot} />
           </SimpleGrid>
           <Text size="sm" mt="md"><strong>Hand levels:</strong> {HAND_IDS.map(hand => `${HANDS[hand].name} ${state.handLevels[hand]}`).join(' · ')}</Text>
           <Text size="sm" mt="sm"><strong>Gold:</strong> base {state.stats.goldBySource.roundBase} · rerolls {state.stats.goldBySource.unusedRerolls} · interest {state.stats.goldBySource.interest} · Golden {state.stats.goldBySource.golden} · Jackpot {state.stats.goldBySource.jackpot}</Text>

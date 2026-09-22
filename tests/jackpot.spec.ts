@@ -34,7 +34,7 @@ async function perform(page: Page, game: GameState, action: Action) {
   return dispatch(game, action).state;
 }
 
-test('held Jackpot pays on a played-hand clear before the no-reroll transition', async ({ page }) => {
+test('scoring Jackpot pays on a played-hand clear before the no-reroll transition', async ({ page }) => {
   const fixture = jackpotRun();
   let game = newRun(fixture.seed).state;
   await page.goto(`/?seed=${fixture.seed}&speed=instant`);
@@ -46,7 +46,7 @@ test('held Jackpot pays on a played-hand clear before the no-reroll transition',
   const goldBefore = game.gold;
 
   await selectPlay(page, game, fixture.play);
-  await expect(die(page, fixture.heldDieId)).toHaveAttribute('aria-pressed', 'false');
+  await expect(die(page, fixture.heldDieId)).toHaveAttribute('aria-pressed', 'true');
   await page.clock.install({ time: new Date('2026-09-18T12:00:00Z') });
   await page.clock.pauseAt(new Date('2026-09-18T12:00:01Z'));
   await page.getByText('NORMAL', { exact: true }).click();
@@ -61,7 +61,8 @@ test('held Jackpot pays on a played-hand clear before the no-reroll transition',
   await expect(die(page, fixture.heldDieId)).toHaveAccessibleName(new RegExp(`face ${heldValue},`));
   await page.getByRole('button', { name: 'Skip playback' }).click();
   await ready(page);
-  await expect(page.getByText(new RegExp(`^Round ${game.round} cleared`))).toBeVisible();
+  if (fixture.result.state.phase === 'flameReward') await expect(page.getByText('FLAME REWARD', { exact: true })).toBeVisible();
+  else await expect(page.getByText(new RegExp(`^Round ${game.round} cleared`))).toBeVisible();
   expect(fixture.result.state.gold).toBe(goldBefore + CONFIG.jackpotGold + fixture.result.state.lastRoundPayout!.total);
   expect(fixture.result.events.some(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Post-hand'))).toBe(false);
 });

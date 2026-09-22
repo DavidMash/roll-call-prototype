@@ -14,7 +14,6 @@ export const CONFIG = {
   handTrainingCost: 4,
   rerollCostGrowth: 2,
   bonusPips: 10,
-  multiplierIncrement: 0.5,
   standaloneMultiplier: 1,
   goldenGold: 1,
   jackpotGold: 3,
@@ -22,9 +21,9 @@ export const CONFIG = {
   tickMs: { normal: 350, fast: 90, instant: 0 },
   resolutionEventCap: 10000,
   enhancementCosts: {
-    bonus: 3, multiplier: 5, jumpingBean: 2, golden: 2, workout: 3,
+    bonus: 3, jumpingBean: 2, golden: 2, workout: 3,
     missingLink: 2, mirror: 2, magnetic: 3, sticky: 1, slippy: 1,
-    hitchhiker: 2, weighted: 3, jackpot: 3, bump: 3,
+    hitchhiker: 2, weighted: 3, jackpot: 3, bump: 2,
   } satisfies Record<Enhancement, number>,
 } as const;
 

@@ -49,11 +49,11 @@ describe('revised Hitchhiker', () => {
     expect(isValidSelection(game.dice, 'threeKind', [0, 1, 2])).toBe(true);
   });
 
-  it('success applies Bonus, Multiplier, Golden, and Workout before normal hand consumption', () => {
+  it('success applies Bonus, Golden, and Workout under trained hand Mult before normal consumption', () => {
     const game = state();
-    for (const enhancement of ['hitchhiker', 'bonus', 'multiplier', 'golden', 'workout'] as Enhancement[]) enhance(game, 4, enhancement);
+    for (const enhancement of ['hitchhiker', 'bonus', 'golden', 'workout'] as Enhancement[]) enhance(game, 4, enhancement);
     const result = play(game, constant(0));
-    expect(result.state.stats.handScores[0]).toMatchObject({ pips: 38, multiplier: 3, xMult: 1, score: 114, hitchhikerPips: 16 });
+    expect(result.state.stats.handScores[0]).toMatchObject({ pips: 38, multiplier: 2.5, xMult: 1, score: 95, hitchhikerPips: 16 });
     expect(result.state.gold).toBe(1);
     expect(result.state.dice[4].faces[5].workoutPips).toBe(1);
     expect(result.state.consumed).toContain('threeKind');
@@ -71,15 +71,14 @@ describe('revised Hitchhiker', () => {
     expect(withSlippy.events.filter(event => event.type === 'DICE_REROLL_STARTED').at(-1)?.dieIds).toEqual([0, 1, 2, 4]);
   });
 
-  it('successful Hitchhiker cannot Jackpot, but a failed one can', () => {
+  it('successful scoring Hitchhiker can Jackpot, while a failed one cannot', () => {
     const success = state();
     success.target = 1;
     success.stats.rounds[0].target = 1;
     enhance(success, 4, 'hitchhiker');
     enhance(success, 4, 'jackpot');
     const joined = play(success, constant(0));
-    expect(joined.state.stats.goldBySource.jackpot).toBe(0);
-    expect(joined.state.history.some(event => event.message.includes('scored in winning hand'))).toBe(true);
+    expect(joined.state.stats.goldBySource.jackpot).toBe(3);
 
     const failure = state();
     failure.target = 1;
@@ -87,6 +86,6 @@ describe('revised Hitchhiker', () => {
     enhance(failure, 4, 'hitchhiker');
     enhance(failure, 4, 'jackpot');
     const held = play(failure, constant(0.99));
-    expect(held.state.stats.goldBySource.jackpot).toBe(3);
+    expect(held.state.stats.goldBySource.jackpot).toBe(0);
   });
 });

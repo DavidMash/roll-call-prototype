@@ -171,7 +171,12 @@ test('compact HUD, Run Info and Help keep secondary information off the gameplay
   await expect(help).toBeVisible();
   await help.getByRole('tab', { name: 'Enhancements' }).click();
   await expect(help.getByText('Jackpot', { exact: true })).toBeVisible();
-  await expect(help.getByText(/held out of the winning hand/)).toBeVisible();
+  await expect(help.getByText(/scores in the round-clearing hand/)).toBeVisible();
+  await expect(help.getByText('Multiplier', { exact: true })).toHaveCount(0);
+  await expect(help.getByText('Loose Cannon', { exact: true })).toHaveCount(0);
+  await expect(help.getByText('Bump', { exact: true }).locator('..').getByText('2 Gold', { exact: true })).toBeVisible();
+  await expect(help.getByText('Golden', { exact: true }).locator('..').getByText('Max 3', { exact: true })).toBeVisible();
+  await expect(help.getByText('Jackpot', { exact: true }).locator('..').getByText('Max 3', { exact: true })).toBeVisible();
 });
 
 test('Hand Training purchase persists into scorecard and trained scoring playback', async ({ page }) => {
@@ -470,19 +475,23 @@ test('purchased Jumping Bean visibly triggers and rerolls on the next initial ga
   await page.getByRole('button', { name: 'NEXT ROUND' }).click();
   // Observe the transient ability tick deterministically instead of hoping the
   // real-time assertion polling catches its 350 ms display window.
-  const beanIndex = next.events.findIndex(event => event.type === 'ABILITY_TRIGGERED' && event.enhancement === 'jumpingBean');
+  const beanIndex = next.events.findIndex(event => event.type === 'JUMPING_BEAN_FREE_PLAY');
   expect(beanIndex).toBeGreaterThanOrEqual(0);
   for (let index = 0; index <= beanIndex; index++) {
     await expect(page.getByText(`EVENT ${index + 1} / ${next.events.length}`, { exact: true })).toBeVisible();
     if (index < beanIndex) await page.clock.runFor(CONFIG.tickMs.normal);
   }
-  await expect(page.locator('.resolution .score-tick')).toHaveText('JUMPING BEAN');
+  const freePlay = next.events[beanIndex];
+  await expect(page.locator('.resolution .score-tick')).toHaveText(`JUMPING BEAN · FREE ${HANDS[freePlay.hand!].name.toUpperCase()}`);
   await expect(page.locator('.ability-label').first()).toHaveText('JUMPING BEAN');
   await page.getByRole('button', { name: 'Skip playback' }).click();
   await matchBoard(page, next.state);
   await expect(page.getByTestId('scorecard-effect-score')).toHaveText(String(next.state.effectScore));
+  await expect(page.getByTestId(`scorecard-score-${freePlay.hand}`)).toHaveText(String(next.state.scoreByHand[freePlay.hand!]));
+  await expect(page.getByTestId(`scorecard-row-${freePlay.hand}`)).not.toHaveAttribute('data-state', 'consumed');
   await expect(page.getByTestId('scorecard-round-total')).toHaveText(`${next.state.score} / ${next.state.target}`);
   expect(next.state.stats.scoreBySource.jumpingBean).toBeGreaterThan(0);
+  expect(next.state.effectScore).toBe(0);
   expect(next.events.filter(event => event.type === 'DIE_ROLLED' && event.dieIds?.includes(0)).length).toBeGreaterThan(1);
 });
 

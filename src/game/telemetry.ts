@@ -21,7 +21,7 @@ export function createStats(seed: string): RunStats {
       sticky: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
       hitchhiker: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
     }, scoreBySource: { hand: 0, jumpingBean: 0, hitchhiker: 0 }, scoreByHand: {},
-    handScores: [], standaloneScores: [], handBonusPips: 0, hitchhikerPipsContributed: 0,
+    handScores: [], jumpingBeanFreePlays: [], standaloneScores: [], handBonusPips: 0, hitchhikerPipsContributed: 0,
     loss: null, actions: [], resolutionError: null,
   };
 }
@@ -34,7 +34,7 @@ export function boardSnapshot(state: GameState): Board {
     handLevels, handPlayCounts, targetPracticeHand, lastRoundPayout, shop, flameReward });
 }
 export function exportRun(state: GameState) {
-  return { schemaVersion: 9, scoringModel: 'multiplicative-xmult-flame-investment-v1', ...state.stats,
+  return { schemaVersion: 10, scoringModel: 'free-upper-jumping-bean-v1', ...state.stats,
     bonfires: [...state.bonfires], finalHandLevels: structuredClone(state.handLevels),
     finalFlames: state.dice.map(die => ({ dieId: die.id, flame: activeFlameId(die.flame), investedGold: die.flame?.investedGold ?? 0 })),
     rngState: state.rngState, board: boardSnapshot(state) };

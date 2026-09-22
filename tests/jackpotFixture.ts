@@ -13,8 +13,8 @@ function plays(game: GameState) {
     .sort((a, b) => b.score - a.score);
 }
 
-// Discover a fully legal seeded route: buy Jackpot, later hold its showing face
-// outside a hand, and clear the round with that hand.
+// Discover a fully legal seeded route: buy Jackpot, later score its showing face
+// in the hand that clears the round.
 export function jackpotRun() {
   for (let index = 0; index < 2500; index++) {
     const seed = `jackpot-browser-${index}`;
@@ -51,7 +51,7 @@ export function jackpotRun() {
         if (branch.phase !== 'round') break;
         const choices = plays(branch);
         const showingJackpot = activeFace(branch.dice[heldDieId]).enhancements.jackpot;
-        const winner = showingJackpot && choices.find(choice => !choice.action.dieIds.includes(heldDieId)
+        const winner = showingJackpot && choices.find(choice => choice.action.dieIds.includes(heldDieId)
           && branch.score + choice.score >= branch.target);
         if (winner) {
           const result = dispatch(branch, winner.action);
@@ -62,7 +62,7 @@ export function jackpotRun() {
 
         let action: Action;
         const preferred = showingJackpot
-          ? choices.find(choice => !choice.action.dieIds.includes(heldDieId))
+          ? choices.find(choice => choice.action.dieIds.includes(heldDieId))
           : choices[0];
         if (preferred) action = preferred.action;
         else if (branch.manualRerollsRemaining > 0) action = { type: 'MANUAL_REROLL', dieIds: [heldDieId] };

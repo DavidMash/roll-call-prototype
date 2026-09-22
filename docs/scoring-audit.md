@@ -1,39 +1,25 @@
-# Hand-scoring audit
+# Scoring architecture audit
 
-The audit traced `Resolver.play`, `handScore`, `standaloneScore`, `scoringPips`, `whenScored`, and the event playback component before changing behavior.
+The deterministic resolver owns all rolls, hand plays, effects, RNG, history, and round transitions. React only replays immutable event snapshots, so playback speed cannot affect outcomes.
 
-| Stage | Previous behavior | Current behavior |
-| --- | --- | --- |
-| Hand Base Pips | No intrinsic hand pips | The hand's current trained level supplies derived Base Pips when its accumulator is created; this is not a face-scoring event |
-| Selected base pips | Collected by `handScore` from printed rank, prior Workout growth, and Bonus | Captured face snapshots contribute printed rank and prior Workout growth into the live hand accumulator |
-| Bonus | Already included before multiplication; never a separate score addition | Explicit pip contribution before finalization; Hitchhiker Bonus is included in its contribution |
-| Selected Multiplier | Already included before multiplication | Explicit increment to the live hand multiplier |
-| Hitchhiker | After awarding selected-hand score, each unselected Hitchhiker scored separately with its own Bonus and Multiplier | Adds full scoring pips to the active hand; its own Multiplier is ignored |
-| Golden | Triggered after the selected or standalone score was added | Selected and Hitchhiker Golden resolve before hand finalization; independent Bean timing remains unchanged |
-| Workout | Used old pips, then grew after the selected or standalone score was added | Current contributions use old pips, then grow before hand finalization; independent Bean timing remains unchanged |
-| Final hand score | `HAND_SCORE_CALCULATED`, then immediate `SCORE_ADDED`, before Golden/Workout/Hitchhiker | `HAND_SCORE_FINALIZED` after every hand-bound contribution and trigger; one shared finalizer records raw Pips × Mult × the product of XMult factors, rounds it once, then exactly one hand `SCORE_ADDED` awards the integer |
-| Consumption and rerolls | Post-hand rolls and effects finished before consumption | Consume after final hand award, check target, then reroll only if below target |
+## Hand pipeline
 
-The suspected early finalization existed for Hitchhiker and hand-bound trigger timing. Selected Bonus and Multiplier arithmetic was already correct. For 12 selected pips at x2 with an unselected 6-pip Hitchhiker, the previous score was 24 + 6 = 30; the current score is (12 + 6) × 2 = 36.
+Every manual or Jumping Bean hand creates one `HandScoreAccumulator` from the category's trained level. Scoring uses:
 
-## Domain boundary and snapshots
+```text
+round((trained Base Pips + scoring-die Pips + Bonus) × trained Base Mult × product(XMult factors))
+```
 
-`HandScoreAccumulator` holds the selected category/physical IDs, level-derived `basePips`/`baseMultiplier`, live `currentPips`/`currentMultiplier`, Bonus pips, Hitchhiker pips, and nullable raw/final results. It is initialized from the hand's authoritative level before face contributions. Pure contribution helpers are shared by score previews and resolution. Capturing all faces before contributions prevents current Workout increments from changing the current score.
+Ordinary Mult comes only from the trained hand. Workout growth happens after its current face contribution. Successful manual Hitchhikers add Pips but never help form the selected shape. Golden resolves for every scoring face. Jackpot resolves only for scoring faces after that score is known to clear the round.
 
-Every event emitted while the accumulator is active carries an immutable `handScore` snapshot, including Golden/Workout ticks. `HAND_PIPS_CHANGED`, `HAND_MULTIPLIER_CHANGED`, and `HITCHHIKER_ADDED_PIPS` expose changes directly. `HAND_SCORE_FINALIZED` exposes the multiplication result while round score is still unchanged; the following hand `SCORE_ADDED` awards it once.
+The final rounded award is written once to the round total and category total. XMult factors retain their source and are multiplied canonically. A non-visible rounding audit preserves full-precision inputs.
 
-The accumulator closes before consumption or any rerolls. `STANDALONE_SCORE_CALCULATED` identifies independent Jumping Bean arithmetic. No roll-trigger chain can feed back into a finalized hand. Hand and standalone scoring both call the same `finalizeScore` helper: full Pips and Mult precision produce `rawScore`, then `Math.round(rawScore)` produces the one authoritative integer award. A non-visible `SCORE_ROUNDING_AUDIT` history entry preserves both values without putting the raw decimal in prominent playback.
+## Jumping Bean
 
-Later playtesting added Pair/Two Pair and updated lower multipliers in centralized configuration. Both hands use this same accumulator. A winning hand now checks its target after finalization and consumption bookkeeping, emits `POST_HAND_REROLLS_SKIPPED`, and clears without scheduling normal/Slippy gameplay rerolls. All hand-bound Golden/Workout/Hitchhiker effects have already finished. Existing independent initial/manual/active Bean chains still finish before clearance. The free shop exposure roll remains separate and occurs after `ROUND_CLEARED`.
+Jumping Bean uses the same hand pipeline with source `jumpingBean`. Rank 1–6 maps to Ones–Sixes and only the triggering die scores. The free play neither requires nor consumes normal category availability, does not run Hitchhiker or generic post-hand rerolls, and does not consume armed Charge. It does increment run-wide hand history after factors that use the previous-play snapshot have evaluated.
 
-## Telemetry compatibility
+If the free play does not clear the round, Sticky may prevent its one follow-up reroll. Otherwise that die passes through the centralized gameplay roll pipeline, preserving Bump, held-anchor Magnetic, Weighted, Charge gain, and deterministic Bean chaining.
 
-Export schema 9 declares `scoringModel: multiplicative-xmult-flame-investment-v1`. Final rounded hand score is attributed to the selected category and `scoreBySource.hand`. `handScores` records Base Pips/Base Multiplier, every multiplicative XMult factor, raw and rounded final arithmetic, and Bonus/Hitchhiker pip contributions; `handBonusPips` and `hitchhikerPipsContributed` record run totals. Each round also records integer `scoreByHand` and `effectScore`, matching the authoritative current-round board breakdown used by the scorecard. Bonus pips include Bonus carried by Hitchhikers.
+## Telemetry
 
-`scoreBySource.hitchhiker` remains a legacy key at zero for current runs, preventing score double-counting. Schema 1 exports used that field for standalone Hitchhiker score, including the Hitchhiker face's own multiplier. Existing historical exports are not rewritten; replay requires the matching rules version.
-
-## Validation coverage
-
-Engine tests assert below-half, exact-half, above-half, and exact-integer rounding; unchanged round score during accumulation; immutable event snapshots; Bonus/Multiplier/Hitchhiker ordering; rounded target crossing; independent Bean rounding; multiplicative XMult factors; telemetry totals; and deterministic replay.
-
-Browser fixtures reach enhanced and trained boards through seeded legal plays and shop purchases. A controlled playback clock checks literal Pips, fractional Mult, the whole-number final award, integer scorecard/round totals, and the single award in order using the existing playback system. No production fixture hooks or alternate scoring engine were added.
+Export schema 10 uses `free-upper-jumping-bean-v1`. Hand records include play source and consumption semantics. Bean records include category, scoring die, trained Base Pips/Mult, score, XMult factors, history before/after, Sticky/follow-up outcome, round clearance, and Jackpot payout. Jumping Bean does not add Effect Score or standalone-score records.

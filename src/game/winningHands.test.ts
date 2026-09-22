@@ -57,18 +57,17 @@ describe('winning-hand boundary', () => {
     expect(result.state.gold).toBe(roundReward(1) + 3);
   });
 
-  it('finishes winning Bonus/Multiplier/Hitchhiker, Golden and Workout contributions before clearing', () => {
+  it('finishes winning Bonus/Hitchhiker, Golden and Workout contributions before clearing', () => {
     const game = board(undefined, 10);
     for (const enhancement of ['bonus', 'golden', 'workout', 'sticky'] as Enhancement[]) enhance(game, 0, enhancement);
-    enhance(game, 1, 'multiplier');
     for (const enhancement of ['hitchhiker', 'bonus', 'golden', 'workout', 'slippy'] as Enhancement[]) enhance(game, 4, enhancement);
     activeFace(game.dice[4]).workoutPips = 2;
     const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0));
-    expect(result.state.score).toBe(98); // (8 base + 8 + 10 + 18) × 2 + existing 10
+    expect(result.state.score).toBe(76); // (8 base + 8 + 10 + 18) × 1.5 + existing 10
     expect(result.state.gold).toBe(10);
     expect(result.state.dice[0].faces[3].workoutPips).toBe(1);
     expect(result.state.dice[4].faces[5].workoutPips).toBe(3);
-    expect(result.state.stats.handScores[0]).toMatchObject({ handLevel: 1, basePips: 8, pips: 44, multiplier: 2, score: 88, hitchhikerPips: 18 });
+    expect(result.state.stats.handScores[0]).toMatchObject({ handLevel: 1, basePips: 8, pips: 44, multiplier: 1.5, score: 66, hitchhikerPips: 18 });
     const finalIndex = result.events.findIndex(event => event.type === 'HAND_SCORE_FINALIZED');
     const clearIndex = result.events.findIndex(event => event.type === 'ROUND_CLEARED');
     expect(result.events.slice(0, finalIndex).filter(event => event.type === 'WORKOUT_INCREMENTED')).toHaveLength(2);
@@ -90,14 +89,13 @@ describe('winning-hand boundary', () => {
     expect(result.events.some(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Post-hand'))).toBe(false);
   });
 
-  it('can win specifically through Bonus and selected Multiplier before skipping rerolls', () => {
-    const game = board(undefined, 10);
+  it('can win through Bonus and trained Base Mult before skipping rerolls', () => {
+    const game = board(undefined, 20);
     enhance(game, 0, 'bonus');
-    enhance(game, 1, 'multiplier');
     const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant());
-    expect(result.state.score).toBe(62);
+    expect(result.state.score).toBe(59);
     expect(result.state.phase).toBe('shop');
-    expect(result.events.find(event => event.type === 'HAND_SCORE_FINALIZED')).toMatchObject({ pips: 26, multiplier: 2, amount: 52 });
+    expect(result.events.find(event => event.type === 'HAND_SCORE_FINALIZED')).toMatchObject({ pips: 26, multiplier: 1.5, amount: 39 });
     expect(result.events.some(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Post-hand'))).toBe(false);
   });
 
@@ -111,20 +109,20 @@ describe('winning-hand boundary', () => {
   });
 
   it('preserves non-winning Sticky/Slippy batches and prevents same-batch Magnetic self-anchoring', () => {
-    const game = board([5, 5, 4, 2, 6], 20);
+    const game = board([5, 5, 4, 2, 6], 20, 100);
     enhance(game, 0, 'sticky');
     enhance(game, 3, 'slippy');
     enhance(game, 1, 'weighted', 1);
     for (const enhancement of ['magnetic', 'jumpingBean', 'sticky'] as Enhancement[]) enhance(game, 1, enhancement, 6);
     const result = dispatch(game, { type: 'PLAY', hand: 'fives', dieIds: [0, 1] }, sequence(0, 0.99, 0.99, 0, 0));
     expect(result.state.phase).toBe('round');
-    expect(result.state.score).toBe(43); // Hand 17 (7 base + dice), then standalone Bean 6.
+    expect(result.state.score).toBe(50); // Hand 17, then a one-die Sixes free play for 13.
     expect(result.state.dice[0].value).toBe(5);
     expect(result.events.filter(event => event.type === 'DICE_REROLL_STARTED').map(event => event.dieIds)).toEqual([[1, 3]]);
-    expect(result.events.filter(event => ['weighted', 'magnetic', 'jumpingBean'].includes(event.enhancement ?? '')).map(event => event.enhancement))
+    expect(result.events.filter(event => event.type === 'ABILITY_TRIGGERED' && ['weighted', 'magnetic', 'jumpingBean'].includes(event.enhancement ?? '')).map(event => event.enhancement))
       .toEqual(['weighted', 'jumpingBean']);
     expect(result.events.filter(event => event.type === 'SCORE_ADDED').map(event => [event.source, event.amount]))
-      .toEqual([['hand', 17], ['jumpingBean', 6]]);
+      .toEqual([['hand', 17], ['jumpingBean', 13]]);
     expect(result.events.some(event => event.type === 'POST_HAND_REROLLS_SKIPPED')).toBe(false);
     expect(result.state.manualRerollsRemaining).toBe(3);
   });

@@ -19,8 +19,8 @@ function flame(state: GameState, dieId: number, id: Flame, investedGold = 100) {
 const play = (state: GameState, hand = 'threeKind' as const, dieIds = [0, 1, 2], rng = constant()) => dispatch(state, { type: 'PLAY', hand, dieIds }, rng);
 
 describe('multiplicative Flame formulas', () => {
-  it('contains the final unique 14-Flame roster', () => {
-    expect(FLAME_IDS).toEqual(['ultimate', 'minigun', 'hailMary', 'charge', 'personalTrainer', 'looseCannon', 'dragonsHoard', 'wellTrained', 'targetPractice', 'hotStreak', 'moneyToBurn', 'lowball', 'straightShooter', 'doubleDown']);
+  it('contains the final unique 13-Flame roster', () => {
+    expect(FLAME_IDS).toEqual(['ultimate', 'minigun', 'hailMary', 'charge', 'personalTrainer', 'dragonsHoard', 'wellTrained', 'targetPractice', 'hotStreak', 'moneyToBurn', 'lowball', 'straightShooter', 'doubleDown']);
   });
   it.each([[0, 1], [50, 2], [100, 3]] as const)('standard scale %s => ×%s', (gold, factor) => expect(standardFlameMultiplier(gold)).toBe(factor));
   it('uses exact capped special formulas', () => {

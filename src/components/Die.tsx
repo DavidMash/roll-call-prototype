@@ -19,7 +19,6 @@ interface Props {
 
 const BADGE_LABELS: Partial<Record<Enhancement, (count: number) => string>> = {
   bonus: count => `B+${count}`,
-  multiplier: count => `×+${count}`,
   golden: count => `Gold${count > 1 ? ` ×${count}` : ''}`,
   workout: count => `Fit${count > 1 ? ` ×${count}` : ''}`,
 };

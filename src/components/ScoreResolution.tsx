@@ -16,6 +16,7 @@ export function ScoreResolution({ event, busy, current, total, onSkip, deadBoard
 }) {
   let heading = idleText ?? (deadBoard ? 'No playable hands — use a reroll' : 'Choose a hand or select dice');
   if (event?.type === 'HAND_SCORE_FINALIZED' || event?.type === 'STANDALONE_SCORE_CALCULATED') heading = `+${event.amount}`;
+  else if (event?.type === 'JUMPING_BEAN_FREE_PLAY' && event.hand) heading = `JUMPING BEAN · FREE ${HANDS[event.hand].name.toUpperCase()}`;
   else if (event?.type === 'SCORE_ADDED') heading = `+${event.amount}`;
   else if (event?.type === 'HITCHHIKER_ADDED_PIPS') heading = 'HITCHHIKER';
   else if (event?.flame) heading = FLAMES[event.flame].name.toUpperCase();

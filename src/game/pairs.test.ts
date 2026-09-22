@@ -127,14 +127,13 @@ describe('bidirectional Pair selection', () => {
 });
 
 describe('Pair resolution and loss integration', () => {
-  it('scores the Pair Bonus/Multiplier example through one common accumulator', () => {
+  it('scores Pair Bonus through trained Base Mult in one common accumulator', () => {
     const state = game([4, 4, 4, 2, 6]);
     enhance(state, 0, 'bonus');
-    enhance(state, 1, 'multiplier');
     const result = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, rng());
-    expect(result.state.score).toBe(52);
+    expect(result.state.score).toBe(39);
     expect(result.events.filter(event => event.type === 'SCORE_ADDED')).toHaveLength(1);
-    expect(result.state.stats.handScores[0]).toMatchObject({ hand: 'pair', handLevel: 1, basePips: 8, pips: 26, multiplier: 2, score: 52 });
+    expect(result.state.stats.handScores[0]).toMatchObject({ hand: 'pair', handLevel: 1, basePips: 8, pips: 26, multiplier: 1.5, score: 39 });
     expect(result.events.filter(event => event.type === 'DIE_ROLLED').map(event => event.dieIds)).toEqual([[0], [1]]);
     expect(result.state.dice[2].value).toBe(4);
   });
@@ -157,14 +156,12 @@ describe('Pair resolution and loss integration', () => {
     expect(next.state.manualRerollsRemaining).toBe(3);
   });
   it.each([
-    { hand: 'pair' as const, values: [4, 4, 4, 2, 6] as Rank[], ids: [0, 1], pips: 44, mult: 12, score: 528, rerolls: [1, 4] },
-    { hand: 'twoPair' as const, values: [2, 2, 5, 5, 6] as Rank[], ids: [0, 1, 2, 3], pips: 51, mult: 12.5, score: 638, rerolls: [1, 2, 3, 4] },
+    { hand: 'pair' as const, values: [4, 4, 4, 2, 6] as Rank[], ids: [0, 1], pips: 44, mult: 1.5, score: 66, rerolls: [1, 4] },
+    { hand: 'twoPair' as const, values: [2, 2, 5, 5, 6] as Rank[], ids: [0, 1, 2, 3], pips: 51, mult: 2, score: 102, rerolls: [1, 2, 3, 4] },
   ])('$hand shares all participation and scoring enhancement rules', ({ hand, values, ids, pips, mult, score, rerolls }) => {
     const state = game(values);
     for (const enhancement of ['bonus', 'golden', 'workout', 'sticky'] as Enhancement[]) enhance(state, 0, enhancement);
-    enhance(state, 1, 'multiplier');
     for (const enhancement of ['hitchhiker', 'bonus', 'golden', 'workout', 'slippy'] as Enhancement[]) enhance(state, 4, enhancement);
-    enhance(state, 4, 'multiplier', 20);
     activeFace(state.dice[4]).workoutPips = 2;
     const result = dispatch(state, { type: 'PLAY', hand, dieIds: ids }, { next: () => 0 });
     expect(result.state.score).toBe(score);
@@ -173,7 +170,6 @@ describe('Pair resolution and loss integration', () => {
     expect(result.state.dice[0].faces[values[0] - 1].workoutPips).toBe(1);
     expect(result.state.dice[4].faces[5].workoutPips).toBe(3);
     expect(result.state.stats.handScores[0]).toMatchObject({ hand, pips, multiplier: mult, score, hitchhikerPips: 18 });
-    expect(result.state.stats.triggers.multiplier).toBe(2);
     expect(result.events.filter(event => event.type === 'DICE_REROLL_STARTED').map(event => event.dieIds)).toEqual([rerolls]);
     expect(result.state.manualRerollsRemaining).toBe(3);
   });

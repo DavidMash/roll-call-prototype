@@ -2,19 +2,22 @@ import { CONFIG, roundReward, targetForRound } from './config';
 import { activeFace, oppositeFace, rollDie, scoringPips } from './dice';
 import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, stacks } from './enhancements';
 import {
-  activeFlameId, activeFlameInvestment, captureHandStart, chargeGainPerRoll, composeXMult,
-  FLAMES, FLAME_IDS, handXMultContributions, HOT_STREAK_SEQUENCE, independentXMultFactors,
+  activeFlameId, activeFlameInvestment, captureHandStart, chargeGainPerRoll,
+  FLAMES, FLAME_IDS, handXMultContributions, HOT_STREAK_SEQUENCE,
   ownedFlameIds, trainerChance,
 } from './flames';
 import { hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
-import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, handContributions, standaloneScore } from './scoring';
+import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, handContributions } from './scoring';
 import { boardSnapshot } from './telemetry';
-import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandScoreAccumulator, RandomSource, ScoreSource } from './types';
+import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, ScoreSource } from './types';
 
 type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number };
 type RollContext = 'gameplay' | 'shop' | 'flameReward';
 const NORMAL_SHOP_SPEND = new Set<GoldSpendSource>(['enhancement', 'shopDiceReroll', 'enhancementReroll', 'handTraining']);
+const UPPER_HAND_BY_FACE: Record<import('./types').Rank, HandId> = {
+  1: 'ones', 2: 'twos', 3: 'threes', 4: 'fours', 5: 'fives', 6: 'sixes',
+};
 
 // Rules resolve synchronously into immutable snapshots. Playback speed only changes how React reads them.
 export class Resolver {
@@ -88,10 +91,6 @@ export class Resolver {
     round.finalScore = this.state.score;
     this.emit({ type: 'SCORE_ADDED', amount, source, hand, dieIds, message });
   }
-  modifiers(dieId: number, face: Face): void {
-    if (stacks(face, 'bonus')) this.trigger('bonus', dieId, face, `+${stacks(face, 'bonus') * CONFIG.bonusPips} pips`);
-    if (stacks(face, 'multiplier')) this.trigger('multiplier', dieId, face, `+${stacks(face, 'multiplier') * CONFIG.multiplierIncrement} multiplier`);
-  }
   whenScored(dieId: number, snapshot: Face): void {
     const golden = stacks(snapshot, 'golden');
     if (golden) {
@@ -108,32 +107,16 @@ export class Resolver {
         message: `D${dieId + 1} face ${snapshot.rank} Workout ×${workout}: ${before} → ${scoringPips(live)} future pips` });
     }
   }
-  standalone(dieId: number, face: Face): void {
-    const source = 'jumpingBean';
-    this.modifiers(dieId, face);
-    const xMultFactors = independentXMultFactors(this.state, dieId);
-    for (const factor of xMultFactors) this.triggerFlame('looseCannon', factor.dieId, `×${this.format(factor.value)} independent XMult`, undefined, factor.value);
-    const xMult = composeXMult(xMultFactors);
-    const { pips, multiplier, rawScore, score } = standaloneScore(face, xMult);
-    this.state.stats.standaloneScores.push({ round: this.state.round, dieId, pips, multiplier, xMult, xMultFactors: structuredClone(xMultFactors), rawScore, score });
-    this.log({ type: 'SCORE_ROUNDING_AUDIT', dieIds: [dieId], face: face.rank, pips, multiplier, xMult, rawScore, amount: score, source,
-      message: `D${dieId + 1} Jumping Bean: ${this.format(pips)} × ${this.format(multiplier)} × ${this.format(xMult)} = ${this.format(rawScore)}; rounded ${score}` });
-    this.emit({ type: 'STANDALONE_SCORE_CALCULATED', dieIds: [dieId], face: face.rank, pips, multiplier, xMult, rawScore, amount: score, source,
-      message: `D${dieId + 1} Jumping Bean awarded ${score}` });
-    this.addScore(score, source, `D${dieId + 1} Jumping Bean scored ${score}`, [dieId]);
-    this.whenScored(dieId, face);
-  }
-
-  resolveJackpot(scoringDieIds: number[]): void {
+  resolveJackpot(scoringDieIds: number[]): number {
     const scoring = new Set(scoringDieIds);
     let total = 0;
     for (const die of [...this.state.dice].sort((a, b) => a.id - b.id)) {
       const face = activeFace(die);
       const count = stacks(face, 'jackpot');
       if (!count) continue;
-      if (scoring.has(die.id)) {
+      if (!scoring.has(die.id)) {
         this.log({ type: 'ABILITY_EVALUATED', enhancement: 'jackpot', dieIds: [die.id], face: face.rank,
-          message: `D${die.id + 1} Jackpot did not trigger: die scored in winning hand` });
+          message: `D${die.id + 1} Jackpot did not trigger: die did not score in winning hand` });
         continue;
       }
       const payout = count * CONFIG.jackpotGold;
@@ -142,6 +125,7 @@ export class Resolver {
       total += payout;
     }
     if (total) this.log({ type: 'ABILITY_EVALUATED', enhancement: 'jackpot', message: `Total Jackpot payout: +${total} gold` });
+    return total;
   }
 
   private addChargeForRoll(dieId: number): void {
@@ -212,16 +196,33 @@ export class Resolver {
       this.trigger(item.enhancement, item.dieId, item.face, item.enhancement === 'weighted'
         ? `source face ${item.weightedSourceFace} ×${item.weightedStacks}; destination weight ${item.rollWeight}` : '');
       if (item.enhancement === 'jumpingBean') {
-        this.standalone(item.dieId, item.face);
+        const hand = UPPER_HAND_BY_FACE[item.face.rank];
+        const outcome = this.play(hand, [item.dieId], 'jumpingBean');
+        const record = outcome.beanRecordIndex === null ? null : this.state.stats.jumpingBeanFreePlays[outcome.beanRecordIndex];
+        if (outcome.winning) {
+          this.emit({ type: 'JUMPING_BEAN_FOLLOWUP', enhancement: 'jumpingBean', hand, dieIds: [item.dieId], playSource: 'jumpingBean',
+            message: 'Jumping Bean follow-up reroll skipped because the free play cleared the round.' });
+          this.queue = [];
+          return;
+        }
         const sticky = stacks(item.face, 'sticky');
-        if (sticky && this.checkProbability('sticky', sticky, [item.dieId])) this.trigger('sticky', item.dieId, item.face, `×${sticky} prevented Jumping Bean reroll`);
-        else this.rollBatch([item.dieId], 'Jumping Bean reroll', 'gameplay');
+        if (sticky && this.checkProbability('sticky', sticky, [item.dieId])) {
+          if (record) record.stickyPreventedReroll = true;
+          this.trigger('sticky', item.dieId, item.face, `×${sticky} prevented Jumping Bean reroll`);
+          this.emit({ type: 'JUMPING_BEAN_FOLLOWUP', enhancement: 'jumpingBean', hand, dieIds: [item.dieId], playSource: 'jumpingBean',
+            message: `Sticky prevented D${item.dieId + 1}'s Jumping Bean follow-up reroll.` });
+        } else {
+          if (record) record.followupRerolled = true;
+          this.emit({ type: 'JUMPING_BEAN_FOLLOWUP', enhancement: 'jumpingBean', hand, dieIds: [item.dieId], playSource: 'jumpingBean',
+            message: `D${item.dieId + 1} begins its Jumping Bean follow-up reroll.` });
+          this.rollBatch([item.dieId], 'Jumping Bean reroll', 'gameplay');
+        }
       }
     }
     this.queue = [];
   }
 
-  private resolvePersonalTrainer(hand: HandId, scoringIds: number[]): void {
+  private resolvePersonalTrainer(hand: HandId, scoringIds: number[]): boolean | null {
     let chance = 0;
     let dieId: number | null = null;
     if (this.state.bonfires.includes('personalTrainer')) chance = 0.75;
@@ -229,16 +230,17 @@ export class Resolver {
       const trainer = this.state.dice.find(die => scoringIds.includes(die.id) && activeFlameId(die.flame) === 'personalTrainer');
       if (trainer) { chance = trainerChance(activeFlameInvestment(trainer.flame)); dieId = trainer.id; }
     }
-    if (chance <= 0) return;
+    if (chance <= 0) return null;
     this.state.stats.personalTrainerAttempts++;
     const success = probabilityCheck(this.rng, chance);
     this.log({ type: 'ABILITY_CHECKED', flame: 'personalTrainer', dieIds: dieId === null ? undefined : [dieId], hand,
       message: `Personal Trainer ${this.format(chance * 100)}%: ${success ? 'succeeded' : 'failed'}` });
-    if (!success) return;
+    if (!success) return false;
     const before = this.state.handLevels[hand]++;
     this.state.stats.personalTrainerSuccesses++;
     this.state.stats.personalTrainerLevelsGranted++;
     this.triggerFlame('personalTrainer', dieId, `${HANDS[hand].name} Lv. ${before} → ${this.state.handLevels[hand]}`, hand);
+    return true;
   }
   private advanceHotStreak(hand: HandId, scoringIds: number[]): void {
     if (this.state.hotStreakGoal !== hand) return;
@@ -255,19 +257,23 @@ export class Resolver {
     this.emit({ type: 'HOT_STREAK_CHANGED', flame: 'hotStreak', hand, amount: this.state.hotStreakCharges,
       message: `Hot Streak ${qualified ? `gained charge ${this.state.hotStreakCharges}` : 'advanced without charge'}; next ${this.state.hotStreakGoal ? HANDS[this.state.hotStreakGoal].name : 'complete'}` });
   }
-  play(hand: HandId, dieIds: number[]): void {
+  play(hand: HandId, dieIds: number[], playSource: HandPlaySource = 'manual'): { winning: boolean; beanRecordIndex: number | null } {
+    const freeBean = playSource === 'jumpingBean';
     const ids = [...dieIds].sort((a, b) => a - b);
     const handLevel = this.state.handLevels[hand];
     const handStart = captureHandStart(this.state, hand);
+    if (freeBean) handStart.chargeArmed = false;
     const shapeParticipants = ids.map(id => ({ id, face: structuredClone(activeFace(this.state.dice[id])), role: 'selected' as const }));
+    if (freeBean) this.emit({ type: 'JUMPING_BEAN_FREE_PLAY', enhancement: 'jumpingBean', hand, dieIds: ids,
+      face: shapeParticipants[0].face.rank, playSource, handConsumed: false,
+      message: `Jumping Bean free-play: ${HANDS[hand].name}; scoring dice: D${ids[0] + 1}; normal hand availability unchanged` });
     this.handAccumulator = createHandAccumulator(hand, ids, handLevel);
-    this.emit({ type: 'HAND_STARTED', hand, dieIds: ids, message: `Played ${HANDS[hand].name} Lv. ${handLevel}` });
-    this.state.handPlayCounts[hand]++;
-    this.state.stats.handsPlayed[hand] = (this.state.stats.handsPlayed[hand] ?? 0) + 1;
+    this.emit({ type: 'HAND_STARTED', hand, dieIds: ids, playSource, handConsumed: !freeBean,
+      message: `${freeBean ? 'Free-played' : 'Played'} ${HANDS[hand].name} Lv. ${handLevel}` });
     const round = this.state.stats.rounds.at(-1)!;
-    round.lastHand = hand; round.lastAction = 'PLAY';
+    round.lastHand = hand; round.lastAction = freeBean ? 'JUMPING_BEAN' : 'PLAY';
     const hitchhikers: { id: number; face: Face; role: 'hitchhiker' }[] = [];
-    for (const die of [...this.state.dice].sort((a, b) => a.id - b.id)) {
+    for (const die of freeBean ? [] : [...this.state.dice].sort((a, b) => a.id - b.id)) {
       if (ids.includes(die.id)) continue;
       const face = structuredClone(activeFace(die));
       const count = stacks(face, 'hitchhiker');
@@ -284,12 +290,12 @@ export class Resolver {
     }
     for (const contribution of contributions) {
       const { dieId, face, kind, role, amount } = contribution;
-      if (kind !== 'base') this.trigger(kind, dieId, face, `+${amount} ${kind === 'multiplier' ? 'hand multiplier' : 'hand pips'}`);
+      if (kind !== 'base') this.trigger(kind, dieId, face, `+${amount} hand pips`, { hand });
       applyHandContribution(this.handAccumulator, contribution);
-      this.emit({ type: kind === 'multiplier' ? 'HAND_MULTIPLIER_CHANGED' : role === 'hitchhiker' ? 'HITCHHIKER_ADDED_PIPS' : 'HAND_PIPS_CHANGED',
-        hand, dieIds: [dieId], face: face.rank, amount, enhancement: kind === 'base' ? undefined : kind, source: 'hand',
+      this.emit({ type: role === 'hitchhiker' ? 'HITCHHIKER_ADDED_PIPS' : 'HAND_PIPS_CHANGED',
+        hand, dieIds: [dieId], face: face.rank, amount, enhancement: kind === 'base' ? undefined : kind, source: freeBean ? 'jumpingBean' : 'hand', playSource,
         pips: this.handAccumulator.currentPips, multiplier: this.handAccumulator.currentMultiplier,
-        message: `D${dieId + 1}${role === 'hitchhiker' ? ' Hitchhiker' : ''} added ${amount} ${kind === 'multiplier' ? 'Mult' : 'Pips'}` });
+        message: `D${dieId + 1}${role === 'hitchhiker' ? ' Hitchhiker' : ''} added ${amount} Pips` });
     }
     for (const { id, face } of scoringParticipants) this.whenScored(id, face);
     for (const factor of handXMultContributions(handStart, hand, handLevel, scoringIds)) {
@@ -305,31 +311,50 @@ export class Resolver {
     this.state.stats.handScores.push({ round: this.state.round, hand, handLevel, dieIds: scoringIds,
       basePips: this.handAccumulator.basePips, baseMultiplier: this.handAccumulator.baseMultiplier,
       pips, multiplier, xMult, xMultFactors: structuredClone(this.handAccumulator.xMultFactors), rawScore, score,
-      bonusPips: this.handAccumulator.bonusPips, hitchhikerPips: this.handAccumulator.hitchhikerPips });
+      bonusPips: this.handAccumulator.bonusPips, hitchhikerPips: this.handAccumulator.hitchhikerPips,
+      playSource, consumedHand: !freeBean });
     this.state.stats.handBonusPips += this.handAccumulator.bonusPips;
     this.state.stats.hitchhikerPipsContributed += this.handAccumulator.hitchhikerPips;
-    this.log({ type: 'SCORE_ROUNDING_AUDIT', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score, source: 'hand',
+    this.log({ type: 'SCORE_ROUNDING_AUDIT', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score, source: freeBean ? 'jumpingBean' : 'hand', playSource,
       message: `Final: ${this.format(pips)} × ${this.format(multiplier)} × ${this.format(xMult)} = ${this.format(rawScore)}; rounded ${score}` });
-    this.emit({ type: 'HAND_SCORE_FINALIZED', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score, source: 'hand', message: `Final awarded hand score: ${score}` });
-    this.addScore(score, 'hand', `${HANDS[hand].name}: round score +${score}`, scoringIds, hand);
-    if (handStart.chargeArmed) {
+    this.emit({ type: 'HAND_SCORE_FINALIZED', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score,
+      source: freeBean ? 'jumpingBean' : 'hand', playSource, handConsumed: !freeBean, message: `Final awarded hand score: ${score}` });
+    this.addScore(score, freeBean ? 'jumpingBean' : 'hand', `${freeBean ? 'Jumping Bean free-play: ' : ''}${HANDS[hand].name}: round score +${score}`, scoringIds, hand);
+    if (!freeBean && handStart.chargeArmed) {
       const consumed = this.state.chargeXMult;
       this.state.chargeXMult = 1; this.state.chargeArmed = false;
       this.state.stats.chargeConsumed = Number((this.state.stats.chargeConsumed + Math.max(0, consumed - 1)).toFixed(12));
       this.emit({ type: 'CHARGE_CHANGED', flame: 'charge', xMult: 1, message: `Charge ×${this.format(consumed)} consumed; meter reset to ×1` });
     }
-    this.advanceHotStreak(hand, scoringIds);
-    this.resolvePersonalTrainer(hand, scoringIds);
+    if (!freeBean) this.advanceHotStreak(hand, scoringIds);
+    const personalTrainerSucceeded = this.resolvePersonalTrainer(hand, scoringIds);
+    this.state.handPlayCounts[hand]++;
+    this.state.stats.handsPlayed[hand] = (this.state.stats.handsPlayed[hand] ?? 0) + 1;
+    this.log({ type: 'ABILITY_EVALUATED', enhancement: freeBean ? 'jumpingBean' : undefined, hand, dieIds: scoringIds, playSource,
+      message: `${HANDS[hand].name} hand history incremented: ${handStart.previousPlays} → ${this.state.handPlayCounts[hand]}` });
     this.handAccumulator = null;
-    this.state.consumed.push(hand);
-    this.emit({ type: 'HAND_CONSUMED', hand, message: `${HANDS[hand].name} consumed for round ${this.state.round}` });
-    const winning = this.state.score >= this.state.target;
-    if (winning) {
-      this.resolveJackpot(scoringIds);
-      this.emit({ type: 'POST_HAND_REROLLS_SKIPPED', hand, message: 'Post-hand rerolls skipped because the target was reached.' });
-      this.evaluate();
-      return;
+    if (!freeBean) {
+      this.state.consumed.push(hand);
+      this.emit({ type: 'HAND_CONSUMED', hand, playSource, handConsumed: true, message: `${HANDS[hand].name} consumed for round ${this.state.round}` });
     }
+    const winning = this.state.score >= this.state.target;
+    let jackpotPayout = 0;
+    if (winning) {
+      jackpotPayout = this.resolveJackpot(scoringIds);
+      this.emit({ type: 'POST_HAND_REROLLS_SKIPPED', hand, playSource, message: 'Post-hand rerolls skipped because the target was reached.' });
+    }
+    const beanRecordIndex = freeBean ? this.state.stats.jumpingBeanFreePlays.push({
+      round: this.state.round, dieId: ids[0], face: shapeParticipants[0].face.rank, hand, handLevel,
+      basePips: this.state.stats.handScores.at(-1)!.basePips, baseMultiplier: this.state.stats.handScores.at(-1)!.baseMultiplier,
+      score, xMultFactors: structuredClone(this.state.stats.handScores.at(-1)!.xMultFactors),
+      previousPlayCount: handStart.previousPlays, handPlayCountAfter: this.state.handPlayCounts[hand], consumedHand: false,
+      stickyPreventedReroll: false, followupRerolled: false, roundCleared: winning, jackpotPayout, personalTrainerSucceeded,
+    }) - 1 : null;
+    if (winning) {
+      if (!freeBean) this.evaluate();
+      return { winning, beanRecordIndex };
+    }
+    if (freeBean) return { winning, beanRecordIndex };
     const rerolls = new Set<number>();
     for (const { id, face } of shapeParticipants) {
       const sticky = stacks(face, 'sticky');
@@ -340,6 +365,7 @@ export class Resolver {
     this.rollBatch([...rerolls], 'Post-hand reroll', 'gameplay');
     this.drain();
     this.evaluate();
+    return { winning: this.state.score >= this.state.target, beanRecordIndex: null };
   }
 
   manualReroll(dieIds: number[]): void {

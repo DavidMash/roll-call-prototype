@@ -43,7 +43,7 @@ async function perform(page: Page, game: GameState, action: Action) {
   return dispatch(game, action).state;
 }
 
-test('live Pips and Mult build through Bonus, Multiplier and Hitchhiker before one final award', async ({ page }) => {
+test('live Pips build through Bonus and Hitchhiker under trained Mult before one final award', async ({ page }) => {
   const fixture = scoringPlaybackRun();
   const final = fixture.result.events.find(event => event.type === 'HAND_SCORE_FINALIZED')!;
   const started = fixture.result.events.find(event => event.type === 'HAND_STARTED')!;
@@ -82,10 +82,6 @@ test('live Pips and Mult build through Bonus, Multiplier and Hitchhiker before o
         await expect(page.locator('.score-tick')).toHaveText('BONUS');
         observed.push(['Bonus', event.handScore.currentPips, event.handScore.currentMultiplier]);
       }
-      if (event.type === 'HAND_MULTIPLIER_CHANGED') {
-        await expect(page.locator('.score-tick')).toHaveText('MULTIPLIER');
-        observed.push(['Multiplier', event.handScore.currentPips, event.handScore.currentMultiplier]);
-      }
       if (event.type === 'HITCHHIKER_ADDED_PIPS') {
         await expect(page.locator('.score-tick')).toHaveText('HITCHHIKER');
         observed.push(['Hitchhiker', event.handScore.currentPips, event.handScore.currentMultiplier]);
@@ -100,10 +96,10 @@ test('live Pips and Mult build through Bonus, Multiplier and Hitchhiker before o
   }
   const expectedStages = fixture.result.events.filter(event =>
     (event.type === 'HAND_PIPS_CHANGED' && event.enhancement === 'bonus')
-    || event.type === 'HAND_MULTIPLIER_CHANGED' || event.type === 'HITCHHIKER_ADDED_PIPS');
-  expect(expectedStages).toHaveLength(3);
+    || event.type === 'HITCHHIKER_ADDED_PIPS');
+  expect(expectedStages).toHaveLength(2);
   expect(observed).toEqual(expectedStages.map(event => [
-    event.enhancement === 'bonus' ? 'Bonus' : event.enhancement === 'multiplier' ? 'Multiplier' : 'Hitchhiker',
+    event.enhancement === 'bonus' ? 'Bonus' : 'Hitchhiker',
     event.handScore!.currentPips, event.handScore!.currentMultiplier,
   ]));
   await page.getByRole('button', { name: 'Skip playback' }).click();

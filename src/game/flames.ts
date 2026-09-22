@@ -14,7 +14,6 @@ export const FLAMES: Record<Flame, FlameDefinition> = {
   hailMary: { name: 'Hail Mary', shortName: 'HAIL', affectsXMult: true, description: 'Scores with 0 manual rerolls left: scale XMult from ×1 to ×3.', bonfireDescription: 'Every hand played with 0 rerolls receives ×3.' },
   charge: { name: 'Charge', shortName: 'CHG', affectsXMult: true, description: 'This die’s gameplay rolls store up to +0.5 XMult each; arm it for a hand.', bonfireDescription: 'Every gameplay die roll adds +0.5 to the global meter.' },
   personalTrainer: { name: 'Personal Trainer', shortName: 'TRAIN', affectsXMult: false, description: 'When this die scores, up to a 75% chance to train the hand after scoring.', bonfireDescription: 'Every played hand gets one 75% training check.' },
-  looseCannon: { name: 'Loose Cannon', shortName: 'LOOSE', affectsXMult: true, description: 'This die’s independent scores scale XMult from ×1 to ×3.', bonfireDescription: 'Every independent score receives ×3.' },
   dragonsHoard: { name: "Dragon's Hoard", shortName: 'HOARD', affectsXMult: true, description: 'When this die scores, held Gold and investment scale XMult up to ×3.', bonfireDescription: 'Every hand receives the held-Gold factor, capped at ×3.' },
   wellTrained: { name: 'Well Trained', shortName: 'WELL', affectsXMult: true, description: 'When this die scores, previous plays scale XMult up to ×3.', bonfireDescription: 'Every hand receives its play-history factor, capped at ×3.' },
   targetPractice: { name: 'Target Practice', shortName: 'TARGET', affectsXMult: true, description: 'Scores in the round target: scale XMult from ×1 to ×5.', bonfireDescription: 'The round target globally receives ×5.' },
@@ -138,7 +137,7 @@ export function handXMultContributions(snapshot: HandStartSnapshot, hand: HandId
   const result: XMultFactor[] = [];
   if (snapshot.chargeArmed && snapshot.chargeXMult > 1) result.push({ source: 'charge', value: snapshot.chargeXMult, dieId: null, detail: 'armed stored Charge' });
   for (const id of snapshot.bonfires) {
-    if (!FLAMES[id]?.affectsXMult || id === 'looseCannon' || id === 'charge' || !qualifies(id, snapshot, hand, handLevel)) continue;
+    if (!FLAMES[id]?.affectsXMult || id === 'charge' || !qualifies(id, snapshot, hand, handLevel)) continue;
     const value = factorValue(id, 100, snapshot, scoringDieIds);
     if (value > 1) {
       const context = factorInput(id, snapshot, scoringDieIds);
@@ -147,7 +146,7 @@ export function handXMultContributions(snapshot: HandStartSnapshot, hand: HandId
   }
   for (const die of snapshot.dice) {
     const id = die.flame;
-    if (!id || !scoring.has(die.dieId) || !FLAMES[id].affectsXMult || id === 'looseCannon' || id === 'charge' || !qualifies(id, snapshot, hand, handLevel)) continue;
+    if (!id || !scoring.has(die.dieId) || !FLAMES[id].affectsXMult || id === 'charge' || !qualifies(id, snapshot, hand, handLevel)) continue;
     const value = factorValue(id, die.investedGold, snapshot, scoringDieIds);
     if (value > 1) result.push({ source: id, value, dieId: die.dieId, ...factorInput(id, snapshot, scoringDieIds) });
   }
@@ -156,13 +155,6 @@ export function handXMultContributions(snapshot: HandStartSnapshot, hand: HandId
 export const composeXMult = (factors: readonly (number | XMultFactor)[]) =>
   Number(factors.map(item => typeof item === 'number' ? item : item.value).sort((a, b) => a - b)
     .reduce((product, value) => product * value, 1).toFixed(12));
-export const independentXMultFactors = (state: Pick<GameState, 'dice' | 'bonfires'>, dieId: number): XMultFactor[] => {
-  if (state.bonfires.includes('looseCannon')) return [{ source: 'looseCannon', value: 3, dieId: null, detail: 'Bonfire' }];
-  const flame = state.dice[dieId]?.flame;
-  if (activeFlameId(flame) !== 'looseCannon') return [];
-  const value = standardFlameMultiplier(activeFlameInvestment(flame));
-  return value > 1 ? [{ source: 'looseCannon', value, dieId }] : [];
-};
 export const ownedFlameIds = (state: Pick<GameState, 'dice' | 'bonfires'>) => new Set<Flame>([
   ...state.bonfires,
   ...state.dice.map(die => activeFlameId(die.flame)).filter((id): id is Flame => id !== null),
