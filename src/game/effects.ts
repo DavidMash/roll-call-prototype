@@ -10,11 +10,11 @@ import { hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
 import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, handContributions } from './scoring';
 import { boardSnapshot } from './telemetry';
-import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, ScoreSource } from './types';
+import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameStateBase, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, ScoreSource } from './types';
 
 type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number };
 type RollContext = 'gameplay' | 'shop' | 'flameReward';
-const NORMAL_SHOP_SPEND = new Set<GoldSpendSource>(['enhancement', 'shopDiceReroll', 'enhancementReroll', 'handTraining']);
+const NORMAL_SHOP_SPEND = new Set<GoldSpendSource>(['enhancement', 'shopDiceReroll', 'enhancementReroll', 'handTraining', 'lifeRestore']);
 const UPPER_HAND_BY_FACE: Record<import('./types').Rank, HandId> = {
   1: 'ones', 2: 'twos', 3: 'threes', 4: 'fours', 5: 'fives', 6: 'sixes',
 };
@@ -65,6 +65,7 @@ export class Resolver {
     this.emit({ type: 'GOLD_ADDED', amount, message, goldSource, enhancement, face, dieIds: dieId === undefined ? undefined : [dieId] });
   }
   spendGold(amount: number, message: string, goldSpendSource: GoldSpendSource): void {
+    if (this.state.phase !== 'shop') throw new Error('Gold may only be spent in a normal Shop.');
     this.state.gold -= amount;
     this.state.stats.goldSpent += amount;
     this.state.stats.goldSpentBySource[goldSpendSource] += amount;
@@ -91,7 +92,7 @@ export class Resolver {
     round.finalScore = this.state.score;
     this.emit({ type: 'SCORE_ADDED', amount, source, hand, dieIds, message });
   }
-  whenScored(dieId: number, snapshot: Face): void {
+  whenScored(dieId: number, snapshot: Face, hand: HandId, playSource: HandPlaySource, participation: 'selected' | 'hitchhiker'): void {
     const golden = stacks(snapshot, 'golden');
     if (golden) {
       this.state.stats.triggers.golden = (this.state.stats.triggers.golden ?? 0) + 1;
@@ -105,6 +106,16 @@ export class Resolver {
       live.workoutPips += workout * CONFIG.workoutIncrement;
       this.emit({ type: 'WORKOUT_INCREMENTED', enhancement: 'workout', dieIds: [dieId], face: snapshot.rank,
         message: `D${dieId + 1} face ${snapshot.rank} Workout ×${workout}: ${before} → ${scoringPips(live)} future pips` });
+    }
+    if (stacks(snapshot, 'vintage')) {
+      const live = this.state.dice[dieId].faces[snapshot.rank - 1];
+      const before = Math.max(0, live.vintageSellValue ?? 0);
+      live.vintageSellValue = before + 3;
+      this.state.stats.triggers.vintage = (this.state.stats.triggers.vintage ?? 0) + 1;
+      this.state.stats.vintageGrowth.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
+        dieId, face: snapshot.rank, hand, playSource, participation, from: before, to: live.vintageSellValue });
+      this.emit({ type: 'VINTAGE_GROWN', enhancement: 'vintage', dieIds: [dieId], face: snapshot.rank, hand, playSource,
+        amount: 3, message: `D${dieId + 1} face ${snapshot.rank} Vintage · ${HANDS[hand].name} (${playSource === 'jumpingBean' ? 'Jumping Bean free play' : participation}) · sell value ${before} → ${live.vintageSellValue}` });
     }
   }
   resolveJackpot(scoringDieIds: number[]): number {
@@ -297,7 +308,7 @@ export class Resolver {
         pips: this.handAccumulator.currentPips, multiplier: this.handAccumulator.currentMultiplier,
         message: `D${dieId + 1}${role === 'hitchhiker' ? ' Hitchhiker' : ''} added ${amount} Pips` });
     }
-    for (const { id, face } of scoringParticipants) this.whenScored(id, face);
+    for (const { id, face, role } of scoringParticipants) this.whenScored(id, face, hand, playSource, role === 'hitchhiker' ? 'hitchhiker' : 'selected');
     for (const factor of handXMultContributions(handStart, hand, handLevel, scoringIds)) {
       const beforeXMult = this.handAccumulator.currentXMult;
       applyXMult(this.handAccumulator, factor);
@@ -387,19 +398,66 @@ export class Resolver {
     }
     this.evaluate();
   }
-  startRound(): void {
+  private captureRoundCheckpoint(): void {
+    const clone = structuredClone(this.state);
+    const { roundCheckpoint: _checkpoint, ...base } = clone;
+    // History snapshots and the action audit are retained across Bust separately;
+    // omitting them here keeps the checkpoint compact without weakening rollback.
+    base.history = [];
+    base.stats.actions = [];
+    this.state.roundCheckpoint = base as GameStateBase;
+  }
+  private resolveBust(): void {
+    const checkpoint = this.state.roundCheckpoint;
+    if (!checkpoint) throw new Error('Bust occurred without a round-start checkpoint.');
+    const current = this.state.stats.rounds.at(-1)!;
+    const failure = {
+      round: this.state.round, attempt: this.state.roundAttemptNumber, score: this.state.score, target: this.state.target,
+      shortfall: Math.max(0, this.state.target - this.state.score), livesBefore: this.state.lives,
+      livesAfter: Math.max(0, this.state.lives - 1),
+    };
+    const failureValues = this.state.dice.map(die => die.value);
+    const failureConsumed = [...this.state.consumed];
+    const failureLastHand = current.lastHand;
+    const failureLastAction = current.lastAction;
+    const history = this.state.history;
+    const actions = this.state.stats.actions;
+    Object.assign(this.state, structuredClone(checkpoint));
+    this.state.roundCheckpoint = structuredClone(checkpoint);
+    this.state.history = history;
+    this.state.stats.actions = actions;
+    this.state.lives = failure.livesAfter;
+    this.state.roundAttemptNumber = failure.livesAfter > 0 ? failure.attempt + 1 : failure.attempt;
+    this.state.bust = failure;
+    this.state.phase = failure.livesAfter > 0 ? 'bust' : 'lost';
+    this.state.stats.busts.push({ ...failure, retryStarted: false, runEndedNoLives: failure.livesAfter === 0 });
+    this.emit({ type: 'ROUND_BUST', amount: failure.shortfall,
+      message: `BUST · Round ${failure.round} attempt ${failure.attempt} · ${failure.score} / ${failure.target} · ${failure.shortfall} short · lives ${failure.livesBefore} → ${failure.livesAfter}` });
+    if (failure.livesAfter === 0) {
+      this.state.stats.loss = { round: failure.round, afterHand: failureLastHand, score: failure.score, afterAction: failureLastAction,
+        manualRerollsRemaining: 0, values: failureValues, consumed: failureConsumed };
+      this.emit({ type: 'RUN_LOST', message: `Run over: ${failure.score} / ${failure.target}; no lives remain` });
+    }
+  }
+  startRound(retry = false): void {
     if (this.state.chargeXMult !== 1 || this.state.chargeArmed) this.state.stats.chargeResets++;
     this.state.phase = 'round'; this.state.score = 0; this.state.scoreByHand = {}; this.state.effectScore = 0;
     this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound; this.state.target = targetForRound(this.state.round);
     this.state.consumed = []; this.state.targetPracticeHand = null; this.state.lastRoundPayout = null;
     this.state.chargeXMult = 1; this.state.chargeArmed = false; this.state.hotStreakCharges = 0;
     this.state.hotStreakGoal = ownedFlameIds(this.state).has('hotStreak') ? 'pair' : null;
-    this.state.shop = null; this.state.flameReward = null; this.state.stats.roundReached = this.state.round;
-    this.state.stats.rounds.push({ round: this.state.round, target: this.state.target, firstCrossedScore: null,
+    this.state.shop = null; this.state.flameReward = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
+    if (retry) {
+      const priorBust = this.state.stats.busts.at(-1);
+      if (priorBust?.round === this.state.round && !priorBust.retryStarted) priorBust.retryStarted = true;
+    }
+    this.captureRoundCheckpoint();
+    this.state.stats.rounds.push({ round: this.state.round, attempt: this.state.roundAttemptNumber, target: this.state.target, firstCrossedScore: null,
       finalScore: 0, clearMargin: null, cleared: false, lastHand: null, lastAction: null,
       manualRerollsGranted: CONFIG.manualRerollsPerRound, manualRerollChargesSpent: 0,
       manualRerollsRemainingAtClear: null, manualRerollActions: 0, deadBoardRescues: 0, scoreByHand: {}, effectScore: 0, payout: null });
-    this.emit({ type: 'ROUND_STARTED', message: `Round ${this.state.round} — goal ${this.state.target}; Charge reset to ×1` });
+    this.emit({ type: retry ? 'ROUND_RETRY_STARTED' : 'ROUND_STARTED',
+      message: `Round ${this.state.round} — Attempt ${this.state.roundAttemptNumber} — goal ${this.state.target}; Charge reset to ×1` });
     this.selectTargetPractice();
     this.rollBatch(this.state.dice.map(die => die.id), 'Initial round roll', 'gameplay');
     this.drain(); this.evaluate();
@@ -447,10 +505,10 @@ export class Resolver {
   }
   openFlameReward(): void {
     this.state.phase = 'flameReward'; this.state.shop = null;
-    this.state.flameReward = { offers: [], offerRerolls: 0, acquired: false };
+    this.state.flameReward = { offers: [], acquired: false };
     this.rollBatch(this.state.dice.map(die => die.id), 'Flame Reward roll', 'flameReward');
     this.freshFlameOffers();
-    this.emit({ type: 'FLAME_REWARD_OPENED', message: 'Flame Reward — choose a new Flame or stoke an existing Ember' });
+    this.emit({ type: 'FLAME_REWARD_OPENED', message: 'Flame Reward — choose and assign one new Flame, or skip' });
   }
   evaluate(): void {
     const current = this.state.stats.rounds.at(-1)!;
@@ -472,10 +530,7 @@ export class Resolver {
       if (this.state.round % 3 === 0) this.openFlameReward(); else this.openShop();
     } else if (!hasPlayableHand(this.state.dice, this.state.consumed)) {
       if (this.state.manualRerollsRemaining > 0) { this.emit({ type: 'DEAD_BOARD', message: `No playable hands — ${this.state.manualRerollsRemaining} rerolls remain` }); return; }
-      this.state.phase = 'lost';
-      this.state.stats.loss = { round: this.state.round, afterHand: current.lastHand, score: this.state.score, afterAction: current.lastAction,
-        manualRerollsRemaining: this.state.manualRerollsRemaining, values: this.state.dice.map(die => die.value), consumed: [...this.state.consumed] };
-      this.emit({ type: 'RUN_LOST', message: `Run over: ${this.state.score} / ${this.state.target}` });
+      this.resolveBust();
     }
   }
 }

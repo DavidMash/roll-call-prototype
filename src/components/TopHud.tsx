@@ -1,4 +1,5 @@
-import { ActionIcon, Badge, Box, Group, Progress, SegmentedControl, Text, Tooltip } from '@mantine/core';
+import { ActionIcon, Badge, Box, Group, Progress, SegmentedControl, Text, Tooltip, UnstyledButton } from '@mantine/core';
+import { CONFIG } from '../game/config';
 import type { Board } from '../game/types';
 import { FLAMES } from '../game/flames';
 import type { PlaybackSpeed } from '../useGame';
@@ -11,13 +12,15 @@ function HudStat({ testId, icon, label, value }: { testId: string; icon: string;
   </div>;
 }
 
-export function TopHud({ board, speed, setSpeed, openRunInfo, openHelp }: {
+export function TopHud({ board, speed, setSpeed, openRunInfo, openHelp, openRestoreLives }: {
   board: Board;
   speed: PlaybackSpeed;
   setSpeed: (speed: PlaybackSpeed) => void;
   openRunInfo: () => void;
   openHelp: () => void;
+  openRestoreLives: () => void;
 }) {
+  const hearts = Array.from({ length: CONFIG.maxLives }, (_, index) => index < board.lives ? '♥' : '♡').join(' ');
   return <Box component="header" className="top-hud">
     <Group className="top-hud-row" justify="space-between" wrap="nowrap">
       <Text className="game-title">ROLL CALL</Text>
@@ -26,9 +29,14 @@ export function TopHud({ board, speed, setSpeed, openRunInfo, openHelp }: {
         <HudStat testId="stat-goal" icon="◎" label="Goal" value={board.target} />
         <HudStat testId="stat-score" icon="★" label="Score" value={board.score} />
         <HudStat testId="stat-gold" icon="●" label="Gold" value={board.gold} />
+        {board.phase === 'shop'
+          ? <Tooltip label="Restore lost lives" withArrow><UnstyledButton className="hud-lives interactive" data-testid="stat-lives"
+            aria-label={`${board.lives} of ${CONFIG.maxLives} lives; restore lives`} onClick={openRestoreLives}>{hearts}</UnstyledButton></Tooltip>
+          : <div className="hud-lives" data-testid="stat-lives" aria-label={`${board.lives} of ${CONFIG.maxLives} lives`}>{hearts}</div>}
         {board.phase === 'shop' || board.phase === 'flameReward'
           ? <div className="hud-phase" aria-label={board.phase === 'shop' ? 'Shop phase' : 'Flame Reward phase'}>{board.phase === 'shop' ? 'SHOP' : 'FLAME'}</div>
-          : <HudStat testId="stat-rerolls" icon="↻" label="Rerolls" value={board.manualRerollsRemaining} />}
+          : board.phase === 'round' ? <HudStat testId="stat-rerolls" icon="↻" label="Rerolls" value={board.manualRerollsRemaining} />
+            : <div className="hud-phase" aria-label={board.phase === 'bust' ? 'Bust phase' : 'Run ended'}>{board.phase === 'bust' ? 'BUST' : 'OVER'}</div>}
       </Group>
       <Group className="hud-actions" gap={6} wrap="nowrap">
         <SegmentedControl size="xs" aria-label="Playback speed" value={speed}

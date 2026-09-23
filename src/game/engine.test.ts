@@ -23,7 +23,9 @@ function state(values: Rank[] = [1, 2, 3, 4, 5]): GameState {
   return game;
 }
 function enhance(game: GameState, id: number, enhancement: Enhancement, count = 1, rank?: Rank) {
-  game.dice[id].faces[(rank ?? game.dice[id].value) - 1].enhancements[enhancement] = count;
+  const face = game.dice[id].faces[(rank ?? game.dice[id].value) - 1];
+  face.enhancements[enhancement] = count;
+  if (enhancement === 'vintage') face.vintageSellValue = 0;
 }
 const play = (game: GameState, hand: HandId = 'ones', dieIds = [0], rng = constant()) =>
   dispatch(game, { type: 'PLAY', hand, dieIds }, rng);
@@ -443,6 +445,7 @@ describe('round boundaries and losing', () => {
   it('valid consumed hands do not prevent loss on the complete board', () => {
     const game = state([1, 2, 2, 4, 5]);
     game.manualRerollsRemaining = 0;
+    game.lives = 1;
     game.consumed = ['twos', 'threes', 'fours', 'fives', 'sixes', 'pair', 'twoPair'];
     const result = play(game);
     expect(result.state.phase).toBe('lost');
@@ -601,6 +604,8 @@ describe('reproducibility and end-to-end domain flow', () => {
             if (!bought.error) { game = bought.state; purchases++; }
           }
           game = dispatch(game, { type: 'NEXT_ROUND' }).state;
+        } else if (game.phase === 'bust') {
+          game = dispatch(game, { type: 'RETRY_ROUND' }).state;
         } else throw new Error(`Unexpected ${game.phase}`);
       }
       if (game.phase === 'lost') losses++;

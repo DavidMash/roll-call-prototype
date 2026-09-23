@@ -2,7 +2,7 @@ export type Rank = 1 | 2 | 3 | 4 | 5 | 6;
 export type Enhancement =
   | 'bonus' | 'jumpingBean' | 'golden' | 'workout'
   | 'missingLink' | 'mirror' | 'magnetic' | 'sticky' | 'slippy'
-  | 'hitchhiker' | 'weighted' | 'jackpot' | 'bump';
+  | 'hitchhiker' | 'weighted' | 'jackpot' | 'bump' | 'vintage';
 export type Flame =
   | 'ultimate' | 'minigun' | 'hailMary' | 'charge' | 'personalTrainer'
   | 'dragonsHoard' | 'wellTrained' | 'targetPractice'
@@ -10,11 +10,11 @@ export type Flame =
 export type HandId =
   | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes'
   | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
-export type Phase = 'round' | 'flameReward' | 'shop' | 'lost' | 'error';
+export type Phase = 'round' | 'bust' | 'flameReward' | 'shop' | 'lost' | 'error';
 export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker';
 export type HandPlaySource = 'manual' | 'jumpingBean';
-export type GoldSource = 'golden' | 'jackpot' | 'roundBase' | 'unusedRerolls' | 'interest' | 'flameBonus';
-export type GoldSpendSource = 'enhancement' | 'shopDiceReroll' | 'enhancementReroll' | 'handTraining' | 'flameReroll' | 'flameInvestment';
+export type GoldSource = 'golden' | 'jackpot' | 'enhancementSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'flameBonus';
+export type GoldSpendSource = 'enhancement' | 'shopDiceReroll' | 'enhancementReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore';
 export type HandLevels = Record<HandId, number>;
 
 export interface XMultFactor {
@@ -62,6 +62,7 @@ export interface Face {
   rank: Rank;
   workoutPips: number;
   enhancements: Partial<Record<Enhancement, number>>;
+  vintageSellValue?: number;
 }
 export interface ActiveFlame { id: Flame; investedGold: number }
 export interface StandaloneScoreRecord {
@@ -79,7 +80,7 @@ export interface Offer { id: number; enhancement: Enhancement; purchased: boolea
 export interface TrainingOffer { hand: HandId; purchased: boolean }
 export interface Shop { offers: Offer[]; trainingOffers: TrainingOffer[]; diceRerolls: number; offerRerolls: number }
 export interface FlameOffer { id: number; flame: Flame }
-export interface FlameReward { offers: FlameOffer[]; offerRerolls: number; acquired: boolean }
+export interface FlameReward { offers: FlameOffer[]; acquired: boolean }
 export interface RoundPayout {
   baseGold: number;
   unusedRerollGold: number;
@@ -94,6 +95,11 @@ export interface Board {
   target: number;
   score: number;
   gold: number;
+  lives: number;
+  livesPurchasedThisRun: number;
+  roundAttemptNumber: number;
+  bust: BustSummary | null;
+  flameTutorial: { pendingDieId: number | null; completed: boolean };
   manualRerollsRemaining: number;
   dice: Die[];
   bonfires: Flame[];
@@ -114,6 +120,7 @@ export interface Board {
 }
 export interface RoundStats {
   round: number;
+  attempt: number;
   target: number;
   firstCrossedScore: number | null;
   finalScore: number;
@@ -139,7 +146,23 @@ export interface ManualRerollStats {
   rescuedDeadBoard: boolean;
 }
 export interface Purchase { round: number; enhancement: Enhancement; dieId: number; face: Rank; cost: number; stacksApplied?: number }
-export interface ScrapRecord { round: number; enhancement: Enhancement; dieId: number; face: Rank; stacksRemoved: number }
+export interface EnhancementSale {
+  round: number; enhancement: Enhancement; dieId: number; face: Rank; stacksSold: number;
+  baseSellPrice: number; totalProceeds: number; goldBefore: number; goldAfter: number;
+  vintageSellValue?: number;
+}
+export interface BustRecord {
+  round: number; attempt: number; score: number; target: number; shortfall: number;
+  livesBefore: number; livesAfter: number; retryStarted: boolean; runEndedNoLives: boolean;
+}
+export interface LifeRestorePurchase {
+  round: number; purchaseNumber: number; cost: number; goldBefore: number; goldAfter: number;
+  livesBefore: number; livesAfter: number; lifetimeSpendBefore: number; lifetimeSpendAfter: number;
+}
+export interface VintageGrowthRecord {
+  round: number; attempt: number; dieId: number; face: Rank; hand: HandId; playSource: HandPlaySource;
+  participation: 'selected' | 'hitchhiker'; from: number; to: number;
+}
 export interface TrainingPurchase { round: number; hand: HandId; fromLevel: number; toLevel: number; cost: number }
 export interface FlameAcquisition { round: number; dieId: number; flame: Flame; replaced: Flame | null }
 export type FlameStokeSource = 'flame_reward' | 'shop';
@@ -178,7 +201,10 @@ export interface RunStats {
   rounds: RoundStats[];
   handsPlayed: Partial<Record<HandId, number>>;
   purchases: Purchase[];
-  scraps: ScrapRecord[];
+  sales: EnhancementSale[];
+  busts: BustRecord[];
+  lifeRestores: LifeRestorePurchase[];
+  vintageGrowth: VintageGrowthRecord[];
   trainingPurchases: TrainingPurchase[];
   trainingPurchasesTotal: number;
   trainingGoldSpent: number;
@@ -187,8 +213,6 @@ export interface RunStats {
   flameStokes: FlameStoke[];
   totalFlameInvestment: number;
   bonfiresCreated: { round: number; flame: Flame }[];
-  flameOfferRerolls: number;
-  flameRerollGoldSpent: number;
   flameTriggers: Partial<Record<Flame, number>>;
   xMultFactorsByFlame: Partial<Record<Flame, number[]>>;
   targetPracticeTargets: { round: number; hand: HandId }[];
@@ -242,8 +266,9 @@ export type EventType =
   | 'FLAME_REWARD_OPENED' | 'FLAME_OFFERS_REFRESHED' | 'FLAME_ACQUIRED' | 'FLAME_REPLACED'
   | 'FLAME_SKIPPED' | 'FLAME_INVESTED' | 'BONFIRE_CREATED' | 'FLAME_TRIGGERED' | 'HAND_XMULT_CHANGED'
   | 'TARGET_PRACTICE_SELECTED' | 'CHARGE_CHANGED' | 'CHARGE_ARMED' | 'HOT_STREAK_CHANGED'
-  | 'ENHANCEMENT_SCRAPPED' | 'MAGNETIC_ATTRACTION' | 'BUMP_ROLL'
+  | 'ENHANCEMENT_SOLD' | 'VINTAGE_GROWN' | 'MAGNETIC_ATTRACTION' | 'BUMP_ROLL'
   | 'JUMPING_BEAN_FREE_PLAY' | 'JUMPING_BEAN_FOLLOWUP'
+  | 'ROUND_BUST' | 'ROUND_RETRY_STARTED' | 'LIFE_RESTORED' | 'FLAME_TUTORIAL_COMPLETED'
   | 'RUN_LOST' | 'RESOLUTION_ERROR' | 'MANUAL_REROLL_STARTED' | 'DEAD_BOARD' | 'DEAD_BOARD_RESCUED';
 export interface EventRecord {
   id: number;
@@ -270,24 +295,36 @@ export interface EventRecord {
   handScore?: HandScoreAccumulator;
 }
 export interface GameEvent extends EventRecord { board: Board }
-export interface GameState extends Board {
+export interface BustSummary {
+  round: number;
+  attempt: number;
+  score: number;
+  target: number;
+  shortfall: number;
+  livesBefore: number;
+  livesAfter: number;
+}
+export interface GameStateBase extends Board {
   seed: string;
   rngState: number;
   nextOfferId: number;
   stats: RunStats;
   history: EventRecord[];
 }
+export interface GameState extends GameStateBase { roundCheckpoint: GameStateBase | null }
 export type Action =
   | { type: 'PLAY'; hand: HandId; dieIds: number[] }
   | { type: 'MANUAL_REROLL'; dieIds: number[] }
   | { type: 'TOGGLE_CHARGE' }
   | { type: 'BUY'; offerId: number; dieId: number }
-  | { type: 'SCRAP_ENHANCEMENT'; dieId: number; face: Rank; enhancement: Enhancement }
+  | { type: 'SELL_ENHANCEMENT'; dieId: number; face: Rank; enhancement: Enhancement }
   | { type: 'TRAIN_HAND'; hand: HandId }
   | { type: 'CHOOSE_FLAME'; offerId: number; dieId: number }
   | { type: 'STOKE_FLAME'; dieId: number; amount: number }
-  | { type: 'REROLL_FLAMES' }
   | { type: 'CONTINUE_FLAME_REWARD' }
+  | { type: 'RESTORE_LIFE' }
+  | { type: 'DISMISS_FLAME_TUTORIAL' }
+  | { type: 'RETRY_ROUND' }
   | { type: 'REROLL_DICE' }
   | { type: 'REROLL_OFFERS' }
   | { type: 'NEXT_ROUND' };

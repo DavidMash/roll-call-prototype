@@ -187,9 +187,15 @@ describe('loss, rescue and shop separation', () => {
     game.consumed = ['twos', 'threes', 'fours', 'fives', 'sixes', 'pair', 'twoPair'];
     game.manualRerollsRemaining = remaining;
     const result = dispatch(game, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant());
-    expect(hasPlayableHand(result.state.dice, result.state.consumed)).toBe(false);
-    expect(result.state.phase).toBe(remaining === 0 ? 'lost' : 'round');
-    expect(result.events.at(-1)!.type).toBe(remaining === 0 ? 'RUN_LOST' : 'DEAD_BOARD');
+    if (remaining === 0) {
+      expect(result.state.phase).toBe('bust');
+      expect(result.state.bust).toMatchObject({ livesBefore: 3, livesAfter: 2 });
+      expect(result.events.at(-1)!.type).toBe('ROUND_BUST');
+    } else {
+      expect(hasPlayableHand(result.state.dice, result.state.consumed)).toBe(false);
+      expect(result.state.phase).toBe('round');
+      expect(result.events.at(-1)!.type).toBe('DEAD_BOARD');
+    }
   });
   it('a legal hand keeps the round active with zero rerolls', () => {
     const game = board();
@@ -220,10 +226,11 @@ describe('loss, rescue and shop separation', () => {
   });
   it('keeps a persistent dead board active until the final reroll resolves', () => {
     let game = deadBoard();
+    game.lives = 1;
     for (const remaining of [2, 1, 0]) {
       const result = reroll(game, [0], constant(0));
       game = result.state;
-      expect(game.manualRerollsRemaining).toBe(remaining);
+      expect(game.manualRerollsRemaining).toBe(remaining ? remaining : 3);
       expect(game.phase).toBe(remaining ? 'round' : 'lost');
       expect(result.events.at(-1)!.type).toBe(remaining ? 'DEAD_BOARD' : 'RUN_LOST');
     }

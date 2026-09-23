@@ -1,91 +1,100 @@
 # Roll Call prototype
 
-Roll Call is a deterministic React/TypeScript/Vite dice roguelike. The domain engine resolves complete actions synchronously and emits immutable events and board snapshots; React only plays those snapshots. Playback speed therefore cannot affect outcomes.
+Roll Call is a deterministic React/TypeScript/Vite dice roguelike. The domain engine resolves actions synchronously and emits immutable events and board snapshots; React only plays those snapshots. Playback speed cannot change outcomes.
 
-## Core loop
+## Rounds, lives, and Busts
 
-Choose a legal Yahtzee-style hand, select its physical dice, and play it. A played category is consumed for the round. Each round grants three manual die rerolls, charged once per selected die. Reach the target to enter the shop; a run ends only when the score is below target, no unconsumed hand is playable, and no manual rerolls remain.
+Choose a legal Yahtzee-style hand, select its physical dice, and play it. A played category is consumed for the round. Each attempt grants three manual die rerolls, charged once per selected die.
 
-Scoring is:
+A run starts with `3 / 3` lives. When score is below target, no legal unconsumed hand remains, and no manual rerolls remain, the attempt Busts. The engine restores its round-start checkpoint, subtracts one life, increments the attempt number, and retries the same round. Each attempt uses a deterministic seed derived from the run seed, round, and attempt, so retries are reproducible but do not repeat the same roll stream. A Bust that reduces lives to zero ends the run.
+
+The checkpoint prevents failed-attempt farming. Score, consumed hands, dice, rerolls, gameplay Gold, Charge, Hot Streak, Workout, Personal Trainer levels, hand history, Vintage growth, and other attempt changes roll back. Shop purchases made before the attempt remain.
+
+Scoring remains:
 
 ```text
 round(Pips × Mult × XMult)
 ```
 
-Every XMult contribution is a multiplicative factor and the factors are composed centrally. There is no additive-XMult state. Large builds can still compound to enormous scores, but each Flame has a hand, resource, or sequencing condition.
+Every XMult contribution is a multiplicative factor composed centrally. Ordinary Mult still comes from trained hand Base Mult.
 
-## Gold and shops
+## Gold and the Shop
 
-Every clear pays:
+The normal Shop is the only place Gold is spent. It contains enhancement purchases and refreshes, Hand Training, paid dice rerolls, Flame Stoke controls, and life restoration. Gold may still be earned during scoring.
+
+Every successful clear pays, in order:
 
 - 5 base Gold;
-- 1 Gold per unused manual reroll (0–3);
-- `min(5, floor(heldGold / 5))` interest, using held Gold after scoring effects;
-- an additional +5 Flame Bonus on rounds divisible by three.
+- 1 Gold per unused manual reroll;
+- `min(5, floor(heldGold / 5))` interest using the pre-payout Gold snapshot;
+- +5 Flame Bonus on rounds divisible by three.
 
-Interest is snapshotted before the Flame Bonus is awarded. The ordinary clear payout is at most 13 and an every-third-round payout is at most 18 before enhancement income. Shop dice rerolls cost 2/4/8/16… and enhancement rerolls cost 3/6/12/24…. Hand Training costs 4 Gold. Lifetime normal-shop spending includes enhancements, training, and both shop reroll types.
+A failed attempt pays none of these rewards. The Flame Bonus does not affect the interest calculation that precedes it.
 
-Enhancements attach to an exposed physical face. A face holds at most three distinct enhancement types; more stacks of an existing type use no additional type slot. Sticky, Hitchhiker, Golden, and Jackpot cap at three stacks. With no offer selected, selecting an exposed die opens Manage Die with all six faces and their capacities. Any enhancement type can be scrapped there, removing all its stacks with no refund. A fourth-type attempt opens the same modal focused on the full face and preserves the pending offer so it can be applied after room is made.
+Lost lives can be restored one at a time only in a normal Shop. The run-wide prices are `25, 40, 60, 90, 130, 180, 240, 310, 390, 480…`; after 390, each new increment is 10 larger than the prior increment. Restoration spending counts toward Money to Burn. The price counter resets only on a new run, and lives cannot exceed three.
 
-The enhancement roster is Bonus, Jumping Bean, Golden, Workout, Missing Link, Mirror, Magnetic, Sticky, Slippy, Hitchhiker, Weighted, Jackpot, and Bump. Sustainable and Multiplier have been removed. Ordinary Mult comes exclusively from each hand’s trained Base Mult. Bump costs 2 Gold.
+Lifetime normal-Shop spending includes enhancement purchases, Hand Training, both paid Shop rerolls, and life restoration. Flame Stoke does not count. Enhancement sales are income and do not reduce or increase historical spending.
 
-Jumping Bean is a real free Upper-hand play rather than an independent score. Rolling one free-plays the matching Ones–Sixes category using only that die and its trained Base Pips/Base Mult, records the score in that category, increments hand history, and then rerolls the die. It works even if the category is already consumed and never consumes or reopens its normal use. Relevant face effects and hand-based Flames apply; Hitchhiker, generic Slippy/post-hand batches, Lower-only Flames, and automatic Charge consumption do not. Sticky may block the follow-up roll, Bump may control it, and another Bean landing can chain.
+## Enhancements and selling
 
-Golden pays +1 Gold per stack whenever its scoring face participates, up to +3. Jackpot pays +3 Gold per stack only when its face scores in the hand that clears the round, up to +9 per face.
+Enhancements attach to the exposed physical face. A face holds at most three distinct types; extra stacks of an existing type use no additional slot. Clicking a die with no offer selected opens Manage Die for all six faces and its Ember. A fourth-type attempt opens Manage Die on the full face and preserves the pending offer, allowing a sale followed by immediate application.
 
-### Roll control
+Selling removes every stack of the selected enhancement type from that face. Normal stack sales pay `stack count × base sell price`. Sale prices and purchase prices are authoritative enhancement metadata.
 
-Roll-result precedence is:
+| Enhancement | Buy | Base sell / stack |
+|---|---:|---:|
+| Sticky | 2 | 1 |
+| Slippy | 2 | 1 |
+| Jumping Bean | 2 | 1 |
+| Golden | 2 | 1 |
+| Missing Link | 2 | 1 |
+| Mirror | 2 | 1 |
+| Hitchhiker | 2 | 1 |
+| Bump | 2 | 1 |
+| Bonus | 3 | 1 |
+| Workout | 3 | 2 |
+| Magnetic | 3 | 2 |
+| Weighted | 3 | 2 |
+| Jackpot | 3 | 1 |
+| Vintage | 3 | dynamic |
 
-1. Bump, if the die begins the roll showing a Bump face;
-2. attraction from a held Magnetic anchor;
-3. Weighted/random selection.
+Sticky and Slippy now cost 2 Gold; their gameplay behavior is unchanged.
 
-Bump advances one numerical face, wrapping 6→1, on the next actual roll. Its destination can trigger normal landed-face effects, but Bump does not recurse in the same roll.
+### Vintage
 
-A Magnetic anchor must already be showing Magnetic before a roll batch and must be held outside that batch. It attracts each rolled die that owns a Magnetic face. Newly landed Magnetic faces never become anchors within the same batch.
+Vintage is unique and non-stackable. A new instance starts with a 0-Gold sell value and has no direct scoring effect. Whenever its physical face participates in a resolved scoring hand, its sell value increases by 3 Gold exactly once. Selected dice, successful Hitchhikers, and Jumping Bean free plays qualify; rolls, displayed faces, failed Hitchhikers, Shop rolls, and Flame Reward rolls do not. Separate Bean-chain hand resolutions may each grow it.
 
-## Flames, embers, and Bonfires
+Vintage has no value cap and may exceed its 3-Gold purchase price. Selling pays its current value and deletes that accumulated state; repurchasing starts at 0. Failed-attempt growth rolls back with the round checkpoint.
 
-Every third clear opens the special Flame Reward screen before the shop. New Flames remain exclusive to this cadence. The rolled faces carry into the shop without another free roll. On the reward screen the player may:
+## Flame Rewards, Embers, and Bonfires
 
-- Stoke arbitrary whole Gold amounts into active Flames by selecting their physical dice;
-- acquire at most one offered Flame;
-- replace an active Flame and lose its investment;
-- reroll offers for 5/10/20/40… Gold;
-- skip acquisition and continue.
+Every third successful clear adds the +5 Flame Bonus and opens the special Flame Reward before the Shop. This screen only allows the player to select one of the three deterministic distinct offers and assign it to a physical die, or skip. There are no paid offer rerolls and no Stoke controls on Flame Rewards.
 
-New Flames are 0-Gold Embers with neutral effects. Owned Flames can be Stoked through their physical die on every normal shop as well as on Flame Rewards; normal shops never acquire or replace Flames. Investment is limited to 100. At 100 the Flame becomes a Bonfire: it detaches from its die, frees the slot, appears in the global Bonfire strip, and applies once globally. Active and Bonfire types are unique and are excluded from future offers.
+New Flames begin as 0-Gold Embers. The immediately following Shop shows a one-time controlled tooltip on the first Flame’s die, teaching the player to click the die, Stoke it, and reach Bonfire at 100 Gold. All Flame investment occurs through Manage Die in a normal Shop. Arbitrary positive whole-Gold Stoke amounts are supported and do not count toward Money to Burn spending.
 
-Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a factor and scoring applies `XMult *= factor`. Multiple factors multiply; no Flame adds a bonus directly to global XMult.
+At exactly 100 invested Gold an Ember becomes a global Bonfire, detaches from its die, and cannot be reacquired. Replacing an active Ember during a later Flame Reward destroys its investment. The threshold and all Flame formulas remain unchanged.
 
-The final roster is:
+Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a factor and scoring applies `XMult *= factor`.
 
-| Flame | Active rule | Bonfire rule |
-|---|---|---|
-| Ultimate | Highest-level hand: factor `1 + 4p` (×1→×5) | Every qualifying hand gets ×5 |
-| Minigun | Upper hand: factor `1 + 4p` (×1→×5) | Every Upper hand gets ×5 |
-| Hail Mary | Zero rerolls: factor `1 + 4p` (×1→×5) | Every qualifying hand gets ×5 |
-| Charge | Each gameplay roll grows the stored factor by `p`; armed Charge contributes that factor | Every gameplay die roll grows it by 1 |
-| Personal Trainer | `min(75%, 150% × p)` training chance; no XMult factor | One 75% check per hand |
-| Dragon's Hoard | `1 + 4p × min(heldGold/100, 1)`, capped at ×5 | Global full-progress formula |
-| Well Trained | `min(5, 1 + previousPlays × 0.2p)` | Global full-progress formula |
-| Target Practice | Targeted Lower hand: factor `1 + 8p` (×1→×9) | Targeted hand gets ×9 globally |
-| Hot Streak | Factor `1 + successfulCharges × p` on the current sequence hand | Removes the die requirement; full coefficient |
-| Money to Burn | `1 + 4p × min(shopSpend/100, 1)`, capped at ×5 | Global full-progress formula |
-| Lowball | `1 + 2 × (printedFaceTier − 1) × p`, up to ×5 | Global full-progress printed-face factor |
-| Straight Shooter | Small/Large Straight: factor `1 + 4p` (×1→×5) | Those Straights get ×5 globally |
-| Double Down | Pair/Two Pair: factor `1 + 4p` (×1→×5) | Pair and Two Pair get ×5 globally |
-
-Charge must be armed explicitly. It resets after use and at round start. Post-hand gameplay rerolls can immediately begin charging the next hand.
-
-Hot Streak resets to Pair and zero charges each round. Its sequence is Pair → Two Pair → Three of a Kind → Small Straight → Full House → Four of a Kind → Large Straight → Five of a Kind. Playing a future sequence hand early does not reset the current goal; when reached later, that already-consumed hand is skipped without retroactive charge.
-
-Target Practice chooses from the three least-played Lower hands using seeded RNG and remains fixed for the round. Lowball uses printed/current face values, including successful Hitchhikers, never Bonus or Workout pips.
+| Flame | Active rule |
+|---|---|
+| Ultimate | Highest-level hand: `1 + 4p`, max ×5 |
+| Minigun | Upper hand: `1 + 4p`, max ×5 |
+| Hail Mary | Zero rerolls: `1 + 4p`, max ×5 |
+| Charge | Gameplay rolls add `p` to its stored factor; armed factor multiplies XMult |
+| Personal Trainer | `min(75%, 150% × p)` training chance; no XMult |
+| Dragon's Hoard | `1 + 4p × min(heldGold/100, 1)`, max ×5 |
+| Well Trained | `min(5, 1 + previousPlays × 0.2p)` |
+| Target Practice | Targeted Lower hand: `1 + 8p`, max ×9 |
+| Hot Streak | `1 + successfulCharges × p` |
+| Money to Burn | `1 + 4p × min(shopSpend/100, 1)`, max ×5 |
+| Lowball | `1 + 2 × (printedFaceTier − 1) × p`, max ×5 |
+| Straight Shooter | Small/Large Straight: `1 + 4p`, max ×5 |
+| Double Down | Pair/Two Pair: `1 + 4p`, max ×5 |
 
 ## Telemetry and validation
 
-Run Info exports schema 12 / `multiplicative-flames-v2`, including source-aware hand scores, ordered XMult factor records, Flame Reward/shop Stoke sources, Flame progression, Charge, Trainer, Hot Streak, shop spending, and clear-payout components.
+Run Info exports schema 13 / `lives-vintage-economy-v1`, including round attempts, Bust/life transitions, restore purchases, enhancement sales, Vintage growth, source-aware hand scores, Flame factors, Stoke records, and Shop spending.
 
 Validation commands:
 

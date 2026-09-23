@@ -27,8 +27,7 @@ function flameSeed() {
         else break;
       } else if (game.phase === 'shop') game = dispatch(game, { type: 'NEXT_ROUND' }).state;
       else if (game.phase === 'flameReward') {
-        const rerolled = dispatch(game, { type: 'REROLL_FLAMES' }).state;
-        if (rerolled.flameReward!.offers.some(offer => offer.flame === 'wellTrained')) return seed;
+        if (game.flameReward!.offers.some(offer => offer.flame === 'wellTrained')) return seed;
         break;
       } else break;
     }
@@ -81,7 +80,7 @@ async function reachReward(page: Page, seed: string) {
   return game;
 }
 
-test('Flame Reward rerolls offers, preserves faces, reveals XMult, and previews Well Trained', async ({ page }) => {
+test('Flame Reward has fixed offers, preserves faces, reveals XMult, and previews Well Trained', async ({ page }) => {
   const seed = flameSeed();
   let game = await reachReward(page, seed);
   await expect(page.getByText('FLAME REWARD', { exact: true })).toBeVisible();
@@ -93,9 +92,7 @@ test('Flame Reward rerolls offers, preserves faces, reveals XMult, and previews 
   await expect(page.getByTestId('flame-die-4')).toBeVisible();
   const rewardFaces = game.dice.map(die => die.value);
 
-  await page.getByRole('button', { name: '↻ Reroll · 5 Gold', exact: true }).click();
-  game = dispatch(game, { type: 'REROLL_FLAMES' }).state;
-  await ready(page);
+  await expect(page.getByRole('button', { name: /Reroll.*Gold/ })).toHaveCount(0);
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
   await expect(page.getByTestId('stat-gold').getByText(String(game.gold), { exact: true })).toBeVisible();
 
@@ -114,12 +111,19 @@ test('Flame Reward rerolls offers, preserves faces, reveals XMult, and previews 
   expect(game.phase).toBe('shop');
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
   await expect(page.getByRole('button', { name: new RegExp(`^Die 1, face ${rewardFaces[0]},.*Flame ${FLAMES.wellTrained.name}`) })).toBeVisible();
+  await expect(page.getByRole('tooltip')).toContainText('Your Flame is only an Ember—it has no effect yet.');
+  await expect(page.getByRole('tooltip')).toContainText('Stoke the Flame with Gold');
+  await expect(page.getByRole('tooltip')).toContainText('100 Gold');
+  await expect(page.locator('.flame-tutorial-anchor')).toHaveCount(1);
   await expect(page.getByText(`🔥 ${FLAMES.wellTrained.shortName} 0`, { exact: true })).toBeVisible();
   await expect(page.locator('[data-testid^="flame-offer-"]')).toHaveCount(0);
 
   const goldBeforeStoke = game.gold;
   await page.getByRole('button', { name: /^Die 1,/ }).click();
-  const manager = page.getByRole('dialog', { name: 'D1 — Manage Faces' });
+  game = dispatch(game, { type: 'DISMISS_FLAME_TUTORIAL' }).state;
+  await ready(page);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  const manager = page.getByRole('dialog', { name: 'D1 — Manage Die' });
   await expect(manager.getByTestId('shop-flame-context')).toContainText('0 / 100 → BONFIRE');
   await manager.getByRole('button', { name: 'Stoke Flame', exact: true }).click();
   const shopStoke = page.getByRole('dialog', { name: `D1 — Stoke ${FLAMES.wellTrained.name}` });
@@ -152,7 +156,7 @@ test('Flame Reward rerolls offers, preserves faces, reveals XMult, and previews 
   await expect(page.getByTestId(`well-trained-preview-${choice.hand}`)).toHaveCount(0);
 });
 
-test('unified Flame screen supports arbitrary investment and optional acquisition', async ({ page }) => {
+test('Flame Reward only acquires while Shop Manage Die supports arbitrary Stoke and optional acquisition', async ({ page }) => {
   const seed = flameSeed();
   let game = await reachReward(page, seed);
   const rewardFaces = game.dice.map(die => die.value);
@@ -164,7 +168,20 @@ test('unified Flame screen supports arbitrary investment and optional acquisitio
   const active = page.getByTestId(`active-flame-${offer.flame}`);
   await expect(active).toContainText('0 / 100 → BONFIRE');
   await expect(page.getByText(/Donate/i)).toHaveCount(0);
-  await page.getByTestId('flame-die-0').getByRole('button', { name: /^Die 1,/ }).click();
+  await expect(page.getByRole('button', { name: /Stoke/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
+  game = dispatch(game, { type: 'CONTINUE_FLAME_REWARD' }).state;
+  await ready(page);
+  expect(game.phase).toBe('shop');
+  expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
+  await expect(page.getByRole('tooltip')).toBeVisible();
+  await page.getByRole('button', { name: 'Dismiss Flame tip', exact: true }).click();
+  game = dispatch(game, { type: 'DISMISS_FLAME_TUTORIAL' }).state;
+  await ready(page);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await page.getByRole('button', { name: /^Die 1,/ }).click();
+  const manager = page.getByRole('dialog', { name: 'D1 — Manage Die' });
+  await manager.getByRole('button', { name: 'Stoke Flame', exact: true }).click();
   const stoke = page.getByRole('dialog', { name: new RegExp(`Stoke ${FLAMES[offer.flame].name}`) });
   await expect(stoke).toContainText('Current');
   await expect(stoke).toContainText('At Bonfire');
@@ -172,13 +189,9 @@ test('unified Flame screen supports arbitrary investment and optional acquisitio
   await stoke.getByRole('button', { name: 'Stoke 7 Gold', exact: true }).click();
   game = dispatch(game, { type: 'STOKE_FLAME', dieId: 0, amount: 7 }).state;
   await ready(page);
-  await expect(page.getByTestId(`active-flame-${offer.flame}`)).toContainText('7 / 100 → BONFIRE');
+  await expect(stoke).toContainText('7 / 100 → BONFIRE');
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
-  game = dispatch(game, { type: 'CONTINUE_FLAME_REWARD' }).state;
-  await ready(page);
-  expect(game.phase).toBe('shop');
-  expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
+  await page.keyboard.press('Escape');
 
   // A separate deterministic run can use the same primary action without taking an offer.
   game = await reachReward(page, seed);

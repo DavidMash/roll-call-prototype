@@ -1,7 +1,7 @@
 import { Alert, Button, Group, Paper, Stack, Text } from '@mantine/core';
 import { validateAction } from '../game/engine';
 import { activeFlameInvestment, captureHandStart, composeXMult, handXMultContributions, hasXMultFlame, hotStreakMultiplier, targetPracticeMultiplier } from '../game/flames';
-import { hasPlayableHand, HANDS } from '../game/hands';
+import { handOptions, hasPlayableHand, HANDS } from '../game/hands';
 import { finalizeScore, handScore } from '../game/scoring';
 import { canPlay, emptySelection, selectHand, toggleDie } from '../game/selection';
 import type { Selection } from '../game/selection';
@@ -26,6 +26,8 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
   const manualAction: Action = { type: 'MANUAL_REROLL', dieIds: selection.dieIds };
   const canReroll = validateAction(board, manualAction) === null;
   const deadBoard = !hasPlayableHand(board.dice, board.consumed);
+  const availablePlays = handOptions(board.dice, board.consumed).filter(option => !option.consumed).length;
+  const lastPlay = board.manualRerollsRemaining === 0 && availablePlays === 1 && valid;
   const hotFlame = board.dice.find(die => die.flame?.id === 'hotStreak')?.flame;
   const hotInvestment = board.bonfires.includes('hotStreak') ? 100 : activeFlameInvestment(hotFlame);
   const targetFlame = board.dice.find(die => die.flame?.id === 'targetPractice')?.flame;
@@ -38,6 +40,10 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
     {!busy && deadBoard && board.manualRerollsRemaining > 0 && <Alert color="orange" py={5} title="No playable hands" role="status">
       Select dice and use a reroll.
     </Alert>}
+    {!busy && !deadBoard && <Group gap="xs" aria-label="Round options remaining">
+      {board.manualRerollsRemaining === 0 && <Alert color="orange" py={4} title="NO REROLLS" />}
+      <Text size="xs" fw={800} c={lastPlay ? 'red' : 'dimmed'}>{lastPlay ? 'LAST PLAY' : `${availablePlays} ${availablePlays === 1 ? 'PLAY' : 'PLAYS'} AVAILABLE`}</Text>
+    </Group>}
     {(board.hotStreakGoal || board.targetPracticeHand) && <Paper p="xs" className="flame-goals"><Group gap="lg">
       {board.hotStreakGoal && <Text size="xs"><strong>🔥 HOT STREAK</strong> · Next: {HANDS[board.hotStreakGoal].name} · Charges: {board.hotStreakCharges} · Hit now: ×{Number(hotStreakMultiplier(hotInvestment, board.hotStreakCharges + 1).toFixed(4))}</Text>}
       {board.targetPracticeHand && <Text size="xs"><strong>◎ TARGET</strong> · {HANDS[board.targetPracticeHand].name} · ×{Number(targetPracticeMultiplier(targetInvestment).toFixed(4))}</Text>}
@@ -64,7 +70,7 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
             : selection.dieIds.length ? 'Select a complete participating set' : 'Choose a hand or select dice'}</Text>
           <Group gap="xs" wrap="nowrap">
             <Button size="sm" variant="default" disabled={busy || !canReroll} aria-label={`Reroll Selected — ${selection.dieIds.length}`} onClick={() => submit(manualAction)}>↻ Reroll Selected — {selection.dieIds.length}</Button>
-            <Button size="sm" disabled={busy || !valid} onClick={() => submit({ type: 'PLAY', hand: selection.hand!, dieIds: selection.dieIds })}>PLAY</Button>
+            <Button size="sm" color={lastPlay ? 'red' : undefined} disabled={busy || !valid} onClick={() => submit({ type: 'PLAY', hand: selection.hand!, dieIds: selection.dieIds })}>{lastPlay ? 'LAST PLAY' : 'PLAY'}</Button>
           </Group>
         </div>
       </div>

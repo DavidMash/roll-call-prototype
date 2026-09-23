@@ -10,10 +10,11 @@ const SHORT_DESCRIPTION: Record<Enhancement, string> = {
   sticky: 'Chance to prevent a scored reroll.', slippy: 'Rerolls after a played hand continues.',
   hitchhiker: 'Chance to join as a scorer when held out.', weighted: 'Raises the roll weight of the opposite face.',
   jackpot: 'Earns Gold when this face scores in the winning hand; max 3.', bump: 'Advances one face on this die’s next roll.',
+  vintage: 'Starts worth 0 Gold; gains +3 sell value whenever this face scores.',
 };
 const ICON: Record<Enhancement, string> = {
   bonus: '+', jumpingBean: '↯', golden: '●', workout: '▲', missingLink: '⛓', mirror: '◇',
-  magnetic: '∩', sticky: '⚓', slippy: '↻', hitchhiker: '♟', weighted: '▼', jackpot: '★', bump: '↑',
+  magnetic: '∩', sticky: '⚓', slippy: '↻', hitchhiker: '♟', weighted: '▼', jackpot: '★', bump: '↑', vintage: 'V',
 };
 export function EnhancementCard({ offer, selected, gold, busy, onSelect }: {
   offer: Offer; selected: boolean; gold: number; busy: boolean; onSelect: () => void;

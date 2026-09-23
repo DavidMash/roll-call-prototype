@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG, roundReward, targetForRound } from './config';
 import { newRun } from './engine';
+import { enhancementCost } from './enhancements';
 
 describe('prototype balance progression', () => {
   it('uses a 50-point base, 1.35 growth, and targets rounded to five', () => {
@@ -34,7 +35,7 @@ describe('prototype balance progression', () => {
   });
 
   it('prices Jackpot at three gold and pays three gold per stack', () => {
-    expect(CONFIG.enhancementCosts.jackpot).toBe(3);
+    expect(enhancementCost('jackpot')).toBe(3);
     expect(CONFIG.jackpotGold).toBe(3);
   });
 });

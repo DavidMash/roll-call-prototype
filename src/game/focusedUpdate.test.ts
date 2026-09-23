@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { CONFIG } from './config';
 import { activeFace } from './dice';
 import { dispatch, newRun } from './engine';
 import { attachmentError, ENHANCEMENTS, ENHANCEMENT_IDS, enhancementCost, stacks } from './enhancements';
@@ -37,16 +36,16 @@ function deterministicBean(rank: Rank, configure?: (game: GameState) => void, rn
 }
 
 describe('focused enhancement roster and migration', () => {
-  it('contains exactly the 13 requested enhancements and locks their prices', () => {
+  it('contains the current 14 enhancements and locks their prices', () => {
     expect(ENHANCEMENT_IDS).toEqual([
       'bonus', 'jumpingBean', 'golden', 'workout', 'missingLink', 'mirror', 'magnetic',
-      'sticky', 'slippy', 'hitchhiker', 'weighted', 'jackpot', 'bump',
+      'sticky', 'slippy', 'hitchhiker', 'weighted', 'jackpot', 'bump', 'vintage',
     ]);
     expect(Object.fromEntries(ENHANCEMENT_IDS.map(id => [id, enhancementCost(id)]))).toEqual({
       bonus: 3, jumpingBean: 2, golden: 2, workout: 3, missingLink: 2, mirror: 2,
-      magnetic: 3, sticky: 1, slippy: 1, hitchhiker: 2, weighted: 3, jackpot: 3, bump: 2,
+      magnetic: 3, sticky: 2, slippy: 2, hitchhiker: 2, weighted: 3, jackpot: 3, bump: 2, vintage: 3,
     });
-    expect((CONFIG.enhancementCosts as Record<string, number | undefined>).multiplier).toBeUndefined();
+    expect((ENHANCEMENTS as Record<string, unknown>).multiplier).toBeUndefined();
   });
 
   it('uses authoritative stack metadata and rejects a fourth capped stack', () => {

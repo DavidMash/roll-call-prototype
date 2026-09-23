@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { CONFIG, targetForRound } from './config';
+import { targetForRound } from './config';
 import { createDice } from './dice';
+import { ENHANCEMENTS } from './enhancements';
 import { combinationsForHand, defaultCombination, handOptions, HAND_IDS, isValidSelection } from './hands';
 import { handScore } from './scoring';
 import { canPlay, emptySelection, selectHand, toggleDie } from './selection';
@@ -59,7 +60,7 @@ describe('hand detection', () => {
   });
   it('uses the centralized progression formula', () => {
     expect(Array.from({ length: 6 }, (_, i) => targetForRound(i + 1))).toEqual([50, 70, 90, 125, 165, 225]);
-    expect(CONFIG.enhancementCosts).toHaveProperty('weighted', 3);
+    expect(ENHANCEMENTS.weighted.purchasePrice).toBe(3);
   });
 });
 

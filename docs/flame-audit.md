@@ -25,9 +25,9 @@ Bonfires continue to use each Flame's full-progress formula globally and still r
 ## Flow audit
 
 - New Flame acquisition remains exclusive to the every-third-clear Flame Reward. The existing +5 Flame Bonus and one-acquisition limit are unchanged.
-- The same `STOKE_FLAME` domain action now accepts both `flameReward` and `shop` phases. It validates whole positive Gold, held Gold, active ownership, and the 100-Gold cap once.
+- `STOKE_FLAME` is accepted only in the normal `shop` phase. It validates whole positive Gold, held Gold, active ownership, and the 100-Gold cap once. Flame Rewards no longer spend Gold or refresh offers.
 - Shop Stoke is reached through the owned Flame's physical die and Manage Die context. It does not expose Flame offers, acquisition, or replacement.
-- Stoke telemetry records the source (`flame_reward` or `shop`), round, die, Flame, amount, previous investment, and resulting investment. Bonfire completion remains a separate record.
+- Stoke telemetry records the Shop source, round, die, Flame, amount, previous investment, and resulting investment. Bonfire completion remains a separate record.
 - UI effect text comes from shared domain selectors used by both Shop and Flame Reward screens. Scoring playback reports the prior XMult, the Flame factor, and their product.
 
 ## Named non-catalog checks

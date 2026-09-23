@@ -17,7 +17,9 @@ export function scoringPlaybackRun() {
     for (let step = 0; step < 80 && game.round <= 6; step++) {
       if (game.phase === 'lost' || game.phase === 'error') break;
       let action: Action;
-      if (game.phase === 'flameReward') {
+      if (game.phase === 'bust') {
+        action = { type: 'RETRY_ROUND' };
+      } else if (game.phase === 'flameReward') {
         action = game.flameReward!.acquired
           ? { type: 'CONTINUE_FLAME_REWARD' }
           : { type: 'CHOOSE_FLAME', offerId: game.flameReward!.offers[0].id, dieId: Math.floor(game.round / 3 - 1) % 5 };

@@ -38,6 +38,8 @@ async function perform(page: Page, game: GameState, action: Action) {
   } else if (action.type === 'MANUAL_REROLL') {
     await selectDice(page, action.dieIds);
     await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();
+  } else if (action.type === 'RETRY_ROUND') {
+    await page.getByRole('button', { name: /^RETRY ROUND / }).click();
   } else throw new Error(`Unexpected fixture action: ${action.type}`);
   await ready(page);
   return dispatch(game, action).state;

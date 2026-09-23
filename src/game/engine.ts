@@ -1,12 +1,14 @@
-import { CONFIG, diceRerollCost, flameRerollCost, offerRerollCost } from './config';
+import { CONFIG, diceRerollCost, lifeRestoreCost, offerRerollCost } from './config';
 import { activeFace, createDice } from './dice';
 import { Resolver } from './effects';
-import { attachmentError, enhancementCost, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, stacks } from './enhancements';
+import { attachmentError, enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, stacks } from './enhancements';
 import { activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasOwnedFlame, isFlame } from './flames';
 import { HANDS, initialHandLevels, initialHandPlayCounts, isValidSelection } from './hands';
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
 import type { Action, Board, GameState, RandomSource, Resolution } from './types';
+
+const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`${seed}:round:${round}:attempt:${attempt}`);
 
 function normalizedState(state: GameState): GameState {
   const next = structuredClone(state);
@@ -22,6 +24,8 @@ function normalizedState(state: GameState): GameState {
         if (clamped > 0) face.enhancements[id] = clamped;
         else delete face.enhancements[id];
       }
+      if (stacks(face, 'vintage')) face.vintageSellValue = Math.max(0, Math.floor(face.vintageSellValue ?? 0));
+      else delete face.vintageSellValue;
     }
     const id = activeFlameId(die.flame);
     die.flame = id ? { id, investedGold: activeFlameInvestment(die.flame) } : null;
@@ -30,14 +34,28 @@ function normalizedState(state: GameState): GameState {
   if (next.shop) next.shop.offers = next.shop.offers.filter(offer => isEnhancement(offer.enhancement));
   if (next.flameReward) next.flameReward.offers = next.flameReward.offers.filter(offer => isFlame(offer.flame));
   next.stats.jumpingBeanFreePlays ??= [];
+  next.lives = Math.max(0, Math.min(CONFIG.maxLives, Math.floor(next.lives ?? CONFIG.maxLives)));
+  next.livesPurchasedThisRun = Math.max(0, Math.floor(next.livesPurchasedThisRun ?? 0));
+  next.roundAttemptNumber = Math.max(1, Math.floor(next.roundAttemptNumber ?? 1));
+  next.bust ??= null;
+  next.flameTutorial ??= { pendingDieId: null, completed: false };
+  next.roundCheckpoint ??= null;
+  next.stats.sales ??= [];
+  next.stats.busts ??= [];
+  next.stats.lifeRestores ??= [];
+  next.stats.vintageGrowth ??= [];
+  next.stats.rounds = next.stats.rounds.map(round => ({ ...round, attempt: round.attempt ?? 1 }));
   next.stats.flameStokes ??= ((next.stats as unknown as { flameDonations?: GameState['stats']['flameStokes'] }).flameDonations ?? []);
   next.stats.flameStokes = next.stats.flameStokes.map(stoke => ({ ...stoke,
     from: stoke.from ?? Math.max(0, stoke.total - stoke.amount), source: stoke.source ?? 'flame_reward' }));
   next.stats.goldBySource.flameBonus ??= 0;
+  next.stats.goldBySource.enhancementSale ??= 0;
+  next.stats.goldSpentBySource.lifeRestore ??= 0;
   return next;
 }
 
 export function validateAction(state: Board, action: Action): string | null {
+  if (action.type === 'RETRY_ROUND') return state.phase === 'bust' && state.lives > 0 ? null : 'A living Bust is required to retry the round.';
   if (action.type === 'MANUAL_REROLL') {
     if (state.phase !== 'round') return 'Manual rerolls can only be used during a gameplay round.';
     if (!action.dieIds.length) return 'Select at least one die to reroll.';
@@ -60,9 +78,7 @@ export function validateAction(state: Board, action: Action): string | null {
     return null;
   }
   if (action.type === 'STOKE_FLAME') {
-    if (!((state.phase === 'flameReward' && state.flameReward) || (state.phase === 'shop' && state.shop))) {
-      return 'Stoking requires an open shop or Flame Reward.';
-    }
+    if (state.phase !== 'shop' || !state.shop) return 'Flames can only be Stoked in a normal Shop.';
     const die = state.dice.find(item => item.id === action.dieId);
     if (!die?.flame || !activeFlameId(die.flame)) return 'Choose an active Flame to invest in.';
     if (!Number.isInteger(action.amount) || action.amount <= 0) return 'Stoking requires a positive whole Gold amount.';
@@ -70,16 +86,13 @@ export function validateAction(state: Board, action: Action): string | null {
     if (activeFlameInvestment(die.flame) + action.amount > 100) return 'A Flame cannot hold more than 100 invested Gold.';
     return null;
   }
-  if (action.type === 'CHOOSE_FLAME' || action.type === 'REROLL_FLAMES' || action.type === 'CONTINUE_FLAME_REWARD') {
+  if (action.type === 'CHOOSE_FLAME' || action.type === 'CONTINUE_FLAME_REWARD') {
     if (state.phase !== 'flameReward' || !state.flameReward) return 'This action requires an open Flame Reward.';
     if (action.type === 'CHOOSE_FLAME') {
       if (state.flameReward.acquired) return 'Only one new Flame may be acquired per reward.';
       const offer = state.flameReward.offers.find(item => item.id === action.offerId);
       if (!offer || !state.dice.some(die => die.id === action.dieId)) return 'Choose an available Flame and a physical die.';
       if (hasOwnedFlame(state as GameState, offer.flame)) return 'That Flame type is already owned by this run.';
-    } else if (action.type === 'REROLL_FLAMES') {
-      if (state.flameReward.acquired) return 'A Flame has already been acquired on this reward screen.';
-      if (state.gold < flameRerollCost(state.flameReward.offerRerolls)) return 'Not enough gold to reroll Flame offers.';
     }
     return null;
   }
@@ -91,9 +104,13 @@ export function validateAction(state: Board, action: Action): string | null {
     if (state.gold < enhancementCost(offer.enhancement)) return 'Not enough gold for this enhancement.';
     return attachmentError(activeFace(die), offer.enhancement);
   }
-  if (action.type === 'SCRAP_ENHANCEMENT') {
+  if (action.type === 'SELL_ENHANCEMENT') {
     const die = state.dice.find(item => item.id === action.dieId);
     if (!die || !Number.isInteger(action.face) || !stacks(die.faces[action.face - 1], action.enhancement)) return 'Choose an enhancement that exists on that physical face.';
+  }
+  if (action.type === 'RESTORE_LIFE') {
+    if (state.lives >= CONFIG.maxLives) return 'All lives are already restored.';
+    if (state.gold < lifeRestoreCost(state.livesPurchasedThisRun)) return 'Not enough gold to restore a life.';
   }
   if (action.type === 'TRAIN_HAND') {
     const offer = state.shop.trainingOffers.find(item => item.hand === action.hand);
@@ -105,8 +122,9 @@ export function validateAction(state: Board, action: Action): string | null {
   return null;
 }
 
-function execute(state: GameState, run: (resolver: Resolver) => void, random?: RandomSource): Resolution {
+function execute(state: GameState, run: (resolver: Resolver) => void, random?: RandomSource, rngStateOverride?: number): Resolution {
   const next = structuredClone(state);
+  if (rngStateOverride !== undefined) next.rngState = rngStateOverride;
   const seeded = new SeededRng(next.rngState);
   const resolver = new Resolver(next, random ?? seeded);
   try { run(resolver); }
@@ -126,13 +144,14 @@ function execute(state: GameState, run: (resolver: Resolver) => void, random?: R
 export function newRun(seed: string, random?: RandomSource): Resolution {
   const state: GameState = {
     phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: CONFIG.baseTarget,
-    score: 0, gold: CONFIG.startingGold, dice: createDice(), bonfires: [], chargeXMult: 1,
+    score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, livesPurchasedThisRun: 0, roundAttemptNumber: 1,
+    bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], chargeXMult: 1,
     chargeArmed: false, hotStreakGoal: null, hotStreakCharges: 0, lifetimeNormalShopGoldSpent: 0, consumed: [], shop: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
     scoreByHand: {}, effectScore: 0, lastRoundPayout: null, flameReward: null,
-    manualRerollsRemaining: CONFIG.manualRerollsPerRound, nextOfferId: 0, stats: createStats(seed), history: [],
+    manualRerollsRemaining: CONFIG.manualRerollsPerRound, nextOfferId: 0, stats: createStats(seed), history: [], roundCheckpoint: null,
   };
-  return execute(state, resolver => resolver.startRound(), random);
+  return execute(state, resolver => resolver.startRound(), random, random ? undefined : attemptSeed(seed, 1, 1));
 }
 
 export function dispatch(state: GameState, action: Action, random?: RandomSource): Resolution {
@@ -140,6 +159,9 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
   const normalizationChangedState = JSON.stringify(normalized) !== JSON.stringify(state);
   const error = validateAction(normalized, action);
   if (error) return { state: normalizationChangedState ? normalized : state, events: [], error };
+  const rngStateOverride = random ? undefined : action.type === 'NEXT_ROUND'
+    ? attemptSeed(normalized.seed, normalized.round + 1, 1)
+    : action.type === 'RETRY_ROUND' ? attemptSeed(normalized.seed, normalized.round, normalized.roundAttemptNumber) : undefined;
   return execute(normalized, resolver => {
     const next = resolver.state;
     next.stats.actions.push(structuredClone(action));
@@ -159,6 +181,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const cost = enhancementCost(offer.enhancement);
         resolver.spendGold(cost, `Bought ${ENHANCEMENTS[offer.enhancement].name}: −${cost} gold`, 'enhancement');
         face.enhancements[offer.enhancement] = (face.enhancements[offer.enhancement] ?? 0) + 1;
+        if (offer.enhancement === 'vintage') face.vintageSellValue = 0;
         offer.purchased = true;
         next.stats.purchases.push({ round: next.round, enhancement: offer.enhancement, dieId: die.id, face: face.rank, cost, stacksApplied: 1 });
         const key = `D${die.id + 1}:${face.rank}`;
@@ -167,23 +190,32 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
           message: `${ENHANCEMENTS[offer.enhancement].name} attached to D${die.id + 1}, physical face ${face.rank}` });
         break;
       }
-      case 'SCRAP_ENHANCEMENT': {
+      case 'SELL_ENHANCEMENT': {
         const die = next.dice[action.dieId];
         const face = die.faces[action.face - 1];
-        const stacksRemoved = stacks(face, action.enhancement);
+        const stacksSold = stacks(face, action.enhancement);
+        const definition = ENHANCEMENTS[action.enhancement];
+        const totalProceeds = enhancementSellValue(face, action.enhancement);
+        const goldBefore = next.gold;
+        const vintageSellValue = action.enhancement === 'vintage' ? totalProceeds : undefined;
         delete face.enhancements[action.enhancement];
-        next.stats.scraps.push({ round: next.round, enhancement: action.enhancement, dieId: die.id, face: face.rank, stacksRemoved });
-        resolver.emit({ type: 'ENHANCEMENT_SCRAPPED', enhancement: action.enhancement, dieIds: [die.id], face: face.rank,
-          amount: stacksRemoved, message: `Scrapped ${ENHANCEMENTS[action.enhancement].name} ×${stacksRemoved} from D${die.id + 1} face ${face.rank}; no Gold refund` });
+        if (action.enhancement === 'vintage') delete face.vintageSellValue;
+        resolver.addGold(totalProceeds, `Sold ${definition.name} ×${stacksSold}: +${totalProceeds} Gold`, 'enhancementSale', die.id, action.enhancement, face.rank);
+        next.stats.sales.push({ round: next.round, enhancement: action.enhancement, dieId: die.id, face: face.rank, stacksSold,
+          baseSellPrice: definition.baseSellPrice, totalProceeds, goldBefore, goldAfter: next.gold, vintageSellValue });
+        resolver.emit({ type: 'ENHANCEMENT_SOLD', enhancement: action.enhancement, dieIds: [die.id], face: face.rank,
+          amount: totalProceeds, message: `Sold all ${stacksSold} ${definition.name} stack${stacksSold === 1 ? '' : 's'} from D${die.id + 1} face ${face.rank} for ${totalProceeds} Gold` });
         break;
       }
       case 'CHOOSE_FLAME': {
         const offer = next.flameReward!.offers.find(item => item.id === action.offerId)!;
         const die = next.dice[action.dieId];
         const replaced = activeFlameId(die.flame);
+        const firstFlame = next.stats.flameAcquisitions.length === 0;
         die.flame = { id: offer.flame, investedGold: 0 };
         next.flameReward!.acquired = true;
         next.stats.flameAcquisitions.push({ round: next.round, dieId: die.id, flame: offer.flame, replaced });
+        if (firstFlame && !next.flameTutorial.completed) next.flameTutorial.pendingDieId = die.id;
         resolver.emit({ type: replaced ? 'FLAME_REPLACED' : 'FLAME_ACQUIRED', flame: offer.flame, dieIds: [die.id],
           message: replaced ? `D${die.id + 1} replaced ${FLAMES[replaced].name} with ${FLAMES[offer.flame].name}; prior investment was lost`
             : `D${die.id + 1} acquired ${FLAMES[offer.flame].name} as a 0-Gold ember` });
@@ -193,9 +225,9 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const die = next.dice[action.dieId];
         const id = activeFlameId(die.flame)!;
         const flame = die.flame = { id, investedGold: activeFlameInvestment(die.flame) };
-        const source = next.phase === 'shop' ? 'shop' as const : 'flame_reward' as const;
+        const source = 'shop' as const;
         const from = flame.investedGold;
-        resolver.spendGold(action.amount, `Stoked ${FLAMES[flame.id].name}: −${action.amount} Gold (${source === 'shop' ? 'shop' : 'Flame Reward'})`, 'flameInvestment');
+        resolver.spendGold(action.amount, `Stoked ${FLAMES[flame.id].name}: −${action.amount} Gold (Shop)`, 'flameInvestment');
         flame.investedGold += action.amount;
         next.stats.flameStokes.push({ round: next.round, dieId: die.id, flame: flame.id, amount: action.amount,
           from, total: flame.investedGold, source });
@@ -210,16 +242,6 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
           resolver.emit({ type: 'BONFIRE_CREATED', flame: id, dieIds: [die.id],
             message: `${FLAMES[id].name} became a Bonfire and detached from D${die.id + 1}` });
         }
-        break;
-      }
-      case 'REROLL_FLAMES': {
-        const cost = flameRerollCost(next.flameReward!.offerRerolls);
-        resolver.spendGold(cost, `Paid for Flame offer reroll: −${cost} gold`, 'flameReroll');
-        next.flameReward!.offerRerolls++;
-        next.stats.flameOfferRerolls++;
-        next.stats.flameRerollGoldSpent += cost;
-        resolver.freshFlameOffers();
-        resolver.emit({ type: 'FLAME_OFFERS_REFRESHED', message: 'Fresh unique unowned Flame offers' });
         break;
       }
       case 'CONTINUE_FLAME_REWARD':
@@ -255,7 +277,27 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         resolver.emit({ type: 'TRAINING_PURCHASED', hand: action.hand, goldSpendSource: 'handTraining', message: `${HANDS[action.hand].name} trained to level ${toLevel}` });
         break;
       }
-      case 'NEXT_ROUND': next.round++; resolver.startRound(); break;
+      case 'RESTORE_LIFE': {
+        const purchaseNumber = next.livesPurchasedThisRun + 1;
+        const cost = lifeRestoreCost(next.livesPurchasedThisRun);
+        const goldBefore = next.gold;
+        const livesBefore = next.lives;
+        const lifetimeSpendBefore = next.lifetimeNormalShopGoldSpent;
+        resolver.spendGold(cost, `Restored life #${purchaseNumber}: −${cost} Gold`, 'lifeRestore');
+        next.lives++;
+        next.livesPurchasedThisRun++;
+        next.stats.lifeRestores.push({ round: next.round, purchaseNumber, cost, goldBefore, goldAfter: next.gold,
+          livesBefore, livesAfter: next.lives, lifetimeSpendBefore, lifetimeSpendAfter: next.lifetimeNormalShopGoldSpent });
+        resolver.emit({ type: 'LIFE_RESTORED', amount: cost,
+          message: `Restore #${purchaseNumber}: ${cost} Gold · lives ${livesBefore} → ${next.lives} · lifetime shop spend +${cost}` });
+        break;
+      }
+      case 'DISMISS_FLAME_TUTORIAL':
+        next.flameTutorial = { pendingDieId: null, completed: true };
+        resolver.emit({ type: 'FLAME_TUTORIAL_COMPLETED', message: 'First-Flame shop tutorial completed' });
+        break;
+      case 'RETRY_ROUND': resolver.startRound(true); break;
+      case 'NEXT_ROUND': next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
     }
-  }, random);
+  }, random, rngStateOverride);
 }

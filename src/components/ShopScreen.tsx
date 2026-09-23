@@ -2,7 +2,7 @@ import { Alert, Badge, Button, Group, Modal, Paper, Progress, SimpleGrid, Stack,
 import { useState } from 'react';
 import { diceRerollCost, offerRerollCost } from '../game/config';
 import { activeFace } from '../game/dice';
-import { attachmentError, enhancementCost, ENHANCEMENTS, ENHANCEMENT_IDS, FACE_TYPE_LIMIT, faceEnhancementTypes } from '../game/enhancements';
+import { attachmentError, enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, FACE_TYPE_LIMIT, faceEnhancementTypes } from '../game/enhancements';
 import { activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasXMultFlame } from '../game/flames';
 import type { Action, Board, Enhancement, GameEvent, Rank } from '../game/types';
 import { DiceRow } from './DiceRow';
@@ -12,7 +12,7 @@ import { ScoreResolution } from './ScoreResolution';
 import { StokeFlameModal } from './StokeFlameModal';
 import { TrainingCard } from './TrainingCard';
 
-interface ScrapTarget { face: Rank; enhancement: Enhancement; stacks: number }
+interface SaleTarget { face: Rank; enhancement: Enhancement; stacks: number; proceeds: number }
 
 export function ShopScreen({ board, event, busy, progress, selectedOffer, setSelectedOffer, submit, skip }: {
   board: Board; event: GameEvent | null; busy: boolean; progress: { current: number; total: number };
@@ -22,7 +22,7 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
   const offer = shop.offers.find(item => item.id === selectedOffer && !item.purchased);
   const [managedDieId, setManagedDieId] = useState<number | null>(null);
   const [focusedFace, setFocusedFace] = useState<Rank | null>(null);
-  const [scrapTarget, setScrapTarget] = useState<ScrapTarget | null>(null);
+  const [saleTarget, setSaleTarget] = useState<SaleTarget | null>(null);
   const [stokeDieId, setStokeDieId] = useState<number | null>(null);
   const managedDie = managedDieId === null ? null : board.dice.find(die => die.id === managedDieId) ?? null;
 
@@ -51,15 +51,16 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
     if (!error && board.gold >= enhancementCost(selected.enhancement)) submit({ type: 'BUY', offerId, dieId });
   }
   function clickDie(dieId: number) {
+    if (board.flameTutorial.pendingDieId === dieId && !board.flameTutorial.completed) submit({ type: 'DISMISS_FLAME_TUTORIAL' });
     if (offer) attemptPurchase(offer.id, dieId);
     else openManager(dieId);
   }
-  function scrap(face: Rank, enhancement: Enhancement, count: number) {
-    if (count > 1) setScrapTarget({ face, enhancement, stacks: count });
-    else if (managedDie) submit({ type: 'SCRAP_ENHANCEMENT', dieId: managedDie.id, face, enhancement });
+  function sell(face: Rank, enhancement: Enhancement, count: number) {
+    if (!managedDie) return;
+    setSaleTarget({ face, enhancement, stacks: count, proceeds: enhancementSellValue(managedDie.faces[face - 1], enhancement) });
   }
   function closeManager() {
-    setManagedDieId(null); setFocusedFace(null); setScrapTarget(null); setStokeDieId(null);
+    setManagedDieId(null); setFocusedFace(null); setSaleTarget(null); setStokeDieId(null);
   }
 
   const managedFlame = activeFlameId(managedDie?.flame);
@@ -68,6 +69,11 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
   const focusedError = offer && focused && managedActiveFace?.rank === focused.rank ? attachmentError(focused, offer.enhancement) : null;
   const canApplyFocused = !!(offer && focused && managedDie && managedActiveFace?.rank === focused.rank
     && !focusedError && board.gold >= enhancementCost(offer.enhancement));
+  const tutorialDieId = !board.flameTutorial.completed ? board.flameTutorial.pendingDieId : null;
+  const tutorialFlame = tutorialDieId === null ? null : board.dice[tutorialDieId]?.flame;
+  const tutorialInvested = activeFlameInvestment(tutorialFlame);
+  const tutorialLabel = <Stack gap={3}><Text size="sm" fw={800}>{tutorialInvested === 0 ? 'Your Flame is only an Ember—it has no effect yet.' : 'Manage and Stoke this Ember in the Shop.'}</Text>
+    <Text size="xs">Click this die to manage its faces and Stoke the Flame with Gold. At 100 Gold, it becomes a Bonfire.</Text></Stack>;
 
   return <>
     <Stack gap="xs" className="shop-screen">
@@ -94,10 +100,11 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
       </Paper>
       <Paper p="md" className="shop-section exposed-section">
         <Group justify="space-between" className="section-heading">
-          <div><Group gap="xs"><Text fw={700} size="sm" tt="uppercase" lts=".08em">Exposed Faces</Text>{offer && <Badge size="xs" color="teal">{ENHANCEMENTS[offer.enhancement].name} selected</Badge>}</Group>
+          <div><Group gap="xs"><Text fw={700} size="sm" tt="uppercase" lts=".08em">Physical Dice</Text>{offer && <Badge size="xs" color="teal">{ENHANCEMENTS[offer.enhancement].name} selected</Badge>}</Group>
             <Text size="xs" c="dimmed">{offer ? 'Eligible faces are outlined. Select a dimmed full face to make room.' : 'Select a die to manage all six physical faces.'}</Text></div>
           <Group gap="xs">
             {offer && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setSelectedOffer(null)}>Cancel placement</Button>}
+            {tutorialDieId !== null && <Button size="compact-xs" variant="subtle" color="orange" onClick={() => submit({ type: 'DISMISS_FLAME_TUTORIAL' })}>Dismiss Flame tip</Button>}
             <Button size="compact-xs" variant="default" disabled={busy || board.gold < diceRerollCost(shop.diceRerolls)}
               aria-label={`Reroll Dice · ${diceRerollCost(shop.diceRerolls)} gold`}
               onClick={() => submit({ type: 'REROLL_DICE' })}>↻ Dice · {diceRerollCost(shop.diceRerolls)} gold</Button>
@@ -105,7 +112,7 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
         </Group>
         <DiceRow dice={board.dice} event={event} disabled={busy} eligibleIds={offer ? eligibleIds : undefined} restrictToEligible={!!offer}
           ineligibleReasons={placementErrors} actionableIneligibleIds={capacityBlockedIds} showCapacity
-          onClick={clickDie} onDropOffer={attemptPurchase} />
+          onClick={clickDie} onDropOffer={attemptPurchase} tutorialDieId={tutorialDieId} tutorialLabel={tutorialLabel} />
       </Paper>
       <div className="shop-action-dock">
         <Text size="xs" c="dimmed">Upgrades are permanent for this run.</Text>
@@ -113,9 +120,9 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
       </div>
     </Stack>
 
-    <Modal opened={managedDie !== null} onClose={closeManager} title={managedDie ? `D${managedDie.id + 1} — Manage Faces` : 'Manage Die'} size="lg" centered transitionProps={{ duration: 0 }}>
+    <Modal opened={managedDie !== null} onClose={closeManager} title={managedDie ? `D${managedDie.id + 1} — Manage Die` : 'Manage Die'} size="lg" centered transitionProps={{ duration: 0 }}>
       {managedDie && <Stack gap="sm">
-        <Text size="sm" c="dimmed">Scrap all stacks of one enhancement type for no refund.</Text>
+        <Text size="sm" c="dimmed">Manage this die's Ember and sell all stacks of an enhancement type from any physical face.</Text>
         {managedFlame && <Paper withBorder p="sm" className="shop-flame-context" data-testid="shop-flame-context">
           <Group justify="space-between" align="flex-start"><div><Group gap={5}><Badge color="orange" variant="light">🔥 EMBER</Badge><Text fw={800}>{FLAMES[managedFlame].name}</Text></Group>
             <Text size="xs" c="dimmed" mt={5}>{flameEffectText(managedFlame, activeFlameInvestment(managedDie.flame), board)}</Text></div>
@@ -125,7 +132,7 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
           <Progress value={activeFlameInvestment(managedDie.flame)} color="orange" size="sm" mt={4} />
         </Paper>}
         {offer && focused && managedActiveFace?.rank === focused.rank && focusedError?.includes(`${FACE_TYPE_LIMIT} enhancement types`) && <Alert color="orange" title={`Face ${focused.rank} is full`}>
-          Face {focused.rank} already has {FACE_TYPE_LIMIT} enhancement types. Scrap one to make room for {ENHANCEMENTS[offer.enhancement].name}.
+          Face {focused.rank} already has {FACE_TYPE_LIMIT} enhancement types. Sell one to make room for {ENHANCEMENTS[offer.enhancement].name}.
         </Alert>}
         {offer && focused && managedActiveFace?.rank === focused.rank && !focusedError && <Alert color="teal" title="Room available">
           {ENHANCEMENTS[offer.enhancement].name} is still selected and can now be applied to exposed face {focused.rank}.
@@ -140,10 +147,11 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
               <Group justify="space-between"><Text fw={800}>FACE {face.rank}</Text>{managedDie.value === face.rank && <Badge size="xs" color="teal">EXPOSED</Badge>}</Group>
               <Text size="xs" c={typeCount === FACE_TYPE_LIMIT ? 'orange' : 'dimmed'} fw={700} mt={4}>{typeCount} / {FACE_TYPE_LIMIT} TYPES</Text>
               <Stack gap={4} mt="xs">{ids.length === 0 ? <Text size="xs" c="dimmed">No enhancements</Text> : ids.map(id => <Group key={id} justify="space-between" gap={4} wrap="nowrap">
-                <Text size="xs">{ENHANCEMENTS[id].name} ×{face.enhancements[id]}</Text>
+                <div><Text size="xs">{ENHANCEMENTS[id].name}{id === 'vintage' ? '' : ` ×${face.enhancements[id]}`}</Text>
+                  <Text size="xs" c="dimmed">Sell {enhancementSellValue(face, id)} Gold</Text></div>
                 <Button size="compact-xs" variant="subtle" color="red" disabled={busy}
-                  aria-label={`Scrap ${ENHANCEMENTS[id].name} from D${managedDie.id + 1} face ${face.rank}`}
-                  onClick={event => { event.stopPropagation(); scrap(face.rank, id, face.enhancements[id]!); }}>Scrap</Button>
+                  aria-label={`Sell ${ENHANCEMENTS[id].name} from D${managedDie.id + 1} face ${face.rank} for ${enhancementSellValue(face, id)} Gold`}
+                  onClick={event => { event.stopPropagation(); sell(face.rank, id, face.enhancements[id]!); }}>Sell</Button>
               </Group>)}</Stack>
             </Paper>;
           })}
@@ -158,13 +166,13 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
       </Stack>}
     </Modal>
 
-    <Modal opened={scrapTarget !== null} onClose={() => setScrapTarget(null)} title="Scrap enhancement stacks?" centered transitionProps={{ duration: 0 }}>
-      {scrapTarget && managedDie && <>
-        <Text>Remove all <strong>{scrapTarget.stacks} stacks</strong> of <strong>{ENHANCEMENTS[scrapTarget.enhancement].name}</strong> from D{managedDie.id + 1} face {scrapTarget.face}?</Text>
-        <Text size="sm" c="dimmed" mt="xs">This gives no Gold refund.</Text>
-        <Group justify="flex-end" mt="lg"><Button variant="default" onClick={() => setScrapTarget(null)}>Cancel</Button><Button color="red" onClick={() => {
-          submit({ type: 'SCRAP_ENHANCEMENT', dieId: managedDie.id, face: scrapTarget.face, enhancement: scrapTarget.enhancement }); setScrapTarget(null);
-        }}>Scrap {scrapTarget.stacks} stacks</Button></Group>
+    <Modal opened={saleTarget !== null} onClose={() => setSaleTarget(null)} title="Sell enhancement?" centered transitionProps={{ duration: 0 }}>
+      {saleTarget && managedDie && <>
+        <Text>Sell <strong>{ENHANCEMENTS[saleTarget.enhancement].name}{saleTarget.enhancement === 'vintage' ? '' : ` ×${saleTarget.stacks}`}</strong> for <strong>{saleTarget.proceeds} Gold</strong>?</Text>
+        <Text size="sm" c="dimmed" mt="xs">All {saleTarget.stacks} {ENHANCEMENTS[saleTarget.enhancement].name} stack{saleTarget.stacks === 1 ? '' : 's'} on Face {saleTarget.face} will be removed.</Text>
+        <Group justify="flex-end" mt="lg"><Button variant="default" onClick={() => setSaleTarget(null)}>Cancel</Button><Button color="red" onClick={() => {
+          submit({ type: 'SELL_ENHANCEMENT', dieId: managedDie.id, face: saleTarget.face, enhancement: saleTarget.enhancement }); setSaleTarget(null);
+        }}>Sell for {saleTarget.proceeds} Gold</Button></Group>
       </>}
     </Modal>
     <StokeFlameModal board={board} dieId={stokeDieId} opened={stokeDieId !== null} busy={busy}

@@ -73,7 +73,7 @@ describe('flat round Gold economy', () => {
   });
 });
 
-describe('enhancement metadata, face slots, caps, and scrapping', () => {
+describe('enhancement metadata, face slots, caps, and selling', () => {
   it('allows three distinct types, rejects a fourth, and permits an existing stack', () => {
     const state = shop(); const face = activeFace(state.dice[0]);
     face.enhancements.bonus = 1; face.enhancements.workout = 1; face.enhancements.golden = 1;
@@ -90,13 +90,13 @@ describe('enhancement metadata, face slots, caps, and scrapping', () => {
       expect(canAttach(activeFace(state.dice[0]), id)).toBe(false);
     }
   });
-  it('scraps every stack for no Gold and frees a type slot', () => {
+  it('sells every stack for its metadata value and frees a type slot', () => {
     const state = shop(); const face = state.dice[0].faces[3];
     face.enhancements.sticky = 3; face.enhancements.bonus = 2; face.enhancements.workout = 1;
-    const result = dispatch(state, { type: 'SCRAP_ENHANCEMENT', dieId: 0, face: 4, enhancement: 'sticky' });
-    expect(result.state.gold).toBe(100); expect(result.state.dice[0].faces[3].enhancements.sticky).toBeUndefined();
+    const result = dispatch(state, { type: 'SELL_ENHANCEMENT', dieId: 0, face: 4, enhancement: 'sticky' });
+    expect(result.state.gold).toBe(103); expect(result.state.dice[0].faces[3].enhancements.sticky).toBeUndefined();
     expect(canAttach(result.state.dice[0].faces[3], 'bump')).toBe(true);
-    expect(result.state.stats.scraps[0]).toMatchObject({ stacksRemoved: 3, face: 4 });
+    expect(result.state.stats.sales[0]).toMatchObject({ stacksSold: 3, face: 4, totalProceeds: 3 });
   });
   it('rejects a fourth type authoritatively during purchase', () => {
     const state = shop(); const face = activeFace(state.dice[0]);

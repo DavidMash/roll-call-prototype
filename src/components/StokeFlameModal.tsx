@@ -32,7 +32,7 @@ export function StokeFlameModal({ board, dieId, opened, busy, onClose, submit }:
     title={die && flameId ? `D${die.id + 1} — Stoke ${FLAMES[flameId].name}` : 'Stoke Ember'} centered transitionProps={{ duration: 0 }}>
     {die && flameId && <Stack gap="sm" data-testid="stoke-flame-controls">
       <Group justify="space-between"><Badge color="orange" variant="light">🔥 EMBER</Badge><Badge color="yellow" variant="light">{board.gold} Gold held</Badge></Group>
-      <div><Text fw={800}>{FLAMES[flameId].name}</Text><Text size="sm" c="dimmed">Spend Gold to stoke this Ember. The same rules apply in shops and Flame Rewards.</Text></div>
+      <div><Text fw={800}>{FLAMES[flameId].name}</Text><Text size="sm" c="dimmed">Spend Gold to Stoke this Ember in the Shop.</Text></div>
       <div><Group justify="space-between"><Text size="sm" fw={700}>{invested} / 100 → BONFIRE</Text><Text size="xs" c="dimmed">{100 - invested} remaining</Text></Group><Progress value={invested} color="orange" size="lg" mt={5} /></div>
       <div className="stoke-effects">
         <div className="modal-stat"><Text size="xs" c="dimmed" tt="uppercase">Current</Text><Text size="sm" fw={700}>{flameEffectText(flameId, invested, board)}</Text></div>

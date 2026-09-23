@@ -179,8 +179,13 @@ describe('Pair resolution and loss integration', () => {
       state.manualRerollsRemaining = 0;
       state.consumed = HAND_IDS.filter(id => id !== 'ones' && !(available && id === hand));
       const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [4] }, rng());
-      expect(hasPlayableHand(result.state.dice, result.state.consumed)).toBe(available);
-      expect(result.state.phase).toBe(available ? 'round' : 'lost');
+      if (available) {
+        expect(hasPlayableHand(result.state.dice, result.state.consumed)).toBe(true);
+        expect(result.state.phase).toBe('round');
+      } else {
+        expect(result.state.phase).toBe('bust');
+        expect(result.state.bust).toMatchObject({ livesBefore: 3, livesAfter: 2 });
+      }
     }
   });
   it('keeps a board with consumed pairs alive while manual rerolls remain', () => {

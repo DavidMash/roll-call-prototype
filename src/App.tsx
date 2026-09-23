@@ -2,9 +2,11 @@ import { Alert, Button, Container, Group, Paper, Stack, Text, Title } from '@man
 import { useState } from 'react';
 import { RunInfoModal } from './components/DebugPanel';
 import { DiceRow } from './components/DiceRow';
+import { BustScreen } from './components/BustScreen';
 import { FlameRewardScreen } from './components/FlameRewardScreen';
 import { HelpModal } from './components/HelpModal';
 import { RoundScreen } from './components/RoundScreen';
+import { RestoreLivesModal } from './components/RestoreLivesModal';
 import { ShopScreen } from './components/ShopScreen';
 import { TopHud } from './components/TopHud';
 import { emptySelection } from './game/selection';
@@ -25,12 +27,13 @@ export default function App() {
   const [selectedFlameOffer, setSelectedFlameOffer] = useState<number | null>(null);
   const [runInfoOpen, setRunInfoOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [restoreLivesOpen, setRestoreLivesOpen] = useState(false);
   const game = useGame(initialSeed, speed);
   const { board, state, busy, event, progress } = game;
   function submit(action: Action) {
     if (busy) return;
     game.submit(action);
-    if (action.type !== 'BUY' && action.type !== 'SCRAP_ENHANCEMENT' && action.type !== 'STOKE_FLAME') setSelectedOffer(null);
+    if (!['BUY', 'SELL_ENHANCEMENT', 'STOKE_FLAME', 'RESTORE_LIFE', 'DISMISS_FLAME_TUTORIAL'].includes(action.type)) setSelectedOffer(null);
     setSelectedFlameOffer(null);
     setSelection(emptySelection());
   }
@@ -40,20 +43,24 @@ export default function App() {
     setSelectedOffer(null);
     setSelectedFlameOffer(null);
     setRunInfoOpen(false);
+    setRestoreLivesOpen(false);
     game.restart(seed);
   }
   return <Container size={1180} px={{ base: 6, sm: 'sm' }} py={8} className="app-container">
-    <TopHud board={board} speed={speed} setSpeed={setSpeed} openRunInfo={() => setRunInfoOpen(true)} openHelp={() => setHelpOpen(true)} />
+    <TopHud board={board} speed={speed} setSpeed={setSpeed} openRunInfo={() => setRunInfoOpen(true)} openHelp={() => setHelpOpen(true)}
+      openRestoreLives={() => setRestoreLivesOpen(true)} />
     {game.error && <Alert color="orange" withCloseButton onClose={game.clearError} my="xs" py={5} title="Action unavailable">{game.error}</Alert>}
     <main className="main-content">
       {board.phase === 'flameReward' && board.flameReward ? <FlameRewardScreen board={board} event={event} busy={busy} progress={progress}
         selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} />
         : board.phase === 'shop' && board.shop ? <ShopScreen board={board} event={event} busy={busy} progress={progress}
         selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} submit={submit} skip={game.skip} />
+        : (board.phase === 'bust' || (board.phase === 'lost' && board.bust)) ? <BustScreen board={board} submit={submit}
+          restartSame={() => restart(state.seed)} newRun={() => restart(freshSeed())} />
         : board.phase === 'lost' || board.phase === 'error' ? <Stack gap="sm">
           <Paper p="xl" ta="center" className="end-state">
-            <Title order={2}>{board.phase === 'lost' ? 'Run over' : 'Resolution stopped'}</Title>
-            <Text mt="sm">{board.phase === 'lost' ? `Reached round ${board.round}. Final score ${board.score} / ${board.target}. No legal unconsumed hands or manual rerolls remain.` : state.stats.resolutionError}</Text>
+            <Title order={2}>{board.phase === 'lost' ? 'RUN OVER' : 'Resolution stopped'}</Title>
+            <Text mt="sm">{board.phase === 'lost' && board.bust ? `Bust on round ${board.bust.round}: ${board.bust.score} / ${board.bust.target}. No lives remain.` : state.stats.resolutionError}</Text>
             <Text size="sm" c="dimmed" mt="sm">Run details and event history are available in Run Info.</Text>
             <Group justify="center" mt="lg"><Button onClick={() => restart(state.seed)}>Restart same seed</Button><Button variant="default" onClick={() => restart(freshSeed())}>New seed</Button></Group>
           </Paper>
@@ -65,5 +72,7 @@ export default function App() {
       seedInput={seedInput} setSeedInput={setSeedInput} startSeed={() => restart(seedInput.trim())}
       restartSeed={() => restart(state.seed)} newSeed={() => restart(freshSeed())} />
     <HelpModal opened={helpOpen} onClose={() => setHelpOpen(false)} />
+    <RestoreLivesModal board={board} opened={restoreLivesOpen && board.phase === 'shop'} busy={busy}
+      onClose={() => setRestoreLivesOpen(false)} submit={submit} />
   </Container>;
 }

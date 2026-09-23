@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { newRun, dispatch } from '../src/game/engine';
+import { activeFace } from '../src/game/dice';
 import { handOptions, handStats, HANDS, HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import { enhancementCost, ENHANCEMENTS } from '../src/game/enhancements';
@@ -23,7 +24,8 @@ async function matchBoard(page: Page, game: GameState) {
     if (game.phase === 'shop') await expect(page.getByText(new RegExp(`\\+${game.lastRoundPayout?.totalRoundRewardGold ?? 5} Gold`))).toBeVisible();
     await expect(page.getByTestId('stat-rerolls')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^Reroll Selected/ })).toHaveCount(0);
-  } else await expect(page.getByTestId('stat-rerolls').getByText(String(game.manualRerollsRemaining), { exact: true })).toBeVisible();
+  } else if (game.phase === 'round') await expect(page.getByTestId('stat-rerolls').getByText(String(game.manualRerollsRemaining), { exact: true })).toBeVisible();
+  else await expect(page.getByTestId('stat-rerolls')).toHaveCount(0);
   for (const die of game.dice) await expect(page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1}, face ${die.value},`) })).toBeVisible();
 }
 async function playBest(page: Page, game: GameState): Promise<GameState> {
@@ -198,9 +200,25 @@ test('compact HUD, Run Info and Help keep secondary information off the gameplay
   await expect(help.getByText(/scores in the round-clearing hand/)).toBeVisible();
   await expect(help.getByText('Multiplier', { exact: true })).toHaveCount(0);
   await expect(help.getByText('Loose Cannon', { exact: true })).toHaveCount(0);
-  await expect(help.getByText('Bump', { exact: true }).locator('..').getByText('2 Gold', { exact: true })).toBeVisible();
+  await expect(help.getByText('Bump', { exact: true }).locator('..').getByText('Buy 2', { exact: true })).toBeVisible();
+  await expect(help.getByText('Vintage', { exact: true })).toBeVisible();
   await expect(help.getByText('Golden', { exact: true }).locator('..').getByText('Max 3', { exact: true })).toBeVisible();
   await expect(help.getByText('Jackpot', { exact: true }).locator('..').getByText('Max 3', { exact: true })).toBeVisible();
+});
+
+test('HUD hearts are interactive only in Shop and the restore modal enforces the three-life maximum', async ({ page }) => {
+  await page.goto('/?seed=life-modal&speed=instant');
+  await ready(page);
+  await expect(page.getByTestId('stat-lives')).toHaveAccessibleName('3 of 3 lives');
+  await expect(page.getByTestId('stat-lives')).not.toHaveAttribute('role', 'button');
+  const game = await reachShop(page, findShopSeed());
+  expect(game.lives).toBe(3);
+  await expect(page.getByTestId('stat-lives')).toHaveAccessibleName('3 of 3 lives; restore lives');
+  await page.getByTestId('stat-lives').click();
+  const modal = page.getByRole('dialog', { name: 'RESTORE LIVES' });
+  await expect(modal).toContainText('All lives restored.');
+  await expect(modal).toContainText('Next restore: 25 Gold');
+  await expect(modal.getByRole('button', { name: 'ALL LIVES RESTORED', exact: true })).toBeDisabled();
 });
 
 test('Hand Training purchase persists into scorecard and trained scoring playback', async ({ page }) => {
@@ -305,10 +323,14 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
         game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId }).state;
       }
       await matchBoard(page, game);
+    } else if (game.phase === 'bust') {
+      await page.getByRole('button', { name: `RETRY ROUND ${game.round}`, exact: true }).click();
+      game = dispatch(game, { type: 'RETRY_ROUND' }).state;
+      await matchBoard(page, game);
     } else throw new Error(`Unexpected phase: ${game.phase}`);
   }
   expect(game.phase).toBe('lost');
-  await expect(page.getByRole('heading', { name: 'Run over' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'RUN OVER' })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('run-over.png'), fullPage: true });
   await page.getByRole('button', { name: 'Run Info', exact: true }).click();
   const runInfo = page.getByRole('dialog', { name: 'Run Info' });
@@ -357,6 +379,24 @@ test('native drag-and-drop purchase and enhancement refresh', async ({ page }) =
   for (const item of game.shop!.offers) await expect(page.getByTestId(`offer-${item.enhancement}`).getByText(ENHANCEMENTS[item.enhancement].name, { exact: true })).toBeVisible();
 });
 
+test('Vintage offer and Manage Die expose its authoritative dynamic sell value', async ({ page }) => {
+  let game = await reachShop(page, findShopSeed('vintage'));
+  const offer = game.shop!.offers.find(item => item.enhancement === 'vintage')!;
+  const card = page.getByTestId('offer-vintage');
+  await expect(card).toContainText('3 gold');
+  await expect(card).toContainText('Starts worth 0 Gold');
+  await card.getByRole('button').click();
+  await page.getByRole('button', { name: /^Die 1,/ }).click();
+  game = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 0 }).state;
+  await matchBoard(page, game);
+  await page.getByRole('button', { name: /^Die 1,/ }).click();
+  const manager = page.getByRole('dialog', { name: 'D1 — Manage Die' });
+  const face = activeFace(game.dice[0]).rank;
+  await expect(manager.getByTestId(`manage-face-${face}`)).toContainText('Vintage');
+  await expect(manager.getByTestId(`manage-face-${face}`)).toContainText('Sell 0 Gold');
+  await expect(manager.getByRole('button', { name: `Sell Vintage from D1 face ${face} for 0 Gold`, exact: true })).toBeVisible();
+});
+
 test('stackable enhancement purchases show a single readable count badge', async ({ page }) => {
   let game = await reachShop(page, findStickyStackSeed());
   const startingGold = game.gold;
@@ -378,26 +418,26 @@ test('stackable enhancement purchases show a single readable count badge', async
 
   await expect(physical).toContainText('Sticky ×2');
   expect(game.dice[0].faces[game.dice[0].value - 1].enhancements.sticky).toBe(2);
-  expect(game.gold).toBe(startingGold - 5); // two 1-Gold Sticky stacks and one 3-Gold offer reroll
+  expect(game.gold).toBe(startingGold - 7); // two 2-Gold Sticky stacks and one 3-Gold offer reroll
   const face = game.dice[0].value;
   await expect(page.getByText('Manage faces', { exact: true })).toHaveCount(0);
   await physical.click();
-  const manager = page.getByRole('dialog', { name: 'D1 — Manage Faces' });
+  const manager = page.getByRole('dialog', { name: 'D1 — Manage Die' });
   await expect(manager).toBeVisible();
   await expect(manager.locator('[data-testid^="manage-face-"]')).toHaveCount(6);
   await expect(manager.getByTestId(`manage-face-${face}`)).toContainText('1 / 3 TYPES');
-  await manager.getByRole('button', { name: `Scrap Sticky from D1 face ${face}`, exact: true }).click();
-  const confirmation = page.getByRole('dialog', { name: 'Scrap enhancement stacks?' });
-  await expect(confirmation).toContainText('2 stacks');
-  await confirmation.getByRole('button', { name: 'Scrap 2 stacks', exact: true }).click();
-  game = dispatch(game, { type: 'SCRAP_ENHANCEMENT', dieId: 0, face, enhancement: 'sticky' }).state;
+  await manager.getByRole('button', { name: `Sell Sticky from D1 face ${face} for 2 Gold`, exact: true }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Sell enhancement?' });
+  await expect(confirmation).toContainText('2 Sticky stacks');
+  await confirmation.getByRole('button', { name: 'Sell for 2 Gold', exact: true }).click();
+  game = dispatch(game, { type: 'SELL_ENHANCEMENT', dieId: 0, face, enhancement: 'sticky' }).state;
   await manager.getByRole('button', { name: 'Close', exact: true }).click();
   await matchBoard(page, game);
   await expect(physical).not.toContainText('Sticky');
   expect(game.gold).toBe(startingGold - 5);
 });
 
-test('a fourth enhancement type opens Manage Die and preserves the offer through scrap and apply', async ({ page }) => {
+test('a fourth enhancement type opens Manage Die and preserves the offer through sell and apply', async ({ page }) => {
   const fixture = findCapacitySeed();
   let game = await reachShop(page, fixture.seed);
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
@@ -423,14 +463,16 @@ test('a fourth enhancement type opens Manage Die and preserves the offer through
   await expect(target).toHaveAttribute('aria-disabled', 'false');
   await expect(target).toHaveAttribute('title', /already has 3 enhancement types/);
   await target.click();
-  const manager = page.getByRole('dialog', { name: 'D1 — Manage Faces' });
-  await expect(manager).toContainText(`Scrap one to make room for ${ENHANCEMENTS[pending.enhancement].name}`);
+  const manager = page.getByRole('dialog', { name: 'D1 — Manage Die' });
+  await expect(manager).toContainText(`Sell one to make room for ${ENHANCEMENTS[pending.enhancement].name}`);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(manager.getByTestId('manage-face-6')).toBeVisible();
   const removed = initial[0].enhancement;
-  await manager.getByRole('button', { name: `Scrap ${ENHANCEMENTS[removed].name} from D1 face ${face}`, exact: true }).click();
-  game = dispatch(game, { type: 'SCRAP_ENHANCEMENT', dieId: 0, face, enhancement: removed }).state;
+  const proceeds = ENHANCEMENTS[removed].baseSellPrice;
+  await manager.getByRole('button', { name: `Sell ${ENHANCEMENTS[removed].name} from D1 face ${face} for ${proceeds} Gold`, exact: true }).click();
+  await page.getByRole('dialog', { name: 'Sell enhancement?' }).getByRole('button', { name: `Sell for ${proceeds} Gold`, exact: true }).click();
+  game = dispatch(game, { type: 'SELL_ENHANCEMENT', dieId: 0, face, enhancement: removed }).state;
   const apply = manager.getByRole('button', { name: `Apply ${ENHANCEMENTS[pending.enhancement].name}`, exact: true });
   await expect(apply).toBeEnabled();
   await expect(page.getByText(`${ENHANCEMENTS[pending.enhancement].name} selected`, { exact: true })).toBeVisible();
@@ -440,7 +482,7 @@ test('a fourth enhancement type opens Manage Die and preserves the offer through
   expect(game.dice[0].faces[face - 1].enhancements[removed]).toBeUndefined();
   expect(game.dice[0].faces[face - 1].enhancements[pending.enhancement]).toBe(1);
   const spent = initial.reduce((total, item) => total + enhancementCost(item.enhancement), 0) + 3 + enhancementCost(pending.enhancement);
-  expect(game.gold).toBe(fixture.startingGold - spent);
+  expect(game.gold).toBe(fixture.startingGold - spent + proceeds);
 });
 
 test('ambiguous physical dice can be changed and filtering never ends the run', async ({ page }) => {

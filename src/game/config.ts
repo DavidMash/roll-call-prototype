@@ -1,16 +1,14 @@
-import type { Enhancement } from './types';
-
 export const CONFIG = {
   diceCount: 5,
   baseTarget: 50,
   targetGrowth: 1.35,
   targetRounding: 5,
   startingGold: 0,
+  maxLives: 3,
   manualRerollsPerRound: 3,
   roundRewardBase: 5,
   diceRerollBase: 2,
   offerRerollBase: 3,
-  flameRerollBase: 5,
   handTrainingCost: 4,
   rerollCostGrowth: 2,
   bonusPips: 10,
@@ -20,11 +18,6 @@ export const CONFIG = {
   workoutIncrement: 1,
   tickMs: { normal: 350, fast: 90, instant: 0 },
   resolutionEventCap: 10000,
-  enhancementCosts: {
-    bonus: 3, jumpingBean: 2, golden: 2, workout: 3,
-    missingLink: 2, mirror: 2, magnetic: 3, sticky: 1, slippy: 1,
-    hitchhiker: 2, weighted: 3, jackpot: 3, bump: 2,
-  } satisfies Record<Enhancement, number>,
 } as const;
 
 export const targetForRound = (round: number) =>
@@ -32,4 +25,12 @@ export const targetForRound = (round: number) =>
 export const roundReward = (_round?: number) => CONFIG.roundRewardBase;
 export const diceRerollCost = (count: number) => CONFIG.diceRerollBase * CONFIG.rerollCostGrowth ** count;
 export const offerRerollCost = (count: number) => CONFIG.offerRerollBase * CONFIG.rerollCostGrowth ** count;
-export const flameRerollCost = (count: number) => CONFIG.flameRerollBase * CONFIG.rerollCostGrowth ** count;
+export function lifeRestoreCost(purchases: number): number {
+  if (!Number.isInteger(purchases) || purchases < 0) throw new Error('Life restore count must be a non-negative integer.');
+  const opening = [25, 40, 60, 90];
+  if (purchases < opening.length) return opening[purchases];
+  let price = opening.at(-1)!;
+  let increment = 40;
+  for (let index = 4; index <= purchases; index++) { price += increment; increment += 10; }
+  return price;
+}

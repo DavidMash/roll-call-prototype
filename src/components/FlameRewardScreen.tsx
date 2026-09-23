@@ -1,12 +1,10 @@
 import { Badge, Button, Card, Group, Modal, Paper, Progress, Stack, Text, Tooltip } from '@mantine/core';
 import { useState } from 'react';
-import { flameRerollCost } from '../game/config';
 import { activeFlameId, activeFlameInvestment, flameEffectText, flameFullEffectText, FLAMES, hasXMultFlame } from '../game/flames';
 import type { Action, Board, GameEvent } from '../game/types';
 import { Die } from './Die';
 import { RoundPayoutSummary } from './RoundPayoutSummary';
 import { ScoreResolution } from './ScoreResolution';
-import { StokeFlameModal } from './StokeFlameModal';
 
 export function FlameRewardScreen({ board, event, busy, progress, selectedOffer, setSelectedOffer, submit, skip }: {
   board: Board; event: GameEvent | null; busy: boolean; progress: { current: number; total: number };
@@ -15,7 +13,6 @@ export function FlameRewardScreen({ board, event, busy, progress, selectedOffer,
   const reward = board.flameReward!;
   const offer = reward.acquired ? undefined : reward.offers.find(item => item.id === selectedOffer);
   const [replacementDie, setReplacementDie] = useState<number | null>(null);
-  const [managedDieId, setManagedDieId] = useState<number | null>(null);
 
   function chooseOrManage(dieId: number) {
     if (offer) {
@@ -23,7 +20,6 @@ export function FlameRewardScreen({ board, event, busy, progress, selectedOffer,
       else submit({ type: 'CHOOSE_FLAME', offerId: offer.id, dieId });
       return;
     }
-    if (activeFlameId(board.dice[dieId].flame)) setManagedDieId(dieId);
   }
   function confirmReplacement() {
     if (!offer || replacementDie === null) return;
@@ -36,7 +32,7 @@ export function FlameRewardScreen({ board, event, busy, progress, selectedOffer,
   return <>
     <Stack gap="xs" className="flame-reward-screen">
       <Group justify="space-between" className="shop-summary flame-reward-header">
-        <div><Text fw={800}>FLAME REWARD</Text><Text size="xs" c="dimmed">Choose a new Flame or stoke your existing Embers.</Text></div>
+        <div><Text fw={800}>FLAME REWARD</Text><Text size="xs" c="dimmed">Choose one new Flame and assign it to a physical die, or skip.</Text></div>
         <Badge color="yellow" variant="light">{board.gold} Gold</Badge>
       </Group>
       <Paper p="xs" className="flame-payout"><RoundPayoutSummary board={board} /></Paper>
@@ -48,8 +44,7 @@ export function FlameRewardScreen({ board, event, busy, progress, selectedOffer,
       </Paper>}
       <Paper p="xs" className="shop-section flame-offers-section">
         <Group justify="space-between" className="section-heading">
-          <div><Text fw={700} size="sm" tt="uppercase">Flame offers</Text><Text size="xs" c="dimmed">{reward.acquired ? 'Acquisition complete — you may keep stoking.' : 'Taking a Flame is optional.'}</Text></div>
-          <Button size="compact-xs" variant="default" disabled={busy || reward.acquired || board.gold < flameRerollCost(reward.offerRerolls)} onClick={() => submit({ type: 'REROLL_FLAMES' })}>↻ Reroll · {flameRerollCost(reward.offerRerolls)} Gold</Button>
+          <div><Text fw={700} size="sm" tt="uppercase">Flame offers</Text><Text size="xs" c="dimmed">{reward.acquired ? 'Acquisition complete.' : 'Taking a Flame is optional. Offers cannot be refreshed.'}</Text></div>
         </Group>
         <div className="shop-grid flame-offers">{reward.offers.map(item => <Card key={item.id} p="sm" className={`flame-offer ${selectedOffer === item.id && !reward.acquired ? 'selected' : ''}`} data-testid={`flame-offer-${item.flame}`}>
           <Group justify="space-between"><Text fw={750}>🔥 {FLAMES[item.flame].name}</Text><Badge size="xs" color="teal">FREE</Badge></Group>
@@ -60,7 +55,7 @@ export function FlameRewardScreen({ board, event, busy, progress, selectedOffer,
       </Paper>
       <Paper p="md" className="shop-section flame-dice-section">
         <Group justify="space-between" mb="xs"><div><Text fw={700} size="sm" tt="uppercase">Physical Dice & Embers</Text><Text size="xs" c="dimmed">Flames stay with their die until they become global Bonfires.</Text></div>
-          <Text size="xs" c={offer ? 'orange' : 'dimmed'}>{offer ? `${FLAMES[offer.flame].name} selected — choose a die` : 'Select an Ember die to stoke it'}</Text></Group>
+          <Text size="xs" c={offer ? 'orange' : 'dimmed'}>{offer ? `${FLAMES[offer.flame].name} selected — choose a die` : 'Active Ember progress is shown for context only'}</Text></Group>
         <div className="flame-dice-grid">{board.dice.map(die => {
           const flameId = activeFlameId(die.flame);
           const invested = activeFlameInvestment(die.flame);
@@ -81,9 +76,6 @@ export function FlameRewardScreen({ board, event, busy, progress, selectedOffer,
       </Paper>
       <div className="shop-action-dock"><Text size="xs" c="dimmed">These exposed faces carry into the shop. No second free roll.</Text><Button disabled={busy} onClick={() => submit({ type: 'CONTINUE_FLAME_REWARD' })}>CONTINUE TO SHOP →</Button></div>
     </Stack>
-
-    <StokeFlameModal board={board} dieId={managedDieId} opened={managedDieId !== null} busy={busy}
-      onClose={() => setManagedDieId(null)} submit={submit} />
 
     <Modal opened={replacementDie !== null} onClose={() => setReplacementDie(null)} title="Replace Flame?" centered transitionProps={{ duration: 0 }}>
       {replacingId && offer && <><Text>Replace <strong>{FLAMES[replacingId].name}</strong> ({activeFlameInvestment(replacing?.flame)} Gold invested) with <strong>{FLAMES[offer.flame].name}</strong>?</Text>

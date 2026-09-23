@@ -56,7 +56,7 @@ function deadBoardRun(rescue: boolean) {
               remainsDeadUntilLoss = false;
             }
           }
-          if (remainsDeadUntilLoss && resolved.phase === 'lost') {
+          if (remainsDeadUntilLoss && resolved.phase === 'bust') {
             return { seed: game.seed, actions: [...prefix, ...attemptActions], game: original };
           }
         }
@@ -71,6 +71,10 @@ function deadBoardRun(rescue: boolean) {
       }
       if (game.phase === 'shop') {
         const action: Action = { type: 'NEXT_ROUND' };
+        prefix.push(action);
+        game = dispatch(game, action).state;
+      } else if (game.phase === 'bust') {
+        const action: Action = { type: 'RETRY_ROUND' };
         prefix.push(action);
         game = dispatch(game, action).state;
       }
@@ -96,6 +100,8 @@ async function reachDeadBoard(page: Page, rescue: boolean) {
       await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();
     } else if (action.type === 'NEXT_ROUND') {
       await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+    } else if (action.type === 'RETRY_ROUND') {
+      await page.getByRole('button', { name: /^RETRY ROUND / }).click();
     }
   }
   await matchRound(page, fixture.game);
@@ -154,9 +160,12 @@ test('dead board remains playable with rerolls and loses only after the final co
   await expect(page.getByRole('heading', { name: 'Run over' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Skip playback' }).click();
   game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
-  await matchRound(page, game);
-  await expect(page.getByRole('heading', { name: 'Run over' })).toBeVisible();
-  expect(game.manualRerollsRemaining).toBe(0);
+  await ready(page);
+  await expect(page.getByRole('heading', { name: 'BUST' })).toBeVisible();
+  await expect(page.getByText('1 LIFE LOST', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: `RETRY ROUND ${game.round}`, exact: true })).toBeVisible();
+  expect(game.phase).toBe('bust');
+  expect(game.lives).toBe(2);
 });
 
 test('a manual reroll rescues a dead board and restores legal hand controls', async ({ page }) => {
