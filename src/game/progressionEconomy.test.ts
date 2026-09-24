@@ -28,7 +28,7 @@ function shop(seed = 'economy-shop'): GameState {
   const state = newRun(seed, constant(0.2)).state;
   state.phase = 'shop';
   state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
-  state.flameReward = null;
+  state.flameSelection = null;
   return state;
 }
 
@@ -93,8 +93,8 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     expect(result.state.shop).toEqual(expectedShop);
     expect(result.state.dice).toEqual(expectedDice);
     expect(result.state.handLevels.ones).toBe(2);
-    expect(result.state.stats.goldBySource).toMatchObject({ roundBase: 0, unusedRerolls: 0, interest: 0, flameBonus: 0 });
-    expect(result.state.flameReward).toBeNull();
+    expect(result.state.stats.goldBySource).toMatchObject({ roundBase: 0, unusedRerolls: 0, interest: 0, bossReward: 0 });
+    expect(result.state.flameSelection).toBeNull();
     expect(result.events.slice(-3).map(event => event.type)).toEqual(['ROUND_BUST', 'MAP_TRANSITION', 'SHOP_REOPENED_AFTER_BUST']);
     expect(result.state.stats.busts.at(-1)).toMatchObject({ round: 2, attempt: 1, checkpointRestored: true, returnedToShop: true });
   });
@@ -178,7 +178,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     expect(result.state.dice.map(die => die.value)).toEqual(checkpointDice);
   });
 
-  it('does not pay clear rewards or Flame Bonus on Bust, then can pay normally after a retry clear', () => {
+  it('does not pay clear rewards or Boss Reward on Bust, then can pay normally after a retry clear', () => {
     let state = newRun('bust-payout', constant(0.2)).state;
     state.round = 3;
     state.target = 50;
@@ -186,7 +186,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     state.stats.rounds.at(-1)!.target = 50;
     state.roundCheckpoint = compactCheckpoint(state);
     const busted = forceBust(state).state;
-    expect(busted.stats.goldBySource).toMatchObject({ roundBase: 0, unusedRerolls: 0, interest: 0, flameBonus: 0 });
+    expect(busted.stats.goldBySource).toMatchObject({ roundBase: 0, unusedRerolls: 0, interest: 0, bossReward: 0 });
     state = dispatch(busted, { type: 'RETRY_ROUND' }, constant(0.2)).state;
     state.target = 1;
     state.stats.rounds.at(-1)!.target = 1;
@@ -194,7 +194,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     choice.value = 1;
     const cleared = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [choice.id] }, constant()).state;
     expect(cleared.stats.goldBySource.roundBase).toBe(5);
-    expect(cleared.stats.goldBySource.flameBonus).toBe(5);
+    expect(cleared.stats.goldBySource.bossReward).toBe(10);
   });
 });
 
@@ -306,7 +306,7 @@ describe('enhancement selling and Vintage', () => {
     expect(beanResult.state.stats.vintageGrowth.at(-1)).toMatchObject({ playSource: 'jumpingBean', from: 0, to: 3 });
   });
 
-  it('does not grow Vintage for display, failed Hitchhiker, Shop rolls, or Flame Reward rolls', () => {
+  it('does not grow Vintage for display, failed Hitchhiker, Shop rolls, or Flame Selection rolls', () => {
     const state = newRun('vintage-no-growth', constant(0.2)).state;
     state.target = 100000;
     state.dice[4].value = 6;
@@ -323,7 +323,7 @@ describe('enhancement selling and Vintage', () => {
     failed.gold = 100;
     const shopRoll = dispatch(failed, { type: 'REROLL_DICE' }, constant(0.99)).state;
     expect(shopRoll.dice[4].faces[5].vintageSellValue).toBe(0);
-    new Resolver(shopRoll, constant(0.99)).rollBatch([4], 'Flame Reward roll test', 'flameReward');
+    new Resolver(shopRoll, constant(0.99)).rollBatch([4], 'Flame Selection roll test', 'flameSelection');
     expect(shopRoll.dice[4].faces[5].vintageSellValue).toBe(0);
   });
 
@@ -344,17 +344,17 @@ describe('enhancement selling and Vintage', () => {
   });
 });
 
-describe('Flame Reward spending boundary and tutorial state', () => {
+describe('Flame Selection spending boundary and tutorial state', () => {
   it('schedules the first-Flame tutorial, forbids Reward Stoke, and completes the tutorial once in Shop', () => {
     let state = newRun('first-flame', constant(0.2)).state;
-    state.phase = 'flameReward';
+    state.phase = 'flameSelection';
     state.gold = 100;
-    state.flameReward = { offers: [{ id: 1, flame: 'ultimate' }], acquired: false };
+    state.flameSelection = { offers: [{ id: 1, flame: 'ultimate' }], acquired: false };
     state.shop = null;
     state = dispatch(state, { type: 'CHOOSE_FLAME', offerId: 1, dieId: 2 }).state;
     expect(state.flameTutorial).toEqual({ pendingDieId: 2, completed: false });
     expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 2, amount: 1 })).toContain('normal Shop');
-    state = dispatch(state, { type: 'CONTINUE_FLAME_REWARD' }, constant(0.2)).state;
+    state = dispatch(state, { type: 'CONTINUE_FLAME_SELECTION' }, constant(0.2)).state;
     expect(state.phase).toBe('shop');
     expect(state.flameTutorial.pendingDieId).toBe(2);
     state = dispatch(state, { type: 'DISMISS_FLAME_TUTORIAL' }).state;

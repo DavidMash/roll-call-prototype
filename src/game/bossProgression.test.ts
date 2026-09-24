@@ -105,7 +105,9 @@ describe('The Warden', () => {
     expect(state.boss.pendingReinforcements).toBe(4);
     expect(state.phase).toBe('round');
     for (const dieId of [1, 2, 3, 4]) state = dispatch(state, { type: 'CHOOSE_WARDEN_DIE', dieId }, constant(0)).state;
-    expect(state.phase).toBe('flameReward');
+    expect(state.phase).toBe('roundSummary');
+    state = dispatch(state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
+    expect(state.phase).toBe('flameSelection');
     expect(state.dice).toHaveLength(5);
     expect(state.stats.bossEncounters.at(-1)).toMatchObject({ boss: 'warden', cleared: true, wardenActiveDiceAtEnd: 5 });
   });
@@ -133,6 +135,19 @@ describe('The Hexer', () => {
     expect(rollWeights(die)).toEqual([1, 1, 1, 2, 2, 2, 1]);
   });
 
+  it.each([1, 2, 3, 4, 5, 6, 7] as const)('manual reroll excludes Cursed face %s while preserving authored behavior', face => {
+    const state = bossRound('hexer');
+    const cursed = state.dice.find(die => die.owner === 'boss')!;
+    cursed.value = face;
+    const result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [cursed.id] }, constant(.8));
+    const rolled = result.state.dice.find(die => die.owner === 'boss')!;
+    expect(rolled.value).not.toBe(face);
+    expect(result.events.find(event => event.type === 'DIE_ROLLED' && event.dieIds?.includes(cursed.id))).toMatchObject({
+      rollSource: 'manual_reroll', previousFace: face, resultFace: rolled.value,
+    });
+    if (face === 1) expect(rolled.value).toBe(6); // Authored Weighted → 6 remains favored after renormalization.
+  });
+
   it('requires the Cursed Die in manual hands and removes it after clear', () => {
     let state = bossRound('hexer');
     expect(state.dice).toHaveLength(6);
@@ -144,9 +159,11 @@ describe('The Hexer', () => {
     expect(validateAction(state, { type: 'PLAY', hand: 'pair', dieIds: [0, cursed.id] })).toBeNull();
     state.target = 1;
     state = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, cursed.id] }, constant(.2)).state;
-    expect(state.phase).toBe('flameReward');
+    expect(state.phase).toBe('roundSummary');
+    expect(state.lastRoundPayout).toMatchObject({ baseGold: 5, unusedRerollGold: 3, interestGold: 0, bossRewardGold: 10, totalRoundRewardGold: 18 });
+    state = dispatch(state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
+    expect(state.phase).toBe('flameSelection');
     expect(state.dice.every(die => die.owner === 'player')).toBe(true);
-    expect(state.lastRoundPayout).toMatchObject({ baseGold: 5, unusedRerollGold: 3, interestGold: 0, flameBonusGold: 5, totalRoundRewardGold: 13 });
   });
 
   it('supports extended straights and Mirror group matching with rank 7', () => {
@@ -189,7 +206,7 @@ describe('The Hexer', () => {
     jackpotState.target = 1;
     const cleared = dispatch(jackpotState, { type: 'PLAY', hand: 'pair', dieIds: [0, jackpotCursed.id] }, constant(.2)).state;
     expect(cleared.stats.goldBySource.jackpot).toBe(3);
-    expect(cleared.gold).toBe(16);
+    expect(cleared.gold).toBe(21);
   });
 
   it('removes the Cursed Die on failed-attempt rollback and recreates it for the retry', () => {

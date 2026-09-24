@@ -3,14 +3,13 @@ import { useState } from 'react';
 import { activeFlameId, activeFlameInvestment, flameEffectText, flameFullEffectText, FLAMES, hasXMultFlame } from '../game/flames';
 import type { Action, Board, GameEvent } from '../game/types';
 import { Die } from './Die';
-import { RoundPayoutSummary } from './RoundPayoutSummary';
 import { ScoreResolution } from './ScoreResolution';
 
-export function FlameRewardScreen({ board, event, busy, progress, selectedOffer, setSelectedOffer, submit, skip }: {
+export function FlameSelectionScreen({ board, event, busy, progress, selectedOffer, setSelectedOffer, submit, skip }: {
   board: Board; event: GameEvent | null; busy: boolean; progress: { current: number; total: number };
   selectedOffer: number | null; setSelectedOffer: (id: number | null) => void; submit: (action: Action) => void; skip: () => void;
 }) {
-  const reward = board.flameReward!;
+  const reward = board.flameSelection!;
   const offer = reward.acquired ? undefined : reward.offers.find(item => item.id === selectedOffer);
   const [replacementDie, setReplacementDie] = useState<number | null>(null);
 
@@ -30,12 +29,11 @@ export function FlameRewardScreen({ board, event, busy, progress, selectedOffer,
   const replacing = replacementDie === null ? null : board.dice[replacementDie];
   const replacingId = activeFlameId(replacing?.flame);
   return <>
-    <Stack gap="xs" className="flame-reward-screen">
-      <Group justify="space-between" className="shop-summary flame-reward-header">
-        <div><Text fw={800}>FLAME REWARD</Text><Text size="xs" c="dimmed">Choose one new Flame and assign it to a physical die, or skip.</Text></div>
+    <Stack gap="xs" className="flame-selection-screen">
+      <Group justify="space-between" className="shop-summary flame-selection-header">
+        <div><Text fw={800}>FLAME SELECTION</Text><Text size="xs" c="dimmed">Choose one new Flame and assign it to a physical die, or skip.</Text></div>
         <Badge color="yellow" variant="light">{board.gold} Gold</Badge>
       </Group>
-      <Paper p="xs" className="flame-payout"><RoundPayoutSummary board={board} /></Paper>
       {busy && <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} showXMult={hasXMultFlame(board.dice, board.bonfires)} />}
       {board.bonfires.length > 0 && <Paper p="xs" className="shop-section bonfire-strip" data-testid="bonfires">
         <Group gap="xs"><Text fw={700} size="sm" tt="uppercase">Bonfires</Text>{board.bonfires.map(id => <Tooltip key={id} label={FLAMES[id].bonfireDescription} withArrow>
@@ -74,12 +72,12 @@ export function FlameRewardScreen({ board, event, busy, progress, selectedOffer,
           </Card>;
         })}</div>
       </Paper>
-      <div className="shop-action-dock"><Text size="xs" c="dimmed">These exposed faces carry into the shop. No second free roll.</Text><Button disabled={busy} onClick={() => submit({ type: 'CONTINUE_FLAME_REWARD' })}>CONTINUE TO SHOP →</Button></div>
+      <div className="shop-action-dock"><Text size="xs" c="dimmed">These exposed faces carry into the shop. No second free roll.</Text><Button disabled={busy} onClick={() => submit({ type: 'CONTINUE_FLAME_SELECTION' })}>CONTINUE TO SHOP →</Button></div>
     </Stack>
 
     <Modal opened={replacementDie !== null} onClose={() => setReplacementDie(null)} title="Replace Flame?" centered transitionProps={{ duration: 0 }}>
       {replacingId && offer && <><Text>Replace <strong>{FLAMES[replacingId].name}</strong> ({activeFlameInvestment(replacing?.flame)} Gold invested) with <strong>{FLAMES[offer.flame].name}</strong>?</Text>
-        <Text size="sm" c="dimmed" mt="xs">The old Flame and all its investment are destroyed. Its type may return in a future reward.</Text>
+        <Text size="sm" c="dimmed" mt="xs">The old Flame and all its investment are destroyed. Its type may return in a future selection.</Text>
         <Group justify="flex-end" mt="lg"><Button variant="default" onClick={() => setReplacementDie(null)}>Cancel</Button><Button color="orange" onClick={confirmReplacement}>Replace Flame</Button></Group></>}
     </Modal>
   </>;

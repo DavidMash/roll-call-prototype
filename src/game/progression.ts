@@ -5,7 +5,7 @@ export const encounterNode = (round: number, boss?: BossType | null): RunNode =>
   ? { id: `boss:${round}`, type: 'boss_round', round, boss: boss ?? undefined }
   : { id: `round:${round}`, type: 'normal_round', round };
 export const shopNodeBefore = (round: number): RunNode => ({ id: `shop:before-round:${round}`, type: 'shop', round });
-export const flameNodeAfter = (round: number): RunNode => ({ id: `flame:after-round:${round}`, type: 'flame_reward', round });
+export const flameNodeAfter = (round: number): RunNode => ({ id: `flame:after-round:${round}`, type: 'flame_selection', round });
 
 export function routeThrough(seed: string, throughRound: number): RunNode[] {
   const route: RunNode[] = [];
@@ -28,7 +28,7 @@ export function routeWindow(seed: string, destinationId: string, radius = 3): Ru
 export function nodeLabel(node: RunNode): string {
   if (node.type === 'normal_round') return `R${node.round}`;
   if (node.type === 'boss_round') return `BOSS R${node.round}`;
-  if (node.type === 'flame_reward') return 'FLAME';
+  if (node.type === 'flame_selection') return 'FLAME SELECTION';
   return 'SHOP';
 }
 

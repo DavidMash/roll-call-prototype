@@ -148,9 +148,10 @@ describe('Pair resolution and loss integration', () => {
     expect(result.events.filter(event => event.type === 'HAND_CONSUMED')).toHaveLength(1);
     expect(result.state.stats.handsPlayed[hand]).toBe(1);
     expect(result.state.stats.scoreByHand[hand]).toBe(score);
+    const shop = dispatch(result.state, { type: 'CONTINUE_ROUND_SUMMARY' }, { next: () => 0.99 }).state;
     const rolls = [0.2, 0.2, 0.6, 0.6, 0.99];
     let index = 0;
-    const next = dispatch(result.state, { type: 'NEXT_ROUND' }, { next: () => rolls[index++] ?? 0.99 });
+    const next = dispatch(shop, { type: 'NEXT_ROUND' }, { next: () => rolls[index++] ?? 0.99 });
     expect(next.state.consumed).toEqual([]);
     expect(handOptions(next.state.dice, next.state.consumed).find(option => option.id === hand)?.consumed).toBe(false);
     expect(next.state.manualRerollsRemaining).toBe(3);

@@ -24,7 +24,7 @@ describe('flat round Gold economy', () => {
     const state = board(); state.target = 1; state.manualRerollsRemaining = remaining;
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant());
     expect(result.state.lastRoundPayout).toEqual({ baseGold: 5, unusedRerollGold: remaining, interestGold: 0,
-      flameBonusGold: 0, heldGoldSnapshot: 0, totalRoundRewardGold: 5 + remaining });
+      bossRewardGold: 0, heldGoldSnapshot: 0, totalRoundRewardGold: 5 + remaining });
   });
   it.each([[0, 0], [4, 0], [5, 1], [24, 4], [25, 5], [29, 5], [30, 6], [49, 9], [50, 10], [55, 10], [1000, 10]] as const)('calculates capped interest from %s held Gold', (gold, interest) => {
     const state = board(); state.target = 1; state.gold = gold;
@@ -43,29 +43,32 @@ describe('flat round Gold economy', () => {
     expect(result.state.lastRoundPayout).toMatchObject({ heldGoldSnapshot: 49, interestGold: 9, totalRoundRewardGold: 17 });
     expect(result.state.gold).toBe(66);
   });
-  it.each([[1, 0], [2, 0], [3, 5], [4, 0], [6, 5], [9, 5]] as const)('round %s pays a %s Gold Flame Bonus', (round, flameBonusGold) => {
+  it.each([[1, 0], [2, 0], [3, 10], [4, 0], [6, 10], [9, 10]] as const)('round %s pays a %s Gold Boss Reward', (round, bossRewardGold) => {
     const state = board(); state.round = round; state.stats.rounds[0].round = round; state.target = 1;
+    if (bossRewardGold) state.boss = { type: 'caller', calledHand: 'ones', playsRemaining: 3, satisfied: true, satisfyingSource: 'manual' };
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant());
-    expect(result.state.lastRoundPayout?.flameBonusGold).toBe(flameBonusGold);
-    expect(result.state.lastRoundPayout?.totalRoundRewardGold).toBe(8 + flameBonusGold);
-    expect(result.state.phase).toBe(flameBonusGold ? 'flameReward' : 'shop');
+    expect(result.state.lastRoundPayout?.bossRewardGold).toBe(bossRewardGold);
+    expect(result.state.lastRoundPayout?.totalRoundRewardGold).toBe(8 + bossRewardGold);
+    expect(result.state.phase).toBe('roundSummary');
   });
-  it('snapshots interest before the Flame Bonus and keeps scoring Gold separate', () => {
+  it('snapshots interest before the Boss Reward and keeps scoring Gold separate', () => {
     const state = board(); state.round = 3; state.stats.rounds[0].round = 3; state.target = 1; state.gold = 4;
+    state.boss = { type: 'caller', calledHand: 'ones', playsRemaining: 3, satisfied: true, satisfyingSource: 'manual' };
     activeFace(state.dice[0]).enhancements.golden = 1;
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant());
     expect(result.state.lastRoundPayout).toEqual({ baseGold: 5, unusedRerollGold: 3, interestGold: 1,
-      flameBonusGold: 5, heldGoldSnapshot: 5, totalRoundRewardGold: 14 });
-    expect(result.state.gold).toBe(19);
-    expect(result.state.stats.goldBySource).toMatchObject({ golden: 1, flameBonus: 5, interest: 1 });
+      bossRewardGold: 10, heldGoldSnapshot: 5, totalRoundRewardGold: 19 });
+    expect(result.state.gold).toBe(24);
+    expect(result.state.stats.goldBySource).toMatchObject({ golden: 1, bossReward: 10, interest: 1 });
   });
-  it('caps ordinary rewards at 18 and Flame-round rewards at 23 before scoring Gold', () => {
+  it('caps ordinary rewards at 18 and Boss rewards at 28 before scoring Gold', () => {
     const ordinary = board(); ordinary.target = 1; ordinary.gold = 50;
     const ordinaryResult = dispatch(ordinary, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant());
     expect(ordinaryResult.state.lastRoundPayout?.totalRoundRewardGold).toBe(18);
     const flameRound = board(); flameRound.round = 3; flameRound.stats.rounds[0].round = 3; flameRound.target = 1; flameRound.gold = 50;
+    flameRound.boss = { type: 'caller', calledHand: 'ones', playsRemaining: 3, satisfied: true, satisfyingSource: 'manual' };
     const flameResult = dispatch(flameRound, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant());
-    expect(flameResult.state.lastRoundPayout?.totalRoundRewardGold).toBe(23);
+    expect(flameResult.state.lastRoundPayout?.totalRoundRewardGold).toBe(28);
   });
   it('uses shop dice prices 2/4/8/16 and resets the counter in a new shop', () => {
     expect([0, 1, 2, 3].map(diceRerollCost)).toEqual([2, 4, 8, 16]);
@@ -75,6 +78,7 @@ describe('flat round Gold economy', () => {
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant()).state;
     state.target = 1; state.dice.forEach(die => { die.value = 1; });
     state = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant()).state;
+    state = dispatch(state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
     expect(state.shop?.diceRerolls).toBe(0); expect(diceRerollCost(state.shop!.diceRerolls)).toBe(2);
   });
 });

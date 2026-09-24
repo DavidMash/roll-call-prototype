@@ -4,6 +4,7 @@ import { dispatch, newRun } from './engine';
 import { ENHANCEMENT_IDS } from './enhancements';
 import { HAND_IDS, hasPlayableHand } from './hands';
 import { exportRun } from './telemetry';
+import { rollDie, rollWeights } from './dice';
 import type { Enhancement, GameState, RandomSource, Rank } from './types';
 
 const constant = (value = 0.99): RandomSource => ({ next: () => value });
@@ -113,6 +114,30 @@ describe('manual reroll resource', () => {
 });
 
 describe('manual roll effects and hand independence', () => {
+  it.each([1, 2, 3, 4, 5, 6] as Rank[])('excludes current d6 face %s with one RNG draw', face => {
+    for (const random of [0, .1, .25, .5, .75, .999999]) {
+      const game = board([face, 2, 3, 4, 5]);
+      const rng = { next: vi.fn(() => random) };
+      const result = reroll(game, [0], rng);
+      expect(result.state.dice[0].value).not.toBe(face);
+      expect(rng.next).toHaveBeenCalledTimes(1);
+      expect(result.events.find(event => event.type === 'DIE_ROLLED')).toMatchObject({
+        rollSource: 'manual_reroll', previousFace: face, resultFace: result.state.dice[0].value, sameFaceExcluded: true,
+      });
+    }
+  });
+  it('zeros the current Weighted destination and renormalizes the remaining authored weights', () => {
+    const game = board([5, 2, 3, 4, 6]);
+    game.dice[0].faces[1].enhancements.weighted = 3;
+    expect(rollWeights(game.dice[0])).toEqual([1, 1, 1, 1, 4, 1]);
+    expect(rollWeights(game.dice[0], 5)).toEqual([1, 1, 1, 1, 0, 1]);
+    const result = reroll(game, [0], constant(.8));
+    expect(result.state.dice[0].value).toBe(6);
+  });
+  it('leaves automatic rolls free to repeat the current face', () => {
+    const game = board([3, 2, 3, 4, 5]);
+    expect(rollDie(game.dice[0], constant((2 + .1) / 6)).value).toBe(3);
+  });
   it('does not score or consume a hand, trigger Slippy or Hitchhiker, or spend gold', () => {
     const game = board();
     enhance(game, 0, 'slippy');
@@ -168,7 +193,7 @@ describe('manual roll effects and hand independence', () => {
     game.target = 5;
     for (const enhancement of ['jumpingBean', 'golden', 'workout'] as Enhancement[]) enhance(game, 0, enhancement, 6);
     const result = reroll(game, [0], sequence(0.99, 0.99, 0));
-    expect(result.state.phase).toBe('shop');
+    expect(result.state.phase).toBe('roundSummary');
     expect(result.state.score).toBe(13);
     expect(result.state.gold).toBe(8);
     expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: 13, finalScore: 13,
@@ -210,7 +235,7 @@ describe('loss, rescue and shop separation', () => {
     game.consumed = ['twos', 'threes', 'fours', 'fives', 'sixes', 'pair', 'twoPair'];
     game.target = 1;
     const result = dispatch(game, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant());
-    expect(result.state.phase).toBe('shop');
+    expect(result.state.phase).toBe('roundSummary');
     expect(result.state.stats.loss).toBeNull();
     expect(result.state.stats.rounds[0].manualRerollsRemainingAtClear).toBe(0);
   });
@@ -222,11 +247,12 @@ describe('loss, rescue and shop separation', () => {
     expect(result.state.stats.deadBoardRescues).toBe(1);
     expect(result.state.stats.rounds[0].deadBoardRescues).toBe(1);
     expect(result.state.stats.manualRerolls[0]).toMatchObject({ startedDeadBoard: true, rescuedDeadBoard: true });
-    expect(dispatch(result.state, { type: 'PLAY', hand: 'twos', dieIds: [0] }, constant()).error).toBeUndefined();
+    expect(dispatch(result.state, { type: 'PLAY', hand: 'threes', dieIds: [0] }, constant()).error).toBeUndefined();
   });
   it('keeps a persistent dead board active until the final reroll resolves', () => {
     let game = deadBoard();
     game.lives = 1;
+    game.consumed = [...HAND_IDS];
     for (const remaining of [2, 1, 0]) {
       const result = reroll(game, [0], constant(0));
       game = result.state;
@@ -243,7 +269,7 @@ describe('loss, rescue and shop separation', () => {
     game.target = 5;
     enhance(game, 0, 'jumpingBean', 6);
     const result = reroll(game, [0], sequence(0.99, 0.99, 0));
-    expect(result.state.phase).toBe('shop');
+    expect(result.state.phase).toBe('roundSummary');
     expect(result.state.score).toBe(13);
     expect(result.state.manualRerollsRemaining).toBe(0);
     expect(result.state.stats.loss).toBeNull();

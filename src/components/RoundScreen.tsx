@@ -41,7 +41,9 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
     ? `${HANDS[selection.hand].name} · ${selection.dieIds.length} ${selection.dieIds.length === 1 ? 'die' : 'dice'} selected`
     : selection.dieIds.length ? `${selection.dieIds.length} ${selection.dieIds.length === 1 ? 'die' : 'dice'} selected` : undefined;
   return <Stack gap="xs" className="round-screen">
-    <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} deadBoard={deadBoard} idleText={idleText} showXMult={showXMult} />
+    <div className="live-score-panel" data-testid="live-score-panel">
+      <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} deadBoard={deadBoard} idleText={idleText} showXMult={showXMult} />
+    </div>
     <BossPanel board={board} busy={busy} submit={submit} />
     {!busy && deadBoard && board.manualRerollsRemaining > 0 && <Alert color="orange" py={5} title="No playable hands" role="status">
       Select dice and use a reroll.

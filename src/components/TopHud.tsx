@@ -34,8 +34,10 @@ export function TopHud({ board, speed, setSpeed, openRunInfo, openHelp, openRest
           ? <Tooltip label="Restore lost lives" withArrow><UnstyledButton className="hud-lives interactive" data-testid="stat-lives"
             aria-label={`${board.lives} of ${CONFIG.maxLives} lives; restore lives`} onClick={openRestoreLives}>{hearts}</UnstyledButton></Tooltip>
           : <div className="hud-lives" data-testid="stat-lives" aria-label={`${board.lives} of ${CONFIG.maxLives} lives`}>{hearts}</div>}
-        {board.phase === 'shop' || board.phase === 'flameReward'
-          ? <div className="hud-phase" aria-label={board.phase === 'shop' ? 'Shop phase' : 'Flame Reward phase'}>{board.phase === 'shop' ? 'SHOP' : 'FLAME'}</div>
+        {board.phase === 'shop' || board.phase === 'flameSelection' || board.phase === 'roundSummary'
+          ? <div className="hud-phase" aria-label={board.phase === 'shop' ? 'Shop phase' : board.phase === 'flameSelection' ? 'Flame Selection phase' : 'Round Summary phase'}>
+            {board.phase === 'shop' ? 'SHOP' : board.phase === 'flameSelection' ? 'FLAME SELECTION' : 'SUMMARY'}
+          </div>
           : board.phase === 'round' ? <><HudStat testId="stat-rerolls" icon="↻" label="Rerolls" value={board.manualRerollsRemaining} />
             {board.boss && <div className="hud-phase" data-testid="boss-hud-label">{BOSSES[board.boss.type].name}</div>}</>
             : <div className="hud-phase" aria-label={board.phase === 'bust' ? 'Bust phase' : 'Run ended'}>{board.phase === 'bust' ? 'BUST' : 'OVER'}</div>}

@@ -34,10 +34,12 @@ export function winningSlippyRun() {
     for (let step = 0; step < 80 && game.round <= 4; step++) {
       if (game.phase === 'lost' || game.phase === 'error') break;
       let action: Action;
-      if (game.phase === 'flameReward') {
-        action = game.flameReward!.acquired
-          ? { type: 'CONTINUE_FLAME_REWARD' }
-          : { type: 'CHOOSE_FLAME', offerId: game.flameReward!.offers[0].id, dieId: Math.floor(game.round / 3 - 1) % 5 };
+      if (game.phase === 'roundSummary') {
+        action = { type: 'CONTINUE_ROUND_SUMMARY' };
+      } else if (game.phase === 'flameSelection') {
+        action = game.flameSelection!.acquired
+          ? { type: 'CONTINUE_FLAME_SELECTION' }
+          : { type: 'CHOOSE_FLAME', offerId: game.flameSelection!.offers[0].id, dieId: Math.floor(game.round / 3 - 1) % 5 };
       } else if (game.phase === 'shop') {
         const offer = !game.bust ? game.shop!.offers.find(item => item.enhancement === 'slippy' && !item.purchased) : undefined;
         if (offer && !boughtSlippy) {

@@ -16,7 +16,7 @@ export function RunMapTransition({ seed, event, onSkip }: { seed: string; event:
         {index > 0 && <span className="map-connector" aria-hidden="true" />}
         <div className={`run-map-node node-${node.type} ${node.id === destination ? 'destination' : ''}`}
           title={nodeDescription(node)} aria-current={node.id === destination ? 'step' : undefined}>
-          <span className="node-glyph">{node.type === 'shop' ? '¤' : node.type === 'flame_reward' ? '◆' : node.type === 'boss_round' ? '!' : '•'}</span>
+          <span className="node-glyph">{node.type === 'shop' ? '¤' : node.type === 'flame_selection' ? '◆' : node.type === 'boss_round' ? '!' : '•'}</span>
           <span>{nodeLabel(node)}</span>
         </div>
       </div>)}

@@ -32,12 +32,14 @@ async function perform(page: Page, game: GameState, action: Action) {
   } else if (action.type === 'NEXT_ROUND') {
     await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   } else if (action.type === 'CHOOSE_FLAME') {
-    const offer = game.flameReward!.offers.find(item => item.id === action.offerId)!;
+    const offer = game.flameSelection!.offers.find(item => item.id === action.offerId)!;
     await page.getByTestId(`flame-offer-${offer.flame}`).getByRole('button', { name: 'Select Flame' }).click();
     await page.getByRole('button', { name: new RegExp(`^Die ${action.dieId + 1},`) }).click();
     if (game.dice[action.dieId].flame) await page.getByRole('button', { name: 'Replace Flame', exact: true }).click();
-  } else if (action.type === 'CONTINUE_FLAME_REWARD') {
+  } else if (action.type === 'CONTINUE_FLAME_SELECTION') {
     await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
+  } else if (action.type === 'CONTINUE_ROUND_SUMMARY') {
+    await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
   } else if (action.type === 'MANUAL_REROLL') {
     await selectDice(page, action.dieIds);
     await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();

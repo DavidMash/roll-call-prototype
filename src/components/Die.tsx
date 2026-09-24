@@ -3,6 +3,7 @@ import { activeFace, scoringPips } from '../game/dice';
 import { ENHANCEMENTS, ENHANCEMENT_IDS, FACE_TYPE_LIMIT, faceEnhancementTypes } from '../game/enhancements';
 import { activeFlameId, activeFlameInvestment, FLAMES } from '../game/flames';
 import type { Die as PhysicalDie, Enhancement, Flame } from '../game/types';
+import { PipFace } from './PipFace';
 
 interface Props {
   die: PhysicalDie;
@@ -58,7 +59,7 @@ export function Die({ die, selected, highlighted, rolling, ability, flameAbility
       {flameId && <Tooltip label={`${FLAMES[flameId].name}: ${flameInvestment}/100 Gold. ${FLAMES[flameId].description}`} multiline maw={320} withArrow>
         <Badge className="flame-badge" size="xs" color="orange" variant="light">🔥 {FLAMES[flameId].shortName} {flameInvestment}</Badge>
       </Tooltip>}
-      <span className="die-number">{die.value}</span>
+      <PipFace value={die.value} label={`${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`} showing ${die.value}`} />
       {pips !== face.rank && <Text size="xs" c="teal" fw={700} className="die-pips">{pips} Pips</Text>}
       <div className="die-badges">
         {visibleEnhancements.map(id => {

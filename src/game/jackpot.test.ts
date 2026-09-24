@@ -37,7 +37,7 @@ describe('round-clearing scoring Jackpot', () => {
     enhance(game, 0, 'jackpot', stackCount);
     const result = playPair(game);
     const interest = Math.min(10, Math.floor(payout / 5));
-    expect(result.state.phase).toBe('shop');
+    expect(result.state.phase).toBe('roundSummary');
     expect(result.state.gold).toBe(payout + roundReward() + 3 + interest);
     expect(result.state.stats.goldBySource.jackpot).toBe(payout);
     expect(result.state.stats.triggers.jackpot).toBe(1);
@@ -86,7 +86,7 @@ describe('round-clearing scoring Jackpot', () => {
     enhance(game, 0, 'jumpingBean', 1, 6);
     enhance(game, 0, 'jackpot', 2, 6);
     const result = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }, sequence(0.99));
-    expect(result.state.phase).toBe('shop');
+    expect(result.state.phase).toBe('roundSummary');
     expect(result.state.score).toBe(13);
     expect(result.state.stats.goldBySource.jackpot).toBe(6);
     expect(result.state.stats.jumpingBeanFreePlays[0]).toMatchObject({ hand: 'sixes', roundCleared: true, jackpotPayout: 6 });

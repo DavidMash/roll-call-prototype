@@ -7,8 +7,8 @@ import { activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasXMult
 import type { Action, Board, Enhancement, GameEvent, Rank } from '../game/types';
 import { DiceRow } from './DiceRow';
 import { EnhancementCard } from './EnhancementCard';
-import { RoundPayoutSummary } from './RoundPayoutSummary';
 import { ScoreResolution } from './ScoreResolution';
+import { PipFace } from './PipFace';
 import { StokeFlameModal } from './StokeFlameModal';
 import { TrainingCard } from './TrainingCard';
 import { BossPreview } from './BossPanel';
@@ -86,7 +86,7 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
             <Text size="xs" c="dimmed">Prepare for another attempt. Your pre-attempt Shop has been restored.</Text></div>
           <Text fw={800} c="red" aria-label={`${board.lives} of ${CONFIG.maxLives} lives`}>{hearts(board.lives)}</Text>
         </Group>
-      </Paper> : <RoundPayoutSummary board={board} />}</div>
+      </Paper> : <Group justify="space-between"><Text fw={800}>SHOP</Text><Text size="xs" c="dimmed">Prepare for round {board.round + 1}.</Text></Group>}</div>
       {busy && <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} showXMult={hasXMultFlame(board.dice, board.bonfires)} />}
       <BossPreview board={board} />
       <Paper p="xs" className="shop-section">
@@ -158,7 +158,7 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
             return <Paper key={face.rank} withBorder p="sm" data-testid={`manage-face-${face.rank}`}
               className={`manage-face-tile ${focusedFace === face.rank ? 'focused' : ''} ${managedDie.value === face.rank ? 'exposed-face' : ''}`}
               onClick={() => setFocusedFace(face.rank)}>
-              <Group justify="space-between"><Text fw={800}>FACE {face.rank}</Text>{managedDie.value === face.rank && <Badge size="xs" color="teal">EXPOSED</Badge>}</Group>
+              <Group justify="space-between"><Group gap="xs"><PipFace value={face.rank} compact label={`D${managedDie.id + 1} face ${face.rank}`} /><Text fw={800}>FACE {face.rank}</Text></Group>{managedDie.value === face.rank && <Badge size="xs" color="teal">EXPOSED</Badge>}</Group>
               <Text size="xs" c={typeCount === FACE_TYPE_LIMIT ? 'orange' : 'dimmed'} fw={700} mt={4}>{typeCount} / {FACE_TYPE_LIMIT} TYPES</Text>
               <Stack gap={4} mt="xs">{ids.length === 0 ? <Text size="xs" c="dimmed">No enhancements</Text> : ids.map(id => <Group key={id} justify="space-between" gap={4} wrap="nowrap">
                 <div><Text size="xs">{ENHANCEMENTS[id].name}{id === 'vintage' ? '' : ` ×${face.enhancements[id]}`}</Text>

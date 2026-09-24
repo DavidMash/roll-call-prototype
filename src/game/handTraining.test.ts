@@ -145,6 +145,8 @@ describe('Hand Training purchases and persistence', () => {
     expect(game.handLevels.pair).toBe(2);
     game.dice.forEach(die => { die.value = 6; });
     game = dispatch(game, { type: 'PLAY', hand: 'fiveKind', dieIds: [0, 1, 2, 3, 4] }, constant()).state;
+    expect(game.phase).toBe('roundSummary');
+    game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
     expect(game.phase).toBe('shop');
     expect(game.handLevels.pair).toBe(2);
     expect(game.shop!.trainingOffers).toHaveLength(3);
@@ -158,8 +160,10 @@ describe('Hand Training purchases and persistence', () => {
 describe('seeded Training offer generation', () => {
   it('creates three distinct deterministic offers and keeps them fixed during enhancement rerolls', () => {
     const action = { type: 'PLAY' as const, hand: 'fiveKind' as const, dieIds: [0, 1, 2, 3, 4] };
-    const first = dispatch(winningState('training-offers'), action);
-    const replay = dispatch(winningState('training-offers'), action);
+    const firstClear = dispatch(winningState('training-offers'), action);
+    const replayClear = dispatch(winningState('training-offers'), action);
+    const first = dispatch(firstClear.state, { type: 'CONTINUE_ROUND_SUMMARY' });
+    const replay = dispatch(replayClear.state, { type: 'CONTINUE_ROUND_SUMMARY' });
     expect(first).toEqual(replay);
     const offers = first.state.shop!.trainingOffers;
     expect(offers).toHaveLength(3);
@@ -174,6 +178,8 @@ describe('seeded Training offer generation', () => {
     const playFive = { type: 'PLAY' as const, hand: 'fiveKind' as const, dieIds: [0, 1, 2, 3, 4] };
     let a = dispatch(winningState('training-next-shop'), playFive).state;
     let b = dispatch(winningState('training-next-shop'), playFive).state;
+    a = dispatch(a, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
+    b = dispatch(b, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
     const firstRngState = a.rngState;
     a = dispatch(a, { type: 'NEXT_ROUND' }).state;
     b = dispatch(b, { type: 'NEXT_ROUND' }).state;
@@ -181,6 +187,8 @@ describe('seeded Training offer generation', () => {
     b.dice.forEach(die => { die.value = 6; });
     a = dispatch(a, playFive).state;
     b = dispatch(b, playFive).state;
+    a = dispatch(a, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
+    b = dispatch(b, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
     expect(a.shop!.trainingOffers).toEqual(b.shop!.trainingOffers);
     expect(a.shop!.trainingOffers).toHaveLength(3);
     expect(new Set(a.shop!.trainingOffers.map(offer => offer.hand)).size).toBe(3);

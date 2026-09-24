@@ -1,8 +1,9 @@
 import { Badge, Button, Group, Paper, Progress, SimpleGrid, Stack, Text } from '@mantine/core';
 import { BOSSES, createCursedDie, cursedFaceSummary, wardenCheckpoints } from '../game/bosses';
-import { targetForRound } from '../game/config';
+import { CONFIG, targetForRound } from '../game/config';
 import { HANDS } from '../game/hands';
 import type { Action, Board } from '../game/types';
+import { PipFace } from './PipFace';
 
 export function BossPanel({ board, busy, submit }: { board: Board; busy: boolean; submit: (action: Action) => void }) {
   const boss = board.boss;
@@ -28,7 +29,10 @@ export function BossPanel({ board, busy, submit }: { board: Board; busy: boolean
         <Text size="xs" fw={800} mb={4}>{boss.startingDieId === null ? 'CHOOSE YOUR STARTING DIE' : `CHOOSE REINFORCEMENT · ${boss.pendingReinforcements} PENDING`}</Text>
         <Group gap="xs">{board.dice.filter(die => die.owner === 'player' && !boss.activeDieIds.includes(die.id)).map(die =>
           <Button key={die.id} size="compact-sm" color="cyan" variant="light" disabled={busy}
-            onClick={() => submit({ type: 'CHOOSE_WARDEN_DIE', dieId: die.id })}>Deploy D{die.id + 1} · face {die.value}</Button>)}</Group>
+            aria-label={`Deploy D${die.id + 1}, face ${die.value}`}
+            onClick={() => submit({ type: 'CHOOSE_WARDEN_DIE', dieId: die.id })}>
+            <span className="warden-die-choice"><PipFace value={die.value} compact label={`Die ${die.id + 1} showing ${die.value}`} /> D{die.id + 1}</span>
+          </Button>)}</Group>
       </div>}
     </Stack>}
     {boss.type === 'hexer' && <div className="hexer-rule" data-testid="hexer-rule">
@@ -47,6 +51,8 @@ export function BossPreview({ board }: { board: Board }) {
     <Group justify="space-between"><div><Text size="xs" fw={900} tt="uppercase" lts=".14em">Incoming · Round {nextRound}</Text>
       <Text fw={950}>{boss.name}</Text></div><Badge variant="light">BOSS</Badge></Group>
     <Text size="sm" mt={5}>{boss.shortRule}</Text>
+    <Text size="xs" fw={800} mt={5}>Base Reward: {CONFIG.roundRewardBase} Gold</Text>
+    <Text size="xs" fw={800}>Boss Reward: +{CONFIG.bossRewardGold} Gold</Text>
     {bossType === 'caller' && <Text size="xs" c="dimmed" mt={4}>The exact called hand is revealed when the encounter begins.</Text>}
     {bossType === 'warden' && <Text size="xs" mt={4}>Reinforcements at {wardenCheckpoints(targetForRound(nextRound)).join(', ')} points (10%, 25%, 45%, 70%).</Text>}
     {bossType === 'hexer' && <SimpleGrid cols={{ base: 1, sm: 2 }} spacing={4} mt="xs">

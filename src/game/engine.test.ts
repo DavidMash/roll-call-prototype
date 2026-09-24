@@ -358,10 +358,10 @@ describe('round boundaries and losing', () => {
       const result = play(game, 'fiveKind', [0, 1, 2, 3, 4]);
       expect(result.error).toBeUndefined();
       const held = earned;
-      const flameBonus = round % 3 === 0 ? 5 : 0;
-      const expectedPayout = 5 + 3 + Math.min(10, Math.floor(held / 5)) + flameBonus;
+      const bossReward = 0;
+      const expectedPayout = 5 + 3 + Math.min(10, Math.floor(held / 5)) + bossReward;
       earned += expectedPayout;
-      expect(result.state.phase).toBe(round % 3 === 0 ? 'flameReward' : 'shop');
+      expect(result.state.phase).toBe('roundSummary');
       expect(result.state.gold).toBe(earned);
       expect(result.state.stats.goldEarned).toBe(earned);
       expect(result.state.stats.goldSpent).toBe(0);
@@ -370,19 +370,16 @@ describe('round boundaries and losing', () => {
         finalScore: 225, clearMargin: 225 - targetForRound(round), cleared: true,
       });
       expect(result.state.lastRoundPayout).toEqual({ baseGold: 5, unusedRerollGold: 3,
-        interestGold: Math.min(10, Math.floor(held / 5)), flameBonusGold: flameBonus,
+        interestGold: Math.min(10, Math.floor(held / 5)), bossRewardGold: bossReward,
         heldGoldSnapshot: held, totalRoundRewardGold: expectedPayout });
       const rewards = result.events.filter(event => event.type === 'GOLD_ADDED');
       const rewardIndex = result.events.indexOf(rewards[0]);
       expect(result.events.findIndex(event => event.type === 'ROUND_CLEARED')).toBeLessThan(rewardIndex);
-      const destinationIndex = result.events.findIndex(event => event.type === (round % 3 === 0 ? 'FLAME_REWARD_OPENED' : 'SHOP_OPENED'));
-      expect(rewardIndex).toBeLessThan(destinationIndex);
+      expect(result.events.some(event => event.type === 'SHOP_OPENED' || event.type === 'FLAME_SELECTION_OPENED')).toBe(false);
       expect(play(result.state, 'fiveKind', [0, 1, 2, 3, 4]).state).toBe(result.state);
-
-      const postReward = result.state.phase === 'flameReward' ? (() => {
-        const chosen = dispatch(result.state, { type: 'CHOOSE_FLAME', offerId: result.state.flameReward!.offers[0].id, dieId: 0 }, constant()).state;
-        return dispatch(chosen, { type: 'CONTINUE_FLAME_REWARD' }, constant()).state;
-      })() : result.state;
+      const progressed = dispatch(result.state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant());
+      expect(progressed.events.some(event => event.type === 'MAP_TRANSITION')).toBe(true);
+      const postReward = progressed.state;
       expect(postReward.phase).toBe('shop');
       const next = dispatch(postReward, { type: 'NEXT_ROUND' }, constant());
       expect(next.state.phase).toBe('round');
@@ -396,7 +393,7 @@ describe('round boundaries and losing', () => {
     const data = exportRun(game);
     expect(data.roundReached).toBe(5);
     expect(data.rounds.map(round => round.target)).toEqual([50, 70, 90, 125, 165]);
-    expect(data.goldEarned).toBe(47);
+    expect(data.goldEarned).toBe(41);
     expect(data.goldSpent).toBe(0);
   });
   it('keeps Golden income separate from the updated baseline reward', () => {
@@ -404,7 +401,7 @@ describe('round boundaries and losing', () => {
     enhance(game, 0, 'golden', 2);
     const result = play(game, 'fiveKind', [0, 1, 2, 3, 4]);
     const goldenIncome = 2 * CONFIG.goldenGold;
-    expect(result.state.phase).toBe('shop');
+    expect(result.state.phase).toBe('roundSummary');
     expect(result.state.gold).toBe(10);
     expect(result.state.stats.goldEarned).toBe(10);
     expect(result.events.filter(event => event.type === 'GOLD_ADDED').map(event => ({
@@ -422,14 +419,15 @@ describe('round boundaries and losing', () => {
     enhance(game, 0, 'jumpingBean', 1, 6);
     enhance(game, 0, 'golden', 1, 6);
     const result = play(game, 'ones', [0], sequence(0.99, 0.99, 0));
-    expect(result.state.phase).toBe('shop');
+    expect(result.state.phase).toBe('roundSummary');
     expect(result.state.score).toBe(21);
     expect(result.state.gold).toBe(9);
     expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: 21, finalScore: 21, clearMargin: 1, cleared: true });
     expect(result.events.findIndex(e => e.type === 'HAND_CONSUMED')).toBeLessThan(result.events.findIndex(e => e.type === 'ROUND_CLEARED'));
     expect(result.state.stats.triggers.jumpingBean).toBe(1);
-    expect(result.state.shop!.offers).toHaveLength(3);
-    expect(new Set(result.state.shop!.offers.map(o => o.enhancement)).size).toBe(3);
+    const shopState = dispatch(result.state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
+    expect(shopState.shop!.offers).toHaveLength(3);
+    expect(new Set(shopState.shop!.offers.map(o => o.enhancement)).size).toBe(3);
   });
   it('initial-roll effects can clear a round after the complete chain', () => {
     const game = shop();
@@ -437,7 +435,7 @@ describe('round boundaries and losing', () => {
     enhance(game, 0, 'bonus', 10, 6);
     const result = dispatch(game, { type: 'NEXT_ROUND' }, sequence(0.99, 0, 0, 0, 0, 0));
     expect(result.state.round).toBe(2);
-    expect(result.state.phase).toBe('shop');
+    expect(result.state.phase).toBe('roundSummary');
     expect(result.state.score).toBe(113);
     expect(result.state.gold).toBe(118);
     expect(result.state.consumed).toEqual([]);
@@ -462,7 +460,7 @@ describe('round boundaries and losing', () => {
     const game = state([1, 2, 2, 4, 5]);
     game.target = 1;
     game.consumed = ['twos', 'threes', 'fours', 'fives', 'sixes', 'pair', 'twoPair'];
-    expect(play(game).state.phase).toBe('shop');
+    expect(play(game).state.phase).toBe('roundSummary');
   });
 });
 
@@ -537,8 +535,9 @@ describe('shop', () => {
     enhance(game, 0, 'bonus', 10, 6);
     enhance(game, 0, 'sticky', 1, 6);
     const result = dispatch(game, { type: 'NEXT_ROUND' }, sequence(0.99, 0.99, 0.99, 0.99, 0.99, 0));
-    expect(result.state.phase).toBe('shop');
-    expect(result.state.shop).toMatchObject({ diceRerolls: 0, offerRerolls: 0 });
+    expect(result.state.phase).toBe('roundSummary');
+    const continued = dispatch(result.state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
+    expect(continued.shop).toMatchObject({ diceRerolls: 0, offerRerolls: 0 });
   });
   it('all abilities except Weighted are inert during shop rolls', () => {
     const game = shop();
@@ -566,10 +565,12 @@ describe('reproducibility and end-to-end domain flow', () => {
         const ar = dispatch(a, action), br = dispatch(b, action);
         expect(ar.events).toEqual(br.events);
         a = ar.state; b = br.state;
-        } else if (a.phase === 'flameReward') {
-          const action = a.flameReward!.acquired
-            ? { type: 'CONTINUE_FLAME_REWARD' as const }
-            : { type: 'CHOOSE_FLAME' as const, offerId: a.flameReward!.offers[0].id, dieId: 0 };
+        } else if (a.phase === 'roundSummary') {
+          a = dispatch(a, { type: 'CONTINUE_ROUND_SUMMARY' }).state; b = dispatch(b, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
+        } else if (a.phase === 'flameSelection') {
+          const action = a.flameSelection!.acquired
+            ? { type: 'CONTINUE_FLAME_SELECTION' as const }
+            : { type: 'CHOOSE_FLAME' as const, offerId: a.flameSelection!.offers[0].id, dieId: 0 };
           a = dispatch(a, action).state; b = dispatch(b, action).state;
         } else if (a.phase === 'shop') {
         const action = a.bust ? { type: 'RETRY_ROUND' as const } : { type: 'NEXT_ROUND' as const };
@@ -595,10 +596,12 @@ describe('reproducibility and end-to-end domain flow', () => {
             expect(game.manualRerollsRemaining).toBeGreaterThan(0);
             game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
           }
-        } else if (game.phase === 'flameReward') {
-          game = game.flameReward!.acquired
-            ? dispatch(game, { type: 'CONTINUE_FLAME_REWARD' }).state
-            : dispatch(game, { type: 'CHOOSE_FLAME', offerId: game.flameReward!.offers[0].id, dieId: seed % 5 }).state;
+        } else if (game.phase === 'roundSummary') {
+          game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
+        } else if (game.phase === 'flameSelection') {
+          game = game.flameSelection!.acquired
+            ? dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state
+            : dispatch(game, { type: 'CHOOSE_FLAME', offerId: game.flameSelection!.offers[0].id, dieId: seed % 5 }).state;
         } else if (game.phase === 'shop') {
           if (game.bust) { game = dispatch(game, { type: 'RETRY_ROUND' }).state; continue; }
           clears++;

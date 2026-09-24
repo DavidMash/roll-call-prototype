@@ -15,7 +15,7 @@ import { encounterNode, flameNodeAfter, shopNodeBefore } from './progression';
 import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameStateBase, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, RunNode, ScoreSource } from './types';
 
 type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number };
-type RollContext = 'gameplay' | 'shop' | 'flameReward';
+type RollContext = 'gameplay' | 'shop' | 'flameSelection';
 const NORMAL_SHOP_SPEND = new Set<GoldSpendSource>(['enhancement', 'shopDiceReroll', 'enhancementReroll', 'handTraining', 'lifeRestore']);
 const UPPER_HAND_BY_FACE: Partial<Record<import('./types').Rank, HandId>> = {
   1: 'ones', 2: 'twos', 3: 'threes', 4: 'fours', 5: 'fives', 6: 'sixes',
@@ -188,7 +188,7 @@ export class Resolver {
     this.emit({ type: 'CHARGE_CHANGED', flame: 'charge', dieIds: [dieId], xMult: this.state.chargeXMult,
       message: `Charge stored factor grew by ${this.format(gain)} from D${dieId + 1}: ×${this.format(this.state.chargeXMult)}` });
   }
-  rollBatch(dieIds: number[], reason: string, context: RollContext): void {
+  rollBatch(dieIds: number[], reason: string, context: RollContext, excludeStartingFace = false): void {
     const ids = [...new Set(dieIds)].sort((a, b) => a - b);
     if (!ids.length) return;
     this.emit({ type: 'DICE_REROLL_STARTED', dieIds: ids, message: `${reason}: ${ids.map(id => `D${id + 1}`).join(', ')}` });
@@ -203,16 +203,21 @@ export class Resolver {
       const before = die.value;
       const bumped = context === 'gameplay' && stacks(activeFace(die), 'bump') > 0;
       if (bumped) return { dieId, before, value: (isCursedDie(die) ? Math.min(7, before + 1) : before === 6 ? 1 : before + 1) as import('./types').Rank, weighted: false, bumped, attracted: false };
-      const destinations = anchors.length ? die.faces.filter(face => stacks(face, 'magnetic')) : [];
+      const destinations = anchors.length
+        ? die.faces.filter(face => stacks(face, 'magnetic') && (!excludeStartingFace || face.rank !== before))
+        : [];
       if (destinations.length) return { dieId, before, value: destinations[randomIndex(this.rng, destinations.length)].rank, weighted: false, bumped: false, attracted: true };
-      return { dieId, before, ...rollDie(die, this.rng), bumped: false, attracted: false };
+      return { dieId, before, ...rollDie(die, this.rng, excludeStartingFace ? before : undefined), bumped: false, attracted: false };
     });
     const triggers: RollTrigger[] = [];
     for (const result of results) {
       const die = this.state.dice.find(item => item.id === result.dieId)!;
       die.value = result.value;
       const face = structuredClone(activeFace(die));
-      this.emit({ type: 'DIE_ROLLED', dieIds: [die.id], face: die.value, message: `D${die.id + 1} rolled: ${result.before} → ${die.value}` });
+      this.emit({ type: 'DIE_ROLLED', dieIds: [die.id], face: die.value,
+        rollSource: excludeStartingFace ? 'manual_reroll' : 'automatic', previousFace: result.before, resultFace: die.value,
+        sameFaceExcluded: excludeStartingFace && !result.bumped,
+        message: `D${die.id + 1} rolled: ${result.before} → ${die.value}${excludeStartingFace ? ' · previous face excluded' : ''}` });
       if (isCursedDie(die)) {
         this.state.stats.hexerEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
           kind: reason.startsWith('Manual') ? 'manual_reroll' : die.value === 7 ? 'seven' : 'roll', face: die.value });
@@ -475,7 +480,7 @@ export class Resolver {
     const record = { round: this.state.round, dieIds: ids, charges: ids.length, remaining: this.state.manualRerollsRemaining, startedDeadBoard, rescuedDeadBoard: false };
     this.state.stats.manualRerolls.push(record);
     this.emit({ type: 'MANUAL_REROLL_STARTED', dieIds: ids, amount: ids.length, message: `Manual reroll; ${this.state.manualRerollsRemaining} remaining` });
-    this.rollBatch(ids, 'Manual gameplay reroll', 'gameplay');
+    this.rollBatch(ids, 'Manual gameplay reroll', 'gameplay', true);
     this.drain();
     if (startedDeadBoard && (this.state.score >= this.state.target || hasPlayableHand(activeEncounterDice(this.state), this.state.consumed))) {
       record.rescuedDeadBoard = true; round.deadBoardRescues++; this.state.stats.deadBoardRescues++;
@@ -491,7 +496,8 @@ export class Resolver {
     // generating offers, reroll allowances, exposed faces, or rewards.
     base.phase = 'shop';
     base.shop ??= { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
-    base.flameReward = null;
+    base.flameSelection = null;
+    base.roundSummary = null;
     base.bust = null;
     base.boss = null;
     base.dice = base.dice.filter(die => die.owner === 'player');
@@ -574,10 +580,10 @@ export class Resolver {
     if (this.state.chargeXMult !== 1 || this.state.chargeArmed) this.state.stats.chargeResets++;
     this.state.phase = 'round'; this.state.score = 0; this.state.scoreByHand = {}; this.state.effectScore = 0;
     this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound; this.state.target = targetForRound(this.state.round);
-    this.state.consumed = []; this.state.targetPracticeHand = null; this.state.lastRoundPayout = null;
+    this.state.consumed = []; this.state.targetPracticeHand = null; this.state.lastRoundPayout = null; this.state.roundSummary = null;
     this.state.chargeXMult = 1; this.state.chargeArmed = false; this.state.hotStreakCharges = 0;
     this.state.hotStreakGoal = ownedFlameIds(this.state).has('hotStreak') ? 'pair' : null;
-    this.state.flameReward = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
+    this.state.flameSelection = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
     const bossType = this.state.bossSchedule[this.state.round]
       ?? (this.state.round > 60 ? bossTypeForRound(this.state.seed, this.state.round) : null);
@@ -589,7 +595,8 @@ export class Resolver {
     this.state.stats.rounds.push({ round: this.state.round, attempt: this.state.roundAttemptNumber, target: this.state.target, firstCrossedScore: null,
       finalScore: 0, clearMargin: null, cleared: false, lastHand: null, lastAction: null,
       manualRerollsGranted: CONFIG.manualRerollsPerRound, manualRerollChargesSpent: 0,
-      manualRerollsRemainingAtClear: null, manualRerollActions: 0, deadBoardRescues: 0, scoreByHand: {}, effectScore: 0, payout: null });
+      manualRerollsRemainingAtClear: null, manualRerollActions: 0, deadBoardRescues: 0, scoreByHand: {}, effectScore: 0,
+      goldBefore: this.state.gold, goldBySourceBefore: structuredClone(this.state.stats.goldBySource), payout: null });
     if (this.state.boss) {
       const boss = this.state.boss;
       this.state.stats.bossEncounters.push({ boss: boss.type, round: this.state.round, attempt: this.state.roundAttemptNumber,
@@ -625,7 +632,7 @@ export class Resolver {
   freshFlameOffers(): void {
     const owned = ownedFlameIds(this.state);
     const pool = FLAME_IDS.filter(id => !owned.has(id));
-    this.state.flameReward!.offers = Array.from({ length: Math.min(3, pool.length) }, () => {
+    this.state.flameSelection!.offers = Array.from({ length: Math.min(3, pool.length) }, () => {
       const [flame] = pool.splice(randomIndex(this.rng, pool.length), 1); return { id: this.state.nextOfferId++, flame };
     });
   }
@@ -646,24 +653,30 @@ export class Resolver {
   openShop(rollDice = true): void {
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
     this.state.boss = null;
-    this.state.phase = 'shop'; this.state.flameReward = null;
+    this.state.phase = 'shop'; this.state.flameSelection = null; this.state.roundSummary = null;
     this.state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
     const upcomingBoss = this.state.round + 1 > 60 ? bossTypeForRound(this.state.seed, this.state.round + 1) : null;
     if (upcomingBoss) this.state.bossSchedule[this.state.round + 1] = upcomingBoss;
     this.mapTransition(shopNodeBefore(this.state.round + 1));
     if (rollDice) this.rollBatch(this.state.dice.map(die => die.id), 'Free shop roll', 'shop');
     this.freshOffers(); this.freshTrainingOffers();
-    this.emit({ type: 'SHOP_OPENED', message: `Shop opened${rollDice ? '' : '; Flame Reward faces preserved'}` });
+    this.emit({ type: 'SHOP_OPENED', message: `Shop opened${rollDice ? '' : '; Flame Selection faces preserved'}` });
   }
-  openFlameReward(): void {
+  openFlameSelection(): void {
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
     this.state.boss = null;
-    this.state.phase = 'flameReward'; this.state.shop = null;
-    this.state.flameReward = { offers: [], acquired: false };
+    this.state.phase = 'flameSelection'; this.state.shop = null; this.state.roundSummary = null;
+    this.state.flameSelection = { offers: [], acquired: false };
     this.mapTransition(flameNodeAfter(this.state.round));
-    this.rollBatch(this.state.dice.map(die => die.id), 'Flame Reward roll', 'flameReward');
+    this.rollBatch(this.state.dice.map(die => die.id), 'Flame Selection roll', 'flameSelection');
     this.freshFlameOffers();
-    this.emit({ type: 'FLAME_REWARD_OPENED', message: 'Flame Reward — choose and assign one new Flame, or skip' });
+    this.emit({ type: 'FLAME_SELECTION_OPENED', message: 'Flame Selection — choose and assign one new Flame, or skip' });
+  }
+  continueRoundSummary(): void {
+    const summary = this.state.roundSummary;
+    if (!summary) throw new Error('Round Summary is not available.');
+    if (summary.encounterType === 'boss') this.openFlameSelection();
+    else this.openShop();
   }
   evaluate(): void {
     const current = this.state.stats.rounds.at(-1)!;
@@ -688,17 +701,38 @@ export class Resolver {
           message: `${this.state.boss.type.toUpperCase()} cleared with ${this.state.score} / ${this.state.target}` });
       }
       this.emit({ type: 'ROUND_CLEARED', message: `Round ${this.state.round} cleared with ${this.state.score} / ${this.state.target}` });
+      const bossType = this.state.boss?.type ?? null;
       const heldGoldSnapshot = this.state.gold;
       const payout = { baseGold: roundReward(), unusedRerollGold: this.state.manualRerollsRemaining,
         interestGold: interestForGold(heldGoldSnapshot),
-        flameBonusGold: this.state.round % 3 === 0 ? 5 : 0, heldGoldSnapshot, totalRoundRewardGold: 0 };
-      payout.totalRoundRewardGold = payout.baseGold + payout.unusedRerollGold + payout.interestGold + payout.flameBonusGold;
+        bossRewardGold: bossType ? CONFIG.bossRewardGold : 0, heldGoldSnapshot, totalRoundRewardGold: 0 };
+      payout.totalRoundRewardGold = payout.baseGold + payout.unusedRerollGold + payout.interestGold + payout.bossRewardGold;
       current.payout = payout; this.state.lastRoundPayout = payout;
       this.addGold(payout.baseGold, `Round clear base: +${payout.baseGold} gold`, 'roundBase');
       if (payout.unusedRerollGold) this.addGold(payout.unusedRerollGold, `Unused rerolls: +${payout.unusedRerollGold} gold`, 'unusedRerolls');
       if (payout.interestGold) this.addGold(payout.interestGold, `Interest on ${heldGoldSnapshot} held Gold: +${payout.interestGold}`, 'interest');
-      if (payout.flameBonusGold) this.addGold(payout.flameBonusGold, `Flame Bonus: +${payout.flameBonusGold} gold`, 'flameBonus');
-      if (this.state.round % 3 === 0) this.openFlameReward(); else this.openShop();
+      if (payout.bossRewardGold) this.addGold(payout.bossRewardGold, `Boss Reward: +${payout.bossRewardGold} gold`, 'bossReward');
+      const goldenGold = this.state.stats.goldBySource.golden - current.goldBySourceBefore.golden;
+      const jackpotGold = this.state.stats.goldBySource.jackpot - current.goldBySourceBefore.jackpot;
+      const knownGold = payout.baseGold + payout.unusedRerollGold + payout.interestGold + payout.bossRewardGold + goldenGold + jackpotGold;
+      const totalGoldEarned = this.state.gold - current.goldBefore;
+      const summary = this.state.roundSummary = {
+        round: this.state.round, encounterType: bossType ? 'boss' : 'normal', bossType,
+        score: this.state.score, target: this.state.target, goldBefore: current.goldBefore, goldAfter: this.state.gold,
+        totalGoldEarned, sources: {
+          baseRewardGold: payout.baseGold, unusedRerollGold: payout.unusedRerollGold, interestGold: payout.interestGold,
+          bossRewardGold: payout.bossRewardGold, goldenGold, jackpotGold, otherGold: totalGoldEarned - knownGold,
+        },
+      };
+      if (Object.values(summary.sources).reduce((sum, amount) => sum + amount, 0) !== totalGoldEarned)
+        throw new Error('Round Summary Gold sources do not reconcile.');
+      this.state.phase = 'roundSummary';
+      this.state.stats.roundSummaries.push({ ...structuredClone(summary), shown: true });
+      this.emit({ type: 'ROUND_SUMMARY_SHOWN', boss: bossType ?? undefined, roundSummary: structuredClone(summary), amount: totalGoldEarned,
+        encounterType: summary.encounterType, goldBefore: summary.goldBefore, goldAfter: summary.goldAfter,
+        goldEarnedTotal: totalGoldEarned, baseRewardGold: payout.baseGold, unusedRerollGold: payout.unusedRerollGold,
+        interestGold: payout.interestGold, bossRewardGold: payout.bossRewardGold, goldenGold, jackpotGold,
+        message: `${bossType ? 'Boss defeated' : `Round ${this.state.round} cleared`} · Gold ${summary.goldBefore} → ${summary.goldAfter} (+${totalGoldEarned})` });
     } else if (this.state.boss?.type !== 'warden' || (this.state.boss.startingDieId !== null && this.state.boss.pendingReinforcements === 0)) {
       if (hasPlayableHand(activeEncounterDice(this.state), this.state.consumed)) return;
       if (this.state.manualRerollsRemaining > 0) { this.emit({ type: 'DEAD_BOARD', message: `No playable hands — ${this.state.manualRerollsRemaining} rerolls remain` }); return; }

@@ -70,6 +70,11 @@ function deadBoardRun(rescue: boolean) {
         prefix.push(action);
         game = dispatch(game, action).state;
       }
+      if (game.phase === 'roundSummary') {
+        const action: Action = { type: 'CONTINUE_ROUND_SUMMARY' };
+        prefix.push(action);
+        game = dispatch(game, action).state;
+      }
       if (game.phase === 'shop') {
         const action: Action = game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' };
         prefix.push(action);
@@ -97,6 +102,8 @@ async function reachDeadBoard(page: Page, rescue: boolean) {
       await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();
     } else if (action.type === 'NEXT_ROUND') {
       await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+    } else if (action.type === 'CONTINUE_ROUND_SUMMARY') {
+      await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
     } else if (action.type === 'RETRY_ROUND') {
       await page.getByRole('button', { name: /^RETRY ROUND / }).click();
     }

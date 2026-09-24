@@ -17,22 +17,25 @@ export function createDice(): Die[] {
     faces: RANKS.map(rank => ({ rank, workoutPips: 0, enhancements: {} })),
   }));
 }
-export const rollWeights = (die: Die): number[] => die.owner === 'boss'
+export const rollWeights = (die: Die, excludedFace?: Rank): number[] => (die.owner === 'boss'
   ? die.faces.map(destination => 1 + die.faces.reduce((weight, source) =>
     weight + (source.weightedTarget === destination.rank ? stacks(source, 'weighted') : 0), 0))
-  : RANKS.map(rank => 1 + stacks(die.faces[oppositeFace(rank) - 1], 'weighted'));
+  : RANKS.map(rank => 1 + stacks(die.faces[oppositeFace(rank) - 1], 'weighted')))
+  .map((weight, index) => die.faces[index].rank === excludedFace ? 0 : weight);
 export const weightedSourceFace = (die: Die, destination: Rank): Face | undefined => die.owner === 'boss'
   ? die.faces.find(face => face.weightedTarget === destination && stacks(face, 'weighted'))
   : die.faces[oppositeFace(destination) - 1];
-export function rollDie(die: Die, rng: RandomSource): { value: Rank; weighted: boolean } {
+export function rollDie(die: Die, rng: RandomSource, excludedFace?: Rank): { value: Rank; weighted: boolean } {
   if (stacks(activeFace(die), 'bump')) {
     if (die.owner === 'boss') return { value: Math.min(7, die.value + 1) as Rank, weighted: false };
     return { value: (die.value === 6 ? 1 : die.value + 1) as Rank, weighted: false };
   }
-  const weights = rollWeights(die);
+  const weights = rollWeights(die, excludedFace);
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  if (totalWeight <= 0) throw new Error('A die roll must have at least one eligible face.');
   const random = rng.next();
   if (!Number.isFinite(random) || random < 0 || random >= 1) throw new Error('RNG must return a number in [0, 1).');
-  let cursor = random * weights.reduce((a, b) => a + b, 0);
+  let cursor = random * totalWeight;
   for (let i = 0; i < weights.length; i++) {
     cursor -= weights[i];
     if (cursor < 0) return { value: die.faces[i].rank, weighted: weights[i] > 1 };

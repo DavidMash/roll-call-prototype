@@ -15,10 +15,10 @@ export function createStats(seed: string): RunStats {
     lifetimeNormalShopGoldSpent: 0, moneyToBurnMultipliers: [], lowballAverages: [], magneticAnchorBatches: 0, magneticAttractions: 0,
     bumpControlledRolls: 0, enhancedFaces: [], enhancementShopRerolls: 0, shopDiceRerolls: 0,
     goldEarned: 0,
-    goldBySource: { golden: 0, jackpot: 0, enhancementSale: 0, roundBase: 0, unusedRerolls: 0, interest: 0, flameBonus: 0 },
+    goldBySource: { golden: 0, jackpot: 0, enhancementSale: 0, roundBase: 0, unusedRerolls: 0, interest: 0, bossReward: 0 },
     goldSpent: 0,
     goldSpentBySource: { enhancement: 0, shopDiceReroll: 0, enhancementReroll: 0, handTraining: 0, flameInvestment: 0, lifeRestore: 0 },
-    manualRerollActions: 0, manualDiceRerolled: 0, manualRerolls: [], deadBoardRescues: 0,
+    manualRerollActions: 0, manualDiceRerolled: 0, manualRerolls: [], deadBoardRescues: 0, roundSummaries: [],
     triggers: {}, probabilityProcs: {
       sticky: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
       hitchhiker: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
@@ -31,14 +31,14 @@ export function boardSnapshot(state: GameState): Board {
   const { phase, round, target, score, gold, lives, livesPurchasedThisRun, roundAttemptNumber, bossSchedule, boss, currentNodeId, bust, flameTutorial,
     manualRerollsRemaining, dice, bonfires, chargeXMult,
     chargeArmed, hotStreakGoal, hotStreakCharges, lifetimeNormalShopGoldSpent, consumed, scoreByHand, effectScore,
-    handLevels, handPlayCounts, targetPracticeHand, lastRoundPayout, shop, flameReward } = state;
+    handLevels, handPlayCounts, targetPracticeHand, lastRoundPayout, roundSummary, shop, flameSelection } = state;
   return structuredClone({ phase, round, target, score, gold, lives, livesPurchasedThisRun, roundAttemptNumber, bossSchedule, boss, currentNodeId, bust, flameTutorial,
     manualRerollsRemaining, dice, bonfires,
     chargeXMult, chargeArmed, hotStreakGoal, hotStreakCharges, lifetimeNormalShopGoldSpent, consumed, scoreByHand, effectScore,
-    handLevels, handPlayCounts, targetPracticeHand, lastRoundPayout, shop, flameReward });
+    handLevels, handPlayCounts, targetPracticeHand, lastRoundPayout, roundSummary, shop, flameSelection });
 }
 export function exportRun(state: GameState) {
-  return { schemaVersion: 15, scoringModel: 'boss-map-progression-v1', ...state.stats,
+  return { schemaVersion: 16, scoringModel: 'round-summary-boss-reward-v1', ...state.stats,
     bonfires: [...state.bonfires], finalHandLevels: structuredClone(state.handLevels),
     finalFlames: state.dice.filter(die => die.owner === 'player').map(die => ({ dieId: die.id, flame: activeFlameId(die.flame), investedGold: die.flame?.investedGold ?? 0 })),
     rngState: state.rngState, board: boardSnapshot(state) };

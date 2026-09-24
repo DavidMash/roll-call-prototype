@@ -47,13 +47,17 @@ async function playOne(page: Page, game: GameState) {
   await ready(page);
   return next;
 }
-async function reachBossShop(page: Page, boss: BossType) {
-  const seed = seedFor(boss);
+async function reachBossShop(page: Page, boss: BossType, seed = seedFor(boss)) {
   let game = newRun(seed).state;
   await page.goto(`/?seed=${seed}&speed=instant`);
   await ready(page);
   while (!(game.phase === 'shop' && game.round === 2)) {
     if (game.phase === 'round') game = await playOne(page, game);
+    else if (game.phase === 'roundSummary') {
+      await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
+      game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
+      await ready(page);
+    }
     else if (game.phase === 'shop') {
       await page.getByRole('button', { name: game.bust ? `RETRY ROUND ${game.round}` : 'NEXT ROUND', exact: true }).click();
       game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' }).state;
@@ -92,6 +96,8 @@ test('Caller preview hides the call, then encounter reveals it and its counter',
   await expect(page.getByTestId('boss-panel')).toContainText(HANDS[game.boss.calledHand].name);
   await expect(page.getByTestId('boss-panel')).toContainText('3 MANUAL PLAYS LEFT');
   await expect(page.getByTestId('boss-hud-label')).toHaveText('THE CALLER');
+  await expect(page.locator('[data-screen-theme="caller"]')).toBeVisible();
+  await expect(page.getByTestId('live-score-panel')).toHaveCSS('position', 'sticky');
 });
 
 test('Warden preview shows exact thresholds and encounter locks four dice until deployment', async ({ page }) => {
@@ -102,6 +108,7 @@ test('Warden preview shows exact thresholds and encounter locks four dice until 
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await ready(page);
   await expect(page.getByTestId('boss-panel')).toContainText('CHOOSE YOUR STARTING DIE');
+  await expect(page.locator('.warden-die-choice .pip-face')).toHaveCount(5);
   await expect(page.locator('.die.ineligible')).toHaveCount(5);
   await page.getByRole('button', { name: /Deploy D1/ }).click();
   game = dispatch(game, { type: 'CHOOSE_WARDEN_DIE', dieId: 0 }).state;
@@ -124,4 +131,46 @@ test('Hexer preview exposes all seven faces and encounter adds the styled Cursed
   await expect(page.locator('.die.cursed-die')).toHaveCount(1);
   await expect(page.getByTestId('hexer-rule')).toContainText('must participate in every manual hand');
   expect(game.dice).toHaveLength(6);
+});
+
+test('Hexer face 7 renders the impossible seven-pip physical die and remains selectable', async ({ page }) => {
+  let game = await reachBossShop(page, 'hexer', 'boss-browser-33');
+  await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+  game = dispatch(game, { type: 'NEXT_ROUND' }).state;
+  await ready(page);
+  const cursed = game.dice.find(die => die.owner === 'boss')!;
+  expect(cursed.value).toBe(7);
+  const button = page.getByRole('button', { name: /^Cursed Die, face 7,/ });
+  await expect(button.locator('.pip-face')).toHaveAttribute('aria-label', 'Cursed Die showing 7');
+  await expect(button.locator('.pip')).toHaveCount(7);
+  await button.click();
+  await expect(button).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('Boss clear shows +10 Boss Reward summary before the Flame Selection map', async ({ page }) => {
+  let game = await reachBossShop(page, 'hexer');
+  await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+  game = dispatch(game, { type: 'NEXT_ROUND' }).state;
+  await ready(page);
+  for (let step = 0; step < 120 && game.phase !== 'roundSummary'; step++) {
+    if (game.phase === 'round') game = await playOne(page, game);
+    else if (game.phase === 'shop' && game.bust) {
+      await page.getByRole('button', { name: `RETRY ROUND ${game.round}`, exact: true }).click();
+      game = dispatch(game, { type: 'RETRY_ROUND' }).state;
+      await ready(page);
+    } else throw new Error(`Unexpected Boss clear phase ${game.phase}`);
+  }
+  expect(game.phase).toBe('roundSummary');
+  await expect(page.getByRole('heading', { name: 'BOSS DEFEATED' })).toBeVisible();
+  await expect(page.getByTestId('summary-gold-breakdown')).toContainText('Boss Reward');
+  await expect(page.getByTestId('summary-gold-breakdown')).toContainText('+10');
+  await expect(page.getByText('Flame Bonus')).toHaveCount(0);
+  await expect(page.locator('[data-screen-theme="hexer"]')).toBeVisible();
+
+  await page.getByText('NORMAL', { exact: true }).click();
+  await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
+  await expect(page.getByTestId('run-map-transition')).toHaveAttribute('data-destination', `flame:after-round:${game.round}`);
+  await page.getByRole('button', { name: 'Skip', exact: true }).click();
+  await ready(page);
+  await expect(page.getByRole('main').getByText('FLAME SELECTION', { exact: true })).toBeVisible();
 });

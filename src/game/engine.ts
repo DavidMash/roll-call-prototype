@@ -13,6 +13,10 @@ const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`
 
 function normalizedState(state: GameState): GameState {
   const next = structuredClone(state);
+  const legacy = next as GameState & { flameReward?: GameState['flameSelection'] };
+  if (!next.flameSelection && legacy.flameReward) next.flameSelection = legacy.flameReward;
+  delete legacy.flameReward;
+  if ((next.phase as string) === 'flameReward') next.phase = 'flameSelection';
   for (const die of next.dice) {
     die.owner ??= 'player';
     for (const face of die.faces) {
@@ -34,7 +38,8 @@ function normalizedState(state: GameState): GameState {
   }
   next.bonfires = next.bonfires.filter(isFlame);
   if (next.shop) next.shop.offers = next.shop.offers.filter(offer => isEnhancement(offer.enhancement));
-  if (next.flameReward) next.flameReward.offers = next.flameReward.offers.filter(offer => isFlame(offer.flame));
+  if (next.flameSelection) next.flameSelection.offers = next.flameSelection.offers.filter(offer => isFlame(offer.flame));
+  next.roundSummary ??= null;
   next.stats.jumpingBeanFreePlays ??= [];
   next.bossSchedule ??= bossSchedule(next.seed);
   next.boss ??= null;
@@ -47,6 +52,8 @@ function normalizedState(state: GameState): GameState {
   next.roundCheckpoint ??= null;
   next.stats.sales ??= [];
   next.stats.mapTransitions ??= [];
+  next.stats.mapTransitions = next.stats.mapTransitions.map(record => ({ ...record,
+    nodeType: (record.nodeType as string) === 'flame_reward' ? 'flame_selection' : record.nodeType }));
   next.stats.bossEncounters ??= [];
   next.stats.callerEvents ??= [];
   next.stats.wardenEvents ??= [];
@@ -57,17 +64,41 @@ function normalizedState(state: GameState): GameState {
     returnedToShop: bust.returnedToShop ?? bust.livesAfter > 0 }));
   next.stats.lifeRestores ??= [];
   next.stats.vintageGrowth ??= [];
-  next.stats.rounds = next.stats.rounds.map(round => ({ ...round, attempt: round.attempt ?? 1 }));
+  next.stats.rounds = next.stats.rounds.map(round => {
+    const legacyPayout = round.payout as (typeof round.payout & { flameBonusGold?: number }) | null;
+    const payout = legacyPayout ? { ...legacyPayout,
+      bossRewardGold: legacyPayout.bossRewardGold ?? legacyPayout.flameBonusGold ?? 0 } : null;
+    if (payout) delete (payout as { flameBonusGold?: number }).flameBonusGold;
+    return { ...round, attempt: round.attempt ?? 1, goldBefore: round.goldBefore ?? next.gold,
+      goldBySourceBefore: round.goldBySourceBefore ?? structuredClone(next.stats.goldBySource), payout };
+  });
+  const legacyLastPayout = next.lastRoundPayout as (typeof next.lastRoundPayout & { flameBonusGold?: number }) | null;
+  if (legacyLastPayout) {
+    next.lastRoundPayout = { ...legacyLastPayout,
+      bossRewardGold: legacyLastPayout.bossRewardGold ?? legacyLastPayout.flameBonusGold ?? 0 };
+    delete (next.lastRoundPayout as { flameBonusGold?: number }).flameBonusGold;
+  }
   next.stats.flameStokes ??= ((next.stats as unknown as { flameDonations?: GameState['stats']['flameStokes'] }).flameDonations ?? []);
   next.stats.flameStokes = next.stats.flameStokes.map(stoke => ({ ...stoke,
-    from: stoke.from ?? Math.max(0, stoke.total - stoke.amount), source: stoke.source ?? 'flame_reward' }));
-  next.stats.goldBySource.flameBonus ??= 0;
+    from: stoke.from ?? Math.max(0, stoke.total - stoke.amount),
+    source: (stoke.source as string) === 'flame_reward' ? 'flame_selection' : stoke.source ?? 'flame_selection' }));
+  const legacyGold = next.stats.goldBySource as Record<string, number>;
+  next.stats.goldBySource.bossReward ??= legacyGold.flameBonus ?? 0;
+  delete legacyGold.flameBonus;
+  next.stats.roundSummaries ??= [];
+  next.history = next.history.map(record => ({ ...record,
+    type: (record.type as string) === 'FLAME_REWARD_OPENED' ? 'FLAME_SELECTION_OPENED' : record.type,
+    nodeType: (record.nodeType as string) === 'flame_reward' ? 'flame_selection' : record.nodeType }));
+  next.stats.actions = next.stats.actions.map(action => (action.type as string) === 'CONTINUE_FLAME_REWARD'
+    ? { type: 'CONTINUE_FLAME_SELECTION' } : action);
   next.stats.goldBySource.enhancementSale ??= 0;
   next.stats.goldSpentBySource.lifeRestore ??= 0;
   return next;
 }
 
 export function validateAction(state: Board, action: Action): string | null {
+  if (action.type === 'CONTINUE_ROUND_SUMMARY') return state.phase === 'roundSummary' && !!state.roundSummary
+    ? null : 'A completed encounter summary is required.';
   if (action.type === 'CHOOSE_WARDEN_DIE') {
     if (state.phase !== 'round' || state.boss?.type !== 'warden') return 'A Warden reinforcement choice is not pending.';
     const die = state.dice.find(item => item.id === action.dieId && item.owner === 'player');
@@ -109,11 +140,11 @@ export function validateAction(state: Board, action: Action): string | null {
     if (activeFlameInvestment(die.flame) + action.amount > 100) return 'A Flame cannot hold more than 100 invested Gold.';
     return null;
   }
-  if (action.type === 'CHOOSE_FLAME' || action.type === 'CONTINUE_FLAME_REWARD') {
-    if (state.phase !== 'flameReward' || !state.flameReward) return 'This action requires an open Flame Reward.';
+  if (action.type === 'CHOOSE_FLAME' || action.type === 'CONTINUE_FLAME_SELECTION') {
+    if (state.phase !== 'flameSelection' || !state.flameSelection) return 'This action requires an open Flame Selection.';
     if (action.type === 'CHOOSE_FLAME') {
-      if (state.flameReward.acquired) return 'Only one new Flame may be acquired per reward.';
-      const offer = state.flameReward.offers.find(item => item.id === action.offerId);
+      if (state.flameSelection.acquired) return 'Only one new Flame may be acquired per selection.';
+      const offer = state.flameSelection.offers.find(item => item.id === action.offerId);
       if (!offer || !state.dice.some(die => die.id === action.dieId && die.owner === 'player')) return 'Choose an available Flame and a physical die.';
       if (hasOwnedFlame(state as GameState, offer.flame)) return 'That Flame type is already owned by this run.';
     }
@@ -173,7 +204,7 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
     bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], chargeXMult: 1,
     chargeArmed: false, hotStreakGoal: null, hotStreakCharges: 0, lifetimeNormalShopGoldSpent: 0, consumed: [], shop: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
-    scoreByHand: {}, effectScore: 0, lastRoundPayout: null, flameReward: null,
+    scoreByHand: {}, effectScore: 0, lastRoundPayout: null, roundSummary: null, flameSelection: null,
     manualRerollsRemaining: CONFIG.manualRerollsPerRound, nextOfferId: 0, stats: createStats(seed), history: [], roundCheckpoint: null,
   };
   return execute(state, resolver => resolver.startRound(), random, random ? undefined : attemptSeed(seed, 1, 1));
@@ -233,12 +264,12 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         break;
       }
       case 'CHOOSE_FLAME': {
-        const offer = next.flameReward!.offers.find(item => item.id === action.offerId)!;
+        const offer = next.flameSelection!.offers.find(item => item.id === action.offerId)!;
         const die = next.dice[action.dieId];
         const replaced = activeFlameId(die.flame);
         const firstFlame = next.stats.flameAcquisitions.length === 0;
         die.flame = { id: offer.flame, investedGold: 0 };
-        next.flameReward!.acquired = true;
+        next.flameSelection!.acquired = true;
         next.stats.flameAcquisitions.push({ round: next.round, dieId: die.id, flame: offer.flame, replaced });
         if (firstFlame && !next.flameTutorial.completed) next.flameTutorial.pendingDieId = die.id;
         resolver.emit({ type: replaced ? 'FLAME_REPLACED' : 'FLAME_ACQUIRED', flame: offer.flame, dieIds: [die.id],
@@ -269,8 +300,9 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         }
         break;
       }
-      case 'CONTINUE_FLAME_REWARD':
-        if (!next.flameReward!.acquired) {
+      case 'CONTINUE_ROUND_SUMMARY': resolver.continueRoundSummary(); break;
+      case 'CONTINUE_FLAME_SELECTION':
+        if (!next.flameSelection!.acquired) {
           next.stats.flameSkips.push(next.round);
           resolver.emit({ type: 'FLAME_SKIPPED', message: `Skipped Flame acquisition for round ${next.round}` });
         }

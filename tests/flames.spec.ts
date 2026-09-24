@@ -6,6 +6,7 @@ import { handOptions, HANDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
 import { activeEncounterDice } from '../src/game/bosses';
+import { CONFIG } from '../src/game/config';
 
 function bestHand(game: GameState, requiredDie?: number) {
   const dice = activeEncounterDice(game);
@@ -38,21 +39,22 @@ function flameSeed() {
     for (let step = 0; step < 250; step++) {
       if (game.phase === 'round') {
         game = dispatch(game, automaticAction(game)).state;
-      } else if (game.phase === 'shop') game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' }).state;
-      else if (game.phase === 'flameReward') {
-        if (game.flameReward!.offers.some(offer => offer.flame === 'wellTrained')) return seed;
+      } else if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
+      else if (game.phase === 'shop') game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' }).state;
+      else if (game.phase === 'flameSelection') {
+        if (game.flameSelection!.offers.some(offer => offer.flame === 'wellTrained')) return seed;
         break;
       } else break;
     }
   }
-  throw new Error('No deterministic three-round Flame Reward seed found.');
+  throw new Error('No deterministic three-round Flame Selection seed found.');
 }
 
 async function ready(page: Page) {
   await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
 }
 
-async function perform(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'CHOOSE_WARDEN_DIE' | 'NEXT_ROUND' | 'RETRY_ROUND' }>) {
+async function perform(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'CHOOSE_WARDEN_DIE' | 'NEXT_ROUND' | 'RETRY_ROUND' | 'CONTINUE_ROUND_SUMMARY' }>) {
   if (action.type === 'PLAY') {
     const handRow = page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) });
     await handRow.click();
@@ -68,6 +70,7 @@ async function perform(page: Page, game: GameState, action: Extract<Action, { ty
     await page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) }).click();
     await page.getByRole('button', { name: 'Reroll Selected — 1', exact: true }).click();
   } else if (action.type === 'CHOOSE_WARDEN_DIE') await page.getByRole('button', { name: new RegExp(`Deploy D${action.dieId + 1}`) }).click();
+  else if (action.type === 'CONTINUE_ROUND_SUMMARY') await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
   else await page.getByRole('button', { name: action.type === 'RETRY_ROUND' ? `RETRY ROUND ${game.round}` : 'NEXT ROUND', exact: true }).click();
   const next = dispatch(game, action).state;
   await ready(page);
@@ -85,42 +88,43 @@ async function reachReward(page: Page, seed: string) {
   await expect(page.locator('.selection-preview')).not.toContainText('XMult');
   await initialRow.click();
 
-  while (game.phase !== 'flameReward') {
+  while (game.phase !== 'flameSelection') {
     if (game.phase === 'round') {
       game = await perform(page, game, automaticAction(game));
-    } else if (game.phase === 'shop') game = await perform(page, game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' });
-    else throw new Error(`Unexpected phase before Flame Reward: ${game.phase}`);
+    } else if (game.phase === 'roundSummary') game = await perform(page, game, { type: 'CONTINUE_ROUND_SUMMARY' });
+    else if (game.phase === 'shop') game = await perform(page, game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' });
+    else throw new Error(`Unexpected phase before Flame Selection: ${game.phase}`);
   }
   return game;
 }
 
-test('Flame Reward has fixed offers, preserves faces, reveals XMult, and previews Well Trained', async ({ page }) => {
+test('Flame Selection has fixed offers, preserves faces, reveals XMult, and previews Well Trained', async ({ page }) => {
   const seed = flameSeed();
   let game = await reachReward(page, seed);
-  await expect(page.getByText('FLAME REWARD', { exact: true })).toBeVisible();
-  await expect(page.getByTestId('round-payout-breakdown')).toContainText('5 Flame Bonus');
+  await expect(page.getByRole('main').getByText('FLAME SELECTION', { exact: true })).toBeVisible();
   await expect(page.getByText('Active Embers', { exact: true })).toHaveCount(0);
   await expect(page.locator('[data-testid^="flame-offer-"]')).toHaveCount(3);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.getByTestId('flame-die-4')).toBeVisible();
+  await expect(page.locator('.flame-die-card .pip-face')).toHaveCount(5);
   const rewardFaces = game.dice.map(die => die.value);
 
   await expect(page.getByRole('button', { name: /Reroll.*Gold/ })).toHaveCount(0);
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
   await expect(page.getByTestId('stat-gold').getByText(String(game.gold), { exact: true })).toBeVisible();
 
-  const offer = game.flameReward!.offers.find(item => item.flame === 'wellTrained')!;
+  const offer = game.flameSelection!.offers.find(item => item.flame === 'wellTrained')!;
   const card = page.getByTestId('flame-offer-wellTrained');
   await card.getByRole('button', { name: 'Select Flame', exact: true }).click();
   await page.getByRole('button', { name: /^Die 1,/ }).click();
   game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId: 0 }).state;
   await ready(page);
 
-  expect(game.phase).toBe('flameReward');
+  expect(game.phase).toBe('flameSelection');
   await expect(page.getByTestId('active-flame-wellTrained')).toContainText('0 / 100 → BONFIRE');
   await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
-  game = dispatch(game, { type: 'CONTINUE_FLAME_REWARD' }).state;
+  game = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
   await ready(page);
   expect(game.phase).toBe('shop');
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
@@ -166,16 +170,27 @@ test('Flame Reward has fixed offers, preserves faces, reveals XMult, and preview
   const wellTrained = Number(wellTrainedMultiplier(2, game.handPlayCounts[choice.hand]).toFixed(4));
   await expect(page.getByTestId(`well-trained-preview-${choice.hand}`)).toHaveText(`WELL TRAINED ×${wellTrained}`);
   await expect(page.locator('.selection-preview')).toContainText('XMult');
-
-  await page.getByRole('button', { name: /^Die 1,/ }).click();
-  await expect(page.getByTestId(`well-trained-preview-${choice.hand}`)).toHaveCount(0);
+  await page.setViewportSize({ width: 500, height: 520 });
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const panel = page.getByTestId('live-score-panel');
+  await expect(panel).toBeInViewport();
+  await page.clock.install({ time: new Date('2026-09-24T12:00:00Z') });
+  await page.getByText('NORMAL', { exact: true }).click();
+  await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
+  const result = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds });
+  const xMultIndex = result.events.findIndex(event => event.type === 'HAND_XMULT_CHANGED' && event.flame === 'wellTrained');
+  expect(xMultIndex).toBeGreaterThan(0);
+  await page.clock.runFor(CONFIG.tickMs.normal * xMultIndex);
+  await expect(page.getByTestId('hand-xmult')).toHaveText(`x${result.events[xMultIndex].handScore!.currentXMult}`);
+  await expect(panel).toBeInViewport();
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 });
 
-test('Flame Reward only acquires while Shop Manage Die supports arbitrary Stoke and optional acquisition', async ({ page }) => {
+test('Flame Selection only acquires while Shop Manage Die supports arbitrary Stoke and optional acquisition', async ({ page }) => {
   const seed = flameSeed();
   let game = await reachReward(page, seed);
   const rewardFaces = game.dice.map(die => die.value);
-  const offer = game.flameReward!.offers[0];
+  const offer = game.flameSelection!.offers[0];
   await page.getByTestId(`flame-offer-${offer.flame}`).getByRole('button', { name: 'Select Flame' }).click();
   await page.getByRole('button', { name: /^Die 1,/ }).click();
   game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId: 0 }).state;
@@ -185,7 +200,7 @@ test('Flame Reward only acquires while Shop Manage Die supports arbitrary Stoke 
   await expect(page.getByText(/Donate/i)).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Stoke/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
-  game = dispatch(game, { type: 'CONTINUE_FLAME_REWARD' }).state;
+  game = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
   await ready(page);
   expect(game.phase).toBe('shop');
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
@@ -211,7 +226,7 @@ test('Flame Reward only acquires while Shop Manage Die supports arbitrary Stoke 
   // A separate deterministic run can use the same primary action without taking an offer.
   game = await reachReward(page, seed);
   await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
-  game = dispatch(game, { type: 'CONTINUE_FLAME_REWARD' }).state;
+  game = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
   await ready(page);
   expect(game.phase).toBe('shop');
   expect(game.stats.flameSkips).toContain(game.round);

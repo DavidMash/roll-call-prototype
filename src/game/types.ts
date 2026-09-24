@@ -1,6 +1,6 @@
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type BossType = 'caller' | 'warden' | 'hexer';
-export type RunNodeType = 'normal_round' | 'boss_round' | 'shop' | 'flame_reward';
+export type RunNodeType = 'normal_round' | 'boss_round' | 'shop' | 'flame_selection';
 export type Enhancement =
   | 'bonus' | 'jumpingBean' | 'golden' | 'workout'
   | 'missingLink' | 'mirror' | 'magnetic' | 'sticky' | 'slippy'
@@ -12,10 +12,10 @@ export type Flame =
 export type HandId =
   | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes'
   | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
-export type Phase = 'round' | 'bust' | 'flameReward' | 'shop' | 'lost' | 'error';
+export type Phase = 'round' | 'roundSummary' | 'bust' | 'flameSelection' | 'shop' | 'lost' | 'error';
 export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker';
 export type HandPlaySource = 'manual' | 'jumpingBean';
-export type GoldSource = 'golden' | 'jackpot' | 'enhancementSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'flameBonus';
+export type GoldSource = 'golden' | 'jackpot' | 'enhancementSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward';
 export type GoldSpendSource = 'enhancement' | 'shopDiceReroll' | 'enhancementReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore';
 export type HandLevels = Record<HandId, number>;
 
@@ -107,14 +107,34 @@ export interface Offer { id: number; enhancement: Enhancement; purchased: boolea
 export interface TrainingOffer { hand: HandId; purchased: boolean }
 export interface Shop { offers: Offer[]; trainingOffers: TrainingOffer[]; diceRerolls: number; offerRerolls: number }
 export interface FlameOffer { id: number; flame: Flame }
-export interface FlameReward { offers: FlameOffer[]; acquired: boolean }
+export interface FlameSelection { offers: FlameOffer[]; acquired: boolean }
 export interface RoundPayout {
   baseGold: number;
   unusedRerollGold: number;
   interestGold: number;
-  flameBonusGold: number;
+  bossRewardGold: number;
   heldGoldSnapshot: number;
   totalRoundRewardGold: number;
+}
+export interface RoundSummaryGoldSources {
+  baseRewardGold: number;
+  unusedRerollGold: number;
+  interestGold: number;
+  bossRewardGold: number;
+  goldenGold: number;
+  jackpotGold: number;
+  otherGold: number;
+}
+export interface RoundSummary {
+  round: number;
+  encounterType: 'normal' | 'boss';
+  bossType: BossType | null;
+  score: number;
+  target: number;
+  goldBefore: number;
+  goldAfter: number;
+  totalGoldEarned: number;
+  sources: RoundSummaryGoldSources;
 }
 export interface Board {
   phase: Phase;
@@ -145,8 +165,9 @@ export interface Board {
   handPlayCounts: Record<HandId, number>;
   targetPracticeHand: HandId | null;
   lastRoundPayout: RoundPayout | null;
+  roundSummary: RoundSummary | null;
   shop: Shop | null;
-  flameReward: FlameReward | null;
+  flameSelection: FlameSelection | null;
 }
 export interface RoundStats {
   round: number;
@@ -165,6 +186,8 @@ export interface RoundStats {
   deadBoardRescues: number;
   scoreByHand: Partial<Record<HandId, number>>;
   effectScore: number;
+  goldBefore: number;
+  goldBySourceBefore: Record<GoldSource, number>;
   payout: RoundPayout | null;
 }
 export interface ManualRerollStats {
@@ -174,6 +197,9 @@ export interface ManualRerollStats {
   remaining: number;
   startedDeadBoard: boolean;
   rescuedDeadBoard: boolean;
+}
+export interface RoundSummaryRecord extends RoundSummary {
+  shown: boolean;
 }
 export interface Purchase { round: number; enhancement: Enhancement; dieId: number; face: Rank; cost: number; stacksApplied?: number }
 export interface EnhancementSale {
@@ -232,7 +258,7 @@ export interface VintageGrowthRecord {
 }
 export interface TrainingPurchase { round: number; hand: HandId; fromLevel: number; toLevel: number; cost: number }
 export interface FlameAcquisition { round: number; dieId: number; flame: Flame; replaced: Flame | null }
-export type FlameStokeSource = 'flame_reward' | 'shop';
+export type FlameStokeSource = 'flame_selection' | 'shop';
 export interface FlameStoke {
   round: number;
   dieId: number;
@@ -310,6 +336,7 @@ export interface RunStats {
   manualDiceRerolled: number;
   manualRerolls: ManualRerollStats[];
   deadBoardRescues: number;
+  roundSummaries: RoundSummaryRecord[];
   goldEarned: number;
   goldBySource: Record<GoldSource, number>;
   goldSpent: number;
@@ -334,8 +361,9 @@ export type EventType =
   | 'HAND_SCORE_FINALIZED' | 'STANDALONE_SCORE_CALCULATED' | 'SCORE_ROUNDING_AUDIT'
   | 'POST_HAND_REROLLS_SKIPPED' | 'SCORE_ADDED' | 'GOLD_ADDED' | 'WORKOUT_INCREMENTED'
   | 'DICE_REROLL_STARTED' | 'DIE_ROLLED' | 'DIE_FLIPPED' | 'HAND_CONSUMED' | 'ROUND_CLEARED'
+  | 'ROUND_SUMMARY_SHOWN'
   | 'SHOP_OPENED' | 'OFFER_PURCHASED' | 'TRAINING_PURCHASED' | 'OFFERS_REFRESHED' | 'GOLD_SPENT'
-  | 'FLAME_REWARD_OPENED' | 'FLAME_OFFERS_REFRESHED' | 'FLAME_ACQUIRED' | 'FLAME_REPLACED'
+  | 'FLAME_SELECTION_OPENED' | 'FLAME_OFFERS_REFRESHED' | 'FLAME_ACQUIRED' | 'FLAME_REPLACED'
   | 'FLAME_SKIPPED' | 'FLAME_INVESTED' | 'BONFIRE_CREATED' | 'FLAME_TRIGGERED' | 'HAND_XMULT_CHANGED'
   | 'TARGET_PRACTICE_SELECTED' | 'CHARGE_CHANGED' | 'CHARGE_ARMED' | 'HOT_STREAK_CHANGED'
   | 'ENHANCEMENT_SOLD' | 'VINTAGE_GROWN' | 'MAGNETIC_ATTRACTION' | 'BUMP_ROLL'
@@ -369,6 +397,21 @@ export interface EventRecord {
   goldSource?: GoldSource;
   goldSpendSource?: GoldSpendSource;
   face?: Rank;
+  rollSource?: 'manual_reroll' | 'automatic';
+  previousFace?: Rank;
+  resultFace?: Rank;
+  sameFaceExcluded?: boolean;
+  roundSummary?: RoundSummary;
+  encounterType?: 'normal' | 'boss';
+  goldBefore?: number;
+  goldAfter?: number;
+  goldEarnedTotal?: number;
+  baseRewardGold?: number;
+  unusedRerollGold?: number;
+  interestGold?: number;
+  bossRewardGold?: number;
+  goldenGold?: number;
+  jackpotGold?: number;
   probability?: { enhancement: 'sticky' | 'hitchhiker'; stacks: number; chance: number; succeeded: boolean };
   handScore?: HandScoreAccumulator;
 }
@@ -399,7 +442,8 @@ export type Action =
   | { type: 'TRAIN_HAND'; hand: HandId }
   | { type: 'CHOOSE_FLAME'; offerId: number; dieId: number }
   | { type: 'STOKE_FLAME'; dieId: number; amount: number }
-  | { type: 'CONTINUE_FLAME_REWARD' }
+  | { type: 'CONTINUE_ROUND_SUMMARY' }
+  | { type: 'CONTINUE_FLAME_SELECTION' }
   | { type: 'RESTORE_LIFE' }
   | { type: 'DISMISS_FLAME_TUTORIAL' }
   | { type: 'CHOOSE_WARDEN_DIE'; dieId: number }

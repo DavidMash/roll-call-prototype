@@ -29,6 +29,8 @@ async function perform(page: Page, game: GameState, action: Action) {
     await die(page, action.dieId).click();
   } else if (action.type === 'NEXT_ROUND') {
     await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+  } else if (action.type === 'CONTINUE_ROUND_SUMMARY') {
+    await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
   } else throw new Error(`Unsupported fixture action: ${action.type}`);
   await ready(page);
   return dispatch(game, action).state;
@@ -61,8 +63,7 @@ test('scoring Jackpot pays on a played-hand clear before the no-reroll transitio
   await expect(die(page, fixture.heldDieId)).toHaveAccessibleName(new RegExp(`face ${heldValue},`));
   await page.getByRole('button', { name: 'Skip playback' }).click();
   await ready(page);
-  if (fixture.result.state.phase === 'flameReward') await expect(page.getByText('FLAME REWARD', { exact: true })).toBeVisible();
-  else await expect(page.getByText(new RegExp(`^Round ${game.round} cleared`))).toBeVisible();
+  await expect(page.getByTestId('round-summary')).toBeVisible();
   expect(fixture.result.state.gold).toBe(goldBefore + CONFIG.jackpotGold + fixture.result.state.lastRoundPayout!.totalRoundRewardGold);
   expect(fixture.result.events.some(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Post-hand'))).toBe(false);
 });

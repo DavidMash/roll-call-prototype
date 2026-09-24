@@ -7,6 +7,7 @@ export const CONFIG = {
   maxLives: 3,
   manualRerollsPerRound: 3,
   roundRewardBase: 5,
+  bossRewardGold: 10,
   interestInterval: 5,
   interestCap: 10,
   diceRerollBase: 2,

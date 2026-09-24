@@ -33,7 +33,7 @@ describe('winning-hand boundary', () => {
     enhance(game, 0, 'weighted', 1);
     const rng = { next: vi.fn(() => 0.99) };
     const result = dispatch(game, { type: 'PLAY', hand, dieIds: [0, 1] }, rng);
-    expect(result.state.phase).toBe('shop');
+    expect(result.state.phase).toBe('roundSummary');
     expect(result.state.score).toBe(finalScore);
     expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: finalScore, finalScore,
       clearMargin: finalScore - 50, cleared: true });
@@ -48,12 +48,12 @@ describe('winning-hand boundary', () => {
     expect(result.state.manualRerollsRemaining).toBe(3);
     // Normal shop exposure remains a separate free five-die roll after ROUND_CLEARED.
     expect(result.events.filter(event => event.type === 'DICE_REROLL_STARTED').map(event => event.message))
-      .toEqual(['Free shop roll: D1, D2, D3, D4, D5']);
-    expect(result.events.slice(clearIndex + 1).filter(event => event.type === 'DIE_ROLLED')).toHaveLength(5);
+      .toEqual([]);
+    expect(result.events.slice(clearIndex + 1).filter(event => event.type === 'DIE_ROLLED')).toHaveLength(0);
     expect(result.state.stats.triggers.slippy).toBeUndefined();
     expect(result.state.stats.triggers.magnetic).toBeUndefined();
     expect(result.state.stats.triggers.jumpingBean).toBeUndefined();
-    expect(rng.next).toHaveBeenCalledTimes(11); // Five shop outcomes + three enhancement + three training offers; no gameplay draws.
+    expect(rng.next).not.toHaveBeenCalled();
     expect(result.state.gold).toBe(roundReward(1) + 3);
   });
 
@@ -84,7 +84,7 @@ describe('winning-hand boundary', () => {
     expect(18 + (8 + 8) * 1.5).toBeLessThan(game.target);
     const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0));
     expect(result.state.score).toBe(51);
-    expect(result.state.phase).toBe('shop');
+    expect(result.state.phase).toBe('roundSummary');
     expect(result.events.some(event => event.type === 'POST_HAND_REROLLS_SKIPPED')).toBe(true);
     expect(result.events.some(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Post-hand'))).toBe(false);
   });
@@ -94,7 +94,7 @@ describe('winning-hand boundary', () => {
     enhance(game, 0, 'bonus');
     const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant());
     expect(result.state.score).toBe(59);
-    expect(result.state.phase).toBe('shop');
+    expect(result.state.phase).toBe('roundSummary');
     expect(result.events.find(event => event.type === 'HAND_SCORE_FINALIZED')).toMatchObject({ pips: 26, multiplier: 1.5, amount: 39 });
     expect(result.events.some(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Post-hand'))).toBe(false);
   });
@@ -102,7 +102,7 @@ describe('winning-hand boundary', () => {
   it('consumes a winning hand without scheduling post-win rerolls', () => {
     const game = board();
     const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant());
-    expect(result.state.phase).toBe('shop');
+    expect(result.state.phase).toBe('roundSummary');
     expect(result.state.consumed).toContain('pair');
     expect(result.events.some(event => event.type === 'POST_HAND_REROLLS_SKIPPED')).toBe(true);
     expect(result.events.some(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Post-hand'))).toBe(false);

@@ -4,7 +4,7 @@ Roll Call is a deterministic React/TypeScript/Vite dice roguelike. The domain en
 
 ## Rounds, lives, and Busts
 
-Choose a legal Yahtzee-style hand, select its physical dice, and play it. A played category is consumed for the round. Each attempt grants three manual die rerolls, charged once per selected die.
+Choose a legal Yahtzee-style hand, select its physical dice, and play it. A played category is consumed for the round. Each attempt grants three manual die rerolls, charged once per selected die. A manual gameplay reroll always changes that die's printed face: the engine removes the current face from the normal seeded weighted distribution and samples once. Automatic, effect-driven, Boss-entry, and Shop rolls may still repeat naturally; Bump keeps its deterministic precedence.
 
 A run starts with `3 / 3` lives. When score is below target, no legal unconsumed hand remains, and no manual rerolls remain, the attempt Busts. The engine restores the checkpoint captured when the player committed to the attempt, subtracts one life, increments the attempt number, and reopens that exact Shop. The failed round does not restart automatically: the player may continue preparing, then explicitly choose `RETRY ROUND N`. Each attempt uses a deterministic seed derived from the run seed, round, and attempt, so retries are reproducible but do not repeat the same roll stream. A Bust that reduces lives to zero ends the run without reopening the Shop.
 
@@ -20,9 +20,9 @@ Every XMult contribution is a multiplicative factor composed centrally. Ordinary
 
 ## Run map and Boss cadence
 
-Progression follows one linear route: `Round 1 → Shop → Round 2 → Shop → Boss Round 3 → Flame Reward → Shop`, then repeats. A short local map transition plays before every normal Round, Boss, Shop, and Flame Reward. It only shows nearby nodes, uses stable node IDs such as `round:2`, `boss:3`, `flame:after-round:3`, and `shop:before-round:4`, advances automatically, offers a skip control, and collapses under reduced-motion preferences. Normal Rounds use blue (`#3B82F6`), Shops gold (`#F59E0B`), and Flame Rewards red (`#EF4444`) over the shared dark foundation.
+Progression follows one linear route: `Round 1 → Shop → Round 2 → Shop → Boss Round 3 → Flame Selection → Shop`, then repeats. A short local map transition plays before every normal Round, Boss, Shop, and Flame Selection. It only shows nearby nodes, uses stable node IDs such as `round:2`, `boss:3`, `flame:after-round:3`, and `shop:before-round:4`, advances automatically, offers a skip control, and collapses under reduced-motion preferences. Normal Rounds use blue (`#3B82F6`), Shops gold (`#F59E0B`), and Flame Selections red (`#EF4444`) over the shared dark foundation.
 
-Every third round is a Boss encounter. Boss assignment is deterministic from the run seed and uses shuffled bags of Caller, Warden, and Hexer: all three occur before a reshuffle and the boundary cannot repeat the previous boss. The assignment is stored in run state, shown in the immediately preceding Shop, and remains stable on retry. Boss rounds use the normal round target and the same payout; clearing one opens the every-third-round Flame Reward and then the Shop.
+Every third round is a Boss encounter. Boss assignment is deterministic from the run seed and uses shuffled bags of Caller, Warden, and Hexer: all three occur before a reshuffle and the boundary cannot repeat the previous boss. The assignment is stored in run state, shown in the immediately preceding Shop, and remains stable on retry. Boss rounds use the normal round target and add a 10-Gold Boss Reward on a successful clear. Clearing one proceeds through Round Summary, the Flame Selection map transition, Flame Selection, and then the Shop transition.
 
 ### The Caller
 
@@ -57,9 +57,11 @@ Every successful clear pays, in order:
 - 5 base Gold;
 - 1 Gold per unused manual reroll;
 - `min(10, floor(heldGold / 5))` interest using the pre-payout Gold snapshot;
-- +5 Flame Bonus on rounds divisible by three.
+- +10 Boss Reward after successfully defeating a Boss.
 
-A failed attempt pays none of these rewards. Interest is +1 per 5 Gold held, reaches its +10 maximum at 50 Gold, and is snapshotted after scoring Gold effects but before base, reroll, interest, or Flame Bonus payouts are added. Thus the maximum normal round payout is 18 Gold, or 23 Gold on an every-third-round Flame Bonus clear.
+A failed attempt pays none of these rewards. Interest is +1 per 5 Gold held, reaches its +10 maximum at 50 Gold, and is snapshotted after scoring Gold effects but before base, reroll, interest, or Boss Reward payouts are added. Thus the maximum standard normal-round payout is 18 Gold and the maximum standard Boss payout is 28 Gold, excluding scoring Gold such as Golden and Jackpot.
+
+Every successful encounter pauses on a concise Round Summary before the next map transition. Its domain-owned snapshot shows score/target, Gold before and after, total Gold earned, and reconciled aggregate rows for Base Reward, unused rerolls, interest, Golden, Jackpot, other gameplay Gold, and Boss Reward when applicable. Bust attempts never create a successful summary.
 
 Lost lives can be restored one at a time only in a normal Shop. The run-wide prices are `25, 40, 60, 90, 130, 180, 240, 310, 390, 480…`; after 390, each new increment is 10 larger than the prior increment. Restoration spending counts toward Money to Burn. The price counter resets only on a new run, and lives cannot exceed three.
 
@@ -92,17 +94,17 @@ Sticky and Slippy now cost 2 Gold; their gameplay behavior is unchanged.
 
 ### Vintage
 
-Vintage is unique and non-stackable. A new instance starts with a 0-Gold sell value and has no direct scoring effect. Whenever its physical face participates in a resolved scoring hand, its sell value increases by 3 Gold exactly once. Selected dice, successful Hitchhikers, and Jumping Bean free plays qualify; rolls, displayed faces, failed Hitchhikers, Shop rolls, and Flame Reward rolls do not. Separate Bean-chain hand resolutions may each grow it.
+Vintage is unique and non-stackable. A new instance starts with a 0-Gold sell value and has no direct scoring effect. Whenever its physical face participates in a resolved scoring hand, its sell value increases by 3 Gold exactly once. Selected dice, successful Hitchhikers, and Jumping Bean free plays qualify; rolls, displayed faces, failed Hitchhikers, Shop rolls, and Flame Selection rolls do not. Separate Bean-chain hand resolutions may each grow it.
 
 Vintage has no value cap and may exceed its 3-Gold purchase price. Selling pays its current value and deletes that accumulated state; repurchasing starts at 0. Failed-attempt growth rolls back with the round checkpoint.
 
-## Flame Rewards, Embers, and Bonfires
+## Flame Selections, Embers, and Bonfires
 
-Every third successful clear adds the +5 Flame Bonus and opens the special Flame Reward before the Shop. This screen only allows the player to select one of the three deterministic distinct offers and assign it to a physical die, or skip. There are no paid offer rerolls and no Stoke controls on Flame Rewards.
+Every third successful clear adds the +10 Boss Reward, shows its Round Summary, and then opens the special Flame Selection before the Shop. This screen only allows the player to select one of the three deterministic distinct offers and assign it to a physical die, or skip. There are no paid offer rerolls and no Stoke controls on Flame Selections.
 
 New Flames begin as 0-Gold Embers. The immediately following Shop shows a one-time controlled tooltip on the first Flame’s die, teaching the player to click the die, Stoke it, and reach Bonfire at 100 Gold. All Flame investment occurs through Manage Die in a normal Shop. Arbitrary positive whole-Gold Stoke amounts are supported and do not count toward Money to Burn spending.
 
-At exactly 100 invested Gold an Ember becomes a global Bonfire, detaches from its die, and cannot be reacquired. Replacing an active Ember during a later Flame Reward destroys its investment. The threshold and all Flame formulas remain unchanged.
+At exactly 100 invested Gold an Ember becomes a global Bonfire, detaches from its die, and cannot be reacquired. Replacing an active Ember during a later Flame Selection destroys its investment. The threshold and all Flame formulas remain unchanged.
 
 Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a factor and scoring applies `XMult *= factor`.
 
@@ -122,9 +124,13 @@ Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a f
 | Straight Shooter | Small/Large Straight: `1 + 4p`, max ×5 |
 | Double Down | Pair/Two Pair: `1 + 4p`, max ×5 |
 
+## Dice visuals and live scoring
+
+Physical die faces use a shared scalable pip layout in gameplay, the Shop, Manage Die, Flame Selection, and Warden choices. Faces 1–6 use standard real-die arrangements; the Hexer's impossible 7 uses the six-pip arrangement plus a center pip. Numeric face and scoring labels remain available in details and accessibility text. During Round and Boss gameplay, the live Pips / Mult / XMult panel sticks immediately below the measured global HUD while the scorecard scrolls.
+
 ## Telemetry and validation
 
-Run Info exports schema 15 / `boss-map-progression-v1`, including route transitions, destination and direction, boss assignment and attempts, Caller calls and outcomes, Warden thresholds and choices, Hexer die activity, round attempts, Bust/checkpoint lifecycle, economy, enhancements, Vintage growth, source-aware scoring, Flame factors, Stoke records, and Shop spending.
+Run Info exports schema 16 / `round-summary-boss-reward-v1`, including route transitions, destination and direction, boss assignment and attempts, Round Summary Gold reconciliation, manual-reroll face exclusion, Caller calls and outcomes, Warden thresholds and choices, Hexer die activity, round attempts, Bust/checkpoint lifecycle, economy, enhancements, Vintage growth, source-aware scoring, Flame factors, Stoke records, and Shop spending.
 
 Validation commands:
 
