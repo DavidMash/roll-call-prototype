@@ -245,7 +245,7 @@ export interface WardenEventRecord {
 }
 export interface HexerEventRecord {
   round: number; attempt: number;
-  kind: 'roll' | 'manual_reroll' | 'hand' | 'jumping_bean' | 'workout' | 'seven' | 'mirror_seven' | 'jackpot' | 'sticky';
+  kind: 'roll' | 'manual_reroll' | 'hand' | 'jumping_bean' | 'workout' | 'seven' | 'jackpot' | 'sticky';
   face?: Rank; hand?: HandId; amount?: number;
 }
 export interface LifeRestorePurchase {

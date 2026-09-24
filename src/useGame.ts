@@ -16,7 +16,7 @@ export function useGame(seed: string, speed: PlaybackSpeed) {
     if (speed === 'instant') { setIndex(result.events.length); return; }
     const currentEvent = result.events[index];
     const delay = currentEvent?.type === 'MAP_TRANSITION'
-      ? reducedMotion ? 80 : currentEvent.boss ? 1500 : 900
+      ? reducedMotion ? 80 : currentEvent.boss ? 3000 : 1800
       : !reducedMotion && currentEvent?.type === 'ROUND_BUST'
         ? Math.max(CONFIG.tickMs[speed], 1200) : CONFIG.tickMs[speed];
     const timeout = window.setTimeout(() => setIndex(current => current + 1), delay);

@@ -124,9 +124,16 @@ describe('The Hexer', () => {
     const die = createCursedDie();
     expect(die.owner).toBe('boss');
     expect(die.faces).toHaveLength(7);
-    expect(die.faces[0]).toMatchObject({ rank: 1, weightedTarget: 6, enhancements: { golden: 1, jumpingBean: 1, weighted: 1 } });
-    expect(die.faces[4].enhancements).toEqual({ workout: 5, mirror: 1, bump: 1 });
-    expect(die.faces[6]).toMatchObject({ rank: 7, enhancements: { bonus: 5, jackpot: 1, sticky: 1, mirror: 1 } });
+    expect(die.faces.map(face => ({ rank: face.rank, weightedTarget: face.weightedTarget ?? null, enhancements: face.enhancements }))).toEqual([
+      { rank: 1, weightedTarget: 6, enhancements: { golden: 1, jumpingBean: 1, weighted: 1 } },
+      { rank: 2, weightedTarget: 5, enhancements: { bonus: 1, jumpingBean: 1, weighted: 1 } },
+      { rank: 3, weightedTarget: 4, enhancements: { workout: 1, jumpingBean: 1, weighted: 1 } },
+      { rank: 4, weightedTarget: null, enhancements: { missingLink: 1, mirror: 1, bump: 1 } },
+      { rank: 5, weightedTarget: null, enhancements: { workout: 5, mirror: 1, bump: 1 } },
+      { rank: 6, weightedTarget: null, enhancements: { workout: 10, mirror: 1, bump: 1 } },
+      { rank: 7, weightedTarget: null, enhancements: { bonus: 5, jackpot: 1, sticky: 1 } },
+    ]);
+    expect(die.faces.every(face => Object.keys(face.enhancements).length <= 3)).toBe(true);
     expect(rollWeights(die)).toEqual([1, 1, 1, 2, 2, 2, 1]);
   });
 
@@ -161,14 +168,14 @@ describe('The Hexer', () => {
     expect(state.dice.every(die => die.owner === 'player')).toBe(true);
   });
 
-  it('supports extended straights and Mirror group matching with rank 7', () => {
+  it('supports extended straights with rank 7 without treating it as a matching wild', () => {
     const cursed = createCursedDie();
     const players = newRun('seven-hands', constant(.2)).state.dice;
     [3, 4, 5, 6].forEach((rank, index) => { players[index].value = rank as 3 | 4 | 5 | 6; });
     cursed.value = 7;
     expect(combinationsForHand([...players.slice(0, 4), cursed], 'largeStraight')).toContainEqual([0, 1, 2, 3, cursed.id]);
     players[0].value = 2;
-    expect(combinationsForHand([players[0], cursed], 'pair')).toContainEqual([0, cursed.id]);
+    expect(combinationsForHand([players[0], cursed], 'pair')).not.toContainEqual([0, cursed.id]);
     expect(activeFace(cursed).rank).toBe(7);
   });
 
@@ -181,9 +188,11 @@ describe('The Hexer', () => {
     expect(cursed.value).toBe(7);
 
     state.target = 1_000_000;
-    state.dice[0].value = 2;
+    state.dice[0].value = 4;
+    state.dice[1].value = 5;
+    state.dice[2].value = 6;
     cursed.value = 7;
-    state = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, cursed.id] }, constant(0)).state;
+    state = dispatch(state, { type: 'PLAY', hand: 'smallStraight', dieIds: [0, 1, 2, cursed.id] }, constant(0)).state;
     cursed = state.dice.find(die => die.owner === 'boss')!;
     expect(cursed.value).toBe(7);
     expect(state.stats.triggers.sticky).toBe(1);
@@ -196,10 +205,12 @@ describe('The Hexer', () => {
 
     const jackpotState = bossRound('hexer');
     const jackpotCursed = jackpotState.dice.find(die => die.owner === 'boss')!;
-    jackpotState.dice[0].value = 2;
+    jackpotState.dice[0].value = 4;
+    jackpotState.dice[1].value = 5;
+    jackpotState.dice[2].value = 6;
     jackpotCursed.value = 7;
     jackpotState.target = 1;
-    const cleared = dispatch(jackpotState, { type: 'PLAY', hand: 'pair', dieIds: [0, jackpotCursed.id] }, constant(.2)).state;
+    const cleared = dispatch(jackpotState, { type: 'PLAY', hand: 'smallStraight', dieIds: [0, 1, 2, jackpotCursed.id] }, constant(.2)).state;
     expect(cleared.stats.goldBySource.jackpot).toBe(3);
     expect(cleared.gold).toBe(21);
   });

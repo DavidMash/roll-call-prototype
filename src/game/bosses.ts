@@ -5,7 +5,6 @@ import type { BossRuntimeState, BossType, Die, HandId, Rank } from './types';
 export interface BossDefinition {
   name: string;
   shortRule: string;
-  motif: string;
   primary: string;
   secondary: string;
 }
@@ -13,22 +12,19 @@ export interface BossDefinition {
 export const BOSSES: Record<BossType, BossDefinition> = {
   caller: {
     name: 'THE CALLER',
-    shortRule: 'Complete the demanded hand within 3 manual plays.',
-    motif: 'Broadcast pulse',
+    shortRule: 'Answer the called hand within three plays.',
     primary: '#A855F7',
     secondary: '#D946EF',
   },
   warden: {
     name: 'THE WARDEN',
-    shortRule: 'Start with D1. Checkpoints release D2 through D5 in order.',
-    motif: 'Lock and checkpoint',
+    shortRule: 'Begin with D1; checkpoints release the rest in order.',
     primary: '#06B6D4',
     secondary: '#14B8A6',
   },
   hexer: {
     name: 'THE HEXER',
-    shortRule: 'Include the seven-sided Cursed Die in every manual hand.',
-    motif: 'Curse mark',
+    shortRule: 'A seven-sided Cursed Die joins the battle and must be used in every hand.',
     primary: '#84CC16',
     secondary: '#D9F99D',
   },
@@ -120,7 +116,7 @@ export function createCursedDie(): Die {
       face(4, { missingLink: 1, mirror: 1, bump: 1 }),
       face(5, { workout: 5, mirror: 1, bump: 1 }),
       face(6, { workout: 10, mirror: 1, bump: 1 }),
-      face(7, { bonus: 5, jackpot: 1, sticky: 1, mirror: 1 }),
+      face(7, { bonus: 5, jackpot: 1, sticky: 1 }),
     ],
   };
 }
@@ -132,14 +128,3 @@ export function activeEncounterDice(state: { dice: Die[]; boss: BossRuntimeState
 }
 
 export const isCursedDie = (die: Die | undefined): boolean => die?.owner === 'boss';
-
-export const cursedFaceSummary = (rank: Rank): string => {
-  const die = createCursedDie();
-  const current = die.faces[rank - 1];
-  const names: Record<string, string> = {
-    golden: 'Golden', jumpingBean: 'Jumping Bean', weighted: `Weighted → ${current.weightedTarget}`,
-    bonus: 'Bonus', workout: 'Workout', missingLink: 'Missing Link', mirror: 'Mirror', bump: 'Bump',
-    jackpot: 'Jackpot', sticky: 'Sticky',
-  };
-  return Object.entries(current.enhancements).map(([id, count]) => `${names[id]}${count! > 1 ? ` ×${count}` : ''}`).join(' · ');
-};

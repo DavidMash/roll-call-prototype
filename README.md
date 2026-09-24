@@ -44,9 +44,9 @@ The Hexer (toxic green) adds a temporary boss-owned seven-sided Cursed Die that 
 | 4 | Missing Link, Mirror, Bump |
 | 5 | Workout 5, Mirror, Bump |
 | 6 | Workout 10, Mirror, Bump |
-| 7 | Bonus 5, Jackpot 1, Sticky 1, Mirror |
+| 7 | Bonus 5, Jackpot 1, Sticky 1 |
 
-Bump advances `4 → 5 → 6 → 7` and does not wrap. Seven is a genuine rank, so Small Straight recognizes `4-5-6-7`, Large Straight recognizes `3-4-5-6-7`, and Mirror on 7 participates in matching-group hands normally. The Cursed Die cannot own Flames and is removed after a clear or failed-attempt rollback.
+Bump advances `4 → 5 → 6 → 7` and does not wrap. Seven is a genuine rank, so Small Straight recognizes `4-5-6-7` and Large Straight recognizes `3-4-5-6-7`. The Cursed Die cannot own Flames and is removed after a clear or failed-attempt rollback.
 
 ## Gold and the Shop
 

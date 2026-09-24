@@ -1,6 +1,5 @@
-import { Badge, Group, Paper, Progress, SimpleGrid, Stack, Text } from '@mantine/core';
-import { BOSSES, createCursedDie, cursedFaceSummary, wardenCheckpoints } from '../game/bosses';
-import { CONFIG, targetForRound } from '../game/config';
+import { Badge, Group, Paper, Progress, Stack, Text } from '@mantine/core';
+import { BOSSES } from '../game/bosses';
 import { HANDS } from '../game/hands';
 import type { Board } from '../game/types';
 
@@ -12,12 +11,12 @@ export function BossPanel({ board }: { board: Board }) {
     <Group justify="space-between" align="flex-start" gap="xs">
       <div><Text size="xs" fw={900} tt="uppercase" lts=".14em">Boss Round {board.round}</Text>
         <Text fw={950}>{definition.name}</Text></div>
-      <Badge color={boss.type === 'caller' ? 'violet' : boss.type === 'warden' ? 'cyan' : 'lime'}>{definition.motif}</Badge>
+      <Badge color={boss.type === 'caller' ? 'violet' : boss.type === 'warden' ? 'cyan' : 'lime'}>BOSS</Badge>
     </Group>
     {boss.type === 'caller' && <Group mt={6} justify="space-between" gap="xs">
       <Text size="sm"><strong>CALL:</strong> {HANDS[boss.calledHand].name}</Text>
       <Text size="sm" fw={800} c={boss.satisfied ? 'teal' : boss.playsRemaining <= 1 ? 'red' : undefined}>
-        {boss.satisfied ? 'ANSWERED' : `${boss.playsRemaining} MANUAL ${boss.playsRemaining === 1 ? 'PLAY' : 'PLAYS'} LEFT`}
+        {boss.satisfied ? 'ANSWERED' : `${boss.playsRemaining} ${boss.playsRemaining === 1 ? 'PLAY' : 'PLAYS'} LEFT`}
       </Text>
     </Group>}
     {boss.type === 'warden' && <Stack gap={5} mt={6}>
@@ -30,8 +29,7 @@ export function BossPanel({ board }: { board: Board }) {
       <Text size="xs" c="dimmed">Fixed release order: D1 → D2 → D3 → D4 → D5</Text>
     </Stack>}
     {boss.type === 'hexer' && <div className="hexer-rule" data-testid="hexer-rule">
-      <Text size="sm"><strong>CURSE:</strong> The Cursed Die must participate in every manual hand.</Text>
-      <Text size="xs" c="dimmed">Its authored seven-face loadout remains active; face 7 is a genuine rank.</Text>
+      <Text size="sm"><strong>CURSE:</strong> Include the Cursed Die whenever you play a hand.</Text>
     </div>}
   </Paper>;
 }
@@ -45,12 +43,5 @@ export function BossPreview({ board }: { board: Board }) {
     <Group justify="space-between"><div><Text size="xs" fw={900} tt="uppercase" lts=".14em">Incoming · Round {nextRound}</Text>
       <Text fw={950}>{boss.name}</Text></div><Badge variant="light">BOSS</Badge></Group>
     <Text size="sm" mt={5}>{boss.shortRule}</Text>
-    <Text size="xs" fw={800} mt={5}>Base Reward: {CONFIG.roundRewardBase} Gold</Text>
-    <Text size="xs" fw={800}>Boss Reward: +{CONFIG.bossRewardGold} Gold</Text>
-    {bossType === 'caller' && <Text size="xs" c="dimmed" mt={4}>The exact called hand is revealed when the encounter begins.</Text>}
-    {bossType === 'warden' && <Text size="xs" mt={4}>Reinforcements at {wardenCheckpoints(targetForRound(nextRound)).join(', ')} points (10%, 25%, 45%, 70%).</Text>}
-    {bossType === 'hexer' && <SimpleGrid cols={{ base: 1, sm: 2 }} spacing={4} mt="xs">
-      {createCursedDie().faces.map(face => <Text key={face.rank} size="xs"><strong>{face.rank}</strong> · {cursedFaceSummary(face.rank)}</Text>)}
-    </SimpleGrid>}
   </Paper>;
 }

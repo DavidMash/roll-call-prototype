@@ -120,8 +120,6 @@ export class Resolver {
     if (this.state.boss?.type === 'hexer' && dieId === this.state.boss.cursedDieId) {
       this.state.stats.hexerEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
         kind: playSource === 'jumpingBean' ? 'jumping_bean' : 'hand', face: snapshot.rank, hand });
-      if (snapshot.rank === 7 && stacks(snapshot, 'mirror')) this.state.stats.hexerEvents.push({
-        round: this.state.round, attempt: this.state.roundAttemptNumber, kind: 'mirror_seven', face: 7, hand });
     }
     const golden = stacks(snapshot, 'golden');
     if (golden) {
@@ -332,7 +330,7 @@ export class Resolver {
     this.state.stats.callerEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
       calledHand: boss.calledHand, playsRemaining: boss.playsRemaining, satisfied: false, source, expired });
     this.emit({ type: 'CALLER_CHANGED', boss: 'caller', hand, playSource: source, amount: boss.playsRemaining,
-      message: `${HANDS[hand].name} did not answer ${HANDS[boss.calledHand].name} · ${Math.max(0, boss.playsRemaining)} manual plays remain` });
+      message: `${HANDS[hand].name} did not answer ${HANDS[boss.calledHand].name} · ${Math.max(0, boss.playsRemaining)} plays remain` });
     return expired;
   }
   private deployWardenDie(dieId: number): void {
@@ -618,7 +616,7 @@ export class Resolver {
       this.emit({ type: 'BOSS_STARTED', boss: boss.type,
         message: `${boss.type.toUpperCase()} · Round ${this.state.round} · Attempt ${this.state.roundAttemptNumber} · goal ${this.state.target}` });
       if (boss.type === 'caller') this.emit({ type: 'CALLER_CALLED', boss: 'caller', hand: boss.calledHand, amount: 3,
-        message: `The Caller demands ${HANDS[boss.calledHand].name} within 3 manual plays` });
+        message: `The Caller demands ${HANDS[boss.calledHand].name} within 3 plays` });
     }
     if (!this.state.boss) this.emit({ type: retry ? 'ROUND_RETRY_STARTED' : 'ROUND_STARTED',
       message: `Round ${this.state.round} — Attempt ${this.state.roundAttemptNumber} — goal ${this.state.target}; Charge reset to ×1` });

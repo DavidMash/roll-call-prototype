@@ -9,7 +9,7 @@ import { activeEncounterDice } from '../src/game/bosses';
 // Reach the enhanced board through real seeded plays and purchases, without UI injection.
 export function scoringPlaybackRun() {
   // Try the verified fixture first; retain discovery if future rules invalidate it.
-  const indices = [216, ...Array.from({ length: 1500 }, (_, index) => index).filter(index => index !== 216)];
+  const indices = [11, ...Array.from({ length: 1500 }, (_, index) => index).filter(index => index !== 11)];
   for (const index of indices) {
     const seed = `live-scoring-${index}`;
     let game = newRun(seed).state;
@@ -51,10 +51,11 @@ export function scoringPlaybackRun() {
           const result = dispatch(game, scoringAction);
           if (result.events.some(event => event.enhancement === 'hitchhiker')) return { seed, actions, game, action: scoringAction, result };
         }
+        if (!choices.length && game.manualRerollsRemaining === 0) break;
         action = choices[0] ?? { type: 'MANUAL_REROLL', dieIds: [dice[0].id] };
       }
       const result = dispatch(game, action);
-      if (result.error) throw new Error(result.error);
+      if (result.error) break;
       actions.push(action);
       game = result.state;
     }

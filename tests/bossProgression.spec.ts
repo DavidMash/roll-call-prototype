@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { activeEncounterDice, bossTypeForRound, wardenCheckpoints } from '../src/game/bosses';
-import { targetForRound } from '../src/game/config';
 import { dispatch, newRun } from '../src/game/engine';
 import { handOptions, HANDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
@@ -73,6 +72,8 @@ test('local route transition appears, can be skipped, and honors reduced motion'
   await expect(map).toBeVisible();
   await expect(map).toHaveAttribute('data-destination', 'round:1');
   await expect(map.locator('[aria-current="step"]')).toContainText('R1');
+  await page.waitForTimeout(1100);
+  await expect(map).toBeVisible();
   await map.getByRole('button', { name: 'Skip', exact: true }).click();
   await ready(page);
   await expect(map).toHaveCount(0);
@@ -88,22 +89,23 @@ test('Caller preview hides the call, then encounter reveals it and its counter',
   let game = await reachBossShop(page, 'caller');
   const preview = page.getByTestId('boss-preview');
   await expect(preview).toContainText('THE CALLER');
-  await expect(preview).toContainText('exact called hand is revealed');
+  await expect(preview).toContainText('Answer the called hand within three plays.');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await ready(page);
   if (game.boss?.type !== 'caller') throw new Error('Caller fixture failed');
   await expect(page.getByTestId('boss-panel')).toContainText(HANDS[game.boss.calledHand].name);
-  await expect(page.getByTestId('boss-panel')).toContainText('3 MANUAL PLAYS LEFT');
+  await expect(page.getByTestId('boss-panel')).toContainText('3 PLAYS LEFT');
   await expect(page.getByTestId('boss-hud-label')).toHaveText('THE CALLER');
   await expect(page.locator('[data-screen-theme="caller"]')).toBeVisible();
   await expect(page.getByTestId('live-score-panel')).toHaveCSS('position', 'sticky');
 });
 
-test('Warden preview shows exact thresholds and encounter starts with only centered D1', async ({ page }) => {
+test('Warden preview stays concise and encounter starts with only centered D1', async ({ page }) => {
   let game = await reachBossShop(page, 'warden');
-  const thresholds = wardenCheckpoints(targetForRound(3));
-  await expect(page.getByTestId('boss-preview')).toContainText(thresholds.join(', '));
+  const preview = page.getByTestId('boss-preview');
+  await expect(preview).toContainText('Begin with D1; checkpoints release the rest in order.');
+  await expect(preview).not.toContainText('10%');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await ready(page);
@@ -146,23 +148,27 @@ test('Warden checkpoints auto-release D2 onward without interrupting hand select
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeEnabled();
 });
 
-test('Hexer preview exposes all seven faces and encounter adds the styled Cursed Die', async ({ page }) => {
+test('Hexer preview keeps its faces secret and encounter fits all six dice on one row', async ({ page }) => {
   let game = await reachBossShop(page, 'hexer');
   const preview = page.getByTestId('boss-preview');
   await expect(preview).toContainText('THE HEXER');
-  for (let rank = 1; rank <= 7; rank++) await expect(preview.getByText(new RegExp(`^${rank} ·`))).toBeVisible();
-  await expect(preview).toContainText('Weighted');
-  await expect(preview).toContainText('Jackpot');
+  await expect(preview).toContainText('A seven-sided Cursed Die joins the battle and must be used in every hand.');
+  await expect(preview).not.toContainText('Weighted');
+  await expect(preview).not.toContainText('Jackpot');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await ready(page);
   await expect(page.getByRole('button', { name: /^Cursed Die, face/ })).toBeVisible();
   await expect(page.locator('.die.cursed-die')).toHaveCount(1);
-  await expect(page.getByTestId('hexer-rule')).toContainText('must participate in every manual hand');
+  await expect(page.getByTestId('hexer-rule')).toHaveText('CURSE: Include the Cursed Die whenever you play a hand.');
+  const dice = page.locator('.gameplay-dock .die');
+  await expect(dice).toHaveCount(6);
+  const boxes = await dice.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().top));
+  expect(Math.max(...boxes) - Math.min(...boxes)).toBeLessThan(2);
   expect(game.dice).toHaveLength(6);
 });
 
-test('Hexer face 7 renders the impossible seven-pip physical die and remains selectable', async ({ page }) => {
+test('Hexer face 7 renders seven pips without Mirror and remains selectable', async ({ page }) => {
   let game = await reachBossShop(page, 'hexer', 'boss-browser-33');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
@@ -172,6 +178,10 @@ test('Hexer face 7 renders the impossible seven-pip physical die and remains sel
   const button = page.getByRole('button', { name: /^Cursed Die, face 7,/ });
   await expect(button.locator('.pip-face')).toHaveAttribute('aria-label', 'Cursed Die showing 7');
   await expect(button.locator('.pip')).toHaveCount(7);
+  await expect(button).not.toContainText('Mirror');
+  await expect(button).toContainText('B+5');
+  await expect(button).toContainText('Jackpot');
+  await expect(button).toContainText('Sticky');
   await button.click();
   await expect(button).toHaveAttribute('aria-pressed', 'true');
 });
