@@ -3,7 +3,7 @@ import { BOSSES } from '../game/bosses';
 import { nodeDescription, nodeLabel, routeWindow } from '../game/progression';
 import type { GameEvent } from '../game/types';
 
-export function RunMapTransition({ seed, event, onSkip }: { seed: string; event: GameEvent; onSkip: () => void }) {
+export function RunMapTransition({ seed, event, onContinue }: { seed: string; event: GameEvent; onContinue: () => void }) {
   const destination = event.toNode ?? '';
   const nodes = routeWindow(seed, destination);
   const boss = event.boss ? BOSSES[event.boss] : null;
@@ -26,6 +26,6 @@ export function RunMapTransition({ seed, event, onSkip }: { seed: string; event:
       <Text fw={950} size="xl">{boss?.name ?? (destinationNode ? nodeDescription(destinationNode) : destination)}</Text>
       {boss && <Text size="sm">{boss.shortRule}</Text>}
     </div>
-    <Button size="compact-xs" variant="subtle" color="gray" className="map-skip" onClick={onSkip}>Skip</Button>
+    <Button size="sm" variant="light" className="map-continue" onClick={onContinue}>Continue</Button>
   </Paper>;
 }

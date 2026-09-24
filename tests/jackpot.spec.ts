@@ -7,7 +7,12 @@ import type { Action, GameState } from '../src/game/types';
 import { jackpotRun } from './jackpotFixture';
 
 const die = (page: Page, id: number) => page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) });
-async function ready(page: Page) { await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0); }
+async function ready(page: Page) {
+  await page.locator('main').waitFor();
+  const map = page.getByTestId('run-map-transition');
+  if (await map.count()) await map.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
+}
 async function selectPlay(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' }>) {
   await page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) }).click();
   for (const physical of game.dice) {

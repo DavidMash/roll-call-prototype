@@ -5,7 +5,12 @@ import { hasPlayableHand, handOptions, HANDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
 
-async function ready(page: Page) { await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0); }
+async function ready(page: Page) {
+  await page.locator('main').waitFor();
+  const map = page.getByTestId('run-map-transition');
+  if (await map.count()) await map.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
+}
 async function matchRound(page: Page, game: GameState) {
   await ready(page);
   await expect(page.getByTestId('stat-rerolls').getByText(String(game.manualRerollsRemaining), { exact: true })).toBeVisible();
@@ -167,6 +172,9 @@ test('dead board remains playable with rerolls and loses only after the final co
   const failedRound = game.round;
   const expectedShop = structuredClone(game.roundCheckpoint?.shop);
   game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+  const fallbackMap = page.getByTestId('run-map-transition');
+  await expect(fallbackMap).toBeVisible({ timeout: 15000 });
+  await fallbackMap.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.getByTestId('bust-shop-banner')).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/ROUND \d+ BUST · 1 LIFE LOST/)).toBeVisible();
   await expect(page.getByRole('button', { name: `RETRY ROUND ${game.round}`, exact: true })).toBeVisible();

@@ -7,7 +7,12 @@ import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
 import { pairSelectionRun, winningSlippyRun } from './handFixtures';
 
-async function ready(page: Page) { await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0); }
+async function ready(page: Page) {
+  await page.locator('main').waitFor();
+  const map = page.getByTestId('run-map-transition');
+  if (await map.count()) await map.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
+}
 const die = (page: Page, id: number) => page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) });
 async function select(page: Page, ids: number[]) { for (const id of ids) await die(page, id).click(); }
 async function perform(page: Page, game: GameState, action: Action) {

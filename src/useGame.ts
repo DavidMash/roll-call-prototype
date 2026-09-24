@@ -13,12 +13,11 @@ export function useGame(seed: string, speed: PlaybackSpeed) {
   const busy = index < result.events.length;
   useEffect(() => {
     if (!busy) return;
-    if (speed === 'instant') { setIndex(result.events.length); return; }
     const currentEvent = result.events[index];
-    const delay = currentEvent?.type === 'MAP_TRANSITION'
-      ? reducedMotion ? 80 : currentEvent.boss ? 3000 : 1800
-      : !reducedMotion && currentEvent?.type === 'ROUND_BUST'
-        ? Math.max(CONFIG.tickMs[speed], 1200) : CONFIG.tickMs[speed];
+    if (currentEvent?.type === 'MAP_TRANSITION') return;
+    if (speed === 'instant') { setIndex(result.events.length); return; }
+    const delay = !reducedMotion && currentEvent?.type === 'ROUND_BUST'
+      ? Math.max(CONFIG.tickMs[speed], 1200) : CONFIG.tickMs[speed];
     const timeout = window.setTimeout(() => setIndex(current => current + 1), delay);
     return () => window.clearTimeout(timeout);
   }, [result, index, speed, busy, reducedMotion]);
@@ -46,7 +45,7 @@ export function useGame(seed: string, speed: PlaybackSpeed) {
     },
     restart: (nextSeed: string) => load(newRun(nextSeed)),
     skip: () => setIndex(result.events.length),
-    skipTransition: () => setIndex(current => Math.min(current + 1, result.events.length)),
+    continueTransition: () => setIndex(current => Math.min(current + 1, result.events.length)),
     clearError: () => setError(null),
   };
 }

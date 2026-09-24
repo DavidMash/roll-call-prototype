@@ -26,7 +26,12 @@ function automaticAction(game: GameState): Action {
   return choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
     : { type: 'MANUAL_REROLL', dieIds: [activeEncounterDice(game)[0].id] };
 }
-async function ready(page: Page) { await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0); }
+async function ready(page: Page) {
+  await page.locator('main').waitFor();
+  const map = page.getByTestId('run-map-transition');
+  if (await map.count()) await map.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
+}
 async function matchBoard(page: Page, game: GameState) {
   await ready(page);
   for (const [stat, value] of [['round', game.round], ['goal', game.target], ['score', game.score], ['gold', game.gold]] as const) {
@@ -302,7 +307,7 @@ test('successful normal encounter shows a reconciled Round Summary before the Sh
   await page.getByText('NORMAL', { exact: true }).click();
   await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
   await expect(page.getByTestId('run-map-transition')).toHaveAttribute('data-destination', `shop:before-round:${game.round + 1}`);
-  await page.getByRole('button', { name: 'Skip', exact: true }).click();
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await ready(page);
   await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
 });
@@ -743,6 +748,7 @@ for (const direction of ['hand-first', 'dice-first'] as const) {
 test('fast event playback and skipping produce the same outcome as instant playback', async ({ page }) => {
   const game = newRun('playback').state;
   await page.goto('/?seed=playback&speed=fast');
+  await page.getByTestId('run-map-transition').getByRole('button', { name: 'Continue', exact: true }).click();
   await matchBoard(page, game);
   const choice = bestHand(game);
   await page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) }).click();
@@ -788,7 +794,7 @@ test('purchased Jumping Bean visibly triggers and rerolls on the next initial ga
   for (let index = 0; index <= beanIndex; index++) {
     if (next.events[index].type === 'MAP_TRANSITION') {
       await expect(page.getByTestId('run-map-transition')).toBeVisible();
-      await page.getByTestId('run-map-transition').getByRole('button', { name: 'Skip', exact: true }).click();
+      await page.getByTestId('run-map-transition').getByRole('button', { name: 'Continue', exact: true }).click();
     } else {
       await expect(page.getByText(`EVENT ${index + 1} / ${next.events.length}`, { exact: true })).toBeVisible();
       if (index < beanIndex) await page.clock.runFor(CONFIG.tickMs.normal);

@@ -68,7 +68,7 @@ export default function App() {
       openRestoreLives={() => setRestoreLivesOpen(true)} />
     {game.error && <Alert color="orange" withCloseButton onClose={game.clearError} my="xs" py={5} title="Action unavailable">{game.error}</Alert>}
     <main className="main-content">
-      {event?.type === 'MAP_TRANSITION' ? <RunMapTransition seed={state.seed} event={event} onSkip={game.skipTransition} />
+      {event?.type === 'MAP_TRANSITION' ? <RunMapTransition seed={state.seed} event={event} onContinue={game.continueTransition} />
         : board.phase === 'roundSummary' && board.roundSummary ? <RoundSummaryScreen board={board} busy={busy} submit={submit} />
         : board.phase === 'flameSelection' && board.flameSelection ? <FlameSelectionScreen board={board} event={event} busy={busy} progress={progress}
         selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} />

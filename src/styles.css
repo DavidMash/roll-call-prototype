@@ -234,7 +234,7 @@ button { font: inherit; }
   text-align: center; border: 1px solid color-mix(in srgb, var(--screen-primary) 38%, transparent);
   background: radial-gradient(circle at center, color-mix(in srgb, var(--screen-primary) 18%, #12181d), #090d10 68%); }
 .map-kicker { color: var(--screen-secondary); font-size: .67rem; font-weight: 900; letter-spacing: .22em; }
-.run-map-track { display: flex; align-items: center; justify-content: center; width: min(92vw, 920px); overflow: hidden; }
+.run-map-track { display: flex; align-items: center; justify-content: center; width: min(92vw, 920px); padding-block: 8px; overflow: hidden; }
 .run-map-segment { display: flex; align-items: center; min-width: 0; }
 .map-connector { width: clamp(16px, 4vw, 60px); height: 2px; background: rgba(255,255,255,.15); }
 .run-map-node { width: 82px; height: 62px; display: grid; place-content: center; gap: 1px; flex: none; border: 1px solid rgba(255,255,255,.18); border-radius: 13px;
@@ -242,7 +242,7 @@ button { font: inherit; }
 .run-map-node.destination { color: white; border-color: var(--screen-primary); background: color-mix(in srgb, var(--screen-primary) 22%, #12181d); box-shadow: 0 0 30px color-mix(in srgb, var(--screen-primary) 30%, transparent); animation: map-arrive 1400ms cubic-bezier(.2,.8,.2,1) both; }
 .node-glyph { font-size: 1.1rem; color: var(--screen-secondary); }
 .map-arrival { animation: map-copy 1000ms 360ms both; }
-.map-skip { position: absolute; right: 12px; bottom: 10px; }
+.map-continue { position: absolute; right: 14px; bottom: 12px; }
 .boss-reveal { animation: boss-flash 1040ms ease-out; }
 @keyframes map-arrive { from { transform: translateX(24px) scale(.72); opacity: .35; } to { transform: translateX(0) scale(1.08); opacity: 1; } }
 @keyframes map-copy { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }

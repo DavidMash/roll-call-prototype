@@ -9,6 +9,9 @@ import { scoringPlaybackRun } from './scoringFixture';
 import { activeEncounterDice } from '../src/game/bosses';
 
 async function ready(page: Page) {
+  await page.locator('main').waitFor();
+  const map = page.getByTestId('run-map-transition');
+  if (await map.count()) await map.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
 }
 async function selectDice(page: Page, dieIds: number[]) {

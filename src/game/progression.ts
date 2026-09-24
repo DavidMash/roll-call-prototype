@@ -26,8 +26,8 @@ export function routeWindow(seed: string, destinationId: string, radius = 3): Ru
 }
 
 export function nodeLabel(node: RunNode): string {
-  if (node.type === 'normal_round') return `R${node.round}`;
-  if (node.type === 'boss_round') return `BOSS R${node.round}`;
+  if (node.type === 'normal_round') return `Round ${node.round}`;
+  if (node.type === 'boss_round') return `Boss Round ${node.round}`;
   if (node.type === 'flame_selection') return 'FLAME SELECTION';
   return 'SHOP';
 }

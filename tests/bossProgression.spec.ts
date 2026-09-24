@@ -13,7 +13,12 @@ const seedFor = (boss: BossType) => {
   }
   throw new Error(`No seed found for ${boss}`);
 };
-const ready = async (page: Page) => expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
+async function ready(page: Page) {
+  await page.locator('main').waitFor();
+  const map = page.getByTestId('run-map-transition');
+  if (await map.count()) await map.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
+}
 function best(game: GameState) {
   const dice = activeEncounterDice(game);
   const callerHand = game.boss?.type === 'caller' && !game.boss.satisfied ? game.boss.calledHand : null;
@@ -66,23 +71,32 @@ async function reachBossShop(page: Page, boss: BossType, seed = seedFor(boss)) {
   return game;
 }
 
-test('local route transition appears, can be skipped, and honors reduced motion', async ({ page }) => {
+test('local route transition waits for Continue and honors reduced motion', async ({ page }) => {
   await page.goto('/?seed=map-browser&speed=normal');
   const map = page.getByTestId('run-map-transition');
   await expect(map).toBeVisible();
   await expect(map).toHaveAttribute('data-destination', 'round:1');
-  await expect(map.locator('[aria-current="step"]')).toContainText('R1');
+  const destination = map.locator('[aria-current="step"]');
+  await expect(destination).toContainText('Round 1');
+  await expect(map.getByText('Round 1', { exact: true })).toHaveCount(2);
+  const trackBox = await map.locator('.run-map-track').boundingBox();
+  const nodeBox = await destination.boundingBox();
+  expect(nodeBox!.y).toBeGreaterThanOrEqual(trackBox!.y);
+  expect(nodeBox!.y + nodeBox!.height).toBeLessThanOrEqual(trackBox!.y + trackBox!.height);
   await page.waitForTimeout(1100);
   await expect(map).toBeVisible();
-  await map.getByRole('button', { name: 'Skip', exact: true }).click();
+  await map.getByRole('button', { name: 'Continue', exact: true }).click();
   await ready(page);
   await expect(map).toHaveCount(0);
   await expect(page.getByTestId('stat-round')).toContainText('1');
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  const started = Date.now();
   await page.goto('/?seed=map-reduced&speed=normal');
-  await expect(page.getByTestId('run-map-transition')).toHaveCount(0, { timeout: 800 });
-  expect(Date.now() - started).toBeLessThan(1000);
+  const reducedMap = page.getByTestId('run-map-transition');
+  await expect(reducedMap).toBeVisible();
+  await page.waitForTimeout(250);
+  await expect(reducedMap).toBeVisible();
+  await reducedMap.getByRole('button', { name: 'Continue', exact: true }).click();
+  await ready(page);
 });
 
 test('Caller preview hides the call, then encounter reveals it and its counter', async ({ page }) => {
@@ -209,7 +223,7 @@ test('Boss clear shows +10 Boss Reward summary before the Flame Selection map', 
   await page.getByText('NORMAL', { exact: true }).click();
   await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
   await expect(page.getByTestId('run-map-transition')).toHaveAttribute('data-destination', `flame:after-round:${game.round}`);
-  await page.getByRole('button', { name: 'Skip', exact: true }).click();
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await ready(page);
   await expect(page.getByRole('main').getByText('FLAME SELECTION', { exact: true })).toBeVisible();
 });
