@@ -8,6 +8,7 @@ import { enhancementCost, ENHANCEMENTS } from '../src/game/enhancements';
 import { CONFIG } from '../src/game/config';
 import type { Action, Enhancement, GameState } from '../src/game/types';
 import { activeEncounterDice } from '../src/game/bosses';
+import { RUN_STORAGE_KEY } from '../src/game/persistence';
 
 function bestHand(game: GameState) {
   const dice = activeEncounterDice(game);
@@ -190,6 +191,8 @@ function nearStraightRun() {
 }
 async function reachShop(page: Page, seed: string) {
   let game = newRun(seed).state;
+  await page.goto('/');
+  await page.evaluate(key => localStorage.removeItem(key), RUN_STORAGE_KEY);
   await page.goto(`/?seed=${seed}&speed=instant`);
   await matchBoard(page, game);
   while (game.phase === 'round') game = await playBest(page, game);
@@ -756,6 +759,61 @@ test('fast event playback and skipping produce the same outcome as instant playb
   await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toBeVisible();
   await page.getByRole('button', { name: 'Skip playback' }).click();
   await matchBoard(page, dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }).state);
+});
+
+test('settled progress resumes across reloads and return visits with seed-aware precedence', async ({ page }) => {
+  const seed = 'resume-browser';
+  let game = newRun(seed).state;
+  await page.goto(`/?seed=${seed}&speed=fast`);
+  await ready(page);
+  const choice = bestHand(game);
+  await page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) }).click();
+  await page.getByRole('button', { name: 'PLAY', exact: true }).click();
+  game = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }).state;
+  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toBeVisible();
+
+  await page.reload();
+  await page.locator('main').waitFor();
+  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
+  await expect(page.getByTestId('run-map-transition')).toHaveCount(0);
+  await matchBoard(page, game);
+
+  await page.goto('about:blank');
+  await page.goto('/?speed=instant');
+  await matchBoard(page, game);
+
+  await page.goto(`/?seed=${seed}&speed=instant`);
+  await matchBoard(page, game);
+
+  const different = newRun('different-browser-run').state;
+  await page.goto('/?seed=different-browser-run&speed=instant');
+  await expect(page.getByTestId('run-map-transition')).toBeVisible();
+  await page.reload();
+  await page.locator('main').waitFor();
+  await expect(page.getByTestId('run-map-transition')).toHaveCount(0);
+  await matchBoard(page, different);
+
+  await page.getByRole('button', { name: 'Run Info', exact: true }).click();
+  let runInfo = page.getByRole('dialog', { name: 'Run Info' });
+  await runInfo.getByRole('tab', { name: 'Debug' }).click();
+  await runInfo.getByRole('button', { name: 'New seed', exact: true }).click();
+  const generatedSeed = new URL(page.url()).searchParams.get('seed');
+  expect(generatedSeed).toMatch(/^roll-/);
+  await expect(page.getByTestId('run-map-transition')).toBeVisible();
+  await page.reload();
+  await matchBoard(page, newRun(generatedSeed!).state);
+
+  const generated = newRun(generatedSeed!).state;
+  const generatedChoice = bestHand(generated);
+  await page.getByRole('button', { name: new RegExp(`^${HANDS[generatedChoice.hand].name} `) }).click();
+  await page.getByRole('button', { name: 'PLAY', exact: true }).click();
+  await matchBoard(page, dispatch(generated, { type: 'PLAY', hand: generatedChoice.hand, dieIds: generatedChoice.dieIds }).state);
+  await page.getByRole('button', { name: 'Run Info', exact: true }).click();
+  runInfo = page.getByRole('dialog', { name: 'Run Info' });
+  await runInfo.getByRole('tab', { name: 'Debug' }).click();
+  await runInfo.getByRole('button', { name: 'Restart same seed', exact: true }).click();
+  await page.reload();
+  await matchBoard(page, generated);
 });
 
 test('purchased Jumping Bean visibly triggers and rerolls on the next initial gameplay roll', async ({ page }) => {

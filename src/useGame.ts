@@ -2,15 +2,23 @@ import { useEffect, useState } from 'react';
 import { useReducedMotion } from '@mantine/hooks';
 import { CONFIG } from './game/config';
 import { dispatch, newRun } from './game/engine';
+import { browserRunStorage, loadPersistedRun, savePersistedRun } from './game/persistence';
 import type { Action, Resolution } from './game/types';
 
 export type PlaybackSpeed = keyof typeof CONFIG.tickMs;
-export function useGame(seed: string, speed: PlaybackSpeed) {
+const DEFAULT_SEED = 'roll-call';
+
+export function useGame(requestedSeed: string | null, speed: PlaybackSpeed) {
   const reducedMotion = useReducedMotion();
-  const [result, setResult] = useState<Resolution>(() => newRun(seed));
+  const [storage] = useState(browserRunStorage);
+  const [result, setResult] = useState<Resolution>(() => {
+    const saved = loadPersistedRun(storage, requestedSeed);
+    return saved ? { state: saved, events: [] } : newRun(requestedSeed ?? DEFAULT_SEED);
+  });
   const [index, setIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const busy = index < result.events.length;
+  useEffect(() => { savePersistedRun(storage, result.state); }, [storage, result.state]);
   useEffect(() => {
     if (!busy) return;
     const currentEvent = result.events[index];
@@ -23,6 +31,7 @@ export function useGame(seed: string, speed: PlaybackSpeed) {
   }, [result, index, speed, busy, reducedMotion]);
   function load(next: Resolution) {
     if (next.error) { setError(next.error); return; }
+    savePersistedRun(storage, next.state);
     setError(null);
     setResult(next);
     setIndex(0);

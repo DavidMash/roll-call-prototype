@@ -18,7 +18,8 @@ import { useGame } from './useGame';
 import type { PlaybackSpeed } from './useGame';
 
 const query = new URLSearchParams(window.location.search);
-const initialSeed = query.get('seed') || 'roll-call';
+const requestedSeed = query.get('seed');
+const initialSeed = requestedSeed || 'roll-call';
 const initialSpeed = ['normal', 'fast', 'instant'].includes(query.get('speed') ?? '') ? query.get('speed') as PlaybackSpeed : 'normal';
 const freshSeed = () => `roll-${Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join('-')}`;
 
@@ -33,9 +34,10 @@ export default function App() {
   const [restoreLivesOpen, setRestoreLivesOpen] = useState(false);
   const [hudHeight, setHudHeight] = useState(60);
   const appRef = useRef<HTMLDivElement>(null);
-  const game = useGame(initialSeed, speed);
+  const game = useGame(requestedSeed, speed);
   const { board, state, busy, event, progress } = game;
   const theme = screenTheme(board);
+  useLayoutEffect(() => setSeedInput(state.seed), [state.seed]);
   useLayoutEffect(() => {
     const hud = appRef.current?.querySelector<HTMLElement>('.top-hud');
     if (!hud) return;
@@ -53,6 +55,9 @@ export default function App() {
     setSelection(emptySelection());
   }
   function restart(seed: string) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('seed', seed);
+    window.history.replaceState(window.history.state, '', url);
     setSeedInput(seed);
     setSelection(emptySelection());
     setSelectedOffer(null);

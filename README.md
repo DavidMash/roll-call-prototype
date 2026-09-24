@@ -2,6 +2,8 @@
 
 Roll Call is a deterministic React/TypeScript/Vite dice roguelike. The domain engine resolves actions synchronously and emits immutable events and board snapshots; React only plays those snapshots. Playback speed cannot change outcomes.
 
+The browser keeps one active run in local storage. Refreshing the page or returning without a `seed` query resumes the latest settled game state; an interrupted event playback or map transition is skipped. A matching `?seed=` resumes that save, while a different explicit seed starts a fresh run and replaces it. Starting, restarting, or generating a run also replaces the saved run. Playback speed, selections, dialogs, and other transient UI state are not saved.
+
 ## Rounds, lives, and Busts
 
 Choose a legal Yahtzee-style hand, select its physical dice, and play it. A played category is consumed for the round. Each attempt grants three manual die rerolls, charged once per selected die. A manual gameplay reroll always changes that die's printed face: the engine removes the current face from the normal seeded weighted distribution and samples once. Automatic, effect-driven, Boss-entry, and Shop rolls may still repeat naturally; Bump keeps its deterministic precedence.

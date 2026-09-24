@@ -7,6 +7,7 @@ import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
 import { activeEncounterDice } from '../src/game/bosses';
 import { CONFIG } from '../src/game/config';
+import { RUN_STORAGE_KEY } from '../src/game/persistence';
 
 function bestHand(game: GameState, requiredDie?: number) {
   const dice = activeEncounterDice(game);
@@ -222,6 +223,7 @@ test('Flame Selection only acquires while Shop Manage Die supports arbitrary Sto
   await page.keyboard.press('Escape');
 
   // A separate deterministic run can use the same primary action without taking an offer.
+  await page.evaluate(key => localStorage.removeItem(key), RUN_STORAGE_KEY);
   game = await reachReward(page, seed);
   await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
   game = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
