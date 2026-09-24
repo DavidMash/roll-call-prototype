@@ -30,7 +30,7 @@ The Caller (purple/magenta) chooses from Ones through Sixes, Pair, Two Pair, Thr
 
 ### The Warden
 
-The Warden (cyan/teal) begins with all five player dice locked. The player chooses one starting die, which receives a real gameplay roll. Checkpoints at 10%, 25%, 45%, and 70% of the normal target, rounded to the game’s five-point target interval, each release one chosen reinforcement with another real gameplay roll. Crossed checkpoints queue, so multiple releases are chosen one at a time. Locked dice cannot be played, manually rerolled, trigger roll effects, or contribute attached Flames; global Bonfires remain active. A retry resets the encounter and asks for a new starting choice.
+The Warden (cyan/teal) starts with D1 active and D2–D5 locked. Checkpoints at 10%, 25%, 45%, and 70% of the normal target, rounded to the game’s five-point target interval, automatically release D2, D3, D4, and D5 in that order, each with a real gameplay roll. Locked dice cannot be played, manually rerolled, trigger roll effects, or contribute attached Flames; global Bonfires remain active. A retry resets the encounter to D1.
 
 ### The Hexer
 

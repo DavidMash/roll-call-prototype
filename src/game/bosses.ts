@@ -20,7 +20,7 @@ export const BOSSES: Record<BossType, BossDefinition> = {
   },
   warden: {
     name: 'THE WARDEN',
-    shortRule: 'Start with one die. Reach checkpoints to release reinforcements.',
+    shortRule: 'Start with D1. Checkpoints release D2 through D5 in order.',
     motif: 'Lock and checkpoint',
     primary: '#06B6D4',
     secondary: '#14B8A6',

@@ -18,7 +18,7 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
 }) {
   const encounterDice = activeEncounterDice(board);
   const valid = canPlay(encounterDice, board.consumed, selection)
-    && (board.boss?.type !== 'hexer' || selection.dieIds.includes(board.boss.cursedDieId));
+    && validateAction(board, { type: 'PLAY', hand: selection.hand!, dieIds: selection.dieIds }) === null;
   const showXMult = hasXMultFlame(board.dice, board.bonfires);
   const preview = valid ? (() => {
     const hand = selection.hand!;
@@ -29,8 +29,7 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
   })() : null;
   const manualAction: Action = { type: 'MANUAL_REROLL', dieIds: selection.dieIds };
   const canReroll = validateAction(board, manualAction) === null;
-  const awaitingWarden = board.boss?.type === 'warden' && (board.boss.startingDieId === null || board.boss.pendingReinforcements > 0);
-  const deadBoard = !awaitingWarden && !hasPlayableHand(encounterDice, board.consumed);
+  const deadBoard = !hasPlayableHand(encounterDice, board.consumed);
   const availablePlays = handOptions(encounterDice, board.consumed).filter(option => !option.consumed).length;
   const lastPlay = board.manualRerollsRemaining === 0 && availablePlays === 1 && valid;
   const hotFlame = board.dice.find(die => die.flame?.id === 'hotStreak')?.flame;
@@ -44,7 +43,7 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
     <div className="live-score-panel" data-testid="live-score-panel">
       <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} deadBoard={deadBoard} idleText={idleText} showXMult={showXMult} />
     </div>
-    <BossPanel board={board} busy={busy} submit={submit} />
+    <BossPanel board={board} />
     {!busy && deadBoard && board.manualRerollsRemaining > 0 && <Alert color="orange" py={5} title="No playable hands" role="status">
       Select dice and use a reroll.
     </Alert>}
@@ -63,10 +62,7 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
     </Paper>
     <Paper className="gameplay-dock" p="xs">
       <div className="gameplay-dock-content">
-        <DiceRow dice={board.dice} event={event} disabled={busy} selected={selection.dieIds}
-          eligibleIds={board.boss?.type === 'warden' ? board.boss.activeDieIds : undefined}
-          restrictToEligible={board.boss?.type === 'warden'}
-          ineligibleReasons={board.boss?.type === 'warden' ? Object.fromEntries(board.dice.map(die => [die.id, 'Locked by The Warden until a checkpoint.'])) : undefined}
+        <DiceRow dice={encounterDice} event={event} disabled={busy} selected={selection.dieIds}
           onClick={id => setSelection(toggleDie(encounterDice, board.consumed, selection, id))} />
         <div className="gameplay-actions">
           {(board.bonfires.includes('charge') || board.dice.some(die => die.flame?.id === 'charge')) && <Group gap="xs" justify="flex-end" mb={4}>

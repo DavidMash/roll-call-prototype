@@ -446,7 +446,6 @@ export type Action =
   | { type: 'CONTINUE_FLAME_SELECTION' }
   | { type: 'RESTORE_LIFE' }
   | { type: 'DISMISS_FLAME_TUTORIAL' }
-  | { type: 'CHOOSE_WARDEN_DIE'; dieId: number }
   | { type: 'RETRY_ROUND' }
   | { type: 'REROLL_DICE' }
   | { type: 'REROLL_OFFERS' }

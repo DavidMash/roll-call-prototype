@@ -1,11 +1,10 @@
-import { Badge, Button, Group, Paper, Progress, SimpleGrid, Stack, Text } from '@mantine/core';
+import { Badge, Group, Paper, Progress, SimpleGrid, Stack, Text } from '@mantine/core';
 import { BOSSES, createCursedDie, cursedFaceSummary, wardenCheckpoints } from '../game/bosses';
 import { CONFIG, targetForRound } from '../game/config';
 import { HANDS } from '../game/hands';
-import type { Action, Board } from '../game/types';
-import { PipFace } from './PipFace';
+import type { Board } from '../game/types';
 
-export function BossPanel({ board, busy, submit }: { board: Board; busy: boolean; submit: (action: Action) => void }) {
+export function BossPanel({ board }: { board: Board }) {
   const boss = board.boss;
   if (!boss) return null;
   const definition = BOSSES[boss.type];
@@ -25,15 +24,10 @@ export function BossPanel({ board, busy, submit }: { board: Board; busy: boolean
       <Group gap={5}>{boss.checkpoints.map((threshold, index) => <Badge key={threshold} size="sm"
         variant={index < boss.reachedCheckpoints ? 'filled' : 'light'} color="cyan">{threshold}</Badge>)}</Group>
       <Progress value={Math.min(100, board.score / board.target * 100)} color="cyan" size="sm" />
-      {(boss.startingDieId === null || boss.pendingReinforcements > 0) && <div>
-        <Text size="xs" fw={800} mb={4}>{boss.startingDieId === null ? 'CHOOSE YOUR STARTING DIE' : `CHOOSE REINFORCEMENT · ${boss.pendingReinforcements} PENDING`}</Text>
-        <Group gap="xs">{board.dice.filter(die => die.owner === 'player' && !boss.activeDieIds.includes(die.id)).map(die =>
-          <Button key={die.id} size="compact-sm" color="cyan" variant="light" disabled={busy}
-            aria-label={`Deploy D${die.id + 1}, face ${die.value}`}
-            onClick={() => submit({ type: 'CHOOSE_WARDEN_DIE', dieId: die.id })}>
-            <span className="warden-die-choice"><PipFace value={die.value} compact label={`Die ${die.id + 1} showing ${die.value}`} /> D{die.id + 1}</span>
-          </Button>)}</Group>
-      </div>}
+      <Text size="xs" fw={800}>{boss.activeDieIds.length
+        ? `ACTIVE · ${boss.activeDieIds.map(id => `D${id + 1}`).join(', ')}`
+        : 'D1 DEPLOYING'}</Text>
+      <Text size="xs" c="dimmed">Fixed release order: D1 → D2 → D3 → D4 → D5</Text>
     </Stack>}
     {boss.type === 'hexer' && <div className="hexer-rule" data-testid="hexer-rule">
       <Text size="sm"><strong>CURSE:</strong> The Cursed Die must participate in every manual hand.</Text>

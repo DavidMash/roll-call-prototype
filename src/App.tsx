@@ -47,7 +47,7 @@ export default function App() {
   }, []);
   function submit(action: Action) {
     if (busy) return;
-    game.submit(action);
+    if (!game.submit(action)) return;
     if (!['BUY', 'SELL_ENHANCEMENT', 'STOKE_FLAME', 'RESTORE_LIFE', 'DISMISS_FLAME_TUTORIAL'].includes(action.type)) setSelectedOffer(null);
     setSelectedFlameOffer(null);
     setSelection(emptySelection());

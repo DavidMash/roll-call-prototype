@@ -99,13 +99,6 @@ function normalizedState(state: GameState): GameState {
 export function validateAction(state: Board, action: Action): string | null {
   if (action.type === 'CONTINUE_ROUND_SUMMARY') return state.phase === 'roundSummary' && !!state.roundSummary
     ? null : 'A completed encounter summary is required.';
-  if (action.type === 'CHOOSE_WARDEN_DIE') {
-    if (state.phase !== 'round' || state.boss?.type !== 'warden') return 'A Warden reinforcement choice is not pending.';
-    const die = state.dice.find(item => item.id === action.dieId && item.owner === 'player');
-    if (!die || state.boss.activeDieIds.includes(die.id)) return 'Choose a locked player die.';
-    if (state.boss.startingDieId !== null && state.boss.pendingReinforcements < 1) return 'A Warden reinforcement choice is not pending.';
-    return null;
-  }
   if (action.type === 'RETRY_ROUND') return state.phase === 'shop' && !!state.shop && !!state.bust && state.lives > 0
     ? null : 'A returned Bust Shop is required to retry the round.';
   if (action.type === 'MANUAL_REROLL') {
@@ -119,7 +112,6 @@ export function validateAction(state: Board, action: Action): string | null {
   if (action.type === 'PLAY') {
     if (state.phase !== 'round') return 'Hands can only be played during a round.';
     if (state.consumed.includes(action.hand)) return 'That hand has already been consumed.';
-    if (state.boss?.type === 'warden' && (state.boss.startingDieId === null || state.boss.pendingReinforcements > 0)) return 'Choose the Warden die awaiting deployment first.';
     if (state.boss?.type === 'hexer' && !action.dieIds.includes(state.boss.cursedDieId)) return 'The Cursed Die must participate in every hand.';
     if (!isValidSelection(activeEncounterDice(state), action.hand, action.dieIds)) return 'Select a complete valid set of participating dice.';
     return null;
@@ -353,7 +345,6 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         next.flameTutorial = { pendingDieId: null, completed: true };
         resolver.emit({ type: 'FLAME_TUTORIAL_COMPLETED', message: 'First-Flame shop tutorial completed' });
         break;
-      case 'CHOOSE_WARDEN_DIE': resolver.chooseWardenDie(action.dieId); break;
       case 'RETRY_ROUND': resolver.startRound(true); break;
       case 'NEXT_ROUND': next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
     }

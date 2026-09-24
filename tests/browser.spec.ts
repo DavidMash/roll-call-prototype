@@ -19,11 +19,6 @@ function bestHand(game: GameState) {
     .sort((a, b) => (callerHand ? Number(b.hand === callerHand) - Number(a.hand === callerHand) : 0) || b.score - a.score)[0];
 }
 function automaticAction(game: GameState): Action {
-  const warden = game.boss?.type === 'warden' ? game.boss : null;
-  if (warden && (warden.startingDieId === null || warden.pendingReinforcements > 0)) {
-    const die = game.dice.find(item => item.owner === 'player' && !warden.activeDieIds.includes(item.id))!;
-    return { type: 'CHOOSE_WARDEN_DIE', dieId: die.id };
-  }
   const choice = bestHand(game);
   if (game.boss?.type === 'caller' && !game.boss.satisfied && choice?.hand !== game.boss.calledHand && game.manualRerollsRemaining > 0) {
     return { type: 'MANUAL_REROLL', dieIds: [activeEncounterDice(game)[0].id] };
@@ -50,17 +45,10 @@ async function matchBoard(page: Page, game: GameState) {
     await expect(page.getByRole('button', { name: /^Reroll Selected/ })).toHaveCount(0);
   } else if (game.phase === 'round') await expect(page.getByTestId('stat-rerolls').getByText(String(game.manualRerollsRemaining), { exact: true })).toBeVisible();
   else await expect(page.getByTestId('stat-rerolls')).toHaveCount(0);
-  for (const die of game.dice) await expect(page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`}, face ${die.value},`) })).toBeVisible();
+  const visibleDice = game.phase === 'round' ? activeEncounterDice(game) : game.dice;
+  for (const die of visibleDice) await expect(page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`}, face ${die.value},`) })).toBeVisible();
 }
 async function playBest(page: Page, game: GameState): Promise<GameState> {
-  const warden = game.boss?.type === 'warden' ? game.boss : null;
-  if (warden && (warden.startingDieId === null || warden.pendingReinforcements > 0)) {
-    const die = game.dice.find(item => item.owner === 'player' && !warden.activeDieIds.includes(item.id))!;
-    await page.getByRole('button', { name: new RegExp(`Deploy D${die.id + 1}`) }).click();
-    const next = dispatch(game, { type: 'CHOOSE_WARDEN_DIE', dieId: die.id }).state;
-    await matchBoard(page, next);
-    return next;
-  }
   const choice = bestHand(game);
   if (game.boss?.type === 'caller' && !game.boss.satisfied && choice?.hand !== game.boss.calledHand && game.manualRerollsRemaining > 0) {
     const die = activeEncounterDice(game)[0];
@@ -80,7 +68,7 @@ async function playBest(page: Page, game: GameState): Promise<GameState> {
   }
   const handRow = page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) });
   await handRow.click();
-  for (const die of game.dice) {
+  for (const die of activeEncounterDice(game)) {
     const target = page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) });
     const selected = await target.getAttribute('aria-pressed') === 'true';
     if (selected !== choice.dieIds.includes(die.id)) await target.click();

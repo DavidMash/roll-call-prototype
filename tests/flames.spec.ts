@@ -19,11 +19,7 @@ function bestHand(game: GameState, requiredDie?: number) {
     .filter(choice => game.boss?.type !== 'hexer' || choice.dieIds.includes(game.boss.cursedDieId))
     .sort((a, b) => (callerHand ? Number(b.hand === callerHand) - Number(a.hand === callerHand) : 0) || b.score - a.score)[0];
 }
-function automaticAction(game: GameState): Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'CHOOSE_WARDEN_DIE' }> {
-  const warden = game.boss?.type === 'warden' ? game.boss : null;
-  if (warden && (warden.startingDieId === null || warden.pendingReinforcements > 0)) {
-    return { type: 'CHOOSE_WARDEN_DIE', dieId: game.dice.find(die => die.owner === 'player' && !warden.activeDieIds.includes(die.id))!.id };
-  }
+function automaticAction(game: GameState): Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' }> {
   const choice = bestHand(game);
   if (game.boss?.type === 'caller' && !game.boss.satisfied && choice?.hand !== game.boss.calledHand && game.manualRerollsRemaining > 0) {
     return { type: 'MANUAL_REROLL', dieIds: [activeEncounterDice(game)[0].id] };
@@ -54,11 +50,11 @@ async function ready(page: Page) {
   await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
 }
 
-async function perform(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'CHOOSE_WARDEN_DIE' | 'NEXT_ROUND' | 'RETRY_ROUND' | 'CONTINUE_ROUND_SUMMARY' }>) {
+async function perform(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'NEXT_ROUND' | 'RETRY_ROUND' | 'CONTINUE_ROUND_SUMMARY' }>) {
   if (action.type === 'PLAY') {
     const handRow = page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) });
     await handRow.click();
-    for (const die of game.dice) {
+    for (const die of activeEncounterDice(game)) {
       const target = page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) });
       const selected = await target.getAttribute('aria-pressed') === 'true';
       if (selected !== action.dieIds.includes(die.id)) await target.click();
@@ -69,8 +65,7 @@ async function perform(page: Page, game: GameState, action: Extract<Action, { ty
     const die = game.dice.find(item => item.id === action.dieIds[0])!;
     await page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) }).click();
     await page.getByRole('button', { name: 'Reroll Selected — 1', exact: true }).click();
-  } else if (action.type === 'CHOOSE_WARDEN_DIE') await page.getByRole('button', { name: new RegExp(`Deploy D${action.dieId + 1}`) }).click();
-  else if (action.type === 'CONTINUE_ROUND_SUMMARY') await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
+  } else if (action.type === 'CONTINUE_ROUND_SUMMARY') await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
   else await page.getByRole('button', { name: action.type === 'RETRY_ROUND' ? `RETRY ROUND ${game.round}` : 'NEXT ROUND', exact: true }).click();
   const next = dispatch(game, action).state;
   await ready(page);

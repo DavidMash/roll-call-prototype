@@ -85,26 +85,22 @@ describe('The Caller', () => {
 });
 
 describe('The Warden', () => {
-  it('uses exact rounded thresholds, locks dice, and deploys each choice with a real roll', () => {
-    let state = bossRound('warden');
-    expect(state.boss).toMatchObject({ type: 'warden', checkpoints: wardenCheckpoints(state.target), activeDieIds: [] });
-    expect(validateAction(state, { type: 'PLAY', hand: 'ones', dieIds: [0] })).toContain('Choose the Warden');
-    state = dispatch(state, { type: 'CHOOSE_WARDEN_DIE', dieId: 2 }, constant(0)).state;
-    expect(state.boss).toMatchObject({ type: 'warden', startingDieId: 2, activeDieIds: [2] });
-    expect(state.dice[2].value).toBe(1);
+  it('uses exact rounded thresholds and auto-deploys D1 with a real roll', () => {
+    const state = bossRound('warden');
+    expect(state.boss).toMatchObject({ type: 'warden', checkpoints: wardenCheckpoints(state.target), startingDieId: 0, activeDieIds: [0] });
     expect(validateAction(state, { type: 'MANUAL_REROLL', dieIds: [1] })).toContain('unlocked');
-    expect(state.stats.wardenEvents[0]).toMatchObject({ kind: 'starting_die', dieId: 2, activeDice: 1 });
+    expect(state.stats.wardenEvents[0]).toMatchObject({ kind: 'starting_die', dieId: 0, activeDice: 1 });
+    expect(state.history.some(event => event.type === 'DIE_ROLLED' && event.dieIds?.includes(0))).toBe(true);
   });
 
-  it('queues multiple crossed reinforcements and requires sequential choices', () => {
+  it('auto-deploys multiple crossed reinforcements in D2-through-D5 order', () => {
     let state = bossRound('warden');
-    state = dispatch(state, { type: 'CHOOSE_WARDEN_DIE', dieId: 0 }, constant(0)).state;
+    state.dice[0].value = 1;
     state.handLevels.ones = 20;
     state = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(0)).state;
     if (state.boss?.type !== 'warden') throw new Error('Warden fixture failed');
-    expect(state.boss.pendingReinforcements).toBe(4);
-    expect(state.phase).toBe('round');
-    for (const dieId of [1, 2, 3, 4]) state = dispatch(state, { type: 'CHOOSE_WARDEN_DIE', dieId }, constant(0)).state;
+    expect(state.boss.pendingReinforcements).toBe(0);
+    expect(state.boss.activeDieIds).toEqual([0, 1, 2, 3, 4]);
     expect(state.phase).toBe('roundSummary');
     state = dispatch(state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
     expect(state.phase).toBe('flameSelection');
@@ -112,15 +108,14 @@ describe('The Warden', () => {
     expect(state.stats.bossEncounters.at(-1)).toMatchObject({ boss: 'warden', cleared: true, wardenActiveDiceAtEnd: 5 });
   });
 
-  it('resets attempt-local locks and asks for a new starter on retry', () => {
+  it('resets attempt-local locks and auto-deploys D1 again on retry', () => {
     let state = bossRound('warden');
-    state = dispatch(state, { type: 'CHOOSE_WARDEN_DIE', dieId: 3 }, constant(.2)).state;
     state.consumed = [...HAND_IDS];
     state.manualRerollsRemaining = 0;
     new Resolver(state, constant(.2)).evaluate();
     expect(state.phase).toBe('shop');
     state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.55)).state;
-    expect(state.boss).toMatchObject({ type: 'warden', startingDieId: null, activeDieIds: [], reachedCheckpoints: 0 });
+    expect(state.boss).toMatchObject({ type: 'warden', startingDieId: 0, activeDieIds: [0], reachedCheckpoints: 0 });
   });
 });
 

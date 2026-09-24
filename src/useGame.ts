@@ -34,7 +34,16 @@ export function useGame(seed: string, speed: PlaybackSpeed) {
     event: busy ? result.events[index] : null,
     busy, error,
     progress: { current: Math.min(index + 1, result.events.length), total: result.events.length },
-    submit: (action: Action) => { if (!busy) load(dispatch(result.state, action)); },
+    submit: (action: Action) => {
+      if (busy) return false;
+      const next = dispatch(result.state, action);
+      if (next.error) {
+        setError(next.error);
+        return false;
+      }
+      load(next);
+      return true;
+    },
     restart: (nextSeed: string) => load(newRun(nextSeed)),
     skip: () => setIndex(result.events.length),
     skipTransition: () => setIndex(current => Math.min(current + 1, result.events.length)),

@@ -36,7 +36,7 @@ async function playOne(page: Page, game: GameState) {
   }
   const handRow = page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) });
   await handRow.click();
-  for (const die of game.dice) {
+  for (const die of activeEncounterDice(game)) {
     const button = page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) });
     const selected = await button.getAttribute('aria-pressed') === 'true';
     if (selected !== choice.dieIds.includes(die.id)) await button.click();
@@ -100,21 +100,50 @@ test('Caller preview hides the call, then encounter reveals it and its counter',
   await expect(page.getByTestId('live-score-panel')).toHaveCSS('position', 'sticky');
 });
 
-test('Warden preview shows exact thresholds and encounter locks four dice until deployment', async ({ page }) => {
+test('Warden preview shows exact thresholds and encounter starts with only centered D1', async ({ page }) => {
   let game = await reachBossShop(page, 'warden');
   const thresholds = wardenCheckpoints(targetForRound(3));
   await expect(page.getByTestId('boss-preview')).toContainText(thresholds.join(', '));
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await ready(page);
-  await expect(page.getByTestId('boss-panel')).toContainText('CHOOSE YOUR STARTING DIE');
-  await expect(page.locator('.warden-die-choice .pip-face')).toHaveCount(5);
-  await expect(page.locator('.die.ineligible')).toHaveCount(5);
-  await page.getByRole('button', { name: /Deploy D1/ }).click();
-  game = dispatch(game, { type: 'CHOOSE_WARDEN_DIE', dieId: 0 }).state;
-  await ready(page);
-  await expect(page.locator('.die.ineligible')).toHaveCount(4);
+  await expect(page.getByTestId('boss-panel')).toContainText('ACTIVE · D1');
+  await expect(page.getByRole('button', { name: /^Die 1,/ })).toBeVisible();
+  for (const id of [2, 3, 4, 5]) await expect(page.getByRole('button', { name: new RegExp(`^Die ${id},`) })).toHaveCount(0);
+  await expect(page.locator('.die.ineligible')).toHaveCount(0);
+  const rowBox = await page.locator('.gameplay-dock .dice-row').boundingBox();
+  const dieBox = await page.getByRole('button', { name: /^Die 1,/ }).boundingBox();
+  expect(Math.abs((rowBox!.x + rowBox!.width / 2) - (dieBox!.x + dieBox!.width / 2))).toBeLessThan(2);
   expect(game.boss).toMatchObject({ type: 'warden', startingDieId: 0, activeDieIds: [0] });
+});
+
+test('Warden checkpoints auto-release D2 onward without interrupting hand selection', async ({ page }) => {
+  let game = await reachBossShop(page, 'warden');
+  await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+  game = dispatch(game, { type: 'NEXT_ROUND' }).state;
+  await ready(page);
+
+  const first = best(game)!;
+  expect(first.score).toBeGreaterThanOrEqual(wardenCheckpoints(game.target)[0]);
+  game = await playOne(page, game);
+  if (game.boss?.type !== 'warden') throw new Error('Warden fixture failed');
+  expect(game.boss.pendingReinforcements).toBe(0);
+  expect(game.boss.activeDieIds.slice(0, 2)).toEqual([0, 1]);
+  await expect(page.getByRole('button', { name: /^Die 2,/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Die 3,/ })).toHaveCount(0);
+  const rowBox = await page.locator('.gameplay-dock .dice-row').boundingBox();
+  const d1Box = await page.getByRole('button', { name: /^Die 1,/ }).boundingBox();
+  const d2Box = await page.getByRole('button', { name: /^Die 2,/ }).boundingBox();
+  expect(Math.abs((rowBox!.x + rowBox!.width / 2) - (d1Box!.x + (d2Box!.x + d2Box!.width - d1Box!.x) / 2))).toBeLessThan(2);
+
+  const second = best(game)!;
+  const handRow = page.getByRole('button', { name: new RegExp(`^${HANDS[second.hand].name} `) });
+  await handRow.click();
+  await expect(handRow).toHaveAttribute('aria-pressed', 'true');
+  for (const dieId of second.dieIds) {
+    await expect(page.getByRole('button', { name: new RegExp(`^Die ${dieId + 1},`) })).toHaveAttribute('aria-pressed', 'true');
+  }
+  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeEnabled();
 });
 
 test('Hexer preview exposes all seven faces and encounter adds the styled Cursed Die', async ({ page }) => {

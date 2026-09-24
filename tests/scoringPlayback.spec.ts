@@ -18,7 +18,7 @@ async function perform(page: Page, game: GameState, action: Action) {
   if (action.type === 'PLAY') {
     const row = page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) });
     await row.click();
-    for (const physical of game.dice) {
+    for (const physical of activeEncounterDice(game)) {
       const target = page.getByRole('button', { name: new RegExp(`^${physical.owner === 'boss' ? 'Cursed Die' : `Die ${physical.id + 1}`},`) });
       const selected = await target.getAttribute('aria-pressed') === 'true';
       if (selected !== action.dieIds.includes(physical.id)) await target.click();
@@ -45,8 +45,6 @@ async function perform(page: Page, game: GameState, action: Action) {
     await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();
   } else if (action.type === 'RETRY_ROUND') {
     await page.getByRole('button', { name: /^RETRY ROUND / }).click();
-  } else if (action.type === 'CHOOSE_WARDEN_DIE') {
-    await page.getByRole('button', { name: new RegExp(`Deploy D${action.dieId + 1}`) }).click();
   } else throw new Error(`Unexpected fixture action: ${action.type}`);
   await ready(page);
   return dispatch(game, action).state;
@@ -64,7 +62,7 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
   await expect(page.getByTestId('stat-score').getByText(String(game.score), { exact: true })).toBeVisible();
   const finalRow = page.getByRole('button', { name: new RegExp(`^${HANDS[fixture.action.hand].name} `) });
   await finalRow.click();
-  for (const physical of game.dice) {
+  for (const physical of activeEncounterDice(game)) {
     const target = page.getByRole('button', { name: new RegExp(`^${physical.owner === 'boss' ? 'Cursed Die' : `Die ${physical.id + 1}`},`) });
     const selected = await target.getAttribute('aria-pressed') === 'true';
     if (selected !== fixture.action.dieIds.includes(physical.id)) await target.click();

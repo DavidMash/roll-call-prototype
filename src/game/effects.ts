@@ -113,7 +113,7 @@ export class Resolver {
       this.state.stats.wardenEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
         kind: 'checkpoint', threshold, activeDice: boss.activeDieIds.length });
       this.emit({ type: 'WARDEN_CHECKPOINT', boss: 'warden', amount: threshold,
-        message: `Warden checkpoint ${threshold} reached · choose a reinforcement` });
+        message: `Warden checkpoint ${threshold} reached · next reinforcement released` });
     }
   }
   whenScored(dieId: number, snapshot: Face, hand: HandId, playSource: HandPlaySource, participation: 'selected' | 'hitchhiker'): void {
@@ -335,9 +335,9 @@ export class Resolver {
       message: `${HANDS[hand].name} did not answer ${HANDS[boss.calledHand].name} · ${Math.max(0, boss.playsRemaining)} manual plays remain` });
     return expired;
   }
-  chooseWardenDie(dieId: number): void {
+  private deployWardenDie(dieId: number): void {
     const boss = this.state.boss;
-    if (boss?.type !== 'warden') throw new Error('Warden choice attempted without The Warden.');
+    if (boss?.type !== 'warden') throw new Error('Warden deployment attempted without The Warden.');
     const starting = boss.startingDieId === null;
     boss.activeDieIds.push(dieId);
     if (starting) boss.startingDieId = dieId;
@@ -347,10 +347,19 @@ export class Resolver {
     const encounter = this.state.stats.bossEncounters.at(-1);
     if (starting && encounter?.boss === 'warden') encounter.wardenStartingDieId = dieId;
     this.emit({ type: 'WARDEN_REINFORCEMENT', boss: 'warden', dieIds: [dieId],
-      message: `${starting ? 'Starting die' : 'Reinforcement'} D${dieId + 1} deployed · real gameplay roll` });
+      message: `${starting ? 'Starting die' : 'Reinforcement'} D${dieId + 1} auto-deployed · real gameplay roll` });
     this.rollBatch([dieId], 'Warden deployment', 'gameplay');
     this.drain();
-    this.evaluate();
+  }
+  private deployPendingWardenDice(): void {
+    const boss = this.state.boss;
+    if (boss?.type !== 'warden') return;
+    while (boss.pendingReinforcements > 0) {
+      const next = this.state.dice.filter(die => die.owner === 'player')
+        .sort((a, b) => a.id - b.id).find(die => !boss.activeDieIds.includes(die.id));
+      if (!next) throw new Error('The Warden has more pending reinforcements than locked dice.');
+      this.deployWardenDie(next.id);
+    }
   }
   play(hand: HandId, dieIds: number[], playSource: HandPlaySource = 'manual'): { winning: boolean; beanRecordIndex: number | null } {
     const freeBean = playSource === 'jumpingBean';
@@ -453,7 +462,7 @@ export class Resolver {
       stickyPreventedReroll: false, followupRerolled: false, roundCleared: winning, jackpotPayout, personalTrainerSucceeded,
     }) - 1 : null;
     if (winning) {
-      if (!freeBean) this.evaluate();
+      if (!freeBean) { this.deployPendingWardenDice(); this.evaluate(); }
       return { winning, beanRecordIndex };
     }
     if (freeBean) return { winning, beanRecordIndex };
@@ -466,6 +475,7 @@ export class Resolver {
     for (const die of activeEncounterDice(this.state)) if (stacks(activeFace(die), 'slippy')) { this.trigger('slippy', die.id, activeFace(die), 'joined post-hand reroll'); rerolls.add(die.id); }
     this.rollBatch([...rerolls], 'Post-hand reroll', 'gameplay');
     this.drain();
+    this.deployPendingWardenDice();
     this.evaluate();
     return { winning: this.state.score >= this.state.target, beanRecordIndex: null };
   }
@@ -482,6 +492,7 @@ export class Resolver {
     this.emit({ type: 'MANUAL_REROLL_STARTED', dieIds: ids, amount: ids.length, message: `Manual reroll; ${this.state.manualRerollsRemaining} remaining` });
     this.rollBatch(ids, 'Manual gameplay reroll', 'gameplay', true);
     this.drain();
+    this.deployPendingWardenDice();
     if (startedDeadBoard && (this.state.score >= this.state.target || hasPlayableHand(activeEncounterDice(this.state), this.state.consumed))) {
       record.rescuedDeadBoard = true; round.deadBoardRescues++; this.state.stats.deadBoardRescues++;
       this.emit({ type: 'DEAD_BOARD_RESCUED', dieIds: ids, message: 'Dead board rescued' });
@@ -613,7 +624,12 @@ export class Resolver {
       message: `Round ${this.state.round} — Attempt ${this.state.roundAttemptNumber} — goal ${this.state.target}; Charge reset to ×1` });
     this.selectTargetPractice();
     if (this.state.boss?.type === 'hexer') this.state.dice.push(createCursedDie());
-    if (this.state.boss?.type !== 'warden') this.rollBatch(activeEncounterDice(this.state).map(die => die.id), 'Initial round roll', 'gameplay');
+    if (this.state.boss?.type === 'warden') {
+      const first = this.state.dice.filter(die => die.owner === 'player').sort((a, b) => a.id - b.id)[0];
+      if (!first) throw new Error('The Warden requires at least one player die.');
+      this.deployWardenDie(first.id);
+      this.deployPendingWardenDice();
+    } else this.rollBatch(activeEncounterDice(this.state).map(die => die.id), 'Initial round roll', 'gameplay');
     this.drain(); this.evaluate();
   }
   freshOffers(): void {

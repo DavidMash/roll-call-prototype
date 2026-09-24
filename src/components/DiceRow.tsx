@@ -1,5 +1,6 @@
 import { Die } from './Die';
 import { Tooltip } from '@mantine/core';
+import type { CSSProperties } from 'react';
 import type { Die as PhysicalDie, GameEvent } from '../game/types';
 
 interface Props {
@@ -19,7 +20,7 @@ interface Props {
 }
 export function DiceRow({ dice, selected = [], event, disabled, eligibleIds, restrictToEligible = false,
   ineligibleReasons = {}, actionableIneligibleIds = [], showCapacity = false, onClick, onDropOffer, tutorialDieId, tutorialLabel }: Props) {
-  return <div className="dice-row">{dice.map(die => {
+  return <div className="dice-row" style={{ '--dice-columns': Math.min(5, dice.length) } as CSSProperties}>{dice.map(die => {
     const involved = event?.dieIds?.includes(die.id) ?? false;
     const rendered = <Die key={`${die.id}:${involved && event?.enhancement ? event.id : 'idle'}`} die={die}
       selected={selected.includes(die.id)} highlighted={involved && event?.type !== 'DIE_ROLLED'}
