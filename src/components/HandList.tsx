@@ -50,8 +50,8 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
   </section>;
 }
 
-export function HandScorecard({ board, selection, busy, onSelect, onClear }: {
-  board: Board; selection: Selection; busy: boolean; onSelect: (hand: HandId) => void; onClear: () => void;
+export function HandScorecard({ board, selection, busy, canClear = selection.dieIds.length > 0, onSelect, onClear }: {
+  board: Board; selection: Selection; busy: boolean; canClear?: boolean; onSelect: (hand: HandId) => void; onClear: () => void;
 }) {
   const encounterDice = activeEncounterDice(board);
   const hasCompatibleHand = [...UPPER_HAND_IDS, ...LOWER_HAND_IDS].some(hand => !board.consumed.includes(hand)
@@ -59,13 +59,15 @@ export function HandScorecard({ board, selection, busy, onSelect, onClear }: {
   return <div className="scorecard">
     <Group justify="space-between" className="scorecard-header">
       <Text fw={700} size="sm" tt="uppercase" lts=".08em">Scorecard</Text>
-      <Button size="compact-xs" variant="subtle" color="gray" onClick={onClear} disabled={busy || !selection.dieIds.length}>Clear selection</Button>
+      <Button size="compact-xs" variant="subtle" color="gray" onClick={onClear} disabled={busy || !canClear}>Clear selection</Button>
     </Group>
     <div className="scorecard-grid">
       <ScorecardSection title="Upper" hands={UPPER_HAND_IDS} {...{ board, selection, busy, onSelect }} />
       <ScorecardSection title="Lower" hands={LOWER_HAND_IDS} {...{ board, selection, busy, onSelect }} />
     </div>
-    {selection.dieIds.length > 0 && !hasCompatibleHand && <Text size="xs" c="orange" className="scorecard-hint">No available hand contains all selected dice.</Text>}
+    {selection.dieIds.length > 0 && !hasCompatibleHand && <Text size="xs" c="orange" className="scorecard-hint">
+      {board.boss?.type === 'hexer' ? 'No available hand includes the Cursed Die.' : 'No available hand contains all selected dice.'}
+    </Text>}
     <div className="scorecard-totals" aria-label="Round score breakdown">
       <Group gap="xs"><Text size="xs" c="dimmed">Effects</Text><Text size="sm" fw={600} data-testid="scorecard-effect-score">{board.effectScore}</Text></Group>
       <Group gap="xs"><Text size="xs" c="dimmed">Total</Text><Text size="sm" fw={700} data-testid="scorecard-round-total">{board.score} / {board.target}</Text></Group>

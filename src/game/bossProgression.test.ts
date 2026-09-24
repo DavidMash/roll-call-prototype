@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { activeFace, rollWeights } from './dice';
 import { dispatch, newRun, validateAction } from './engine';
-import { BOSS_TYPES, bossSchedule, createCursedDie, wardenCheckpoints } from './bosses';
-import { combinationsForHand, HAND_IDS } from './hands';
+import { activeEncounterDice, BOSS_TYPES, bossSchedule, createCursedDie, requiredEncounterDieIds, wardenCheckpoints } from './bosses';
+import { combinationsForHand, HAND_IDS, hasPlayableHand } from './hands';
 import { routeThrough } from './progression';
 import type { BossType, GameState, RandomSource } from './types';
 import { Resolver } from './effects';
@@ -166,6 +166,23 @@ describe('The Hexer', () => {
     state = dispatch(state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
     expect(state.phase).toBe('flameSelection');
     expect(state.dice.every(die => die.owner === 'player')).toBe(true);
+  });
+
+  it('busts when ordinary hands remain but none can include the Cursed Die', () => {
+    const state = bossRound('hexer');
+    const cursed = state.dice.find(die => die.owner === 'boss')!;
+    state.dice.filter(die => die.owner === 'player').forEach(die => { die.value = 1; });
+    cursed.value = 7;
+    state.manualRerollsRemaining = 0;
+
+    expect(hasPlayableHand(activeEncounterDice(state), state.consumed)).toBe(true);
+    expect(hasPlayableHand(activeEncounterDice(state), state.consumed, requiredEncounterDieIds(state))).toBe(false);
+
+    new Resolver(state, constant(.2)).evaluate();
+    expect(state.phase).toBe('shop');
+    expect(state.bust).toMatchObject({ round: 3, score: 0, livesAfter: 2 });
+    expect(state.lives).toBe(2);
+    expect(state.boss).toBeNull();
   });
 
   it('supports extended straights with rank 7 without treating it as a matching wild', () => {

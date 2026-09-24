@@ -15,6 +15,7 @@ interface Props {
   disabled: boolean;
   eligible?: boolean;
   ineligibleReason?: string;
+  lockedReason?: string;
   allowIneligibleClick?: boolean;
   showCapacity?: boolean;
   onClick: () => void;
@@ -28,7 +29,7 @@ const BADGE_LABELS: Partial<Record<Enhancement, (count: number) => string>> = {
 };
 
 export function Die({ die, selected, highlighted, rolling, ability, flameAbility, disabled, eligible,
-  ineligibleReason, allowIneligibleClick = false, showCapacity = false, onClick, onDropOffer }: Props) {
+  ineligibleReason, lockedReason, allowIneligibleClick = false, showCapacity = false, onClick, onDropOffer }: Props) {
   const face = activeFace(die);
   const enhancements = ENHANCEMENT_IDS.filter(id => face.enhancements[id])
     .sort((a, b) => face.enhancements[b]! - face.enhancements[a]!);
@@ -39,14 +40,14 @@ export function Die({ die, selected, highlighted, rolling, ability, flameAbility
   const flameInvestment = activeFlameInvestment(die.flame);
   const enhancementSummary = enhancements.map(id => `${ENHANCEMENTS[id].name} ×${face.enhancements[id]}`).join(', ');
   const activeAbility = flameAbility ? FLAMES[flameAbility].name : ability ? ENHANCEMENTS[ability].name : '';
-  const interactionDisabled = disabled || (!!ineligibleReason && !allowIneligibleClick);
+  const interactionDisabled = disabled || !!lockedReason || (!!ineligibleReason && !allowIneligibleClick);
   const capacity = faceEnhancementTypes(face).length;
   return <div className="die-wrap">
     <div className="ability-label" aria-hidden="true">{activeAbility.toUpperCase()}</div>
     <Paper component="button" type="button" withBorder
-      className={`die ${die.owner === 'boss' ? 'cursed-die' : ''} ${selected ? 'selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${ability || flameAbility ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''}`}
-      disabled={disabled} aria-disabled={interactionDisabled} aria-pressed={selected} title={ineligibleReason}
-      aria-label={`${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`}, face ${die.value}, ${pips} scoring pips${flameId ? `, Flame ${FLAMES[flameId].name}, ${flameInvestment} of 100 Gold` : ''}${enhancementSummary ? `, ${enhancementSummary}` : ''}${ineligibleReason ? `, unavailable: ${ineligibleReason}` : ''}`}
+      className={`die ${die.owner === 'boss' ? 'cursed-die' : ''} ${selected ? 'selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${ability || flameAbility ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''}`}
+      disabled={disabled} aria-disabled={interactionDisabled} aria-pressed={selected} title={lockedReason ?? ineligibleReason}
+      aria-label={`${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`}, face ${die.value}, ${pips} scoring pips${flameId ? `, Flame ${FLAMES[flameId].name}, ${flameInvestment} of 100 Gold` : ''}${enhancementSummary ? `, ${enhancementSummary}` : ''}${lockedReason ? `, required: ${lockedReason}` : ineligibleReason ? `, unavailable: ${ineligibleReason}` : ''}`}
       onClick={() => { if (!interactionDisabled) onClick(); }}
       onDragOver={event => { if (!disabled && onDropOffer) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }}
       onDrop={event => {

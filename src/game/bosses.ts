@@ -127,4 +127,8 @@ export function activeEncounterDice(state: { dice: Die[]; boss: BossRuntimeState
   return state.dice.filter(die => active.has(die.id));
 }
 
+export function requiredEncounterDieIds(state: { boss: BossRuntimeState | null }): number[] {
+  return state.boss?.type === 'hexer' ? [state.boss.cursedDieId] : [];
+}
+
 export const isCursedDie = (die: Die | undefined): boolean => die?.owner === 'boss';

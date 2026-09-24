@@ -103,7 +103,8 @@ export function handOptions(dice: Die[], consumed: HandId[], selected: number[] 
     combinations: combinationsForHand(dice, id).filter(set => selected.every(die => set.includes(die))),
   })).filter(option => option.combinations.length > 0);
 }
-export const hasPlayableHand = (dice: Die[], consumed: HandId[]) => handOptions(dice, consumed).some(option => !option.consumed);
+export const hasPlayableHand = (dice: Die[], consumed: HandId[], requiredDieIds: number[] = []) =>
+  handOptions(dice, consumed, requiredDieIds).some(option => !option.consumed);
 export function defaultCombination(dice: Die[], hand: HandId, selected: number[] = []): number[] | null {
   const combinations = combinationsForHand(dice, hand);
   // A dice-first upper selection is already complete; do not expand it.

@@ -4,7 +4,7 @@ import { enhancementCost, stacks } from '../src/game/enhancements';
 import { handOptions } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, Enhancement } from '../src/game/types';
-import { activeEncounterDice } from '../src/game/bosses';
+import { activeEncounterDice, requiredEncounterDieIds } from '../src/game/bosses';
 
 // Reach the enhanced board through real seeded plays and purchases, without UI injection.
 export function scoringPlaybackRun() {
@@ -52,7 +52,10 @@ export function scoringPlaybackRun() {
           if (result.events.some(event => event.enhancement === 'hitchhiker')) return { seed, actions, game, action: scoringAction, result };
         }
         if (!choices.length && game.manualRerollsRemaining === 0) break;
-        action = choices[0] ?? { type: 'MANUAL_REROLL', dieIds: [dice[0].id] };
+        action = choices[0] ?? {
+          type: 'MANUAL_REROLL',
+          dieIds: [...new Set([...requiredEncounterDieIds(game), dice[0].id])].sort((a, b) => a - b),
+        };
       }
       const result = dispatch(game, action);
       if (result.error) break;

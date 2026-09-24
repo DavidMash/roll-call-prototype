@@ -12,6 +12,8 @@ interface Props {
   restrictToEligible?: boolean;
   ineligibleReasons?: Record<number, string>;
   actionableIneligibleIds?: number[];
+  lockedIds?: number[];
+  lockedReasons?: Record<number, string>;
   showCapacity?: boolean;
   onClick: (dieId: number) => void;
   onDropOffer?: (offerId: number, dieId: number) => void;
@@ -19,7 +21,8 @@ interface Props {
   tutorialLabel?: React.ReactNode;
 }
 export function DiceRow({ dice, selected = [], event, disabled, eligibleIds, restrictToEligible = false,
-  ineligibleReasons = {}, actionableIneligibleIds = [], showCapacity = false, onClick, onDropOffer, tutorialDieId, tutorialLabel }: Props) {
+  ineligibleReasons = {}, actionableIneligibleIds = [], lockedIds = [], lockedReasons = {}, showCapacity = false,
+  onClick, onDropOffer, tutorialDieId, tutorialLabel }: Props) {
   return <div className="dice-row" data-dice-count={dice.length}
     style={{ '--dice-columns': dice.length } as CSSProperties}>{dice.map(die => {
     const involved = event?.dieIds?.includes(die.id) ?? false;
@@ -28,6 +31,7 @@ export function DiceRow({ dice, selected = [], event, disabled, eligibleIds, res
       rolling={involved && (event?.type === 'DICE_REROLL_STARTED' || event?.type === 'DIE_ROLLED')}
       ability={involved ? event?.enhancement : undefined} flameAbility={involved ? event?.flame : undefined}
       disabled={disabled} eligible={eligibleIds?.includes(die.id)}
+      lockedReason={lockedIds.includes(die.id) ? lockedReasons[die.id] ?? 'This die is required.' : undefined}
       ineligibleReason={restrictToEligible && !eligibleIds?.includes(die.id) ? ineligibleReasons[die.id] ?? 'This face is not eligible.' : undefined}
       allowIneligibleClick={actionableIneligibleIds.includes(die.id)} showCapacity={showCapacity} onClick={() => onClick(die.id)}
       onDropOffer={onDropOffer ? offerId => onDropOffer(offerId, die.id) : undefined} />;

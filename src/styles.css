@@ -98,6 +98,7 @@ button { font: inherit; }
 .die.eligible { border-color: var(--mantine-color-teal-4); box-shadow: 0 0 0 1px var(--mantine-color-teal-6); }
 .die.ineligible { opacity: .42; filter: saturate(.55); cursor: not-allowed; }
 .die.ineligible:not([aria-disabled="true"]) { cursor: pointer; }
+.die.locked-selection { cursor: default; }
 .die.pulse { animation: pulse 300ms ease-in-out; }
 .die.rolling { animation: shake 180ms ease-in-out 2; }
 .die:focus-visible, .offer:focus-visible, .scorecard-row:focus-visible { outline: 2px solid var(--mantine-color-teal-4); outline-offset: -2px; }

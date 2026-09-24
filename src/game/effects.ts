@@ -10,7 +10,7 @@ import { hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
 import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, handContributions } from './scoring';
 import { boardSnapshot } from './telemetry';
-import { activeEncounterDice, bossTypeForRound, createBossRuntime, createCursedDie, isCursedDie } from './bosses';
+import { activeEncounterDice, bossTypeForRound, createBossRuntime, createCursedDie, isCursedDie, requiredEncounterDieIds } from './bosses';
 import { encounterNode, flameNodeAfter, shopNodeBefore } from './progression';
 import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameStateBase, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, RunNode, ScoreSource } from './types';
 
@@ -480,7 +480,8 @@ export class Resolver {
 
   manualReroll(dieIds: number[]): void {
     const ids = [...dieIds].sort((a, b) => a - b);
-    const startedDeadBoard = !hasPlayableHand(activeEncounterDice(this.state), this.state.consumed);
+    const requiredDieIds = requiredEncounterDieIds(this.state);
+    const startedDeadBoard = !hasPlayableHand(activeEncounterDice(this.state), this.state.consumed, requiredDieIds);
     this.state.manualRerollsRemaining -= ids.length;
     const round = this.state.stats.rounds.at(-1)!;
     round.lastAction = 'MANUAL_REROLL'; round.manualRerollChargesSpent += ids.length; round.manualRerollActions++;
@@ -491,7 +492,7 @@ export class Resolver {
     this.rollBatch(ids, 'Manual gameplay reroll', 'gameplay', true);
     this.drain();
     this.deployPendingWardenDice();
-    if (startedDeadBoard && (this.state.score >= this.state.target || hasPlayableHand(activeEncounterDice(this.state), this.state.consumed))) {
+    if (startedDeadBoard && (this.state.score >= this.state.target || hasPlayableHand(activeEncounterDice(this.state), this.state.consumed, requiredDieIds))) {
       record.rescuedDeadBoard = true; round.deadBoardRescues++; this.state.stats.deadBoardRescues++;
       this.emit({ type: 'DEAD_BOARD_RESCUED', dieIds: ids, message: 'Dead board rescued' });
     }
@@ -748,7 +749,7 @@ export class Resolver {
         interestGold: payout.interestGold, bossRewardGold: payout.bossRewardGold, goldenGold, jackpotGold,
         message: `${bossType ? 'Boss defeated' : `Round ${this.state.round} cleared`} · Gold ${summary.goldBefore} → ${summary.goldAfter} (+${totalGoldEarned})` });
     } else if (this.state.boss?.type !== 'warden' || (this.state.boss.startingDieId !== null && this.state.boss.pendingReinforcements === 0)) {
-      if (hasPlayableHand(activeEncounterDice(this.state), this.state.consumed)) return;
+      if (hasPlayableHand(activeEncounterDice(this.state), this.state.consumed, requiredEncounterDieIds(this.state))) return;
       if (this.state.manualRerollsRemaining > 0) { this.emit({ type: 'DEAD_BOARD', message: `No playable hands — ${this.state.manualRerollsRemaining} rerolls remain` }); return; }
       this.resolveBust();
     }

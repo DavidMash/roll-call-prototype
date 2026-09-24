@@ -44,7 +44,11 @@ async function perform(page: Page, game: GameState, action: Action) {
   } else if (action.type === 'CONTINUE_ROUND_SUMMARY') {
     await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
   } else if (action.type === 'MANUAL_REROLL') {
-    await selectDice(page, action.dieIds);
+    for (const physical of activeEncounterDice(game)) {
+      const target = page.getByRole('button', { name: new RegExp(`^${physical.owner === 'boss' ? 'Cursed Die' : `Die ${physical.id + 1}`},`) });
+      const selected = await target.getAttribute('aria-pressed') === 'true';
+      if (selected !== action.dieIds.includes(physical.id)) await target.click();
+    }
     await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();
   } else if (action.type === 'RETRY_ROUND') {
     await page.getByRole('button', { name: /^RETRY ROUND / }).click();
