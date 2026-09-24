@@ -28,7 +28,8 @@ function deadBoardRun(rescue: boolean) {
   for (let i = 0; i < 1000; i++) {
     let game = newRun(`dead-manual-${i}`).state;
     const prefix: Action[] = [];
-    for (let round = 1; round <= 5 && game.phase !== 'lost'; round++) {
+    // This fixture targets ordinary dead-board behavior; stay before the first Boss.
+    for (let round = 1; round <= 2 && game.phase !== 'lost'; round++) {
       let attempt = structuredClone(game);
       const attemptActions: Action[] = [];
       while (attempt.phase === 'round') {

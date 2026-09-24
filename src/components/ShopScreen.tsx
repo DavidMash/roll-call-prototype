@@ -11,6 +11,7 @@ import { RoundPayoutSummary } from './RoundPayoutSummary';
 import { ScoreResolution } from './ScoreResolution';
 import { StokeFlameModal } from './StokeFlameModal';
 import { TrainingCard } from './TrainingCard';
+import { BossPreview } from './BossPanel';
 
 interface SaleTarget { face: Rank; enhancement: Enhancement; stacks: number; proceeds: number }
 const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
@@ -87,6 +88,7 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
         </Group>
       </Paper> : <RoundPayoutSummary board={board} />}</div>
       {busy && <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} showXMult={hasXMultFlame(board.dice, board.bonfires)} />}
+      <BossPreview board={board} />
       <Paper p="xs" className="shop-section">
         <Group justify="space-between" className="section-heading">
           <Text fw={700} size="sm" tt="uppercase" lts=".08em">Hand Training</Text>

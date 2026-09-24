@@ -18,6 +18,36 @@ round(Pips × Mult × XMult)
 
 Every XMult contribution is a multiplicative factor composed centrally. Ordinary Mult still comes from trained hand Base Mult.
 
+## Run map and Boss cadence
+
+Progression follows one linear route: `Round 1 → Shop → Round 2 → Shop → Boss Round 3 → Flame Reward → Shop`, then repeats. A short local map transition plays before every normal Round, Boss, Shop, and Flame Reward. It only shows nearby nodes, uses stable node IDs such as `round:2`, `boss:3`, `flame:after-round:3`, and `shop:before-round:4`, advances automatically, offers a skip control, and collapses under reduced-motion preferences. Normal Rounds use blue (`#3B82F6`), Shops gold (`#F59E0B`), and Flame Rewards red (`#EF4444`) over the shared dark foundation.
+
+Every third round is a Boss encounter. Boss assignment is deterministic from the run seed and uses shuffled bags of Caller, Warden, and Hexer: all three occur before a reshuffle and the boundary cannot repeat the previous boss. The assignment is stored in run state, shown in the immediately preceding Shop, and remains stable on retry. Boss rounds use the normal round target and the same payout; clearing one opens the every-third-round Flame Reward and then the Shop.
+
+### The Caller
+
+The Caller (purple/magenta) chooses from Ones through Sixes, Pair, Two Pair, Three of a Kind, Small Straight, and Full House. The exact call is hidden in the Shop preview and revealed at encounter start. It must be completed within three manual plays. A matching Jumping Bean free play satisfies the call without decrementing the counter; a nonmatching Bean does not decrement it. The third nonmatching manual play Busts the attempt even if its score reached the target.
+
+### The Warden
+
+The Warden (cyan/teal) begins with all five player dice locked. The player chooses one starting die, which receives a real gameplay roll. Checkpoints at 10%, 25%, 45%, and 70% of the normal target, rounded to the game’s five-point target interval, each release one chosen reinforcement with another real gameplay roll. Crossed checkpoints queue, so multiple releases are chosen one at a time. Locked dice cannot be played, manually rerolled, trigger roll effects, or contribute attached Flames; global Bonfires remain active. A retry resets the encounter and asks for a new starting choice.
+
+### The Hexer
+
+The Hexer (toxic green) adds a temporary boss-owned seven-sided Cursed Die that must participate in every manual hand and can otherwise roll and reroll normally. Its authored faces are:
+
+| Face | Enhancements |
+|---:|---|
+| 1 | Golden 1, Jumping Bean, Weighted → 6 |
+| 2 | Bonus 1, Jumping Bean, Weighted → 5 |
+| 3 | Workout 1, Jumping Bean, Weighted → 4 |
+| 4 | Missing Link, Mirror, Bump |
+| 5 | Workout 5, Mirror, Bump |
+| 6 | Workout 10, Mirror, Bump |
+| 7 | Bonus 5, Jackpot 1, Sticky 1, Mirror |
+
+Bump advances `4 → 5 → 6 → 7` and does not wrap. Seven is a genuine rank, so Small Straight recognizes `4-5-6-7`, Large Straight recognizes `3-4-5-6-7`, and Mirror on 7 participates in matching-group hands normally. The Cursed Die cannot own Flames and is removed after a clear or failed-attempt rollback.
+
 ## Gold and the Shop
 
 The normal Shop is the only place Gold is spent. It contains enhancement purchases and refreshes, Hand Training, paid dice rerolls, Flame Stoke controls, and life restoration. Gold may still be earned during scoring.
@@ -94,7 +124,7 @@ Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a f
 
 ## Telemetry and validation
 
-Run Info exports schema 14 / `bust-shop-interest-v2`, including round attempts, Bust detection, checkpoint restoration, Shop return/retry status, life transitions, restore purchases, enhancement sales, Vintage growth, source-aware hand scores, Flame factors, Stoke records, and Shop spending.
+Run Info exports schema 15 / `boss-map-progression-v1`, including route transitions, destination and direction, boss assignment and attempts, Caller calls and outcomes, Warden thresholds and choices, Hexer die activity, round attempts, Bust/checkpoint lifecycle, economy, enhancements, Vintage growth, source-aware scoring, Flame factors, Stoke records, and Shop spending.
 
 Validation commands:
 

@@ -3,10 +3,12 @@ import { combinationsForHand, handStats, HANDS, LOWER_HAND_IDS, UPPER_HAND_IDS }
 import { activeFlameId, activeFlameInvestment, wellTrainedMultiplier } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
+import { activeEncounterDice } from '../game/bosses';
 
 function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
   title: string; hands: HandId[]; board: Board; selection: Selection; busy: boolean; onSelect: (hand: HandId) => void;
 }) {
+  const encounterDice = activeEncounterDice(board);
   return <section className="scorecard-section" aria-labelledby={`scorecard-${title.toLowerCase()}`}>
     <Text id={`scorecard-${title.toLowerCase()}`} className="scorecard-section-title" size="xs" fw={700} tt="uppercase">{title}</Text>
     <div className="scorecard-rows">
@@ -14,14 +16,14 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
         const definition = HANDS[hand];
         const stats = handStats(hand, board.handLevels[hand]);
         const consumed = board.consumed.includes(hand);
-        const compatible = combinationsForHand(board.dice, hand)
+        const compatible = combinationsForHand(encounterDice, hand)
           .some(set => selection.dieIds.every(dieId => set.includes(dieId)));
         const playable = !consumed && compatible;
         const selected = selection.hand === hand;
         const targeted = board.targetPracticeHand === hand;
-        const selectedWellTrained = selected ? selection.dieIds.find(id => activeFlameId(board.dice[id].flame) === 'wellTrained') : undefined;
+        const selectedWellTrained = selected ? selection.dieIds.find(id => activeFlameId(board.dice.find(die => die.id === id)?.flame) === 'wellTrained') : undefined;
         const wellTrained = board.bonfires.includes('wellTrained') ? wellTrainedMultiplier(100, board.handPlayCounts[hand])
-          : selectedWellTrained === undefined ? 1 : wellTrainedMultiplier(activeFlameInvestment(board.dice[selectedWellTrained].flame), board.handPlayCounts[hand]);
+          : selectedWellTrained === undefined ? 1 : wellTrainedMultiplier(activeFlameInvestment(board.dice.find(die => die.id === selectedWellTrained)?.flame), board.handPlayCounts[hand]);
         const showWellTrained = selected && (board.bonfires.includes('wellTrained') || selectedWellTrained !== undefined);
         const hotTarget = board.hotStreakGoal === hand;
         const score = board.scoreByHand[hand];
@@ -51,8 +53,9 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
 export function HandScorecard({ board, selection, busy, onSelect, onClear }: {
   board: Board; selection: Selection; busy: boolean; onSelect: (hand: HandId) => void; onClear: () => void;
 }) {
+  const encounterDice = activeEncounterDice(board);
   const hasCompatibleHand = [...UPPER_HAND_IDS, ...LOWER_HAND_IDS].some(hand => !board.consumed.includes(hand)
-    && combinationsForHand(board.dice, hand).some(set => selection.dieIds.every(id => set.includes(id))));
+    && combinationsForHand(encounterDice, hand).some(set => selection.dieIds.every(id => set.includes(id))));
   return <div className="scorecard">
     <Group justify="space-between" className="scorecard-header">
       <Text fw={700} size="sm" tt="uppercase" lts=".08em">Scorecard</Text>

@@ -6,13 +6,30 @@ import { handOptions, handStats, HANDS, HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import { enhancementCost, ENHANCEMENTS } from '../src/game/enhancements';
 import { CONFIG } from '../src/game/config';
-import type { Enhancement, GameState } from '../src/game/types';
+import type { Action, Enhancement, GameState } from '../src/game/types';
+import { activeEncounterDice } from '../src/game/bosses';
 
 function bestHand(game: GameState) {
-  return handOptions(game.dice, game.consumed).filter(option => !option.consumed)
+  const dice = activeEncounterDice(game);
+  const callerHand = game.boss?.type === 'caller' && !game.boss.satisfied ? game.boss.calledHand : null;
+  return handOptions(dice, game.consumed).filter(option => !option.consumed)
     .flatMap(option => option.combinations.map(dieIds => ({ hand: option.id, dieIds,
-      score: handScore(game.dice, option.id, dieIds, game.handLevels[option.id]).score })))
-    .sort((a, b) => b.score - a.score)[0];
+      score: handScore(dice, option.id, dieIds, game.handLevels[option.id]).score })))
+    .filter(choice => game.boss?.type !== 'hexer' || choice.dieIds.includes(game.boss.cursedDieId))
+    .sort((a, b) => (callerHand ? Number(b.hand === callerHand) - Number(a.hand === callerHand) : 0) || b.score - a.score)[0];
+}
+function automaticAction(game: GameState): Action {
+  const warden = game.boss?.type === 'warden' ? game.boss : null;
+  if (warden && (warden.startingDieId === null || warden.pendingReinforcements > 0)) {
+    const die = game.dice.find(item => item.owner === 'player' && !warden.activeDieIds.includes(item.id))!;
+    return { type: 'CHOOSE_WARDEN_DIE', dieId: die.id };
+  }
+  const choice = bestHand(game);
+  if (game.boss?.type === 'caller' && !game.boss.satisfied && choice?.hand !== game.boss.calledHand && game.manualRerollsRemaining > 0) {
+    return { type: 'MANUAL_REROLL', dieIds: [activeEncounterDice(game)[0].id] };
+  }
+  return choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
+    : { type: 'MANUAL_REROLL', dieIds: [activeEncounterDice(game)[0].id] };
 }
 async function ready(page: Page) { await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0); }
 async function matchBoard(page: Page, game: GameState) {
@@ -27,24 +44,43 @@ async function matchBoard(page: Page, game: GameState) {
     await expect(page.getByRole('button', { name: /^Reroll Selected/ })).toHaveCount(0);
   } else if (game.phase === 'round') await expect(page.getByTestId('stat-rerolls').getByText(String(game.manualRerollsRemaining), { exact: true })).toBeVisible();
   else await expect(page.getByTestId('stat-rerolls')).toHaveCount(0);
-  for (const die of game.dice) await expect(page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1}, face ${die.value},`) })).toBeVisible();
+  for (const die of game.dice) await expect(page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`}, face ${die.value},`) })).toBeVisible();
 }
 async function playBest(page: Page, game: GameState): Promise<GameState> {
-  const choice = bestHand(game);
-  if (!choice) {
-    await page.getByRole('button', { name: /^Die 1,/ }).click();
-    await page.getByRole('button', { name: 'Reroll Selected — 1', exact: true }).click();
-    const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+  const warden = game.boss?.type === 'warden' ? game.boss : null;
+  if (warden && (warden.startingDieId === null || warden.pendingReinforcements > 0)) {
+    const die = game.dice.find(item => item.owner === 'player' && !warden.activeDieIds.includes(item.id))!;
+    await page.getByRole('button', { name: new RegExp(`Deploy D${die.id + 1}`) }).click();
+    const next = dispatch(game, { type: 'CHOOSE_WARDEN_DIE', dieId: die.id }).state;
     await matchBoard(page, next);
     return next;
   }
-  await page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) }).click();
+  const choice = bestHand(game);
+  if (game.boss?.type === 'caller' && !game.boss.satisfied && choice?.hand !== game.boss.calledHand && game.manualRerollsRemaining > 0) {
+    const die = activeEncounterDice(game)[0];
+    await page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},`) }).click();
+    await page.getByRole('button', { name: /^Reroll Selected/ }).click();
+    const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [die.id] }).state;
+    await matchBoard(page, next);
+    return next;
+  }
+  if (!choice) {
+    const die = activeEncounterDice(game)[0];
+    await page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) }).click();
+    await page.getByRole('button', { name: 'Reroll Selected — 1', exact: true }).click();
+    const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [die.id] }).state;
+    await matchBoard(page, next);
+    return next;
+  }
+  const handRow = page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) });
+  await handRow.click();
   for (const die of game.dice) {
-    const target = page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},`) });
+    const target = page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) });
     const selected = await target.getAttribute('aria-pressed') === 'true';
     if (selected !== choice.dieIds.includes(die.id)) await target.click();
   }
-  await page.getByRole('button', { name: 'PLAY', exact: true }).click();
+  if (await handRow.getAttribute('aria-pressed') !== 'true') await handRow.click();
+  await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
   const next = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }).state;
   await matchBoard(page, next);
   return next;
@@ -54,9 +90,7 @@ function findShopSeed(required?: Enhancement) {
     const seed = `browser-${i}`;
     let game = newRun(seed).state;
     for (let step = 0; step < 12 && game.phase === 'round'; step++) {
-      const choice = bestHand(game);
-      game = dispatch(game, choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
-        : { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+      game = dispatch(game, automaticAction(game)).state;
     }
     if (game.phase === 'shop' && !game.bust && (!required || game.shop!.offers.some(offer => offer.enhancement === required))) return seed;
   }
@@ -67,9 +101,7 @@ function findTrainingSeed() {
     const seed = `training-browser-${i}`;
     let game = newRun(seed).state;
     for (let step = 0; step < 12 && game.phase === 'round'; step++) {
-      const choice = bestHand(game);
-      game = dispatch(game, choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
-        : { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+      game = dispatch(game, automaticAction(game)).state;
     }
     if (game.phase !== 'shop' || game.bust) continue;
     for (const offer of game.shop!.trainingOffers) {
@@ -89,9 +121,7 @@ function findStickyStackSeed() {
     const seed = `sticky-stack-${i}`;
     let game = newRun(seed).state;
     for (let step = 0; step < 12 && game.phase === 'round'; step++) {
-      const choice = bestHand(game);
-      game = dispatch(game, choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
-        : { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+      game = dispatch(game, automaticAction(game)).state;
     }
     if (game.phase !== 'shop' || game.bust) continue;
     const first = game.shop!.offers.find(offer => offer.enhancement === 'sticky');
@@ -108,9 +138,7 @@ function findCapacitySeed() {
     let game = newRun(seed).state;
     for (let round = 1; round <= 2; round++) {
       for (let step = 0; step < 12 && game.phase === 'round'; step++) {
-        const choice = bestHand(game);
-        game = dispatch(game, choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
-          : { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+        game = dispatch(game, automaticAction(game)).state;
       }
       if (game.phase !== 'shop' || game.bust) break;
       if (round === 1) game = dispatch(game, { type: 'NEXT_ROUND' }).state;
@@ -133,9 +161,7 @@ function findHighInterestSeed() {
     for (let step = 0; step < 250 && game.phase !== 'lost'; step++) {
       if (game.lastRoundPayout && game.lastRoundPayout.interestGold >= 6) return seed;
       if (game.phase === 'round') {
-        const choice = bestHand(game);
-        game = dispatch(game, choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
-          : { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+        game = dispatch(game, automaticAction(game)).state;
       } else if (game.phase === 'shop') {
         game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' }).state;
       } else if (game.phase === 'flameReward') {
@@ -307,7 +333,7 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   const scored = handScore(game.dice, hand, option.combinations[0], 2);
   expect(Number.isInteger(scored.rawScore)).toBe(false);
   await expect(page.getByText(`${scored.pips} pips × ${scored.multiplier} = ${scored.score} points`, { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'PLAY', exact: true }).click();
+  await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
   const result = dispatch(game, { type: 'PLAY', hand, dieIds: option.combinations[0] });
   const finalizedIndex = result.events.findIndex(event => event.type === 'HAND_SCORE_FINALIZED');
   for (let index = 0; index <= finalizedIndex; index++) {
@@ -652,8 +678,13 @@ test('purchased Jumping Bean visibly triggers and rerolls on the next initial ga
   const beanIndex = next.events.findIndex(event => event.type === 'JUMPING_BEAN_FREE_PLAY');
   expect(beanIndex).toBeGreaterThanOrEqual(0);
   for (let index = 0; index <= beanIndex; index++) {
-    await expect(page.getByText(`EVENT ${index + 1} / ${next.events.length}`, { exact: true })).toBeVisible();
-    if (index < beanIndex) await page.clock.runFor(CONFIG.tickMs.normal);
+    if (next.events[index].type === 'MAP_TRANSITION') {
+      await expect(page.getByTestId('run-map-transition')).toBeVisible();
+      await page.getByTestId('run-map-transition').getByRole('button', { name: 'Skip', exact: true }).click();
+    } else {
+      await expect(page.getByText(`EVENT ${index + 1} / ${next.events.length}`, { exact: true })).toBeVisible();
+      if (index < beanIndex) await page.clock.runFor(CONFIG.tickMs.normal);
+    }
   }
   const freePlay = next.events[beanIndex];
   await expect(page.locator('.resolution .score-tick')).toHaveText(`JUMPING BEAN · FREE ${HANDS[freePlay.hand!].name.toUpperCase()}`);

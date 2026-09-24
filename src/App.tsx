@@ -9,6 +9,8 @@ import { RoundScreen } from './components/RoundScreen';
 import { RestoreLivesModal } from './components/RestoreLivesModal';
 import { ShopScreen } from './components/ShopScreen';
 import { TopHud } from './components/TopHud';
+import { RunMapTransition } from './components/RunMapTransition';
+import { screenTheme } from './game/screenThemes';
 import { emptySelection } from './game/selection';
 import type { Action } from './game/types';
 import { useGame } from './useGame';
@@ -30,6 +32,7 @@ export default function App() {
   const [restoreLivesOpen, setRestoreLivesOpen] = useState(false);
   const game = useGame(initialSeed, speed);
   const { board, state, busy, event, progress } = game;
+  const theme = screenTheme(board);
   function submit(action: Action) {
     if (busy) return;
     game.submit(action);
@@ -46,12 +49,14 @@ export default function App() {
     setRestoreLivesOpen(false);
     game.restart(seed);
   }
-  return <Container size={1180} px={{ base: 6, sm: 'sm' }} py={8} className="app-container">
+  return <Container size={1180} px={{ base: 6, sm: 'sm' }} py={8} className="app-container screen-theme"
+    data-screen-theme={theme.id} style={{ '--screen-primary': theme.accent, '--screen-secondary': theme.accentStrong } as React.CSSProperties}>
     <TopHud board={board} speed={speed} setSpeed={setSpeed} openRunInfo={() => setRunInfoOpen(true)} openHelp={() => setHelpOpen(true)}
       openRestoreLives={() => setRestoreLivesOpen(true)} />
     {game.error && <Alert color="orange" withCloseButton onClose={game.clearError} my="xs" py={5} title="Action unavailable">{game.error}</Alert>}
     <main className="main-content">
-      {board.phase === 'flameReward' && board.flameReward ? <FlameRewardScreen board={board} event={event} busy={busy} progress={progress}
+      {event?.type === 'MAP_TRANSITION' ? <RunMapTransition seed={state.seed} event={event} onSkip={game.skipTransition} />
+        : board.phase === 'flameReward' && board.flameReward ? <FlameRewardScreen board={board} event={event} busy={busy} progress={progress}
         selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} />
         : board.phase === 'shop' && board.shop ? <ShopScreen board={board} event={event} busy={busy} progress={progress}
         selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} submit={submit} skip={game.skip} />

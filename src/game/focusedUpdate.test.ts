@@ -12,7 +12,7 @@ function sequence(...values: number[]): RandomSource {
   return { next: () => values[index++] ?? 0 };
 }
 const upperByRank: Record<Rank, HandId> = {
-  1: 'ones', 2: 'twos', 3: 'threes', 4: 'fours', 5: 'fives', 6: 'sixes',
+  1: 'ones', 2: 'twos', 3: 'threes', 4: 'fours', 5: 'fives', 6: 'sixes', 7: 'sixes',
 };
 function baseState(): GameState {
   const game = newRun('focused-update', constant(0.2)).state;

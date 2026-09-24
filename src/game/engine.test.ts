@@ -352,6 +352,7 @@ describe('Jumping Bean', () => {
 describe('round boundaries and losing', () => {
   it('awards flat base, unused-reroll Gold, and capped interest before the shop', () => {
     let game = newRun('balance-flow', constant()).state;
+    game.bossSchedule = {};
     let earned = 0;
     for (let round = 1; round <= 4; round++) {
       const result = play(game, 'fiveKind', [0, 1, 2, 3, 4]);
@@ -582,6 +583,7 @@ describe('reproducibility and end-to-end domain flow', () => {
     let clears = 0, losses = 0, purchases = 0;
     for (let seed = 0; seed < 20; seed++) {
       let game = newRun(`audit-${seed}`).state;
+      game.bossSchedule = {};
       for (let step = 0; step < 200 && game.phase !== 'lost'; step++) {
         if (game.phase === 'round') {
           const options = handOptions(game.dice, game.consumed).filter(option => !option.consumed);

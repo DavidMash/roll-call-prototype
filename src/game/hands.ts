@@ -1,4 +1,4 @@
-import { activeFace, RANKS } from './dice';
+import { activeFace, HAND_RANKS } from './dice';
 import { stacks } from './enhancements';
 import type { Die, HandId, HandOption, Rank } from './types';
 
@@ -70,14 +70,14 @@ function subsets<T>(items: T[], size: number): T[][] {
 function straightValid(dice: Die[], size: number): boolean {
   const natural = dice.filter(die => !stacks(activeFace(die), 'missingLink')).map(die => die.value);
   if (new Set(natural).size !== natural.length) return false;
-  return RANKS.slice(0, 7 - size).some(start => natural.every(rank => rank >= start && rank < start + size));
+  return HAND_RANKS.slice(0, HAND_RANKS.length - size + 1).some(start => natural.every(rank => rank >= start && rank < start + size));
 }
 function matchingGroupsValid(dice: Die[], groups: readonly number[]): boolean {
   const natural = dice.filter(die => !stacks(activeFace(die), 'mirror')).map(die => die.value);
   // Distinct ranks own disjoint slots. Every Mirror fills exactly one remaining slot.
   function assign(group: number, ranks: Rank[]): boolean {
     if (group === groups.length) return natural.every(rank => ranks.includes(rank));
-    return RANKS.some(rank => !ranks.includes(rank)
+    return HAND_RANKS.some(rank => !ranks.includes(rank)
       && natural.filter(value => value === rank).length <= groups[group]
       && assign(group + 1, [...ranks, rank]));
   }

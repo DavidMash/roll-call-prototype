@@ -6,6 +6,7 @@ import { HANDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
 import { scoringPlaybackRun } from './scoringFixture';
+import { activeEncounterDice } from '../src/game/bosses';
 
 async function ready(page: Page) {
   await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
@@ -15,13 +16,15 @@ async function selectDice(page: Page, dieIds: number[]) {
 }
 async function perform(page: Page, game: GameState, action: Action) {
   if (action.type === 'PLAY') {
-    await page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) }).click();
+    const row = page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) });
+    await row.click();
     for (const physical of game.dice) {
-      const target = page.getByRole('button', { name: new RegExp(`^Die ${physical.id + 1},`) });
+      const target = page.getByRole('button', { name: new RegExp(`^${physical.owner === 'boss' ? 'Cursed Die' : `Die ${physical.id + 1}`},`) });
       const selected = await target.getAttribute('aria-pressed') === 'true';
       if (selected !== action.dieIds.includes(physical.id)) await target.click();
     }
-    await page.getByRole('button', { name: 'PLAY', exact: true }).click();
+    if (await row.getAttribute('aria-pressed') !== 'true') await row.click();
+    await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
   } else if (action.type === 'BUY') {
     const offer = game.shop!.offers.find(item => item.id === action.offerId)!;
     await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button').click();
@@ -40,6 +43,8 @@ async function perform(page: Page, game: GameState, action: Action) {
     await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();
   } else if (action.type === 'RETRY_ROUND') {
     await page.getByRole('button', { name: /^RETRY ROUND / }).click();
+  } else if (action.type === 'CHOOSE_WARDEN_DIE') {
+    await page.getByRole('button', { name: new RegExp(`Deploy D${action.dieId + 1}`) }).click();
   } else throw new Error(`Unexpected fixture action: ${action.type}`);
   await ready(page);
   return dispatch(game, action).state;
@@ -55,19 +60,21 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
   for (const action of fixture.actions) game = await perform(page, game, action);
   expect(game).toEqual(fixture.game);
   await expect(page.getByTestId('stat-score').getByText(String(game.score), { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: new RegExp(`^${HANDS[fixture.action.hand].name} `) }).click();
+  const finalRow = page.getByRole('button', { name: new RegExp(`^${HANDS[fixture.action.hand].name} `) });
+  await finalRow.click();
   for (const physical of game.dice) {
-    const target = page.getByRole('button', { name: new RegExp(`^Die ${physical.id + 1},`) });
+    const target = page.getByRole('button', { name: new RegExp(`^${physical.owner === 'boss' ? 'Cursed Die' : `Die ${physical.id + 1}`},`) });
     const selected = await target.getAttribute('aria-pressed') === 'true';
     if (selected !== fixture.action.dieIds.includes(physical.id)) await target.click();
   }
-  const deterministicPreview = handScore(game.dice, fixture.action.hand, fixture.action.dieIds, game.handLevels[fixture.action.hand]);
+  if (await finalRow.getAttribute('aria-pressed') !== 'true') await finalRow.click();
+  const deterministicPreview = handScore(activeEncounterDice(game), fixture.action.hand, fixture.action.dieIds, game.handLevels[fixture.action.hand]);
   await expect(page.locator('.selection-preview')).toContainText(`${deterministicPreview.pips} pips × ${deterministicPreview.multiplier}`);
 
   await page.clock.install({ time: new Date('2026-09-17T12:00:00Z') });
   await page.clock.pauseAt(new Date('2026-09-17T12:00:01Z'));
   await page.getByText('NORMAL', { exact: true }).click();
-  await page.getByRole('button', { name: 'PLAY', exact: true }).click();
+  await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
   const observed: [string, number, number][] = [];
   for (const [index, event] of fixture.result.events.entries()) {
     await expect(page.getByText(`EVENT ${index + 1} / ${fixture.result.events.length}`, { exact: true })).toBeVisible();

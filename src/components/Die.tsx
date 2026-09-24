@@ -43,9 +43,9 @@ export function Die({ die, selected, highlighted, rolling, ability, flameAbility
   return <div className="die-wrap">
     <div className="ability-label" aria-hidden="true">{activeAbility.toUpperCase()}</div>
     <Paper component="button" type="button" withBorder
-      className={`die ${selected ? 'selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${ability || flameAbility ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''}`}
+      className={`die ${die.owner === 'boss' ? 'cursed-die' : ''} ${selected ? 'selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${ability || flameAbility ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''}`}
       disabled={disabled} aria-disabled={interactionDisabled} aria-pressed={selected} title={ineligibleReason}
-      aria-label={`Die ${die.id + 1}, face ${die.value}, ${pips} scoring pips${flameId ? `, Flame ${FLAMES[flameId].name}, ${flameInvestment} of 100 Gold` : ''}${enhancementSummary ? `, ${enhancementSummary}` : ''}${ineligibleReason ? `, unavailable: ${ineligibleReason}` : ''}`}
+      aria-label={`${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`}, face ${die.value}, ${pips} scoring pips${flameId ? `, Flame ${FLAMES[flameId].name}, ${flameInvestment} of 100 Gold` : ''}${enhancementSummary ? `, ${enhancementSummary}` : ''}${ineligibleReason ? `, unavailable: ${ineligibleReason}` : ''}`}
       onClick={() => { if (!interactionDisabled) onClick(); }}
       onDragOver={event => { if (!disabled && onDropOffer) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }}
       onDrop={event => {
@@ -54,7 +54,7 @@ export function Die({ die, selected, highlighted, rolling, ability, flameAbility
         const raw = event.dataTransfer.getData('application/x-roll-call-offer');
         if (raw !== '' && Number.isInteger(Number(raw))) onDropOffer(Number(raw));
       }}>
-      <Text size="xs" c="dimmed" className="die-id">D{die.id + 1}</Text>
+      <Text size="xs" c="dimmed" className="die-id">{die.owner === 'boss' ? 'CURSED' : `D${die.id + 1}`}</Text>
       {flameId && <Tooltip label={`${FLAMES[flameId].name}: ${flameInvestment}/100 Gold. ${FLAMES[flameId].description}`} multiline maw={320} withArrow>
         <Badge className="flame-badge" size="xs" color="orange" variant="light">🔥 {FLAMES[flameId].shortName} {flameInvestment}</Badge>
       </Tooltip>}

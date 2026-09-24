@@ -3,7 +3,9 @@ import type { Board, GameState, RunStats } from './types';
 
 export function createStats(seed: string): RunStats {
   return {
-    seed, roundReached: 1, rounds: [], handsPlayed: {}, purchases: [], sales: [], busts: [], lifeRestores: [], vintageGrowth: [],
+    seed, roundReached: 1, rounds: [], handsPlayed: {}, purchases: [], sales: [], busts: [],
+    mapTransitions: [], bossEncounters: [], callerEvents: [], wardenEvents: [], hexerEvents: [],
+    lifeRestores: [], vintageGrowth: [],
     trainingPurchases: [], trainingPurchasesTotal: 0, trainingGoldSpent: 0,
     flameAcquisitions: [], flameSkips: [], flameStokes: [], totalFlameInvestment: 0,
     bonfiresCreated: [], flameTriggers: {},
@@ -26,18 +28,18 @@ export function createStats(seed: string): RunStats {
   };
 }
 export function boardSnapshot(state: GameState): Board {
-  const { phase, round, target, score, gold, lives, livesPurchasedThisRun, roundAttemptNumber, bust, flameTutorial,
+  const { phase, round, target, score, gold, lives, livesPurchasedThisRun, roundAttemptNumber, bossSchedule, boss, currentNodeId, bust, flameTutorial,
     manualRerollsRemaining, dice, bonfires, chargeXMult,
     chargeArmed, hotStreakGoal, hotStreakCharges, lifetimeNormalShopGoldSpent, consumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, lastRoundPayout, shop, flameReward } = state;
-  return structuredClone({ phase, round, target, score, gold, lives, livesPurchasedThisRun, roundAttemptNumber, bust, flameTutorial,
+  return structuredClone({ phase, round, target, score, gold, lives, livesPurchasedThisRun, roundAttemptNumber, bossSchedule, boss, currentNodeId, bust, flameTutorial,
     manualRerollsRemaining, dice, bonfires,
     chargeXMult, chargeArmed, hotStreakGoal, hotStreakCharges, lifetimeNormalShopGoldSpent, consumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, lastRoundPayout, shop, flameReward });
 }
 export function exportRun(state: GameState) {
-  return { schemaVersion: 14, scoringModel: 'bust-shop-interest-v2', ...state.stats,
+  return { schemaVersion: 15, scoringModel: 'boss-map-progression-v1', ...state.stats,
     bonfires: [...state.bonfires], finalHandLevels: structuredClone(state.handLevels),
-    finalFlames: state.dice.map(die => ({ dieId: die.id, flame: activeFlameId(die.flame), investedGold: die.flame?.investedGold ?? 0 })),
+    finalFlames: state.dice.filter(die => die.owner === 'player').map(die => ({ dieId: die.id, flame: activeFlameId(die.flame), investedGold: die.flame?.investedGold ?? 0 })),
     rngState: state.rngState, board: boardSnapshot(state) };
 }

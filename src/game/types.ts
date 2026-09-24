@@ -1,4 +1,6 @@
-export type Rank = 1 | 2 | 3 | 4 | 5 | 6;
+export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type BossType = 'caller' | 'warden' | 'hexer';
+export type RunNodeType = 'normal_round' | 'boss_round' | 'shop' | 'flame_reward';
 export type Enhancement =
   | 'bonus' | 'jumpingBean' | 'golden' | 'workout'
   | 'missingLink' | 'mirror' | 'magnetic' | 'sticky' | 'slippy'
@@ -16,6 +18,30 @@ export type HandPlaySource = 'manual' | 'jumpingBean';
 export type GoldSource = 'golden' | 'jackpot' | 'enhancementSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'flameBonus';
 export type GoldSpendSource = 'enhancement' | 'shopDiceReroll' | 'enhancementReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore';
 export type HandLevels = Record<HandId, number>;
+
+export interface RunNode {
+  id: string;
+  type: RunNodeType;
+  round: number;
+  boss?: BossType;
+}
+export interface CallerBossState {
+  type: 'caller';
+  calledHand: HandId;
+  playsRemaining: number;
+  satisfied: boolean;
+  satisfyingSource: HandPlaySource | null;
+}
+export interface WardenBossState {
+  type: 'warden';
+  checkpoints: number[];
+  activeDieIds: number[];
+  startingDieId: number | null;
+  reachedCheckpoints: number;
+  pendingReinforcements: number;
+}
+export interface HexerBossState { type: 'hexer'; cursedDieId: number }
+export type BossRuntimeState = CallerBossState | WardenBossState | HexerBossState;
 
 export interface XMultFactor {
   source: Flame | 'charge';
@@ -62,6 +88,7 @@ export interface Face {
   rank: Rank;
   workoutPips: number;
   enhancements: Partial<Record<Enhancement, number>>;
+  weightedTarget?: Rank;
   vintageSellValue?: number;
 }
 export interface ActiveFlame { id: Flame; investedGold: number }
@@ -75,7 +102,7 @@ export interface StandaloneScoreRecord {
   rawScore: number;
   score: number;
 }
-export interface Die { id: number; value: Rank; faces: Face[]; flame: ActiveFlame | null }
+export interface Die { id: number; value: Rank; faces: Face[]; flame: ActiveFlame | null; owner: 'player' | 'boss' }
 export interface Offer { id: number; enhancement: Enhancement; purchased: boolean }
 export interface TrainingOffer { hand: HandId; purchased: boolean }
 export interface Shop { offers: Offer[]; trainingOffers: TrainingOffer[]; diceRerolls: number; offerRerolls: number }
@@ -98,6 +125,9 @@ export interface Board {
   lives: number;
   livesPurchasedThisRun: number;
   roundAttemptNumber: number;
+  bossSchedule: Partial<Record<number, BossType>>;
+  boss: BossRuntimeState | null;
+  currentNodeId: string;
   bust: BustSummary | null;
   flameTutorial: { pendingDieId: number | null; completed: boolean };
   manualRerollsRemaining: number;
@@ -156,6 +186,42 @@ export interface BustRecord {
   livesBefore: number; livesAfter: number; checkpointRestored: boolean; returnedToShop: boolean;
   retryStarted: boolean; runEndedNoLives: boolean;
 }
+export interface MapTransitionRecord {
+  fromNode: string | null;
+  toNode: string;
+  nodeType: RunNodeType;
+  round: number;
+  boss?: BossType;
+  direction: 'forward' | 'backward';
+}
+export interface BossEncounterRecord {
+  boss: BossType;
+  round: number;
+  attempt: number;
+  started: boolean;
+  cleared: boolean;
+  busted: boolean;
+  calledHand?: HandId;
+  callerManualPlays?: number;
+  callerSatisfied?: boolean;
+  callerSatisfyingSource?: HandPlaySource | null;
+  wardenCheckpoints?: number[];
+  wardenStartingDieId?: number | null;
+  wardenActiveDiceAtEnd?: number;
+}
+export interface CallerEventRecord {
+  round: number; attempt: number; calledHand: HandId; playsRemaining: number;
+  satisfied: boolean; source: HandPlaySource; expired: boolean;
+}
+export interface WardenEventRecord {
+  round: number; attempt: number; kind: 'starting_die' | 'checkpoint' | 'reinforcement';
+  threshold?: number; dieId?: number; activeDice: number;
+}
+export interface HexerEventRecord {
+  round: number; attempt: number;
+  kind: 'roll' | 'manual_reroll' | 'hand' | 'jumping_bean' | 'workout' | 'seven' | 'mirror_seven' | 'jackpot' | 'sticky';
+  face?: Rank; hand?: HandId; amount?: number;
+}
 export interface LifeRestorePurchase {
   round: number; purchaseNumber: number; cost: number; goldBefore: number; goldAfter: number;
   livesBefore: number; livesAfter: number; lifetimeSpendBefore: number; lifetimeSpendAfter: number;
@@ -204,6 +270,11 @@ export interface RunStats {
   purchases: Purchase[];
   sales: EnhancementSale[];
   busts: BustRecord[];
+  mapTransitions: MapTransitionRecord[];
+  bossEncounters: BossEncounterRecord[];
+  callerEvents: CallerEventRecord[];
+  wardenEvents: WardenEventRecord[];
+  hexerEvents: HexerEventRecord[];
   lifeRestores: LifeRestorePurchase[];
   vintageGrowth: VintageGrowthRecord[];
   trainingPurchases: TrainingPurchase[];
@@ -258,7 +329,7 @@ export interface RunStats {
   resolutionError: string | null;
 }
 export type EventType =
-  | 'ROUND_STARTED' | 'HAND_STARTED' | 'ABILITY_TRIGGERED' | 'ABILITY_CHECKED' | 'ABILITY_EVALUATED'
+  | 'MAP_TRANSITION' | 'ROUND_STARTED' | 'BOSS_STARTED' | 'BOSS_CLEARED' | 'HAND_STARTED' | 'ABILITY_TRIGGERED' | 'ABILITY_CHECKED' | 'ABILITY_EVALUATED'
   | 'HAND_PIPS_CHANGED' | 'HAND_MULTIPLIER_CHANGED' | 'HITCHHIKER_ADDED_PIPS'
   | 'HAND_SCORE_FINALIZED' | 'STANDALONE_SCORE_CALCULATED' | 'SCORE_ROUNDING_AUDIT'
   | 'POST_HAND_REROLLS_SKIPPED' | 'SCORE_ADDED' | 'GOLD_ADDED' | 'WORKOUT_INCREMENTED'
@@ -270,6 +341,7 @@ export type EventType =
   | 'ENHANCEMENT_SOLD' | 'VINTAGE_GROWN' | 'MAGNETIC_ATTRACTION' | 'BUMP_ROLL'
   | 'JUMPING_BEAN_FREE_PLAY' | 'JUMPING_BEAN_FOLLOWUP'
   | 'ROUND_BUST' | 'SHOP_REOPENED_AFTER_BUST' | 'ROUND_RETRY_STARTED' | 'LIFE_RESTORED' | 'FLAME_TUTORIAL_COMPLETED'
+  | 'CALLER_CALLED' | 'CALLER_CHANGED' | 'WARDEN_CHECKPOINT' | 'WARDEN_REINFORCEMENT' | 'CURSED_DIE_ROLLED'
   | 'RUN_LOST' | 'RESOLUTION_ERROR' | 'MANUAL_REROLL_STARTED' | 'DEAD_BOARD' | 'DEAD_BOARD_RESCUED';
 export interface EventRecord {
   id: number;
@@ -279,6 +351,11 @@ export interface EventRecord {
   dieIds?: number[];
   enhancement?: Enhancement;
   flame?: Flame;
+  boss?: BossType;
+  fromNode?: string | null;
+  toNode?: string;
+  nodeType?: RunNodeType;
+  direction?: 'forward' | 'backward';
   hand?: HandId;
   playSource?: HandPlaySource;
   handConsumed?: boolean;
@@ -325,6 +402,7 @@ export type Action =
   | { type: 'CONTINUE_FLAME_REWARD' }
   | { type: 'RESTORE_LIFE' }
   | { type: 'DISMISS_FLAME_TUTORIAL' }
+  | { type: 'CHOOSE_WARDEN_DIE'; dieId: number }
   | { type: 'RETRY_ROUND' }
   | { type: 'REROLL_DICE' }
   | { type: 'REROLL_OFFERS' }

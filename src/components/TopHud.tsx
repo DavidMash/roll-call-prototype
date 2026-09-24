@@ -3,6 +3,7 @@ import { CONFIG } from '../game/config';
 import type { Board } from '../game/types';
 import { FLAMES } from '../game/flames';
 import type { PlaybackSpeed } from '../useGame';
+import { BOSSES } from '../game/bosses';
 
 function HudStat({ testId, icon, label, value }: { testId: string; icon: string; label: string; value: number }) {
   return <div className="hud-stat" data-testid={testId} aria-label={`${label} ${value}`}>
@@ -35,7 +36,8 @@ export function TopHud({ board, speed, setSpeed, openRunInfo, openHelp, openRest
           : <div className="hud-lives" data-testid="stat-lives" aria-label={`${board.lives} of ${CONFIG.maxLives} lives`}>{hearts}</div>}
         {board.phase === 'shop' || board.phase === 'flameReward'
           ? <div className="hud-phase" aria-label={board.phase === 'shop' ? 'Shop phase' : 'Flame Reward phase'}>{board.phase === 'shop' ? 'SHOP' : 'FLAME'}</div>
-          : board.phase === 'round' ? <HudStat testId="stat-rerolls" icon="↻" label="Rerolls" value={board.manualRerollsRemaining} />
+          : board.phase === 'round' ? <><HudStat testId="stat-rerolls" icon="↻" label="Rerolls" value={board.manualRerollsRemaining} />
+            {board.boss && <div className="hud-phase" data-testid="boss-hud-label">{BOSSES[board.boss.type].name}</div>}</>
             : <div className="hud-phase" aria-label={board.phase === 'bust' ? 'Bust phase' : 'Run ended'}>{board.phase === 'bust' ? 'BUST' : 'OVER'}</div>}
       </Group>
       <Group className="hud-actions" gap={6} wrap="nowrap">

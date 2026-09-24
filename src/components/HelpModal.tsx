@@ -9,18 +9,24 @@ const HAND_RULES: Record<HandId, string> = {
   ones: 'Any non-empty subset of Ones.', twos: 'Any non-empty subset of Twos.', threes: 'Any non-empty subset of Threes.',
   fours: 'Any non-empty subset of Fours.', fives: 'Any non-empty subset of Fives.', sixes: 'Any non-empty subset of Sixes.',
   pair: 'Two matching dice.', twoPair: 'Two different pairs using four dice.', threeKind: 'Three matching dice.',
-  smallStraight: 'Four consecutive ranks.', fullHouse: 'Three of one rank and two of another.', fourKind: 'Four matching dice.',
-  largeStraight: 'Five consecutive ranks.', fiveKind: 'Five matching dice.',
+  smallStraight: 'Four consecutive ranks; The Hexer enables 4-5-6-7.', fullHouse: 'Three of one rank and two of another.', fourKind: 'Four matching dice.',
+  largeStraight: 'Five consecutive ranks; The Hexer enables 3-4-5-6-7.', fiveKind: 'Five matching dice.',
 };
 
 export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   return <Modal opened={opened} onClose={onClose} title="How to Play" size="xl" centered transitionProps={{ duration: 0 }}>
     <Tabs defaultValue="play">
-      <Tabs.List grow><Tabs.Tab value="play">How to Play</Tabs.Tab><Tabs.Tab value="scoring">Scoring</Tabs.Tab><Tabs.Tab value="hands">Hands</Tabs.Tab><Tabs.Tab value="enhancements">Enhancements</Tabs.Tab><Tabs.Tab value="flames">Flames</Tabs.Tab><Tabs.Tab value="shop">Shop</Tabs.Tab></Tabs.List>
+      <Tabs.List grow><Tabs.Tab value="play">How to Play</Tabs.Tab><Tabs.Tab value="bosses">Bosses</Tabs.Tab><Tabs.Tab value="scoring">Scoring</Tabs.Tab><Tabs.Tab value="hands">Hands</Tabs.Tab><Tabs.Tab value="enhancements">Enhancements</Tabs.Tab><Tabs.Tab value="flames">Flames</Tabs.Tab><Tabs.Tab value="shop">Shop</Tabs.Tab></Tabs.List>
       <Tabs.Panel value="play" pt="md">
         <Text size="sm">Select a scorecard hand and its participating dice, then Play. Every hand is consumed after use. Each round grants {CONFIG.manualRerollsPerRound} manual die rerolls, charged once per selected die.</Text>
         <Text size="sm" mt="sm">A run starts with 3 lives. With no playable hands and no rerolls, the attempt Busts: one life is lost, failed-attempt gains are rolled back, and the exact pre-attempt Shop reopens without refreshing. Prepare there, then use Retry Round to begin another deterministic attempt of the same round. A Bust at 1 life leaves 0 and ends the run instead.</Text>
         <Text size="sm" mt="sm">Every clear pays 5 base Gold, 1 per unused reroll, and +1 interest per 5 Gold held, capped at +10 when holding 50 Gold. Scoring Gold is included in the pre-payout interest snapshot; the payout itself is not. Every third clear then adds a +5 Flame Bonus.</Text>
+      </Tabs.Panel>
+      <Tabs.Panel value="bosses" pt="md">
+        <Text size="sm">The local run map appears between destinations. Every third round is a Boss; clearing it uses the normal target and payout, then opens the usual Flame Reward and Shop. Bosses come from a seeded no-repeat bag: all three appear once before reshuffling, with no immediate repeat.</Text>
+        <div className="help-item"><Text fw={800}>THE CALLER</Text><Text size="sm">Complete the revealed called hand within three manual plays. A matching Jumping Bean free play satisfies the call without reducing the count. Three nonmatching manual plays Bust the attempt.</Text></div>
+        <div className="help-item"><Text fw={800}>THE WARDEN</Text><Text size="sm">Choose one starting die; the other four are locked. Crossing 10%, 25%, 45%, and 70% of the target releases one chosen die with a real gameplay roll. Multiple crossed checkpoints queue and resolve one choice at a time. Locked dice cannot play, reroll, or use attached Flames; Bonfires remain global.</Text></div>
+        <div className="help-item"><Text fw={800}>THE HEXER</Text><Text size="sm">A temporary boss-owned seven-sided Cursed Die joins the pool and must participate in every manual hand. It can reroll and use its authored enhancements normally. Bump advances 4→5→6→7 without wrapping; rank 7 supports 4-5-6-7 and 3-4-5-6-7 straights and Mirror matching. The die disappears after clear or rollback.</Text></div>
       </Tabs.Panel>
       <Tabs.Panel value="scoring" pt="md"><Text size="sm"><strong>Score = round(Pips × Mult × XMult).</strong> Ordinary Mult comes only from the played hand’s trained Base Mult. Every applicable Flame produces a factor and resolves as <strong>XMult ×= factor</strong>; multiple factors multiply and XMult defaults to ×1.</Text><Text size="sm" mt="sm">Jumping Bean free-plays the matching Upper hand using only its die. It uses trained hand stats, counts in play history, can trigger applicable Flames and Vintage, and may chain, but never consumes that hand’s normal use. Hitchhiker does not join a Bean free play.</Text></Tabs.Panel>
       <Tabs.Panel value="hands" pt="md"><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{HAND_IDS.map(hand => { const stats = handStats(hand, 1); return <div key={hand} className="help-item"><Group justify="space-between"><Text size="sm" fw={700}>{HANDS[hand].name}</Text><Text size="xs" c="violet">{stats.basePips} · ×{stats.baseMultiplier}</Text></Group><Text size="xs" c="dimmed">{HAND_RULES[hand]}</Text></div>; })}</SimpleGrid></Tabs.Panel>

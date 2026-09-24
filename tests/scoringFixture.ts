@@ -4,6 +4,7 @@ import { enhancementCost, stacks } from '../src/game/enhancements';
 import { handOptions } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, Enhancement } from '../src/game/types';
+import { activeEncounterDice } from '../src/game/bosses';
 
 // Reach the enhanced board through real seeded plays and purchases, without UI injection.
 export function scoringPlaybackRun() {
@@ -34,17 +35,29 @@ export function scoringPlaybackRun() {
         } else action = { type: 'NEXT_ROUND' };
         }
       } else {
-        const choices = handOptions(game.dice, game.consumed).filter(option => !option.consumed)
+        const warden = game.boss?.type === 'warden' ? game.boss : null;
+        if (warden && (warden.startingDieId === null || warden.pendingReinforcements > 0)) {
+          action = { type: 'CHOOSE_WARDEN_DIE', dieId: game.dice.find(die => die.owner === 'player' && !warden.activeDieIds.includes(die.id))!.id };
+          const result = dispatch(game, action);
+          actions.push(action);
+          game = result.state;
+          continue;
+        }
+        const dice = activeEncounterDice(game);
+        const callerHand = game.boss?.type === 'caller' && !game.boss.satisfied ? game.boss.calledHand : null;
+        const choices = handOptions(dice, game.consumed).filter(option => !option.consumed)
           .flatMap(option => option.combinations.map(dieIds => ({ type: 'PLAY' as const, hand: option.id, dieIds })))
-          .sort((a, b) => handScore(game.dice, b.hand, b.dieIds).score - handScore(game.dice, a.hand, a.dieIds).score);
+          .filter(choice => game.boss?.type !== 'hexer' || choice.dieIds.includes(game.boss.cursedDieId))
+          .sort((a, b) => (callerHand ? Number(b.hand === callerHand) - Number(a.hand === callerHand) : 0)
+            || handScore(dice, b.hand, b.dieIds).score - handScore(dice, a.hand, a.dieIds).score);
         const scoringAction = choices.find(choice =>
           choice.dieIds.some(id => stacks(activeFace(game.dice[id]), 'bonus'))
-          && game.dice.some(die => !choice.dieIds.includes(die.id) && stacks(activeFace(die), 'hitchhiker')));
+          && dice.some(die => !choice.dieIds.includes(die.id) && stacks(activeFace(die), 'hitchhiker')));
         if (scoringAction) {
           const result = dispatch(game, scoringAction);
           if (result.events.some(event => event.enhancement === 'hitchhiker')) return { seed, actions, game, action: scoringAction, result };
         }
-        action = choices[0] ?? { type: 'MANUAL_REROLL', dieIds: [0] };
+        action = choices[0] ?? { type: 'MANUAL_REROLL', dieIds: [dice[0].id] };
       }
       const result = dispatch(game, action);
       if (result.error) throw new Error(result.error);

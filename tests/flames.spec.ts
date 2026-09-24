@@ -1,18 +1,34 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { dispatch, newRun } from '../src/game/engine';
-import { FLAMES } from '../src/game/flames';
+import { FLAMES, wellTrainedMultiplier } from '../src/game/flames';
 import { handOptions, HANDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
+import { activeEncounterDice } from '../src/game/bosses';
 
 function bestHand(game: GameState, requiredDie?: number) {
-  return handOptions(game.dice, game.consumed).filter(option => !option.consumed)
+  const dice = activeEncounterDice(game);
+  const callerHand = game.boss?.type === 'caller' && !game.boss.satisfied ? game.boss.calledHand : null;
+  return handOptions(dice, game.consumed).filter(option => !option.consumed)
     .flatMap(option => option.combinations
       .filter(dieIds => requiredDie === undefined || dieIds.includes(requiredDie))
       .map(dieIds => ({ hand: option.id, dieIds,
-        score: handScore(game.dice, option.id, dieIds, game.handLevels[option.id]).score })))
-    .sort((a, b) => b.score - a.score)[0];
+        score: handScore(dice, option.id, dieIds, game.handLevels[option.id]).score })))
+    .filter(choice => game.boss?.type !== 'hexer' || choice.dieIds.includes(game.boss.cursedDieId))
+    .sort((a, b) => (callerHand ? Number(b.hand === callerHand) - Number(a.hand === callerHand) : 0) || b.score - a.score)[0];
+}
+function automaticAction(game: GameState): Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'CHOOSE_WARDEN_DIE' }> {
+  const warden = game.boss?.type === 'warden' ? game.boss : null;
+  if (warden && (warden.startingDieId === null || warden.pendingReinforcements > 0)) {
+    return { type: 'CHOOSE_WARDEN_DIE', dieId: game.dice.find(die => die.owner === 'player' && !warden.activeDieIds.includes(die.id))!.id };
+  }
+  const choice = bestHand(game);
+  if (game.boss?.type === 'caller' && !game.boss.satisfied && choice?.hand !== game.boss.calledHand && game.manualRerollsRemaining > 0) {
+    return { type: 'MANUAL_REROLL', dieIds: [activeEncounterDice(game)[0].id] };
+  }
+  return choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
+    : { type: 'MANUAL_REROLL', dieIds: [activeEncounterDice(game)[0].id] };
 }
 
 function flameSeed() {
@@ -21,10 +37,7 @@ function flameSeed() {
     let game = newRun(seed).state;
     for (let step = 0; step < 250; step++) {
       if (game.phase === 'round') {
-        const choice = bestHand(game);
-        if (choice) game = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }).state;
-        else if (game.manualRerollsRemaining > 0) game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
-        else break;
+        game = dispatch(game, automaticAction(game)).state;
       } else if (game.phase === 'shop') game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' }).state;
       else if (game.phase === 'flameReward') {
         if (game.flameReward!.offers.some(offer => offer.flame === 'wellTrained')) return seed;
@@ -39,19 +52,23 @@ async function ready(page: Page) {
   await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
 }
 
-async function perform(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'NEXT_ROUND' | 'RETRY_ROUND' }>) {
+async function perform(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'CHOOSE_WARDEN_DIE' | 'NEXT_ROUND' | 'RETRY_ROUND' }>) {
   if (action.type === 'PLAY') {
-    await page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) }).click();
+    const handRow = page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) });
+    await handRow.click();
     for (const die of game.dice) {
-      const target = page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},`) });
+      const target = page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) });
       const selected = await target.getAttribute('aria-pressed') === 'true';
       if (selected !== action.dieIds.includes(die.id)) await target.click();
     }
-    await page.getByRole('button', { name: 'PLAY', exact: true }).click();
+    if (await handRow.getAttribute('aria-pressed') !== 'true') await handRow.click();
+    await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
   } else if (action.type === 'MANUAL_REROLL') {
-    await page.getByRole('button', { name: /^Die 1,/ }).click();
+    const die = game.dice.find(item => item.id === action.dieIds[0])!;
+    await page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) }).click();
     await page.getByRole('button', { name: 'Reroll Selected — 1', exact: true }).click();
-  } else await page.getByRole('button', { name: action.type === 'RETRY_ROUND' ? `RETRY ROUND ${game.round}` : 'NEXT ROUND', exact: true }).click();
+  } else if (action.type === 'CHOOSE_WARDEN_DIE') await page.getByRole('button', { name: new RegExp(`Deploy D${action.dieId + 1}`) }).click();
+  else await page.getByRole('button', { name: action.type === 'RETRY_ROUND' ? `RETRY ROUND ${game.round}` : 'NEXT ROUND', exact: true }).click();
   const next = dispatch(game, action).state;
   await ready(page);
   return next;
@@ -70,10 +87,7 @@ async function reachReward(page: Page, seed: string) {
 
   while (game.phase !== 'flameReward') {
     if (game.phase === 'round') {
-      const choice = bestHand(game);
-      game = await perform(page, game, choice
-        ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
-        : { type: 'MANUAL_REROLL', dieIds: [0] });
+      game = await perform(page, game, automaticAction(game));
     } else if (game.phase === 'shop') game = await perform(page, game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' });
     else throw new Error(`Unexpected phase before Flame Reward: ${game.phase}`);
   }
@@ -149,7 +163,8 @@ test('Flame Reward has fixed offers, preserves faces, reveals XMult, and preview
     const selected = await target.getAttribute('aria-pressed') === 'true';
     if (selected !== choice.dieIds.includes(die.id)) await target.click();
   }
-  await expect(page.getByTestId(`well-trained-preview-${choice.hand}`)).toHaveText('WELL TRAINED ×1');
+  const wellTrained = Number(wellTrainedMultiplier(2, game.handPlayCounts[choice.hand]).toFixed(4));
+  await expect(page.getByTestId(`well-trained-preview-${choice.hand}`)).toHaveText(`WELL TRAINED ×${wellTrained}`);
   await expect(page.locator('.selection-preview')).toContainText('XMult');
 
   await page.getByRole('button', { name: /^Die 1,/ }).click();

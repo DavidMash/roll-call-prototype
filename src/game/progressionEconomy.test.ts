@@ -95,7 +95,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     expect(result.state.handLevels.ones).toBe(2);
     expect(result.state.stats.goldBySource).toMatchObject({ roundBase: 0, unusedRerolls: 0, interest: 0, flameBonus: 0 });
     expect(result.state.flameReward).toBeNull();
-    expect(result.events.slice(-2).map(event => event.type)).toEqual(['ROUND_BUST', 'SHOP_REOPENED_AFTER_BUST']);
+    expect(result.events.slice(-3).map(event => event.type)).toEqual(['ROUND_BUST', 'MAP_TRANSITION', 'SHOP_REOPENED_AFTER_BUST']);
     expect(result.state.stats.busts.at(-1)).toMatchObject({ round: 2, attempt: 1, checkpointRestored: true, returnedToShop: true });
   });
 

@@ -6,6 +6,7 @@ import { activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasOwned
 import { HANDS, initialHandLevels, initialHandPlayCounts, isValidSelection } from './hands';
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
+import { activeEncounterDice, bossSchedule } from './bosses';
 import type { Action, Board, GameState, RandomSource, Resolution } from './types';
 
 const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`${seed}:round:${round}:attempt:${attempt}`);
@@ -13,6 +14,7 @@ const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`
 function normalizedState(state: GameState): GameState {
   const next = structuredClone(state);
   for (const die of next.dice) {
+    die.owner ??= 'player';
     for (const face of die.faces) {
       delete (face.enhancements as Record<string, number | undefined>).multiplier;
       for (const id of ENHANCEMENT_IDS) {
@@ -34,6 +36,9 @@ function normalizedState(state: GameState): GameState {
   if (next.shop) next.shop.offers = next.shop.offers.filter(offer => isEnhancement(offer.enhancement));
   if (next.flameReward) next.flameReward.offers = next.flameReward.offers.filter(offer => isFlame(offer.flame));
   next.stats.jumpingBeanFreePlays ??= [];
+  next.bossSchedule ??= bossSchedule(next.seed);
+  next.boss ??= null;
+  next.currentNodeId ??= '';
   next.lives = Math.max(0, Math.min(CONFIG.maxLives, Math.floor(next.lives ?? CONFIG.maxLives)));
   next.livesPurchasedThisRun = Math.max(0, Math.floor(next.livesPurchasedThisRun ?? 0));
   next.roundAttemptNumber = Math.max(1, Math.floor(next.roundAttemptNumber ?? 1));
@@ -41,6 +46,11 @@ function normalizedState(state: GameState): GameState {
   next.flameTutorial ??= { pendingDieId: null, completed: false };
   next.roundCheckpoint ??= null;
   next.stats.sales ??= [];
+  next.stats.mapTransitions ??= [];
+  next.stats.bossEncounters ??= [];
+  next.stats.callerEvents ??= [];
+  next.stats.wardenEvents ??= [];
+  next.stats.hexerEvents ??= [];
   next.stats.busts ??= [];
   next.stats.busts = next.stats.busts.map(bust => ({ ...bust,
     checkpointRestored: bust.checkpointRestored ?? true,
@@ -58,20 +68,29 @@ function normalizedState(state: GameState): GameState {
 }
 
 export function validateAction(state: Board, action: Action): string | null {
+  if (action.type === 'CHOOSE_WARDEN_DIE') {
+    if (state.phase !== 'round' || state.boss?.type !== 'warden') return 'A Warden reinforcement choice is not pending.';
+    const die = state.dice.find(item => item.id === action.dieId && item.owner === 'player');
+    if (!die || state.boss.activeDieIds.includes(die.id)) return 'Choose a locked player die.';
+    if (state.boss.startingDieId !== null && state.boss.pendingReinforcements < 1) return 'A Warden reinforcement choice is not pending.';
+    return null;
+  }
   if (action.type === 'RETRY_ROUND') return state.phase === 'shop' && !!state.shop && !!state.bust && state.lives > 0
     ? null : 'A returned Bust Shop is required to retry the round.';
   if (action.type === 'MANUAL_REROLL') {
     if (state.phase !== 'round') return 'Manual rerolls can only be used during a gameplay round.';
     if (!action.dieIds.length) return 'Select at least one die to reroll.';
     if (new Set(action.dieIds).size !== action.dieIds.length
-      || action.dieIds.some(id => !Number.isInteger(id) || !state.dice.some(die => die.id === id))) return 'Select distinct physical dice that are on the board.';
+      || action.dieIds.some(id => !Number.isInteger(id) || !activeEncounterDice(state).some(die => die.id === id))) return 'Select distinct unlocked dice that are on the board.';
     if (action.dieIds.length > state.manualRerollsRemaining) return 'Not enough manual rerolls for these dice.';
     return null;
   }
   if (action.type === 'PLAY') {
     if (state.phase !== 'round') return 'Hands can only be played during a round.';
     if (state.consumed.includes(action.hand)) return 'That hand has already been consumed.';
-    if (!isValidSelection(state.dice, action.hand, action.dieIds)) return 'Select a complete valid set of participating dice.';
+    if (state.boss?.type === 'warden' && (state.boss.startingDieId === null || state.boss.pendingReinforcements > 0)) return 'Choose the Warden die awaiting deployment first.';
+    if (state.boss?.type === 'hexer' && !action.dieIds.includes(state.boss.cursedDieId)) return 'The Cursed Die must participate in every hand.';
+    if (!isValidSelection(activeEncounterDice(state), action.hand, action.dieIds)) return 'Select a complete valid set of participating dice.';
     return null;
   }
   if (action.type === 'TOGGLE_CHARGE') {
@@ -83,7 +102,7 @@ export function validateAction(state: Board, action: Action): string | null {
   }
   if (action.type === 'STOKE_FLAME') {
     if (state.phase !== 'shop' || !state.shop) return 'Flames can only be Stoked in a normal Shop.';
-    const die = state.dice.find(item => item.id === action.dieId);
+    const die = state.dice.find(item => item.id === action.dieId && item.owner === 'player');
     if (!die?.flame || !activeFlameId(die.flame)) return 'Choose an active Flame to invest in.';
     if (!Number.isInteger(action.amount) || action.amount <= 0) return 'Stoking requires a positive whole Gold amount.';
     if (action.amount > state.gold) return 'Not enough gold to stoke that Ember.';
@@ -95,7 +114,7 @@ export function validateAction(state: Board, action: Action): string | null {
     if (action.type === 'CHOOSE_FLAME') {
       if (state.flameReward.acquired) return 'Only one new Flame may be acquired per reward.';
       const offer = state.flameReward.offers.find(item => item.id === action.offerId);
-      if (!offer || !state.dice.some(die => die.id === action.dieId)) return 'Choose an available Flame and a physical die.';
+      if (!offer || !state.dice.some(die => die.id === action.dieId && die.owner === 'player')) return 'Choose an available Flame and a physical die.';
       if (hasOwnedFlame(state as GameState, offer.flame)) return 'That Flame type is already owned by this run.';
     }
     return null;
@@ -150,6 +169,7 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
   const state: GameState = {
     phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: CONFIG.baseTarget,
     score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, livesPurchasedThisRun: 0, roundAttemptNumber: 1,
+    bossSchedule: bossSchedule(seed), boss: null, currentNodeId: '',
     bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], chargeXMult: 1,
     chargeArmed: false, hotStreakGoal: null, hotStreakCharges: 0, lifetimeNormalShopGoldSpent: 0, consumed: [], shop: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
@@ -301,6 +321,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         next.flameTutorial = { pendingDieId: null, completed: true };
         resolver.emit({ type: 'FLAME_TUTORIAL_COMPLETED', message: 'First-Flame shop tutorial completed' });
         break;
+      case 'CHOOSE_WARDEN_DIE': resolver.chooseWardenDie(action.dieId); break;
       case 'RETRY_ROUND': resolver.startRound(true); break;
       case 'NEXT_ROUND': next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
     }

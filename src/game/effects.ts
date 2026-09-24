@@ -1,5 +1,5 @@
 import { CONFIG, interestForGold, roundReward, targetForRound } from './config';
-import { activeFace, oppositeFace, rollDie, scoringPips } from './dice';
+import { activeFace, rollDie, scoringPips, weightedSourceFace } from './dice';
 import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, stacks } from './enhancements';
 import {
   activeFlameId, activeFlameInvestment, captureHandStart, chargeGainPerRoll,
@@ -10,12 +10,14 @@ import { hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
 import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, handContributions } from './scoring';
 import { boardSnapshot } from './telemetry';
-import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameStateBase, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, ScoreSource } from './types';
+import { activeEncounterDice, bossTypeForRound, createBossRuntime, createCursedDie, isCursedDie } from './bosses';
+import { encounterNode, flameNodeAfter, shopNodeBefore } from './progression';
+import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameStateBase, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, RunNode, ScoreSource } from './types';
 
 type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number };
 type RollContext = 'gameplay' | 'shop' | 'flameReward';
 const NORMAL_SHOP_SPEND = new Set<GoldSpendSource>(['enhancement', 'shopDiceReroll', 'enhancementReroll', 'handTraining', 'lifeRestore']);
-const UPPER_HAND_BY_FACE: Record<import('./types').Rank, HandId> = {
+const UPPER_HAND_BY_FACE: Partial<Record<import('./types').Rank, HandId>> = {
   1: 'ones', 2: 'twos', 3: 'threes', 4: 'fours', 5: 'fives', 6: 'sixes',
 };
 
@@ -32,6 +34,14 @@ export class Resolver {
     const record = { ...event, ...(this.handAccumulator ? { handScore: structuredClone(this.handAccumulator) } : {}), id: this.state.history.length, round: this.state.round };
     this.state.history.push(record);
     this.events.push({ ...record, board: boardSnapshot(this.state) });
+  }
+  mapTransition(node: RunNode, direction: 'forward' | 'backward' = 'forward'): void {
+    const fromNode = this.state.currentNodeId || null;
+    this.state.currentNodeId = node.id;
+    this.state.stats.mapTransitions.push({ fromNode, toNode: node.id, nodeType: node.type,
+      round: node.round, boss: node.boss, direction });
+    this.emit({ type: 'MAP_TRANSITION', fromNode, toNode: node.id, nodeType: node.type,
+      boss: node.boss, direction, message: `${fromNode ?? 'Run start'} → ${node.id}` });
   }
   log(event: Omit<EventRecord, 'id' | 'round'>): void {
     this.state.history.push({ ...event, id: this.state.history.length, round: this.state.round });
@@ -91,8 +101,28 @@ export class Resolver {
     if (round.firstCrossedScore === null && this.state.score >= this.state.target) round.firstCrossedScore = this.state.score;
     round.finalScore = this.state.score;
     this.emit({ type: 'SCORE_ADDED', amount, source, hand, dieIds, message });
+    this.updateWardenCheckpoints();
+  }
+  private updateWardenCheckpoints(): void {
+    const boss = this.state.boss;
+    if (boss?.type !== 'warden') return;
+    while (boss.reachedCheckpoints < boss.checkpoints.length
+      && this.state.score >= boss.checkpoints[boss.reachedCheckpoints]) {
+      const threshold = boss.checkpoints[boss.reachedCheckpoints++];
+      boss.pendingReinforcements++;
+      this.state.stats.wardenEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
+        kind: 'checkpoint', threshold, activeDice: boss.activeDieIds.length });
+      this.emit({ type: 'WARDEN_CHECKPOINT', boss: 'warden', amount: threshold,
+        message: `Warden checkpoint ${threshold} reached · choose a reinforcement` });
+    }
   }
   whenScored(dieId: number, snapshot: Face, hand: HandId, playSource: HandPlaySource, participation: 'selected' | 'hitchhiker'): void {
+    if (this.state.boss?.type === 'hexer' && dieId === this.state.boss.cursedDieId) {
+      this.state.stats.hexerEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
+        kind: playSource === 'jumpingBean' ? 'jumping_bean' : 'hand', face: snapshot.rank, hand });
+      if (snapshot.rank === 7 && stacks(snapshot, 'mirror')) this.state.stats.hexerEvents.push({
+        round: this.state.round, attempt: this.state.roundAttemptNumber, kind: 'mirror_seven', face: 7, hand });
+    }
     const golden = stacks(snapshot, 'golden');
     if (golden) {
       this.state.stats.triggers.golden = (this.state.stats.triggers.golden ?? 0) + 1;
@@ -101,14 +131,16 @@ export class Resolver {
     const workout = stacks(snapshot, 'workout');
     if (workout) {
       this.state.stats.triggers.workout = (this.state.stats.triggers.workout ?? 0) + 1;
-      const live = this.state.dice[dieId].faces[snapshot.rank - 1];
+      const live = this.state.dice.find(die => die.id === dieId)!.faces[snapshot.rank - 1];
       const before = scoringPips(live);
       live.workoutPips += workout * CONFIG.workoutIncrement;
       this.emit({ type: 'WORKOUT_INCREMENTED', enhancement: 'workout', dieIds: [dieId], face: snapshot.rank,
         message: `D${dieId + 1} face ${snapshot.rank} Workout ×${workout}: ${before} → ${scoringPips(live)} future pips` });
     }
+    if (workout && this.state.boss?.type === 'hexer' && dieId === this.state.boss.cursedDieId) this.state.stats.hexerEvents.push({
+      round: this.state.round, attempt: this.state.roundAttemptNumber, kind: 'workout', face: snapshot.rank, hand, amount: workout });
     if (stacks(snapshot, 'vintage')) {
-      const live = this.state.dice[dieId].faces[snapshot.rank - 1];
+      const live = this.state.dice.find(die => die.id === dieId)!.faces[snapshot.rank - 1];
       const before = Math.max(0, live.vintageSellValue ?? 0);
       live.vintageSellValue = before + 3;
       this.state.stats.triggers.vintage = (this.state.stats.triggers.vintage ?? 0) + 1;
@@ -133,6 +165,8 @@ export class Resolver {
       const payout = count * CONFIG.jackpotGold;
       this.state.stats.triggers.jackpot = (this.state.stats.triggers.jackpot ?? 0) + 1;
       this.addGold(payout, `D${die.id + 1} Jackpot ×${count}: +${payout} gold`, 'jackpot', die.id, 'jackpot', face.rank);
+      if (isCursedDie(die)) this.state.stats.hexerEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
+        kind: 'jackpot', face: face.rank, amount: payout });
       total += payout;
     }
     if (total) this.log({ type: 'ABILITY_EVALUATED', enhancement: 'jackpot', message: `Total Jackpot payout: +${total} gold` });
@@ -144,7 +178,7 @@ export class Resolver {
     let sourceDie: number | null = dieId;
     if (this.state.bonfires.includes('charge')) { gain = 1; sourceDie = null; }
     else {
-      const flame = this.state.dice[dieId].flame;
+      const flame = this.state.dice.find(die => die.id === dieId)?.flame;
       if (activeFlameId(flame) === 'charge') gain = chargeGainPerRoll(activeFlameInvestment(flame));
     }
     if (gain <= 0) return;
@@ -159,26 +193,32 @@ export class Resolver {
     if (!ids.length) return;
     this.emit({ type: 'DICE_REROLL_STARTED', dieIds: ids, message: `${reason}: ${ids.map(id => `D${id + 1}`).join(', ')}` });
     const rolling = new Set(ids);
-    const anchors = context === 'gameplay' ? this.state.dice.filter(die => !rolling.has(die.id) && stacks(activeFace(die), 'magnetic')).map(die => die.id) : [];
+    const anchors = context === 'gameplay' ? activeEncounterDice(this.state).filter(die => !rolling.has(die.id) && stacks(activeFace(die), 'magnetic')).map(die => die.id) : [];
     if (anchors.length) {
       this.state.stats.magneticAnchorBatches++;
       this.log({ type: 'ABILITY_EVALUATED', enhancement: 'magnetic', dieIds: anchors, message: `Held Magnetic anchor${anchors.length > 1 ? 's' : ''}: ${anchors.map(id => `D${id + 1}`).join(', ')}` });
     }
     const results = ids.map(dieId => {
-      const die = this.state.dice[dieId];
+      const die = this.state.dice.find(item => item.id === dieId)!;
       const before = die.value;
       const bumped = context === 'gameplay' && stacks(activeFace(die), 'bump') > 0;
-      if (bumped) return { dieId, before, value: (before === 6 ? 1 : before + 1) as import('./types').Rank, weighted: false, bumped, attracted: false };
+      if (bumped) return { dieId, before, value: (isCursedDie(die) ? Math.min(7, before + 1) : before === 6 ? 1 : before + 1) as import('./types').Rank, weighted: false, bumped, attracted: false };
       const destinations = anchors.length ? die.faces.filter(face => stacks(face, 'magnetic')) : [];
       if (destinations.length) return { dieId, before, value: destinations[randomIndex(this.rng, destinations.length)].rank, weighted: false, bumped: false, attracted: true };
       return { dieId, before, ...rollDie(die, this.rng), bumped: false, attracted: false };
     });
     const triggers: RollTrigger[] = [];
     for (const result of results) {
-      const die = this.state.dice[result.dieId];
+      const die = this.state.dice.find(item => item.id === result.dieId)!;
       die.value = result.value;
       const face = structuredClone(activeFace(die));
       this.emit({ type: 'DIE_ROLLED', dieIds: [die.id], face: die.value, message: `D${die.id + 1} rolled: ${result.before} → ${die.value}` });
+      if (isCursedDie(die)) {
+        this.state.stats.hexerEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
+          kind: reason.startsWith('Manual') ? 'manual_reroll' : die.value === 7 ? 'seven' : 'roll', face: die.value });
+        this.emit({ type: 'CURSED_DIE_ROLLED', boss: 'hexer', dieIds: [die.id], face: die.value,
+          message: `Cursed Die rolled ${die.value}` });
+      }
       if (result.bumped) {
         this.state.stats.bumpControlledRolls++;
         this.state.stats.triggers.bump = (this.state.stats.triggers.bump ?? 0) + 1;
@@ -191,9 +231,9 @@ export class Resolver {
       }
       if (context === 'gameplay') this.addChargeForRoll(die.id);
       if (result.weighted) {
-        const weightedSourceFace = oppositeFace(result.value);
-        const weightedStacks = stacks(die.faces[weightedSourceFace - 1], 'weighted');
-        triggers.push({ dieId: die.id, face, enhancement: 'weighted', weightedSourceFace, weightedStacks, rollWeight: 1 + weightedStacks });
+        const source = weightedSourceFace(die, result.value)!;
+        const weightedStacks = stacks(source, 'weighted');
+        triggers.push({ dieId: die.id, face, enhancement: 'weighted', weightedSourceFace: source.rank, weightedStacks, rollWeight: 1 + weightedStacks });
       }
       if (context === 'gameplay' && stacks(face, 'jumpingBean')) triggers.push({ dieId: die.id, face, enhancement: 'jumpingBean' });
     }
@@ -208,6 +248,7 @@ export class Resolver {
         ? `source face ${item.weightedSourceFace} ×${item.weightedStacks}; destination weight ${item.rollWeight}` : '');
       if (item.enhancement === 'jumpingBean') {
         const hand = UPPER_HAND_BY_FACE[item.face.rank];
+        if (!hand) continue;
         const outcome = this.play(hand, [item.dieId], 'jumpingBean');
         const record = outcome.beanRecordIndex === null ? null : this.state.stats.jumpingBeanFreePlays[outcome.beanRecordIndex];
         if (outcome.winning) {
@@ -268,13 +309,52 @@ export class Resolver {
     this.emit({ type: 'HOT_STREAK_CHANGED', flame: 'hotStreak', hand, amount: this.state.hotStreakCharges,
       message: `Hot Streak ${qualified ? `gained charge ${this.state.hotStreakCharges}` : 'advanced without charge'}; next ${this.state.hotStreakGoal ? HANDS[this.state.hotStreakGoal].name : 'complete'}` });
   }
+  private resolveCallerCall(hand: HandId, source: HandPlaySource): boolean {
+    const boss = this.state.boss;
+    if (boss?.type !== 'caller' || boss.satisfied) return false;
+    if (hand === boss.calledHand) {
+      boss.satisfied = true;
+      boss.satisfyingSource = source;
+      this.state.stats.callerEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
+        calledHand: boss.calledHand, playsRemaining: boss.playsRemaining, satisfied: true, source, expired: false });
+      this.emit({ type: 'CALLER_CHANGED', boss: 'caller', hand, playSource: source,
+        message: `${HANDS[hand].name} answered The Caller${source === 'jumpingBean' ? ' via Jumping Bean' : ''}` });
+      return false;
+    }
+    if (source === 'jumpingBean') return false;
+    boss.playsRemaining--;
+    const expired = boss.playsRemaining <= 0;
+    this.state.stats.callerEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
+      calledHand: boss.calledHand, playsRemaining: boss.playsRemaining, satisfied: false, source, expired });
+    this.emit({ type: 'CALLER_CHANGED', boss: 'caller', hand, playSource: source, amount: boss.playsRemaining,
+      message: `${HANDS[hand].name} did not answer ${HANDS[boss.calledHand].name} · ${Math.max(0, boss.playsRemaining)} manual plays remain` });
+    return expired;
+  }
+  chooseWardenDie(dieId: number): void {
+    const boss = this.state.boss;
+    if (boss?.type !== 'warden') throw new Error('Warden choice attempted without The Warden.');
+    const starting = boss.startingDieId === null;
+    boss.activeDieIds.push(dieId);
+    if (starting) boss.startingDieId = dieId;
+    else boss.pendingReinforcements--;
+    this.state.stats.wardenEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
+      kind: starting ? 'starting_die' : 'reinforcement', dieId, activeDice: boss.activeDieIds.length });
+    const encounter = this.state.stats.bossEncounters.at(-1);
+    if (starting && encounter?.boss === 'warden') encounter.wardenStartingDieId = dieId;
+    this.emit({ type: 'WARDEN_REINFORCEMENT', boss: 'warden', dieIds: [dieId],
+      message: `${starting ? 'Starting die' : 'Reinforcement'} D${dieId + 1} deployed · real gameplay roll` });
+    this.rollBatch([dieId], 'Warden deployment', 'gameplay');
+    this.drain();
+    this.evaluate();
+  }
   play(hand: HandId, dieIds: number[], playSource: HandPlaySource = 'manual'): { winning: boolean; beanRecordIndex: number | null } {
     const freeBean = playSource === 'jumpingBean';
+    const callerExpired = this.resolveCallerCall(hand, playSource);
     const ids = [...dieIds].sort((a, b) => a - b);
     const handLevel = this.state.handLevels[hand];
     const handStart = captureHandStart(this.state, hand);
     if (freeBean) handStart.chargeArmed = false;
-    const shapeParticipants = ids.map(id => ({ id, face: structuredClone(activeFace(this.state.dice[id])), role: 'selected' as const }));
+    const shapeParticipants = ids.map(id => ({ id, face: structuredClone(activeFace(this.state.dice.find(die => die.id === id)!)), role: 'selected' as const }));
     if (freeBean) this.emit({ type: 'JUMPING_BEAN_FREE_PLAY', enhancement: 'jumpingBean', hand, dieIds: ids,
       face: shapeParticipants[0].face.rank, playSource, handConsumed: false,
       message: `Jumping Bean free-play: ${HANDS[hand].name}; scoring dice: D${ids[0] + 1}; normal hand availability unchanged` });
@@ -284,7 +364,7 @@ export class Resolver {
     const round = this.state.stats.rounds.at(-1)!;
     round.lastHand = hand; round.lastAction = freeBean ? 'JUMPING_BEAN' : 'PLAY';
     const hitchhikers: { id: number; face: Face; role: 'hitchhiker' }[] = [];
-    for (const die of freeBean ? [] : [...this.state.dice].sort((a, b) => a.id - b.id)) {
+    for (const die of freeBean ? [] : [...activeEncounterDice(this.state)].sort((a, b) => a.id - b.id)) {
       if (ids.includes(die.id)) continue;
       const face = structuredClone(activeFace(die));
       const count = stacks(face, 'hitchhiker');
@@ -349,7 +429,12 @@ export class Resolver {
       this.state.consumed.push(hand);
       this.emit({ type: 'HAND_CONSUMED', hand, playSource, handConsumed: true, message: `${HANDS[hand].name} consumed for round ${this.state.round}` });
     }
-    const winning = this.state.score >= this.state.target;
+    if (callerExpired) {
+      this.resolveBust();
+      return { winning: false, beanRecordIndex: null };
+    }
+    const winning = this.state.score >= this.state.target
+      && (this.state.boss?.type !== 'caller' || this.state.boss.satisfied);
     let jackpotPayout = 0;
     if (winning) {
       jackpotPayout = this.resolveJackpot(scoringIds);
@@ -373,7 +458,7 @@ export class Resolver {
       if (sticky && this.checkProbability('sticky', sticky, [id])) this.trigger('sticky', id, face, `×${sticky} stayed after scoring`);
       else rerolls.add(id);
     }
-    for (const die of this.state.dice) if (stacks(activeFace(die), 'slippy')) { this.trigger('slippy', die.id, activeFace(die), 'joined post-hand reroll'); rerolls.add(die.id); }
+    for (const die of activeEncounterDice(this.state)) if (stacks(activeFace(die), 'slippy')) { this.trigger('slippy', die.id, activeFace(die), 'joined post-hand reroll'); rerolls.add(die.id); }
     this.rollBatch([...rerolls], 'Post-hand reroll', 'gameplay');
     this.drain();
     this.evaluate();
@@ -382,7 +467,7 @@ export class Resolver {
 
   manualReroll(dieIds: number[]): void {
     const ids = [...dieIds].sort((a, b) => a - b);
-    const startedDeadBoard = !hasPlayableHand(this.state.dice, this.state.consumed);
+    const startedDeadBoard = !hasPlayableHand(activeEncounterDice(this.state), this.state.consumed);
     this.state.manualRerollsRemaining -= ids.length;
     const round = this.state.stats.rounds.at(-1)!;
     round.lastAction = 'MANUAL_REROLL'; round.manualRerollChargesSpent += ids.length; round.manualRerollActions++;
@@ -392,7 +477,7 @@ export class Resolver {
     this.emit({ type: 'MANUAL_REROLL_STARTED', dieIds: ids, amount: ids.length, message: `Manual reroll; ${this.state.manualRerollsRemaining} remaining` });
     this.rollBatch(ids, 'Manual gameplay reroll', 'gameplay');
     this.drain();
-    if (startedDeadBoard && (this.state.score >= this.state.target || hasPlayableHand(this.state.dice, this.state.consumed))) {
+    if (startedDeadBoard && (this.state.score >= this.state.target || hasPlayableHand(activeEncounterDice(this.state), this.state.consumed))) {
       record.rescuedDeadBoard = true; round.deadBoardRescues++; this.state.stats.deadBoardRescues++;
       this.emit({ type: 'DEAD_BOARD_RESCUED', dieIds: ids, message: 'Dead board rescued' });
     }
@@ -408,6 +493,8 @@ export class Resolver {
     base.shop ??= { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
     base.flameReward = null;
     base.bust = null;
+    base.boss = null;
+    base.dice = base.dice.filter(die => die.owner === 'player');
     // History snapshots and the action audit are retained across Bust separately;
     // omitting them here keeps the checkpoint compact without weakening rollback.
     base.history = [];
@@ -427,6 +514,15 @@ export class Resolver {
     const failureConsumed = [...this.state.consumed];
     const failureLastHand = current.lastHand;
     const failureLastAction = current.lastAction;
+    const failedBoss = structuredClone(this.state.boss);
+    const failedNodeId = this.state.currentNodeId;
+    const progressionTelemetry = {
+      mapTransitions: structuredClone(this.state.stats.mapTransitions),
+      bossEncounters: structuredClone(this.state.stats.bossEncounters),
+      callerEvents: structuredClone(this.state.stats.callerEvents),
+      wardenEvents: structuredClone(this.state.stats.wardenEvents),
+      hexerEvents: structuredClone(this.state.stats.hexerEvents),
+    };
     const history = this.state.history;
     const actions = this.state.stats.actions;
     Object.assign(this.state, structuredClone(checkpoint));
@@ -434,6 +530,7 @@ export class Resolver {
     this.state.shop ??= { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
     this.state.history = history;
     this.state.stats.actions = actions;
+    Object.assign(this.state.stats, progressionTelemetry);
     this.state.lives = failure.livesAfter;
     this.state.roundAttemptNumber = failure.livesAfter > 0 ? failure.attempt + 1 : failure.attempt;
     this.state.bust = failure;
@@ -445,12 +542,28 @@ export class Resolver {
       message: `BUST · Round ${failure.round} attempt ${failure.attempt} · ${failure.score} / ${failure.target} · ${failure.shortfall} short · lives ${failure.livesBefore} → ${failure.livesAfter}` });
     if (failure.livesAfter > 0) {
       this.state.phase = 'shop';
+      this.state.currentNodeId = failedNodeId;
+      this.mapTransition(shopNodeBefore(failure.round), 'backward');
       this.emit({ type: 'SHOP_REOPENED_AFTER_BUST',
         message: `Round ${failure.round} attempt ${failure.attempt} checkpoint restored · returned to the same Shop · prepare for attempt ${failure.attempt + 1}` });
     } else {
       this.state.stats.loss = { round: failure.round, afterHand: failureLastHand, score: failure.score, afterAction: failureLastAction,
         manualRerollsRemaining: 0, values: failureValues, consumed: failureConsumed };
       this.emit({ type: 'RUN_LOST', message: `Run over: ${failure.score} / ${failure.target}; no lives remain` });
+    }
+    if (failedBoss) {
+      const encounter = [...this.state.stats.bossEncounters].reverse().find(item =>
+        item.round === failure.round && item.attempt === failure.attempt && item.boss === failedBoss.type);
+      if (encounter) {
+        encounter.busted = true;
+        encounter.calledHand = failedBoss.type === 'caller' ? failedBoss.calledHand : undefined;
+        encounter.callerManualPlays = failedBoss.type === 'caller' ? 3 - failedBoss.playsRemaining : undefined;
+        encounter.callerSatisfied = failedBoss.type === 'caller' ? failedBoss.satisfied : undefined;
+        encounter.callerSatisfyingSource = failedBoss.type === 'caller' ? failedBoss.satisfyingSource : undefined;
+        encounter.wardenCheckpoints = failedBoss.type === 'warden' ? failedBoss.checkpoints : undefined;
+        encounter.wardenStartingDieId = failedBoss.type === 'warden' ? failedBoss.startingDieId : undefined;
+        encounter.wardenActiveDiceAtEnd = failedBoss.type === 'warden' ? failedBoss.activeDieIds.length : undefined;
+      }
     }
   }
   startRound(retry = false): void {
@@ -465,16 +578,35 @@ export class Resolver {
     this.state.chargeXMult = 1; this.state.chargeArmed = false; this.state.hotStreakCharges = 0;
     this.state.hotStreakGoal = ownedFlameIds(this.state).has('hotStreak') ? 'pair' : null;
     this.state.flameReward = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
+    this.state.dice = this.state.dice.filter(die => die.owner === 'player');
+    const bossType = this.state.bossSchedule[this.state.round]
+      ?? (this.state.round > 60 ? bossTypeForRound(this.state.seed, this.state.round) : null);
+    if (bossType) this.state.bossSchedule[this.state.round] = bossType;
+    this.state.boss = bossType ? createBossRuntime(this.state.seed, this.state.round, bossType) : null;
     this.captureRoundCheckpoint();
     this.state.shop = null;
+    this.mapTransition(encounterNode(this.state.round, bossType));
     this.state.stats.rounds.push({ round: this.state.round, attempt: this.state.roundAttemptNumber, target: this.state.target, firstCrossedScore: null,
       finalScore: 0, clearMargin: null, cleared: false, lastHand: null, lastAction: null,
       manualRerollsGranted: CONFIG.manualRerollsPerRound, manualRerollChargesSpent: 0,
       manualRerollsRemainingAtClear: null, manualRerollActions: 0, deadBoardRescues: 0, scoreByHand: {}, effectScore: 0, payout: null });
-    this.emit({ type: retry ? 'ROUND_RETRY_STARTED' : 'ROUND_STARTED',
+    if (this.state.boss) {
+      const boss = this.state.boss;
+      this.state.stats.bossEncounters.push({ boss: boss.type, round: this.state.round, attempt: this.state.roundAttemptNumber,
+        started: true, cleared: false, busted: false,
+        calledHand: boss.type === 'caller' ? boss.calledHand : undefined,
+        wardenCheckpoints: boss.type === 'warden' ? boss.checkpoints : undefined,
+        wardenStartingDieId: boss.type === 'warden' ? boss.startingDieId : undefined });
+      this.emit({ type: 'BOSS_STARTED', boss: boss.type,
+        message: `${boss.type.toUpperCase()} · Round ${this.state.round} · Attempt ${this.state.roundAttemptNumber} · goal ${this.state.target}` });
+      if (boss.type === 'caller') this.emit({ type: 'CALLER_CALLED', boss: 'caller', hand: boss.calledHand, amount: 3,
+        message: `The Caller demands ${HANDS[boss.calledHand].name} within 3 manual plays` });
+    }
+    if (!this.state.boss) this.emit({ type: retry ? 'ROUND_RETRY_STARTED' : 'ROUND_STARTED',
       message: `Round ${this.state.round} — Attempt ${this.state.roundAttemptNumber} — goal ${this.state.target}; Charge reset to ×1` });
     this.selectTargetPractice();
-    this.rollBatch(this.state.dice.map(die => die.id), 'Initial round roll', 'gameplay');
+    if (this.state.boss?.type === 'hexer') this.state.dice.push(createCursedDie());
+    if (this.state.boss?.type !== 'warden') this.rollBatch(activeEncounterDice(this.state).map(die => die.id), 'Initial round roll', 'gameplay');
     this.drain(); this.evaluate();
   }
   freshOffers(): void {
@@ -512,15 +644,23 @@ export class Resolver {
       message: `Target Practice: ${HANDS[this.state.targetPracticeHand].name}` });
   }
   openShop(rollDice = true): void {
+    this.state.dice = this.state.dice.filter(die => die.owner === 'player');
+    this.state.boss = null;
     this.state.phase = 'shop'; this.state.flameReward = null;
     this.state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
+    const upcomingBoss = this.state.round + 1 > 60 ? bossTypeForRound(this.state.seed, this.state.round + 1) : null;
+    if (upcomingBoss) this.state.bossSchedule[this.state.round + 1] = upcomingBoss;
+    this.mapTransition(shopNodeBefore(this.state.round + 1));
     if (rollDice) this.rollBatch(this.state.dice.map(die => die.id), 'Free shop roll', 'shop');
     this.freshOffers(); this.freshTrainingOffers();
     this.emit({ type: 'SHOP_OPENED', message: `Shop opened${rollDice ? '' : '; Flame Reward faces preserved'}` });
   }
   openFlameReward(): void {
+    this.state.dice = this.state.dice.filter(die => die.owner === 'player');
+    this.state.boss = null;
     this.state.phase = 'flameReward'; this.state.shop = null;
     this.state.flameReward = { offers: [], acquired: false };
+    this.mapTransition(flameNodeAfter(this.state.round));
     this.rollBatch(this.state.dice.map(die => die.id), 'Flame Reward roll', 'flameReward');
     this.freshFlameOffers();
     this.emit({ type: 'FLAME_REWARD_OPENED', message: 'Flame Reward — choose and assign one new Flame, or skip' });
@@ -529,8 +669,24 @@ export class Resolver {
     const current = this.state.stats.rounds.at(-1)!;
     current.finalScore = this.state.score;
     if (this.state.score >= this.state.target) {
+      if (this.state.boss?.type === 'caller' && !this.state.boss.satisfied) return;
+      if (this.state.boss?.type === 'warden' && this.state.boss.pendingReinforcements > 0) return;
       current.cleared = true; current.clearMargin = this.state.score - this.state.target;
       current.manualRerollsRemainingAtClear = this.state.manualRerollsRemaining;
+      if (this.state.boss) {
+        const encounter = this.state.stats.bossEncounters.at(-1);
+        if (encounter?.round === this.state.round && encounter.attempt === this.state.roundAttemptNumber) {
+          encounter.cleared = true;
+          if (this.state.boss.type === 'caller') {
+            encounter.callerManualPlays = 3 - this.state.boss.playsRemaining;
+            encounter.callerSatisfied = this.state.boss.satisfied;
+            encounter.callerSatisfyingSource = this.state.boss.satisfyingSource;
+          }
+          if (this.state.boss.type === 'warden') encounter.wardenActiveDiceAtEnd = this.state.boss.activeDieIds.length;
+        }
+        this.emit({ type: 'BOSS_CLEARED', boss: this.state.boss.type,
+          message: `${this.state.boss.type.toUpperCase()} cleared with ${this.state.score} / ${this.state.target}` });
+      }
       this.emit({ type: 'ROUND_CLEARED', message: `Round ${this.state.round} cleared with ${this.state.score} / ${this.state.target}` });
       const heldGoldSnapshot = this.state.gold;
       const payout = { baseGold: roundReward(), unusedRerollGold: this.state.manualRerollsRemaining,
@@ -543,7 +699,8 @@ export class Resolver {
       if (payout.interestGold) this.addGold(payout.interestGold, `Interest on ${heldGoldSnapshot} held Gold: +${payout.interestGold}`, 'interest');
       if (payout.flameBonusGold) this.addGold(payout.flameBonusGold, `Flame Bonus: +${payout.flameBonusGold} gold`, 'flameBonus');
       if (this.state.round % 3 === 0) this.openFlameReward(); else this.openShop();
-    } else if (!hasPlayableHand(this.state.dice, this.state.consumed)) {
+    } else if (this.state.boss?.type !== 'warden' || (this.state.boss.startingDieId !== null && this.state.boss.pendingReinforcements === 0)) {
+      if (hasPlayableHand(activeEncounterDice(this.state), this.state.consumed)) return;
       if (this.state.manualRerollsRemaining > 0) { this.emit({ type: 'DEAD_BOARD', message: `No playable hands — ${this.state.manualRerollsRemaining} rerolls remain` }); return; }
       this.resolveBust();
     }
