@@ -99,6 +99,17 @@ button { font: inherit; }
 .die.ineligible { opacity: .42; filter: saturate(.55); cursor: not-allowed; }
 .die.ineligible:not([aria-disabled="true"]) { cursor: pointer; }
 .die.locked-selection { cursor: default; }
+.die.warden-locked { cursor: not-allowed; border-color: color-mix(in srgb, var(--screen-primary) 45%, var(--mantine-color-dark-4)); }
+.die.warden-locked:disabled { opacity: 1; }
+.die.warden-locked > :not(.die-lock-overlay):not(.die-id) { opacity: .2; filter: saturate(.35); }
+.die.warden-locked .die-id { z-index: 3; color: var(--mantine-color-gray-4); }
+.die-lock-overlay {
+  position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; border-radius: inherit; color: var(--mantine-color-cyan-2); background: rgba(8, 18, 23, .48);
+  font-size: .68rem; font-weight: 900; letter-spacing: .04em; line-height: 1; pointer-events: none;
+  text-shadow: 0 1px 4px rgba(0,0,0,.85);
+}
+.die-lock-symbol { font-size: 1.25rem; line-height: 1.1; }
 .die.pulse { animation: pulse 300ms ease-in-out; }
 .die.rolling { animation: shake 180ms ease-in-out 2; }
 .die:focus-visible, .offer:focus-visible, .scorecard-row:focus-visible { outline: 2px solid var(--mantine-color-teal-4); outline-offset: -2px; }

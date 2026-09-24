@@ -17,6 +17,18 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
   selection: Selection; setSelection: (selection: Selection) => void; submit: (action: Action) => void; skip: () => void;
 }) {
   const encounterDice = activeEncounterDice(board);
+  const wardenBoss = board.boss?.type === 'warden' ? board.boss : null;
+  const wardenDice = wardenBoss
+    ? board.dice.filter(die => die.owner === 'player').sort((a, b) => a.id - b.id)
+    : null;
+  const lockedUntilByDieId: Record<number, number> = {};
+  if (wardenBoss && wardenDice) {
+    wardenDice.forEach((die, index) => {
+      if (index > 0 && !wardenBoss.activeDieIds.includes(die.id)) {
+        lockedUntilByDieId[die.id] = wardenBoss.checkpoints[index - 1];
+      }
+    });
+  }
   const requiredDieIds = requiredEncounterDieIds(board);
   const selectedDieIds = [...new Set([...requiredDieIds, ...selection.dieIds])].sort((a, b) => a - b);
   const selectedHand = selection.hand && handOptions(encounterDice, board.consumed, selectedDieIds)
@@ -68,8 +80,9 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
     </Paper>
     <Paper className="gameplay-dock" p="xs">
       <div className="gameplay-dock-content">
-        <DiceRow dice={encounterDice} event={event} disabled={busy} selected={effectiveSelection.dieIds}
+        <DiceRow dice={wardenDice ?? encounterDice} event={event} disabled={busy} selected={effectiveSelection.dieIds}
           lockedIds={requiredDieIds} lockedReasons={Object.fromEntries(requiredDieIds.map(id => [id, 'Required by The Hexer.']))}
+          lockedUntilByDieId={wardenBoss ? lockedUntilByDieId : undefined}
           onClick={id => setSelection(toggleDie(encounterDice, board.consumed, effectiveSelection, id))} />
         <div className="gameplay-actions">
           {(board.bonfires.includes('charge') || board.dice.some(die => die.flame?.id === 'charge')) && <Group gap="xs" justify="flex-end" mb={4}>
