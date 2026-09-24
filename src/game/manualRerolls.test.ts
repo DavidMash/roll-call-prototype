@@ -188,9 +188,9 @@ describe('loss, rescue and shop separation', () => {
     game.manualRerollsRemaining = remaining;
     const result = dispatch(game, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant());
     if (remaining === 0) {
-      expect(result.state.phase).toBe('bust');
+      expect(result.state.phase).toBe('shop');
       expect(result.state.bust).toMatchObject({ livesBefore: 3, livesAfter: 2 });
-      expect(result.events.at(-1)!.type).toBe('ROUND_BUST');
+      expect(result.events.at(-1)!.type).toBe('SHOP_REOPENED_AFTER_BUST');
     } else {
       expect(hasPlayableHand(result.state.dice, result.state.consumed)).toBe(false);
       expect(result.state.phase).toBe('round');

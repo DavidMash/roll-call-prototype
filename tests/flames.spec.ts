@@ -25,7 +25,7 @@ function flameSeed() {
         if (choice) game = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }).state;
         else if (game.manualRerollsRemaining > 0) game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
         else break;
-      } else if (game.phase === 'shop') game = dispatch(game, { type: 'NEXT_ROUND' }).state;
+      } else if (game.phase === 'shop') game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' }).state;
       else if (game.phase === 'flameReward') {
         if (game.flameReward!.offers.some(offer => offer.flame === 'wellTrained')) return seed;
         break;
@@ -39,7 +39,7 @@ async function ready(page: Page) {
   await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
 }
 
-async function perform(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'NEXT_ROUND' }>) {
+async function perform(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'NEXT_ROUND' | 'RETRY_ROUND' }>) {
   if (action.type === 'PLAY') {
     await page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) }).click();
     for (const die of game.dice) {
@@ -51,7 +51,7 @@ async function perform(page: Page, game: GameState, action: Extract<Action, { ty
   } else if (action.type === 'MANUAL_REROLL') {
     await page.getByRole('button', { name: /^Die 1,/ }).click();
     await page.getByRole('button', { name: 'Reroll Selected — 1', exact: true }).click();
-  } else await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+  } else await page.getByRole('button', { name: action.type === 'RETRY_ROUND' ? `RETRY ROUND ${game.round}` : 'NEXT ROUND', exact: true }).click();
   const next = dispatch(game, action).state;
   await ready(page);
   return next;
@@ -74,7 +74,7 @@ async function reachReward(page: Page, seed: string) {
       game = await perform(page, game, choice
         ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
         : { type: 'MANUAL_REROLL', dieIds: [0] });
-    } else if (game.phase === 'shop') game = await perform(page, game, { type: 'NEXT_ROUND' });
+    } else if (game.phase === 'shop') game = await perform(page, game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' });
     else throw new Error(`Unexpected phase before Flame Reward: ${game.phase}`);
   }
   return game;

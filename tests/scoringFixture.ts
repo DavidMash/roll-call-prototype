@@ -17,13 +17,13 @@ export function scoringPlaybackRun() {
     for (let step = 0; step < 80 && game.round <= 6; step++) {
       if (game.phase === 'lost' || game.phase === 'error') break;
       let action: Action;
-      if (game.phase === 'bust') {
-        action = { type: 'RETRY_ROUND' };
-      } else if (game.phase === 'flameReward') {
+      if (game.phase === 'flameReward') {
         action = game.flameReward!.acquired
           ? { type: 'CONTINUE_FLAME_REWARD' }
           : { type: 'CHOOSE_FLAME', offerId: game.flameReward!.offers[0].id, dieId: Math.floor(game.round / 3 - 1) % 5 };
       } else if (game.phase === 'shop') {
+        if (game.bust) action = { type: 'RETRY_ROUND' };
+        else {
         const offer = game.shop!.offers.find(item => !item.purchased && !purchased.has(item.enhancement)
           && ['bonus', 'hitchhiker'].includes(item.enhancement)
           && game.gold >= enhancementCost(item.enhancement));
@@ -32,6 +32,7 @@ export function scoringPlaybackRun() {
           action = { type: 'BUY', offerId: offer.id, dieId };
           purchased.add(offer.enhancement);
         } else action = { type: 'NEXT_ROUND' };
+        }
       } else {
         const choices = handOptions(game.dice, game.consumed).filter(option => !option.consumed)
           .flatMap(option => option.combinations.map(dieIds => ({ type: 'PLAY' as const, hand: option.id, dieIds })))

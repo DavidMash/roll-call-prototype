@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useReducedMotion } from '@mantine/hooks';
 import { CONFIG } from './game/config';
 import { dispatch, newRun } from './game/engine';
 import type { Action, Resolution } from './game/types';
 
 export type PlaybackSpeed = keyof typeof CONFIG.tickMs;
 export function useGame(seed: string, speed: PlaybackSpeed) {
+  const reducedMotion = useReducedMotion();
   const [result, setResult] = useState<Resolution>(() => newRun(seed));
   const [index, setIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -12,9 +14,12 @@ export function useGame(seed: string, speed: PlaybackSpeed) {
   useEffect(() => {
     if (!busy) return;
     if (speed === 'instant') { setIndex(result.events.length); return; }
-    const timeout = window.setTimeout(() => setIndex(current => current + 1), CONFIG.tickMs[speed]);
+    const currentEvent = result.events[index];
+    const delay = !reducedMotion && currentEvent?.type === 'ROUND_BUST'
+      ? Math.max(CONFIG.tickMs[speed], 1200) : CONFIG.tickMs[speed];
+    const timeout = window.setTimeout(() => setIndex(current => current + 1), delay);
     return () => window.clearTimeout(timeout);
-  }, [result, index, speed, busy]);
+  }, [result, index, speed, busy, reducedMotion]);
   function load(next: Resolution) {
     if (next.error) { setError(next.error); return; }
     setError(null);

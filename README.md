@@ -6,9 +6,9 @@ Roll Call is a deterministic React/TypeScript/Vite dice roguelike. The domain en
 
 Choose a legal Yahtzee-style hand, select its physical dice, and play it. A played category is consumed for the round. Each attempt grants three manual die rerolls, charged once per selected die.
 
-A run starts with `3 / 3` lives. When score is below target, no legal unconsumed hand remains, and no manual rerolls remain, the attempt Busts. The engine restores its round-start checkpoint, subtracts one life, increments the attempt number, and retries the same round. Each attempt uses a deterministic seed derived from the run seed, round, and attempt, so retries are reproducible but do not repeat the same roll stream. A Bust that reduces lives to zero ends the run.
+A run starts with `3 / 3` lives. When score is below target, no legal unconsumed hand remains, and no manual rerolls remain, the attempt Busts. The engine restores the checkpoint captured when the player committed to the attempt, subtracts one life, increments the attempt number, and reopens that exact Shop. The failed round does not restart automatically: the player may continue preparing, then explicitly choose `RETRY ROUND N`. Each attempt uses a deterministic seed derived from the run seed, round, and attempt, so retries are reproducible but do not repeat the same roll stream. A Bust that reduces lives to zero ends the run without reopening the Shop.
 
-The checkpoint prevents failed-attempt farming. Score, consumed hands, dice, rerolls, gameplay Gold, Charge, Hot Streak, Workout, Personal Trainer levels, hand history, Vintage growth, and other attempt changes roll back. Shop purchases made before the attempt remain.
+The checkpoint prevents failed-attempt farming. Score, consumed hands, dice, rerolls, gameplay Gold, Charge, Hot Streak, Workout, Personal Trainer levels, hand history, Vintage growth, and other attempt changes roll back. The Shop's offers, purchased cards, reroll progression, exposed faces, Gold, enhancements, Flames, and training return exactly as committed; it does not refresh or grant another reward. Shop changes made after a Bust become the checkpoint for the next retry, so earlier purchases stay committed and new purchases, sales, Stoke, and life restoration persist into that attempt.
 
 Scoring remains:
 
@@ -26,10 +26,10 @@ Every successful clear pays, in order:
 
 - 5 base Gold;
 - 1 Gold per unused manual reroll;
-- `min(5, floor(heldGold / 5))` interest using the pre-payout Gold snapshot;
+- `min(10, floor(heldGold / 5))` interest using the pre-payout Gold snapshot;
 - +5 Flame Bonus on rounds divisible by three.
 
-A failed attempt pays none of these rewards. The Flame Bonus does not affect the interest calculation that precedes it.
+A failed attempt pays none of these rewards. Interest is +1 per 5 Gold held, reaches its +10 maximum at 50 Gold, and is snapshotted after scoring Gold effects but before base, reroll, interest, or Flame Bonus payouts are added. Thus the maximum normal round payout is 18 Gold, or 23 Gold on an every-third-round Flame Bonus clear.
 
 Lost lives can be restored one at a time only in a normal Shop. The run-wide prices are `25, 40, 60, 90, 130, 180, 240, 310, 390, 480…`; after 390, each new increment is 10 larger than the prior increment. Restoration spending counts toward Money to Burn. The price counter resets only on a new run, and lives cannot exceed three.
 
@@ -94,7 +94,7 @@ Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a f
 
 ## Telemetry and validation
 
-Run Info exports schema 13 / `lives-vintage-economy-v1`, including round attempts, Bust/life transitions, restore purchases, enhancement sales, Vintage growth, source-aware hand scores, Flame factors, Stoke records, and Shop spending.
+Run Info exports schema 14 / `bust-shop-interest-v2`, including round attempts, Bust detection, checkpoint restoration, Shop return/retry status, life transitions, restore purchases, enhancement sales, Vintage growth, source-aware hand scores, Flame factors, Stoke records, and Shop spending.
 
 Validation commands:
 

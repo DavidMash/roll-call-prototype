@@ -36,7 +36,7 @@ describe('round-clearing scoring Jackpot', () => {
     const game = board();
     enhance(game, 0, 'jackpot', stackCount);
     const result = playPair(game);
-    const interest = Math.min(5, Math.floor(payout / 5));
+    const interest = Math.min(10, Math.floor(payout / 5));
     expect(result.state.phase).toBe('shop');
     expect(result.state.gold).toBe(payout + roundReward() + 3 + interest);
     expect(result.state.stats.goldBySource.jackpot).toBe(payout);

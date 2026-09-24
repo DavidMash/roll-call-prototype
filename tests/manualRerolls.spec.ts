@@ -56,7 +56,7 @@ function deadBoardRun(rescue: boolean) {
               remainsDeadUntilLoss = false;
             }
           }
-          if (remainsDeadUntilLoss && resolved.phase === 'bust') {
+          if (remainsDeadUntilLoss && resolved.phase === 'shop' && resolved.bust) {
             return { seed: game.seed, actions: [...prefix, ...attemptActions], game: original };
           }
         }
@@ -70,11 +70,7 @@ function deadBoardRun(rescue: boolean) {
         game = dispatch(game, action).state;
       }
       if (game.phase === 'shop') {
-        const action: Action = { type: 'NEXT_ROUND' };
-        prefix.push(action);
-        game = dispatch(game, action).state;
-      } else if (game.phase === 'bust') {
-        const action: Action = { type: 'RETRY_ROUND' };
+        const action: Action = game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' };
         prefix.push(action);
         game = dispatch(game, action).state;
       }
@@ -158,14 +154,28 @@ test('dead board remains playable with rerolls and loses only after the final co
   await page.getByRole('button', { name: 'Reroll Selected — 1', exact: true }).click();
   await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Run over' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Skip playback' }).click();
-  game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
-  await ready(page);
-  await expect(page.getByRole('heading', { name: 'BUST' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'BUST', exact: true })).toBeVisible({ timeout: 15000 });
   await expect(page.getByText('1 LIFE LOST', { exact: true })).toBeVisible();
+  const failedRound = game.round;
+  const expectedShop = structuredClone(game.roundCheckpoint?.shop);
+  game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+  await expect(page.getByTestId('bust-shop-banner')).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/ROUND \d+ BUST · 1 LIFE LOST/)).toBeVisible();
   await expect(page.getByRole('button', { name: `RETRY ROUND ${game.round}`, exact: true })).toBeVisible();
-  expect(game.phase).toBe('bust');
+  expect(game.phase).toBe('shop');
   expect(game.lives).toBe(2);
+  expect(game.shop).toEqual(expectedShop);
+  await page.getByRole('button', { name: /^Die 1,/ }).click();
+  await expect(page.getByRole('dialog', { name: /D1 .* Manage Die/ })).toBeVisible();
+  await page.getByRole('dialog', { name: /D1 .* Manage Die/ }).getByRole('button', { name: 'Close' }).click();
+  await page.getByTestId('stat-lives').click();
+  await expect(page.getByRole('dialog', { name: 'RESTORE LIVES' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: `RETRY ROUND ${failedRound}`, exact: true }).click();
+  game = dispatch(game, { type: 'RETRY_ROUND' }).state;
+  await matchRound(page, game);
+  expect(game.round).toBe(failedRound);
+  expect(game.roundAttemptNumber).toBeGreaterThan(1);
 });
 
 test('a manual reroll rescues a dead board and restores legal hand controls', async ({ page }) => {

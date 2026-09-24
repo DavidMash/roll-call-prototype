@@ -26,7 +26,7 @@ export function jackpotRun() {
       route.push(action);
       game = dispatch(game, action).state;
     }
-    if (game.phase !== 'shop') continue;
+    if (game.phase !== 'shop' || game.bust) continue;
     const offer = game.shop!.offers.find(item => item.enhancement === 'jackpot');
     if (!offer) continue;
 
@@ -44,8 +44,9 @@ export function jackpotRun() {
 
       for (let step = 0; step < 80 && branch.round <= 6; step++) {
         if (branch.phase === 'shop') {
-          actions.push(next);
-          branch = dispatch(branch, next).state;
+          const shopAction: Action = branch.bust ? { type: 'RETRY_ROUND' } : next;
+          actions.push(shopAction);
+          branch = dispatch(branch, shopAction).state;
           continue;
         }
         if (branch.phase !== 'round') break;

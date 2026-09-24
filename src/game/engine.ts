@@ -42,6 +42,9 @@ function normalizedState(state: GameState): GameState {
   next.roundCheckpoint ??= null;
   next.stats.sales ??= [];
   next.stats.busts ??= [];
+  next.stats.busts = next.stats.busts.map(bust => ({ ...bust,
+    checkpointRestored: bust.checkpointRestored ?? true,
+    returnedToShop: bust.returnedToShop ?? bust.livesAfter > 0 }));
   next.stats.lifeRestores ??= [];
   next.stats.vintageGrowth ??= [];
   next.stats.rounds = next.stats.rounds.map(round => ({ ...round, attempt: round.attempt ?? 1 }));
@@ -55,7 +58,8 @@ function normalizedState(state: GameState): GameState {
 }
 
 export function validateAction(state: Board, action: Action): string | null {
-  if (action.type === 'RETRY_ROUND') return state.phase === 'bust' && state.lives > 0 ? null : 'A living Bust is required to retry the round.';
+  if (action.type === 'RETRY_ROUND') return state.phase === 'shop' && !!state.shop && !!state.bust && state.lives > 0
+    ? null : 'A returned Bust Shop is required to retry the round.';
   if (action.type === 'MANUAL_REROLL') {
     if (state.phase !== 'round') return 'Manual rerolls can only be used during a gameplay round.';
     if (!action.dieIds.length) return 'Select at least one die to reroll.';
@@ -97,6 +101,7 @@ export function validateAction(state: Board, action: Action): string | null {
     return null;
   }
   if (state.phase !== 'shop' || !state.shop) return 'This action requires an open shop.';
+  if (action.type === 'NEXT_ROUND' && state.bust) return 'Use Retry Round after preparing for the failed round.';
   if (action.type === 'BUY') {
     const offer = state.shop.offers.find(item => item.id === action.offerId);
     const die = state.dice.find(item => item.id === action.dieId);

@@ -7,6 +7,8 @@ export const CONFIG = {
   maxLives: 3,
   manualRerollsPerRound: 3,
   roundRewardBase: 5,
+  interestInterval: 5,
+  interestCap: 10,
   diceRerollBase: 2,
   offerRerollBase: 3,
   handTrainingCost: 4,
@@ -23,6 +25,8 @@ export const CONFIG = {
 export const targetForRound = (round: number) =>
   Math.round(CONFIG.baseTarget * CONFIG.targetGrowth ** (round - 1) / CONFIG.targetRounding) * CONFIG.targetRounding;
 export const roundReward = (_round?: number) => CONFIG.roundRewardBase;
+export const interestForGold = (heldGold: number) => Math.min(CONFIG.interestCap,
+  Math.floor(Math.max(0, heldGold) / CONFIG.interestInterval));
 export const diceRerollCost = (count: number) => CONFIG.diceRerollBase * CONFIG.rerollCostGrowth ** count;
 export const offerRerollCost = (count: number) => CONFIG.offerRerollBase * CONFIG.rerollCostGrowth ** count;
 export function lifeRestoreCost(purchases: number): number {

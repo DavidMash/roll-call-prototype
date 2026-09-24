@@ -1,6 +1,6 @@
 import { Alert, Badge, Button, Group, Modal, Paper, Progress, SimpleGrid, Stack, Text, Tooltip } from '@mantine/core';
 import { useState } from 'react';
-import { diceRerollCost, offerRerollCost } from '../game/config';
+import { CONFIG, diceRerollCost, offerRerollCost } from '../game/config';
 import { activeFace } from '../game/dice';
 import { attachmentError, enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, FACE_TYPE_LIMIT, faceEnhancementTypes } from '../game/enhancements';
 import { activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasXMultFlame } from '../game/flames';
@@ -13,12 +13,14 @@ import { StokeFlameModal } from './StokeFlameModal';
 import { TrainingCard } from './TrainingCard';
 
 interface SaleTarget { face: Rank; enhancement: Enhancement; stacks: number; proceeds: number }
+const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
 
 export function ShopScreen({ board, event, busy, progress, selectedOffer, setSelectedOffer, submit, skip }: {
   board: Board; event: GameEvent | null; busy: boolean; progress: { current: number; total: number };
   selectedOffer: number | null; setSelectedOffer: (id: number | null) => void; submit: (action: Action) => void; skip: () => void;
 }) {
   const shop = board.shop!;
+  const returnedFromBust = board.bust;
   const offer = shop.offers.find(item => item.id === selectedOffer && !item.purchased);
   const [managedDieId, setManagedDieId] = useState<number | null>(null);
   const [focusedFace, setFocusedFace] = useState<Rank | null>(null);
@@ -77,7 +79,13 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
 
   return <>
     <Stack gap="xs" className="shop-screen">
-      <div className="shop-summary"><RoundPayoutSummary board={board} /></div>
+      <div className="shop-summary">{returnedFromBust ? <Paper px="sm" py={6} className="bust-shop-banner" data-testid="bust-shop-banner">
+        <Group justify="space-between" gap="xs" wrap="wrap">
+          <div><Text size="sm" fw={850} c="red">ROUND {returnedFromBust.round} BUST · 1 LIFE LOST</Text>
+            <Text size="xs" c="dimmed">Prepare for another attempt. Your pre-attempt Shop has been restored.</Text></div>
+          <Text fw={800} c="red" aria-label={`${board.lives} of ${CONFIG.maxLives} lives`}>{hearts(board.lives)}</Text>
+        </Group>
+      </Paper> : <RoundPayoutSummary board={board} />}</div>
       {busy && <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} showXMult={hasXMultFlame(board.dice, board.bonfires)} />}
       <Paper p="xs" className="shop-section">
         <Group justify="space-between" className="section-heading">
@@ -115,8 +123,12 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
           onClick={clickDie} onDropOffer={attemptPurchase} tutorialDieId={tutorialDieId} tutorialLabel={tutorialLabel} />
       </Paper>
       <div className="shop-action-dock">
-        <Text size="xs" c="dimmed">Upgrades are permanent for this run.</Text>
-        <Button size="sm" disabled={busy} aria-label="NEXT ROUND" onClick={() => submit({ type: 'NEXT_ROUND' })}>NEXT ROUND →</Button>
+        <Text size="xs" c="dimmed">{returnedFromBust ? 'Prepare for another attempt.' : 'Upgrades are permanent for this run.'}</Text>
+        <Button size="sm" disabled={busy} aria-label={returnedFromBust ? `RETRY ROUND ${board.round}` : 'NEXT ROUND'}
+          color={returnedFromBust ? 'red' : undefined}
+          onClick={() => submit(returnedFromBust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' })}>
+          {returnedFromBust ? `RETRY ROUND ${board.round}` : 'NEXT ROUND'} →
+        </Button>
       </div>
     </Stack>
 

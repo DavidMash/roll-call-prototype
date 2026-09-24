@@ -21,7 +21,8 @@ async function matchBoard(page: Page, game: GameState) {
     await expect(page.getByTestId(`stat-${stat}`).getByText(String(value), { exact: true })).toBeVisible();
   }
   if (game.phase === 'shop' || game.phase === 'flameReward') {
-    if (game.phase === 'shop') await expect(page.getByText(new RegExp(`\\+${game.lastRoundPayout?.totalRoundRewardGold ?? 5} Gold`))).toBeVisible();
+    if (game.phase === 'shop' && game.bust) await expect(page.getByTestId('bust-shop-banner')).toBeVisible();
+    else if (game.phase === 'shop') await expect(page.getByText(new RegExp(`\\+${game.lastRoundPayout?.totalRoundRewardGold ?? 5} Gold`))).toBeVisible();
     await expect(page.getByTestId('stat-rerolls')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^Reroll Selected/ })).toHaveCount(0);
   } else if (game.phase === 'round') await expect(page.getByTestId('stat-rerolls').getByText(String(game.manualRerollsRemaining), { exact: true })).toBeVisible();
@@ -57,7 +58,7 @@ function findShopSeed(required?: Enhancement) {
       game = dispatch(game, choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
         : { type: 'MANUAL_REROLL', dieIds: [0] }).state;
     }
-    if (game.phase === 'shop' && (!required || game.shop!.offers.some(offer => offer.enhancement === required))) return seed;
+    if (game.phase === 'shop' && !game.bust && (!required || game.shop!.offers.some(offer => offer.enhancement === required))) return seed;
   }
   throw new Error('No suitable shop seed found');
 }
@@ -70,7 +71,7 @@ function findTrainingSeed() {
       game = dispatch(game, choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
         : { type: 'MANUAL_REROLL', dieIds: [0] }).state;
     }
-    if (game.phase !== 'shop') continue;
+    if (game.phase !== 'shop' || game.bust) continue;
     for (const offer of game.shop!.trainingOffers) {
       const trained = dispatch(game, { type: 'TRAIN_HAND', hand: offer.hand }).state;
       const next = dispatch(trained, { type: 'NEXT_ROUND' }).state;
@@ -92,7 +93,7 @@ function findStickyStackSeed() {
       game = dispatch(game, choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
         : { type: 'MANUAL_REROLL', dieIds: [0] }).state;
     }
-    if (game.phase !== 'shop') continue;
+    if (game.phase !== 'shop' || game.bust) continue;
     const first = game.shop!.offers.find(offer => offer.enhancement === 'sticky');
     if (!first) continue;
     game = dispatch(game, { type: 'BUY', offerId: first.id, dieId: 0 }).state;
@@ -111,10 +112,10 @@ function findCapacitySeed() {
         game = dispatch(game, choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
           : { type: 'MANUAL_REROLL', dieIds: [0] }).state;
       }
-      if (game.phase !== 'shop') break;
+      if (game.phase !== 'shop' || game.bust) break;
       if (round === 1) game = dispatch(game, { type: 'NEXT_ROUND' }).state;
     }
-    if (game.phase !== 'shop' || game.round !== 2) continue;
+    if (game.phase !== 'shop' || game.bust || game.round !== 2) continue;
     const startingGold = game.gold;
     const initial = [...game.shop!.offers];
     for (const offer of initial) game = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 0 }).state;
@@ -124,6 +125,27 @@ function findCapacitySeed() {
     if (next && game.gold >= enhancementCost(next.enhancement)) return { seed, startingGold };
   }
   throw new Error('No deterministic capacity workflow seed found');
+}
+function findHighInterestSeed() {
+  for (let index = 0; index < 500; index++) {
+    const seed = `interest-browser-${index}`;
+    let game = newRun(seed).state;
+    for (let step = 0; step < 250 && game.phase !== 'lost'; step++) {
+      if (game.lastRoundPayout && game.lastRoundPayout.interestGold >= 6) return seed;
+      if (game.phase === 'round') {
+        const choice = bestHand(game);
+        game = dispatch(game, choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
+          : { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+      } else if (game.phase === 'shop') {
+        game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' }).state;
+      } else if (game.phase === 'flameReward') {
+        game = game.flameReward!.acquired
+          ? dispatch(game, { type: 'CONTINUE_FLAME_REWARD' }).state
+          : dispatch(game, { type: 'CHOOSE_FLAME', offerId: game.flameReward!.offers[0].id, dieId: 0 }).state;
+      }
+    }
+  }
+  throw new Error('No deterministic high-interest browser seed found');
 }
 function nearStraightRun() {
   for (let i = 0; i < 5000; i++) {
@@ -195,6 +217,8 @@ test('compact HUD, Run Info and Help keep secondary information off the gameplay
   await page.getByRole('button', { name: 'How to Play', exact: true }).click();
   const help = page.getByRole('dialog', { name: 'How to Play' });
   await expect(help).toBeVisible();
+  await expect(help).toContainText('exact pre-attempt Shop reopens without refreshing');
+  await expect(help).toContainText('capped at +10 when holding 50 Gold');
   await help.getByRole('tab', { name: 'Enhancements' }).click();
   await expect(help.getByText('Jackpot', { exact: true })).toBeVisible();
   await expect(help.getByText(/scores in the round-clearing hand/)).toBeVisible();
@@ -219,6 +243,35 @@ test('HUD hearts are interactive only in Shop and the restore modal enforces the
   await expect(modal).toContainText('All lives restored.');
   await expect(modal).toContainText('Next restore: 25 Gold');
   await expect(modal.getByRole('button', { name: 'ALL LIVES RESTORED', exact: true })).toBeDisabled();
+});
+
+test('round payout UI displays interest above five', async ({ page }) => {
+  const seed = findHighInterestSeed();
+  let game = newRun(seed).state;
+  await page.goto(`/?seed=${seed}&speed=instant`);
+  await matchBoard(page, game);
+  for (let step = 0; step < 250 && (game.lastRoundPayout?.interestGold ?? 0) < 6; step++) {
+    if (game.phase === 'round') game = await playBest(page, game);
+    else if (game.phase === 'shop') {
+      const action = game.bust ? { type: 'RETRY_ROUND' as const } : { type: 'NEXT_ROUND' as const };
+      await page.getByRole('button', { name: game.bust ? `RETRY ROUND ${game.round}` : 'NEXT ROUND', exact: true }).click();
+      game = dispatch(game, action).state;
+      await matchBoard(page, game);
+    } else if (game.phase === 'flameReward') {
+      if (game.flameReward!.acquired) {
+        await page.getByRole('button', { name: /CONTINUE TO SHOP/ }).click();
+        game = dispatch(game, { type: 'CONTINUE_FLAME_REWARD' }).state;
+      } else {
+        const offer = game.flameReward!.offers[0];
+        await page.getByTestId(`flame-offer-${offer.flame}`).getByRole('button', { name: 'Select Flame' }).click();
+        await page.getByRole('button', { name: /^Die 1,/ }).click();
+        game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId: 0 }).state;
+      }
+      await matchBoard(page, game);
+    }
+  }
+  expect(game.lastRoundPayout?.interestGold).toBeGreaterThanOrEqual(6);
+  await expect(page.getByTestId('round-payout-breakdown')).toContainText(`${game.lastRoundPayout!.interestGold} interest`);
 });
 
 test('Hand Training purchase persists into scorecard and trained scoring playback', async ({ page }) => {
@@ -308,8 +361,9 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
   for (let step = 0; step < 100 && game.phase !== 'lost'; step++) {
     if (game.phase === 'round') game = await playBest(page, game);
     else if (game.phase === 'shop') {
-      await page.getByRole('button', { name: 'NEXT ROUND' }).click();
-      game = dispatch(game, { type: 'NEXT_ROUND' }).state;
+      const action = game.bust ? { type: 'RETRY_ROUND' as const } : { type: 'NEXT_ROUND' as const };
+      await page.getByRole('button', { name: game.bust ? `RETRY ROUND ${game.round}` : 'NEXT ROUND' }).click();
+      game = dispatch(game, action).state;
       await matchBoard(page, game);
     } else if (game.phase === 'flameReward') {
       if (game.flameReward!.acquired) {
@@ -323,14 +377,12 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
         game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId }).state;
       }
       await matchBoard(page, game);
-    } else if (game.phase === 'bust') {
-      await page.getByRole('button', { name: `RETRY ROUND ${game.round}`, exact: true }).click();
-      game = dispatch(game, { type: 'RETRY_ROUND' }).state;
-      await matchBoard(page, game);
     } else throw new Error(`Unexpected phase: ${game.phase}`);
   }
   expect(game.phase).toBe('lost');
   await expect(page.getByRole('heading', { name: 'RUN OVER' })).toBeVisible();
+  await expect(page.getByTestId('bust-shop-banner')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^RETRY ROUND / })).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('run-over.png'), fullPage: true });
   await page.getByRole('button', { name: 'Run Info', exact: true }).click();
   const runInfo = page.getByRole('dialog', { name: 'Run Info' });
@@ -576,7 +628,7 @@ test('purchased Jumping Bean visibly triggers and rerolls on the next initial ga
       candidate = dispatch(candidate, choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
         : { type: 'MANUAL_REROLL', dieIds: [0] }).state;
     }
-    if (candidate.phase !== 'shop') continue;
+    if (candidate.phase !== 'shop' || candidate.bust) continue;
     const offer = candidate.shop!.offers.find(item => item.enhancement === 'jumpingBean');
     if (!offer) continue;
     candidate = dispatch(candidate, { type: 'BUY', offerId: offer.id, dieId: 0 }).state;

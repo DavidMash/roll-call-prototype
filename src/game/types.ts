@@ -153,7 +153,8 @@ export interface EnhancementSale {
 }
 export interface BustRecord {
   round: number; attempt: number; score: number; target: number; shortfall: number;
-  livesBefore: number; livesAfter: number; retryStarted: boolean; runEndedNoLives: boolean;
+  livesBefore: number; livesAfter: number; checkpointRestored: boolean; returnedToShop: boolean;
+  retryStarted: boolean; runEndedNoLives: boolean;
 }
 export interface LifeRestorePurchase {
   round: number; purchaseNumber: number; cost: number; goldBefore: number; goldAfter: number;
@@ -268,7 +269,7 @@ export type EventType =
   | 'TARGET_PRACTICE_SELECTED' | 'CHARGE_CHANGED' | 'CHARGE_ARMED' | 'HOT_STREAK_CHANGED'
   | 'ENHANCEMENT_SOLD' | 'VINTAGE_GROWN' | 'MAGNETIC_ATTRACTION' | 'BUMP_ROLL'
   | 'JUMPING_BEAN_FREE_PLAY' | 'JUMPING_BEAN_FOLLOWUP'
-  | 'ROUND_BUST' | 'ROUND_RETRY_STARTED' | 'LIFE_RESTORED' | 'FLAME_TUTORIAL_COMPLETED'
+  | 'ROUND_BUST' | 'SHOP_REOPENED_AFTER_BUST' | 'ROUND_RETRY_STARTED' | 'LIFE_RESTORED' | 'FLAME_TUTORIAL_COMPLETED'
   | 'RUN_LOST' | 'RESOLUTION_ERROR' | 'MANUAL_REROLL_STARTED' | 'DEAD_BOARD' | 'DEAD_BOARD_RESCUED';
 export interface EventRecord {
   id: number;

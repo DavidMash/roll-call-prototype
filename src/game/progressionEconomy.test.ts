@@ -41,7 +41,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     const attemptOneDice = state.dice.map(die => die.value);
 
     state = forceBust(state).state;
-    expect(state).toMatchObject({ phase: 'bust', lives: 2, round, target, score: 0, roundAttemptNumber: 2 });
+    expect(state).toMatchObject({ phase: 'shop', lives: 2, round, target, score: 0, roundAttemptNumber: 2 });
     expect(state.bust).toMatchObject({ attempt: 1, livesBefore: 3, livesAfter: 2 });
     state = dispatch(state, { type: 'RETRY_ROUND' }).state;
     expect(state).toMatchObject({ phase: 'round', lives: 2, round, target, roundAttemptNumber: 2, manualRerollsRemaining: 3 });
@@ -49,11 +49,13 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     expect(state.dice.map(die => die.value)).not.toEqual(attemptOneDice);
 
     state = forceBust(state).state;
-    expect(state).toMatchObject({ phase: 'bust', lives: 1, roundAttemptNumber: 3 });
+    expect(state).toMatchObject({ phase: 'shop', lives: 1, roundAttemptNumber: 3 });
     state = dispatch(state, { type: 'RETRY_ROUND' }).state;
     state = forceBust(state).state;
     expect(state).toMatchObject({ phase: 'lost', lives: 0, round, roundAttemptNumber: 3 });
     expect(state.bust).toMatchObject({ livesBefore: 1, livesAfter: 0 });
+    expect(state.shop).toBeNull();
+    expect(state.roundCheckpoint).toBeNull();
     expect(state.stats.busts).toHaveLength(3);
     expect(state.stats.busts.map(item => item.retryStarted)).toEqual([true, true, false]);
     expect(validateAction(state, { type: 'RESTORE_LIFE' })).toContain('open shop');
@@ -69,6 +71,79 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     expect(first.dice.map(die => die.value)).not.toEqual(newRun('retry-rng').state.dice.map(die => die.value));
   });
 
+  it('restores the exact pre-attempt Shop without rewards or regeneration', () => {
+    const state = shop('same-bust-shop');
+    state.gold = 37;
+    state.shop = {
+      offers: [{ id: 41, enhancement: 'bonus', purchased: true }, { id: 42, enhancement: 'workout', purchased: false }],
+      trainingOffers: [{ hand: 'ones', purchased: true }, { hand: 'pair', purchased: false }],
+      diceRerolls: 2,
+      offerRerolls: 1,
+    };
+    state.dice.forEach((die, index) => { die.value = (index + 1) as Rank; });
+    activeFace(state.dice[0]).enhancements.bonus = 1;
+    state.dice[1].flame = { id: 'wellTrained', investedGold: 23 };
+    state.handLevels.ones = 2;
+    const expectedShop = structuredClone(state.shop);
+    const expectedDice = structuredClone(state.dice);
+
+    const attempt = dispatch(state, { type: 'NEXT_ROUND' }, constant(0.2)).state;
+    const result = forceBust(attempt);
+    expect(result.state).toMatchObject({ phase: 'shop', round: 2, roundAttemptNumber: 2, lives: 2, gold: 37, score: 0 });
+    expect(result.state.shop).toEqual(expectedShop);
+    expect(result.state.dice).toEqual(expectedDice);
+    expect(result.state.handLevels.ones).toBe(2);
+    expect(result.state.stats.goldBySource).toMatchObject({ roundBase: 0, unusedRerolls: 0, interest: 0, flameBonus: 0 });
+    expect(result.state.flameReward).toBeNull();
+    expect(result.events.slice(-2).map(event => event.type)).toEqual(['ROUND_BUST', 'SHOP_REOPENED_AFTER_BUST']);
+    expect(result.state.stats.busts.at(-1)).toMatchObject({ round: 2, attempt: 1, checkpointRestored: true, returnedToShop: true });
+  });
+
+  it('captures post-Bust purchases as the next attempt checkpoint', () => {
+    let state = shop('bust-purchase-checkpoint');
+    state.gold = 20;
+    state.shop!.offers = [{ id: 7, enhancement: 'bonus', purchased: false }];
+    state = forceBust(dispatch(state, { type: 'NEXT_ROUND' }, constant(0.2)).state).state;
+    expect(state).toMatchObject({ phase: 'shop', roundAttemptNumber: 2 });
+    state = dispatch(state, { type: 'BUY', offerId: 7, dieId: 0 }).state;
+    const boughtFace = activeFace(state.dice[0]).rank;
+    expect(state.gold).toBe(17);
+    state = dispatch(state, { type: 'RETRY_ROUND' }, constant(0.2)).state;
+    expect(state.roundAttemptNumber).toBe(2);
+    state = forceBust(state).state;
+    expect(state).toMatchObject({ phase: 'shop', roundAttemptNumber: 3, gold: 17 });
+    expect(state.dice[0].faces[boughtFace - 1].enhancements.bonus).toBe(1);
+    expect(state.shop!.offers[0].purchased).toBe(true);
+  });
+
+  it('keeps a post-Bust sale in the second checkpoint', () => {
+    let state = shop('bust-sale-checkpoint');
+    state.gold = 10;
+    activeFace(state.dice[0]).enhancements.workout = 1;
+    state = forceBust(dispatch(state, { type: 'NEXT_ROUND' }, constant(0.2)).state).state;
+    const soldRank = activeFace(state.dice[0]).rank;
+    state = dispatch(state, { type: 'SELL_ENHANCEMENT', dieId: 0, face: soldRank, enhancement: 'workout' }).state;
+    expect(state.gold).toBe(12);
+    state = dispatch(state, { type: 'RETRY_ROUND' }, constant(0.2)).state;
+    state = forceBust(state).state;
+    expect(state.gold).toBe(12);
+    expect(state.dice[0].faces[soldRank - 1].enhancements.workout).toBeUndefined();
+    expect(state.stats.sales).toHaveLength(1);
+  });
+
+  it('includes a post-Bust life restore in the next checkpoint before losing another life', () => {
+    let state = shop('bust-life-checkpoint');
+    state.gold = 100;
+    state = forceBust(dispatch(state, { type: 'NEXT_ROUND' }, constant(0.2)).state).state;
+    expect(state.lives).toBe(2);
+    state = dispatch(state, { type: 'RESTORE_LIFE' }).state;
+    expect(state).toMatchObject({ lives: 3, livesPurchasedThisRun: 1, gold: 75 });
+    state = dispatch(state, { type: 'RETRY_ROUND' }, constant(0.2)).state;
+    state = forceBust(state).state;
+    expect(state).toMatchObject({ phase: 'shop', lives: 2, livesPurchasedThisRun: 1, gold: 75, roundAttemptNumber: 3 });
+    expect(lifeRestoreCost(state.livesPurchasedThisRun)).toBe(40);
+  });
+
   it('rolls back failed-attempt Gold, Workout, Trainer, history, and Vintage growth', () => {
     const state = newRun('rollback', constant(0.2)).state;
     state.gold = 10;
@@ -79,16 +154,28 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     face.enhancements.vintage = 1;
     face.vintageSellValue = 0;
     state.roundCheckpoint = compactCheckpoint(state);
+    const checkpointDice = state.dice.map(die => die.value);
+    state.gold = 99;
+    state.stats.goldBySource.jackpot = 3;
+    state.chargeXMult = 4;
+    state.chargeArmed = true;
+    state.hotStreakCharges = 3;
 
     const result = forceBust(state, constant(0));
     expect(result.events.some(event => event.type === 'VINTAGE_GROWN')).toBe(true);
     expect(result.events.some(event => event.type === 'WORKOUT_INCREMENTED')).toBe(true);
-    expect(result.state).toMatchObject({ phase: 'bust', gold: 10, score: 0, manualRerollsRemaining: 3 });
+    expect(result.state).toMatchObject({ phase: 'shop', gold: 10, score: 0, manualRerollsRemaining: 3 });
     expect(result.state.dice[0].faces[0]).toMatchObject({ workoutPips: 0, vintageSellValue: 0 });
     expect(result.state.handLevels.ones).toBe(1);
     expect(result.state.handPlayCounts.ones).toBe(0);
     expect(result.state.stats.goldBySource.golden).toBe(0);
+    expect(result.state.stats.goldBySource.jackpot).toBe(0);
     expect(result.state.stats.vintageGrowth).toEqual([]);
+    expect(result.state.chargeXMult).toBe(1);
+    expect(result.state.chargeArmed).toBe(false);
+    expect(result.state.hotStreakCharges).toBe(0);
+    expect(result.state.consumed).toEqual([]);
+    expect(result.state.dice.map(die => die.value)).toEqual(checkpointDice);
   });
 
   it('does not pay clear rewards or Flame Bonus on Bust, then can pay normally after a retry clear', () => {

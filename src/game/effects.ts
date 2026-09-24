@@ -1,4 +1,4 @@
-import { CONFIG, roundReward, targetForRound } from './config';
+import { CONFIG, interestForGold, roundReward, targetForRound } from './config';
 import { activeFace, oppositeFace, rollDie, scoringPips } from './dice';
 import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, stacks } from './enhancements';
 import {
@@ -401,6 +401,13 @@ export class Resolver {
   private captureRoundCheckpoint(): void {
     const clone = structuredClone(this.state);
     const { roundCheckpoint: _checkpoint, ...base } = clone;
+    // The checkpoint is a round-ready gameplay baseline plus the exact Shop
+    // session that launched it. Bust restoration reopens this Shop without
+    // generating offers, reroll allowances, exposed faces, or rewards.
+    base.phase = 'shop';
+    base.shop ??= { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
+    base.flameReward = null;
+    base.bust = null;
     // History snapshots and the action audit are retained across Bust separately;
     // omitting them here keeps the checkpoint compact without weakening rollback.
     base.history = [];
@@ -424,34 +431,42 @@ export class Resolver {
     const actions = this.state.stats.actions;
     Object.assign(this.state, structuredClone(checkpoint));
     this.state.roundCheckpoint = structuredClone(checkpoint);
+    this.state.shop ??= { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
     this.state.history = history;
     this.state.stats.actions = actions;
     this.state.lives = failure.livesAfter;
     this.state.roundAttemptNumber = failure.livesAfter > 0 ? failure.attempt + 1 : failure.attempt;
     this.state.bust = failure;
+    this.state.stats.busts.push({ ...failure, checkpointRestored: true, returnedToShop: failure.livesAfter > 0,
+      retryStarted: false, runEndedNoLives: failure.livesAfter === 0 });
     this.state.phase = failure.livesAfter > 0 ? 'bust' : 'lost';
-    this.state.stats.busts.push({ ...failure, retryStarted: false, runEndedNoLives: failure.livesAfter === 0 });
+    if (failure.livesAfter === 0) { this.state.shop = null; this.state.roundCheckpoint = null; }
     this.emit({ type: 'ROUND_BUST', amount: failure.shortfall,
       message: `BUST · Round ${failure.round} attempt ${failure.attempt} · ${failure.score} / ${failure.target} · ${failure.shortfall} short · lives ${failure.livesBefore} → ${failure.livesAfter}` });
-    if (failure.livesAfter === 0) {
+    if (failure.livesAfter > 0) {
+      this.state.phase = 'shop';
+      this.emit({ type: 'SHOP_REOPENED_AFTER_BUST',
+        message: `Round ${failure.round} attempt ${failure.attempt} checkpoint restored · returned to the same Shop · prepare for attempt ${failure.attempt + 1}` });
+    } else {
       this.state.stats.loss = { round: failure.round, afterHand: failureLastHand, score: failure.score, afterAction: failureLastAction,
         manualRerollsRemaining: 0, values: failureValues, consumed: failureConsumed };
       this.emit({ type: 'RUN_LOST', message: `Run over: ${failure.score} / ${failure.target}; no lives remain` });
     }
   }
   startRound(retry = false): void {
+    if (retry) {
+      const priorBust = this.state.stats.busts.at(-1);
+      if (priorBust?.round === this.state.round && !priorBust.retryStarted) priorBust.retryStarted = true;
+    }
     if (this.state.chargeXMult !== 1 || this.state.chargeArmed) this.state.stats.chargeResets++;
     this.state.phase = 'round'; this.state.score = 0; this.state.scoreByHand = {}; this.state.effectScore = 0;
     this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound; this.state.target = targetForRound(this.state.round);
     this.state.consumed = []; this.state.targetPracticeHand = null; this.state.lastRoundPayout = null;
     this.state.chargeXMult = 1; this.state.chargeArmed = false; this.state.hotStreakCharges = 0;
     this.state.hotStreakGoal = ownedFlameIds(this.state).has('hotStreak') ? 'pair' : null;
-    this.state.shop = null; this.state.flameReward = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
-    if (retry) {
-      const priorBust = this.state.stats.busts.at(-1);
-      if (priorBust?.round === this.state.round && !priorBust.retryStarted) priorBust.retryStarted = true;
-    }
+    this.state.flameReward = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
     this.captureRoundCheckpoint();
+    this.state.shop = null;
     this.state.stats.rounds.push({ round: this.state.round, attempt: this.state.roundAttemptNumber, target: this.state.target, firstCrossedScore: null,
       finalScore: 0, clearMargin: null, cleared: false, lastHand: null, lastAction: null,
       manualRerollsGranted: CONFIG.manualRerollsPerRound, manualRerollChargesSpent: 0,
@@ -519,7 +534,7 @@ export class Resolver {
       this.emit({ type: 'ROUND_CLEARED', message: `Round ${this.state.round} cleared with ${this.state.score} / ${this.state.target}` });
       const heldGoldSnapshot = this.state.gold;
       const payout = { baseGold: roundReward(), unusedRerollGold: this.state.manualRerollsRemaining,
-        interestGold: Math.min(5, Math.floor(heldGoldSnapshot / 5)),
+        interestGold: interestForGold(heldGoldSnapshot),
         flameBonusGold: this.state.round % 3 === 0 ? 5 : 0, heldGoldSnapshot, totalRoundRewardGold: 0 };
       payout.totalRoundRewardGold = payout.baseGold + payout.unusedRerollGold + payout.interestGold + payout.flameBonusGold;
       current.payout = payout; this.state.lastRoundPayout = payout;

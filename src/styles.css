@@ -87,6 +87,7 @@ button { font: inherit; }
 .die:focus-visible, .offer:focus-visible, .scorecard-row:focus-visible { outline: 2px solid var(--mantine-color-teal-4); outline-offset: -2px; }
 
 .shop-summary { min-height: 27px; padding: 0 5px; }
+.bust-shop-banner { background: rgba(250,82,82,.08); border: 1px solid rgba(250,82,82,.26); }
 .round-payout-summary { min-width: 0; font-variant-numeric: tabular-nums; }
 .round-payout-summary .mantine-Text-root { line-height: 1.25; }
 .shop-section { min-width: 0; }

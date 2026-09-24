@@ -358,7 +358,7 @@ describe('round boundaries and losing', () => {
       expect(result.error).toBeUndefined();
       const held = earned;
       const flameBonus = round % 3 === 0 ? 5 : 0;
-      const expectedPayout = 5 + 3 + Math.min(5, Math.floor(held / 5)) + flameBonus;
+      const expectedPayout = 5 + 3 + Math.min(10, Math.floor(held / 5)) + flameBonus;
       earned += expectedPayout;
       expect(result.state.phase).toBe(round % 3 === 0 ? 'flameReward' : 'shop');
       expect(result.state.gold).toBe(earned);
@@ -369,7 +369,7 @@ describe('round boundaries and losing', () => {
         finalScore: 225, clearMargin: 225 - targetForRound(round), cleared: true,
       });
       expect(result.state.lastRoundPayout).toEqual({ baseGold: 5, unusedRerollGold: 3,
-        interestGold: Math.min(5, Math.floor(held / 5)), flameBonusGold: flameBonus,
+        interestGold: Math.min(10, Math.floor(held / 5)), flameBonusGold: flameBonus,
         heldGoldSnapshot: held, totalRoundRewardGold: expectedPayout });
       const rewards = result.events.filter(event => event.type === 'GOLD_ADDED');
       const rewardIndex = result.events.indexOf(rewards[0]);
@@ -395,7 +395,7 @@ describe('round boundaries and losing', () => {
     const data = exportRun(game);
     expect(data.roundReached).toBe(5);
     expect(data.rounds.map(round => round.target)).toEqual([50, 70, 90, 125, 165]);
-    expect(data.goldEarned).toBe(46);
+    expect(data.goldEarned).toBe(47);
     expect(data.goldSpent).toBe(0);
   });
   it('keeps Golden income separate from the updated baseline reward', () => {
@@ -438,7 +438,7 @@ describe('round boundaries and losing', () => {
     expect(result.state.round).toBe(2);
     expect(result.state.phase).toBe('shop');
     expect(result.state.score).toBe(113);
-    expect(result.state.gold).toBe(113);
+    expect(result.state.gold).toBe(118);
     expect(result.state.consumed).toEqual([]);
     expect(result.state.stats.rounds.at(-1)!.firstCrossedScore).toBe(113);
   });
@@ -571,7 +571,7 @@ describe('reproducibility and end-to-end domain flow', () => {
             : { type: 'CHOOSE_FLAME' as const, offerId: a.flameReward!.offers[0].id, dieId: 0 };
           a = dispatch(a, action).state; b = dispatch(b, action).state;
         } else if (a.phase === 'shop') {
-        const action = { type: 'NEXT_ROUND' as const };
+        const action = a.bust ? { type: 'RETRY_ROUND' as const } : { type: 'NEXT_ROUND' as const };
         a = dispatch(a, action).state; b = dispatch(b, action).state;
       } else break;
     }
@@ -598,14 +598,13 @@ describe('reproducibility and end-to-end domain flow', () => {
             ? dispatch(game, { type: 'CONTINUE_FLAME_REWARD' }).state
             : dispatch(game, { type: 'CHOOSE_FLAME', offerId: game.flameReward!.offers[0].id, dieId: seed % 5 }).state;
         } else if (game.phase === 'shop') {
+          if (game.bust) { game = dispatch(game, { type: 'RETRY_ROUND' }).state; continue; }
           clears++;
           for (const offer of game.shop!.offers) {
             const bought = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 0 });
             if (!bought.error) { game = bought.state; purchases++; }
           }
           game = dispatch(game, { type: 'NEXT_ROUND' }).state;
-        } else if (game.phase === 'bust') {
-          game = dispatch(game, { type: 'RETRY_ROUND' }).state;
         } else throw new Error(`Unexpected ${game.phase}`);
       }
       if (game.phase === 'lost') losses++;
@@ -615,5 +614,5 @@ describe('reproducibility and end-to-end domain flow', () => {
     expect(clears).toBeGreaterThan(0);
     expect(purchases).toBeGreaterThan(0);
     expect(losses).toBe(20);
-  }, 15000);
+  }, 30000);
 });

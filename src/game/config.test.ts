@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CONFIG, roundReward, targetForRound } from './config';
+import { CONFIG, interestForGold, roundReward, targetForRound } from './config';
 import { newRun } from './engine';
 import { enhancementCost } from './enhancements';
 
@@ -32,6 +32,11 @@ describe('prototype balance progression', () => {
     expect(result.events[0].board.gold).toBe(0);
     expect(result.state.gold).toBe(0);
     expect(result.state.stats.goldEarned).toBe(0);
+  });
+
+  it('pays one interest per five held Gold up to ten', () => {
+    expect([0, 4, 5, 24, 25, 29, 30, 49, 50, 55, 1000].map(interestForGold))
+      .toEqual([0, 0, 1, 4, 5, 5, 6, 9, 10, 10, 10]);
   });
 
   it('prices Jackpot at three gold and pays three gold per stack', () => {

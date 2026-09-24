@@ -183,7 +183,7 @@ describe('Pair resolution and loss integration', () => {
         expect(hasPlayableHand(result.state.dice, result.state.consumed)).toBe(true);
         expect(result.state.phase).toBe('round');
       } else {
-        expect(result.state.phase).toBe('bust');
+        expect(result.state.phase).toBe('shop');
         expect(result.state.bust).toMatchObject({ livesBefore: 3, livesAfter: 2 });
       }
     }

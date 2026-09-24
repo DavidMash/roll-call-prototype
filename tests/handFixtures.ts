@@ -39,11 +39,11 @@ export function winningSlippyRun() {
           ? { type: 'CONTINUE_FLAME_REWARD' }
           : { type: 'CHOOSE_FLAME', offerId: game.flameReward!.offers[0].id, dieId: Math.floor(game.round / 3 - 1) % 5 };
       } else if (game.phase === 'shop') {
-        const offer = game.shop!.offers.find(item => item.enhancement === 'slippy' && !item.purchased);
+        const offer = !game.bust ? game.shop!.offers.find(item => item.enhancement === 'slippy' && !item.purchased) : undefined;
         if (offer && !boughtSlippy) {
           action = { type: 'BUY', offerId: offer.id, dieId: 4 };
           boughtSlippy = true;
-        } else action = { type: 'NEXT_ROUND' };
+        } else action = game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' };
       } else {
         const hands = choices(game);
         const winning = hands.find(choice => game.score + handScore(game.dice, choice.hand, choice.dieIds).score >= game.target);
