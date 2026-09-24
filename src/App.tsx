@@ -73,13 +73,14 @@ export default function App() {
       openRestoreLives={() => setRestoreLivesOpen(true)} />
     {game.error && <Alert color="orange" withCloseButton onClose={game.clearError} my="xs" py={5} title="Action unavailable">{game.error}</Alert>}
     <main className="main-content">
-      {event?.type === 'MAP_TRANSITION' ? <RunMapTransition seed={state.seed} event={event} onContinue={game.continueTransition} />
+      {event?.type === 'MAP_TRANSITION' ? <RunMapTransition key={event.id} seed={state.seed} event={event} onContinue={game.continuePlayback} />
         : board.phase === 'roundSummary' && board.roundSummary ? <RoundSummaryScreen board={board} busy={busy} submit={submit} />
         : board.phase === 'flameSelection' && board.flameSelection ? <FlameSelectionScreen board={board} event={event} busy={busy} progress={progress}
         selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} />
         : board.phase === 'shop' && board.shop ? <ShopScreen board={board} event={event} busy={busy} progress={progress}
         selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} submit={submit} skip={game.skip} />
-        : (board.phase === 'bust' || (board.phase === 'lost' && board.bust)) ? <BustScreen board={board}
+      : (board.phase === 'bust' || (board.phase === 'lost' && board.bust)) ? <BustScreen board={board}
+          onContinue={event?.type === 'ROUND_BUST' && (board.bust?.livesAfter ?? 0) > 0 ? game.continuePlayback : undefined}
           restartSame={() => restart(state.seed)} newRun={() => restart(freshSeed())} />
         : board.phase === 'lost' || board.phase === 'error' ? <Stack gap="sm">
           <Paper p="xl" ta="center" className="end-state">

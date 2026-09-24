@@ -5,8 +5,8 @@ import { DiceRow } from './DiceRow';
 
 const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
 
-export function BustScreen({ board, restartSame, newRun }: {
-  board: Board; restartSame?: () => void; newRun?: () => void;
+export function BustScreen({ board, onContinue, restartSame, newRun }: {
+  board: Board; onContinue?: () => void; restartSame?: () => void; newRun?: () => void;
 }) {
   const bust = board.bust!;
   return <Stack gap="sm">
@@ -18,6 +18,7 @@ export function BustScreen({ board, restartSame, newRun }: {
       {bust.livesAfter > 0 ? <>
         <Text fw={800} mt="xs">1 LIFE LOST</Text>
         <Text size="sm" c="dimmed" mt="md">Restoring your pre-attempt build and returning to the Shop…</Text>
+        {onContinue && <Button mt="lg" onClick={onContinue}>Continue</Button>}
       </> : <><Text fw={800} mt="xs">NO LIVES REMAIN</Text><Title order={3} mt="md">RUN OVER</Title>
         {restartSame && newRun && <Group justify="center" mt="lg"><Button onClick={restartSame}>Restart same seed</Button><Button variant="default" onClick={newRun}>New seed</Button></Group>}
       </>}

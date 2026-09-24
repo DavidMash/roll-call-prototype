@@ -29,8 +29,13 @@ function automaticAction(game: GameState): Action {
 }
 async function ready(page: Page) {
   await page.locator('main').waitFor();
-  const map = page.getByTestId('run-map-transition');
-  if (await map.count()) await map.getByRole('button', { name: 'Continue', exact: true }).click();
+  for (let barrier = 0; barrier < 2; barrier++) {
+    const bustContinue = page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true });
+    if (await bustContinue.count()) { await bustContinue.click(); continue; }
+    const map = page.getByTestId('run-map-transition');
+    if (await map.count()) { await map.getByRole('button', { name: 'Continue', exact: true }).click(); continue; }
+    break;
+  }
   await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
 }
 async function matchBoard(page: Page, game: GameState) {
@@ -517,6 +522,9 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
   }
   expect(game.phase).toBe('lost');
   await expect(page.getByRole('heading', { name: 'RUN OVER' })).toBeVisible();
+  await expect(page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Restart same seed', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New seed', exact: true })).toBeVisible();
   await expect(page.getByTestId('bust-shop-banner')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^RETRY ROUND / })).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('run-over.png'), fullPage: true });

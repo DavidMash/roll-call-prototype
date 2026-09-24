@@ -49,8 +49,13 @@ function flameSeed() {
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
-  const map = page.getByTestId('run-map-transition');
-  if (await map.count()) await map.getByRole('button', { name: 'Continue', exact: true }).click();
+  for (let barrier = 0; barrier < 2; barrier++) {
+    const bustContinue = page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true });
+    if (await bustContinue.count()) { await bustContinue.click(); continue; }
+    const map = page.getByTestId('run-map-transition');
+    if (await map.count()) { await map.getByRole('button', { name: 'Continue', exact: true }).click(); continue; }
+    break;
+  }
   await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
 }
 

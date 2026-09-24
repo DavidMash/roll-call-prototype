@@ -1,9 +1,24 @@
 import { Button, Paper, Text } from '@mantine/core';
+import { useEffect, useRef } from 'react';
 import { BOSSES } from '../game/bosses';
 import { nodeDescription, nodeLabel, routeWindow } from '../game/progression';
 import type { GameEvent } from '../game/types';
 
+const MAP_AUTO_CONTINUE_MS = 5000;
+
 export function RunMapTransition({ seed, event, onContinue }: { seed: string; event: GameEvent; onContinue: () => void }) {
+  const continued = useRef(false);
+  const onContinueRef = useRef(onContinue);
+  onContinueRef.current = onContinue;
+  const continueOnce = () => {
+    if (continued.current) return;
+    continued.current = true;
+    onContinueRef.current();
+  };
+  useEffect(() => {
+    const timeout = window.setTimeout(continueOnce, MAP_AUTO_CONTINUE_MS);
+    return () => window.clearTimeout(timeout);
+  }, [event.id]);
   const destination = event.toNode ?? '';
   const nodes = routeWindow(seed, destination);
   const boss = event.boss ? BOSSES[event.boss] : null;
@@ -26,6 +41,7 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
       <Text fw={950} size="xl">{boss?.name ?? (destinationNode ? nodeDescription(destinationNode) : destination)}</Text>
       {boss && <Text size="sm">{boss.shortRule}</Text>}
     </div>
-    <Button size="sm" variant="light" className="map-continue" onClick={onContinue}>Continue</Button>
+    <Button size="sm" variant="light" className="map-continue" onClick={continueOnce}
+      style={{ '--map-auto-continue-duration': `${MAP_AUTO_CONTINUE_MS}ms` } as React.CSSProperties}>Continue</Button>
   </Paper>;
 }

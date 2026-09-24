@@ -8,6 +8,9 @@ import type { Action, Resolution } from './game/types';
 export type PlaybackSpeed = keyof typeof CONFIG.tickMs;
 const DEFAULT_SEED = 'roll-call';
 
+const isPlaybackBarrier = (event: Resolution['events'][number] | undefined) => event?.type === 'MAP_TRANSITION'
+  || (event?.type === 'ROUND_BUST' && (event.board.bust?.livesAfter ?? 0) > 0);
+
 export function useGame(requestedSeed: string | null, speed: PlaybackSpeed) {
   const reducedMotion = useReducedMotion();
   const [storage] = useState(browserRunStorage);
@@ -22,8 +25,12 @@ export function useGame(requestedSeed: string | null, speed: PlaybackSpeed) {
   useEffect(() => {
     if (!busy) return;
     const currentEvent = result.events[index];
-    if (currentEvent?.type === 'MAP_TRANSITION') return;
-    if (speed === 'instant') { setIndex(result.events.length); return; }
+    if (isPlaybackBarrier(currentEvent)) return;
+    if (speed === 'instant') {
+      const nextBarrier = result.events.findIndex((candidate, candidateIndex) => candidateIndex > index && isPlaybackBarrier(candidate));
+      setIndex(nextBarrier === -1 ? result.events.length : nextBarrier);
+      return;
+    }
     const delay = !reducedMotion && currentEvent?.type === 'ROUND_BUST'
       ? Math.max(CONFIG.tickMs[speed], 1200) : CONFIG.tickMs[speed];
     const timeout = window.setTimeout(() => setIndex(current => current + 1), delay);
@@ -54,7 +61,7 @@ export function useGame(requestedSeed: string | null, speed: PlaybackSpeed) {
     },
     restart: (nextSeed: string) => load(newRun(nextSeed)),
     skip: () => setIndex(result.events.length),
-    continueTransition: () => setIndex(current => Math.min(current + 1, result.events.length)),
+    continuePlayback: () => setIndex(current => Math.min(current + 1, result.events.length)),
     clearError: () => setError(null),
   };
 }
