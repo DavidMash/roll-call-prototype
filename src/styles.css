@@ -82,9 +82,10 @@ button { font: inherit; }
 .die:disabled { cursor: default; }
 .die-id { position: absolute; top: 4px; left: 6px; font-size: .57rem; font-weight: 700; letter-spacing: .05em; }
 .flame-badge { position: absolute; top: 3px; right: 3px; max-width: 64px; height: 15px; padding-inline: 3px; font-size: .48rem; text-transform: none; }
-.pip-face { width: min(46%, 48px); aspect-ratio: 1; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); flex: none; }
+.pip-face { width: min(64%, 64px); aspect-ratio: 1; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); flex: none; }
+.die > .pip-face { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
 .pip-face.compact { width: 28px; }
-.pip { width: clamp(4px, 48%, 9px); aspect-ratio: 1; place-self: center; border-radius: 50%; background: currentColor; box-shadow: 0 1px 1px rgba(0,0,0,.45); }
+.pip { width: clamp(5px, 58%, 12px); aspect-ratio: 1; place-self: center; border-radius: 50%; background: currentColor; box-shadow: 0 1px 1px rgba(0,0,0,.45); }
 .pip-top-left { grid-column: 1; grid-row: 1; }
 .pip-top-right { grid-column: 3; grid-row: 1; }
 .pip-middle-left { grid-column: 1; grid-row: 2; }
@@ -93,9 +94,11 @@ button { font: inherit; }
 .pip-bottom-left { grid-column: 1; grid-row: 3; }
 .pip-bottom-right { grid-column: 3; grid-row: 3; }
 .warden-die-choice { display: inline-flex; align-items: center; gap: 5px; }
-.die-pips { line-height: 1; margin-top: 2px; }
+.die-face-status { position: absolute; left: 4px; right: 4px; bottom: 4px; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.die-face-status.with-capacity { bottom: 15px; }
+.die-pips { line-height: 1; }
 .die-capacity { position: absolute; right: 5px; bottom: 3px; font-size: .52rem; font-weight: 750; }
-.die-badges { max-height: 34px; display: flex; justify-content: center; flex-wrap: wrap; gap: 2px; margin-top: 4px; overflow: hidden; }
+.die-badges { max-height: 34px; display: flex; justify-content: center; flex-wrap: wrap; gap: 2px; overflow: hidden; }
 .die-badges .mantine-Badge-root { height: 15px; padding-inline: 4px; font-size: .5rem; text-transform: none; }
 .die.selected { background: rgba(18, 184, 134, .16); border-color: var(--mantine-color-teal-5); box-shadow: inset 0 0 0 1px var(--mantine-color-teal-7); }
 .die.scoring { background: rgba(250, 176, 5, .12); border-color: var(--mantine-color-yellow-6); }
@@ -204,7 +207,7 @@ button { font: inherit; }
   .dice-row { width: 100%; grid-template-columns: repeat(var(--dice-columns, 5), minmax(0, 1fr)); gap: 4px; }
   .exposed-section .dice-row { grid-template-columns: repeat(var(--dice-columns, 5), minmax(0, 1fr)); }
   .die { min-height: 68px; max-height: 86px; padding: 3px 2px; }
-  .pip-face { width: min(52%, 42px); }
+  .pip-face { width: min(62%, 48px); }
   .pip-face.compact { width: 24px; }
   .ability-label { height: 17px; font-size: .46rem; }
   .die-badges .mantine-Badge-root { font-size: .44rem; padding-inline: 2px; }

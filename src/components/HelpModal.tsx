@@ -26,7 +26,7 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
         <Text size="sm">Every third round is a Boss battle. Each Boss changes the rules, and victory leads to a Flame Selection.</Text>
         <div className="help-item"><Text fw={800}>THE CALLER</Text><Text size="sm">Calls continue throughout the fight. Answer each within three manual plays; a miss halves the current round score, while a matching Jumping Bean answers for free.</Text></div>
         <div className="help-item"><Text fw={800}>THE WARDEN</Text><Text size="sm">All five dice roll, then remain locked. Choose one to unlock without rerolling; each checkpoint lets you choose another.</Text></div>
-        <div className="help-item"><Text fw={800}>THE HEXER</Text><Text size="sm">A seven-sided Cursed Die joins the battle. Include it whenever you play a hand, and expect surprises on its faces.</Text></div>
+        <div className="help-item"><Text fw={800}>THE HEXER</Text><Text size="sm">A Cursed Die joins the battle. Include it whenever you play a hand, and expect surprises on its faces.</Text></div>
         <div className="help-item"><Text fw={800}>THE MARATHON</Text><Text size="sm">The target is tripled. Manual hands enter a seven-manual-play cooldown instead of being permanently consumed.</Text></div>
         <div className="help-item"><Text fw={800}>QUICKDRAW</Text><Text size="sm">The target is one third of normal, but only one Lower-section hand may be played. Upper hands remain normal.</Text></div>
         <div className="help-item"><Text fw={800}>THE FLY</Text><Text size="sm">Hands score ×0.5 until the marked Lower hand catches the Fly. A miss moves it to another unused Lower row.</Text></div>

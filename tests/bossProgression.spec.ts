@@ -276,7 +276,7 @@ test('Hexer preview keeps its faces secret and encounter fits all six dice on on
   let game = await reachBossShop(page, 'hexer');
   const preview = page.getByTestId('boss-preview');
   await expect(preview).toContainText('THE HEXER');
-  await expect(preview).toContainText('A seven-sided Cursed Die joins the battle and must be used in every hand.');
+  await expect(preview).toContainText('A Cursed Die joins the battle and must be used in every hand.');
   await expect(preview).not.toContainText('Weighted');
   await expect(preview).not.toContainText('Jackpot');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();

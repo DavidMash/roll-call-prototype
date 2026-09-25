@@ -36,7 +36,7 @@ The Warden (cyan/teal) rolls all five player dice at encounter start, resolves o
 
 ### The Hexer
 
-The Hexer (toxic green) adds a temporary boss-owned seven-sided Cursed Die that must genuinely participate in every manual scoring hand. It remains freely selectable and rerollable like every other die; scorecard rows only become playable when a valid combination can include it. Its authored faces are:
+The Hexer (toxic green) adds a temporary boss-owned Cursed Die that must genuinely participate in every manual scoring hand. It remains freely selectable and rerollable like every other die; scorecard rows only become playable when a valid combination can include it. Its authored faces are:
 
 | Face | Enhancements |
 |---:|---|

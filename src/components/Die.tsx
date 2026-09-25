@@ -78,20 +78,22 @@ export function Die({ die, selected, highlighted, rolling, ability, flameAbility
       {face.snakeEyed && <Badge className="boss-face-badge" size="xs" color="green">SNAKE EYES</Badge>}
       {face.infected && <Badge className="boss-face-badge" size="xs" color="red">INFECTED</Badge>}
       <PipFace value={displayValue} label={`${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`} showing ${displayValue}`} />
-      {pips !== face.rank && <Text size="xs" c="teal" fw={700} className="die-pips">{pips} Pips</Text>}
-      <div className="die-badges">
-        {visibleEnhancements.map(id => {
-          const count = face.enhancements[id]!;
-          const label = BADGE_LABELS[id]?.(count) ?? `${ENHANCEMENTS[id].name}${count > 1 ? ` ×${count}` : ''}`;
-          return <Tooltip key={id} label={`${ENHANCEMENTS[id].name}: ${ENHANCEMENTS[id].description}`} withArrow>
-            <Badge size="xs" variant="light" color={id === 'golden' ? 'yellow' : id === 'jackpot' ? 'orange' : 'teal'}>{label}</Badge>
-          </Tooltip>;
-        })}
-        {hiddenEnhancements.length > 0 && <Tooltip label={hiddenEnhancements.map(id => `${ENHANCEMENTS[id].name} ×${face.enhancements[id]}`).join(', ')} multiline maw={320} withArrow>
-          <Badge size="xs" variant="outline" color="gray">+{hiddenEnhancements.length}</Badge>
-        </Tooltip>}
+      <div className={`die-face-status${showCapacity ? ' with-capacity' : ''}`}>
+        {pips !== face.rank && <Text size="xs" c="teal" fw={700} className="die-pips">{pips} Pips</Text>}
+        <div className="die-badges">
+          {visibleEnhancements.map(id => {
+            const count = face.enhancements[id]!;
+            const label = BADGE_LABELS[id]?.(count) ?? `${ENHANCEMENTS[id].name}${count > 1 ? ` ×${count}` : ''}`;
+            return <Tooltip key={id} label={`${ENHANCEMENTS[id].name}: ${ENHANCEMENTS[id].description}`} withArrow>
+              <Badge size="xs" variant="light" color={id === 'golden' ? 'yellow' : id === 'jackpot' ? 'orange' : 'teal'}>{label}</Badge>
+            </Tooltip>;
+          })}
+          {hiddenEnhancements.length > 0 && <Tooltip label={hiddenEnhancements.map(id => `${ENHANCEMENTS[id].name} ×${face.enhancements[id]}`).join(', ')} multiline maw={320} withArrow>
+            <Badge size="xs" variant="outline" color="gray">+{hiddenEnhancements.length}</Badge>
+          </Tooltip>}
+        </div>
+        {face.infected && enhancements.length > 0 && <Text size="xs" c="red" fw={800} className="disabled-enhancements">ENHANCEMENTS DISABLED</Text>}
       </div>
-      {face.infected && enhancements.length > 0 && <Text size="xs" c="red" fw={800} className="disabled-enhancements">ENHANCEMENTS DISABLED</Text>}
       {showCapacity && (capacity > 0 || eligible !== undefined) && <Text size="xs" c="dimmed" className="die-capacity">{capacity} / {FACE_TYPE_LIMIT}</Text>}
     </Paper>
   </div>;

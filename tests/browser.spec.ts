@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { newRun, dispatch } from '../src/game/engine';
 import { activeFace } from '../src/game/dice';
 import { handOptions, handStats, HANDS, HAND_IDS } from '../src/game/hands';
@@ -9,6 +9,18 @@ import { CONFIG } from '../src/game/config';
 import type { Action, Enhancement, GameState } from '../src/game/types';
 import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
+
+async function expectCenteredPips(die: Locator) {
+  const dieBox = await die.boundingBox();
+  const faceBox = await die.locator('.pip-face').boundingBox();
+  const pipBox = await die.locator('.pip').first().boundingBox();
+  expect(dieBox).not.toBeNull();
+  expect(faceBox).not.toBeNull();
+  expect(pipBox).not.toBeNull();
+  expect(Math.abs((faceBox!.x + faceBox!.width / 2) - (dieBox!.x + dieBox!.width / 2))).toBeLessThan(1);
+  expect(Math.abs((faceBox!.y + faceBox!.height / 2) - (dieBox!.y + dieBox!.height / 2))).toBeLessThan(1);
+  expect(pipBox!.width / dieBox!.width).toBeGreaterThan(.09);
+}
 
 function bestHand(game: GameState) {
   const dice = activeEncounterDice(game);
@@ -301,8 +313,8 @@ test('physical dice use centralized pip faces in gameplay, Shop, and Manage Die'
     const button = page.getByRole('button', { name: new RegExp(`^Die ${physical.id + 1}, face ${physical.value},`) });
     await expect(button.locator('.pip-face')).toHaveAttribute('aria-label', `Die ${physical.id + 1} showing ${physical.value}`);
     await expect(button.locator('.pip')).toHaveCount(physical.value);
+    await expectCenteredPips(button);
   }
-
   const shop = await reachShop(page, findShopSeed());
   await expect(page.locator('.exposed-section .pip-face')).toHaveCount(5);
   await page.getByRole('button', { name: /^Die 1,/ }).click();
@@ -631,6 +643,7 @@ test('stackable enhancement purchases show a single readable count badge', async
   await matchBoard(page, game);
 
   await expect(physical).toContainText('Sticky ×2');
+  await expectCenteredPips(physical);
   expect(game.dice[0].faces[game.dice[0].value - 1].enhancements.sticky).toBe(2);
   expect(game.gold).toBe(startingGold - 7); // two 2-Gold Sticky stacks and one 3-Gold offer reroll
   const face = game.dice[0].value;
