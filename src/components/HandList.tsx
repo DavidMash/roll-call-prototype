@@ -12,6 +12,8 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
   const unavailableHands = unavailableEncounterHands(board);
   const requiredDieIds = requiredEncounterDieIds(board);
   const ultimate = new Set(ultimateHands(board.handLevels));
+  const ownsUltimate = board.bonfires.includes('ultimate')
+    || board.dice.some(die => activeFlameId(die.flame) === 'ultimate');
   return <section className="scorecard-section" aria-labelledby={`scorecard-${title.toLowerCase()}`}>
     <Text id={`scorecard-${title.toLowerCase()}`} className="scorecard-section-title" size="xs" fw={700} tt="uppercase">{title}</Text>
     <div className="scorecard-rows">
@@ -31,7 +33,7 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
           : selectedWellTrained === undefined ? 1 : wellTrainedMultiplier(activeFlameInvestment(board.dice.find(die => die.id === selectedWellTrained)?.flame), board.handPlayCounts[hand]);
         const showWellTrained = selected && (board.bonfires.includes('wellTrained') || selectedWellTrained !== undefined);
         const hotTarget = board.hotStreakGoal === hand;
-        const isUltimate = ultimate.has(hand);
+        const isUltimate = ownsUltimate && ultimate.has(hand);
         const score = board.scoreByHand[hand];
         const state = consumed ? 'consumed' : selected ? 'selected' : playable ? 'playable' : 'unavailable';
         const scoreLabel = score === undefined ? 'no score' : `${score} points`;

@@ -154,17 +154,16 @@ for (const testCase of [
   });
 }
 
-test('scorecard Ultimate badges match the domain ranking and update with training', async ({ page }) => {
+test('scorecard Ultimate badges require the Flame or Bonfire and match the domain ranking', async ({ page }) => {
   const seed = 'ultimate-scorecard-badges';
   const game = newRun(seed).state;
   await page.goto(`/?seed=${seed}&speed=instant`);
   await ready(page);
-  let expected = ultimateHands(game.handLevels);
-  await expect(page.locator('[data-testid^="ultimate-badge-"]')).toHaveCount(3);
-  for (const hand of HAND_IDS) await expect(page.getByTestId(`ultimate-badge-${hand}`)).toHaveCount(expected.includes(hand) ? 1 : 0);
+  await expect(page.locator('[data-testid^="ultimate-badge-"]')).toHaveCount(0);
 
   game.handLevels.ones = 2;
-  expected = ultimateHands(game.handLevels);
+  game.dice[0].flame = { id: 'ultimate', investedGold: 50 };
+  const expected = ultimateHands(game.handLevels);
   await page.evaluate(saved => localStorage.setItem('roll-call:active-run', JSON.stringify({ version: 1, state: saved })), game);
   await page.reload();
   await ready(page);
@@ -172,6 +171,14 @@ test('scorecard Ultimate badges match the domain ranking and update with trainin
   for (const hand of HAND_IDS) await expect(page.getByTestId(`ultimate-badge-${hand}`)).toHaveCount(expected.includes(hand) ? 1 : 0);
   await page.getByTestId('ultimate-badge-ones').hover();
   await expect(page.getByText('One of your three highest-ranked hands. Hand level ranks first, then trained scoring strength.')).toBeVisible();
+
+  game.dice[0].flame = null;
+  game.bonfires.push('ultimate');
+  await page.evaluate(saved => localStorage.setItem('roll-call:active-run', JSON.stringify({ version: 1, state: saved })), game);
+  await page.reload();
+  await ready(page);
+  await expect(page.locator('[data-testid^="ultimate-badge-"]')).toHaveCount(3);
+  for (const hand of HAND_IDS) await expect(page.getByTestId(`ultimate-badge-${hand}`)).toHaveCount(expected.includes(hand) ? 1 : 0);
 });
 
 test('Warden rolls all dice locked and lets the player choose the first die without rerolling', async ({ page }) => {
