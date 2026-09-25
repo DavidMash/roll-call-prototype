@@ -92,7 +92,6 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
       <Paper p="xs" className="shop-section">
         <Group justify="space-between" className="section-heading">
           <Text fw={700} size="sm" tt="uppercase" lts=".08em">Hand Training</Text>
-          <Tooltip label="Permanent Base Pips and Base Mult upgrades for this run" withArrow><Text size="xs" c="violet">ⓘ 4 gold each</Text></Tooltip>
         </Group>
         <div className="shop-grid training-grid">{shop.trainingOffers.map(item => <TrainingCard key={item.hand} offer={item}
           level={board.handLevels[item.hand]} gold={board.gold} busy={busy}
