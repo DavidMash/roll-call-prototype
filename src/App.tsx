@@ -17,11 +17,11 @@ import type { Action } from './game/types';
 import { useGame } from './useGame';
 import type { PlaybackSpeed } from './useGame';
 
-const query = new URLSearchParams(window.location.search);
-const requestedSeed = query.get('seed');
-const initialSeed = requestedSeed || 'roll-call';
-const initialSpeed = ['normal', 'fast', 'instant'].includes(query.get('speed') ?? '') ? query.get('speed') as PlaybackSpeed : 'normal';
 const freshSeed = () => `roll-${Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join('-')}`;
+const query = new URLSearchParams(window.location.search);
+const requestedSeed = query.get('seed')?.trim() || null;
+const initialSeed = requestedSeed ?? freshSeed();
+const initialSpeed = ['normal', 'fast', 'instant'].includes(query.get('speed') ?? '') ? query.get('speed') as PlaybackSpeed : 'normal';
 
 export default function App() {
   const [seedInput, setSeedInput] = useState(initialSeed);
@@ -34,7 +34,7 @@ export default function App() {
   const [restoreLivesOpen, setRestoreLivesOpen] = useState(false);
   const [hudHeight, setHudHeight] = useState(60);
   const appRef = useRef<HTMLDivElement>(null);
-  const game = useGame(requestedSeed, speed);
+  const game = useGame(requestedSeed, initialSeed, speed);
   const { board, state, busy, event, progress } = game;
   const theme = screenTheme(board);
   useLayoutEffect(() => setSeedInput(state.seed), [state.seed]);

@@ -6,17 +6,16 @@ import { browserRunStorage, loadPersistedRun, savePersistedRun } from './game/pe
 import type { Action, Resolution } from './game/types';
 
 export type PlaybackSpeed = keyof typeof CONFIG.tickMs;
-const DEFAULT_SEED = 'roll-call';
 
 const isPlaybackBarrier = (event: Resolution['events'][number] | undefined) => event?.type === 'MAP_TRANSITION'
   || (event?.type === 'ROUND_BUST' && (event.board.bust?.livesAfter ?? 0) > 0);
 
-export function useGame(requestedSeed: string | null, speed: PlaybackSpeed) {
+export function useGame(requestedSeed: string | null, fallbackSeed: string, speed: PlaybackSpeed) {
   const reducedMotion = useReducedMotion();
   const [storage] = useState(browserRunStorage);
   const [result, setResult] = useState<Resolution>(() => {
     const saved = loadPersistedRun(storage, requestedSeed);
-    return saved ? { state: saved, events: [] } : newRun(requestedSeed ?? DEFAULT_SEED);
+    return saved ? { state: saved, events: [] } : newRun(requestedSeed ?? fallbackSeed);
   });
   const [index, setIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);

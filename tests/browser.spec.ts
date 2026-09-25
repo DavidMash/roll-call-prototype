@@ -38,7 +38,10 @@ async function ready(page: Page) {
     const bustContinue = page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true });
     if (await bustContinue.count()) { await bustContinue.click(); continue; }
     const map = page.getByTestId('run-map-transition');
-    if (await map.count()) { await map.getByRole('button', { name: 'Continue', exact: true }).click(); continue; }
+    if (await map.count()) {
+      await map.getByRole('button', { name: 'Continue', exact: true }).evaluate(element => (element as HTMLElement).click());
+      continue;
+    }
     break;
   }
   await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
@@ -781,6 +784,19 @@ test('fast event playback and skipping produce the same outcome as instant playb
   await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toBeVisible();
   await page.getByRole('button', { name: 'Skip playback' }).click();
   await matchBoard(page, dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }).state);
+});
+
+test('a seedless first visit generates a random seed and then resumes it', async ({ page }) => {
+  await page.goto('/?speed=instant');
+  await ready(page);
+  const firstSeed = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state.seed as string, RUN_STORAGE_KEY);
+  expect(firstSeed).toMatch(/^roll-[a-z0-9]+-[a-z0-9]+$/);
+  expect(firstSeed).not.toBe('roll-call');
+
+  await page.reload();
+  await ready(page);
+  const resumedSeed = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state.seed as string, RUN_STORAGE_KEY);
+  expect(resumedSeed).toBe(firstSeed);
 });
 
 test('settled progress resumes across reloads and return visits with seed-aware precedence', async ({ page }) => {

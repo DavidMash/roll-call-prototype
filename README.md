@@ -2,7 +2,7 @@
 
 Roll Call is a deterministic React/TypeScript/Vite dice roguelike. The domain engine resolves actions synchronously and emits immutable events and board snapshots; React only plays those snapshots. Playback speed cannot change outcomes.
 
-The browser keeps one active run in local storage. Refreshing the page or returning without a `seed` query resumes the latest settled game state; an interrupted event playback or map transition is skipped. A matching `?seed=` resumes that save, while a different explicit seed starts a fresh run and replaces it. Starting, restarting, or generating a run also replaces the saved run. Playback speed, selections, dialogs, and other transient UI state are not saved.
+The browser keeps one active run in local storage. Refreshing the page or returning without a `seed` query resumes the latest settled game state; when no saved run exists, the game generates a random seed. An interrupted event playback or map transition is skipped. A matching `?seed=` resumes that save, while a different explicit seed starts a fresh run and replaces it. Starting, restarting, or generating a run also replaces the saved run. Playback speed, selections, dialogs, and other transient UI state are not saved.
 
 ## Rounds, lives, and Busts
 
