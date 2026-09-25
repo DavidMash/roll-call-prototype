@@ -267,7 +267,9 @@ button { font: inherit; }
 .map-node-placeholder { width: calc(var(--map-node-width) + var(--map-connector-width)); flex: none; }
 .map-connector { width: var(--map-connector-width); height: 2px; position: relative; background: rgba(255,255,255,.15); }
 .map-connector.route-active::after { content: ''; position: absolute; inset: 0; background: var(--screen-primary); transform: scaleX(0); transform-origin: left center;
-  box-shadow: 0 0 9px color-mix(in srgb, var(--screen-primary) 82%, transparent); animation: map-route-fill 1100ms 180ms cubic-bezier(.2,.8,.2,1) forwards; }
+  box-shadow: 0 0 9px color-mix(in srgb, var(--screen-primary) 82%, transparent); animation: map-route-fill-forward 1100ms 180ms cubic-bezier(.2,.8,.2,1) forwards; }
+.map-connector.route-backward::after { background: #f59e0b; transform-origin: right center; box-shadow: 0 0 9px rgba(245,158,11,.82);
+  animation-name: map-route-fill-backward; }
 .run-map-node { width: var(--map-node-width); height: 62px; display: grid; place-content: center; gap: 1px; flex: none; border: 1px solid rgba(255,255,255,.18); border-radius: 13px;
   color: var(--mantine-color-gray-5); background: #13191e; font-size: .68rem; font-weight: 850; transform: scale(.86); }
 .run-map-node.destination { color: white; border-color: var(--screen-primary); background: color-mix(in srgb, var(--screen-primary) 22%, #12181d); box-shadow: 0 0 30px color-mix(in srgb, var(--screen-primary) 30%, transparent); animation: map-arrive 1400ms cubic-bezier(.2,.8,.2,1) both; }
@@ -288,7 +290,8 @@ button { font: inherit; }
 @keyframes map-screen-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-5px) scale(.995); } }
 @keyframes map-arrive { from { transform: translateX(24px) scale(.72); opacity: .35; } to { transform: translateX(0) scale(1.08); opacity: 1; } }
 @keyframes map-copy { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes map-route-fill { to { transform: scaleX(1); } }
+@keyframes map-route-fill-forward { to { transform: scaleX(1); } }
+@keyframes map-route-fill-backward { to { transform: scaleX(1); } }
 @keyframes map-continue-fill { to { transform: scaleX(1); } }
 @keyframes boss-flash { 35% { box-shadow: inset 0 0 80px color-mix(in srgb, var(--screen-primary) 28%, transparent); } }
 @media (max-width: 720px) { .run-map-track { --map-node-width: 64px; } .run-map-node { height: 54px; font-size: .58rem; } .run-map-transition { padding: 18px 8px; } }

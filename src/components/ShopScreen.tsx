@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Group, Modal, Paper, Progress, SimpleGrid, Stack, Text, Tooltip } from '@mantine/core';
+import { Alert, Badge, Button, Group, Modal, Paper, Progress, SimpleGrid, Stack, Text } from '@mantine/core';
 import { useState } from 'react';
 import { CONFIG, diceRerollCost, offerRerollCost } from '../game/config';
 import { activeFace } from '../game/dice';

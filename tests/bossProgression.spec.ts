@@ -364,7 +364,8 @@ test('Boss clear shows +10 Boss Reward summary before the Flame Selection map', 
   await expect(flameMap.locator('.run-map-node')).toHaveCount(5);
   const activeConnector = flameMap.getByTestId('active-map-connector');
   await expect(activeConnector).toHaveCount(1);
-  expect(await activeConnector.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('map-route-fill');
+  await expect(activeConnector).toHaveClass(/route-forward/);
+  expect(await activeConnector.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('map-route-fill-forward');
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await ready(page);
   await expect(page.getByRole('main').getByText('FLAME SELECTION', { exact: true })).toBeVisible();

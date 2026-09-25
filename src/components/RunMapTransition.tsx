@@ -62,7 +62,7 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
           && ((previousNode.id === event.fromNode && node.id === destination)
             || (previousNode.id === destination && node.id === event.fromNode));
         return <div className="run-map-segment" key={node.id}>
-          {index > 0 && <span className={`map-connector ${joinsTravel ? 'route-active' : ''}`}
+          {index > 0 && <span className={`map-connector ${joinsTravel ? `route-active route-${event.direction ?? 'forward'}` : ''}`}
             data-testid={joinsTravel ? 'active-map-connector' : undefined} aria-hidden="true" />}
           <div className={`run-map-node node-${node.type} ${node.id === destination ? 'destination' : ''}`}
             title={nodeDescription(node)} aria-current={node.id === destination ? 'step' : undefined}>

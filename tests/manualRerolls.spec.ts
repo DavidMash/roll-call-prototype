@@ -188,6 +188,15 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   await bustContinue.click();
   const fallbackMap = page.getByTestId('run-map-transition');
   await expect(fallbackMap).toBeVisible({ timeout: 15000 });
+  const fallbackConnector = fallbackMap.getByTestId('active-map-connector');
+  await expect(fallbackConnector).toHaveClass(/route-backward/);
+  const fallbackConnectorStyle = await fallbackConnector.evaluate(element => {
+    const style = getComputedStyle(element, '::after');
+    return { animationName: style.animationName, backgroundColor: style.backgroundColor, transformOrigin: style.transformOrigin };
+  });
+  expect(fallbackConnectorStyle.animationName).toBe('map-route-fill-backward');
+  expect(fallbackConnectorStyle.backgroundColor).toBe('rgb(245, 158, 11)');
+  expect(Number.parseFloat(fallbackConnectorStyle.transformOrigin)).toBeGreaterThan(0);
   await fallbackMap.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.getByTestId('bust-shop-banner')).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/ROUND \d+ BUST · 1 LIFE LOST/)).toBeVisible();
