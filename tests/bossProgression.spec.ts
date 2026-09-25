@@ -21,6 +21,7 @@ async function ready(page: Page) {
     const map = page.getByTestId('run-map-transition');
     if (await map.count()) {
       await map.getByRole('button', { name: 'Continue', exact: true }).evaluate(element => (element as HTMLElement).click());
+      await expect(map).toHaveCount(0);
       continue;
     }
     break;
@@ -88,10 +89,8 @@ test('local route transition auto-continues after its visible themed three-secon
   const destination = map.locator('[aria-current="step"]');
   await expect(destination).toContainText('Round 1');
   await expect(map.getByText('Round 1', { exact: true })).toHaveCount(2);
-  const trackBox = await map.locator('.run-map-track').boundingBox();
-  const nodeBox = await destination.boundingBox();
-  expect(nodeBox!.y).toBeGreaterThanOrEqual(trackBox!.y);
-  expect(nodeBox!.y + nodeBox!.height).toBeLessThanOrEqual(trackBox!.y + trackBox!.height);
+  await expect(map.locator('.run-map-node')).toHaveCount(3);
+  await expect(map.locator('.map-node-placeholder')).toHaveCount(2);
   const continueButton = map.getByRole('button', { name: 'Continue', exact: true });
   await expect(continueButton.locator('.map-continue-countdown')).toHaveText('3');
   const fillStyle = await map.locator('.map-continue-fill').evaluate(element => {
@@ -100,7 +99,12 @@ test('local route transition auto-continues after its visible themed three-secon
   });
   expect(fillStyle).toMatchObject({ animationDuration: '3s', animationName: 'map-continue-fill' });
   expect(fillStyle.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
-  await page.waitForTimeout(1100);
+  await page.waitForTimeout(1500);
+  const trackBox = await map.locator('.run-map-track').boundingBox();
+  const nodeBox = await destination.boundingBox();
+  expect(nodeBox!.y).toBeGreaterThanOrEqual(trackBox!.y);
+  expect(nodeBox!.y + nodeBox!.height).toBeLessThanOrEqual(trackBox!.y + trackBox!.height);
+  expect(Math.abs((nodeBox!.x + nodeBox!.width / 2) - (trackBox!.x + trackBox!.width / 2))).toBeLessThan(2);
   await expect(map).toBeVisible();
   await expect(continueButton.locator('.map-continue-countdown')).toHaveText('2');
   await expect(map).toHaveCount(0, { timeout: 3000 });
@@ -355,7 +359,12 @@ test('Boss clear shows +10 Boss Reward summary before the Flame Selection map', 
 
   await page.getByText('NORMAL', { exact: true }).click();
   await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
-  await expect(page.getByTestId('run-map-transition')).toHaveAttribute('data-destination', `flame:after-round:${game.round}`);
+  const flameMap = page.getByTestId('run-map-transition');
+  await expect(flameMap).toHaveAttribute('data-destination', `flame:after-round:${game.round}`);
+  await expect(flameMap.locator('.run-map-node')).toHaveCount(5);
+  const activeConnector = flameMap.getByTestId('active-map-connector');
+  await expect(activeConnector).toHaveCount(1);
+  expect(await activeConnector.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('map-route-fill');
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await ready(page);
   await expect(page.getByRole('main').getByText('FLAME SELECTION', { exact: true })).toBeVisible();

@@ -18,7 +18,7 @@ export function routeThrough(seed: string, throughRound: number): RunNode[] {
   return route;
 }
 
-export function routeWindow(seed: string, destinationId: string, radius = 3): RunNode[] {
+export function routeWindow(seed: string, destinationId: string, radius = 2): RunNode[] {
   const roundMatch = Number(destinationId.match(/\d+/)?.[0] ?? 1);
   const route = routeThrough(seed, Math.max(6, roundMatch + 4));
   const index = Math.max(0, route.findIndex(node => node.id === destinationId));

@@ -3,7 +3,7 @@ import { activeFace, rollWeights } from './dice';
 import { dispatch, newRun, validateAction } from './engine';
 import { activeEncounterDice, BOSS_TYPES, bossSchedule, createCursedDie, requiredEncounterDieIds, WARDEN_CHECKPOINT_FRACTIONS, wardenCheckpoints, wardenNextUnlockThreshold } from './bosses';
 import { combinationsForHand, HAND_IDS, hasPlayableHand } from './hands';
-import { routeThrough } from './progression';
+import { routeThrough, routeWindow } from './progression';
 import type { BossType, GameState, RandomSource } from './types';
 import { Resolver } from './effects';
 
@@ -24,6 +24,13 @@ describe('linear route and deterministic boss schedule', () => {
       'round:1', 'shop:before-round:2', 'round:2', 'shop:before-round:3',
       'boss:3', 'flame:after-round:3', 'shop:before-round:4', 'round:4', 'shop:before-round:5',
     ]);
+  });
+
+  it('limits the local map window to five nodes centered on the destination when possible', () => {
+    const window = routeWindow('route', 'boss:6');
+    expect(window).toHaveLength(5);
+    expect(window[2].id).toBe('boss:6');
+    expect(routeWindow('route', 'round:1')).toHaveLength(3);
   });
 
   it('draws all eight bosses before reshuffling without adjacent repeats', () => {

@@ -49,19 +49,28 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
   const nodes = routeWindow(seed, destination);
   const boss = event.boss ? BOSSES[event.boss] : null;
   const destinationNode = nodes.find(node => node.id === destination);
+  const leadingPlaceholders = Math.max(0, 2 - nodes.findIndex(node => node.id === destination));
   return <Paper className={`run-map-transition ${event.boss ? 'boss-reveal' : ''} ${exiting ? 'map-exiting' : ''}`} data-testid="run-map-transition"
     data-destination={destination} role="status" aria-live="polite"
     style={{ '--map-exit-duration': `${MAP_EXIT_MS}ms` } as React.CSSProperties}>
     <div className="map-kicker">{event.direction === 'backward' ? 'FALL BACK' : 'ROUTE ADVANCE'}</div>
     <div className="run-map-track" aria-label="Local run route">
-      {nodes.map((node, index) => <div className="run-map-segment" key={node.id}>
-        {index > 0 && <span className="map-connector" aria-hidden="true" />}
-        <div className={`run-map-node node-${node.type} ${node.id === destination ? 'destination' : ''}`}
-          title={nodeDescription(node)} aria-current={node.id === destination ? 'step' : undefined}>
-          <span className="node-glyph">{node.type === 'shop' ? '¤' : node.type === 'flame_selection' ? '◆' : node.type === 'boss_round' ? '!' : '•'}</span>
-          <span>{nodeLabel(node)}</span>
-        </div>
-      </div>)}
+      {Array.from({ length: leadingPlaceholders }, (_, index) => <span className="map-node-placeholder" key={`placeholder-${index}`} aria-hidden="true" />)}
+      {nodes.map((node, index) => {
+        const previousNode = nodes[index - 1];
+        const joinsTravel = index > 0 && event.fromNode !== null && event.fromNode !== undefined
+          && ((previousNode.id === event.fromNode && node.id === destination)
+            || (previousNode.id === destination && node.id === event.fromNode));
+        return <div className="run-map-segment" key={node.id}>
+          {index > 0 && <span className={`map-connector ${joinsTravel ? 'route-active' : ''}`}
+            data-testid={joinsTravel ? 'active-map-connector' : undefined} aria-hidden="true" />}
+          <div className={`run-map-node node-${node.type} ${node.id === destination ? 'destination' : ''}`}
+            title={nodeDescription(node)} aria-current={node.id === destination ? 'step' : undefined}>
+            <span className="node-glyph">{node.type === 'shop' ? '¤' : node.type === 'flame_selection' ? '◆' : node.type === 'boss_round' ? '!' : '•'}</span>
+            <span>{nodeLabel(node)}</span>
+          </div>
+        </div>;
+      })}
     </div>
     <div className="map-arrival">
       <Text size="xs" fw={800} tt="uppercase" lts=".14em">Arriving at</Text>

@@ -40,6 +40,7 @@ async function ready(page: Page) {
     const map = page.getByTestId('run-map-transition');
     if (await map.count()) {
       await map.getByRole('button', { name: 'Continue', exact: true }).evaluate(element => (element as HTMLElement).click());
+      await expect(map).toHaveCount(0);
       continue;
     }
     break;
