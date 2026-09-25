@@ -125,7 +125,7 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
           onClick={clickDie} onDropOffer={attemptPurchase} tutorialDieId={tutorialDieId} tutorialLabel={tutorialLabel} />
       </Paper>
       <div className="shop-action-dock">
-        <Text size="xs" c="dimmed">{returnedFromBust ? 'Prepare for another attempt.' : 'Upgrades are permanent for this run.'}</Text>
+        <Text size="xs" c="dimmed">{returnedFromBust ? 'Prepare for another attempt.' : 'Prepare for the next round.'}</Text>
         <Button size="sm" disabled={busy} aria-label={returnedFromBust ? `RETRY ROUND ${board.round}` : 'NEXT ROUND'}
           color={returnedFromBust ? 'red' : undefined}
           onClick={() => submit(returnedFromBust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' })}>
