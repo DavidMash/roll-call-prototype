@@ -8,6 +8,7 @@ export const CONFIG = {
   manualRerollsPerRound: 3,
   roundRewardBase: 5,
   bossRewardGold: 10,
+  infectedFacePipPenalty: 3,
   interestInterval: 5,
   interestCap: 10,
   diceRerollBase: 2,

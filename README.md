@@ -68,7 +68,7 @@ After every scoring hand, Snake Eyes deterministically converts up to two eligib
 
 ### The Infected
 
-One physical face on every player die starts infected. An infected face keeps its value but its attached enhancements are disabled; whole-die Flames and Bonfires still work. An exposed infected face spreads to clean landing faces on other dice using one snapshot generation per roll batch. Infection rolls back on Bust and disappears after the encounter.
+One physical face on every player die starts infected. An infected face keeps its value for hand qualification but contributes 3 fewer Pips, to a minimum of 0; the penalty applies after permanent face-Pip gains such as Workout. Its attached enhancements are disabled, while whole-die Flames and Bonfires still work. An exposed infected face spreads to clean landing faces on other dice using one snapshot generation per roll batch. Infection rolls back on Bust and disappears after the encounter.
 
 ## Gold and the Shop
 

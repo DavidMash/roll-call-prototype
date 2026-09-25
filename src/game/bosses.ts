@@ -55,7 +55,7 @@ export const BOSSES: Record<BossType, BossDefinition> = {
   },
   infected: {
     name: 'THE INFECTED',
-    shortRule: 'Infected faces spread when other dice roll and lose their enhancements.',
+    shortRule: 'Infected faces spread, lose their enhancements, and contribute 3 fewer Pips (minimum 0).',
     primary: '#DC2626',
     secondary: '#FB7185',
   },

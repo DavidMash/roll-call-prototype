@@ -47,7 +47,7 @@ export function Die({ die, selected, highlighted, rolling, ability, flameAbility
   const capacity = faceEnhancementTypes(face).length;
   const dieLabel = die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`;
   const displayValue = face.rank;
-  const temporaryState = face.snakeEyed ? ', Snake-Eyed temporary face' : face.infected ? ', infected face; enhancements disabled' : '';
+  const temporaryState = face.snakeEyed ? ', Snake-Eyed temporary face' : face.infected ? ', infected face; 3 fewer pips; enhancements disabled' : '';
   const dieDetails = `${dieLabel}, face ${displayValue}, ${pips} scoring pips${temporaryState}${flameId ? `, Flame ${FLAMES[flameId].name}, ${flameInvestment} of 100 Gold` : ''}${enhancementSummary ? `, ${enhancementSummary}` : ''}`;
   const accessibilityLabel = wardenLocked
     ? `${dieDetails}, locked${unlockAt === undefined ? '' : ` until ${unlockAt} points`}${wardenSelectable ? ', selectable to unlock' : ''}`

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activeFace } from './dice';
+import { activeFace, scoringPips } from './dice';
 import { Resolver } from './effects';
 import { dispatch, newRun, validateAction } from './engine';
 import { handOptions, HAND_IDS, LOWER_HAND_IDS } from './hands';
@@ -256,18 +256,60 @@ describe('The Infected', () => {
     if (state.boss?.type === 'infected') state.boss.infectedFaces = [];
   }
 
-  it('starts with an infected physical face on every die and disables only that face enhancements', () => {
+  it('starts with an infected physical face on every die', () => {
     const state = bossRound('infected', constant(.2));
     expect(state.dice.every(die => die.faces.filter(face => face.infected).length === 1)).toBe(true);
+  });
+
+  it('subtracts 3 Pips from an infected scoring face without reducing Hand Base Pips', () => {
+    const state = bossRound('infected');
     clearInfection(state);
-    expose(state, [2, 2, 4, 5, 6]);
-    state.dice[0].faces[1].infected = true;
-    state.dice[0].faces[1].enhancements.bonus = 1;
-    state.dice[1].faces[1].enhancements.bonus = 1;
-    expect(handScore(state.dice, 'pair', [0, 1]).pips).toBe(22);
-    state.dice[0].value = 3;
-    state.dice[0].faces[2].enhancements.bonus = 1;
-    expect(handScore(state.dice, 'threes', [0]).pips).toBe(20);
+    state.dice[0].value = 6;
+    activeFace(state.dice[0]).infected = true;
+    expect(scoringPips(activeFace(state.dice[0]))).toBe(3);
+    expect(handScore(state.dice, 'sixes', [0]).pips).toBe(10);
+  });
+
+  it('floors an infected face contribution at 0 Pips', () => {
+    const state = bossRound('infected');
+    clearInfection(state);
+    state.dice[0].value = 2;
+    activeFace(state.dice[0]).infected = true;
+    expect(scoringPips(activeFace(state.dice[0]))).toBe(0);
+    expect(handScore(state.dice, 'twos', [0]).pips).toBe(7);
+  });
+
+  it('applies the penalty to accumulated permanent face Pips', () => {
+    const state = bossRound('infected');
+    clearInfection(state);
+    state.dice[0].value = 6;
+    activeFace(state.dice[0]).workoutPips = 4;
+    activeFace(state.dice[0]).infected = true;
+    expect(scoringPips(activeFace(state.dice[0]))).toBe(7);
+    expect(handScore(state.dice, 'sixes', [0]).pips).toBe(14);
+  });
+
+  it('still suppresses infected-face enhancements while clean faces remain unaffected', () => {
+    const state = bossRound('infected');
+    clearInfection(state);
+    expose(state, [4, 4, 2, 5, 6]);
+    const infected = activeFace(state.dice[0]);
+    const clean = activeFace(state.dice[1]);
+    infected.infected = true;
+    for (const face of [infected, clean]) {
+      face.enhancements.bonus = 1;
+      face.enhancements.golden = 1;
+      face.enhancements.workout = 1;
+    }
+    expect(scoringPips(infected)).toBe(1);
+    expect(scoringPips(clean)).toBe(14);
+    expect(handScore(state.dice, 'pair', [0, 1]).pips).toBe(23);
+
+    state.target = 1_000_000;
+    const result = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.2)).state;
+    expect(result.gold).toBe(1);
+    expect(result.dice[0].faces[3].workoutPips).toBe(0);
+    expect(result.dice[1].faces[3].workoutPips).toBe(1);
   });
 
   it('keeps the whole-die Flame active on an infected exposed face', () => {

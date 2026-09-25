@@ -37,7 +37,7 @@ export function BossPanel({ board }: { board: Board }) {
       : '1 SHOT AVAILABLE'}</Text>}
     {boss.type === 'fly' && <Text size="sm" mt={6} fw={800}>{boss.caught ? 'FLY CAUGHT' : 'FLY LOOSE · ×0.5'}</Text>}
     {boss.type === 'snakeEyes' && <Text size="sm" mt={6}><strong>{boss.mutatedFaces.length} SNAKE-EYED</strong> · Up to two scoring faces become 1 after each hand.</Text>}
-    {boss.type === 'infected' && <Text size="sm" mt={6}><strong>{boss.infectedFaces.length} INFECTED FACES</strong> · Exposed infection spreads across dice when they roll.</Text>}
+    {boss.type === 'infected' && <Text size="sm" mt={6}><strong>{boss.infectedFaces.length} INFECTED FACES</strong> · −3 Pips (minimum 0); enhancements disabled.</Text>}
   </Paper>;
 }
 

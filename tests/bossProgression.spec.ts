@@ -155,7 +155,7 @@ for (const testCase of [
   { type: 'quickdraw', name: 'QUICKDRAW', preview: '⅓ TARGET · Only one Lower hand may be used.', hud: '1 SHOT AVAILABLE' },
   { type: 'fly', name: 'THE FLY', preview: 'Hands score ×0.5 until you catch the moving Fly.', hud: 'FLY LOOSE · ×0.5' },
   { type: 'snakeEyes', name: 'SNAKE EYES', preview: 'Scoring gradually turns your physical faces into 1s.', hud: 'SNAKE-EYED' },
-  { type: 'infected', name: 'THE INFECTED', preview: 'Infected faces spread when other dice roll and lose their enhancements.', hud: 'INFECTED FACES' },
+  { type: 'infected', name: 'THE INFECTED', preview: 'Infected faces spread, lose their enhancements, and contribute 3 fewer Pips (minimum 0).', hud: 'INFECTED FACES' },
 ] as const) {
   test(`${testCase.name} preview, HUD, and theme use the boss architecture`, async ({ page }) => {
     let game = await reachBossShop(page, testCase.type);

@@ -9,7 +9,8 @@ export const oppositeFace = (rank: Rank): Rank => {
   if (rank === 7) throw new Error('The Cursed 7 has no ordinary opposite face.');
   return (7 - rank) as Rank;
 };
-export const baseScoringPips = (face: Face) => face.rank + face.workoutPips;
+export const baseScoringPips = (face: Face) =>
+  Math.max(0, face.rank + face.workoutPips - (face.infected ? CONFIG.infectedFacePipPenalty : 0));
 export const scoringPips = (face: Face) => baseScoringPips(face) + stacks(face, 'bonus') * CONFIG.bonusPips;
 export function createDice(): Die[] {
   return Array.from({ length: CONFIG.diceCount }, (_, id) => ({
