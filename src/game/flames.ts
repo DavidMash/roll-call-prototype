@@ -1,4 +1,4 @@
-import { HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
+import { LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from './hands';
 import type { ActiveFlame, Board, Die, Flame, GameState, HandId, XMultFactor } from './types';
 
 export interface FlameDefinition {
@@ -9,7 +9,7 @@ export interface FlameDefinition {
   affectsXMult: boolean;
 }
 export const FLAMES: Record<Flame, FlameDefinition> = {
-  ultimate: { name: 'Ultimate', shortName: 'ULT', affectsXMult: true, description: 'Scores in a highest-level hand: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Every highest-level hand multiplies XMult by ×5.' },
+  ultimate: { name: 'Ultimate', shortName: 'ULT', affectsXMult: true, description: 'Scores in one of your three Ultimate Hands: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Your three Ultimate Hands globally multiply XMult by ×5.' },
   minigun: { name: 'Minigun', shortName: 'MINI', affectsXMult: true, description: 'Scores in an Upper hand: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Every Upper hand multiplies XMult by ×5.' },
   hailMary: { name: 'Hail Mary', shortName: 'HAIL', affectsXMult: true, description: 'Scores with 0 manual rerolls left: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Every hand played with 0 rerolls multiplies XMult by ×5.' },
   charge: { name: 'Charge', shortName: 'CHG', affectsXMult: true, description: 'This die’s gameplay rolls grow its stored factor by up to +1; arm it to multiply a hand’s XMult.', bonfireDescription: 'Every gameplay die roll grows the global stored factor by +1.' },
@@ -93,7 +93,7 @@ export interface HandStartSnapshot {
   gold: number;
   manualRerollsRemaining: number;
   previousPlays: number;
-  highestHandLevel: number;
+  ultimateHands: HandId[];
   targetPracticeHand: HandId | null;
   hotStreakGoal: HandId | null;
   hotStreakCharges: number;
@@ -109,7 +109,7 @@ export function captureHandStart(state: Pick<GameState, 'gold' | 'manualRerollsR
     gold: state.gold,
     manualRerollsRemaining: state.manualRerollsRemaining,
     previousPlays: state.handPlayCounts[hand],
-    highestHandLevel: Math.max(...HAND_IDS.map(id => state.handLevels[id])),
+    ultimateHands: ultimateHands(state.handLevels),
     targetPracticeHand: state.targetPracticeHand,
     hotStreakGoal: state.hotStreakGoal,
     hotStreakCharges: state.hotStreakCharges,
@@ -121,9 +121,9 @@ export function captureHandStart(state: Pick<GameState, 'gold' | 'manualRerollsR
   };
 }
 
-const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId, handLevel: number) => {
+const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId) => {
   switch (id) {
-    case 'ultimate': return handLevel === snapshot.highestHandLevel;
+    case 'ultimate': return snapshot.ultimateHands.includes(hand);
     case 'minigun': return UPPER_HAND_IDS.includes(hand);
     case 'hailMary': return snapshot.manualRerollsRemaining === 0;
     case 'targetPractice': return hand === snapshot.targetPracticeHand;
@@ -161,12 +161,12 @@ function factorInput(id: Flame, snapshot: HandStartSnapshot, scoringDieIds: numb
   if (id === 'hotStreak') return { input: snapshot.hotStreakCharges + 1, detail: `successful sequence charge ${snapshot.hotStreakCharges + 1}` };
   return {};
 }
-export function handXMultContributions(snapshot: HandStartSnapshot, hand: HandId, handLevel: number, scoringDieIds: number[]): XMultFactor[] {
+export function handXMultContributions(snapshot: HandStartSnapshot, hand: HandId, _handLevel: number, scoringDieIds: number[]): XMultFactor[] {
   const scoring = new Set(scoringDieIds);
   const result: XMultFactor[] = [];
   if (snapshot.chargeArmed && snapshot.chargeXMult > 1) result.push({ source: 'charge', value: snapshot.chargeXMult, dieId: null, detail: 'armed stored Charge' });
   for (const id of snapshot.bonfires) {
-    if (!FLAMES[id]?.affectsXMult || id === 'charge' || !qualifies(id, snapshot, hand, handLevel)) continue;
+    if (!FLAMES[id]?.affectsXMult || id === 'charge' || !qualifies(id, snapshot, hand)) continue;
     const value = factorValue(id, 100, snapshot, scoringDieIds);
     if (value > 1) {
       const context = factorInput(id, snapshot, scoringDieIds);
@@ -175,7 +175,7 @@ export function handXMultContributions(snapshot: HandStartSnapshot, hand: HandId
   }
   for (const die of snapshot.dice) {
     const id = die.flame;
-    if (!id || !scoring.has(die.dieId) || !FLAMES[id].affectsXMult || id === 'charge' || !qualifies(id, snapshot, hand, handLevel)) continue;
+    if (!id || !scoring.has(die.dieId) || !FLAMES[id].affectsXMult || id === 'charge' || !qualifies(id, snapshot, hand)) continue;
     const value = factorValue(id, die.investedGold, snapshot, scoringDieIds);
     if (value > 1) result.push({ source: id, value, dieId: die.dieId, ...factorInput(id, snapshot, scoringDieIds) });
   }

@@ -25,8 +25,8 @@ export function BossPanel({ board }: { board: Board }) {
       <Progress value={Math.min(100, board.score / board.target * 100)} color="cyan" size="sm" />
       <Text size="xs" fw={800}>{boss.activeDieIds.length
         ? `ACTIVE · ${boss.activeDieIds.map(id => `D${id + 1}`).join(', ')}`
-        : 'D1 DEPLOYING'}</Text>
-      <Text size="xs" c="dimmed">Fixed release order: D1 → D2 → D3 → D4 → D5</Text>
+        : 'CHOOSE YOUR FIRST DIE'}</Text>
+      <Text size="xs" c="dimmed">Choose any locked die now and at each reached checkpoint. Unlocking keeps its face.</Text>
     </Stack>}
     {boss.type === 'hexer' && <div className="hexer-rule" data-testid="hexer-rule">
       <Text size="sm"><strong>CURSE:</strong> Include the Cursed Die whenever you play a hand.</Text>

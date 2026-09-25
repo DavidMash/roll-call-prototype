@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { activeEncounterDice, bossTypeForRound, wardenCheckpoints } from '../src/game/bosses';
 import { dispatch, newRun } from '../src/game/engine';
-import { handOptions, HANDS, HAND_IDS } from '../src/game/hands';
+import { handOptions, HANDS, HAND_IDS, ultimateHands } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { BossType, GameState } from '../src/game/types';
 
@@ -135,56 +135,100 @@ test('Caller preview hides the call, then encounter reveals it and its counter',
   await expect(page.getByTestId('live-score-panel')).toHaveCSS('position', 'sticky');
 });
 
-test('Warden preview stays concise and encounter shows locked dice with checkpoint scores', async ({ page }) => {
+test('scorecard Ultimate badges match the domain ranking and update with training', async ({ page }) => {
+  const seed = 'ultimate-scorecard-badges';
+  const game = newRun(seed).state;
+  await page.goto(`/?seed=${seed}&speed=instant`);
+  await ready(page);
+  let expected = ultimateHands(game.handLevels);
+  await expect(page.locator('[data-testid^="ultimate-badge-"]')).toHaveCount(3);
+  for (const hand of HAND_IDS) await expect(page.getByTestId(`ultimate-badge-${hand}`)).toHaveCount(expected.includes(hand) ? 1 : 0);
+
+  game.handLevels.ones = 2;
+  expected = ultimateHands(game.handLevels);
+  await page.evaluate(saved => localStorage.setItem('roll-call:active-run', JSON.stringify({ version: 1, state: saved })), game);
+  await page.reload();
+  await ready(page);
+  await expect(page.locator('[data-testid^="ultimate-badge-"]')).toHaveCount(3);
+  for (const hand of HAND_IDS) await expect(page.getByTestId(`ultimate-badge-${hand}`)).toHaveCount(expected.includes(hand) ? 1 : 0);
+  await page.getByTestId('ultimate-badge-ones').hover();
+  await expect(page.getByText('One of your three highest-ranked hands. Hand level ranks first, then trained scoring strength.')).toBeVisible();
+});
+
+test('Warden rolls all dice locked and lets the player choose the first die without rerolling', async ({ page }) => {
   let game = await reachBossShop(page, 'warden');
   const preview = page.getByTestId('boss-preview');
-  await expect(preview).toContainText('Begin with D1; checkpoints release the rest in order.');
-  await expect(preview).not.toContainText('10%');
+  await expect(preview).toContainText('All five dice roll locked; choose one now and one at each checkpoint.');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await ready(page);
-  await expect(page.getByTestId('boss-panel')).toContainText('ACTIVE · D1');
+  await expect(page.getByTestId('boss-panel')).toContainText('CHOOSE YOUR FIRST DIE');
   if (game.boss?.type !== 'warden') throw new Error('Warden fixture failed');
   await expect(page.locator('.gameplay-dock .die')).toHaveCount(5);
-  await expect(page.getByRole('button', { name: /^Die 1, face/ })).toBeEnabled();
-  for (const [index, id] of [2, 3, 4, 5].entries()) {
-    const threshold = game.boss.checkpoints[index];
-    const die = page.getByRole('button', { name: `Die ${id}, locked until ${threshold} points` });
+  await expect(page.locator('.gameplay-dock .die.warden-locked')).toHaveCount(5);
+  for (const id of [1, 2, 3, 4, 5]) {
+    const die = page.getByRole('button', { name: new RegExp(`^Die ${id}, face .* locked, selectable to unlock$`) });
     await expect(die).toBeVisible();
-    await expect(die).toBeDisabled();
+    await expect(die).toBeEnabled();
     await expect(die).toHaveAttribute('aria-pressed', 'false');
-    await expect(die.locator('.die-lock-overlay')).toContainText(`${threshold} PTS`);
-    await die.evaluate((element: HTMLButtonElement) => element.click());
-    await expect(die).toHaveAttribute('aria-pressed', 'false');
+    await expect(die.locator('.die-lock-overlay')).toContainText('SELECT');
   }
+  const face = game.dice[4].value;
+  await page.getByRole('button', { name: /^Die 5, face .* locked, selectable to unlock$/ }).click();
+  await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();
+  game = dispatch(game, { type: 'UNLOCK_WARDEN_DIE', dieId: 4 }).state;
+  await ready(page);
+  expect(game.dice[4].value).toBe(face);
+  expect(game.boss).toMatchObject({ type: 'warden', startingDieId: 4, activeDieIds: [4] });
+  if (game.boss?.type !== 'warden') throw new Error('Warden fixture failed');
+  const firstCheckpoint = game.boss.checkpoints[0];
   await expect(page.locator('.gameplay-dock .die.warden-locked')).toHaveCount(4);
-  expect(game.boss).toMatchObject({ type: 'warden', startingDieId: 0, activeDieIds: [0] });
+  for (const id of [1, 2, 3, 4]) {
+    const locked = page.getByRole('button', { name: new RegExp(`^Die ${id}, face .* locked until ${firstCheckpoint} points$`) });
+    await expect(locked).toBeDisabled();
+    await expect(locked.locator('.die-lock-overlay')).toContainText(`${firstCheckpoint} PTS`);
+  }
 });
 
-test('Warden checkpoints auto-release D2 onward without interrupting hand selection', async ({ page }) => {
+test('Warden checkpoint pauses play and lets the player choose any remaining die', async ({ page }) => {
   let game = await reachBossShop(page, 'warden');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
+  await ready(page);
+
+  await page.getByRole('button', { name: /^Die 4, face .* locked, selectable to unlock$/ }).click();
+  await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();
+  game = dispatch(game, { type: 'UNLOCK_WARDEN_DIE', dieId: 3 }).state;
   await ready(page);
 
   const first = best(game)!;
   expect(first.score).toBeGreaterThanOrEqual(wardenCheckpoints(game.target)[0]);
   game = await playOne(page, game);
   if (game.boss?.type !== 'warden') throw new Error('Warden fixture failed');
-  expect(game.boss.pendingReinforcements).toBe(0);
-  expect(game.boss.activeDieIds.slice(0, 2)).toEqual([0, 1]);
-  await expect(page.getByRole('button', { name: /^Die 2, face/ })).toBeEnabled();
-  await expect(page.getByRole('button', { name: `Die 3, locked until ${game.boss.checkpoints[1]} points` })).toBeDisabled();
-  await expect(page.locator('.gameplay-dock .die.warden-locked')).toHaveCount(3);
-
-  const second = best(game)!;
-  const handRow = page.getByRole('button', { name: new RegExp(`^${HANDS[second.hand].name} `) });
-  await handRow.click();
-  await expect(handRow).toHaveAttribute('aria-pressed', 'true');
-  for (const dieId of second.dieIds) {
-    await expect(page.getByRole('button', { name: new RegExp(`^Die ${dieId + 1},`) })).toHaveAttribute('aria-pressed', 'true');
+  expect(game.boss.pendingReinforcements).toBe(1);
+  expect(game.boss.activeDieIds).toEqual([3]);
+  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveCount(0);
+  const threshold = game.boss.checkpoints[0];
+  for (const id of [1, 2, 3, 5]) {
+    const locked = page.getByRole('button', { name: new RegExp(`^Die ${id}, face .* locked until ${threshold} points, selectable to unlock$`) });
+    await expect(locked).toBeEnabled();
+    await expect(locked.locator('.die-lock-overlay')).toContainText(`${threshold} PTS`);
   }
-  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeEnabled();
+  const face = game.dice[1].value;
+  await page.getByRole('button', { name: new RegExp(`^Die 2, face .* locked until ${threshold} points, selectable to unlock$`) }).click();
+  await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();
+  game = dispatch(game, { type: 'UNLOCK_WARDEN_DIE', dieId: 1 }).state;
+  await ready(page);
+  expect(game.dice[1].value).toBe(face);
+  if (game.boss?.type !== 'warden') throw new Error('Warden fixture failed');
+  expect(game.boss.activeDieIds).toEqual([3, 1]);
+  const secondThreshold = game.boss.checkpoints[1];
+  await expect(page.locator('.gameplay-dock .die.warden-locked')).toHaveCount(3);
+  for (const id of [1, 3, 5]) {
+    const locked = page.getByRole('button', { name: new RegExp(`^Die ${id}, face .* locked until ${secondThreshold} points$`) });
+    await expect(locked).toBeDisabled();
+  }
+  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeVisible();
 });
 
 test('Hexer preview keeps its faces secret and encounter fits all six dice on one row', async ({ page }) => {

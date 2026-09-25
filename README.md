@@ -32,7 +32,7 @@ The Caller (purple/magenta) chooses from Ones through Sixes, Pair, Two Pair, Thr
 
 ### The Warden
 
-The Warden (cyan/teal) starts with D1 active and D2–D5 locked. Checkpoints at 10%, 25%, 45%, and 70% of the normal target, rounded to the game’s five-point target interval, automatically release D2, D3, D4, and D5 in that order, each with a real gameplay roll. Locked dice cannot be played, manually rerolled, trigger roll effects, or contribute attached Flames; global Bonfires remain active. A retry resets the encounter to D1.
+The Warden (cyan/teal) rolls all five player dice at encounter start, resolves only their landing mechanics, and then locks all five on those faces. The player chooses any die and confirms `UNLOCK DIE`; checkpoints at 5%, 15%, 30%, and 50% of the normal target, rounded to the game’s five-point target interval, pause play and allow another locked die to be chosen. Unlocking retains the rolled face and is never a roll. Every remaining lock shows the same next checkpoint. Locked dice cannot score, be manually rerolled, trigger gameplay effects, or contribute attached Flames; global Bonfires remain active. A retry restores the pre-attempt state, rerolls all five for the new attempt, and returns to the initial choice.
 
 ### The Hexer
 
@@ -112,7 +112,7 @@ Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a f
 
 | Flame | Active rule |
 |---|---|
-| Ultimate | Highest-level hand: `1 + 4p`, max ×5 |
+| Ultimate | One of exactly three ranked Ultimate Hands: `1 + 4p`, max ×5 |
 | Minigun | Upper hand: `1 + 4p`, max ×5 |
 | Hail Mary | Zero rerolls: `1 + 4p`, max ×5 |
 | Charge | Gameplay rolls add `p` to its stored factor; armed factor multiplies XMult |

@@ -1,5 +1,5 @@
 import { Badge, Button, Group, Text, Tooltip } from '@mantine/core';
-import { combinationsForHand, handStats, HANDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from '../game/hands';
+import { combinationsForHand, handStats, HANDS, LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from '../game/hands';
 import { activeFlameId, activeFlameInvestment, wellTrainedMultiplier } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
@@ -9,6 +9,7 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
   title: string; hands: HandId[]; board: Board; selection: Selection; busy: boolean; onSelect: (hand: HandId) => void;
 }) {
   const encounterDice = activeEncounterDice(board);
+  const ultimate = new Set(ultimateHands(board.handLevels));
   return <section className="scorecard-section" aria-labelledby={`scorecard-${title.toLowerCase()}`}>
     <Text id={`scorecard-${title.toLowerCase()}`} className="scorecard-section-title" size="xs" fw={700} tt="uppercase">{title}</Text>
     <div className="scorecard-rows">
@@ -26,15 +27,19 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
           : selectedWellTrained === undefined ? 1 : wellTrainedMultiplier(activeFlameInvestment(board.dice.find(die => die.id === selectedWellTrained)?.flame), board.handPlayCounts[hand]);
         const showWellTrained = selected && (board.bonfires.includes('wellTrained') || selectedWellTrained !== undefined);
         const hotTarget = board.hotStreakGoal === hand;
+        const isUltimate = ultimate.has(hand);
         const score = board.scoreByHand[hand];
         const state = consumed ? 'consumed' : selected ? 'selected' : playable ? 'playable' : 'unavailable';
         const scoreLabel = score === undefined ? 'no score' : `${score} points`;
         return <Button key={hand} variant={selected ? 'light' : 'subtle'} color={selected ? 'teal' : 'gray'}
           className={`scorecard-row ${state} ${targeted ? 'targeted' : ''}`} data-testid={`scorecard-row-${hand}`} data-state={state}
           disabled={busy || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}
-          aria-label={`${definition.name} · Lv. ${stats.level} ${stats.basePips} Pips · ×${stats.baseMultiplier} ${scoreLabel}${consumed ? ' used' : ''}`}>
+          aria-label={`${definition.name} · Lv. ${stats.level} ${stats.basePips} Pips · ×${stats.baseMultiplier}${isUltimate ? ' · Ultimate Hand' : ''} ${scoreLabel}${consumed ? ' used' : ''}`}>
           <span className="scorecard-row-copy">
             <span className="scorecard-hand-name">{targeted && <span className="target-marker" title="Target Practice target">◎ TARGET </span>}{hotTarget && <span className="target-marker" title="Hot Streak goal">🔥 NEXT </span>}{definition.name} <span>· Lv. {stats.level}</span></span>
+            {isUltimate && <Tooltip label="One of your three highest-ranked hands. Hand level ranks first, then trained scoring strength." multiline maw={300} withArrow>
+              <Badge className="ultimate-badge" size="xs" color="grape" variant="light" data-testid={`ultimate-badge-${hand}`}>ULTIMATE</Badge>
+            </Tooltip>}
             <Tooltip label={`${stats.basePips} Base Pips · ×${stats.baseMultiplier} Base Mult`} position="right" withArrow>
               <span className="scorecard-base" data-testid={`scorecard-stats-${hand}`}>{stats.basePips} · ×{stats.baseMultiplier}</span>
             </Tooltip>

@@ -103,6 +103,7 @@ export function validateAction(state: Board, action: Action): string | null {
     ? null : 'A returned Bust Shop is required to retry the round.';
   if (action.type === 'MANUAL_REROLL') {
     if (state.phase !== 'round') return 'Manual rerolls can only be used during a gameplay round.';
+    if (state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0) return 'Unlock a Warden die before taking another action.';
     if (!action.dieIds.length) return 'Select at least one die to reroll.';
     if (new Set(action.dieIds).size !== action.dieIds.length
       || action.dieIds.some(id => !Number.isInteger(id) || !activeEncounterDice(state).some(die => die.id === id))) return 'Select distinct unlocked dice that are on the board.';
@@ -111,14 +112,22 @@ export function validateAction(state: Board, action: Action): string | null {
   }
   if (action.type === 'PLAY') {
     if (state.phase !== 'round') return 'Hands can only be played during a round.';
+    if (state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0) return 'Unlock a Warden die before committing another hand.';
     if (state.consumed.includes(action.hand)) return 'That hand has already been consumed.';
     if (state.boss?.type === 'hexer' && !action.dieIds.includes(state.boss.cursedDieId)) return 'The Cursed Die must participate in every hand.';
     if (!isValidSelection(activeEncounterDice(state), action.hand, action.dieIds)) return 'Select a complete valid set of participating dice.';
     return null;
   }
+  if (action.type === 'UNLOCK_WARDEN_DIE') {
+    if (state.phase !== 'round' || state.boss?.type !== 'warden') return 'Dice can only be unlocked during The Warden encounter.';
+    if (state.boss.pendingReinforcements <= 0) return 'No Warden reinforcement is ready.';
+    const die = state.dice.find(item => item.id === action.dieId && item.owner === 'player');
+    if (!die || state.boss.activeDieIds.includes(die.id)) return 'Choose a locked player die.';
+    return null;
+  }
   if (action.type === 'TOGGLE_CHARGE') {
     if (state.phase !== 'round') return 'Charge can only be armed during a gameplay round.';
-    const owned = state.bonfires.includes('charge') || state.dice.some(die => activeFlameId(die.flame) === 'charge');
+    const owned = state.bonfires.includes('charge') || activeEncounterDice(state).some(die => activeFlameId(die.flame) === 'charge');
     if (!owned) return 'This run does not own Charge.';
     if (!state.chargeArmed && state.chargeXMult <= 1) return 'Charge has no stored bonus yet.';
     return null;
@@ -216,6 +225,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
     switch (action.type) {
       case 'PLAY': resolver.play(action.hand, action.dieIds); break;
       case 'MANUAL_REROLL': resolver.manualReroll(action.dieIds); break;
+      case 'UNLOCK_WARDEN_DIE': resolver.unlockWardenDie(action.dieId); break;
       case 'TOGGLE_CHARGE':
         next.chargeArmed = !next.chargeArmed;
         if (next.chargeArmed) next.stats.chargeArmed++;

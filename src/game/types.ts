@@ -436,6 +436,7 @@ export interface GameState extends GameStateBase { roundCheckpoint: GameStateBas
 export type Action =
   | { type: 'PLAY'; hand: HandId; dieIds: number[] }
   | { type: 'MANUAL_REROLL'; dieIds: number[] }
+  | { type: 'UNLOCK_WARDEN_DIE'; dieId: number }
   | { type: 'TOGGLE_CHARGE' }
   | { type: 'BUY'; offerId: number; dieId: number }
   | { type: 'SELL_ENHANCEMENT'; dieId: number; face: Rank; enhancement: Enhancement }

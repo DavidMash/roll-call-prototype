@@ -20,6 +20,11 @@ function bestHand(game: GameState) {
     .sort((a, b) => (callerHand ? Number(b.hand === callerHand) - Number(a.hand === callerHand) : 0) || b.score - a.score)[0];
 }
 function automaticAction(game: GameState): Action {
+  if (game.boss?.type === 'warden' && game.boss.pendingReinforcements > 0) {
+    const activeDieIds = game.boss.activeDieIds;
+    const die = game.dice.find(item => item.owner === 'player' && !activeDieIds.includes(item.id))!;
+    return { type: 'UNLOCK_WARDEN_DIE', dieId: die.id };
+  }
   const choice = bestHand(game);
   if (game.boss?.type === 'caller' && !game.boss.satisfied && choice?.hand !== game.boss.calledHand && game.manualRerollsRemaining > 0) {
     return { type: 'MANUAL_REROLL', dieIds: [activeEncounterDice(game)[0].id] };
@@ -60,6 +65,15 @@ async function matchBoard(page: Page, game: GameState) {
   for (const die of visibleDice) await expect(page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`}, face ${die.value},`) })).toBeVisible();
 }
 async function playBest(page: Page, game: GameState): Promise<GameState> {
+  if (game.boss?.type === 'warden' && game.boss.pendingReinforcements > 0) {
+    const activeDieIds = game.boss.activeDieIds;
+    const die = game.dice.find(item => item.owner === 'player' && !activeDieIds.includes(item.id))!;
+    await page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},.*selectable to unlock$`) }).click();
+    await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();
+    const next = dispatch(game, { type: 'UNLOCK_WARDEN_DIE', dieId: die.id }).state;
+    await matchBoard(page, next);
+    return next;
+  }
   const choice = bestHand(game);
   if (game.boss?.type === 'caller' && !game.boss.satisfied && choice?.hand !== game.boss.calledHand && game.manualRerollsRemaining > 0) {
     const die = activeEncounterDice(game)[0];

@@ -179,7 +179,7 @@ describe('Jumping Bean effects and Flames', () => {
   });
 
   it.each([
-    { flame: 'ultimate' as const, rank: 4 as Rank, expected: 5 },
+    { flame: 'ultimate' as const, rank: 4 as Rank, expected: 5, trained: true, expectedScore: 88 },
     { flame: 'minigun' as const, rank: 4 as Rank, expected: 5 },
     { flame: 'hailMary' as const, rank: 4 as Rank, expected: 5, zeroRerolls: true },
     { flame: 'dragonsHoard' as const, rank: 4 as Rank, expected: 5, gold: 100 },
@@ -193,9 +193,10 @@ describe('Jumping Bean effects and Flames', () => {
       if (testCase.gold) game.gold = testCase.gold;
       if (testCase.previous) game.handPlayCounts[upperByRank[testCase.rank]] = testCase.previous;
       if (testCase.spend) game.lifetimeNormalShopGoldSpent = testCase.spend;
+      if (testCase.trained) game.handLevels[upperByRank[testCase.rank]] = 2;
     });
     expect(result.state.stats.handScores[0].xMult).toBe(testCase.expected);
-    expect(result.state.stats.handScores[0].score).toBe((7 + testCase.rank) * testCase.expected);
+    expect(result.state.stats.handScores[0].score).toBe(testCase.expectedScore ?? (7 + testCase.rank) * testCase.expected);
   });
 
   it('allows Personal Trainer after finalization and reads Well Trained history before increment', () => {

@@ -37,6 +37,16 @@ export function scoringPlaybackRun() {
         } else action = { type: 'NEXT_ROUND' };
         }
       } else {
+        if (game.boss?.type === 'warden' && game.boss.pendingReinforcements > 0) {
+          const activeDieIds = game.boss.activeDieIds;
+          const die = game.dice.find(item => item.owner === 'player' && !activeDieIds.includes(item.id))!;
+          action = { type: 'UNLOCK_WARDEN_DIE', dieId: die.id };
+          const result = dispatch(game, action);
+          if (result.error) break;
+          actions.push(action);
+          game = result.state;
+          continue;
+        }
         const dice = activeEncounterDice(game);
         const callerHand = game.boss?.type === 'caller' && !game.boss.satisfied ? game.boss.calledHand : null;
         const choices = handOptions(dice, game.consumed).filter(option => !option.consumed)

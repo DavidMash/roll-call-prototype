@@ -13,6 +13,8 @@ interface Props {
   ability?: Enhancement;
   flameAbility?: Flame;
   disabled: boolean;
+  wardenLocked?: boolean;
+  wardenSelectable?: boolean;
   unlockAt?: number;
   eligible?: boolean;
   ineligibleReason?: string;
@@ -30,7 +32,7 @@ const BADGE_LABELS: Partial<Record<Enhancement, (count: number) => string>> = {
 };
 
 export function Die({ die, selected, highlighted, rolling, ability, flameAbility, disabled, eligible,
-  unlockAt, ineligibleReason, lockedReason, allowIneligibleClick = false, showCapacity = false, onClick, onDropOffer }: Props) {
+  wardenLocked = false, wardenSelectable = false, unlockAt, ineligibleReason, lockedReason, allowIneligibleClick = false, showCapacity = false, onClick, onDropOffer }: Props) {
   const face = activeFace(die);
   const enhancements = ENHANCEMENT_IDS.filter(id => face.enhancements[id])
     .sort((a, b) => face.enhancements[b]! - face.enhancements[a]!);
@@ -41,19 +43,19 @@ export function Die({ die, selected, highlighted, rolling, ability, flameAbility
   const flameInvestment = activeFlameInvestment(die.flame);
   const enhancementSummary = enhancements.map(id => `${ENHANCEMENTS[id].name} ×${face.enhancements[id]}`).join(', ');
   const activeAbility = flameAbility ? FLAMES[flameAbility].name : ability ? ENHANCEMENTS[ability].name : '';
-  const wardenLocked = unlockAt !== undefined;
-  const interactionDisabled = disabled || wardenLocked || !!lockedReason || (!!ineligibleReason && !allowIneligibleClick);
+  const interactionDisabled = disabled || (wardenLocked && !wardenSelectable) || !!lockedReason || (!!ineligibleReason && !allowIneligibleClick);
   const capacity = faceEnhancementTypes(face).length;
   const dieLabel = die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`;
+  const dieDetails = `${dieLabel}, face ${die.value}, ${pips} scoring pips${flameId ? `, Flame ${FLAMES[flameId].name}, ${flameInvestment} of 100 Gold` : ''}${enhancementSummary ? `, ${enhancementSummary}` : ''}`;
   const accessibilityLabel = wardenLocked
-    ? `${dieLabel}, locked until ${unlockAt} points`
-    : `${dieLabel}, face ${die.value}, ${pips} scoring pips${flameId ? `, Flame ${FLAMES[flameId].name}, ${flameInvestment} of 100 Gold` : ''}${enhancementSummary ? `, ${enhancementSummary}` : ''}${lockedReason ? `, required: ${lockedReason}` : ineligibleReason ? `, unavailable: ${ineligibleReason}` : ''}`;
+    ? `${dieDetails}, locked${unlockAt === undefined ? '' : ` until ${unlockAt} points`}${wardenSelectable ? ', selectable to unlock' : ''}`
+    : `${dieDetails}${lockedReason ? `, required: ${lockedReason}` : ineligibleReason ? `, unavailable: ${ineligibleReason}` : ''}`;
   return <div className="die-wrap">
     <div className="ability-label" aria-hidden="true">{activeAbility.toUpperCase()}</div>
     <Paper component="button" type="button" withBorder
       className={`die ${die.owner === 'boss' ? 'cursed-die' : ''} ${selected ? 'selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${ability || flameAbility ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''} ${wardenLocked ? 'warden-locked' : ''}`}
-      disabled={disabled || wardenLocked} aria-disabled={interactionDisabled} aria-pressed={selected}
-      title={wardenLocked ? `${dieLabel} locked until ${unlockAt} points` : lockedReason ?? ineligibleReason}
+      disabled={interactionDisabled} aria-disabled={interactionDisabled} aria-pressed={selected}
+      title={wardenLocked ? `${dieLabel} locked${unlockAt === undefined ? '' : ` until ${unlockAt} points`}${wardenSelectable ? ' · choose to unlock' : ''}` : lockedReason ?? ineligibleReason}
       aria-label={accessibilityLabel} data-locked-until={unlockAt}
       onClick={() => { if (!interactionDisabled) onClick(); }}
       onDragOver={event => { if (!interactionDisabled && onDropOffer) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }}
@@ -66,7 +68,7 @@ export function Die({ die, selected, highlighted, rolling, ability, flameAbility
       <Text size="xs" c="dimmed" className="die-id">{die.owner === 'boss' ? 'CURSED' : `D${die.id + 1}`}</Text>
       {wardenLocked && <div className="die-lock-overlay" aria-hidden="true">
         <span className="die-lock-symbol">🔒</span>
-        <span>{unlockAt} PTS</span>
+        <span>{unlockAt === undefined ? 'SELECT' : `${unlockAt} PTS`}</span>
       </div>}
       {flameId && <Tooltip label={`${FLAMES[flameId].name}: ${flameInvestment}/100 Gold. ${FLAMES[flameId].description}`} multiline maw={320} withArrow>
         <Badge className="flame-badge" size="xs" color="orange" variant="light">🔥 {FLAMES[flameId].shortName} {flameInvestment}</Badge>

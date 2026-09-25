@@ -15,6 +15,9 @@ interface Props {
   lockedIds?: number[];
   lockedReasons?: Record<number, string>;
   lockedUntilByDieId?: Record<number, number>;
+  wardenLockedIds?: number[];
+  wardenSelectableIds?: number[];
+  wardenChoiceMode?: boolean;
   showCapacity?: boolean;
   onClick: (dieId: number) => void;
   onDropOffer?: (offerId: number, dieId: number) => void;
@@ -23,6 +26,7 @@ interface Props {
 }
 export function DiceRow({ dice, selected = [], event, disabled, eligibleIds, restrictToEligible = false,
   ineligibleReasons = {}, actionableIneligibleIds = [], lockedIds = [], lockedReasons = {}, lockedUntilByDieId = {}, showCapacity = false,
+  wardenLockedIds = [], wardenSelectableIds = [], wardenChoiceMode = false,
   onClick, onDropOffer, tutorialDieId, tutorialLabel }: Props) {
   return <div className="dice-row" data-dice-count={dice.length}
     style={{ '--dice-columns': dice.length } as CSSProperties}>{dice.map(die => {
@@ -31,7 +35,8 @@ export function DiceRow({ dice, selected = [], event, disabled, eligibleIds, res
       selected={selected.includes(die.id)} highlighted={involved && event?.type !== 'DIE_ROLLED'}
       rolling={involved && (event?.type === 'DICE_REROLL_STARTED' || event?.type === 'DIE_ROLLED')}
       ability={involved ? event?.enhancement : undefined} flameAbility={involved ? event?.flame : undefined}
-      disabled={disabled} eligible={eligibleIds?.includes(die.id)}
+      disabled={disabled || (wardenChoiceMode && !wardenLockedIds.includes(die.id))} eligible={eligibleIds?.includes(die.id)}
+      wardenLocked={wardenLockedIds.includes(die.id)} wardenSelectable={wardenSelectableIds.includes(die.id)}
       unlockAt={lockedUntilByDieId[die.id]}
       lockedReason={lockedIds.includes(die.id) ? lockedReasons[die.id] ?? 'This die is required.' : undefined}
       ineligibleReason={restrictToEligible && !eligibleIds?.includes(die.id) ? ineligibleReasons[die.id] ?? 'This face is not eligible.' : undefined}

@@ -25,7 +25,7 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
       <Tabs.Panel value="bosses" pt="md">
         <Text size="sm">Every third round is a Boss battle. Each Boss changes the rules, and victory leads to a Flame Selection.</Text>
         <div className="help-item"><Text fw={800}>THE CALLER</Text><Text size="sm">Answer the called hand within three plays. A matching Jumping Bean can answer the call too.</Text></div>
-        <div className="help-item"><Text fw={800}>THE WARDEN</Text><Text size="sm">Begin with D1. Reaching the marked checkpoints automatically releases D2 through D5 in order.</Text></div>
+        <div className="help-item"><Text fw={800}>THE WARDEN</Text><Text size="sm">All five dice roll, then remain locked. Choose one to unlock without rerolling; each checkpoint lets you choose another.</Text></div>
         <div className="help-item"><Text fw={800}>THE HEXER</Text><Text size="sm">A seven-sided Cursed Die joins the battle. Include it whenever you play a hand, and expect surprises on its faces.</Text></div>
       </Tabs.Panel>
       <Tabs.Panel value="scoring" pt="md"><Text size="sm"><strong>Score = round(Pips × Mult × XMult).</strong> Ordinary Mult comes only from the played hand’s trained Base Mult. Every applicable Flame produces a factor and resolves as <strong>XMult ×= factor</strong>; multiple factors multiply and XMult defaults to ×1.</Text><Text size="sm" mt="sm">Jumping Bean free-plays the matching Upper hand using only its die. It uses trained hand stats, counts in play history, can trigger applicable Flames and Vintage, and may chain, but never consumes that hand’s normal use. Hitchhiker does not join a Bean free play.</Text></Tabs.Panel>

@@ -1,6 +1,6 @@
 import { CONFIG, targetForRound } from './config';
 import { hashSeed, SeededRng } from './rng';
-import type { BossRuntimeState, BossType, Die, HandId, Rank } from './types';
+import type { BossRuntimeState, BossType, Die, HandId, Rank, WardenBossState } from './types';
 
 export interface BossDefinition {
   name: string;
@@ -18,7 +18,7 @@ export const BOSSES: Record<BossType, BossDefinition> = {
   },
   warden: {
     name: 'THE WARDEN',
-    shortRule: 'Begin with D1; checkpoints release the rest in order.',
+    shortRule: 'All five dice roll locked; choose one now and one at each checkpoint.',
     primary: '#06B6D4',
     secondary: '#14B8A6',
   },
@@ -35,7 +35,7 @@ export const CALLER_HAND_POOL: HandId[] = [
   'ones', 'twos', 'threes', 'fours', 'fives', 'sixes',
   'pair', 'twoPair', 'threeKind', 'smallStraight', 'fullHouse',
 ];
-export const WARDEN_CHECKPOINT_FRACTIONS = [0.1, 0.25, 0.45, 0.7] as const;
+export const WARDEN_CHECKPOINT_FRACTIONS = [0.05, 0.15, 0.3, 0.5] as const;
 export const CURSED_DIE_ID = CONFIG.diceCount;
 
 export const isBossRound = (round: number) => round > 0 && round % 3 === 0;
@@ -79,6 +79,14 @@ export function wardenCheckpoints(target: number): number[] {
     Math.max(CONFIG.targetRounding, Math.round(target * fraction / CONFIG.targetRounding) * CONFIG.targetRounding));
 }
 
+export function wardenNextUnlockThreshold(boss: WardenBossState): number | undefined {
+  if (boss.startingDieId === null) return undefined;
+  const checkpointIndex = boss.pendingReinforcements > 0
+    ? Math.max(0, boss.reachedCheckpoints - boss.pendingReinforcements)
+    : boss.reachedCheckpoints;
+  return boss.checkpoints[checkpointIndex];
+}
+
 export function createBossRuntime(seed: string, round: number, type: BossType): BossRuntimeState {
   switch (type) {
     case 'caller': return {
@@ -94,7 +102,7 @@ export function createBossRuntime(seed: string, round: number, type: BossType): 
       activeDieIds: [],
       startingDieId: null,
       reachedCheckpoints: 0,
-      pendingReinforcements: 0,
+      pendingReinforcements: 1,
     };
     case 'hexer': return { type, cursedDieId: CURSED_DIE_ID };
   }

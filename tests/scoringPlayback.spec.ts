@@ -55,6 +55,9 @@ async function perform(page: Page, game: GameState, action: Action) {
       if (selected !== action.dieIds.includes(physical.id)) await target.click();
     }
     await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();
+  } else if (action.type === 'UNLOCK_WARDEN_DIE') {
+    await page.getByRole('button', { name: new RegExp(`^Die ${action.dieId + 1},.*selectable to unlock$`) }).click();
+    await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();
   } else if (action.type === 'RETRY_ROUND') {
     await page.getByRole('button', { name: /^RETRY ROUND / }).click();
   } else throw new Error(`Unexpected fixture action: ${action.type}`);

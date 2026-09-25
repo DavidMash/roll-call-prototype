@@ -75,7 +75,7 @@ describe('conditional Flames and Bonfires', () => {
     expect(handXMultContributions(captureHandStart(state, 'threeKind'), 'threeKind', 3, [1, 2])).toEqual([]);
   });
   it('applies each Bonfire once globally', () => {
-    const state = game(); state.bonfires = ['ultimate', 'minigun'];
+    const state = game(); state.bonfires = ['ultimate', 'minigun']; state.handLevels.fours = 2;
     const factors = handXMultContributions(captureHandStart(state, 'fours'), 'fours', 1, [0]);
     expect(factors.map(item => item.value)).toEqual([5, 5]);
     expect(composeXMult(factors)).toBe(25);
@@ -96,6 +96,7 @@ describe('conditional Flames and Bonfires', () => {
     expect(XMult_FLAME_IDS).toEqual(FLAME_IDS.filter(id => id !== 'personalTrainer'));
     const state = game([4, 4, 4, 2, 6]); state.gold = 25;
     state.bonfires = ['ultimate', 'dragonsHoard']; flame(state, 0, 'wellTrained', 50);
+    state.handLevels.threeKind = 2;
     state.handPlayCounts.threeKind = 10;
     const factors = handXMultContributions(captureHandStart(state, 'threeKind'), 'threeKind', 1, [0, 1, 2]);
     expect(factors.map(factor => [factor.source, factor.value])).toEqual([['ultimate', 5], ['dragonsHoard', 2], ['wellTrained', 2]]);
@@ -104,7 +105,7 @@ describe('conditional Flames and Bonfires', () => {
   });
   it('plays back factor-by-factor multiplication instead of additive XMult wording', () => {
     const state = game([4, 4, 4, 2, 6]); state.gold = 25; state.bonfires = ['ultimate', 'dragonsHoard'];
-    flame(state, 0, 'wellTrained', 50); state.handPlayCounts.threeKind = 10;
+    flame(state, 0, 'wellTrained', 50); state.handPlayCounts.threeKind = 10; state.handLevels.threeKind = 2;
     const result = play(state);
     const messages = result.events.filter(event => event.type === 'HAND_XMULT_CHANGED').map(event => event.message);
     expect(messages).toEqual([

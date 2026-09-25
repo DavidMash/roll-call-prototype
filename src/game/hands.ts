@@ -1,6 +1,6 @@
 import { activeFace, HAND_RANKS } from './dice';
 import { stacks } from './enhancements';
-import type { Die, HandId, HandOption, Rank } from './types';
+import type { Die, HandId, HandLevels, HandOption, Rank } from './types';
 
 export interface HandDefinition {
   name: string;
@@ -30,6 +30,7 @@ export const HANDS: Record<HandId, HandDefinition> = {
 export const HAND_IDS = Object.keys(HANDS) as HandId[];
 export const UPPER_HAND_IDS = HAND_IDS.filter(id => HANDS[id].rank) as HandId[];
 export const LOWER_HAND_IDS = HAND_IDS.filter(id => !HANDS[id].rank) as HandId[];
+export const ULTIMATE_HAND_COUNT = 3;
 
 export interface HandStats {
   level: number;
@@ -55,6 +56,24 @@ export function handStats(hand: HandId, level: number): HandStats {
     multiplierGrowth,
   };
 }
+export const trainedBaselineStrength = (hand: HandId, level: number) => {
+  const stats = handStats(hand, level);
+  return stats.basePips * stats.baseMultiplier;
+};
+export function rankedHands(handLevels: HandLevels): HandId[] {
+  return [...HAND_IDS].sort((a, b) => {
+    const levelDifference = handLevels[b] - handLevels[a];
+    if (levelDifference) return levelDifference;
+    const strengthDifference = trainedBaselineStrength(b, handLevels[b]) - trainedBaselineStrength(a, handLevels[a]);
+    if (strengthDifference) return strengthDifference;
+    const aRank = HANDS[a].rank;
+    const bRank = HANDS[b].rank;
+    if (aRank && bRank && aRank !== bRank) return bRank - aRank;
+    return HAND_IDS.indexOf(a) - HAND_IDS.indexOf(b);
+  });
+}
+export const ultimateHands = (handLevels: HandLevels): HandId[] =>
+  rankedHands(handLevels).slice(0, ULTIMATE_HAND_COUNT);
 export const initialHandLevels = (): Record<HandId, number> =>
   Object.fromEntries(HAND_IDS.map(hand => [hand, 1])) as Record<HandId, number>;
 export const initialHandPlayCounts = (): Record<HandId, number> =>

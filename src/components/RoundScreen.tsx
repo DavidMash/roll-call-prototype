@@ -9,7 +9,7 @@ import type { Action, Board, GameEvent } from '../game/types';
 import { DiceRow } from './DiceRow';
 import { HandScorecard } from './HandList';
 import { ScoreResolution } from './ScoreResolution';
-import { activeEncounterDice, requiredEncounterDieIds } from '../game/bosses';
+import { activeEncounterDice, requiredEncounterDieIds, wardenNextUnlockThreshold } from '../game/bosses';
 import { BossPanel } from './BossPanel';
 
 export function RoundScreen({ board, event, busy, progress, selection, setSelection, submit, skip }: {
@@ -21,22 +21,23 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
   const wardenDice = wardenBoss
     ? board.dice.filter(die => die.owner === 'player').sort((a, b) => a.id - b.id)
     : null;
+  const wardenLockedIds = wardenBoss && wardenDice
+    ? wardenDice.filter(die => !wardenBoss.activeDieIds.includes(die.id)).map(die => die.id)
+    : [];
+  const awaitingWardenChoice = !!wardenBoss && wardenBoss.pendingReinforcements > 0;
+  const nextWardenThreshold = wardenBoss ? wardenNextUnlockThreshold(wardenBoss) : undefined;
   const lockedUntilByDieId: Record<number, number> = {};
-  if (wardenBoss && wardenDice) {
-    wardenDice.forEach((die, index) => {
-      if (index > 0 && !wardenBoss.activeDieIds.includes(die.id)) {
-        lockedUntilByDieId[die.id] = wardenBoss.checkpoints[index - 1];
-      }
-    });
-  }
+  if (nextWardenThreshold !== undefined) wardenLockedIds.forEach(id => { lockedUntilByDieId[id] = nextWardenThreshold; });
   const requiredDieIds = requiredEncounterDieIds(board);
-  const selectedDieIds = [...new Set([...requiredDieIds, ...selection.dieIds])].sort((a, b) => a - b);
+  const selectedWardenDieId = awaitingWardenChoice && selection.dieIds.length === 1 && wardenLockedIds.includes(selection.dieIds[0])
+    ? selection.dieIds[0] : null;
+  const selectedDieIds = awaitingWardenChoice ? [] : [...new Set([...requiredDieIds, ...selection.dieIds])].sort((a, b) => a - b);
   const selectedHand = selection.hand && handOptions(encounterDice, board.consumed, selectedDieIds)
     .some(option => option.id === selection.hand && !option.consumed) ? selection.hand : null;
   const effectiveSelection: Selection = { dieIds: selectedDieIds, hand: selectedHand };
   const valid = canPlay(encounterDice, board.consumed, effectiveSelection)
     && validateAction(board, { type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds }) === null;
-  const showXMult = hasXMultFlame(board.dice, board.bonfires);
+  const showXMult = hasXMultFlame(encounterDice, board.bonfires);
   const preview = valid ? (() => {
     const hand = effectiveSelection.hand!;
     const base = handScore(encounterDice, hand, effectiveSelection.dieIds, board.handLevels[hand]);
@@ -61,10 +62,10 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
       <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} deadBoard={deadBoard} idleText={idleText} showXMult={showXMult} />
     </div>
     <BossPanel board={board} />
-    {!busy && deadBoard && board.manualRerollsRemaining > 0 && <Alert color="orange" py={5} title="No playable hands" role="status">
+    {!busy && !awaitingWardenChoice && deadBoard && board.manualRerollsRemaining > 0 && <Alert color="orange" py={5} title="No playable hands" role="status">
       Select dice and use a reroll.
     </Alert>}
-    {!busy && !deadBoard && <Group gap="xs" aria-label="Round options remaining">
+    {!busy && !awaitingWardenChoice && !deadBoard && <Group gap="xs" aria-label="Round options remaining">
       {board.manualRerollsRemaining === 0 && <Alert color="orange" py={4} title="NO REROLLS" />}
       <Text size="xs" fw={800} c={lastPlay ? 'red' : 'dimmed'}>{lastPlay ? 'LAST PLAY' : `${availablePlays} ${availablePlays === 1 ? 'PLAY' : 'PLAYS'} AVAILABLE`}</Text>
     </Group>}
@@ -73,31 +74,41 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
       {board.targetPracticeHand && <Text size="xs"><strong>◎ TARGET</strong> · {HANDS[board.targetPracticeHand].name} · ×{Number(targetPracticeMultiplier(targetInvestment).toFixed(4))}</Text>}
     </Group></Paper>}
     <Paper className="scorecard-panel" p="xs">
-      <HandScorecard board={board} selection={effectiveSelection} busy={busy}
+      <HandScorecard board={board} selection={effectiveSelection} busy={busy || awaitingWardenChoice}
         canClear={effectiveSelection.hand !== null || effectiveSelection.dieIds.some(id => !requiredDieIds.includes(id))}
         onSelect={hand => setSelection(selectHand(encounterDice, board.consumed, effectiveSelection, hand))}
         onClear={() => setSelection(requiredDieIds.length ? { dieIds: requiredDieIds, hand: null } : emptySelection())} />
     </Paper>
     <Paper className="gameplay-dock" p="xs">
       <div className="gameplay-dock-content">
-        <DiceRow dice={wardenDice ?? encounterDice} event={event} disabled={busy} selected={effectiveSelection.dieIds}
+        <DiceRow dice={wardenDice ?? encounterDice} event={event} disabled={busy}
+          selected={selectedWardenDieId === null ? effectiveSelection.dieIds : [selectedWardenDieId]}
           lockedIds={requiredDieIds} lockedReasons={Object.fromEntries(requiredDieIds.map(id => [id, 'Required by The Hexer.']))}
+          wardenLockedIds={wardenLockedIds} wardenSelectableIds={awaitingWardenChoice ? wardenLockedIds : []}
+          wardenChoiceMode={awaitingWardenChoice}
           lockedUntilByDieId={wardenBoss ? lockedUntilByDieId : undefined}
-          onClick={id => setSelection(toggleDie(encounterDice, board.consumed, effectiveSelection, id))} />
+          onClick={id => awaitingWardenChoice
+            ? setSelection({ dieIds: selectedWardenDieId === id ? [] : [id], hand: null })
+            : setSelection(toggleDie(encounterDice, board.consumed, effectiveSelection, id))} />
         <div className="gameplay-actions">
-          {(board.bonfires.includes('charge') || board.dice.some(die => die.flame?.id === 'charge')) && <Group gap="xs" justify="flex-end" mb={4}>
+          {(board.bonfires.includes('charge') || encounterDice.some(die => die.flame?.id === 'charge')) && <Group gap="xs" justify="flex-end" mb={4}>
             <Text size="xs" fw={700}>⚡ Charge ×{Number(board.chargeXMult.toFixed(4))}</Text>
             <Button size="compact-xs" color={board.chargeArmed ? 'orange' : 'yellow'} variant={board.chargeArmed ? 'filled' : 'light'}
               disabled={busy || (!board.chargeArmed && board.chargeXMult <= 1)} onClick={() => submit({ type: 'TOGGLE_CHARGE' })}>
               {board.chargeArmed ? 'ARMED — cancel' : `Use Charge ×${Number(board.chargeXMult.toFixed(4))}`}
             </Button>
           </Group>}
-          <Text size="xs" c="dimmed" className="selection-preview">{preview
+          <Text size="xs" c="dimmed" className="selection-preview">{awaitingWardenChoice
+            ? selectedWardenDieId === null ? 'Choose any locked die to bring online' : `D${selectedWardenDieId + 1} will keep its current face`
+            : preview
             ? `${preview.pips} pips × ${preview.multiplier}${showXMult ? ` × ${preview.xMult} XMult` : ''} = ${preview.score} points`
             : effectiveSelection.dieIds.length ? 'Select a complete participating set' : 'Choose a hand or select dice'}</Text>
           <Group gap="xs" wrap="nowrap">
-            <Button size="sm" variant="default" disabled={busy || !canReroll} aria-label={`Reroll Selected — ${effectiveSelection.dieIds.length}`} onClick={() => submit(manualAction)}>↻ Reroll Selected — {effectiveSelection.dieIds.length}</Button>
-            <Button size="sm" color={lastPlay ? 'red' : undefined} disabled={busy || !valid} onClick={() => submit({ type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds })}>{lastPlay ? 'LAST PLAY' : 'PLAY'}</Button>
+            {awaitingWardenChoice ? <Button size="sm" color="cyan" disabled={busy || selectedWardenDieId === null}
+              onClick={() => submit({ type: 'UNLOCK_WARDEN_DIE', dieId: selectedWardenDieId! })}>UNLOCK DIE</Button> : <>
+              <Button size="sm" variant="default" disabled={busy || !canReroll} aria-label={`Reroll Selected — ${effectiveSelection.dieIds.length}`} onClick={() => submit(manualAction)}>↻ Reroll Selected — {effectiveSelection.dieIds.length}</Button>
+              <Button size="sm" color={lastPlay ? 'red' : undefined} disabled={busy || !valid} onClick={() => submit({ type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds })}>{lastPlay ? 'LAST PLAY' : 'PLAY'}</Button>
+            </>}
           </Group>
         </div>
       </div>

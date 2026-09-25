@@ -15,7 +15,7 @@ import { encounterNode, flameNodeAfter, shopNodeBefore } from './progression';
 import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameStateBase, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, RunNode, ScoreSource } from './types';
 
 type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number };
-type RollContext = 'gameplay' | 'shop' | 'flameSelection';
+type RollContext = 'gameplay' | 'wardenSetup' | 'shop' | 'flameSelection';
 const NORMAL_SHOP_SPEND = new Set<GoldSpendSource>(['enhancement', 'shopDiceReroll', 'enhancementReroll', 'handTraining', 'lifeRestore']);
 const UPPER_HAND_BY_FACE: Partial<Record<import('./types').Rank, HandId>> = {
   1: 'ones', 2: 'twos', 3: 'threes', 4: 'fours', 5: 'fives', 6: 'sixes',
@@ -199,7 +199,7 @@ export class Resolver {
     const results = ids.map(dieId => {
       const die = this.state.dice.find(item => item.id === dieId)!;
       const before = die.value;
-      const bumped = context === 'gameplay' && stacks(activeFace(die), 'bump') > 0;
+      const bumped = (context === 'gameplay' || context === 'wardenSetup') && stacks(activeFace(die), 'bump') > 0;
       if (bumped) return { dieId, before, value: (isCursedDie(die) ? Math.min(7, before + 1) : before === 6 ? 1 : before + 1) as import('./types').Rank, weighted: false, bumped, attracted: false };
       const destinations = anchors.length
         ? die.faces.filter(face => stacks(face, 'magnetic') && (!excludeStartingFace || face.rank !== before))
@@ -333,31 +333,20 @@ export class Resolver {
       message: `${HANDS[hand].name} did not answer ${HANDS[boss.calledHand].name} · ${Math.max(0, boss.playsRemaining)} plays remain` });
     return expired;
   }
-  private deployWardenDie(dieId: number): void {
+  unlockWardenDie(dieId: number): void {
     const boss = this.state.boss;
-    if (boss?.type !== 'warden') throw new Error('Warden deployment attempted without The Warden.');
+    if (boss?.type !== 'warden' || boss.pendingReinforcements <= 0) throw new Error('Warden unlock attempted without a pending choice.');
     const starting = boss.startingDieId === null;
     boss.activeDieIds.push(dieId);
     if (starting) boss.startingDieId = dieId;
-    else boss.pendingReinforcements--;
+    boss.pendingReinforcements--;
     this.state.stats.wardenEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
       kind: starting ? 'starting_die' : 'reinforcement', dieId, activeDice: boss.activeDieIds.length });
     const encounter = this.state.stats.bossEncounters.at(-1);
     if (starting && encounter?.boss === 'warden') encounter.wardenStartingDieId = dieId;
     this.emit({ type: 'WARDEN_REINFORCEMENT', boss: 'warden', dieIds: [dieId],
-      message: `${starting ? 'Starting die' : 'Reinforcement'} D${dieId + 1} auto-deployed · real gameplay roll` });
-    this.rollBatch([dieId], 'Warden deployment', 'gameplay');
-    this.drain();
-  }
-  private deployPendingWardenDice(): void {
-    const boss = this.state.boss;
-    if (boss?.type !== 'warden') return;
-    while (boss.pendingReinforcements > 0) {
-      const next = this.state.dice.filter(die => die.owner === 'player')
-        .sort((a, b) => a.id - b.id).find(die => !boss.activeDieIds.includes(die.id));
-      if (!next) throw new Error('The Warden has more pending reinforcements than locked dice.');
-      this.deployWardenDie(next.id);
-    }
+      message: `${starting ? 'Starting die' : 'Reinforcement'} D${dieId + 1} unlocked · face ${this.state.dice.find(die => die.id === dieId)!.value} retained` });
+    this.evaluate();
   }
   play(hand: HandId, dieIds: number[], playSource: HandPlaySource = 'manual'): { winning: boolean; beanRecordIndex: number | null } {
     const freeBean = playSource === 'jumpingBean';
@@ -460,7 +449,7 @@ export class Resolver {
       stickyPreventedReroll: false, followupRerolled: false, roundCleared: winning, jackpotPayout, personalTrainerSucceeded,
     }) - 1 : null;
     if (winning) {
-      if (!freeBean) { this.deployPendingWardenDice(); this.evaluate(); }
+      if (!freeBean) this.evaluate();
       return { winning, beanRecordIndex };
     }
     if (freeBean) return { winning, beanRecordIndex };
@@ -473,7 +462,6 @@ export class Resolver {
     for (const die of activeEncounterDice(this.state)) if (stacks(activeFace(die), 'slippy')) { this.trigger('slippy', die.id, activeFace(die), 'joined post-hand reroll'); rerolls.add(die.id); }
     this.rollBatch([...rerolls], 'Post-hand reroll', 'gameplay');
     this.drain();
-    this.deployPendingWardenDice();
     this.evaluate();
     return { winning: this.state.score >= this.state.target, beanRecordIndex: null };
   }
@@ -491,7 +479,6 @@ export class Resolver {
     this.emit({ type: 'MANUAL_REROLL_STARTED', dieIds: ids, amount: ids.length, message: `Manual reroll; ${this.state.manualRerollsRemaining} remaining` });
     this.rollBatch(ids, 'Manual gameplay reroll', 'gameplay', true);
     this.drain();
-    this.deployPendingWardenDice();
     if (startedDeadBoard && (this.state.score >= this.state.target || hasPlayableHand(activeEncounterDice(this.state), this.state.consumed, requiredDieIds))) {
       record.rescuedDeadBoard = true; round.deadBoardRescues++; this.state.stats.deadBoardRescues++;
       this.emit({ type: 'DEAD_BOARD_RESCUED', dieIds: ids, message: 'Dead board rescued' });
@@ -624,10 +611,9 @@ export class Resolver {
     this.selectTargetPractice();
     if (this.state.boss?.type === 'hexer') this.state.dice.push(createCursedDie());
     if (this.state.boss?.type === 'warden') {
-      const first = this.state.dice.filter(die => die.owner === 'player').sort((a, b) => a.id - b.id)[0];
-      if (!first) throw new Error('The Warden requires at least one player die.');
-      this.deployWardenDie(first.id);
-      this.deployPendingWardenDice();
+      const playerDice = this.state.dice.filter(die => die.owner === 'player').sort((a, b) => a.id - b.id);
+      if (!playerDice.length) throw new Error('The Warden requires at least one player die.');
+      this.rollBatch(playerDice.map(die => die.id), 'Warden opening roll', 'wardenSetup');
     } else this.rollBatch(activeEncounterDice(this.state).map(die => die.id), 'Initial round roll', 'gameplay');
     this.drain(); this.evaluate();
   }

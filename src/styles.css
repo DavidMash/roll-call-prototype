@@ -59,6 +59,7 @@ button { font: inherit; }
 .scorecard-row.targeted { box-shadow: inset 3px 0 var(--mantine-color-orange-6); }
 .scorecard-row.targeted.selected { box-shadow: inset 3px 0 var(--mantine-color-orange-5), inset 0 0 0 1px var(--mantine-color-teal-7); }
 .target-marker { color: var(--mantine-color-orange-4) !important; font-size: .56rem !important; font-weight: 850 !important; letter-spacing: .04em; }
+.ultimate-badge { height: 14px; padding-inline: 4px; font-size: .46rem; letter-spacing: .025em; }
 .well-trained-preview { color: var(--mantine-color-violet-3); font-size: .52rem; font-weight: 750; white-space: nowrap; }
 .scorecard-row.unavailable:disabled { opacity: .35; }
 .scorecard-row.consumed:disabled { opacity: .56; background: rgba(255,255,255,.018); }
@@ -100,8 +101,10 @@ button { font: inherit; }
 .die.ineligible:not([aria-disabled="true"]) { cursor: pointer; }
 .die.locked-selection { cursor: default; }
 .die.warden-locked { cursor: not-allowed; border-color: color-mix(in srgb, var(--screen-primary) 45%, var(--mantine-color-dark-4)); }
+.die.warden-locked:not(:disabled) { cursor: pointer; }
 .die.warden-locked:disabled { opacity: 1; }
-.die.warden-locked > :not(.die-lock-overlay):not(.die-id) { opacity: .2; filter: saturate(.35); }
+.die.warden-locked > :not(.die-lock-overlay):not(.die-id) { opacity: .52; filter: saturate(.65); }
+.die.warden-locked.selected { border-color: var(--mantine-color-cyan-3); box-shadow: inset 0 0 0 2px var(--mantine-color-cyan-6); }
 .die.warden-locked .die-id { z-index: 3; color: var(--mantine-color-gray-4); }
 .die-lock-overlay {
   position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center;

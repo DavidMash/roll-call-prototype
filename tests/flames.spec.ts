@@ -9,7 +9,7 @@ import { activeEncounterDice } from '../src/game/bosses';
 import { CONFIG } from '../src/game/config';
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
 
-function bestHand(game: GameState, requiredDie?: number) {
+function bestHand(game: GameState, requiredDie?: number, requireHistory = false) {
   const dice = activeEncounterDice(game);
   const callerHand = game.boss?.type === 'caller' && !game.boss.satisfied ? game.boss.calledHand : null;
   return handOptions(dice, game.consumed).filter(option => !option.consumed)
@@ -17,10 +17,16 @@ function bestHand(game: GameState, requiredDie?: number) {
       .filter(dieIds => requiredDie === undefined || dieIds.includes(requiredDie))
       .map(dieIds => ({ hand: option.id, dieIds,
         score: handScore(dice, option.id, dieIds, game.handLevels[option.id]).score })))
+    .filter(choice => !requireHistory || game.handPlayCounts[choice.hand] > 0)
     .filter(choice => game.boss?.type !== 'hexer' || choice.dieIds.includes(game.boss.cursedDieId))
     .sort((a, b) => (callerHand ? Number(b.hand === callerHand) - Number(a.hand === callerHand) : 0) || b.score - a.score)[0];
 }
-function automaticAction(game: GameState): Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' }> {
+function automaticAction(game: GameState): Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'UNLOCK_WARDEN_DIE' }> {
+  if (game.boss?.type === 'warden' && game.boss.pendingReinforcements > 0) {
+    const activeDieIds = game.boss.activeDieIds;
+    const die = game.dice.find(item => item.owner === 'player' && !activeDieIds.includes(item.id))!;
+    return { type: 'UNLOCK_WARDEN_DIE', dieId: die.id };
+  }
   const choice = bestHand(game);
   if (game.boss?.type === 'caller' && !game.boss.satisfied && choice?.hand !== game.boss.calledHand && game.manualRerollsRemaining > 0) {
     return { type: 'MANUAL_REROLL', dieIds: [activeEncounterDice(game)[0].id] };
@@ -39,7 +45,11 @@ function flameSeed() {
       } else if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
       else if (game.phase === 'shop') game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' }).state;
       else if (game.phase === 'flameSelection') {
-        if (game.flameSelection!.offers.some(offer => offer.flame === 'wellTrained')) return seed;
+        if (game.flameSelection!.offers.some(offer => offer.flame === 'wellTrained')) {
+          const shop = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
+          const next = dispatch(shop, { type: 'NEXT_ROUND' }).state;
+          if (bestHand(next, 0, true)) return seed;
+        }
         break;
       } else break;
     }
@@ -59,7 +69,7 @@ async function ready(page: Page) {
   await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
 }
 
-async function perform(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'NEXT_ROUND' | 'RETRY_ROUND' | 'CONTINUE_ROUND_SUMMARY' }>) {
+async function perform(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'UNLOCK_WARDEN_DIE' | 'NEXT_ROUND' | 'RETRY_ROUND' | 'CONTINUE_ROUND_SUMMARY' }>) {
   if (action.type === 'PLAY') {
     const handRow = page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) });
     await handRow.click();
@@ -74,6 +84,9 @@ async function perform(page: Page, game: GameState, action: Extract<Action, { ty
     const die = game.dice.find(item => item.id === action.dieIds[0])!;
     await page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) }).click();
     await page.getByRole('button', { name: 'Reroll Selected — 1', exact: true }).click();
+  } else if (action.type === 'UNLOCK_WARDEN_DIE') {
+    await page.getByRole('button', { name: new RegExp(`^Die ${action.dieId + 1},.*selectable to unlock$`) }).click();
+    await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();
   } else if (action.type === 'CONTINUE_ROUND_SUMMARY') await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
   else await page.getByRole('button', { name: action.type === 'RETRY_ROUND' ? `RETRY ROUND ${game.round}` : 'NEXT ROUND', exact: true }).click();
   const next = dispatch(game, action).state;
@@ -164,7 +177,7 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await ready(page);
-  const choice = bestHand(game, 0)!;
+  const choice = bestHand(game, 0, true)!;
   await page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) }).click();
   for (const die of game.dice) {
     const target = page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},`) });
