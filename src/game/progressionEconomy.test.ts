@@ -27,9 +27,16 @@ function forceBust(state: GameState, rng: RandomSource = constant()): ReturnType
 function shop(seed = 'economy-shop'): GameState {
   const state = newRun(seed, constant(0.2)).state;
   state.phase = 'shop';
-  state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
+  state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   state.flameSelection = null;
   return state;
+}
+function clearIntoShop(state: GameState): GameState {
+  state.target = 1;
+  state.stats.rounds.at(-1)!.target = 1;
+  state.dice[0].value = 1;
+  const summary = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant()).state;
+  return dispatch(summary, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
 }
 
 describe('lives, Bust checkpoint, and retry RNG', () => {
@@ -79,6 +86,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
       trainingOffers: [{ hand: 'ones', purchased: true }, { hand: 'pair', purchased: false }],
       diceRerolls: 2,
       offerRerolls: 1,
+      lifeRestores: 0,
     };
     state.dice.forEach((die, index) => { die.value = (index + 1) as Rank; });
     activeFace(state.dice[0]).enhancements.bonus = 1;
@@ -137,11 +145,11 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     state = forceBust(dispatch(state, { type: 'NEXT_ROUND' }, constant(0.2)).state).state;
     expect(state.lives).toBe(2);
     state = dispatch(state, { type: 'RESTORE_LIFE' }).state;
-    expect(state).toMatchObject({ lives: 3, livesPurchasedThisRun: 1, gold: 75 });
+    expect(state).toMatchObject({ lives: 3, gold: 75, shop: { lifeRestores: 1 } });
     state = dispatch(state, { type: 'RETRY_ROUND' }, constant(0.2)).state;
     state = forceBust(state).state;
-    expect(state).toMatchObject({ phase: 'shop', lives: 2, livesPurchasedThisRun: 1, gold: 75, roundAttemptNumber: 3 });
-    expect(lifeRestoreCost(state.livesPurchasedThisRun)).toBe(40);
+    expect(state).toMatchObject({ phase: 'shop', lives: 2, gold: 75, roundAttemptNumber: 3, shop: { lifeRestores: 1 } });
+    expect(lifeRestoreCost(state.shop!.lifeRestores)).toBe(40);
   });
 
   it('rolls back failed-attempt Gold, Workout, Trainer, history, and Vintage growth', () => {
@@ -205,26 +213,72 @@ describe('life restoration economy', () => {
     expect([lifeRestoreCost(10), lifeRestoreCost(11)]).toEqual([580, 690]);
   });
 
-  it('restores exactly one life in Shop, persists its count, and counts the cost for Money to Burn', () => {
+  it('starts a freshly reached Shop at 25 Gold', () => {
+    const state = clearIntoShop(newRun('fresh-restore-shop', constant(0.2)).state);
+    expect(state).toMatchObject({ phase: 'shop', shop: { lifeRestores: 0 } });
+    expect(lifeRestoreCost(state.shop!.lifeRestores)).toBe(25);
+  });
+
+  it('escalates multiple purchases within the same Shop', () => {
     let state = shop();
     state.lives = 2;
     state.gold = 1000;
     const expected = [25, 40, 60, 90];
     for (const cost of expected) {
-      const beforeSpend = state.lifetimeNormalShopGoldSpent;
-      const result = dispatch(state, { type: 'RESTORE_LIFE' });
-      state = result.state;
+      state = dispatch(state, { type: 'RESTORE_LIFE' }).state;
       expect(state.lives).toBe(3);
-      expect(state.stats.lifeRestores.at(-1)).toMatchObject({ cost, livesBefore: 2, livesAfter: 3,
-        lifetimeSpendBefore: beforeSpend, lifetimeSpendAfter: beforeSpend + cost });
+      expect(state.stats.lifeRestores.at(-1)).toMatchObject({ cost, livesBefore: 2, livesAfter: 3 });
       state.lives = 2;
     }
-    expect(state.livesPurchasedThisRun).toBe(4);
-    expect(state.lifetimeNormalShopGoldSpent).toBe(expected.reduce((sum, cost) => sum + cost, 0));
-    expect(state.stats.goldSpentBySource.lifeRestore).toBe(215);
+    expect(state.shop!.lifeRestores).toBe(4);
+    expect(lifeRestoreCost(state.shop!.lifeRestores)).toBe(130);
   });
 
-  it('rejects insufficient Gold and full-life purchases, and a new run resets pricing', () => {
+  it('preserves escalation when a Bust returns to the same pre-round Shop', () => {
+    let state = shop('same-shop-restore-price');
+    state.lives = 1;
+    state.gold = 1000;
+    state = dispatch(state, { type: 'RESTORE_LIFE' }).state;
+    state = forceBust(dispatch(state, { type: 'NEXT_ROUND' }, constant(0.2)).state).state;
+
+    expect(state).toMatchObject({ phase: 'shop', lives: 1, shop: { lifeRestores: 1 } });
+    expect(lifeRestoreCost(state.shop!.lifeRestores)).toBe(40);
+    state = dispatch(state, { type: 'RESTORE_LIFE' }).state;
+    expect(state).toMatchObject({ lives: 2, gold: 935, shop: { lifeRestores: 2 } });
+    expect(state.stats.lifeRestores.map(purchase => purchase.cost)).toEqual([25, 40]);
+  });
+
+  it('resets restoration pricing after clearing the encounter and reaching the next new Shop', () => {
+    let state = shop('next-shop-restore-price');
+    state.lives = 1;
+    state.gold = 1000;
+    state = dispatch(state, { type: 'RESTORE_LIFE' }).state;
+    state = forceBust(dispatch(state, { type: 'NEXT_ROUND' }, constant(0.2)).state).state;
+    state = dispatch(state, { type: 'RESTORE_LIFE' }).state;
+    state = dispatch(state, { type: 'RETRY_ROUND' }, constant(0.2)).state;
+    state = clearIntoShop(state);
+
+    expect(state).toMatchObject({ phase: 'shop', shop: { lifeRestores: 0 } });
+    expect(lifeRestoreCost(state.shop!.lifeRestores)).toBe(25);
+  });
+
+  it('counts life restoration spending toward Money to Burn exactly as before', () => {
+    let state = shop('restore-money-to-burn');
+    state.lives = 1;
+    state.gold = 1000;
+    state = dispatch(state, { type: 'RESTORE_LIFE' }).state;
+    state.lives = 1;
+    state = dispatch(state, { type: 'RESTORE_LIFE' }).state;
+
+    expect(state.lifetimeNormalShopGoldSpent).toBe(65);
+    expect(state.stats.lifetimeNormalShopGoldSpent).toBe(65);
+    expect(state.stats.goldSpentBySource.lifeRestore).toBe(65);
+    expect(state.stats.lifeRestores.at(-1)).toMatchObject({
+      cost: 40, lifetimeSpendBefore: 25, lifetimeSpendAfter: 65,
+    });
+  });
+
+  it('rejects insufficient Gold and full-life purchases', () => {
     const state = shop();
     state.lives = 2;
     state.gold = 24;
@@ -232,8 +286,6 @@ describe('life restoration economy', () => {
     state.gold = 25;
     state.lives = CONFIG.maxLives;
     expect(validateAction(state, { type: 'RESTORE_LIFE' })).toContain('already restored');
-    expect(newRun('restore-reset').state.livesPurchasedThisRun).toBe(0);
-    expect(lifeRestoreCost(newRun('restore-reset').state.livesPurchasedThisRun)).toBe(25);
   });
 });
 
@@ -319,7 +371,7 @@ describe('enhancement selling and Vintage', () => {
     expect(failed.dice[4].faces[5].vintageSellValue).toBe(0);
 
     failed.phase = 'shop';
-    failed.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
+    failed.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     failed.gold = 100;
     const shopRoll = dispatch(failed, { type: 'REROLL_DICE' }, constant(0.99)).state;
     expect(shopRoll.dice[4].faces[5].vintageSellValue).toBe(0);

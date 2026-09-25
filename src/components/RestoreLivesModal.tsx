@@ -7,8 +7,9 @@ const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, in
 export function RestoreLivesModal({ board, opened, busy, onClose, submit }: {
   board: Board; opened: boolean; busy: boolean; onClose: () => void; submit: (action: Action) => void;
 }) {
-  const cost = lifeRestoreCost(board.livesPurchasedThisRun);
-  const nextCost = lifeRestoreCost(board.livesPurchasedThisRun + 1);
+  const restoresAtThisShop = board.shop?.lifeRestores ?? 0;
+  const cost = lifeRestoreCost(restoresAtThisShop);
+  const nextCost = lifeRestoreCost(restoresAtThisShop + 1);
   const full = board.lives >= CONFIG.maxLives;
   return <Modal opened={opened} onClose={onClose} title="RESTORE LIVES" centered transitionProps={{ duration: 0 }}>
     <Stack gap="sm">

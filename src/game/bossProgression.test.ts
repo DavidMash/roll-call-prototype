@@ -11,7 +11,7 @@ const constant = (value = 0): RandomSource => ({ next: () => value });
 function bossRound(type: BossType): GameState {
   const state = newRun(`boss-${type}`, constant(.2)).state;
   state.phase = 'shop';
-  state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
+  state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   state.round = 2;
   state.currentNodeId = 'shop:before-round:3';
   state.bossSchedule[3] = type;
@@ -170,7 +170,7 @@ describe('The Warden', () => {
   it('resolves opening landing mechanics but suppresses opening gameplay and Flame effects', () => {
     const state = newRun('warden-opening-effects', constant(.2)).state;
     state.phase = 'shop';
-    state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
+    state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     state.round = 2;
     state.currentNodeId = 'shop:before-round:3';
     state.bossSchedule[3] = 'warden';

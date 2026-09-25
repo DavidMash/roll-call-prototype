@@ -85,7 +85,7 @@ A failed attempt pays none of these rewards. Interest is +1 per 5 Gold held, rea
 
 Every successful encounter pauses on a concise Round Summary before the next map transition. Its domain-owned snapshot shows score/target, Gold before and after, total Gold earned, and reconciled aggregate rows for Base Reward, unused rerolls, interest, Golden, Jackpot, other gameplay Gold, and Boss Reward when applicable. Bust attempts never create a successful summary.
 
-Lost lives can be restored one at a time only in a normal Shop. The run-wide prices are `25, 40, 60, 90, 130, 180, 240, 310, 390, 480…`; after 390, each new increment is 10 larger than the prior increment. Restoration spending counts toward Money to Burn. The price counter resets only on a new run, and lives cannot exceed three.
+Lost lives can be restored one at a time only in a normal Shop. Each newly reached Shop starts the prices at `25, 40, 60, 90, 130, 180, 240, 310, 390, 480…`; after 390, each new increment is 10 larger than the prior increment. A Bust return preserves the same Shop's escalation, while the next new Shop resets it to 25. Restoration spending counts toward Money to Burn, and lives cannot exceed three.
 
 Lifetime normal-Shop spending includes enhancement purchases, Hand Training, both paid Shop rerolls, and life restoration. Flame Stoke does not count. Enhancement sales are income and do not reduce or increase historical spending.
 

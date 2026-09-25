@@ -37,7 +37,10 @@ function normalizedState(state: GameState): GameState {
     die.flame = id ? { id, investedGold: activeFlameInvestment(die.flame) } : null;
   }
   next.bonfires = next.bonfires.filter(isFlame);
-  if (next.shop) next.shop.offers = next.shop.offers.filter(offer => isEnhancement(offer.enhancement));
+  if (next.shop) {
+    next.shop.offers = next.shop.offers.filter(offer => isEnhancement(offer.enhancement));
+    next.shop.lifeRestores = Math.max(0, Math.floor(next.shop.lifeRestores ?? 0));
+  }
   if (next.flameSelection) next.flameSelection.offers = next.flameSelection.offers.filter(offer => isFlame(offer.flame));
   next.roundSummary ??= null;
   next.stats.jumpingBeanFreePlays ??= [];
@@ -45,7 +48,6 @@ function normalizedState(state: GameState): GameState {
   next.boss ??= null;
   next.currentNodeId ??= '';
   next.lives = Math.max(0, Math.min(CONFIG.maxLives, Math.floor(next.lives ?? CONFIG.maxLives)));
-  next.livesPurchasedThisRun = Math.max(0, Math.floor(next.livesPurchasedThisRun ?? 0));
   next.roundAttemptNumber = Math.max(1, Math.floor(next.roundAttemptNumber ?? 1));
   next.bust ??= null;
   next.flameTutorial ??= { pendingDieId: null, completed: false };
@@ -168,7 +170,7 @@ export function validateAction(state: Board, action: Action): string | null {
   }
   if (action.type === 'RESTORE_LIFE') {
     if (state.lives >= CONFIG.maxLives) return 'All lives are already restored.';
-    if (state.gold < lifeRestoreCost(state.livesPurchasedThisRun)) return 'Not enough gold to restore a life.';
+    if (state.gold < lifeRestoreCost(state.shop.lifeRestores)) return 'Not enough gold to restore a life.';
   }
   if (action.type === 'TRAIN_HAND') {
     const offer = state.shop.trainingOffers.find(item => item.hand === action.hand);
@@ -202,7 +204,7 @@ function execute(state: GameState, run: (resolver: Resolver) => void, random?: R
 export function newRun(seed: string, random?: RandomSource): Resolution {
   const state: GameState = {
     phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: CONFIG.baseTarget,
-    score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, livesPurchasedThisRun: 0, roundAttemptNumber: 1,
+    score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, roundAttemptNumber: 1,
     bossSchedule: bossSchedule(seed), boss: null, currentNodeId: '',
     bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], chargeXMult: 1,
     chargeArmed: false, hotStreakGoal: null, hotStreakCharges: 0, lifetimeNormalShopGoldSpent: 0, consumed: [], shop: null,
@@ -339,14 +341,14 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         break;
       }
       case 'RESTORE_LIFE': {
-        const purchaseNumber = next.livesPurchasedThisRun + 1;
-        const cost = lifeRestoreCost(next.livesPurchasedThisRun);
+        const purchaseNumber = next.stats.lifeRestores.length + 1;
+        const cost = lifeRestoreCost(next.shop!.lifeRestores);
         const goldBefore = next.gold;
         const livesBefore = next.lives;
         const lifetimeSpendBefore = next.lifetimeNormalShopGoldSpent;
         resolver.spendGold(cost, `Restored life #${purchaseNumber}: −${cost} Gold`, 'lifeRestore');
         next.lives++;
-        next.livesPurchasedThisRun++;
+        next.shop!.lifeRestores++;
         next.stats.lifeRestores.push({ round: next.round, purchaseNumber, cost, goldBefore, goldAfter: next.gold,
           livesBefore, livesAfter: next.lives, lifetimeSpendBefore, lifetimeSpendAfter: next.lifetimeNormalShopGoldSpent });
         resolver.emit({ type: 'LIFE_RESTORED', amount: cost,

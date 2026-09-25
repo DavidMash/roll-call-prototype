@@ -62,7 +62,7 @@ describe('focused enhancement roster and migration', () => {
     const game = baseState();
     game.phase = 'shop';
     game.gold = 20;
-    game.shop = { offers: [{ id: 1, enhancement, purchased: false }], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
+    game.shop = { offers: [{ id: 1, enhancement, purchased: false }], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     activeFace(game.dice[0]).enhancements[enhancement] = 3;
     const result = dispatch(game, { type: 'BUY', offerId: 1, dieId: 0 });
     expect(result.error).toContain('capped at 3');
@@ -74,7 +74,7 @@ describe('focused enhancement roster and migration', () => {
     const game = baseState();
     game.phase = 'shop';
     game.gold = 20;
-    game.shop = { offers: [{ id: 1, enhancement: 'multiplier' as Enhancement, purchased: false }], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
+    game.shop = { offers: [{ id: 1, enhancement: 'multiplier' as Enhancement, purchased: false }], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     const result = dispatch(game, { type: 'BUY', offerId: 1, dieId: 0 });
     expect(result.error).toContain('available offer');
     expect(result.state.gold).toBe(20);

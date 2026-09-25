@@ -29,7 +29,7 @@ function shopState(gold = 12): GameState {
   game.phase = 'shop';
   game.gold = gold;
   game.shop = {
-    offers: [], diceRerolls: 0, offerRerolls: 0,
+    offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
     trainingOffers: ['pair', 'fullHouse', 'fiveKind'].map(hand => ({ hand: hand as HandId, purchased: false })),
   };
   return game;

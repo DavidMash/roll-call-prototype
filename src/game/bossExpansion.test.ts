@@ -14,7 +14,7 @@ const constant = (value = 0): RandomSource => ({ next: () => value });
 function bossRound(type: BossType, random: RandomSource = constant(.55)): GameState {
   const state = newRun(`expansion-${type}`, constant(.2)).state;
   state.phase = 'shop';
-  state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
+  state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   state.round = 2;
   state.currentNodeId = 'shop:before-round:3';
   state.bossSchedule[3] = type;

@@ -140,7 +140,7 @@ describe('investment, uniqueness, and reward lifecycle', () => {
   it('rejects Reward spending, fractions, overspend, over-cap, duplicates, and investment outside shops', () => {
     const state = reward(); flame(state, 0, 'charge', 95); state.gold = 4;
     expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 0, amount: 1 })).toContain('normal Shop');
-    state.phase = 'shop'; state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 }; state.flameSelection = null;
+    state.phase = 'shop'; state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 }; state.flameSelection = null;
     expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 0, amount: 1.5 })).toContain('whole');
     expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 0, amount: 5 })).toContain('Not enough');
     state.gold = 100;
@@ -149,7 +149,7 @@ describe('investment, uniqueness, and reward lifecycle', () => {
   });
   it.each([1, 2, 4, 8])('allows arbitrary Stoke at an ordinary round-%s shop without enabling acquisition', round => {
     const state = game(); state.phase = 'shop'; state.round = round; state.gold = 14;
-    state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
+    state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     flame(state, 0, 'dragonsHoard', 27);
     expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 0, amount: 14 })).toBeNull();
     expect(validateAction(state, { type: 'CHOOSE_FLAME', offerId: 1, dieId: 0 })).toContain('Flame Selection');
@@ -164,7 +164,7 @@ describe('investment, uniqueness, and reward lifecycle', () => {
   });
   it('validates Shop Stoke Gold and cap, persists investment, and creates the same Bonfire at 100', () => {
     const state = game(); state.phase = 'shop'; state.gold = 10;
-    state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 }; flame(state, 0, 'ultimate', 95);
+    state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 }; flame(state, 0, 'ultimate', 95);
     expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 0, amount: 11 })).toContain('Not enough');
     expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 0, amount: 6 })).toContain('more than 100');
     const completed = dispatch(state, { type: 'STOKE_FLAME', dieId: 0, amount: 5 }).state;
@@ -181,7 +181,7 @@ describe('investment, uniqueness, and reward lifecycle', () => {
     deprecated.phase = 'round'; deprecated.flameSelection = null;
     expect(play(deprecated).state.phase).not.toBe('error');
     const legacy = reward(); legacy.phase = 'shop'; legacy.flameSelection = null;
-    legacy.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
+    legacy.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     legacy.dice[0].flame = 'ultimate' as unknown as GameState['dice'][number]['flame'];
     const invested = dispatch(legacy, { type: 'STOKE_FLAME', dieId: 0, amount: 7 }).state;
     expect(invested.dice[0].flame).toEqual({ id: 'ultimate', investedGold: 7 });

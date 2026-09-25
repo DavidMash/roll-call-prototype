@@ -117,7 +117,13 @@ export interface StandaloneScoreRecord {
 export interface Die { id: number; value: Rank; faces: Face[]; flame: ActiveFlame | null; owner: 'player' | 'boss' }
 export interface Offer { id: number; enhancement: Enhancement; purchased: boolean }
 export interface TrainingOffer { hand: HandId; purchased: boolean }
-export interface Shop { offers: Offer[]; trainingOffers: TrainingOffer[]; diceRerolls: number; offerRerolls: number }
+export interface Shop {
+  offers: Offer[];
+  trainingOffers: TrainingOffer[];
+  diceRerolls: number;
+  offerRerolls: number;
+  lifeRestores: number;
+}
 export interface FlameOffer { id: number; flame: Flame }
 export interface FlameSelection { offers: FlameOffer[]; acquired: boolean }
 export interface RoundPayout {
@@ -155,7 +161,6 @@ export interface Board {
   score: number;
   gold: number;
   lives: number;
-  livesPurchasedThisRun: number;
   roundAttemptNumber: number;
   bossSchedule: Partial<Record<number, BossType>>;
   boss: BossRuntimeState | null;

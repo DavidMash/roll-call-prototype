@@ -33,7 +33,7 @@ function shop(): GameState {
   const game = state();
   game.phase = 'shop';
   game.gold = 100;
-  game.shop = { diceRerolls: 0, offerRerolls: 0, trainingOffers: [], offers: [
+  game.shop = { diceRerolls: 0, offerRerolls: 0, lifeRestores: 0, trainingOffers: [], offers: [
     { id: 0, enhancement: 'bonus', purchased: false },
     { id: 1, enhancement: 'sticky', purchased: false },
     { id: 2, enhancement: 'weighted', purchased: false },

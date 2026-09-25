@@ -601,7 +601,7 @@ export class Resolver {
     // session that launched it. Bust restoration reopens this Shop without
     // generating offers, reroll allowances, exposed faces, or rewards.
     base.phase = 'shop';
-    base.shop ??= { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
+    base.shop ??= { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     base.flameSelection = null;
     base.roundSummary = null;
     base.bust = null;
@@ -639,7 +639,8 @@ export class Resolver {
     const actions = this.state.stats.actions;
     Object.assign(this.state, structuredClone(checkpoint));
     this.state.roundCheckpoint = structuredClone(checkpoint);
-    this.state.shop ??= { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
+    this.state.shop ??= { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    this.state.shop.lifeRestores ??= 0;
     this.state.history = history;
     this.state.stats.actions = actions;
     Object.assign(this.state.stats, progressionTelemetry);
@@ -777,7 +778,7 @@ export class Resolver {
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
     this.state.boss = null;
     this.state.phase = 'shop'; this.state.flameSelection = null; this.state.roundSummary = null;
-    this.state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0 };
+    this.state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     const upcomingBoss = this.state.round + 1 > 60 ? bossTypeForRound(this.state.seed, this.state.round + 1) : null;
     if (upcomingBoss) this.state.bossSchedule[this.state.round + 1] = upcomingBoss;
     this.mapTransition(shopNodeBefore(this.state.round + 1));

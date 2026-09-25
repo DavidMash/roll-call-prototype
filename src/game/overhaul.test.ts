@@ -14,7 +14,7 @@ function board(values: Rank[] = [1, 2, 3, 4, 5]): GameState {
 }
 function shop(): GameState {
   const state = board(); state.phase = 'shop'; state.gold = 100;
-  state.shop = { diceRerolls: 0, offerRerolls: 0, trainingOffers: [], offers: [] };
+  state.shop = { diceRerolls: 0, offerRerolls: 0, lifeRestores: 0, trainingOffers: [], offers: [] };
   return state;
 }
 function offer(state: GameState, id: number, enhancement: Enhancement) { state.shop!.offers.push({ id, enhancement, purchased: false }); }
