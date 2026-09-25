@@ -101,15 +101,15 @@ describe('Hand Training purchases and persistence', () => {
     expect(newRun('levels-start').state.handLevels.pair).toBe(1);
   });
 
-  it('spends exactly four gold, raises one level, records telemetry, and rejects a duplicate purchase', () => {
+  it('spends exactly three gold, raises one level, records telemetry, and rejects a duplicate purchase', () => {
     const game = shopState();
     const first = dispatch(game, { type: 'TRAIN_HAND', hand: 'pair' });
     expect(first.error).toBeUndefined();
-    expect(first.state.gold).toBe(8);
+    expect(first.state.gold).toBe(9);
     expect(first.state.handLevels.pair).toBe(2);
     expect(first.state.shop!.trainingOffers.find(offer => offer.hand === 'pair')?.purchased).toBe(true);
-    expect(first.state.stats).toMatchObject({ trainingPurchasesTotal: 1, trainingGoldSpent: 4, goldSpent: 4 });
-    expect(first.state.stats.goldSpentBySource.handTraining).toBe(4);
+    expect(first.state.stats).toMatchObject({ trainingPurchasesTotal: 1, trainingGoldSpent: 3, goldSpent: 3 });
+    expect(first.state.stats.goldSpentBySource.handTraining).toBe(3);
     expect(first.state.stats.trainingPurchases).toEqual([
       { round: 1, hand: 'pair', fromLevel: 1, toLevel: 2, cost: CONFIG.handTrainingCost },
     ]);
@@ -122,7 +122,7 @@ describe('Hand Training purchases and persistence', () => {
   });
 
   it('rejects insufficient gold without mutation and permits multiple different offers in one shop', () => {
-    const poor = shopState(3);
+    const poor = shopState(2);
     expect(validateAction(poor, { type: 'TRAIN_HAND', hand: 'pair' })).toContain('Not enough gold');
     const rejected = dispatch(poor, { type: 'TRAIN_HAND', hand: 'pair' });
     expect(rejected.state).toBe(poor);
@@ -132,10 +132,10 @@ describe('Hand Training purchases and persistence', () => {
     const pair = dispatch(game, { type: 'TRAIN_HAND', hand: 'pair' }).state;
     const house = dispatch(pair, { type: 'TRAIN_HAND', hand: 'fullHouse' }).state;
     const five = dispatch(house, { type: 'TRAIN_HAND', hand: 'fiveKind' }).state;
-    expect(five.gold).toBe(0);
+    expect(five.gold).toBe(3);
     expect(five.handLevels).toMatchObject({ pair: 2, fullHouse: 2, fiveKind: 2 });
     expect(five.stats.trainingPurchasesTotal).toBe(3);
-    expect(five.stats.trainingGoldSpent).toBe(12);
+    expect(five.stats.trainingGoldSpent).toBe(9);
   });
 
   it('persists levels through the next round and following shop and exports every final level', () => {

@@ -6,7 +6,7 @@ import { activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasOwned
 import { HANDS, initialHandLevels, initialHandPlayCounts, isValidSelection } from './hands';
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
-import { activeEncounterDice, bossSchedule } from './bosses';
+import { activeEncounterDice, bossSchedule, unavailableEncounterHands } from './bosses';
 import type { Action, Board, GameState, RandomSource, Resolution } from './types';
 
 const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`${seed}:round:${round}:attempt:${attempt}`);
@@ -30,7 +30,7 @@ function normalizedState(state: GameState): GameState {
         if (clamped > 0) face.enhancements[id] = clamped;
         else delete face.enhancements[id];
       }
-      if (stacks(face, 'vintage')) face.vintageSellValue = Math.max(0, Math.floor(face.vintageSellValue ?? 0));
+      if ((face.enhancements.vintage ?? 0) > 0) face.vintageSellValue = Math.max(0, Math.floor(face.vintageSellValue ?? 0));
       else delete face.vintageSellValue;
     }
     const id = activeFlameId(die.flame);
@@ -58,6 +58,7 @@ function normalizedState(state: GameState): GameState {
   next.stats.callerEvents ??= [];
   next.stats.wardenEvents ??= [];
   next.stats.hexerEvents ??= [];
+  next.stats.scoreBySource.boss ??= 0;
   next.stats.busts ??= [];
   next.stats.busts = next.stats.busts.map(bust => ({ ...bust,
     checkpointRestored: bust.checkpointRestored ?? true,
@@ -113,7 +114,8 @@ export function validateAction(state: Board, action: Action): string | null {
   if (action.type === 'PLAY') {
     if (state.phase !== 'round') return 'Hands can only be played during a round.';
     if (state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0) return 'Unlock a Warden die before committing another hand.';
-    if (state.consumed.includes(action.hand)) return 'That hand has already been consumed.';
+    if (unavailableEncounterHands(state).includes(action.hand)) return state.boss?.type === 'marathon'
+      ? 'That hand is still cooling down.' : state.boss?.type === 'quickdraw' ? 'Quickdraw has no Lower shot remaining.' : 'That hand has already been consumed.';
     if (state.boss?.type === 'hexer' && !action.dieIds.includes(state.boss.cursedDieId)) return 'The Cursed Die must participate in every hand.';
     if (!isValidSelection(activeEncounterDice(state), action.hand, action.dieIds)) return 'Select a complete valid set of participating dice.';
     return null;

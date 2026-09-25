@@ -34,6 +34,7 @@ export const ENHANCEMENT_IDS = Object.keys(ENHANCEMENTS) as Enhancement[];
 export const isEnhancement = (value: unknown): value is Enhancement => typeof value === 'string' && Object.hasOwn(ENHANCEMENTS, value);
 export const FACE_TYPE_LIMIT = 3;
 export const stacks = (face: Face, enhancement: Enhancement) => {
+  if (face.infected) return 0;
   const raw = Math.max(0, Math.floor(face.enhancements[enhancement] ?? 0));
   const cap = ENHANCEMENTS[enhancement].maxStacks;
   return cap === null ? raw : Math.min(raw, cap);

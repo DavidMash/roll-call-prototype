@@ -109,7 +109,7 @@ describe('upper-hand subset resolution', () => {
     enhance(game, 1, 'golden');
     enhance(game, 1, 'workout');
     const result = play(game, 'fours', [0], sequence(0, 0.99));
-    expect(result.state.stats.scoreBySource).toEqual({ hand: 15, hitchhiker: 0, jumpingBean: 0 });
+    expect(result.state.stats.scoreBySource).toEqual({ hand: 15, hitchhiker: 0, jumpingBean: 0, boss: 0 });
     expect(result.state.stats.hitchhikerPipsContributed).toBe(4);
     expect(result.state.gold).toBe(1);
     expect(result.state.dice[1].faces[3].workoutPips).toBe(1);
@@ -207,7 +207,7 @@ describe('Hitchhiker', () => {
     enhance(game, 4, 'hitchhiker');
     const result = play(game, 'ones', [0], constant(0));
     expect(result.state.score).toBe(13);
-    expect(result.state.stats.scoreBySource).toEqual({ hand: 13, jumpingBean: 0, hitchhiker: 0 });
+    expect(result.state.stats.scoreBySource).toEqual({ hand: 13, jumpingBean: 0, hitchhiker: 0, boss: 0 });
     expect(result.state.stats.hitchhikerPipsContributed).toBe(5);
     expect(result.events.filter(e => e.type === 'DIE_ROLLED').map(e => e.dieIds)).toEqual([[0]]);
     expect(result.state.stats.triggers.hitchhiker).toBe(1);
@@ -613,7 +613,7 @@ describe('reproducibility and end-to-end domain flow', () => {
         } else throw new Error(`Unexpected ${game.phase}`);
       }
       if (game.phase === 'lost') losses++;
-      expect(game.stats.scoreBySource.hand + game.stats.scoreBySource.jumpingBean + game.stats.scoreBySource.hitchhiker)
+      expect(game.stats.scoreBySource.hand + game.stats.scoreBySource.jumpingBean + game.stats.scoreBySource.hitchhiker + game.stats.scoreBySource.boss)
         .toBe(game.stats.rounds.reduce((sum, round) => sum + round.finalScore, 0));
     }
     expect(clears).toBeGreaterThan(0);

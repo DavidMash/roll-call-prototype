@@ -7,13 +7,13 @@ import { handScore } from '../src/game/scoring';
 import { enhancementCost, ENHANCEMENTS } from '../src/game/enhancements';
 import { CONFIG } from '../src/game/config';
 import type { Action, Enhancement, GameState } from '../src/game/types';
-import { activeEncounterDice } from '../src/game/bosses';
+import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
 
 function bestHand(game: GameState) {
   const dice = activeEncounterDice(game);
   const callerHand = game.boss?.type === 'caller' && !game.boss.satisfied ? game.boss.calledHand : null;
-  return handOptions(dice, game.consumed).filter(option => !option.consumed)
+  return handOptions(dice, unavailableEncounterHands(game)).filter(option => !option.consumed)
     .flatMap(option => option.combinations.map(dieIds => ({ hand: option.id, dieIds,
       score: handScore(dice, option.id, dieIds, game.handLevels[option.id]).score })))
     .filter(choice => game.boss?.type !== 'hexer' || choice.dieIds.includes(game.boss.cursedDieId))

@@ -1,3 +1,4 @@
+import { activeFace } from './dice';
 import { LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from './hands';
 import type { ActiveFlame, Board, Die, Flame, GameState, HandId, XMultFactor } from './types';
 
@@ -117,7 +118,7 @@ export function captureHandStart(state: Pick<GameState, 'gold' | 'manualRerollsR
     chargeArmed: state.chargeArmed,
     lifetimeNormalShopGoldSpent: state.lifetimeNormalShopGoldSpent,
     bonfires: [...state.bonfires],
-    dice: state.dice.map(die => ({ dieId: die.id, flame: activeFlameId(die.flame), investedGold: activeFlameInvestment(die.flame), faceValue: die.value })),
+    dice: state.dice.map(die => ({ dieId: die.id, flame: activeFlameId(die.flame), investedGold: activeFlameInvestment(die.flame), faceValue: activeFace(die).rank })),
   };
 }
 

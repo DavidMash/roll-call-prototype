@@ -18,7 +18,7 @@ export function createHandAccumulator(hand: HandId, dieIds: number[], level = 1)
     hand, handLevel: level, dieIds: [...dieIds].sort((a, b) => a - b),
     basePips: stats.basePips, baseMultiplier: stats.baseMultiplier,
     currentPips: stats.basePips, currentMultiplier: stats.baseMultiplier,
-    xMultFactors: [], currentXMult: 1,
+    xMultFactors: [], currentXMult: 1, bossFactor: 1,
     bonusPips: 0, hitchhikerPips: 0, rawScore: null, finalScore: null,
   };
 }
@@ -57,9 +57,10 @@ export function applyXMult(accumulator: HandScoreAccumulator, factor: import('./
     .reduce((product, value) => product * value, 1).toFixed(12));
 }
 
-export function finalizeHandScore(accumulator: HandScoreAccumulator) {
+export function finalizeHandScore(accumulator: HandScoreAccumulator, bossFactor = 1) {
   if (accumulator.finalScore !== null) throw new Error('Hand score already finalized.');
-  const { rawScore, finalScore } = finalizeScore(accumulator.currentPips, accumulator.currentMultiplier, accumulator.currentXMult);
+  accumulator.bossFactor = bossFactor;
+  const { rawScore, finalScore } = finalizeScore(accumulator.currentPips, accumulator.currentMultiplier, accumulator.currentXMult * bossFactor);
   accumulator.rawScore = rawScore;
   accumulator.finalScore = finalScore;
   return { pips: accumulator.currentPips, multiplier: accumulator.currentMultiplier, xMult: accumulator.currentXMult, rawScore, score: finalScore };

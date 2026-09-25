@@ -17,7 +17,7 @@ export function ScoreResolution({ event, busy, current, total, onSkip, deadBoard
   let heading = idleText ?? (deadBoard ? 'No playable hands — use a reroll' : 'Choose a hand or select dice');
   if (event?.type === 'HAND_SCORE_FINALIZED' || event?.type === 'STANDALONE_SCORE_CALCULATED') heading = `+${event.amount}`;
   else if (event?.type === 'JUMPING_BEAN_FREE_PLAY' && event.hand) heading = `JUMPING BEAN · FREE ${HANDS[event.hand].name.toUpperCase()}`;
-  else if (event?.type === 'SCORE_ADDED') heading = `+${event.amount}`;
+  else if (event?.type === 'SCORE_ADDED') heading = (event.amount ?? 0) < 0 ? `−${Math.abs(event.amount!)}` : `+${event.amount}`;
   else if (event?.type === 'HITCHHIKER_ADDED_PIPS') heading = 'HITCHHIKER';
   else if (event?.flame) heading = FLAMES[event.flame].name.toUpperCase();
   else if (event?.enhancement) heading = ENHANCEMENTS[event.enhancement].name.toUpperCase();
@@ -40,6 +40,7 @@ export function ScoreResolution({ event, busy, current, total, onSkip, deadBoard
       <Text c="dimmed">×</Text>
       <div><Text size="xs" c="dimmed">MULT</Text><Text size="xl" fw={700} data-testid="hand-multiplier">x{event.handScore.currentMultiplier}</Text></div>
       {showXMult && <><Text c="dimmed">×</Text><div><Text size="xs" c="dimmed">XMULT</Text><Text size="xl" fw={700} data-testid="hand-xmult">x{event.handScore.currentXMult}</Text></div></>}
+      {event.handScore.bossFactor !== 1 && <><Text c="dimmed">×</Text><div><Text size="xs" c="dimmed">BOSS</Text><Text size="xl" fw={700} data-testid="hand-boss-factor">x{event.handScore.bossFactor}</Text></div></>}
     </Group>}
     {!event?.handScore && showXMult && event?.type === 'STANDALONE_SCORE_CALCULATED' && <Group justify="center" gap="xl" className="score-accumulator" data-testid="standalone-accumulator">
       <div><Text size="xs" c="dimmed">PIPS</Text><Text size="xl" fw={700}>{event.pips}</Text></div><Text c="dimmed">×</Text>
@@ -48,6 +49,6 @@ export function ScoreResolution({ event, busy, current, total, onSkip, deadBoard
     </Group>}
     <Text key={event?.id ?? 'ready'} className="score-tick" fw={700}>{heading}</Text>
     {busy && event?.message && <Text size="xs" c="dimmed" className="resolution-message">{event.message}</Text>}
-    {event?.source && <Badge size="xs" mt={4} variant="light">{event.source === 'hand' ? 'Selected hand' : ENHANCEMENTS[event.source].name}</Badge>}
+    {event?.source && <Badge size="xs" mt={4} variant="light">{event.source === 'hand' ? 'Selected hand' : event.source === 'boss' ? 'Boss effect' : ENHANCEMENTS[event.source].name}</Badge>}
   </Paper>;
 }

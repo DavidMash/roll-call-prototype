@@ -26,14 +26,14 @@ describe('linear route and deterministic boss schedule', () => {
     ]);
   });
 
-  it('draws all three bosses before reshuffling without adjacent repeats', () => {
-    const sequence = Object.values(bossSchedule('bag-seed', 36));
-    expect(sequence).toHaveLength(12);
-    for (let index = 0; index < sequence.length; index += 3) {
-      expect(new Set(sequence.slice(index, index + 3))).toEqual(new Set(BOSS_TYPES));
+  it('draws all eight bosses before reshuffling without adjacent repeats', () => {
+    const sequence = Object.values(bossSchedule('bag-seed', 72));
+    expect(sequence).toHaveLength(24);
+    for (let index = 0; index < sequence.length; index += BOSS_TYPES.length) {
+      expect(new Set(sequence.slice(index, index + BOSS_TYPES.length))).toEqual(new Set(BOSS_TYPES));
     }
     sequence.slice(1).forEach((boss, index) => expect(boss).not.toBe(sequence[index]));
-    expect(Object.values(bossSchedule('bag-seed', 36))).toEqual(sequence);
+    expect(Object.values(bossSchedule('bag-seed', 72))).toEqual(sequence);
   });
 
   it('emits auditable movement into a boss node', () => {
@@ -55,11 +55,13 @@ describe('The Caller', () => {
     state.dice[0].faces[0].enhancements.jumpingBean = 1;
     state.dice[0].faces[0].enhancements.sticky = 1;
     const result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(0));
-    expect(result.state.boss).toMatchObject({ type: 'caller', calledHand: 'ones', satisfied: true, playsRemaining: 3, satisfyingSource: 'jumpingBean' });
+    expect(result.state.boss).toMatchObject({ type: 'caller', satisfied: false, playsRemaining: 3, satisfyingSource: null, callsCompleted: 1 });
+    if (result.state.boss?.type !== 'caller') throw new Error('Caller fixture failed');
+    expect(result.state.boss.calledHand).not.toBe('ones');
     expect(result.state.stats.callerEvents.at(-1)).toMatchObject({ satisfied: true, source: 'jumpingBean', expired: false });
   });
 
-  it('Busts after the third nonmatching manual play and restores the Shop checkpoint', () => {
+  it('halves score after the third nonmatching manual play, then still supports ordinary Bust rollback', () => {
     let state = bossRound('caller');
     if (state.boss?.type !== 'caller') throw new Error('Caller fixture failed');
     const deterministicCall = state.boss.calledHand;
@@ -70,12 +72,18 @@ describe('The Caller', () => {
       const result = dispatch(state, { type: 'PLAY', hand, dieIds: [0] }, constant(.2));
       state = result.state;
     }
+    expect(state.phase).toBe('round');
+    expect(state.score).toBe(14);
+    expect(state.boss).toMatchObject({ type: 'caller', playsRemaining: 3, callsMissed: 1 });
+    state.consumed = [...HAND_IDS];
+    state.manualRerollsRemaining = 0;
+    new Resolver(state, constant(.2)).evaluate();
     expect(state.phase).toBe('shop');
     expect(state.lives).toBe(2);
     expect(state.round).toBe(3);
     expect(state.roundAttemptNumber).toBe(2);
     expect(state.boss).toBeNull();
-    expect(state.stats.bossEncounters.at(-1)).toMatchObject({ boss: 'caller', busted: true, callerManualPlays: 3 });
+    expect(state.stats.bossEncounters.at(-1)).toMatchObject({ boss: 'caller', busted: true });
     expect(state.stats.mapTransitions.slice(-2).map(item => [item.toNode, item.direction])).toEqual([
       ['boss:3', 'forward'], ['shop:before-round:3', 'backward'],
     ]);

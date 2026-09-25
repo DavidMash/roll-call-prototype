@@ -5,14 +5,14 @@ import { FLAMES, wellTrainedMultiplier } from '../src/game/flames';
 import { handOptions, HANDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
-import { activeEncounterDice } from '../src/game/bosses';
+import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
 import { CONFIG } from '../src/game/config';
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
 
 function bestHand(game: GameState, requiredDie?: number, requireHistory = false) {
   const dice = activeEncounterDice(game);
   const callerHand = game.boss?.type === 'caller' && !game.boss.satisfied ? game.boss.calledHand : null;
-  return handOptions(dice, game.consumed).filter(option => !option.consumed)
+  return handOptions(dice, unavailableEncounterHands(game)).filter(option => !option.consumed)
     .flatMap(option => option.combinations
       .filter(dieIds => requiredDie === undefined || dieIds.includes(requiredDie))
       .map(dieIds => ({ hand: option.id, dieIds,

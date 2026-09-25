@@ -4,7 +4,7 @@ import { enhancementCost, stacks } from '../src/game/enhancements';
 import { handOptions } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, Enhancement } from '../src/game/types';
-import { activeEncounterDice, requiredEncounterDieIds } from '../src/game/bosses';
+import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands } from '../src/game/bosses';
 
 // Reach the enhanced board through real seeded plays and purchases, without UI injection.
 export function scoringPlaybackRun() {
@@ -49,7 +49,7 @@ export function scoringPlaybackRun() {
         }
         const dice = activeEncounterDice(game);
         const callerHand = game.boss?.type === 'caller' && !game.boss.satisfied ? game.boss.calledHand : null;
-        const choices = handOptions(dice, game.consumed).filter(option => !option.consumed)
+        const choices = handOptions(dice, unavailableEncounterHands(game)).filter(option => !option.consumed)
           .flatMap(option => option.combinations.map(dieIds => ({ type: 'PLAY' as const, hand: option.id, dieIds })))
           .filter(choice => game.boss?.type !== 'hexer' || choice.dieIds.includes(game.boss.cursedDieId))
           .sort((a, b) => (callerHand ? Number(b.hand === callerHand) - Number(a.hand === callerHand) : 0)

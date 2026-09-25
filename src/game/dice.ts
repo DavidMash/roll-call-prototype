@@ -21,14 +21,14 @@ export const rollWeights = (die: Die, excludedFace?: Rank): number[] => (die.own
   ? die.faces.map(destination => 1 + die.faces.reduce((weight, source) =>
     weight + (source.weightedTarget === destination.rank ? stacks(source, 'weighted') : 0), 0))
   : RANKS.map(rank => 1 + stacks(die.faces[oppositeFace(rank) - 1], 'weighted')))
-  .map((weight, index) => die.faces[index].rank === excludedFace ? 0 : weight);
+  .map((weight, index) => index + 1 === excludedFace ? 0 : weight);
 export const weightedSourceFace = (die: Die, destination: Rank): Face | undefined => die.owner === 'boss'
   ? die.faces.find(face => face.weightedTarget === destination && stacks(face, 'weighted'))
   : die.faces[oppositeFace(destination) - 1];
-export function rollDie(die: Die, rng: RandomSource, excludedFace?: Rank): { value: Rank; weighted: boolean } {
+export function rollPhysicalDie(die: Die, rng: RandomSource, excludedFace?: Rank): { physicalFace: Rank; value: Rank; weighted: boolean } {
   if (stacks(activeFace(die), 'bump')) {
-    if (die.owner === 'boss') return { value: Math.min(7, die.value + 1) as Rank, weighted: false };
-    return { value: (die.value === 6 ? 1 : die.value + 1) as Rank, weighted: false };
+    const physicalFace = (die.owner === 'boss' ? Math.min(7, die.value + 1) : die.value === 6 ? 1 : die.value + 1) as Rank;
+    return { physicalFace, value: die.faces[physicalFace - 1].rank, weighted: false };
   }
   const weights = rollWeights(die, excludedFace);
   const totalWeight = weights.reduce((a, b) => a + b, 0);
@@ -38,7 +38,11 @@ export function rollDie(die: Die, rng: RandomSource, excludedFace?: Rank): { val
   let cursor = random * totalWeight;
   for (let i = 0; i < weights.length; i++) {
     cursor -= weights[i];
-    if (cursor < 0) return { value: die.faces[i].rank, weighted: weights[i] > 1 };
+    if (cursor < 0) return { physicalFace: (i + 1) as Rank, value: die.faces[i].rank, weighted: weights[i] > 1 };
   }
-  return { value: die.faces.at(-1)!.rank, weighted: weights.at(-1)! > 1 };
+  return { physicalFace: die.faces.length as Rank, value: die.faces.at(-1)!.rank, weighted: weights.at(-1)! > 1 };
+}
+export function rollDie(die: Die, rng: RandomSource, excludedFace?: Rank): { value: Rank; weighted: boolean } {
+  const { value, weighted } = rollPhysicalDie(die, rng, excludedFace);
+  return { value, weighted };
 }

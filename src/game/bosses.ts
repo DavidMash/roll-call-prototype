@@ -1,6 +1,7 @@
 import { CONFIG, targetForRound } from './config';
 import { hashSeed, SeededRng } from './rng';
-import type { BossRuntimeState, BossType, Die, HandId, Rank, WardenBossState } from './types';
+import { HAND_IDS, LOWER_HAND_IDS } from './hands';
+import type { Board, BossRuntimeState, BossType, Die, HandId, Rank, WardenBossState } from './types';
 
 export interface BossDefinition {
   name: string;
@@ -28,9 +29,39 @@ export const BOSSES: Record<BossType, BossDefinition> = {
     primary: '#84CC16',
     secondary: '#D9F99D',
   },
+  marathon: {
+    name: 'THE MARATHON',
+    shortRule: '3× TARGET · Hands recharge after 7 manual plays.',
+    primary: '#F97316',
+    secondary: '#FDBA74',
+  },
+  quickdraw: {
+    name: 'QUICKDRAW',
+    shortRule: '⅓ TARGET · Only one Lower hand may be used.',
+    primary: '#EAB308',
+    secondary: '#FDE047',
+  },
+  fly: {
+    name: 'THE FLY',
+    shortRule: 'Hands score ×0.5 until you catch the moving Fly.',
+    primary: '#92400E',
+    secondary: '#D97706',
+  },
+  snakeEyes: {
+    name: 'SNAKE EYES',
+    shortRule: 'Scoring gradually turns your physical faces into 1s.',
+    primary: '#16A34A',
+    secondary: '#4ADE80',
+  },
+  infected: {
+    name: 'THE INFECTED',
+    shortRule: 'Infected faces spread when other dice roll and lose their enhancements.',
+    primary: '#DC2626',
+    secondary: '#FB7185',
+  },
 };
 
-export const BOSS_TYPES: BossType[] = ['caller', 'warden', 'hexer'];
+export const BOSS_TYPES: BossType[] = ['caller', 'warden', 'hexer', 'marathon', 'quickdraw', 'fly', 'snakeEyes', 'infected'];
 export const CALLER_HAND_POOL: HandId[] = [
   'ones', 'twos', 'threes', 'fours', 'fives', 'sixes',
   'pair', 'twoPair', 'threeKind', 'smallStraight', 'fullHouse',
@@ -74,6 +105,18 @@ export function callerHandForRound(seed: string, round: number): HandId {
   return CALLER_HAND_POOL[Math.floor(rng.next() * CALLER_HAND_POOL.length)];
 }
 
+export function flyHandForRound(seed: string, round: number): HandId {
+  const rng = new SeededRng(hashSeed(`${seed}:boss:${round}:fly-hand`));
+  return LOWER_HAND_IDS[Math.floor(rng.next() * LOWER_HAND_IDS.length)];
+}
+
+export function targetForBoss(type: BossType, normalTarget: number): number {
+  if (type === 'marathon') return normalTarget * 3;
+  if (type === 'quickdraw') return Math.max(CONFIG.targetRounding,
+    Math.round(normalTarget / 3 / CONFIG.targetRounding) * CONFIG.targetRounding);
+  return normalTarget;
+}
+
 export function wardenCheckpoints(target: number): number[] {
   return WARDEN_CHECKPOINT_FRACTIONS.map(fraction =>
     Math.max(CONFIG.targetRounding, Math.round(target * fraction / CONFIG.targetRounding) * CONFIG.targetRounding));
@@ -95,6 +138,8 @@ export function createBossRuntime(seed: string, round: number, type: BossType): 
       playsRemaining: 3,
       satisfied: false,
       satisfyingSource: null,
+      callsCompleted: 0,
+      callsMissed: 0,
     };
     case 'warden': return {
       type,
@@ -105,6 +150,11 @@ export function createBossRuntime(seed: string, round: number, type: BossType): 
       pendingReinforcements: 1,
     };
     case 'hexer': return { type, cursedDieId: CURSED_DIE_ID };
+    case 'marathon': return { type, cooldowns: {} };
+    case 'quickdraw': return { type, lowerShotUsed: false, playedLowerHand: null };
+    case 'fly': return { type, flyHand: flyHandForRound(seed, round), caught: false, moves: 0 };
+    case 'snakeEyes': return { type, mutatedFaces: [] };
+    case 'infected': return { type, infectedFaces: [] };
   }
 }
 
@@ -137,6 +187,29 @@ export function activeEncounterDice(state: { dice: Die[]; boss: BossRuntimeState
 
 export function requiredEncounterDieIds(state: { boss: BossRuntimeState | null }): number[] {
   return state.boss?.type === 'hexer' ? [state.boss.cursedDieId] : [];
+}
+
+export function unavailableEncounterHands(state: Pick<Board, 'boss' | 'consumed'>): HandId[] {
+  const unavailable = new Set(state.consumed);
+  if (state.boss?.type === 'marathon') {
+    for (const hand of HAND_IDS) if ((state.boss.cooldowns[hand] ?? 0) > 0) unavailable.add(hand);
+  }
+  if (state.boss?.type === 'quickdraw' && state.boss.lowerShotUsed) {
+    for (const hand of LOWER_HAND_IDS) unavailable.add(hand);
+  }
+  return [...unavailable];
+}
+
+export function bossHandAvailable(state: Pick<Board, 'boss' | 'consumed'>, hand: HandId): boolean {
+  return !unavailableEncounterHands(state).includes(hand);
+}
+
+export function cleanupTemporaryBossFaces(dice: Die[]): void {
+  for (const die of dice.filter(item => item.owner === 'player')) die.faces.forEach((face, index) => {
+    if (face.snakeEyed) face.rank = (index + 1) as Rank;
+    delete face.snakeEyed;
+    delete face.infected;
+  });
 }
 
 export const isCursedDie = (die: Die | undefined): boolean => die?.owner === 'boss';

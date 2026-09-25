@@ -9,7 +9,7 @@ import type { Action, Board, GameEvent } from '../game/types';
 import { DiceRow } from './DiceRow';
 import { HandScorecard } from './HandList';
 import { ScoreResolution } from './ScoreResolution';
-import { activeEncounterDice, requiredEncounterDieIds, wardenNextUnlockThreshold } from '../game/bosses';
+import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands, wardenNextUnlockThreshold } from '../game/bosses';
 import { BossPanel } from './BossPanel';
 
 export function RoundScreen({ board, event, busy, progress, selection, setSelection, submit, skip }: {
@@ -29,13 +29,15 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
   const lockedUntilByDieId: Record<number, number> = {};
   if (nextWardenThreshold !== undefined) wardenLockedIds.forEach(id => { lockedUntilByDieId[id] = nextWardenThreshold; });
   const requiredDieIds = requiredEncounterDieIds(board);
+  const unavailableHands = unavailableEncounterHands(board);
   const selectedWardenDieId = awaitingWardenChoice && selection.dieIds.length === 1 && wardenLockedIds.includes(selection.dieIds[0])
     ? selection.dieIds[0] : null;
-  const selectedDieIds = awaitingWardenChoice ? [] : [...new Set([...requiredDieIds, ...selection.dieIds])].sort((a, b) => a - b);
-  const selectedHand = selection.hand && handOptions(encounterDice, board.consumed, selectedDieIds)
-    .some(option => option.id === selection.hand && !option.consumed) ? selection.hand : null;
+  const selectedDieIds = awaitingWardenChoice ? [] : [...selection.dieIds].sort((a, b) => a - b);
+  const selectedHand = selection.hand && handOptions(encounterDice, unavailableHands, selectedDieIds)
+    .some(option => option.id === selection.hand && !option.consumed
+      && option.combinations.some(set => requiredDieIds.every(id => set.includes(id)))) ? selection.hand : null;
   const effectiveSelection: Selection = { dieIds: selectedDieIds, hand: selectedHand };
-  const valid = canPlay(encounterDice, board.consumed, effectiveSelection)
+  const valid = canPlay(encounterDice, unavailableHands, effectiveSelection, requiredDieIds)
     && validateAction(board, { type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds }) === null;
   const showXMult = hasXMultFlame(encounterDice, board.bonfires);
   const preview = valid ? (() => {
@@ -43,12 +45,13 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
     const base = handScore(encounterDice, hand, effectiveSelection.dieIds, board.handLevels[hand]);
     const contributions = handXMultContributions(captureHandStart(board, hand), hand, board.handLevels[hand], effectiveSelection.dieIds);
     const xMult = composeXMult(contributions);
-    return { ...base, xMult, score: finalizeScore(base.pips, base.multiplier, xMult).finalScore };
+    const bossFactor = board.boss?.type === 'fly' && !board.boss.caught && hand !== board.boss.flyHand ? .5 : 1;
+    return { ...base, xMult, bossFactor, score: finalizeScore(base.pips, base.multiplier, xMult * bossFactor).finalScore };
   })() : null;
   const manualAction: Action = { type: 'MANUAL_REROLL', dieIds: effectiveSelection.dieIds };
   const canReroll = validateAction(board, manualAction) === null;
-  const deadBoard = !hasPlayableHand(encounterDice, board.consumed, requiredDieIds);
-  const availablePlays = handOptions(encounterDice, board.consumed, requiredDieIds).filter(option => !option.consumed).length;
+  const deadBoard = !hasPlayableHand(encounterDice, unavailableHands, requiredDieIds);
+  const availablePlays = handOptions(encounterDice, unavailableHands, requiredDieIds).filter(option => !option.consumed).length;
   const lastPlay = board.manualRerollsRemaining === 0 && availablePlays === 1 && valid;
   const hotFlame = board.dice.find(die => die.flame?.id === 'hotStreak')?.flame;
   const hotInvestment = board.bonfires.includes('hotStreak') ? 100 : activeFlameInvestment(hotFlame);
@@ -75,21 +78,20 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
     </Group></Paper>}
     <Paper className="scorecard-panel" p="xs">
       <HandScorecard board={board} selection={effectiveSelection} busy={busy || awaitingWardenChoice}
-        canClear={effectiveSelection.hand !== null || effectiveSelection.dieIds.some(id => !requiredDieIds.includes(id))}
-        onSelect={hand => setSelection(selectHand(encounterDice, board.consumed, effectiveSelection, hand))}
-        onClear={() => setSelection(requiredDieIds.length ? { dieIds: requiredDieIds, hand: null } : emptySelection())} />
+        canClear={effectiveSelection.hand !== null || effectiveSelection.dieIds.length > 0}
+        onSelect={hand => setSelection(selectHand(encounterDice, unavailableHands, effectiveSelection, hand, requiredDieIds))}
+        onClear={() => setSelection(emptySelection())} />
     </Paper>
     <Paper className="gameplay-dock" p="xs">
       <div className="gameplay-dock-content">
         <DiceRow dice={wardenDice ?? encounterDice} event={event} disabled={busy}
           selected={selectedWardenDieId === null ? effectiveSelection.dieIds : [selectedWardenDieId]}
-          lockedIds={requiredDieIds} lockedReasons={Object.fromEntries(requiredDieIds.map(id => [id, 'Required by The Hexer.']))}
           wardenLockedIds={wardenLockedIds} wardenSelectableIds={awaitingWardenChoice ? wardenLockedIds : []}
           wardenChoiceMode={awaitingWardenChoice}
           lockedUntilByDieId={wardenBoss ? lockedUntilByDieId : undefined}
           onClick={id => awaitingWardenChoice
             ? setSelection({ dieIds: selectedWardenDieId === id ? [] : [id], hand: null })
-            : setSelection(toggleDie(encounterDice, board.consumed, effectiveSelection, id))} />
+            : setSelection(toggleDie(encounterDice, unavailableHands, effectiveSelection, id, requiredDieIds))} />
         <div className="gameplay-actions">
           {(board.bonfires.includes('charge') || encounterDice.some(die => die.flame?.id === 'charge')) && <Group gap="xs" justify="flex-end" mb={4}>
             <Text size="xs" fw={700}>⚡ Charge ×{Number(board.chargeXMult.toFixed(4))}</Text>
@@ -101,7 +103,7 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
           <Text size="xs" c="dimmed" className="selection-preview">{awaitingWardenChoice
             ? selectedWardenDieId === null ? 'Choose any locked die to bring online' : `D${selectedWardenDieId + 1} will keep its current face`
             : preview
-            ? `${preview.pips} pips × ${preview.multiplier}${showXMult ? ` × ${preview.xMult} XMult` : ''} = ${preview.score} points`
+            ? `${preview.pips} pips × ${preview.multiplier}${showXMult ? ` × ${preview.xMult} XMult` : ''}${preview.bossFactor !== 1 ? ` × ${preview.bossFactor} Boss` : ''} = ${preview.score} points`
             : effectiveSelection.dieIds.length ? 'Select a complete participating set' : 'Choose a hand or select dice'}</Text>
           <Group gap="xs" wrap="nowrap">
             {awaitingWardenChoice ? <Button size="sm" color="cyan" disabled={busy || selectedWardenDieId === null}

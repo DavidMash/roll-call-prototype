@@ -1,5 +1,5 @@
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7;
-export type BossType = 'caller' | 'warden' | 'hexer';
+export type BossType = 'caller' | 'warden' | 'hexer' | 'marathon' | 'quickdraw' | 'fly' | 'snakeEyes' | 'infected';
 export type RunNodeType = 'normal_round' | 'boss_round' | 'shop' | 'flame_selection';
 export type Enhancement =
   | 'bonus' | 'jumpingBean' | 'golden' | 'workout'
@@ -13,7 +13,7 @@ export type HandId =
   | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes'
   | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
 export type Phase = 'round' | 'roundSummary' | 'bust' | 'flameSelection' | 'shop' | 'lost' | 'error';
-export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker';
+export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker' | 'boss';
 export type HandPlaySource = 'manual' | 'jumpingBean';
 export type GoldSource = 'golden' | 'jackpot' | 'enhancementSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward';
 export type GoldSpendSource = 'enhancement' | 'shopDiceReroll' | 'enhancementReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore';
@@ -31,6 +31,8 @@ export interface CallerBossState {
   playsRemaining: number;
   satisfied: boolean;
   satisfyingSource: HandPlaySource | null;
+  callsCompleted?: number;
+  callsMissed?: number;
 }
 export interface WardenBossState {
   type: 'warden';
@@ -41,7 +43,13 @@ export interface WardenBossState {
   pendingReinforcements: number;
 }
 export interface HexerBossState { type: 'hexer'; cursedDieId: number }
-export type BossRuntimeState = CallerBossState | WardenBossState | HexerBossState;
+export interface MarathonBossState { type: 'marathon'; cooldowns: Partial<Record<HandId, number>> }
+export interface QuickdrawBossState { type: 'quickdraw'; lowerShotUsed: boolean; playedLowerHand: HandId | null }
+export interface FlyBossState { type: 'fly'; flyHand: HandId | null; caught: boolean; moves: number }
+export interface SnakeEyesBossState { type: 'snakeEyes'; mutatedFaces: { dieId: number; physicalFace: Rank }[] }
+export interface InfectedBossState { type: 'infected'; infectedFaces: { dieId: number; physicalFace: Rank }[] }
+export type BossRuntimeState = CallerBossState | WardenBossState | HexerBossState | MarathonBossState
+  | QuickdrawBossState | FlyBossState | SnakeEyesBossState | InfectedBossState;
 
 export interface XMultFactor {
   source: Flame | 'charge';
@@ -60,6 +68,7 @@ export interface HandScoreAccumulator {
   currentMultiplier: number;
   xMultFactors: XMultFactor[];
   currentXMult: number;
+  bossFactor: number;
   bonusPips: number;
   hitchhikerPips: number;
   rawScore: number | null;
@@ -75,6 +84,7 @@ export interface HandScoreRecord {
   pips: number;
   multiplier: number;
   xMult: number;
+  bossFactor: number;
   xMultFactors: XMultFactor[];
   rawScore: number;
   score: number;
@@ -90,6 +100,8 @@ export interface Face {
   enhancements: Partial<Record<Enhancement, number>>;
   weightedTarget?: Rank;
   vintageSellValue?: number;
+  snakeEyed?: boolean;
+  infected?: boolean;
 }
 export interface ActiveFlame { id: Flame; investedGold: number }
 export interface StandaloneScoreRecord {
@@ -370,6 +382,7 @@ export type EventType =
   | 'JUMPING_BEAN_FREE_PLAY' | 'JUMPING_BEAN_FOLLOWUP'
   | 'ROUND_BUST' | 'SHOP_REOPENED_AFTER_BUST' | 'ROUND_RETRY_STARTED' | 'LIFE_RESTORED' | 'FLAME_TUTORIAL_COMPLETED'
   | 'CALLER_CALLED' | 'CALLER_CHANGED' | 'WARDEN_CHECKPOINT' | 'WARDEN_REINFORCEMENT' | 'CURSED_DIE_ROLLED'
+  | 'BOSS_HAND_CHANGED' | 'BOSS_FACE_CHANGED'
   | 'RUN_LOST' | 'RESOLUTION_ERROR' | 'MANUAL_REROLL_STARTED' | 'DEAD_BOARD' | 'DEAD_BOARD_RESCUED';
 export interface EventRecord {
   id: number;

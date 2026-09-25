@@ -65,7 +65,7 @@ describe('live hand scoring', () => {
       pips: 48, baseMultiplier: 2.5, multiplier: 2.5, rawScore: 120, score: 120,
       bonusPips: 20, hitchhikerPips: 16, playSource: 'manual', consumedHand: true,
     });
-    expect(result.state.stats.scoreBySource).toEqual({ hand: 120, jumpingBean: 0, hitchhiker: 0 });
+    expect(result.state.stats.scoreBySource).toEqual({ hand: 120, jumpingBean: 0, hitchhiker: 0, boss: 0 });
   });
 
   it('emits immutable accumulator snapshots and adds round score only after finalization', () => {
@@ -117,7 +117,7 @@ describe('live hand scoring', () => {
     const data = exportRun(result.state);
     expect(data).toMatchObject({ schemaVersion: 16, scoringModel: 'round-summary-boss-reward-v1',
       handBonusPips: 20, hitchhikerPipsContributed: 16,
-      scoreByHand: { threeKind: 120 }, scoreBySource: { hand: 120, jumpingBean: 0, hitchhiker: 0 } });
+      scoreByHand: { threeKind: 120 }, scoreBySource: { hand: 120, jumpingBean: 0, hitchhiker: 0, boss: 0 } });
     expect(data.handScores[0]).toMatchObject({ hand: 'threeKind', pips: 48, multiplier: 2.5,
       score: 120, playSource: 'manual', consumedHand: true });
     expect(Object.values(data.scoreBySource).reduce((sum, score) => sum + score, 0)).toBe(result.state.score);

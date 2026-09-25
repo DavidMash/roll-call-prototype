@@ -46,14 +46,16 @@ export function Die({ die, selected, highlighted, rolling, ability, flameAbility
   const interactionDisabled = disabled || (wardenLocked && !wardenSelectable) || !!lockedReason || (!!ineligibleReason && !allowIneligibleClick);
   const capacity = faceEnhancementTypes(face).length;
   const dieLabel = die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`;
-  const dieDetails = `${dieLabel}, face ${die.value}, ${pips} scoring pips${flameId ? `, Flame ${FLAMES[flameId].name}, ${flameInvestment} of 100 Gold` : ''}${enhancementSummary ? `, ${enhancementSummary}` : ''}`;
+  const displayValue = face.rank;
+  const temporaryState = face.snakeEyed ? ', Snake-Eyed temporary face' : face.infected ? ', infected face; enhancements disabled' : '';
+  const dieDetails = `${dieLabel}, face ${displayValue}, ${pips} scoring pips${temporaryState}${flameId ? `, Flame ${FLAMES[flameId].name}, ${flameInvestment} of 100 Gold` : ''}${enhancementSummary ? `, ${enhancementSummary}` : ''}`;
   const accessibilityLabel = wardenLocked
     ? `${dieDetails}, locked${unlockAt === undefined ? '' : ` until ${unlockAt} points`}${wardenSelectable ? ', selectable to unlock' : ''}`
     : `${dieDetails}${lockedReason ? `, required: ${lockedReason}` : ineligibleReason ? `, unavailable: ${ineligibleReason}` : ''}`;
   return <div className="die-wrap">
     <div className="ability-label" aria-hidden="true">{activeAbility.toUpperCase()}</div>
     <Paper component="button" type="button" withBorder
-      className={`die ${die.owner === 'boss' ? 'cursed-die' : ''} ${selected ? 'selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${ability || flameAbility ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''} ${wardenLocked ? 'warden-locked' : ''}`}
+      className={`die ${die.owner === 'boss' ? 'cursed-die' : ''} ${face.snakeEyed ? 'snake-eyed-face' : ''} ${face.infected ? 'infected-face' : ''} ${selected ? 'selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${ability || flameAbility ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''} ${wardenLocked ? 'warden-locked' : ''}`}
       disabled={interactionDisabled} aria-disabled={interactionDisabled} aria-pressed={selected}
       title={wardenLocked ? `${dieLabel} locked${unlockAt === undefined ? '' : ` until ${unlockAt} points`}${wardenSelectable ? ' · choose to unlock' : ''}` : lockedReason ?? ineligibleReason}
       aria-label={accessibilityLabel} data-locked-until={unlockAt}
@@ -73,7 +75,9 @@ export function Die({ die, selected, highlighted, rolling, ability, flameAbility
       {flameId && <Tooltip label={`${FLAMES[flameId].name}: ${flameInvestment}/100 Gold. ${FLAMES[flameId].description}`} multiline maw={320} withArrow>
         <Badge className="flame-badge" size="xs" color="orange" variant="light">🔥 {FLAMES[flameId].shortName} {flameInvestment}</Badge>
       </Tooltip>}
-      <PipFace value={die.value} label={`${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`} showing ${die.value}`} />
+      {face.snakeEyed && <Badge className="boss-face-badge" size="xs" color="green">SNAKE EYES</Badge>}
+      {face.infected && <Badge className="boss-face-badge" size="xs" color="red">INFECTED</Badge>}
+      <PipFace value={displayValue} label={`${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`} showing ${displayValue}`} />
       {pips !== face.rank && <Text size="xs" c="teal" fw={700} className="die-pips">{pips} Pips</Text>}
       <div className="die-badges">
         {visibleEnhancements.map(id => {
@@ -87,6 +91,7 @@ export function Die({ die, selected, highlighted, rolling, ability, flameAbility
           <Badge size="xs" variant="outline" color="gray">+{hiddenEnhancements.length}</Badge>
         </Tooltip>}
       </div>
+      {face.infected && enhancements.length > 0 && <Text size="xs" c="red" fw={800} className="disabled-enhancements">ENHANCEMENTS DISABLED</Text>}
       {showCapacity && (capacity > 0 || eligible !== undefined) && <Text size="xs" c="dimmed" className="die-capacity">{capacity} / {FACE_TYPE_LIMIT}</Text>}
     </Paper>
   </div>;

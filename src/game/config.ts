@@ -12,7 +12,7 @@ export const CONFIG = {
   interestCap: 10,
   diceRerollBase: 2,
   offerRerollBase: 3,
-  handTrainingCost: 4,
+  handTrainingCost: 3,
   rerollCostGrowth: 2,
   bonusPips: 10,
   standaloneMultiplier: 1,

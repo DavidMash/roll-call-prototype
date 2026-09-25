@@ -24,11 +24,11 @@ Every XMult contribution is a multiplicative factor composed centrally. Ordinary
 
 Progression follows one linear route: `Round 1 → Shop → Round 2 → Shop → Boss Round 3 → Flame Selection → Shop`, then repeats. A local map transition appears before every normal Round, Boss, Shop, and Flame Selection. It only shows nearby nodes, uses stable node IDs such as `round:2`, `boss:3`, `flame:after-round:3`, and `shop:before-round:4`, and continues when the player clicks Continue or after five seconds. The Continue button fills from left to right during the countdown. Reduced-motion preferences remove its animation without skipping the five-second screen. Normal Rounds use blue (`#3B82F6`), Shops gold (`#F59E0B`), and Flame Selections red (`#EF4444`) over the shared dark foundation.
 
-Every third round is a Boss encounter. Boss assignment is deterministic from the run seed and uses shuffled bags of Caller, Warden, and Hexer: all three occur before a reshuffle and the boundary cannot repeat the previous boss. The assignment is stored in run state, shown in the immediately preceding Shop, and remains stable on retry. Boss rounds use the normal round target and add a 10-Gold Boss Reward on a successful clear. Clearing one proceeds through Round Summary, the Flame Selection map transition, Flame Selection, and then the Shop transition.
+Every third round is a Boss encounter. Boss assignment is deterministic from the run seed and uses shuffled eight-boss bags: The Caller, The Warden, The Hexer, The Marathon, Quickdraw, The Fly, Snake Eyes, and The Infected all occur before a reshuffle, with boundary repeats avoided. The assignment is stored in run state, shown in the immediately preceding Shop, and remains stable on retry. Boss rounds add a 10-Gold Boss Reward on a successful clear. Clearing one proceeds through Round Summary, the Flame Selection map transition, Flame Selection, and then the Shop transition.
 
 ### The Caller
 
-The Caller (purple/magenta) chooses from Ones through Sixes, Pair, Two Pair, Three of a Kind, Small Straight, and Full House. The exact call is hidden in the Shop preview and revealed at encounter start. It must be completed within three manual plays. A matching Jumping Bean free play satisfies the call without decrementing the counter; a nonmatching Bean does not decrement it. The third nonmatching manual play Busts the attempt even if its score reached the target.
+The Caller (purple/magenta) continuously chooses an unused category from Ones through Sixes, Pair, Two Pair, Three of a Kind, Small Straight, and Full House. Answering within three manual plays immediately starts a fresh call. A matching Jumping Bean answers for free; other Bean plays do not affect the counter. On the third wrong manual hand, that hand scores, current round score is halved and rounded, and a new three-play call begins. The penalty resolves before checking for a clear and never causes an immediate Bust.
 
 ### The Warden
 
@@ -36,7 +36,7 @@ The Warden (cyan/teal) rolls all five player dice at encounter start, resolves o
 
 ### The Hexer
 
-The Hexer (toxic green) adds a temporary boss-owned seven-sided Cursed Die that must participate in every manual hand and can otherwise roll and reroll normally. Its authored faces are:
+The Hexer (toxic green) adds a temporary boss-owned seven-sided Cursed Die that must genuinely participate in every manual scoring hand. It remains freely selectable and rerollable like every other die; scorecard rows only become playable when a valid combination can include it. Its authored faces are:
 
 | Face | Enhancements |
 |---:|---|
@@ -49,6 +49,26 @@ The Hexer (toxic green) adds a temporary boss-owned seven-sided Cursed Die that 
 | 7 | Bonus 5, Jackpot 1, Sticky 1 |
 
 Bump advances `4 → 5 → 6 → 7` and does not wrap. Seven is a genuine rank, so Small Straight recognizes `4-5-6-7` and Large Straight recognizes `3-4-5-6-7`. The Cursed Die cannot own Flames and is removed after a clear or failed-attempt rollback.
+
+### The Marathon
+
+The Marathon triples the normal target. A manually played hand enters a seven-manual-play cooldown instead of being permanently consumed; each later manual hand reduces existing cooldowns by one. Jumping Bean free plays neither enter nor advance cooldowns.
+
+### Quickdraw
+
+Quickdraw uses one third of the normal target, rounded to the normal five-point target interval. Only one Lower-section hand can be manually played during the attempt; Upper hands remain normal, and the Lower shot is optional.
+
+### The Fly
+
+The Fly marks an unused Lower row. All hands score with a final `×0.5` Boss factor until that marked hand is played; the catching hand and every later hand score in full. Every non-catching hand, including Jumping Bean, moves the Fly to another unused Lower row when possible.
+
+### Snake Eyes
+
+After every scoring hand, Snake Eyes deterministically converts up to two eligible participating physical faces into genuine value-1 faces for that attempt. Enhancements stay attached to those physical sides. Mutations roll back on Bust and disappear after the encounter.
+
+### The Infected
+
+One physical face on every player die starts infected. An infected face keeps its value but its attached enhancements are disabled; whole-die Flames and Bonfires still work. An exposed infected face spreads to clean landing faces on other dice using one snapshot generation per roll batch. Infection rolls back on Bust and disappears after the encounter.
 
 ## Gold and the Shop
 

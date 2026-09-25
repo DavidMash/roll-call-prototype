@@ -22,7 +22,7 @@ export function createStats(seed: string): RunStats {
     triggers: {}, probabilityProcs: {
       sticky: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
       hitchhiker: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
-    }, scoreBySource: { hand: 0, jumpingBean: 0, hitchhiker: 0 }, scoreByHand: {},
+    }, scoreBySource: { hand: 0, jumpingBean: 0, hitchhiker: 0, boss: 0 }, scoreByHand: {},
     handScores: [], jumpingBeanFreePlays: [], standaloneScores: [], handBonusPips: 0, hitchhikerPipsContributed: 0,
     loss: null, actions: [], resolutionError: null,
   };

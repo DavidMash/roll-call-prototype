@@ -87,12 +87,12 @@ function subsets<T>(items: T[], size: number): T[][] {
 }
 
 function straightValid(dice: Die[], size: number): boolean {
-  const natural = dice.filter(die => !stacks(activeFace(die), 'missingLink')).map(die => die.value);
+  const natural = dice.filter(die => !stacks(activeFace(die), 'missingLink')).map(die => activeFace(die).rank);
   if (new Set(natural).size !== natural.length) return false;
   return HAND_RANKS.slice(0, HAND_RANKS.length - size + 1).some(start => natural.every(rank => rank >= start && rank < start + size));
 }
 function matchingGroupsValid(dice: Die[], groups: readonly number[]): boolean {
-  const natural = dice.filter(die => !stacks(activeFace(die), 'mirror')).map(die => die.value);
+  const natural = dice.filter(die => !stacks(activeFace(die), 'mirror')).map(die => activeFace(die).rank);
   // Distinct ranks own disjoint slots. Every Mirror fills exactly one remaining slot.
   function assign(group: number, ranks: Rank[]): boolean {
     if (group === groups.length) return natural.every(rank => ranks.includes(rank));
@@ -106,7 +106,7 @@ function matchingGroupsValid(dice: Die[], groups: readonly number[]): boolean {
 export function combinationsForHand(dice: Die[], hand: HandId): number[][] {
   const rule = HANDS[hand];
   if (rule.rank) {
-    const matching = dice.filter(die => die.value === rule.rank).map(die => die.id);
+    const matching = dice.filter(die => activeFace(die).rank === rule.rank).map(die => die.id);
     // Largest first preserves the all-matching hand-first default.
     return Array.from({ length: matching.length }, (_, index) => subsets(matching, matching.length - index)).flat();
   }

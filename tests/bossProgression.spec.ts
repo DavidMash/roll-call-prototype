@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { activeEncounterDice, bossTypeForRound, wardenCheckpoints } from '../src/game/bosses';
+import { activeEncounterDice, bossTypeForRound, unavailableEncounterHands, wardenCheckpoints } from '../src/game/bosses';
 import { dispatch, newRun } from '../src/game/engine';
 import { handOptions, HANDS, HAND_IDS, ultimateHands } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
@@ -27,7 +27,7 @@ async function ready(page: Page) {
 function best(game: GameState) {
   const dice = activeEncounterDice(game);
   const callerHand = game.boss?.type === 'caller' && !game.boss.satisfied ? game.boss.calledHand : null;
-  return handOptions(dice, game.consumed).filter(option => !option.consumed)
+  return handOptions(dice, unavailableEncounterHands(game)).filter(option => !option.consumed)
     .flatMap(option => option.combinations.map(dieIds => ({ hand: option.id, dieIds,
       score: handScore(dice, option.id, dieIds, game.handLevels[option.id]).score })))
     .filter(choice => game.boss?.type !== 'hexer' || choice.dieIds.includes(game.boss.cursedDieId))
@@ -134,6 +134,25 @@ test('Caller preview hides the call, then encounter reveals it and its counter',
   await expect(page.locator('[data-screen-theme="caller"]')).toBeVisible();
   await expect(page.getByTestId('live-score-panel')).toHaveCSS('position', 'sticky');
 });
+
+for (const testCase of [
+  { type: 'marathon', name: 'THE MARATHON', preview: '3× TARGET · Hands recharge after 7 manual plays.', hud: '3× TARGET' },
+  { type: 'quickdraw', name: 'QUICKDRAW', preview: '⅓ TARGET · Only one Lower hand may be used.', hud: '1 SHOT AVAILABLE' },
+  { type: 'fly', name: 'THE FLY', preview: 'Hands score ×0.5 until you catch the moving Fly.', hud: 'FLY LOOSE · ×0.5' },
+  { type: 'snakeEyes', name: 'SNAKE EYES', preview: 'Scoring gradually turns your physical faces into 1s.', hud: 'SNAKE-EYED' },
+  { type: 'infected', name: 'THE INFECTED', preview: 'Infected faces spread when other dice roll and lose their enhancements.', hud: 'INFECTED FACES' },
+] as const) {
+  test(`${testCase.name} preview, HUD, and theme use the boss architecture`, async ({ page }) => {
+    let game = await reachBossShop(page, testCase.type);
+    await expect(page.getByTestId('boss-preview')).toContainText(testCase.preview);
+    await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+    game = dispatch(game, { type: 'NEXT_ROUND' }).state;
+    await ready(page);
+    await expect(page.getByTestId('boss-panel')).toContainText(testCase.name);
+    await expect(page.getByTestId('boss-panel')).toContainText(testCase.hud);
+    await expect(page.locator(`[data-screen-theme="${testCase.type}"]`)).toBeVisible();
+  });
+}
 
 test('scorecard Ultimate badges match the domain ranking and update with training', async ({ page }) => {
   const seed = 'ultimate-scorecard-badges';
@@ -244,9 +263,8 @@ test('Hexer preview keeps its faces secret and encounter fits all six dice on on
   const cursed = game.dice.find(die => die.owner === 'boss')!;
   const cursedButton = page.getByRole('button', { name: /^Cursed Die, face/ });
   await expect(cursedButton).toBeVisible();
-  await expect(cursedButton).toHaveAttribute('aria-pressed', 'true');
-  await expect(cursedButton).toHaveAttribute('aria-disabled', 'true');
-  await expect(cursedButton).toHaveAttribute('title', 'Required by The Hexer.');
+  await expect(cursedButton).toHaveAttribute('aria-pressed', 'false');
+  await expect(cursedButton).toHaveAttribute('aria-disabled', 'false');
   await expect(page.getByRole('button', { name: 'Clear selection' })).toBeDisabled();
 
   const legalHands = new Set(handOptions(activeEncounterDice(game), game.consumed, [cursed.id]).map(option => option.id));
@@ -258,7 +276,7 @@ test('Hexer preview keeps its faces secret and encounter fits all six dice on on
   await playerButton.click();
   await expect(page.getByRole('button', { name: 'Clear selection' })).toBeEnabled();
   await page.getByRole('button', { name: 'Clear selection' }).click();
-  await expect(cursedButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(cursedButton).toHaveAttribute('aria-pressed', 'false');
   await expect(playerButton).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.die.cursed-die')).toHaveCount(1);
   await expect(page.getByTestId('hexer-rule')).toHaveText('CURSE: Include the Cursed Die whenever you play a hand.');
@@ -269,12 +287,18 @@ test('Hexer preview keeps its faces secret and encounter fits all six dice on on
   expect(game.dice).toHaveLength(6);
 });
 
-test('Hexer face 7 renders seven pips without Mirror and remains selected', async ({ page }) => {
-  let game = await reachBossShop(page, 'hexer', 'boss-browser-33');
+test('Hexer face 7 renders seven pips without Mirror and remains freely selectable', async ({ page }) => {
+  let game = await reachBossShop(page, 'hexer');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await ready(page);
-  const cursed = game.dice.find(die => die.owner === 'boss')!;
+  let cursed = game.dice.find(die => die.owner === 'boss')!;
+  cursed.value = 7;
+  await page.evaluate(saved => localStorage.setItem('roll-call:active-run', JSON.stringify({ version: 1, state: saved })), game);
+  await page.reload();
+  await ready(page);
+  game = structuredClone(game);
+  cursed = game.dice.find(die => die.owner === 'boss')!;
   expect(cursed.value).toBe(7);
   const button = page.getByRole('button', { name: /^Cursed Die, face 7,/ });
   await expect(button.locator('.pip-face')).toHaveAttribute('aria-label', 'Cursed Die showing 7');
@@ -283,10 +307,12 @@ test('Hexer face 7 renders seven pips without Mirror and remains selected', asyn
   await expect(button).toContainText('B+5');
   await expect(button).toContainText('Jackpot');
   await expect(button).toContainText('Sticky');
+  await expect(button).toHaveAttribute('aria-pressed', 'false');
+  await expect(button).toHaveAttribute('aria-disabled', 'false');
+  await button.click();
   await expect(button).toHaveAttribute('aria-pressed', 'true');
-  await expect(button).toHaveAttribute('aria-disabled', 'true');
-  await button.evaluate(element => (element as HTMLElement).click());
-  await expect(button).toHaveAttribute('aria-pressed', 'true');
+  await button.click();
+  await expect(button).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('Boss clear shows +10 Boss Reward summary before the Flame Selection map', async ({ page }) => {
