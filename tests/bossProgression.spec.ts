@@ -76,10 +76,11 @@ async function reachBossShop(page: Page, boss: BossType, seed = seedFor(boss)) {
   return game;
 }
 
-test('local route transition auto-continues after its themed five-second fill and honors reduced motion', async ({ page }) => {
+test('local route transition auto-continues after its visible themed three-second countdown and honors reduced motion', async ({ page }) => {
   await page.goto('/?seed=map-browser&speed=normal');
   const map = page.getByTestId('run-map-transition');
   await expect(map).toBeVisible();
+  expect(await map.evaluate(element => getComputedStyle(element).animationName)).toContain('map-screen-in');
   await expect(map).toHaveAttribute('data-destination', 'round:1');
   const destination = map.locator('[aria-current="step"]');
   await expect(destination).toContainText('Round 1');
@@ -89,34 +90,41 @@ test('local route transition auto-continues after its themed five-second fill an
   expect(nodeBox!.y).toBeGreaterThanOrEqual(trackBox!.y);
   expect(nodeBox!.y + nodeBox!.height).toBeLessThanOrEqual(trackBox!.y + trackBox!.height);
   const continueButton = map.getByRole('button', { name: 'Continue', exact: true });
-  const fillStyle = await continueButton.evaluate(element => {
-    const style = getComputedStyle(element, '::before');
+  await expect(continueButton.locator('.map-continue-countdown')).toHaveText('3');
+  const fillStyle = await map.locator('.map-continue-fill').evaluate(element => {
+    const style = getComputedStyle(element);
     return { animationDuration: style.animationDuration, animationName: style.animationName, backgroundColor: style.backgroundColor };
   });
-  expect(fillStyle).toMatchObject({ animationDuration: '5s', animationName: 'map-continue-fill' });
+  expect(fillStyle).toMatchObject({ animationDuration: '3s', animationName: 'map-continue-fill' });
   expect(fillStyle.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
   await page.waitForTimeout(1100);
   await expect(map).toBeVisible();
-  await expect(map).toHaveCount(0, { timeout: 5000 });
+  await expect(continueButton.locator('.map-continue-countdown')).toHaveText('2');
+  await expect(map).toHaveCount(0, { timeout: 3000 });
   await expect(page.getByTestId('stat-round')).toContainText('1');
 
   await page.goto('/?seed=map-manual&speed=normal');
   const manualMap = page.getByTestId('run-map-transition');
   await manualMap.getByRole('button', { name: 'Continue', exact: true }).click();
-  await expect(manualMap).toHaveCount(0);
-  await page.waitForTimeout(5100);
+  await expect(manualMap).toHaveClass(/map-exiting/);
+  expect(await manualMap.evaluate(element => getComputedStyle(element).animationName)).toBe('map-screen-out');
+  await expect(manualMap).toBeVisible();
+  await expect(manualMap).toHaveCount(0, { timeout: 1000 });
+  await page.waitForTimeout(3100);
   await expect(page.getByTestId('stat-round')).toContainText('1');
 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/?seed=map-reduced&speed=normal');
   const reducedMap = page.getByTestId('run-map-transition');
   await expect(reducedMap).toBeVisible();
-  const reducedAnimation = await reducedMap.getByRole('button', { name: 'Continue', exact: true })
-    .evaluate(element => getComputedStyle(element, '::before').animationName);
+  expect(await reducedMap.evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+  await expect(reducedMap.locator('.map-continue-countdown')).toHaveText('3');
+  const reducedAnimation = await reducedMap.locator('.map-continue-fill')
+    .evaluate(element => getComputedStyle(element).animationName);
   expect(reducedAnimation).toBe('none');
   await page.waitForTimeout(250);
   await expect(reducedMap).toBeVisible();
-  await expect(reducedMap).toHaveCount(0, { timeout: 5250 });
+  await expect(reducedMap).toHaveCount(0, { timeout: 3250 });
 });
 
 test('Caller preview hides the call, then encounter reveals it and its counter', async ({ page }) => {
