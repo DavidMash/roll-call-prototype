@@ -211,9 +211,9 @@ describe('The Hexer', () => {
       { rank: 1, weightedTarget: 6, enhancements: { golden: 1, jumpingBean: 1, weighted: 1 } },
       { rank: 2, weightedTarget: 5, enhancements: { bonus: 1, jumpingBean: 1, weighted: 1 } },
       { rank: 3, weightedTarget: 4, enhancements: { workout: 1, jumpingBean: 1, weighted: 1 } },
-      { rank: 4, weightedTarget: null, enhancements: { missingLink: 1, mirror: 1, bump: 1 } },
-      { rank: 5, weightedTarget: null, enhancements: { workout: 5, mirror: 1, bump: 1 } },
-      { rank: 6, weightedTarget: null, enhancements: { workout: 10, mirror: 1, bump: 1 } },
+      { rank: 4, weightedTarget: null, enhancements: { workout: 5, bump: 1 } },
+      { rank: 5, weightedTarget: null, enhancements: { workout: 10, bump: 1 } },
+      { rank: 6, weightedTarget: null, enhancements: { workout: 20, bump: 1 } },
       { rank: 7, weightedTarget: null, enhancements: { bonus: 5, jackpot: 1, sticky: 1 } },
     ]);
     expect(die.faces.every(face => Object.keys(face.enhancements).length <= 3)).toBe(true);

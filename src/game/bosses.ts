@@ -171,9 +171,9 @@ export function createCursedDie(): Die {
       face(1, { golden: 1, jumpingBean: 1, weighted: 1 }, 6),
       face(2, { bonus: 1, jumpingBean: 1, weighted: 1 }, 5),
       face(3, { workout: 1, jumpingBean: 1, weighted: 1 }, 4),
-      face(4, { missingLink: 1, mirror: 1, bump: 1 }),
-      face(5, { workout: 5, mirror: 1, bump: 1 }),
-      face(6, { workout: 10, mirror: 1, bump: 1 }),
+      face(4, { workout: 5, bump: 1 }),
+      face(5, { workout: 10, bump: 1 }),
+      face(6, { workout: 20, bump: 1 }),
       face(7, { bonus: 5, jackpot: 1, sticky: 1 }),
     ],
   };

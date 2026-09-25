@@ -43,9 +43,9 @@ The Hexer (toxic green) adds a temporary boss-owned Cursed Die that must genuine
 | 1 | Golden 1, Jumping Bean, Weighted → 6 |
 | 2 | Bonus 1, Jumping Bean, Weighted → 5 |
 | 3 | Workout 1, Jumping Bean, Weighted → 4 |
-| 4 | Missing Link, Mirror, Bump |
-| 5 | Workout 5, Mirror, Bump |
-| 6 | Workout 10, Mirror, Bump |
+| 4 | Workout 5, Bump |
+| 5 | Workout 10, Bump |
+| 6 | Workout 20, Bump |
 | 7 | Bonus 5, Jackpot 1, Sticky 1 |
 
 Bump advances `4 → 5 → 6 → 7` and does not wrap. Seven is a genuine rank, so Small Straight recognizes `4-5-6-7` and Large Straight recognizes `3-4-5-6-7`. The Cursed Die cannot own Flames and is removed after a clear or failed-attempt rollback.
