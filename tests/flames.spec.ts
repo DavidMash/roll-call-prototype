@@ -253,3 +253,43 @@ test('Flame Selection only acquires while Shop Manage Die supports arbitrary Sto
   expect(game.phase).toBe('shop');
   expect(game.stats.flameSkips).toContain(game.round);
 });
+
+test('arming and canceling Charge preserves the selected hand and dice', async ({ page }) => {
+  const seed = 'charge-selection-preservation';
+  const game = newRun(seed).state;
+  game.dice[0].flame = { id: 'charge', investedGold: 50 };
+  game.chargeXMult = 1.5;
+  const choice = bestHand(game)!;
+
+  await page.goto('/');
+  await page.evaluate(({ key, state }) => localStorage.setItem(key, JSON.stringify({ version: 1, state })), {
+    key: RUN_STORAGE_KEY,
+    state: game,
+  });
+  await page.goto(`/?seed=${seed}&speed=instant`);
+  await ready(page);
+
+  const handRow = page.getByTestId(`scorecard-row-${choice.hand}`);
+  await handRow.click();
+  for (const die of game.dice) {
+    const dieButton = page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},`) });
+    const selected = await dieButton.getAttribute('aria-pressed') === 'true';
+    if (selected !== choice.dieIds.includes(die.id)) await dieButton.click();
+  }
+  await expect(handRow).toHaveAttribute('aria-pressed', 'true');
+
+  const chargeButton = page.getByRole('button', { name: 'Use Charge ×1.5', exact: true });
+  await chargeButton.click();
+  await ready(page);
+  await expect(handRow).toHaveAttribute('aria-pressed', 'true');
+  for (const dieId of choice.dieIds) {
+    await expect(page.getByRole('button', { name: new RegExp(`^Die ${dieId + 1},`) })).toHaveAttribute('aria-pressed', 'true');
+  }
+
+  await page.getByRole('button', { name: 'ARMED — cancel', exact: true }).click();
+  await ready(page);
+  await expect(handRow).toHaveAttribute('aria-pressed', 'true');
+  for (const dieId of choice.dieIds) {
+    await expect(page.getByRole('button', { name: new RegExp(`^Die ${dieId + 1},`) })).toHaveAttribute('aria-pressed', 'true');
+  }
+});

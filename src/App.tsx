@@ -52,7 +52,7 @@ export default function App() {
     if (!game.submit(action)) return;
     if (!['BUY', 'SELL_ENHANCEMENT', 'STOKE_FLAME', 'RESTORE_LIFE', 'DISMISS_FLAME_TUTORIAL'].includes(action.type)) setSelectedOffer(null);
     setSelectedFlameOffer(null);
-    setSelection(emptySelection());
+    if (action.type !== 'TOGGLE_CHARGE') setSelection(emptySelection());
   }
   function restart(seed: string) {
     const url = new URL(window.location.href);
