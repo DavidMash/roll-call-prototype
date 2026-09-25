@@ -11,7 +11,7 @@ import { probabilityCheck, randomIndex } from './rng';
 import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, handContributions } from './scoring';
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie,
-  isCursedDie, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands } from './bosses';
+  isCursedDie, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands, wardenUnlockTarget } from './bosses';
 import { encounterNode, flameNodeAfter, shopNodeBefore } from './progression';
 import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameStateBase, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, RunNode, ScoreSource } from './types';
 
@@ -102,20 +102,17 @@ export class Resolver {
     if (round.firstCrossedScore === null && this.state.score >= this.state.target) round.firstCrossedScore = this.state.score;
     round.finalScore = this.state.score;
     this.emit({ type: 'SCORE_ADDED', amount, source, hand, dieIds, message });
-    this.updateWardenCheckpoints();
+    this.updateWardenUnlockTarget();
   }
-  private updateWardenCheckpoints(): void {
+  private updateWardenUnlockTarget(): void {
     const boss = this.state.boss;
-    if (boss?.type !== 'warden') return;
-    while (boss.reachedCheckpoints < boss.checkpoints.length
-      && this.state.score >= boss.checkpoints[boss.reachedCheckpoints]) {
-      const threshold = boss.checkpoints[boss.reachedCheckpoints++];
-      boss.pendingReinforcements++;
-      this.state.stats.wardenEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
-        kind: 'checkpoint', threshold, activeDice: boss.activeDieIds.length });
-      this.emit({ type: 'WARDEN_CHECKPOINT', boss: 'warden', amount: threshold,
-        message: `Warden checkpoint ${threshold} reached · next reinforcement released` });
-    }
+    if (boss?.type !== 'warden' || boss.nextUnlockTarget === null || boss.pendingReinforcements > 0
+      || boss.activeDieIds.length >= CONFIG.diceCount || this.state.score < boss.nextUnlockTarget) return;
+    boss.pendingReinforcements++;
+    this.state.stats.wardenEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
+      kind: 'target', threshold: boss.nextUnlockTarget, activeDice: boss.activeDieIds.length });
+    this.emit({ type: 'WARDEN_UNLOCK_TARGET', boss: 'warden', amount: boss.nextUnlockTarget,
+      message: `Warden unlock target ${boss.nextUnlockTarget} reached · next reinforcement released` });
   }
   whenScored(dieId: number, snapshot: Face, hand: HandId, playSource: HandPlaySource, participation: 'selected' | 'hitchhiker'): void {
     if (this.state.boss?.type === 'hexer' && dieId === this.state.boss.cursedDieId) {
@@ -448,12 +445,20 @@ export class Resolver {
     boss.activeDieIds.push(dieId);
     if (starting) boss.startingDieId = dieId;
     boss.pendingReinforcements--;
+    boss.nextUnlockTarget = boss.activeDieIds.length < CONFIG.diceCount
+      ? wardenUnlockTarget(this.state.score, this.state.handLevels, this.state.consumed, boss.activeDieIds.length)
+      : null;
+    if (boss.nextUnlockTarget !== null) boss.unlockTargets.push(boss.nextUnlockTarget);
     this.state.stats.wardenEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
       kind: starting ? 'starting_die' : 'reinforcement', dieId, activeDice: boss.activeDieIds.length });
     const encounter = this.state.stats.bossEncounters.at(-1);
-    if (starting && encounter?.boss === 'warden') encounter.wardenStartingDieId = dieId;
+    if (encounter?.boss === 'warden') {
+      if (starting) encounter.wardenStartingDieId = dieId;
+      encounter.wardenUnlockTargets = [...boss.unlockTargets];
+    }
     this.emit({ type: 'WARDEN_REINFORCEMENT', boss: 'warden', dieIds: [dieId],
       message: `${starting ? 'Starting die' : 'Reinforcement'} D${dieId + 1} unlocked · face ${this.state.dice.find(die => die.id === dieId)!.value} retained` });
+    this.updateWardenUnlockTarget();
     this.evaluate();
   }
   play(hand: HandId, dieIds: number[], playSource: HandPlaySource = 'manual'): { winning: boolean; beanRecordIndex: number | null } {
@@ -673,7 +678,7 @@ export class Resolver {
         encounter.callerManualPlays = failedBoss.type === 'caller' ? 3 - failedBoss.playsRemaining : undefined;
         encounter.callerSatisfied = failedBoss.type === 'caller' ? failedBoss.satisfied : undefined;
         encounter.callerSatisfyingSource = failedBoss.type === 'caller' ? failedBoss.satisfyingSource : undefined;
-        encounter.wardenCheckpoints = failedBoss.type === 'warden' ? failedBoss.checkpoints : undefined;
+        encounter.wardenUnlockTargets = failedBoss.type === 'warden' ? failedBoss.unlockTargets : undefined;
         encounter.wardenStartingDieId = failedBoss.type === 'warden' ? failedBoss.startingDieId : undefined;
         encounter.wardenActiveDiceAtEnd = failedBoss.type === 'warden' ? failedBoss.activeDieIds.length : undefined;
       }
@@ -710,7 +715,7 @@ export class Resolver {
       this.state.stats.bossEncounters.push({ boss: boss.type, round: this.state.round, attempt: this.state.roundAttemptNumber,
         started: true, cleared: false, busted: false,
         calledHand: boss.type === 'caller' ? boss.calledHand : undefined,
-        wardenCheckpoints: boss.type === 'warden' ? boss.checkpoints : undefined,
+        wardenUnlockTargets: boss.type === 'warden' ? boss.unlockTargets : undefined,
         wardenStartingDieId: boss.type === 'warden' ? boss.startingDieId : undefined });
       this.emit({ type: 'BOSS_STARTED', boss: boss.type,
         message: `${boss.type.toUpperCase()} · Round ${this.state.round} · Attempt ${this.state.roundAttemptNumber} · goal ${this.state.target}` });

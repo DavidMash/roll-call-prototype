@@ -36,10 +36,10 @@ export interface CallerBossState {
 }
 export interface WardenBossState {
   type: 'warden';
-  checkpoints: number[];
   activeDieIds: number[];
   startingDieId: number | null;
-  reachedCheckpoints: number;
+  nextUnlockTarget: number | null;
+  unlockTargets: number[];
   pendingReinforcements: number;
 }
 export interface HexerBossState { type: 'hexer'; cursedDieId: number }
@@ -248,7 +248,7 @@ export interface BossEncounterRecord {
   callerManualPlays?: number;
   callerSatisfied?: boolean;
   callerSatisfyingSource?: HandPlaySource | null;
-  wardenCheckpoints?: number[];
+  wardenUnlockTargets?: number[];
   wardenStartingDieId?: number | null;
   wardenActiveDiceAtEnd?: number;
 }
@@ -257,7 +257,7 @@ export interface CallerEventRecord {
   satisfied: boolean; source: HandPlaySource; expired: boolean;
 }
 export interface WardenEventRecord {
-  round: number; attempt: number; kind: 'starting_die' | 'checkpoint' | 'reinforcement';
+  round: number; attempt: number; kind: 'starting_die' | 'target' | 'reinforcement';
   threshold?: number; dieId?: number; activeDice: number;
 }
 export interface HexerEventRecord {
@@ -386,7 +386,7 @@ export type EventType =
   | 'ENHANCEMENT_SOLD' | 'VINTAGE_GROWN' | 'MAGNETIC_ATTRACTION' | 'BUMP_ROLL'
   | 'JUMPING_BEAN_FREE_PLAY' | 'JUMPING_BEAN_FOLLOWUP'
   | 'ROUND_BUST' | 'SHOP_REOPENED_AFTER_BUST' | 'ROUND_RETRY_STARTED' | 'LIFE_RESTORED' | 'FLAME_TUTORIAL_COMPLETED'
-  | 'CALLER_CALLED' | 'CALLER_CHANGED' | 'WARDEN_CHECKPOINT' | 'WARDEN_REINFORCEMENT' | 'CURSED_DIE_ROLLED'
+  | 'CALLER_CALLED' | 'CALLER_CHANGED' | 'WARDEN_UNLOCK_TARGET' | 'WARDEN_REINFORCEMENT' | 'CURSED_DIE_ROLLED'
   | 'BOSS_HAND_CHANGED' | 'BOSS_FACE_CHANGED'
   | 'RUN_LOST' | 'RESOLUTION_ERROR' | 'MANUAL_REROLL_STARTED' | 'DEAD_BOARD' | 'DEAD_BOARD_RESCUED';
 export interface EventRecord {

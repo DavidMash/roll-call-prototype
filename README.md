@@ -32,7 +32,7 @@ The Caller (purple/magenta) continuously chooses an unused category from Ones th
 
 ### The Warden
 
-The Warden (cyan/teal) rolls all five player dice at encounter start, resolves only their landing mechanics, and then locks all five on those faces. The player chooses any die and confirms `UNLOCK DIE`; checkpoints at 5%, 15%, 30%, and 50% of the normal target, rounded to the game’s five-point target interval, pause play and allow another locked die to be chosen. Unlocking retains the rolled face and is never a roll. Every remaining lock shows the same next checkpoint. Locked dice cannot score, be manually rerolled, trigger gameplay effects, or contribute attached Flames; global Bonfires remain active. A retry restores the pre-attempt state, rerolls all five for the new attempt, and returns to the initial choice.
+The Warden (cyan/teal) rolls all five player dice at encounter start, resolves only their landing mechanics, and then locks all five on those faces. The player chooses any die and confirms `UNLOCK DIE`. Each unlock freezes the next target at the current score plus half of the theoretical baseline capacity of the still-unused hands naturally possible with the newly active dice, rounded to the game’s five-point target interval. Capacity uses the current Hand Training base Pips and Mult plus ideal natural dice contribution; Flames, Bonfires, XMult, Bonus, Workout growth, wild-card effects, and other enhancements do not inflate it. Reaching the target pauses play and allows another locked die to be chosen. Unlocking retains the rolled face and is never a roll. Every remaining lock shows the same current target. Locked dice cannot score, be manually rerolled, trigger gameplay effects, or contribute attached Flames; global Bonfires remain active. A retry restores the pre-attempt state, rerolls all five for the new attempt, and returns to the initial choice.
 
 ### The Hexer
 
@@ -152,7 +152,7 @@ Physical die faces use a shared scalable pip layout in gameplay, the Shop, Manag
 
 ## Telemetry and validation
 
-Run Info exports schema 16 / `round-summary-boss-reward-v1`, including route transitions, destination and direction, boss assignment and attempts, Round Summary Gold reconciliation, manual-reroll face exclusion, Caller calls and outcomes, Warden thresholds and choices, Hexer die activity, round attempts, Bust/checkpoint lifecycle, economy, enhancements, Vintage growth, source-aware scoring, Flame factors, Stoke records, and Shop spending.
+Run Info exports schema 16 / `round-summary-boss-reward-v1`, including route transitions, destination and direction, boss assignment and attempts, Round Summary Gold reconciliation, manual-reroll face exclusion, Caller calls and outcomes, Warden unlock targets and choices, Hexer die activity, round attempts, Bust/checkpoint lifecycle, economy, enhancements, Vintage growth, source-aware scoring, Flame factors, Stoke records, and Shop spending.
 
 Validation commands:
 

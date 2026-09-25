@@ -96,10 +96,11 @@ button { font: inherit; }
 .warden-die-choice { display: inline-flex; align-items: center; gap: 5px; }
 .die-face-status { position: absolute; left: 4px; right: 4px; bottom: 4px; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .die-face-status.with-capacity { bottom: 15px; }
-.die-pips { line-height: 1; }
+.die-pips { line-height: 1; opacity: .8; }
 .die-capacity { position: absolute; right: 5px; bottom: 3px; font-size: .52rem; font-weight: 750; }
 .die-badges { max-height: 34px; display: flex; justify-content: center; flex-wrap: wrap; gap: 2px; overflow: hidden; }
 .die-badges .mantine-Badge-root { height: 15px; padding-inline: 4px; font-size: .5rem; text-transform: none; }
+.die .flame-badge, .die .boss-face-badge, .die-badges .mantine-Badge-root { opacity: .8; }
 .die.selected { background: rgba(18, 184, 134, .16); border-color: var(--mantine-color-teal-5); box-shadow: inset 0 0 0 1px var(--mantine-color-teal-7); }
 .die.scoring { background: rgba(250, 176, 5, .12); border-color: var(--mantine-color-yellow-6); }
 .die.eligible { border-color: var(--mantine-color-teal-4); box-shadow: 0 0 0 1px var(--mantine-color-teal-6); }

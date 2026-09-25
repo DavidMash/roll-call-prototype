@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { activeFace, rollWeights } from './dice';
 import { dispatch, newRun, validateAction } from './engine';
-import { activeEncounterDice, BOSS_TYPES, bossSchedule, createCursedDie, requiredEncounterDieIds, WARDEN_CHECKPOINT_FRACTIONS, wardenCheckpoints, wardenNextUnlockThreshold } from './bosses';
-import { combinationsForHand, HAND_IDS, hasPlayableHand } from './hands';
+import { activeEncounterDice, BOSS_TYPES, bossSchedule, createCursedDie, requiredEncounterDieIds, wardenBaselineCapacity, wardenIdealNaturalPips, wardenNaturalHands, wardenUnlockTarget } from './bosses';
+import { combinationsForHand, HAND_IDS, hasPlayableHand, initialHandLevels, UPPER_HAND_IDS } from './hands';
 import { routeThrough, routeWindow } from './progression';
 import type { BossType, GameState, RandomSource } from './types';
 import { Resolver } from './effects';
@@ -100,39 +100,73 @@ describe('The Caller', () => {
 });
 
 describe('The Warden', () => {
-  it('rolls all five dice first, leaves all locked, and uses the centralized 5/15/30/50 percent checkpoints', () => {
+  it('rolls all five dice first and leaves all locked before the initial choice', () => {
     const state = bossRound('warden');
-    expect(WARDEN_CHECKPOINT_FRACTIONS).toEqual([.05, .15, .3, .5]);
-    expect(wardenCheckpoints(1_000)).toEqual([50, 150, 300, 500]);
-    expect(state.boss).toMatchObject({ type: 'warden', checkpoints: wardenCheckpoints(state.target),
-      startingDieId: null, activeDieIds: [], reachedCheckpoints: 0, pendingReinforcements: 1 });
+    expect(state.boss).toMatchObject({ type: 'warden', nextUnlockTarget: null, unlockTargets: [],
+      startingDieId: null, activeDieIds: [], pendingReinforcements: 1 });
     const opening = [...state.history].reverse().find(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Warden opening roll'))!;
     expect(state.history.filter(event => event.id > opening.id && event.type === 'DIE_ROLLED').map(event => event.dieIds?.[0])).toEqual([0, 1, 2, 3, 4]);
     expect(activeEncounterDice(state)).toEqual([]);
+  });
+
+  it('calculates deterministic baseline capacity from trained stats and ideal natural dice only', () => {
+    const levels = initialHandLevels();
+    expect(wardenIdealNaturalPips('sixes', 3)).toBe(18);
+    expect(wardenIdealNaturalPips('twoPair', 4)).toBe(22);
+    expect(wardenIdealNaturalPips('fullHouse', 5)).toBe(28);
+    expect(wardenIdealNaturalPips('largeStraight', 5)).toBe(20);
+    expect(wardenBaselineCapacity(levels, [], 1)).toBe(63);
+    expect(wardenUnlockTarget(0, levels, [], 1)).toBe(30);
+    levels.pair = 2;
+    expect(wardenBaselineCapacity(levels, [], 2)).toBe(124);
+    expect(wardenUnlockTarget(0, levels, [], 2)).toBe(60);
+  });
+
+  it('only includes unused hands that are naturally possible at the active-die count', () => {
+    expect(wardenNaturalHands(1)).toEqual(UPPER_HAND_IDS);
+    expect(wardenNaturalHands(2)).toEqual([...UPPER_HAND_IDS, 'pair']);
+    expect(wardenNaturalHands(3)).toEqual([...UPPER_HAND_IDS, 'pair', 'threeKind']);
+    expect(wardenNaturalHands(4)).toEqual([...UPPER_HAND_IDS, 'pair', 'twoPair', 'threeKind', 'smallStraight', 'fourKind']);
+    expect(wardenNaturalHands(5)).toEqual(HAND_IDS);
+    const levels = initialHandLevels();
+    expect(wardenBaselineCapacity(levels, ['sixes', 'pair'], 2)).toBe(65);
+    expect(wardenUnlockTarget(37, levels, ['sixes', 'pair'], 2)).toBe(70);
   });
 
   it('lets the player choose any first die and unlocks it without rerolling or triggering roll effects', () => {
     const state = bossRound('warden');
     const face = state.dice[4].value;
     state.dice[4].faces[face - 1].enhancements.jumpingBean = 1;
+    state.dice[4].faces[face - 1].enhancements.bonus = 2;
+    state.dice[4].faces[face - 1].enhancements.workout = 3;
+    state.dice[4].faces[face - 1].workoutPips = 50;
     state.dice[4].flame = { id: 'charge', investedGold: 100 };
+    state.bonfires = ['ultimate'];
+    state.chargeXMult = 5;
     const result = dispatch(state, { type: 'UNLOCK_WARDEN_DIE', dieId: 4 }, constant(0));
-    expect(result.state.boss).toMatchObject({ type: 'warden', startingDieId: 4, activeDieIds: [4], pendingReinforcements: 0 });
+    expect(result.state.boss).toMatchObject({ type: 'warden', startingDieId: 4, activeDieIds: [4],
+      nextUnlockTarget: 30, unlockTargets: [30], pendingReinforcements: 0 });
     expect(result.state.dice[4].value).toBe(face);
+    expect(result.state.boss?.type === 'warden' && result.state.boss.nextUnlockTarget).toBe(30);
     expect(result.events.some(event => event.type === 'DIE_ROLLED' || event.type === 'JUMPING_BEAN_FREE_PLAY' || event.type === 'CHARGE_CHANGED')).toBe(false);
     expect(result.state.stats.wardenEvents.at(-1)).toMatchObject({ kind: 'starting_die', dieId: 4, activeDice: 1 });
   });
 
-  it('pauses at a checkpoint, lets the player choose any remaining die, and advances the shared next threshold', () => {
+  it('freezes each target until unlock, then snapshots score and unused hands for the next target', () => {
     let state = bossRound('warden');
     state = dispatch(state, { type: 'UNLOCK_WARDEN_DIE', dieId: 3 }, constant()).state;
     if (state.boss?.type !== 'warden') throw new Error('Warden fixture failed');
-    expect(wardenNextUnlockThreshold(state.boss)).toBe(state.boss.checkpoints[0]);
-    state.dice[3].value = 1;
-    state = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [3] }, constant(.2)).state;
+    expect(state.boss.nextUnlockTarget).toBe(30);
+    state.score = 29;
+    state.consumed = ['ones'];
+    state.handLevels.twos = 99;
+    expect(state.boss.nextUnlockTarget).toBe(30);
+    state.handLevels.twos = 1;
+    const resolver = new Resolver(state, constant(.2));
+    resolver.addScore(1, 'hand', 'test target crossing', [3], 'ones');
     if (state.boss?.type !== 'warden') throw new Error('Warden fixture failed');
-    expect(state.boss).toMatchObject({ activeDieIds: [3], reachedCheckpoints: 1, pendingReinforcements: 1 });
-    expect(wardenNextUnlockThreshold(state.boss)).toBe(state.boss.checkpoints[0]);
+    expect(state.boss).toMatchObject({ activeDieIds: [3], nextUnlockTarget: 30, pendingReinforcements: 1 });
+    expect(state.boss.nextUnlockTarget).toBe(30);
     expect(validateAction(state, { type: 'PLAY', hand: 'ones', dieIds: [3] })).toContain('Unlock');
     const lockedFace = state.dice[1].value;
     const unlock = dispatch(state, { type: 'UNLOCK_WARDEN_DIE', dieId: 1 }, constant(0));
@@ -141,7 +175,8 @@ describe('The Warden', () => {
     expect(state.boss.activeDieIds).toEqual([3, 1]);
     expect(state.dice[1].value).toBe(lockedFace);
     expect(unlock.events.some(event => event.type === 'DIE_ROLLED')).toBe(false);
-    expect(wardenNextUnlockThreshold(state.boss)).toBe(state.boss.checkpoints[1]);
+    expect(state.boss.nextUnlockTarget).toBe(85);
+    expect(state.boss.unlockTargets).toEqual([30, 85]);
   });
 
   it('keeps locked dice out of scoring, rerolls, Jumping Bean, and attached Flames while Bonfires stay global', () => {
@@ -196,7 +231,8 @@ describe('The Warden', () => {
     new Resolver(state, constant(.2)).evaluate();
     expect(state.phase).toBe('shop');
     state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.55)).state;
-    expect(state.boss).toMatchObject({ type: 'warden', startingDieId: null, activeDieIds: [], reachedCheckpoints: 0, pendingReinforcements: 1 });
+    expect(state.boss).toMatchObject({ type: 'warden', startingDieId: null, activeDieIds: [],
+      nextUnlockTarget: null, unlockTargets: [], pendingReinforcements: 1 });
     const opening = [...state.history].reverse().find(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Warden opening roll'))!;
     expect(state.history.filter(event => event.id > opening.id && event.type === 'DIE_ROLLED')).toHaveLength(5);
   });

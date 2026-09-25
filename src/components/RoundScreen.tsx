@@ -9,7 +9,7 @@ import type { Action, Board, GameEvent } from '../game/types';
 import { DiceRow } from './DiceRow';
 import { HandScorecard } from './HandList';
 import { ScoreResolution } from './ScoreResolution';
-import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands, wardenNextUnlockThreshold } from '../game/bosses';
+import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands } from '../game/bosses';
 import { BossPanel } from './BossPanel';
 
 export function RoundScreen({ board, event, busy, progress, selection, setSelection, submit, skip }: {
@@ -25,7 +25,7 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
     ? wardenDice.filter(die => !wardenBoss.activeDieIds.includes(die.id)).map(die => die.id)
     : [];
   const awaitingWardenChoice = !!wardenBoss && wardenBoss.pendingReinforcements > 0;
-  const nextWardenThreshold = wardenBoss ? wardenNextUnlockThreshold(wardenBoss) : undefined;
+  const nextWardenThreshold = wardenBoss?.nextUnlockTarget ?? undefined;
   const lockedUntilByDieId: Record<number, number> = {};
   if (nextWardenThreshold !== undefined) wardenLockedIds.forEach(id => { lockedUntilByDieId[id] = nextWardenThreshold; });
   const requiredDieIds = requiredEncounterDieIds(board);

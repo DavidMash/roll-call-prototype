@@ -1,4 +1,4 @@
-import { Badge, Group, Paper, Progress, Stack, Text } from '@mantine/core';
+import { Badge, Group, Paper, Stack, Text } from '@mantine/core';
 import { BOSSES } from '../game/bosses';
 import { HANDS } from '../game/hands';
 import type { Board } from '../game/types';
@@ -20,13 +20,8 @@ export function BossPanel({ board }: { board: Board }) {
       </Text>
     </Group>}
     {boss.type === 'warden' && <Stack gap={5} mt={6}>
-      <Group gap={5}>{boss.checkpoints.map((threshold, index) => <Badge key={threshold} size="sm"
-        variant={index < boss.reachedCheckpoints ? 'filled' : 'light'} color="cyan">{threshold}</Badge>)}</Group>
-      <Progress value={Math.min(100, board.score / board.target * 100)} color="cyan" size="sm" />
-      <Text size="xs" fw={800}>{boss.activeDieIds.length
-        ? `ACTIVE · ${boss.activeDieIds.map(id => `D${id + 1}`).join(', ')}`
-        : 'CHOOSE YOUR FIRST DIE'}</Text>
-      <Text size="xs" c="dimmed">Choose any locked die now and at each reached checkpoint. Unlocking keeps its face.</Text>
+      <Text size="xs" fw={800} data-testid="warden-active-dice">{boss.activeDieIds.length} / 5 DICE UNLOCKED</Text>
+      {boss.nextUnlockTarget !== null && <Text size="xs" fw={800} data-testid="warden-next-target">NEXT DIE AT {boss.nextUnlockTarget}</Text>}
     </Stack>}
     {boss.type === 'hexer' && <div className="hexer-rule" data-testid="hexer-rule">
       <Text size="sm"><strong>CURSE:</strong> Include the Cursed Die whenever you play a hand.</Text>

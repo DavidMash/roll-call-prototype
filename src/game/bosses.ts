@@ -1,7 +1,7 @@
-import { CONFIG, targetForRound } from './config';
+import { CONFIG } from './config';
 import { hashSeed, SeededRng } from './rng';
-import { HAND_IDS, LOWER_HAND_IDS } from './hands';
-import type { Board, BossRuntimeState, BossType, Die, HandId, Rank, WardenBossState } from './types';
+import { handStats, HANDS, HAND_IDS, LOWER_HAND_IDS } from './hands';
+import type { Board, BossRuntimeState, BossType, Die, HandId, HandLevels, Rank } from './types';
 
 export interface BossDefinition {
   name: string;
@@ -19,7 +19,7 @@ export const BOSSES: Record<BossType, BossDefinition> = {
   },
   warden: {
     name: 'THE WARDEN',
-    shortRule: 'All five dice roll locked; choose one now and one at each checkpoint.',
+    shortRule: 'All five dice roll locked; choose one now, then earn each next unlock.',
     primary: '#06B6D4',
     secondary: '#14B8A6',
   },
@@ -66,7 +66,6 @@ export const CALLER_HAND_POOL: HandId[] = [
   'ones', 'twos', 'threes', 'fours', 'fives', 'sixes',
   'pair', 'twoPair', 'threeKind', 'smallStraight', 'fullHouse',
 ];
-export const WARDEN_CHECKPOINT_FRACTIONS = [0.05, 0.15, 0.3, 0.5] as const;
 export const CURSED_DIE_ID = CONFIG.diceCount;
 
 export const isBossRound = (round: number) => round > 0 && round % 3 === 0;
@@ -117,17 +116,32 @@ export function targetForBoss(type: BossType, normalTarget: number): number {
   return normalTarget;
 }
 
-export function wardenCheckpoints(target: number): number[] {
-  return WARDEN_CHECKPOINT_FRACTIONS.map(fraction =>
-    Math.max(CONFIG.targetRounding, Math.round(target * fraction / CONFIG.targetRounding) * CONFIG.targetRounding));
+export function wardenNaturalHands(activeDice: number): HandId[] {
+  return HAND_IDS.filter(hand => HANDS[hand].rank !== undefined || HANDS[hand].size! <= activeDice);
 }
 
-export function wardenNextUnlockThreshold(boss: WardenBossState): number | undefined {
-  if (boss.startingDieId === null) return undefined;
-  const checkpointIndex = boss.pendingReinforcements > 0
-    ? Math.max(0, boss.reachedCheckpoints - boss.pendingReinforcements)
-    : boss.reachedCheckpoints;
-  return boss.checkpoints[checkpointIndex];
+export function wardenIdealNaturalPips(hand: HandId, activeDice: number): number {
+  const definition = HANDS[hand];
+  if (definition.rank !== undefined) return definition.rank * activeDice;
+  if (hand === 'smallStraight' || hand === 'largeStraight') {
+    return Array.from({ length: definition.size! }, (_, index) => 6 - index)
+      .reduce((sum, rank) => sum + rank, 0);
+  }
+  return [...definition.groups!].sort((a, b) => b - a)
+    .reduce((sum, group, index) => sum + group * (6 - index), 0);
+}
+
+export function wardenBaselineCapacity(handLevels: HandLevels, consumed: HandId[], activeDice: number): number {
+  const used = new Set(consumed);
+  return wardenNaturalHands(activeDice).filter(hand => !used.has(hand)).reduce((capacity, hand) => {
+    const stats = handStats(hand, handLevels[hand]);
+    return capacity + Math.round((stats.basePips + wardenIdealNaturalPips(hand, activeDice)) * stats.baseMultiplier);
+  }, 0);
+}
+
+export function wardenUnlockTarget(currentScore: number, handLevels: HandLevels, consumed: HandId[], activeDice: number): number {
+  const rawTarget = currentScore + wardenBaselineCapacity(handLevels, consumed, activeDice) * 0.5;
+  return Math.max(currentScore, Math.round(rawTarget / CONFIG.targetRounding) * CONFIG.targetRounding);
 }
 
 export function createBossRuntime(seed: string, round: number, type: BossType): BossRuntimeState {
@@ -143,10 +157,10 @@ export function createBossRuntime(seed: string, round: number, type: BossType): 
     };
     case 'warden': return {
       type,
-      checkpoints: wardenCheckpoints(targetForRound(round)),
       activeDieIds: [],
       startingDieId: null,
-      reachedCheckpoints: 0,
+      nextUnlockTarget: null,
+      unlockTargets: [],
       pendingReinforcements: 1,
     };
     case 'hexer': return { type, cursedDieId: CURSED_DIE_ID };

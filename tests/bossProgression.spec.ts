@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { activeEncounterDice, bossTypeForRound, unavailableEncounterHands, wardenCheckpoints } from '../src/game/bosses';
+import { activeEncounterDice, bossTypeForRound, unavailableEncounterHands, wardenUnlockTarget } from '../src/game/bosses';
 import { dispatch, newRun } from '../src/game/engine';
 import { handOptions, HANDS, HAND_IDS, ultimateHands } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
@@ -199,11 +199,15 @@ test('scorecard Ultimate badges require the Flame or Bonfire and match the domai
 test('Warden rolls all dice locked and lets the player choose the first die without rerolling', async ({ page }) => {
   let game = await reachBossShop(page, 'warden');
   const preview = page.getByTestId('boss-preview');
-  await expect(preview).toContainText('All five dice roll locked; choose one now and one at each checkpoint.');
+  await expect(preview).toContainText('All five dice roll locked; choose one now, then earn each next unlock.');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await ready(page);
-  await expect(page.getByTestId('boss-panel')).toContainText('CHOOSE YOUR FIRST DIE');
+  const panel = page.getByTestId('boss-panel');
+  await expect(panel).toContainText('0 / 5 DICE UNLOCKED');
+  await expect(panel.getByTestId('warden-next-target')).toHaveCount(0);
+  await expect(panel.locator('[role="progressbar"]')).toHaveCount(0);
+  await expect(panel.locator('.mantine-Badge-root')).toHaveCount(1);
   if (game.boss?.type !== 'warden') throw new Error('Warden fixture failed');
   await expect(page.locator('.gameplay-dock .die')).toHaveCount(5);
   await expect(page.locator('.gameplay-dock .die.warden-locked')).toHaveCount(5);
@@ -222,16 +226,20 @@ test('Warden rolls all dice locked and lets the player choose the first die with
   expect(game.dice[4].value).toBe(face);
   expect(game.boss).toMatchObject({ type: 'warden', startingDieId: 4, activeDieIds: [4] });
   if (game.boss?.type !== 'warden') throw new Error('Warden fixture failed');
-  const firstCheckpoint = game.boss.checkpoints[0];
+  const firstTarget = game.boss.nextUnlockTarget!;
+  expect(firstTarget).toBe(wardenUnlockTarget(0, game.handLevels, [], 1));
+  await expect(panel.getByTestId('warden-active-dice')).toHaveText('1 / 5 DICE UNLOCKED');
+  await expect(panel.getByTestId('warden-next-target')).toHaveText(`NEXT DIE AT ${firstTarget}`);
+  await expect(panel.locator('.mantine-Badge-root')).toHaveCount(1);
   await expect(page.locator('.gameplay-dock .die.warden-locked')).toHaveCount(4);
   for (const id of [1, 2, 3, 4]) {
-    const locked = page.getByRole('button', { name: new RegExp(`^Die ${id}, face .* locked until ${firstCheckpoint} points$`) });
+    const locked = page.getByRole('button', { name: new RegExp(`^Die ${id}, face .* locked until ${firstTarget} points$`) });
     await expect(locked).toBeDisabled();
-    await expect(locked.locator('.die-lock-overlay')).toContainText(`${firstCheckpoint} PTS`);
+    await expect(locked.locator('.die-lock-overlay')).toContainText(`${firstTarget} PTS`);
   }
 });
 
-test('Warden checkpoint pauses play and lets the player choose any remaining die', async ({ page }) => {
+test('Warden target pauses play and updates the shared lock target after the chosen unlock', async ({ page }) => {
   let game = await reachBossShop(page, 'warden');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
@@ -242,14 +250,16 @@ test('Warden checkpoint pauses play and lets the player choose any remaining die
   game = dispatch(game, { type: 'UNLOCK_WARDEN_DIE', dieId: 3 }).state;
   await ready(page);
 
-  const first = best(game)!;
-  expect(first.score).toBeGreaterThanOrEqual(wardenCheckpoints(game.target)[0]);
-  game = await playOne(page, game);
+  const frozenTarget = game.boss?.type === 'warden' ? game.boss.nextUnlockTarget! : 0;
+  for (let plays = 0; game.boss?.type === 'warden' && game.boss.pendingReinforcements === 0 && plays < 6; plays++) {
+    game = await playOne(page, game);
+  }
   if (game.boss?.type !== 'warden') throw new Error('Warden fixture failed');
   expect(game.boss.pendingReinforcements).toBe(1);
   expect(game.boss.activeDieIds).toEqual([3]);
+  expect(game.boss.nextUnlockTarget).toBe(frozenTarget);
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveCount(0);
-  const threshold = game.boss.checkpoints[0];
+  const threshold = game.boss.nextUnlockTarget!;
   for (const id of [1, 2, 3, 5]) {
     const locked = page.getByRole('button', { name: new RegExp(`^Die ${id}, face .* locked until ${threshold} points, selectable to unlock$`) });
     await expect(locked).toBeEnabled();
@@ -263,7 +273,11 @@ test('Warden checkpoint pauses play and lets the player choose any remaining die
   expect(game.dice[1].value).toBe(face);
   if (game.boss?.type !== 'warden') throw new Error('Warden fixture failed');
   expect(game.boss.activeDieIds).toEqual([3, 1]);
-  const secondThreshold = game.boss.checkpoints[1];
+  const secondThreshold = game.boss.nextUnlockTarget!;
+  expect(secondThreshold).toBe(wardenUnlockTarget(game.score, game.handLevels, game.consumed, 2));
+  expect(secondThreshold).not.toBe(threshold);
+  await expect(page.getByTestId('warden-active-dice')).toHaveText('2 / 5 DICE UNLOCKED');
+  await expect(page.getByTestId('warden-next-target')).toHaveText(`NEXT DIE AT ${secondThreshold}`);
   await expect(page.locator('.gameplay-dock .die.warden-locked')).toHaveCount(3);
   for (const id of [1, 3, 5]) {
     const locked = page.getByRole('button', { name: new RegExp(`^Die ${id}, face .* locked until ${secondThreshold} points$`) });
