@@ -1,9 +1,13 @@
 import { Badge, Group, Paper, Stack, Text } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
+import { useState } from 'react';
 import { BOSSES } from '../game/bosses';
 import { HANDS } from '../game/hands';
 import type { Board } from '../game/types';
 
 export function BossPanel({ board }: { board: Board }) {
+  const desktopDetails = useMediaQuery('(min-width: 801px)', false, { getInitialValueInEffect: false });
+  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const boss = board.boss;
   if (!boss) return null;
   const definition = BOSSES[boss.type];
@@ -20,7 +24,8 @@ export function BossPanel({ board }: { board: Board }) {
     }
   })();
   return <Paper p="xs" className={`boss-panel boss-${boss.type}`} data-testid="boss-panel">
-    <details className="boss-details">
+    <details className="boss-details" open={desktopDetails || mobileDetailsOpen}
+      onToggle={event => { if (!desktopDetails) setMobileDetailsOpen(event.currentTarget.open); }}>
       <summary className="boss-compact-row" aria-label={`${definition.name}. ${compactStatus}. Expand boss details`}>
         <strong>{definition.name}</strong><span aria-hidden="true"> · {compactStatus}</span><span className="boss-expand" aria-hidden="true">⌄</span>
       </summary>

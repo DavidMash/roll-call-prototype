@@ -129,8 +129,21 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(await page.locator('.flame-offers').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(3);
+  expect(await page.locator('.flame-dice-grid').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(5);
+  const mobileLayout = await page.evaluate(() => ({
+    offerHeights: [...document.querySelectorAll<HTMLElement>('.flame-offer')].map(card => card.getBoundingClientRect().height),
+    offerNameHeights: [...document.querySelectorAll<HTMLElement>('.flame-offer-name')].map(name => name.getBoundingClientRect().height),
+    dieCardTops: [...document.querySelectorAll<HTMLElement>('.flame-die-card')].map(card => Math.round(card.getBoundingClientRect().top)),
+    dieHeights: [...document.querySelectorAll<HTMLElement>('.flame-die-card .die')].map(die => die.getBoundingClientRect().height),
+  }));
+  expect(Math.max(...mobileLayout.offerHeights) - Math.min(...mobileLayout.offerHeights)).toBeLessThan(2);
+  expect(Math.max(...mobileLayout.offerNameHeights)).toBeLessThan(40);
+  expect(new Set(mobileLayout.dieCardTops).size).toBe(1);
+  expect(Math.max(...mobileLayout.dieHeights)).toBeLessThanOrEqual(68);
+  await expect(page.locator('.flame-offer .info-circle-icon').first()).toBeVisible();
   await expect(page.getByTestId('flame-die-4')).toBeVisible();
   await expect(page.locator('.flame-die-card .die-number')).toHaveCount(5);
+  await page.screenshot({ path: test.info().outputPath('flame-selection-mobile.png'), fullPage: true });
   await setDiceDisplay(page, 'PIPS');
   await expect(page.locator('.flame-die-card .pip-face')).toHaveCount(5);
   const rewardFaces = game.dice.map(die => die.value);
@@ -152,6 +165,7 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
 
   expect(game.phase).toBe('flameSelection');
   await expect(page.getByTestId('active-flame-wellTrained')).toContainText('0 / 100 → BONFIRE');
+  await page.screenshot({ path: test.info().outputPath('flame-selection-acquired-mobile.png'), fullPage: true });
   await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
   game = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
   await ready(page);

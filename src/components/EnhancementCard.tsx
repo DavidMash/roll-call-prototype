@@ -15,12 +15,12 @@ export function EnhancementCard({ offer, selected, gold, busy, onSelect }: {
   return <Card p="sm" className={`offer ${selected ? 'selected' : ''} ${offer.purchased ? 'purchased' : ''}`}
     data-testid={`offer-${offer.enhancement}`} draggable={enabled}
     onDragStart={event => { if (!enabled) { event.preventDefault(); return; } event.dataTransfer.setData('application/x-roll-call-offer', String(offer.id)); event.dataTransfer.effectAllowed = 'copy'; onSelect(); }}>
-    <Group justify="space-between" align="center" wrap="nowrap">
-      <Group gap={4} wrap="nowrap"><span className="offer-icon" aria-hidden="true">{ICON[offer.enhancement]}</span><Text fw={700} size="sm">{definition.name}</Text>
+    <Group className="offer-card-header" justify="space-between" align="center" wrap="nowrap">
+      <Group className="offer-identity" gap={4} wrap="nowrap"><span className="offer-icon" aria-hidden="true">{ICON[offer.enhancement]}</span><Text className="offer-name" fw={700} size="sm">{definition.name}</Text>
         <InfoPopover label={definition.name} description={definition.description} /></Group>
-      <Badge size="sm" variant="light" color="yellow">{enhancementCost(offer.enhancement)} gold</Badge>
+      <Badge className="offer-price" size="sm" variant="light" color="yellow">{enhancementCost(offer.enhancement)} gold</Badge>
     </Group>
-    <Button mt="xs" size="compact-xs" fullWidth variant={selected ? 'filled' : 'light'} disabled={!enabled} onClick={onSelect} aria-pressed={selected}>
+    <Button className="offer-action" mt="xs" size="compact-xs" fullWidth variant={selected ? 'filled' : 'light'} disabled={!enabled} onClick={onSelect} aria-pressed={selected}>
       {offer.purchased ? 'Purchased' : !affordable ? 'Need more gold' : selected ? 'Click an exposed face' : 'Select or drag'}
     </Button>
   </Card>;

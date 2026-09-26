@@ -585,16 +585,31 @@ test('Team Training occupies one existing slot and presents itself as a special 
     const columns = await page.locator(selector).evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length);
     expect(columns).toBe(3);
   }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const shopLayout = await page.evaluate(() => ({
+    trainingHeights: [...document.querySelectorAll<HTMLElement>('.training-grid .training-card')].map(card => card.getBoundingClientRect().height),
+    enhancementHeights: [...document.querySelectorAll<HTMLElement>('.enhancement-grid .offer')].map(card => card.getBoundingClientRect().height),
+    enhancementNameHeights: [...document.querySelectorAll<HTMLElement>('.enhancement-grid .offer-name')].map(name => name.getBoundingClientRect().height),
+    dieHeights: [...document.querySelectorAll<HTMLElement>('.exposed-section .die')].map(die => die.getBoundingClientRect().height),
+  }));
+  expect(Math.max(...shopLayout.trainingHeights) - Math.min(...shopLayout.trainingHeights)).toBeLessThan(2);
+  expect(Math.max(...shopLayout.enhancementHeights) - Math.min(...shopLayout.enhancementHeights)).toBeLessThan(2);
+  expect(Math.max(...shopLayout.enhancementNameHeights)).toBeLessThan(40);
+  expect(Math.max(...shopLayout.dieHeights)).toBeLessThanOrEqual(76);
   const enhancement = page.locator('.enhancement-grid .offer').first();
   const enhancementName = await enhancement.locator('.mantine-Text-root').first().textContent();
-  await enhancement.getByRole('button', { name: `About ${enhancementName}` }).click();
+  const info = enhancement.getByRole('button', { name: `About ${enhancementName}` });
+  await expect(info.locator('.info-circle-icon')).toBeVisible();
+  await info.click();
   await expect(page.getByRole('tooltip')).toBeVisible();
   await page.keyboard.press('Escape');
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await expect(page.locator('.phase-sticky-header')).toBeInViewport();
   await expect(page.locator('.shop-action-dock')).toBeInViewport();
   expect(await page.locator('.phase-sticky-header').evaluate(element => getComputedStyle(element).position)).toBe('sticky');
   expect(await page.locator('.shop-action-dock').evaluate(element => getComputedStyle(element).position)).toBe('sticky');
+  await page.screenshot({ path: test.info().outputPath('shop-mobile.png'), fullPage: true });
 });
 
 test('full seeded run: select/play, clear, buy onto a face, reroll dice, next round, lose and export', async ({ page, context }) => {

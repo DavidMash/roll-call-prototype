@@ -48,15 +48,16 @@ export function FlameSelectionScreen({ board, event, busy, progress, diceDisplay
           <div><Text fw={700} size="sm" tt="uppercase">Flame offers</Text><Text size="xs" c="dimmed">{reward.acquired ? 'Acquisition complete.' : 'Taking a Flame is optional. Offers cannot be refreshed.'}</Text></div>
         </Group>
         <div className="shop-grid flame-offers">{reward.offers.map(item => <Card key={item.id} p="sm" className={`flame-offer ${selectedOffer === item.id && !reward.acquired ? 'selected' : ''}`} data-testid={`flame-offer-${item.flame}`}>
-          <Group justify="space-between" wrap="nowrap"><Group gap={3} wrap="nowrap"><Text fw={750}>🔥 {FLAMES[item.flame].name}</Text>
-            <InfoPopover label={FLAMES[item.flame].name} description={FLAMES[item.flame].description} /></Group><Badge size="xs" color="teal">FREE</Badge></Group>
-          <Button size="compact-xs" fullWidth mt="xs" color="orange" variant={selectedOffer === item.id && !reward.acquired ? 'filled' : 'light'} disabled={busy || reward.acquired}
+          <Group className="flame-offer-header" justify="space-between" wrap="nowrap"><Group className="flame-offer-identity" gap={3} wrap="nowrap">
+            <span className="flame-offer-icon" aria-hidden="true">🔥</span><Text className="flame-offer-name" fw={750}>{FLAMES[item.flame].name}</Text>
+            <InfoPopover label={FLAMES[item.flame].name} description={FLAMES[item.flame].description} /></Group><Badge className="flame-offer-price" size="xs" color="teal">FREE</Badge></Group>
+          <Button className="flame-offer-action" size="compact-xs" fullWidth mt="xs" color="orange" variant={selectedOffer === item.id && !reward.acquired ? 'filled' : 'light'} disabled={busy || reward.acquired}
             onClick={() => setSelectedOffer(selectedOffer === item.id ? null : item.id)}>{selectedOffer === item.id ? 'Choose a die below' : 'Select Flame'}</Button>
         </Card>)}</div>
       </Paper>
       <Paper p="md" className="shop-section flame-dice-section">
-        <Group justify="space-between" mb="xs"><div><Text fw={700} size="sm" tt="uppercase">Physical Dice & Embers</Text><Text size="xs" c="dimmed">Flames stay with their die until they become global Bonfires.</Text></div>
-          <Text size="xs" c={offer ? 'orange' : 'dimmed'}>{offer ? `${FLAMES[offer.flame].name} selected — choose a die` : 'Active Ember progress is shown for context only'}</Text></Group>
+        <Group className="flame-dice-heading" justify="space-between" mb="xs"><div><Text fw={700} size="sm" tt="uppercase">Physical Dice & Embers</Text><Text size="xs" c="dimmed">Flames stay with their die until they become global Bonfires.</Text></div>
+          <Text className="flame-dice-instruction" size="xs" c={offer ? 'orange' : 'dimmed'}>{offer ? `${FLAMES[offer.flame].name} selected — choose a die` : 'Active Ember progress is shown for context only'}</Text></Group>
         <div className="flame-dice-grid">{board.dice.map(die => {
           const flameId = activeFlameId(die.flame);
           const invested = activeFlameInvestment(die.flame);
@@ -67,11 +68,11 @@ export function FlameSelectionScreen({ board, event, busy, progress, diceDisplay
               ability={involved ? event?.enhancement : undefined} flameAbility={involved ? event?.flame : undefined}
               disabled={busy} eligible={!!offer} onClick={() => chooseOrManage(die.id)} />
             {flameId ? <div className="ember-details" data-testid={`active-flame-${flameId}`}>
-              <Group justify="space-between" gap={4} wrap="nowrap"><Text size="xs" fw={800} c="orange">🔥 {FLAMES[flameId].name}</Text><Badge size="xs" color="orange" variant="light">EMBER</Badge></Group>
-              <Text size="xs" fw={700}>{invested} / 100 → BONFIRE</Text>
+              <Group className="ember-heading" justify="space-between" gap={4} wrap="nowrap"><Text className="ember-name" size="xs" fw={800} c="orange">🔥 <span className="ember-name-full">{FLAMES[flameId].name}</span><span className="ember-name-compact">{FLAMES[flameId].shortName}</span></Text><Badge size="xs" color="orange" variant="light">EMBER</Badge></Group>
+              <Text className="ember-investment" size="xs" fw={700}>{invested} / 100 <span className="ember-bonfire-label">→ BONFIRE</span></Text>
               <Progress value={invested} color="orange" size="sm" my={4} />
-              <Text size="xs" c="dimmed">Current: {flameEffectText(flameId, invested, board)}</Text>
-            </div> : <div className="ember-details empty"><Text size="xs" c="dimmed">Empty Flame slot</Text></div>}
+              <Text className="ember-effect" size="xs" c="dimmed">Current: {flameEffectText(flameId, invested, board)}</Text>
+            </div> : <div className="ember-details empty"><Text size="xs" c="dimmed"><span className="ember-empty-full">Empty Flame slot</span><span className="ember-empty-compact">EMPTY</span></Text></div>}
           </Card>;
         })}</div>
       </Paper>

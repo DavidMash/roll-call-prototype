@@ -218,6 +218,22 @@ test('every boss uses a readable compact mobile status without displacing core g
   }
 });
 
+test('boss details start expanded when the compact mobile header is unavailable', async ({ page }) => {
+  const seed = 'desktop-boss-layout';
+  const game = newRun(seed).state;
+  game.round = 3;
+  game.boss = createBossRuntime(seed, game.round, 'caller');
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto(`/?seed=${seed}&speed=instant`);
+  await page.evaluate(([key, state]) => localStorage.setItem(key, JSON.stringify({ version: 1, state })), [RUN_STORAGE_KEY, game] as const);
+  await page.reload();
+  await ready(page);
+
+  await expect(page.locator('.boss-details')).toHaveAttribute('open', '');
+  await expect(page.locator('.boss-full-details')).toBeVisible();
+  await expect(page.locator('.boss-compact-row')).toBeHidden();
+});
+
 test('scorecard Ultimate badges require the Flame or Bonfire and match the domain ranking', async ({ page }) => {
   const seed = 'ultimate-scorecard-badges';
   const game = newRun(seed).state;
