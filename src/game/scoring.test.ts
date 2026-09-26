@@ -38,8 +38,8 @@ describe('score finalization', () => {
     enhance(game, 0, 'bonus', 2);
     const score = handScore(game.dice, 'threeKind', [0, 1, 2], 3);
     expect(score.multiplier).toBe(3.5);
-    expect(score.pips).toBe(50);
-    expect(score.score).toBe(175);
+    expect(score.pips).toBe(49);
+    expect(score.score).toBe(172);
   });
 
   it('ignores and removes a stale Multiplier without crashing', () => {

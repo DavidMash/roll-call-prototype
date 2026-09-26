@@ -179,7 +179,7 @@ describe('Jumping Bean effects and Flames', () => {
   });
 
   it.each([
-    { flame: 'ultimate' as const, rank: 4 as Rank, expected: 5, trained: true, expectedScore: 88 },
+    { flame: 'ultimate' as const, rank: 4 as Rank, expected: 5, trained: true, expectedScore: 98 },
     { flame: 'minigun' as const, rank: 4 as Rank, expected: 5 },
     { flame: 'hailMary' as const, rank: 4 as Rank, expected: 5, zeroRerolls: true },
     { flame: 'dragonsHoard' as const, rank: 4 as Rank, expected: 5, gold: 100 },

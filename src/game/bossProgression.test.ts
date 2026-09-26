@@ -118,8 +118,8 @@ describe('The Warden', () => {
     expect(wardenBaselineCapacity(levels, [], 1)).toBe(63);
     expect(wardenUnlockTarget(0, levels, [], 1)).toBe(30);
     levels.pair = 2;
-    expect(wardenBaselineCapacity(levels, [], 2)).toBe(124);
-    expect(wardenUnlockTarget(0, levels, [], 2)).toBe(60);
+    expect(wardenBaselineCapacity(levels, [], 2)).toBe(130);
+    expect(wardenUnlockTarget(0, levels, [], 2)).toBe(65);
   });
 
   it('only includes unused hands that are naturally possible at the active-die count', () => {

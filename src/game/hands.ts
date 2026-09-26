@@ -36,24 +36,36 @@ export interface HandStats {
   level: number;
   basePips: number;
   baseMultiplier: number;
-  pipsGrowth: number;
-  multiplierGrowth: number;
 }
-export const roundToNearestQuarter = (value: number) => Math.round(value * 4) / 4;
 export const startingBasePips = (hand: HandId) => 5 + 2 * HANDS[hand].baseMultiplier;
-export const pipsGrowthPerLevel = (hand: HandId) => Math.round(startingBasePips(hand) * 0.4);
-export const multiplierGrowthPerLevel = (hand: HandId) =>
-  Math.max(0.25, roundToNearestQuarter(HANDS[hand].baseMultiplier * 0.2));
+export const roundToNearestHalf = (value: number) => Math.round(value * 2) / 2;
+
+function monotonicProgression(
+  originalValue: number,
+  level: number,
+  minimumIncrease: number,
+  roundedTarget: (level: number) => number,
+): number {
+  let value = originalValue;
+  let previousIncrease = minimumIncrease;
+  for (let currentLevel = 2; currentLevel <= level; currentLevel++) {
+    const nextValue = Math.max(roundedTarget(currentLevel), value + previousIncrease);
+    previousIncrease = nextValue - value;
+    value = nextValue;
+  }
+  return value;
+}
+
 export function handStats(hand: HandId, level: number): HandStats {
   if (!Number.isInteger(level) || level < 1) throw new Error('Hand level must be a positive integer.');
-  const pipsGrowth = pipsGrowthPerLevel(hand);
-  const multiplierGrowth = multiplierGrowthPerLevel(hand);
+  const originalBasePips = startingBasePips(hand);
+  const originalBaseMultiplier = HANDS[hand].baseMultiplier;
   return {
     level,
-    basePips: startingBasePips(hand) + (level - 1) * pipsGrowth,
-    baseMultiplier: HANDS[hand].baseMultiplier + (level - 1) * multiplierGrowth,
-    pipsGrowth,
-    multiplierGrowth,
+    basePips: monotonicProgression(originalBasePips, level, 1,
+      currentLevel => Math.round(originalBasePips * ((currentLevel + 2) / 3))),
+    baseMultiplier: monotonicProgression(originalBaseMultiplier, level, 0.5,
+      currentLevel => roundToNearestHalf(originalBaseMultiplier * ((currentLevel + 5) / 6) ** 1.4)),
   };
 }
 export const trainedBaselineStrength = (hand: HandId, level: number) => {
