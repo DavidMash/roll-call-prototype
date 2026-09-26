@@ -3,7 +3,7 @@ import { activeFace, rollWeights } from './dice';
 import { dispatch, newRun, validateAction } from './engine';
 import { activeEncounterDice, BOSS_TYPES, bossSchedule, createCursedDie, requiredEncounterDieIds, wardenBaselineCapacity, wardenIdealNaturalPips, wardenNaturalHands, wardenUnlockTarget } from './bosses';
 import { combinationsForHand, HAND_IDS, hasPlayableHand, initialHandLevels, UPPER_HAND_IDS } from './hands';
-import { routeThrough, routeWindow } from './progression';
+import { encounterTarget, routeThrough, routeWindow } from './progression';
 import type { BossType, GameState, RandomSource } from './types';
 import { Resolver } from './effects';
 
@@ -31,6 +31,14 @@ describe('linear route and deterministic boss schedule', () => {
     expect(window).toHaveLength(5);
     expect(window[2].id).toBe('boss:6');
     expect(routeWindow('route', 'round:1')).toHaveLength(3);
+  });
+
+  it('reports the gameplay target for every encounter node, including target-changing bosses', () => {
+    expect(encounterTarget({ id: 'round:2', type: 'normal_round', round: 2 })).toBe(70);
+    expect(encounterTarget({ id: 'boss:3', type: 'boss_round', round: 3, boss: 'caller' })).toBe(90);
+    expect(encounterTarget({ id: 'boss:6', type: 'boss_round', round: 6, boss: 'marathon' })).toBe(675);
+    expect(encounterTarget({ id: 'boss:6', type: 'boss_round', round: 6, boss: 'quickdraw' })).toBe(75);
+    expect(encounterTarget({ id: 'shop:before-round:2', type: 'shop', round: 2 })).toBeNull();
   });
 
   it('draws all eight bosses before reshuffling without adjacent repeats', () => {

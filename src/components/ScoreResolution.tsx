@@ -32,8 +32,10 @@ export function ScoreResolution({ event, busy, current, total, onSkip, deadBoard
   else if (event?.type === 'DICE_REROLL_STARTED' || event?.type === 'DIE_ROLLED') heading = 'Rolling dice';
   else if (event) heading = 'Resolving';
   return <Paper className={`resolution ${busy ? 'active' : ''}`} p="xs" aria-live="polite" aria-atomic="true">
-    <Group justify="space-between" className="resolution-meta">
-      <Text size="xs" c="dimmed" data-testid="round-score-progress">{busy ? `EVENT ${current} / ${total}` : idleMeta}</Text>
+    <Group justify="space-between" className={`resolution-meta ${busy ? 'is-event-progress' : 'is-round-score'}`}>
+      <Text className={busy ? 'event-progress' : 'round-score-readout'} data-testid="round-score-progress">
+        {busy ? `EVENT ${current} / ${total}` : idleMeta}
+      </Text>
       {busy && <Button size="compact-xs" variant="subtle" color="gray" onClick={onSkip}>Skip playback</Button>}
     </Group>
     {event?.handScore && <Group justify="center" gap="xl" className="score-accumulator" data-testid="hand-accumulator">

@@ -75,7 +75,10 @@ async function matchBoard(page: Page, game: GameState) {
     else if (game.phase === 'shop') await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
     else await expect(page.getByRole('main').getByText('FLAME SELECTION', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Reroll \d+ \/ 3$/ })).toHaveCount(0);
-  } else if (game.phase === 'round') await expect(page.getByTestId('round-score-progress')).toHaveText(`${game.score} / ${game.target}`);
+  } else if (game.phase === 'round') {
+    await expect(page.getByTestId('round-score-progress')).toHaveText(`${game.score} / ${game.target}`);
+    await expect(page.getByTestId('round-goal-progress')).toHaveAttribute('aria-valuetext', `${game.score} of ${game.target} points`);
+  }
   const visibleDice = game.phase === 'round' ? activeEncounterDice(game) : game.dice;
   for (const die of visibleDice) await expect(page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`}, face ${die.value},`) })).toBeVisible();
 }
@@ -267,6 +270,9 @@ test('scorecard keeps all fourteen categories visible with simplified actionable
   await expect(page.getByText('Scorecard', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Clear selection' })).toHaveCount(0);
   await expect(page.getByTestId('round-score-progress')).toHaveText('0 / 50');
+  await expect(page.getByTestId('round-score-progress')).toHaveClass(/round-score-readout/);
+  await expect(page.getByTestId('round-goal-progress')).toHaveAttribute('aria-valuetext', '0 of 50 points');
+  await expect(page.locator('.hud-phase')).toHaveText('ROUND 1');
 
   const playable = page.locator('[data-state="playable"]').first();
   const playableTestId = await playable.getAttribute('data-testid');
@@ -291,7 +297,9 @@ test('selected hands expose desktop score-slot and Enter PLAY shortcuts without 
   await row.click();
   const quickPlay = shell.getByRole('button', { name: /^Play .* for \d+ points$/ });
   await expect(quickPlay).toBeVisible();
-  await expect(quickPlay).toContainText('• PLAY ▶');
+  await expect(quickPlay.locator('.quick-score-expression')).toHaveText(/^\d+ x \d+(?:\.\d+)?(?: \* \d+(?:\.\d+)?)?$/);
+  await expect(quickPlay).not.toContainText('PLAY');
+  await expect(quickPlay.locator('.quick-submit-icon')).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(quickPlay).toBeHidden();

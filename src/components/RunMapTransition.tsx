@@ -2,7 +2,7 @@ import { Button, Paper, Text } from '@mantine/core';
 import { useReducedMotion } from '@mantine/hooks';
 import { useEffect, useRef, useState } from 'react';
 import { BOSSES } from '../game/bosses';
-import { nodeDescription, nodeLabel, routeWindow } from '../game/progression';
+import { encounterTarget, nodeDescription, nodeLabel, routeWindow } from '../game/progression';
 import type { GameEvent } from '../game/types';
 
 const MAP_AUTO_CONTINUE_SECONDS = 3;
@@ -58,6 +58,7 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
       {Array.from({ length: leadingPlaceholders }, (_, index) => <span className="map-node-placeholder" key={`placeholder-${index}`} aria-hidden="true" />)}
       {nodes.map((node, index) => {
         const previousNode = nodes[index - 1];
+        const target = encounterTarget(node);
         const joinsTravel = index > 0 && event.fromNode !== null && event.fromNode !== undefined
           && ((previousNode.id === event.fromNode && node.id === destination)
             || (previousNode.id === destination && node.id === event.fromNode));
@@ -67,7 +68,8 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
           <div className={`run-map-node node-${node.type} ${node.id === destination ? 'destination' : ''}`}
             title={nodeDescription(node)} aria-current={node.id === destination ? 'step' : undefined}>
             <span className="node-glyph">{node.type === 'shop' ? '¤' : node.type === 'flame_selection' ? '◆' : node.type === 'boss_round' ? '!' : '•'}</span>
-            <span>{nodeLabel(node)}</span>
+            <span className="node-label">{nodeLabel(node)}</span>
+            {target !== null && <span className="node-target">{target.toLocaleString()} pts</span>}
           </div>
         </div>;
       })}

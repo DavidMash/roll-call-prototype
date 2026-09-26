@@ -1,4 +1,5 @@
-import { BOSSES, bossTypeForRound, isBossRound } from './bosses';
+import { BOSSES, bossTypeForRound, isBossRound, targetForBoss } from './bosses';
+import { targetForRound } from './config';
 import type { BossType, RunNode } from './types';
 
 export const encounterNode = (round: number, boss?: BossType | null): RunNode => boss || isBossRound(round)
@@ -30,6 +31,12 @@ export function nodeLabel(node: RunNode): string {
   if (node.type === 'boss_round') return `Boss Round ${node.round}`;
   if (node.type === 'flame_selection') return 'FLAME SELECTION';
   return 'SHOP';
+}
+
+export function encounterTarget(node: RunNode): number | null {
+  if (node.type !== 'normal_round' && node.type !== 'boss_round') return null;
+  const normalTarget = targetForRound(node.round);
+  return node.boss ? targetForBoss(node.boss, normalTarget) : normalTarget;
 }
 
 export const nodeDescription = (node: RunNode) => node.boss ? BOSSES[node.boss].name : nodeLabel(node);

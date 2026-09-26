@@ -1,4 +1,4 @@
-import { ActionIcon, Badge, Box, Button, Divider, Drawer, Group, SegmentedControl, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
+import { ActionIcon, Badge, Box, Button, Divider, Drawer, Group, Progress, SegmentedControl, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
 import { useState } from 'react';
 import { CONFIG } from '../game/config';
 import type { Board } from '../game/types';
@@ -45,13 +45,16 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
           ? <div className="hud-phase" aria-label={board.phase === 'shop' ? 'Shop phase' : board.phase === 'flameSelection' ? 'Flame Selection phase' : 'Round Summary phase'}>
             {board.phase === 'shop' ? 'SHOP' : board.phase === 'flameSelection' ? 'FLAME SELECTION' : 'SUMMARY'}
           </div>
-          : board.phase === 'round' ? <div className="hud-phase" aria-label="Round phase">ROUND</div>
+          : board.phase === 'round' ? <div className="hud-phase" aria-label="Round phase">ROUND {board.round}</div>
             : <div className="hud-phase" aria-label={board.phase === 'bust' ? 'Bust phase' : 'Run ended'}>{board.phase === 'bust' ? 'BUST' : 'OVER'}</div>}
       </Group>
       <ActionIcon className="menu-trigger" variant="subtle" color="gray" size="lg" aria-label="Open menu" onClick={() => setDrawerOpen(true)}>
         <span aria-hidden="true" className="hamburger-icon"><i /><i /><i /></span>
       </ActionIcon>
     </Group>
+    {board.phase === 'round' && <Progress data-testid="round-goal-progress"
+      value={Math.min(100, board.score / board.target * 100)} size={4} radius={0}
+      aria-label="Round goal progress" aria-valuetext={`${board.score} of ${board.target} points`} />}
     {board.bonfires.length > 0 && <Group gap={4} px="xs" py={3} className="bonfire-strip" aria-label="Active Bonfires">
       <Text size="xs" fw={700} c="orange">BONFIRES</Text>{board.bonfires.map(id => <Tooltip key={id} label={FLAMES[id].bonfireDescription} withArrow><Badge size="xs" color="red" variant="light">🔥 {FLAMES[id].shortName}</Badge></Tooltip>)}
     </Group>}

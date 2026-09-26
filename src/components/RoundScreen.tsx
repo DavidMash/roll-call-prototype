@@ -92,7 +92,7 @@ export function RoundScreen({ board, event, busy, progress, diceDisplay, selecti
     </Group></Paper>}
     <Paper className="scorecard-panel" p="xs">
       <HandScorecard board={board} selection={effectiveSelection} busy={busy || awaitingWardenChoice} canSubmit={valid && !busy && !awaitingWardenChoice}
-        submitScore={preview?.score ?? null}
+        submitPreview={preview}
         onSelect={hand => setSelection(selectHand(encounterDice, unavailableHands, effectiveSelection, hand, requiredDieIds))}
         onSubmit={() => submit({ type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds })} />
     </Paper>

@@ -15,8 +15,22 @@ const MOBILE_HAND_NAMES: Partial<Record<HandId, string>> = {
   fiveKind: '5 of a Kind',
 };
 
-function ScorecardSection({ title, hands, board, selection, busy, canSubmit, submitScore, onSelect, onSubmit }: {
-  title: string; hands: HandId[]; board: Board; selection: Selection; busy: boolean; canSubmit: boolean; submitScore: number | null;
+export interface HandSubmitPreview {
+  pips: number;
+  multiplier: number;
+  hasXMult: boolean;
+  effectiveXMult: number;
+  score: number;
+}
+
+function SendIcon() {
+  return <svg className="quick-submit-icon" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M3.4 3.2 21 12 3.4 20.8l2.1-7.1 8.2-1.7-8.2-1.7-2.1-7.1Z" />
+  </svg>;
+}
+
+function ScorecardSection({ title, hands, board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit }: {
+  title: string; hands: HandId[]; board: Board; selection: Selection; busy: boolean; canSubmit: boolean; submitPreview: HandSubmitPreview | null;
   onSelect: (hand: HandId) => void; onSubmit: () => void;
 }) {
   const encounterDice = activeEncounterDice(board);
@@ -70,9 +84,13 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
               : consumed && <Badge size="xs" color="gray" variant="light">used</Badge>}
           </span>
         </Button>
-        {showQuickPlay && <Button className="scorecard-quick-play" size="compact-xs"
-          aria-label={`Play ${definition.name} for ${submitScore} points`} onClick={onSubmit}>
-          {submitScore?.toLocaleString()} <span aria-hidden="true">• PLAY ▶</span>
+        {showQuickPlay && submitPreview && <Button className="scorecard-quick-play" size="compact-xs"
+          aria-label={`Play ${definition.name} for ${submitPreview.score} points`} onClick={onSubmit}>
+          <span className="quick-score-expression">
+            {submitPreview.pips} x {submitPreview.multiplier}
+            {submitPreview.hasXMult && <> * {submitPreview.effectiveXMult}</>}
+          </span>
+          <SendIcon />
         </Button>}
         </div>;
       })}
@@ -80,8 +98,8 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
   </section>;
 }
 
-export function HandScorecard({ board, selection, busy, canSubmit, submitScore, onSelect, onSubmit }: {
-  board: Board; selection: Selection; busy: boolean; canSubmit: boolean; submitScore: number | null;
+export function HandScorecard({ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit }: {
+  board: Board; selection: Selection; busy: boolean; canSubmit: boolean; submitPreview: HandSubmitPreview | null;
   onSelect: (hand: HandId) => void; onSubmit: () => void;
 }) {
   const encounterDice = activeEncounterDice(board);
@@ -92,8 +110,8 @@ export function HandScorecard({ board, selection, busy, canSubmit, submitScore, 
       && requiredDieIds.every(id => set.includes(id))));
   return <div className="scorecard">
     <div className="scorecard-grid">
-      <ScorecardSection title="Upper" hands={UPPER_HAND_IDS} {...{ board, selection, busy, canSubmit, submitScore, onSelect, onSubmit }} />
-      <ScorecardSection title="Lower" hands={LOWER_HAND_IDS} {...{ board, selection, busy, canSubmit, submitScore, onSelect, onSubmit }} />
+      <ScorecardSection title="Upper" hands={UPPER_HAND_IDS} {...{ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit }} />
+      <ScorecardSection title="Lower" hands={LOWER_HAND_IDS} {...{ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit }} />
     </div>
     {selection.dieIds.length > 0 && !hasCompatibleHand && <Text size="xs" c="orange" className="scorecard-hint">
       {board.boss?.type === 'hexer' ? 'No available hand includes the Cursed Die.' : 'No available hand contains all selected dice.'}
