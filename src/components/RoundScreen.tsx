@@ -1,8 +1,9 @@
 import { Alert, Button, Group, Paper, Stack, Text } from '@mantine/core';
+import { useEffect } from 'react';
 import { validateAction } from '../game/engine';
 import { activeFlameInvestment, captureHandStart, composeXMult, handXMultContributions, hasXMultFlame, hotStreakMultiplier, targetPracticeMultiplier } from '../game/flames';
 import { handOptions, hasPlayableHand, HANDS } from '../game/hands';
-import { handScore } from '../game/scoring';
+import { finalizeScore, handScore } from '../game/scoring';
 import { canPlay, selectHand, toggleDie } from '../game/selection';
 import type { Selection } from '../game/selection';
 import type { Action, Board, GameEvent } from '../game/types';
@@ -49,7 +50,8 @@ export function RoundScreen({ board, event, busy, progress, diceDisplay, selecti
     const contributions = handXMultContributions(captureHandStart(board, hand), hand, board.handLevels[hand], effectiveSelection.dieIds);
     const xMult = composeXMult(contributions);
     const bossFactor = board.boss?.type === 'fly' && !board.boss.caught && hand !== board.boss.flyHand ? .5 : 1;
-    return { ...base, hasXMult: contributions.length > 0, effectiveXMult: Number((xMult * bossFactor).toFixed(12)) };
+    return { ...base, hasXMult: contributions.length > 0, effectiveXMult: Number((xMult * bossFactor).toFixed(12)),
+      score: finalizeScore(base.pips, base.multiplier, xMult * bossFactor).finalScore };
   })() : null;
   const manualAction: Action = { type: 'MANUAL_REROLL', dieIds: effectiveSelection.dieIds };
   const canReroll = validateAction(board, manualAction) === null;
@@ -61,6 +63,20 @@ export function RoundScreen({ board, event, busy, progress, diceDisplay, selecti
   const idleText = effectiveSelection.hand
     ? `${HANDS[effectiveSelection.hand].name} · ${effectiveSelection.dieIds.length} ${effectiveSelection.dieIds.length === 1 ? 'die' : 'dice'} selected`
     : effectiveSelection.dieIds.length ? `${effectiveSelection.dieIds.length} ${effectiveSelection.dieIds.length === 1 ? 'die' : 'dice'} selected` : undefined;
+  useEffect(() => {
+    if (!valid || busy || awaitingWardenChoice) return;
+    function playOnEnter(keyEvent: KeyboardEvent) {
+      if (keyEvent.key !== 'Enter' || keyEvent.repeat || keyEvent.defaultPrevented) return;
+      const target = keyEvent.target instanceof HTMLElement ? keyEvent.target : null;
+      if (target?.closest('[role="dialog"], input, textarea, select, [contenteditable="true"]')) return;
+      const control = target?.closest('button, a, [role="button"]');
+      if (control && !control.closest('.scorecard-row, .die')) return;
+      keyEvent.preventDefault();
+      submit({ type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds });
+    }
+    window.addEventListener('keydown', playOnEnter, true);
+    return () => window.removeEventListener('keydown', playOnEnter, true);
+  }, [awaitingWardenChoice, busy, effectiveSelection.dieIds, effectiveSelection.hand, submit, valid]);
   return <Stack gap="xs" className="round-screen">
     <div className="live-score-panel" data-testid="live-score-panel">
       <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} deadBoard={deadBoard} idleText={idleText}
@@ -75,8 +91,10 @@ export function RoundScreen({ board, event, busy, progress, diceDisplay, selecti
       {board.targetPracticeHand && <Text size="xs"><strong>◎ TARGET</strong> · {HANDS[board.targetPracticeHand].name} · ×{Number(targetPracticeMultiplier(targetInvestment).toFixed(4))}</Text>}
     </Group></Paper>}
     <Paper className="scorecard-panel" p="xs">
-      <HandScorecard board={board} selection={effectiveSelection} busy={busy || awaitingWardenChoice}
-        onSelect={hand => setSelection(selectHand(encounterDice, unavailableHands, effectiveSelection, hand, requiredDieIds))} />
+      <HandScorecard board={board} selection={effectiveSelection} busy={busy || awaitingWardenChoice} canSubmit={valid && !busy && !awaitingWardenChoice}
+        submitScore={preview?.score ?? null}
+        onSelect={hand => setSelection(selectHand(encounterDice, unavailableHands, effectiveSelection, hand, requiredDieIds))}
+        onSubmit={() => submit({ type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds })} />
     </Paper>
     <Paper className="gameplay-dock" p="xs">
       <div className="gameplay-dock-content">

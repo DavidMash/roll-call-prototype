@@ -281,6 +281,34 @@ test('scorecard keeps all fourteen categories visible with simplified actionable
   await expect(page.getByTestId('round-score-progress')).toHaveText('0 / 50');
 });
 
+test('selected hands expose desktop score-slot and Enter PLAY shortcuts without adding the button to mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.goto('/?seed=scorecard-quick-play&speed=instant');
+  await ready(page);
+  const initialPlayable = page.locator('[data-state="playable"]').first();
+  const row = page.getByTestId((await initialPlayable.getAttribute('data-testid'))!);
+  const shell = row.locator('..');
+  await row.click();
+  const quickPlay = shell.getByRole('button', { name: /^Play .* for \d+ points$/ });
+  await expect(quickPlay).toBeVisible();
+  await expect(quickPlay).toContainText('• PLAY ▶');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(quickPlay).toBeHidden();
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await expect(quickPlay).toBeVisible();
+  await quickPlay.click();
+  await ready(page);
+  await expect(row).toHaveAttribute('data-state', 'consumed');
+
+  const nextPlayable = page.locator('[data-state="playable"]').first();
+  const keyboardRow = page.getByTestId((await nextPlayable.getAttribute('data-testid'))!);
+  await keyboardRow.click();
+  await keyboardRow.press('Enter');
+  await ready(page);
+  await expect(keyboardRow).toHaveAttribute('data-state', 'consumed');
+});
+
 test('compact HUD, Run Info and Help keep secondary information off the gameplay surface', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto('/?seed=ui-overhaul&speed=instant');

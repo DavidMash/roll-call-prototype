@@ -51,7 +51,8 @@ button { font: inherit; }
 .scorecard-section { min-width: 0; overflow: hidden; border-radius: 6px; background: var(--mantine-color-dark-8); }
 .scorecard-section-title { height: 22px; display: flex; align-items: center; padding: 0 9px; color: var(--mantine-color-gray-5); background: rgba(255,255,255,.025); letter-spacing: .1em; }
 .scorecard-rows { display: grid; }
-.scorecard-row { height: 36px; padding: 0 9px; border-radius: 0; border-top: 1px solid rgba(255,255,255,.045); }
+.scorecard-row-shell { min-width: 0; position: relative; }
+.scorecard-row { width: 100%; height: 36px; padding: 0 9px; border-radius: 0; border-top: 1px solid rgba(255,255,255,.045); }
 .scorecard-row .mantine-Button-inner, .scorecard-row .mantine-Button-label { width: 100%; }
 .scorecard-row .mantine-Button-label { display: flex; justify-content: space-between; gap: 8px; }
 .scorecard-row-copy { min-width: 0; display: flex; align-items: center; justify-content: flex-start; gap: 6px; overflow: hidden; line-height: 1; text-align: left; }
@@ -70,6 +71,7 @@ button { font: inherit; }
 .scorecard-row.consumed .scorecard-row-result { color: var(--mantine-color-gray-4); }
 .scorecard-row.caller-called { box-shadow: inset 3px 0 #d946ef, inset 0 0 16px rgba(217,70,239,.1); }
 .scorecard-row.fly-row { box-shadow: inset 3px 0 #92400e, inset 0 0 16px rgba(146,64,14,.16); }
+.scorecard-quick-play { position: absolute; top: 50%; right: 5px; z-index: 2; min-width: 96px; transform: translateY(-50%); white-space: nowrap; }
 .fly-marker { color: #d97706; font-size: .66rem; font-weight: 950; }
 .scorecard-totals { min-height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 4px 9px 0; font-variant-numeric: tabular-nums; }
 .scorecard-hint { padding: 4px 8px 0; }
@@ -378,6 +380,7 @@ button { font: inherit; }
 
   .scorecard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; align-items: stretch; }
   .scorecard-grid > *, .scorecard-row-copy, .scorecard-detail-line, .scorecard-row-result { min-width: 0; }
+  .scorecard-quick-play { display: none; }
   .active-gameplay .scorecard-panel { flex: 1 1 auto !important; min-height: 0; overflow: hidden; padding: 3px !important; }
   .active-gameplay .scorecard { height: 100%; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
   .active-gameplay .scorecard-grid { grid-row: 1; min-height: 0; }
@@ -420,6 +423,12 @@ button { font: inherit; }
   }
   .active-gameplay .gameplay-actions > .mantine-Group-root:last-child .mantine-Button-root { width: 100%; min-height: 40px; padding-inline: 9px; }
   .active-gameplay .gameplay-actions > .mantine-Group-root:last-child .mantine-Button-root:only-child { grid-column: 1 / -1; }
+}
+
+@media (min-width: 801px) {
+  .scorecard-row-shell.has-quick-play { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .scorecard-row-shell.has-quick-play .scorecard-quick-play { position: static; min-width: 104px; height: 36px; border-radius: 0; transform: none; }
+  .scorecard-row-shell.has-quick-play .scorecard-row-result { visibility: hidden; }
 }
 
 @media (max-width: 430px) {
