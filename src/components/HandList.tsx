@@ -1,6 +1,6 @@
-import { Badge, Button, Group, Text, Tooltip } from '@mantine/core';
+import { Badge, Button, Text, Tooltip } from '@mantine/core';
 import { combinationsForHand, handStats, HANDS, LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from '../game/hands';
-import { activeFlameId, activeFlameInvestment, wellTrainedMultiplier } from '../game/flames';
+import { activeFlameId } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
 import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands } from '../game/bosses';
@@ -38,10 +38,6 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
         const playable = !consumed && compatible;
         const selected = selection.hand === hand;
         const targeted = board.targetPracticeHand === hand;
-        const selectedWellTrained = selected ? selection.dieIds.find(id => activeFlameId(board.dice.find(die => die.id === id)?.flame) === 'wellTrained') : undefined;
-        const wellTrained = board.bonfires.includes('wellTrained') ? wellTrainedMultiplier(100, board.handPlayCounts[hand])
-          : selectedWellTrained === undefined ? 1 : wellTrainedMultiplier(activeFlameInvestment(board.dice.find(die => die.id === selectedWellTrained)?.flame), board.handPlayCounts[hand]);
-        const showWellTrained = selected && (board.bonfires.includes('wellTrained') || selectedWellTrained !== undefined);
         const hotTarget = board.hotStreakGoal === hand;
         const isUltimate = ownsUltimate && ultimate.has(hand);
         const score = board.scoreByHand[hand];
@@ -59,15 +55,9 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
               <span className="hand-name-full">{definition.name}</span><span className="hand-name-compact">{MOBILE_HAND_NAMES[hand] ?? definition.name}</span>
               <span className="hand-level"> · Lv. {stats.level}</span>
             </span>
-            <span className="scorecard-detail-line">
-              {isUltimate && <Tooltip label="One of your three highest-ranked hands. Hand level ranks first, then trained scoring strength." multiline maw={300} withArrow>
-                <Badge className="ultimate-badge" size="xs" color="grape" variant="light" data-testid={`ultimate-badge-${hand}`}><span className="wide-label">ULTIMATE</span><span className="compact-label">U</span></Badge>
-              </Tooltip>}
-              <Tooltip label={`${stats.basePips} Base Pips · ×${stats.baseMultiplier} Base Mult`} position="right" withArrow>
-                <span className="scorecard-base" data-testid={`scorecard-stats-${hand}`}>{stats.basePips} · ×{stats.baseMultiplier}</span>
-              </Tooltip>
-              {showWellTrained && <span className="well-trained-preview" data-testid={`well-trained-preview-${hand}`} title={`Well Trained ×${Number(wellTrained.toFixed(4))}`}><span className="wide-label">WELL TRAINED </span>×{Number(wellTrained.toFixed(4))}</span>}
-            </span>
+            {isUltimate && <Tooltip label="One of your three highest-ranked hands. Hand level ranks first, then trained scoring strength." multiline maw={300} withArrow>
+              <Badge className="ultimate-badge" size="xs" color="grape" variant="light" data-testid={`ultimate-badge-${hand}`}><span className="wide-label">ULTIMATE</span><span className="compact-label">U</span></Badge>
+            </Tooltip>}
           </span>
           <span className="scorecard-row-result">
             <span data-testid={`scorecard-score-${hand}`}>{score ?? '—'}</span>
@@ -81,8 +71,8 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
   </section>;
 }
 
-export function HandScorecard({ board, selection, busy, canClear = selection.dieIds.length > 0, onSelect, onClear }: {
-  board: Board; selection: Selection; busy: boolean; canClear?: boolean; onSelect: (hand: HandId) => void; onClear: () => void;
+export function HandScorecard({ board, selection, busy, onSelect }: {
+  board: Board; selection: Selection; busy: boolean; onSelect: (hand: HandId) => void;
 }) {
   const encounterDice = activeEncounterDice(board);
   const unavailableHands = unavailableEncounterHands(board);
@@ -91,10 +81,6 @@ export function HandScorecard({ board, selection, busy, canClear = selection.die
     && combinationsForHand(encounterDice, hand).some(set => selection.dieIds.every(id => set.includes(id))
       && requiredDieIds.every(id => set.includes(id))));
   return <div className="scorecard">
-    <Group justify="space-between" className="scorecard-header">
-      <Text fw={700} size="sm" tt="uppercase" lts=".08em">Scorecard</Text>
-      <Button size="compact-xs" variant="subtle" color="gray" onClick={onClear} disabled={busy || !canClear}>Clear selection</Button>
-    </Group>
     <div className="scorecard-grid">
       <ScorecardSection title="Upper" hands={UPPER_HAND_IDS} {...{ board, selection, busy, onSelect }} />
       <ScorecardSection title="Lower" hands={LOWER_HAND_IDS} {...{ board, selection, busy, onSelect }} />
@@ -102,9 +88,5 @@ export function HandScorecard({ board, selection, busy, canClear = selection.die
     {selection.dieIds.length > 0 && !hasCompatibleHand && <Text size="xs" c="orange" className="scorecard-hint">
       {board.boss?.type === 'hexer' ? 'No available hand includes the Cursed Die.' : 'No available hand contains all selected dice.'}
     </Text>}
-    <div className="scorecard-totals" aria-label="Round score breakdown">
-      <Group gap="xs"><Text size="xs" c="dimmed">Effects</Text><Text size="sm" fw={600} data-testid="scorecard-effect-score">{board.effectScore}</Text></Group>
-      <Group gap="xs"><Text size="xs" c="dimmed">Total</Text><Text size="sm" fw={700} data-testid="scorecard-round-total">{board.score} / {board.target}</Text></Group>
-    </div>
   </div>;
 }

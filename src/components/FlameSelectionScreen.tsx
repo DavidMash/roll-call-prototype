@@ -4,9 +4,12 @@ import { activeFlameId, activeFlameInvestment, flameEffectText, flameFullEffectT
 import type { Action, Board, GameEvent } from '../game/types';
 import { Die } from './Die';
 import { ScoreResolution } from './ScoreResolution';
+import type { DiceDisplay } from '../uiSettings';
+import { InfoPopover } from './InfoPopover';
 
-export function FlameSelectionScreen({ board, event, busy, progress, selectedOffer, setSelectedOffer, submit, skip }: {
+export function FlameSelectionScreen({ board, event, busy, progress, diceDisplay, selectedOffer, setSelectedOffer, submit, skip }: {
   board: Board; event: GameEvent | null; busy: boolean; progress: { current: number; total: number };
+  diceDisplay: DiceDisplay;
   selectedOffer: number | null; setSelectedOffer: (id: number | null) => void; submit: (action: Action) => void; skip: () => void;
 }) {
   const reward = board.flameSelection!;
@@ -30,7 +33,7 @@ export function FlameSelectionScreen({ board, event, busy, progress, selectedOff
   const replacingId = activeFlameId(replacing?.flame);
   return <>
     <Stack gap="xs" className="flame-selection-screen">
-      <Group justify="space-between" className="shop-summary flame-selection-header">
+      <Group justify="space-between" className="shop-summary flame-selection-header phase-sticky-header">
         <div><Text fw={800}>FLAME SELECTION</Text><Text size="xs" c="dimmed">Choose one new Flame and assign it to a physical die, or skip.</Text></div>
         <Badge color="yellow" variant="light">{board.gold} Gold</Badge>
       </Group>
@@ -45,8 +48,8 @@ export function FlameSelectionScreen({ board, event, busy, progress, selectedOff
           <div><Text fw={700} size="sm" tt="uppercase">Flame offers</Text><Text size="xs" c="dimmed">{reward.acquired ? 'Acquisition complete.' : 'Taking a Flame is optional. Offers cannot be refreshed.'}</Text></div>
         </Group>
         <div className="shop-grid flame-offers">{reward.offers.map(item => <Card key={item.id} p="sm" className={`flame-offer ${selectedOffer === item.id && !reward.acquired ? 'selected' : ''}`} data-testid={`flame-offer-${item.flame}`}>
-          <Group justify="space-between"><Text fw={750}>🔥 {FLAMES[item.flame].name}</Text><Badge size="xs" color="teal">FREE</Badge></Group>
-          <Text size="xs" c="dimmed" mt={6}>{FLAMES[item.flame].description}</Text>
+          <Group justify="space-between" wrap="nowrap"><Group gap={3} wrap="nowrap"><Text fw={750}>🔥 {FLAMES[item.flame].name}</Text>
+            <InfoPopover label={FLAMES[item.flame].name} description={FLAMES[item.flame].description} /></Group><Badge size="xs" color="teal">FREE</Badge></Group>
           <Button size="compact-xs" fullWidth mt="xs" color="orange" variant={selectedOffer === item.id && !reward.acquired ? 'filled' : 'light'} disabled={busy || reward.acquired}
             onClick={() => setSelectedOffer(selectedOffer === item.id ? null : item.id)}>{selectedOffer === item.id ? 'Choose a die below' : 'Select Flame'}</Button>
         </Card>)}</div>
@@ -59,7 +62,7 @@ export function FlameSelectionScreen({ board, event, busy, progress, selectedOff
           const invested = activeFlameInvestment(die.flame);
           const involved = event?.dieIds?.includes(die.id) ?? false;
           return <Card key={die.id} p="xs" className={`flame-die-card ${offer ? 'offer-target' : ''}`} data-testid={`flame-die-${die.id}`}>
-            <Die die={die} selected={false} highlighted={involved && event?.type !== 'DIE_ROLLED'}
+            <Die die={die} display={diceDisplay} selected={false} highlighted={involved && event?.type !== 'DIE_ROLLED'}
               rolling={involved && (event?.type === 'DICE_REROLL_STARTED' || event?.type === 'DIE_ROLLED')}
               ability={involved ? event?.enhancement : undefined} flameAbility={involved ? event?.flame : undefined}
               disabled={busy} eligible={!!offer} onClick={() => chooseOrManage(die.id)} />

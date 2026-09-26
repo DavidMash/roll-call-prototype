@@ -4,7 +4,7 @@ import { FLAMES } from '../game/flames';
 import { HANDS } from '../game/hands';
 import type { GameEvent } from '../game/types';
 
-export function ScoreResolution({ event, busy, current, total, onSkip, deadBoard = false, idleText, showXMult = false }: {
+export function ScoreResolution({ event, busy, current, total, onSkip, deadBoard = false, idleText, idleMeta = 'READY', showXMult = false }: {
   event: GameEvent | null;
   busy: boolean;
   current: number;
@@ -12,6 +12,7 @@ export function ScoreResolution({ event, busy, current, total, onSkip, deadBoard
   onSkip: () => void;
   deadBoard?: boolean;
   idleText?: string;
+  idleMeta?: string;
   showXMult?: boolean;
 }) {
   let heading = idleText ?? (deadBoard ? 'No playable hands — use a reroll' : 'Choose a hand or select dice');
@@ -32,7 +33,7 @@ export function ScoreResolution({ event, busy, current, total, onSkip, deadBoard
   else if (event) heading = 'Resolving';
   return <Paper className={`resolution ${busy ? 'active' : ''}`} p="xs" aria-live="polite" aria-atomic="true">
     <Group justify="space-between" className="resolution-meta">
-      <Text size="xs" c="dimmed">{busy ? `EVENT ${current} / ${total}` : 'READY'}</Text>
+      <Text size="xs" c="dimmed" data-testid="round-score-progress">{busy ? `EVENT ${current} / ${total}` : idleMeta}</Text>
       {busy && <Button size="compact-xs" variant="subtle" color="gray" onClick={onSkip}>Skip playback</Button>}
     </Group>
     {event?.handScore && <Group justify="center" gap="xl" className="score-accumulator" data-testid="hand-accumulator">

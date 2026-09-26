@@ -12,12 +12,14 @@ import { PipFace } from './PipFace';
 import { StokeFlameModal } from './StokeFlameModal';
 import { TrainingCard } from './TrainingCard';
 import { BossPreview } from './BossPanel';
+import type { DiceDisplay } from '../uiSettings';
 
 interface SaleTarget { face: Rank; enhancement: Enhancement; stacks: number; proceeds: number }
 const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
 
-export function ShopScreen({ board, event, busy, progress, selectedOffer, setSelectedOffer, submit, skip }: {
+export function ShopScreen({ board, event, busy, progress, diceDisplay, selectedOffer, setSelectedOffer, submit, skip }: {
   board: Board; event: GameEvent | null; busy: boolean; progress: { current: number; total: number };
+  diceDisplay: DiceDisplay;
   selectedOffer: number | null; setSelectedOffer: (id: number | null) => void; submit: (action: Action) => void; skip: () => void;
 }) {
   const shop = board.shop!;
@@ -80,7 +82,7 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
 
   return <>
     <Stack gap="xs" className="shop-screen">
-      <div className="shop-summary">{returnedFromBust ? <Paper px="sm" py={6} className="bust-shop-banner" data-testid="bust-shop-banner">
+      <div className="shop-summary phase-sticky-header">{returnedFromBust ? <Paper px="sm" py={6} className="bust-shop-banner" data-testid="bust-shop-banner">
         <Group justify="space-between" gap="xs" wrap="wrap">
           <div><Text size="sm" fw={850} c="red">ROUND {returnedFromBust.round} BUST · 1 LIFE LOST</Text>
             <Text size="xs" c="dimmed">Prepare for another attempt. Your pre-attempt Shop has been restored.</Text></div>
@@ -119,7 +121,7 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
               onClick={() => submit({ type: 'REROLL_DICE' })}>↻ Dice · {diceRerollCost(shop.diceRerolls)} gold</Button>
           </Group>
         </Group>
-        <DiceRow dice={board.dice} event={event} disabled={busy} eligibleIds={offer ? eligibleIds : undefined} restrictToEligible={!!offer}
+        <DiceRow dice={board.dice} display={diceDisplay} event={event} disabled={busy} eligibleIds={offer ? eligibleIds : undefined} restrictToEligible={!!offer}
           ineligibleReasons={placementErrors} actionableIneligibleIds={capacityBlockedIds} showCapacity
           onClick={clickDie} onDropOffer={attemptPurchase} tutorialDieId={tutorialDieId} tutorialLabel={tutorialLabel} />
       </Paper>
@@ -157,7 +159,10 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
             return <Paper key={face.rank} withBorder p="sm" data-testid={`manage-face-${face.rank}`}
               className={`manage-face-tile ${focusedFace === face.rank ? 'focused' : ''} ${managedDie.value === face.rank ? 'exposed-face' : ''}`}
               onClick={() => setFocusedFace(face.rank)}>
-              <Group justify="space-between"><Group gap="xs"><PipFace value={face.rank} compact label={`D${managedDie.id + 1} face ${face.rank}`} /><Text fw={800}>FACE {face.rank}</Text></Group>{managedDie.value === face.rank && <Badge size="xs" color="teal">EXPOSED</Badge>}</Group>
+              <Group justify="space-between"><Group gap="xs">{diceDisplay === 'pips'
+                ? <PipFace value={face.rank} compact label={`D${managedDie.id + 1} face ${face.rank}`} />
+                : <Text component="span" className="manage-face-number" role="img" aria-label={`D${managedDie.id + 1} face ${face.rank}`}>{face.rank}</Text>}
+                <Text fw={800}>FACE {face.rank}</Text></Group>{managedDie.value === face.rank && <Badge size="xs" color="teal">EXPOSED</Badge>}</Group>
               <Text size="xs" c={typeCount === FACE_TYPE_LIMIT ? 'orange' : 'dimmed'} fw={700} mt={4}>{typeCount} / {FACE_TYPE_LIMIT} TYPES</Text>
               <Stack gap={4} mt="xs">{ids.length === 0 ? <Text size="xs" c="dimmed">No enhancements</Text> : ids.map(id => <Group key={id} justify="space-between" gap={4} wrap="nowrap">
                 <div><Text size="xs">{ENHANCEMENTS[id].name}{id === 'vintage' ? '' : ` ×${face.enhancements[id]}`}</Text>

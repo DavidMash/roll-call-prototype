@@ -5,6 +5,7 @@ import { dispatch, newRun } from '../src/game/engine';
 import { HANDS } from '../src/game/hands';
 import type { Action, GameState } from '../src/game/types';
 import { jackpotRun } from './jackpotFixture';
+import { setPlaybackSpeed } from './uiHelpers';
 
 const die = (page: Page, id: number) => page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) });
 async function ready(page: Page) {
@@ -36,10 +37,10 @@ async function perform(page: Page, game: GameState, action: Action) {
     await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   } else if (action.type === 'MANUAL_REROLL') {
     for (const id of action.dieIds) await die(page, id).click();
-    await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();
+    await page.getByRole('button', { name: /^Reroll \d+ \/ 3$/ }).click();
   } else if (action.type === 'BUY') {
     const offer = game.shop!.offers.find(item => item.id === action.offerId)!;
-    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button').click();
+    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button', { name: 'Select or drag' }).click();
     await die(page, action.dieId).click();
   } else if (action.type === 'NEXT_ROUND') {
     await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
@@ -65,7 +66,7 @@ test('scoring Jackpot pays on a played-hand clear before the no-reroll transitio
   await expect(die(page, fixture.heldDieId)).toHaveAttribute('aria-pressed', 'true');
   await page.clock.install({ time: new Date('2026-09-18T12:00:00Z') });
   await page.clock.pauseAt(new Date('2026-09-18T12:00:01Z'));
-  await page.getByText('NORMAL', { exact: true }).click();
+  await setPlaybackSpeed(page, 'NORMAL');
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   const jackpotIndex = fixture.result.events.findIndex(event => event.enhancement === 'jackpot');
   for (let index = 0; index <= jackpotIndex; index++) {

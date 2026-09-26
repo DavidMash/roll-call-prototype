@@ -1,8 +1,10 @@
-import { ActionIcon, Badge, Box, Group, Progress, SegmentedControl, Text, Tooltip, UnstyledButton } from '@mantine/core';
+import { ActionIcon, Badge, Box, Button, Divider, Drawer, Group, SegmentedControl, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
+import { useState } from 'react';
 import { CONFIG } from '../game/config';
 import type { Board } from '../game/types';
 import { FLAMES } from '../game/flames';
 import type { PlaybackSpeed } from '../useGame';
+import type { DiceDisplay } from '../uiSettings';
 
 function HudStat({ testId, icon, label, value }: { testId: string; icon: string; label: string; value: number }) {
   return <div className="hud-stat" data-testid={testId} aria-label={`${label} ${value}`}>
@@ -12,22 +14,28 @@ function HudStat({ testId, icon, label, value }: { testId: string; icon: string;
   </div>;
 }
 
-export function TopHud({ board, speed, setSpeed, openRunInfo, openHelp, openRestoreLives }: {
+export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, openRunInfo, openHelp, openRestoreLives }: {
   board: Board;
   speed: PlaybackSpeed;
   setSpeed: (speed: PlaybackSpeed) => void;
+  diceDisplay: DiceDisplay;
+  setDiceDisplay: (display: DiceDisplay) => void;
   openRunInfo: () => void;
   openHelp: () => void;
   openRestoreLives: () => void;
 }) {
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const hearts = Array.from({ length: CONFIG.maxLives }, (_, index) => index < board.lives ? '♥' : '♡').join(' ');
-  return <Box component="header" className="top-hud">
+  function launch(action: () => void) {
+    setDrawerOpen(false);
+    action();
+  }
+  return <>
+  <Box component="header" className="top-hud">
     <Group className="top-hud-row" justify="space-between" wrap="nowrap">
       <Text className="game-title">ROLL CALL</Text>
       <Group className="hud-stats" gap="xs" wrap="nowrap">
         <HudStat testId="stat-round" icon="R" label="Round" value={board.round} />
-        <HudStat testId="stat-goal" icon="◎" label="Goal" value={board.target} />
-        <HudStat testId="stat-score" icon="★" label="Score" value={board.score} />
         <HudStat testId="stat-gold" icon="●" label="Gold" value={board.gold} />
         {board.phase === 'shop'
           ? <Tooltip label="Restore lost lives" withArrow><UnstyledButton className="hud-lives interactive" data-testid="stat-lives"
@@ -37,24 +45,34 @@ export function TopHud({ board, speed, setSpeed, openRunInfo, openHelp, openRest
           ? <div className="hud-phase" aria-label={board.phase === 'shop' ? 'Shop phase' : board.phase === 'flameSelection' ? 'Flame Selection phase' : 'Round Summary phase'}>
             {board.phase === 'shop' ? 'SHOP' : board.phase === 'flameSelection' ? 'FLAME SELECTION' : 'SUMMARY'}
           </div>
-          : board.phase === 'round' ? <HudStat testId="stat-rerolls" icon="↻" label="Rerolls" value={board.manualRerollsRemaining} />
+          : board.phase === 'round' ? <div className="hud-phase" aria-label="Round phase">ROUND</div>
             : <div className="hud-phase" aria-label={board.phase === 'bust' ? 'Bust phase' : 'Run ended'}>{board.phase === 'bust' ? 'BUST' : 'OVER'}</div>}
       </Group>
-      <Group className="hud-actions" gap={6} wrap="nowrap">
-        <SegmentedControl size="xs" aria-label="Playback speed" value={speed}
-          onChange={value => setSpeed(value as PlaybackSpeed)}
-          data={[{ label: 'NORMAL', value: 'normal' }, { label: 'FAST', value: 'fast' }, { label: 'INSTANT', value: 'instant' }]} />
-        <Tooltip label="Run Info" withArrow>
-          <ActionIcon variant="subtle" color="gray" aria-label="Run Info" onClick={openRunInfo}>◉</ActionIcon>
-        </Tooltip>
-        <Tooltip label="How to Play" withArrow>
-          <ActionIcon variant="subtle" color="gray" aria-label="How to Play" onClick={openHelp}>?</ActionIcon>
-        </Tooltip>
-      </Group>
+      <ActionIcon className="menu-trigger" variant="subtle" color="gray" size="lg" aria-label="Open menu" onClick={() => setDrawerOpen(true)}>
+        <span aria-hidden="true" className="hamburger-icon"><i /><i /><i /></span>
+      </ActionIcon>
     </Group>
-    <Progress value={Math.min(100, board.score / board.target * 100)} size={4} radius={0} aria-label="Round goal progress" />
     {board.bonfires.length > 0 && <Group gap={4} px="xs" py={3} className="bonfire-strip" aria-label="Active Bonfires">
       <Text size="xs" fw={700} c="orange">BONFIRES</Text>{board.bonfires.map(id => <Tooltip key={id} label={FLAMES[id].bonfireDescription} withArrow><Badge size="xs" color="red" variant="light">🔥 {FLAMES[id].shortName}</Badge></Tooltip>)}
     </Group>}
-  </Box>;
+  </Box>
+  <Drawer opened={drawerOpen} onClose={() => setDrawerOpen(false)} position="right" size={320} title="Menu"
+    transitionProps={{ duration: 0 }} classNames={{ content: 'game-menu-drawer', header: 'game-menu-header' }}>
+    <Stack gap="md">
+      <div><Text size="xs" fw={800} tt="uppercase" mb={6}>Game speed</Text>
+        <SegmentedControl fullWidth aria-label="Playback speed" value={speed}
+          onChange={value => setSpeed(value as PlaybackSpeed)}
+          data={[{ label: 'NORMAL', value: 'normal' }, { label: 'FAST', value: 'fast' }, { label: 'INSTANT', value: 'instant' }]} />
+      </div>
+      <div><Text size="xs" fw={800} tt="uppercase" mb={6}>Dice display</Text>
+        <SegmentedControl fullWidth aria-label="Dice display" value={diceDisplay}
+          onChange={value => setDiceDisplay(value as DiceDisplay)}
+          data={[{ label: 'NUMERALS', value: 'numerals' }, { label: 'PIPS', value: 'pips' }]} />
+      </div>
+      <Divider />
+      <Button variant="default" fullWidth onClick={() => launch(openRunInfo)}>Run Info</Button>
+      <Button variant="default" fullWidth onClick={() => launch(openHelp)}>How to Play</Button>
+    </Stack>
+  </Drawer>
+  </>;
 }

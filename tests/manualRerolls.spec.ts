@@ -4,6 +4,8 @@ import { dispatch, newRun } from '../src/game/engine';
 import { hasPlayableHand, handOptions, HANDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
+import { setPlaybackSpeed } from './uiHelpers';
+import { CONFIG } from '../src/game/config';
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
@@ -23,8 +25,7 @@ async function ready(page: Page) {
 }
 async function matchRound(page: Page, game: GameState) {
   await ready(page);
-  await expect(page.getByTestId('stat-rerolls').getByText(String(game.manualRerollsRemaining), { exact: true })).toBeVisible();
-  await expect(page.getByTestId('stat-score').getByText(String(game.score), { exact: true })).toBeVisible();
+  await expect(page.getByTestId('round-score-progress')).toHaveText(`${game.score} / ${game.target}`);
   for (const die of game.dice) {
     const button = page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1}, face ${die.value},`) });
     await expect(button).toBeVisible();
@@ -33,7 +34,7 @@ async function matchRound(page: Page, game: GameState) {
 }
 async function reroll(page: Page, game: GameState, dieIds: number[]) {
   for (const id of dieIds) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
-  await page.getByRole('button', { name: `Reroll Selected — ${dieIds.length}`, exact: true }).click();
+  await page.getByRole('button', { name: `Reroll ${CONFIG.manualRerollsPerRound - game.manualRerollsRemaining + dieIds.length} / ${CONFIG.manualRerollsPerRound}`, exact: true }).click();
   const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds });
   await matchRound(page, next.state);
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
@@ -114,7 +115,7 @@ async function reachDeadBoard(page: Page, rescue: boolean) {
       await page.getByRole('button', { name: 'PLAY', exact: true }).click();
     } else if (action.type === 'MANUAL_REROLL') {
       for (const id of action.dieIds) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
-      await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();
+      await page.getByRole('button', { name: /^Reroll \d+ \/ 3$/ }).click();
     } else if (action.type === 'NEXT_ROUND') {
       await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
     } else if (action.type === 'CONTINUE_ROUND_SUMMARY') {
@@ -133,19 +134,19 @@ test('strategic single-die and multi-die rerolls cost charges, clear selection a
   let game = newRun('manual-browser').state;
   await page.goto('/?seed=manual-browser&speed=instant');
   await matchRound(page, game);
-  await expect(page.getByRole('button', { name: 'Reroll Selected — 0', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Reroll 0 / 3', exact: true })).toBeDisabled();
   const single = await reroll(page, game, [1]);
   game = single.state;
   expect(game.manualRerollsRemaining).toBe(2);
   expect(single.events.filter(event => event.type === 'DIE_ROLLED').map(event => event.dieIds)).toEqual([[1]]);
   for (const id of [0, 2, 4]) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
-  await expect(page.getByRole('button', { name: 'Reroll Selected — 3', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Reroll 4 / 3', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: /^Die 5,/ }).click();
-  const button = page.getByRole('button', { name: 'Reroll Selected — 2', exact: true });
+  const button = page.getByRole('button', { name: 'Reroll 3 / 3', exact: true });
   await expect(button).toBeEnabled();
-  await page.getByText('NORMAL', { exact: true }).click();
+  await setPlaybackSpeed(page, 'NORMAL');
   await button.click();
-  await expect(page.getByRole('button', { name: 'Reroll Selected — 0', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Reroll \d+ \/ 3$/ })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: /^Die 1,/ })).toBeDisabled();
   await page.getByRole('button', { name: 'Skip playback' }).click();
@@ -153,10 +154,10 @@ test('strategic single-die and multi-die rerolls cost charges, clear selection a
   await matchRound(page, game);
   expect(game.manualRerollsRemaining).toBe(0);
   expect(game.phase).toBe('round');
-  await page.getByText('INSTANT', { exact: true }).click();
+  await setPlaybackSpeed(page, 'INSTANT');
   const option = handOptions(game.dice, game.consumed).find(hand => !hand.consumed)!;
   await page.getByRole('button', { name: new RegExp(`^${HANDS[option.id].name} `) }).click();
-  await expect(page.getByRole('button', { name: /^Reroll Selected/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Reroll \d+ \/ 3$/ })).toBeDisabled();
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   game = dispatch(game, { type: 'PLAY', hand: option.id, dieIds: option.combinations[0] }).state;
   await matchRound(page, game);
@@ -172,9 +173,9 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
     await expect(page.getByRole('heading', { name: 'Run over' })).toHaveCount(0);
     await expect(page.getByText('Select dice and use a reroll.', { exact: true })).toBeVisible();
   }
-  if (playbackSpeed === 'normal') await page.getByText('NORMAL', { exact: true }).click();
+  if (playbackSpeed === 'normal') await setPlaybackSpeed(page, 'NORMAL');
   await page.getByRole('button', { name: /^Die 1,/ }).click();
-  await page.getByRole('button', { name: 'Reroll Selected — 1', exact: true }).click();
+  await page.getByRole('button', { name: 'Reroll 3 / 3', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Run over' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'BUST', exact: true })).toBeVisible({ timeout: 15000 });
   await expect(page.getByText('1 LIFE LOST', { exact: true })).toBeVisible();

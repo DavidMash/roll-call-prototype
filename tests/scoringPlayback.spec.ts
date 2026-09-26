@@ -7,6 +7,7 @@ import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
 import { scoringPlaybackRun } from './scoringFixture';
 import { activeEncounterDice } from '../src/game/bosses';
+import { setPlaybackSpeed } from './uiHelpers';
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
@@ -39,7 +40,7 @@ async function perform(page: Page, game: GameState, action: Action) {
     await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
   } else if (action.type === 'BUY') {
     const offer = game.shop!.offers.find(item => item.id === action.offerId)!;
-    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button').click();
+    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button', { name: 'Select or drag' }).click();
     await selectDice(page, [action.dieId]);
   } else if (action.type === 'NEXT_ROUND') {
     await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
@@ -58,7 +59,7 @@ async function perform(page: Page, game: GameState, action: Action) {
       const selected = await target.getAttribute('aria-pressed') === 'true';
       if (selected !== action.dieIds.includes(physical.id)) await target.click();
     }
-    await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();
+    await page.getByRole('button', { name: `Reroll ${CONFIG.manualRerollsPerRound - game.manualRerollsRemaining + action.dieIds.length} / ${CONFIG.manualRerollsPerRound}`, exact: true }).click();
   } else if (action.type === 'UNLOCK_WARDEN_DIE') {
     await page.getByRole('button', { name: new RegExp(`^Die ${action.dieId + 1},.*selectable to unlock$`) }).click();
     await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();
@@ -78,7 +79,7 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
   await ready(page);
   for (const action of fixture.actions) game = await perform(page, game, action);
   expect(game).toEqual(fixture.game);
-  await expect(page.getByTestId('stat-score').getByText(String(game.score), { exact: true })).toBeVisible();
+  await expect(page.getByTestId('round-score-progress')).toHaveText(`${game.score} / ${game.target}`);
   const finalRow = page.getByRole('button', { name: new RegExp(`^${HANDS[fixture.action.hand].name} `) });
   await finalRow.click();
   for (const physical of activeEncounterDice(game)) {
@@ -88,11 +89,11 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
   }
   if (await finalRow.getAttribute('aria-pressed') !== 'true') await finalRow.click();
   const deterministicPreview = handScore(activeEncounterDice(game), fixture.action.hand, fixture.action.dieIds, game.handLevels[fixture.action.hand]);
-  await expect(page.locator('.selection-preview')).toContainText(`${deterministicPreview.pips} pips × ${deterministicPreview.multiplier}`);
+  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText(`${deterministicPreview.pips} x ${deterministicPreview.multiplier} • PLAY`);
 
   await page.clock.install({ time: new Date('2026-09-17T12:00:00Z') });
   await page.clock.pauseAt(new Date('2026-09-17T12:00:01Z'));
-  await page.getByText('NORMAL', { exact: true }).click();
+  await setPlaybackSpeed(page, 'NORMAL');
   await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
   const observed: [string, number, number][] = [];
   for (const [index, event] of fixture.result.events.entries()) {
@@ -100,7 +101,6 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
     if (event.handScore) {
       await expect(page.getByTestId('hand-pips')).toHaveText(String(event.handScore.currentPips));
       await expect(page.getByTestId('hand-multiplier')).toHaveText(`x${event.handScore.currentMultiplier}`);
-      await expect(page.getByTestId('stat-score').getByText(String(event.board.score), { exact: true })).toBeVisible();
       if (event.type !== 'SCORE_ADDED') expect(event.board.score).toBe(game.score);
       if (event.type === 'HAND_STARTED') {
         expect(event.handScore.basePips).toBe(started.handScore!.basePips);
@@ -132,5 +132,5 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
   ]));
   await page.getByRole('button', { name: 'Skip playback' }).click();
   await ready(page);
-  await expect(page.getByTestId('stat-score').getByText(String(fixture.result.state.score), { exact: true })).toBeVisible();
+  await expect(page.getByTestId('round-score-progress')).toHaveText(`${fixture.result.state.score} / ${fixture.result.state.target}`);
 });

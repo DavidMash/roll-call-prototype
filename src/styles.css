@@ -25,6 +25,10 @@ button { font: inherit; }
 .hud-phase { padding: 3px 9px; border-radius: 999px; color: var(--mantine-color-teal-3); background: var(--mantine-color-teal-9); font-size: .67rem; font-weight: 800; letter-spacing: .08em; }
 .hud-actions { flex: 0 0 auto; }
 .hud-actions .mantine-SegmentedControl-label { padding-inline: 8px; font-size: .61rem; font-weight: 700; }
+.menu-trigger { flex: 0 0 auto; }
+.hamburger-icon { width: 18px; display: grid; gap: 3px; }
+.hamburger-icon i { height: 2px; display: block; border-radius: 999px; background: currentColor; }
+.game-menu-drawer, .game-menu-header { background: var(--mantine-color-dark-8); }
 
 .round-screen, .shop-screen { min-width: 0; }
 .live-score-panel {
@@ -50,8 +54,8 @@ button { font: inherit; }
 .scorecard-row { height: 36px; padding: 0 9px; border-radius: 0; border-top: 1px solid rgba(255,255,255,.045); }
 .scorecard-row .mantine-Button-inner, .scorecard-row .mantine-Button-label { width: 100%; }
 .scorecard-row .mantine-Button-label { display: flex; justify-content: space-between; gap: 8px; }
-.scorecard-row-copy { min-width: 0; display: flex; align-items: baseline; gap: 8px; line-height: 1; }
-.scorecard-hand-name { color: var(--mantine-color-gray-1); font-size: .75rem; font-weight: 720; white-space: nowrap; }
+.scorecard-row-copy { min-width: 0; display: flex; align-items: center; justify-content: flex-start; gap: 6px; overflow: hidden; line-height: 1; text-align: left; }
+.scorecard-hand-name { min-width: 0; color: var(--mantine-color-gray-1); font-size: .82rem; font-weight: 760; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .scorecard-hand-name > span { color: var(--mantine-color-gray-5); font-size: .64rem; font-weight: 600; }
 .scorecard-base { color: var(--mantine-color-gray-5); font-size: .65rem; font-weight: 550; white-space: nowrap; }
 .scorecard-row-result { display: flex; align-items: center; justify-content: flex-end; gap: 5px; color: var(--mantine-color-gray-1); font-size: .78rem; font-weight: 750; font-variant-numeric: tabular-nums; }
@@ -87,6 +91,7 @@ button { font: inherit; }
 .flame-badge { position: absolute; top: 3px; right: 3px; max-width: 64px; height: 15px; padding-inline: 3px; font-size: .48rem; text-transform: none; }
 .pip-face { width: min(64%, 64px); aspect-ratio: 1; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); flex: none; }
 .die > .pip-face { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.die > .die-number { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: clamp(1.65rem, 5vw, 2.4rem); font-weight: 850; line-height: 1; }
 .pip-face.compact { width: 28px; }
 .pip { width: clamp(5px, 58%, 12px); aspect-ratio: 1; place-self: center; border-radius: 50%; background: currentColor; box-shadow: 0 1px 1px rgba(0,0,0,.45); }
 .pip-top-left { grid-column: 1; grid-row: 1; }
@@ -156,13 +161,15 @@ button { font: inherit; }
 .manage-face-tile { min-height: 132px; cursor: pointer; background: var(--mantine-color-dark-7); transition: border-color 100ms, background 100ms; }
 .manage-face-tile.focused { border-color: var(--mantine-color-teal-5); background: rgba(18,184,134,.08); }
 .manage-face-tile.exposed-face { box-shadow: inset 3px 0 var(--mantine-color-teal-6); }
+.manage-face-number { width: 28px; height: 28px; display: inline-grid; place-items: center; border-radius: 6px; background: var(--mantine-color-dark-6); font-size: 1rem; font-weight: 850; }
 .shop-flame-context { background: rgba(230,119,0,.07); border-color: rgba(255,146,43,.24); }
 .hud-lives { color: var(--mantine-color-red-5); font-weight: 900; letter-spacing: .08em; white-space: nowrap; padding: 4px 6px; border-radius: 6px; }
 .hud-lives.interactive { border: 1px solid rgba(250,82,82,.45); cursor: pointer; }
 .hud-lives.interactive:hover, .hud-lives.interactive:focus-visible { background: rgba(250,82,82,.12); outline: 2px solid var(--mantine-color-red-5); }
 .flame-tutorial-anchor { display: inline-flex; border-radius: 12px; animation: flame-tutorial-pulse 1.8s ease-in-out infinite; }
 @keyframes flame-tutorial-pulse { 0%, 100% { box-shadow: 0 0 0 2px rgba(255,146,43,.35); } 50% { box-shadow: 0 0 0 7px rgba(255,146,43,.08); } }
-.shop-action-dock { position: sticky; bottom: 6px; z-index: 10; display: flex; justify-content: space-between; align-items: center; min-height: 42px; padding: 5px 7px; border-radius: var(--mantine-radius-md); background: rgba(20,26,30,.97); box-shadow: 0 -8px 24px rgba(0,0,0,.24); }
+.shop-action-dock { position: sticky; bottom: max(6px, env(safe-area-inset-bottom)); z-index: 16; display: flex; justify-content: space-between; align-items: center; min-height: 42px; padding: 5px 7px; border-radius: var(--mantine-radius-md); background: rgba(20,26,30,.97); box-shadow: 0 -8px 24px rgba(0,0,0,.24); }
+.phase-sticky-header { position: sticky; top: var(--hud-sticky-offset, 68px); z-index: 14; padding: 5px 7px; border-radius: var(--mantine-radius-md); background: rgba(20,26,30,.97); box-shadow: 0 7px 20px rgba(0,0,0,.2); backdrop-filter: blur(10px); }
 .flame-selection-screen { min-width: 0; }
 .flame-payout { background: rgba(230,119,0,.07); border: 1px solid rgba(255,146,43,.16); }
 .flame-offer { min-height: 128px; background: var(--mantine-color-dark-8); border: 1px solid rgba(255, 146, 43, .16); }
@@ -193,8 +200,8 @@ button { font: inherit; }
 @keyframes score-in { from { opacity: .4; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (max-width: 900px) {
-  .top-hud-row { flex-wrap: wrap !important; row-gap: 3px; }
-  .hud-stats { order: 3; flex-basis: 100%; justify-content: space-between; }
+  .top-hud-row { flex-wrap: nowrap !important; row-gap: 3px; }
+  .hud-stats { order: initial; flex-basis: auto; justify-content: space-evenly; }
   .gameplay-dock-content { align-items: stretch; flex-direction: column; gap: 5px; }
   .gameplay-dock .dice-row { flex-basis: auto; }
   .gameplay-actions { display: flex; flex: none; align-items: center; justify-content: space-between; padding: 0; }
@@ -203,6 +210,13 @@ button { font: inherit; }
 @media (max-width: 720px) {
   .scorecard-grid { grid-template-columns: 1fr; }
   .shop-grid { grid-template-columns: 1fr; }
+  .training-grid, .enhancement-grid, .flame-offers { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .training-grid .training-card, .enhancement-grid .offer, .flame-offers .flame-offer { min-height: 0; padding: 6px; }
+  .training-grid .mantine-Text-root, .enhancement-grid .mantine-Text-root, .flame-offers .mantine-Text-root { overflow-wrap: anywhere; }
+  .training-grid .mantine-Group-root, .enhancement-grid > * > .mantine-Group-root, .flame-offers > * > .mantine-Group-root { gap: 3px !important; }
+  .training-grid .mantine-Button-root, .enhancement-grid .mantine-Button-root, .flame-offers .mantine-Button-root { height: auto; min-height: 26px; padding: 3px 4px; font-size: .62rem; white-space: normal; line-height: 1.05; }
+  .training-grid .mantine-Badge-root, .enhancement-grid .mantine-Badge-root, .flame-offers .mantine-Badge-root { height: auto; min-height: 18px; padding: 2px 4px; font-size: .55rem; white-space: normal; }
+  .training-grid .mantine-ActionIcon-root, .enhancement-grid .mantine-ActionIcon-root, .flame-offers .mantine-ActionIcon-root { flex: none; width: 22px; height: 22px; min-width: 22px; }
   .flame-dice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stoke-effects { grid-template-columns: 1fr; }
   .stoke-preview { grid-column: auto; }
@@ -217,13 +231,12 @@ button { font: inherit; }
   .ability-label { height: 17px; font-size: .46rem; }
   .die-badges .mantine-Badge-root { font-size: .44rem; padding-inline: 2px; }
   .offer-description { min-height: auto; }
-  .shop-action-dock { bottom: 2px; }
+  .shop-action-dock { bottom: max(2px, env(safe-area-inset-bottom)); }
 }
 @media (max-width: 520px) {
   .game-title { font-size: .95rem; }
   .hud-stat { gap: 3px; padding-inline: 3px; }
   .hud-stat-label { display: none; }
-  .hud-actions .mantine-SegmentedControl-label { padding-inline: 6px; }
   .scorecard-row { height: 34px; padding-inline: 7px; }
   .scorecard-hand-name { font-size: .7rem; }
   .scorecard-base { font-size: .59rem; }
@@ -366,14 +379,9 @@ button { font: inherit; }
   .scorecard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; align-items: stretch; }
   .scorecard-grid > *, .scorecard-row-copy, .scorecard-detail-line, .scorecard-row-result { min-width: 0; }
   .active-gameplay .scorecard-panel { flex: 1 1 auto !important; min-height: 0; overflow: hidden; padding: 3px !important; }
-  .active-gameplay .scorecard { height: 100%; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; }
-  .active-gameplay .scorecard-header { grid-row: 1; min-height: 18px; padding: 0 2px 2px; }
-  .active-gameplay .scorecard-header .mantine-Text-root { font-size: .66rem; }
-  .active-gameplay .scorecard-header .mantine-Button-root { min-height: 18px; height: 18px; padding-inline: 5px; font-size: .57rem; }
-  .active-gameplay .scorecard-grid { grid-row: 2; min-height: 0; }
-  .active-gameplay .scorecard-hint { grid-row: 3; max-height: 18px; padding: 2px 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .58rem; }
-  .active-gameplay .scorecard-totals { grid-row: 4; min-height: 20px; padding: 2px 5px 0; }
-  .active-gameplay .scorecard-totals .mantine-Text-root { font-size: .65rem; }
+  .active-gameplay .scorecard { height: 100%; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+  .active-gameplay .scorecard-grid { grid-row: 1; min-height: 0; }
+  .active-gameplay .scorecard-hint { grid-row: 2; max-height: 18px; padding: 2px 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .58rem; }
   .active-gameplay .scorecard-section { height: 100%; min-height: 0; display: grid; grid-template-rows: 17px minmax(0, 1fr); }
   .active-gameplay .scorecard-section-title { height: 17px; padding-inline: 5px; font-size: .57rem; }
   .active-gameplay .scorecard-rows { min-height: 0; grid-template-rows: repeat(8, minmax(0, 1fr)); }
@@ -383,16 +391,12 @@ button { font: inherit; }
   .active-gameplay .scorecard-row .mantine-Button-inner,
   .active-gameplay .scorecard-row .mantine-Button-label { min-width: 0; height: 100%; }
   .active-gameplay .scorecard-row .mantine-Button-label { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px; align-items: center; }
-  .active-gameplay .scorecard-row-copy { align-self: stretch; display: grid; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); gap: 0; align-items: center; overflow: hidden; }
-  .active-gameplay .scorecard-hand-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: .62rem; line-height: 1; }
-  .active-gameplay .scorecard-hand-name > .hand-level { font-size: .49rem; }
-  .active-gameplay .scorecard-detail-line { min-width: 0; display: flex; align-items: center; gap: 3px; overflow: hidden; line-height: 1; }
-  .active-gameplay .scorecard-base { flex: none; margin-left: 0; font-size: .52rem; }
+  .active-gameplay .scorecard-row-copy { align-self: stretch; display: flex; gap: 4px; align-items: center; overflow: hidden; }
+  .active-gameplay .scorecard-hand-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: .75rem; line-height: 1; }
+  .active-gameplay .scorecard-hand-name > .hand-level { font-size: .56rem; }
   .active-gameplay .ultimate-badge,
   .active-gameplay .scorecard-row-result .mantine-Badge-root { flex: none; height: 12px; padding-inline: 2px; font-size: .4rem; }
   .active-gameplay .ultimate-badge { width: 12px; }
-  .active-gameplay .well-trained-preview { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: .44rem; }
-  .active-gameplay .well-trained-preview::before { content: 'WT '; }
   .active-gameplay .scorecard-row-result { flex-direction: column; gap: 0; font-size: .62rem; line-height: 1; }
   .active-gameplay .wide-label { display: none; }
   .active-gameplay .compact-label { display: inline; }
@@ -411,12 +415,8 @@ button { font: inherit; }
   .active-gameplay .charge-controls { grid-column: 1 / -1; min-width: 0; margin: 0; flex-wrap: nowrap; }
   .active-gameplay .selection-preview { display: none; }
   .active-gameplay .gameplay-actions > .mantine-Group-root:last-child {
-    width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 2fr);
+    width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
     flex-wrap: nowrap; justify-content: stretch;
-  }
-  .active-gameplay .mobile-score-total {
-    min-width: 42px; min-height: 40px; display: flex; align-items: center; justify-content: center;
-    color: var(--mantine-color-teal-3); font-size: .66rem; font-variant-numeric: tabular-nums; white-space: nowrap;
   }
   .active-gameplay .gameplay-actions > .mantine-Group-root:last-child .mantine-Button-root { width: 100%; min-height: 40px; padding-inline: 9px; }
   .active-gameplay .gameplay-actions > .mantine-Group-root:last-child .mantine-Button-root:only-child { grid-column: 1 / -1; }
@@ -428,8 +428,6 @@ button { font: inherit; }
   .active-gameplay .game-title { font-size: .82rem; letter-spacing: .08em; }
   .active-gameplay .hud-stat { padding-inline: 2px; font-size: .7rem; }
   .active-gameplay .hud-lives { padding-inline: 3px; font-size: .72rem; }
-  .active-gameplay .hud-actions { gap: 2px !important; }
-  .active-gameplay .hud-actions .mantine-SegmentedControl-label { padding-inline: 4px; font-size: .53rem; }
   .active-gameplay .gameplay-actions > .mantine-Group-root:last-child { gap: 4px !important; }
   .active-gameplay .gameplay-actions > .mantine-Group-root:last-child .mantine-Button-root { padding-inline: 7px; font-size: .7rem; }
 }
@@ -439,17 +437,11 @@ button { font: inherit; }
   .active-gameplay .game-title { display: none; }
   .active-gameplay .top-hud-row { flex-wrap: nowrap !important; }
   .active-gameplay .hud-stats { order: initial; flex-basis: auto; }
-  .active-gameplay .hud-actions .mantine-SegmentedControl-label {
-    display: block; width: 1ch; min-width: 1ch; max-width: 1ch; margin-inline: 7px; padding: 0;
-    overflow: hidden; text-align: left; white-space: nowrap; font-size: .52rem;
-  }
   .active-gameplay .resolution { min-height: 36px; }
   .active-gameplay .resolution.active { min-height: 62px; }
   .active-gameplay .round-screen { gap: 3px !important; }
-  .active-gameplay .scorecard-header { min-height: 16px; }
   .active-gameplay .scorecard-section { grid-template-rows: 15px minmax(0, 1fr); }
   .active-gameplay .scorecard-section-title { height: 15px; }
-  .active-gameplay .scorecard-totals { min-height: 17px; padding-top: 0; }
   .active-gameplay .die { min-height: 48px; max-height: 54px; }
   .active-gameplay .gameplay-actions > .mantine-Group-root:last-child .mantine-Button-root { min-height: 36px; }
 }

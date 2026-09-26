@@ -2,6 +2,7 @@ import { Badge, Button, Card, Group, Text } from '@mantine/core';
 import { handTrainingCost, teamTrainingCost } from '../game/config';
 import { handStats, HANDS } from '../game/hands';
 import type { HandLevels, TrainingOffer } from '../game/types';
+import { InfoPopover } from './InfoPopover';
 
 export function TrainingCard({ offer, handLevels, gold, busy, onTrain }: {
   offer: TrainingOffer; handLevels: HandLevels; gold: number; busy: boolean; onTrain: () => void;
@@ -10,7 +11,8 @@ export function TrainingCard({ offer, handLevels, gold, busy, onTrain }: {
     const cost = teamTrainingCost(offer.purchases);
     return <Card p="sm" className="training-card team-training-card" data-testid="training-offer-team">
       <Group justify="space-between" align="start" wrap="nowrap">
-        <div><Text fw={800} size="sm" tt="uppercase">Team Training</Text><Text size="xs" c="yellow.3">Train ALL hands +1 level.</Text></div>
+        <Group gap={3} wrap="nowrap"><Text fw={800} size="sm" tt="uppercase">Team Training</Text>
+          <InfoPopover label="Team Training" description="Train every hand by one level." /></Group>
         <Badge size="xs" color="yellow" variant="filled">Special</Badge>
       </Group>
       {offer.purchases > 0 && <Text size="xs" mt={5} c="dimmed">Purchased {offer.purchases}× this Shop</Text>}
@@ -28,7 +30,9 @@ export function TrainingCard({ offer, handLevels, gold, busy, onTrain }: {
   const cost = handTrainingCost(offer.purchases);
   return <Card p="sm" className="training-card" data-testid={`training-offer-${offer.hand}`}>
     <Group justify="space-between" align="start" wrap="nowrap">
-      <div><Text fw={700} size="sm" tt="uppercase">{HANDS[offer.hand].name}</Text><Text size="xs" c="dimmed">Lv.{currentLevel} → {nextLevel}</Text></div>
+      <div><Group gap={3} wrap="nowrap"><Text fw={700} size="sm" tt="uppercase">{HANDS[offer.hand].name}</Text>
+        <InfoPopover label={`${HANDS[offer.hand].name} training`} description={`Train ${HANDS[offer.hand].name} by one level, increasing its base Pips and Mult.`} /></Group>
+        <Text size="xs" c="dimmed">Lv.{currentLevel} → {nextLevel}</Text></div>
       {offer.purchases > 0 && <Badge size="xs" color="teal" variant="light">Trained ×{offer.purchases}</Badge>}
     </Group>
     <Group gap="md" mt={5} wrap="nowrap">

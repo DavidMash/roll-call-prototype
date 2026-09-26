@@ -6,6 +6,7 @@ import { handOptions, HANDS, HAND_IDS, ultimateHands } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { BossType, GameState } from '../src/game/types';
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
+import { setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 
 const seedFor = (boss: BossType) => {
   for (let index = 0; index < 100; index++) {
@@ -43,7 +44,7 @@ async function playOne(page: Page, game: GameState) {
   if (!choice) {
     const die = activeEncounterDice(game)[0];
     await page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) }).click();
-    await page.getByRole('button', { name: /^Reroll Selected/ }).click();
+    await page.getByRole('button', { name: /^Reroll \d+ \/ 3$/ }).click();
     const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [die.id] }).state;
     await ready(page);
     return next;
@@ -349,7 +350,7 @@ test('Hexer preview keeps its faces secret and encounter fits all six dice on on
   await expect(cursedButton).toBeVisible();
   await expect(cursedButton).toHaveAttribute('aria-pressed', 'false');
   await expect(cursedButton).toHaveAttribute('aria-disabled', 'false');
-  await expect(page.getByRole('button', { name: 'Clear selection' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Clear selection' })).toHaveCount(0);
 
   const legalHands = new Set(handOptions(activeEncounterDice(game), game.consumed, [cursed.id]).map(option => option.id));
   for (const hand of HAND_IDS) {
@@ -358,8 +359,7 @@ test('Hexer preview keeps its faces secret and encounter fits all six dice on on
 
   const playerButton = page.getByRole('button', { name: /^Die 1,/ });
   await playerButton.click();
-  await expect(page.getByRole('button', { name: 'Clear selection' })).toBeEnabled();
-  await page.getByRole('button', { name: 'Clear selection' }).click();
+  await playerButton.click();
   await expect(cursedButton).toHaveAttribute('aria-pressed', 'false');
   await expect(playerButton).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.die.cursed-die')).toHaveCount(1);
@@ -381,6 +381,7 @@ test('Hexer face 7 renders seven pips without Mirror and remains freely selectab
   await page.evaluate(saved => localStorage.setItem('roll-call:active-run', JSON.stringify({ version: 1, state: saved })), game);
   await page.reload();
   await ready(page);
+  await setDiceDisplay(page, 'PIPS');
   game = structuredClone(game);
   cursed = game.dice.find(die => die.owner === 'boss')!;
   expect(cursed.value).toBe(7);
@@ -419,7 +420,7 @@ test('Boss clear shows +10 Boss Reward summary before the Flame Selection map', 
   await expect(page.getByText('Flame Bonus')).toHaveCount(0);
   await expect(page.locator('[data-screen-theme="hexer"]')).toBeVisible();
 
-  await page.getByText('NORMAL', { exact: true }).click();
+  await setPlaybackSpeed(page, 'NORMAL');
   await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
   const flameMap = page.getByTestId('run-map-transition');
   await expect(flameMap).toHaveAttribute('data-destination', `flame:after-round:${game.round}`);

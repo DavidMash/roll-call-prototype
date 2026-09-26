@@ -2,9 +2,11 @@ import { Die } from './Die';
 import { Tooltip } from '@mantine/core';
 import type { CSSProperties } from 'react';
 import type { Die as PhysicalDie, GameEvent } from '../game/types';
+import type { DiceDisplay } from '../uiSettings';
 
 interface Props {
   dice: PhysicalDie[];
+  display: DiceDisplay;
   selected?: number[];
   event: GameEvent | null;
   disabled: boolean;
@@ -24,14 +26,14 @@ interface Props {
   tutorialDieId?: number | null;
   tutorialLabel?: React.ReactNode;
 }
-export function DiceRow({ dice, selected = [], event, disabled, eligibleIds, restrictToEligible = false,
+export function DiceRow({ dice, display, selected = [], event, disabled, eligibleIds, restrictToEligible = false,
   ineligibleReasons = {}, actionableIneligibleIds = [], lockedIds = [], lockedReasons = {}, lockedUntilByDieId = {}, showCapacity = false,
   wardenLockedIds = [], wardenSelectableIds = [], wardenChoiceMode = false,
   onClick, onDropOffer, tutorialDieId, tutorialLabel }: Props) {
   return <div className="dice-row" data-dice-count={dice.length}
     style={{ '--dice-columns': dice.length } as CSSProperties}>{dice.map(die => {
     const involved = event?.dieIds?.includes(die.id) ?? false;
-    const rendered = <Die key={`${die.id}:${involved && event?.enhancement ? event.id : 'idle'}`} die={die}
+    const rendered = <Die key={`${die.id}:${involved && event?.enhancement ? event.id : 'idle'}`} die={die} display={display}
       selected={selected.includes(die.id)} highlighted={involved && event?.type !== 'DIE_ROLLED'}
       rolling={involved && (event?.type === 'DICE_REROLL_STARTED' || event?.type === 'DIE_ROLLED')}
       ability={involved ? event?.enhancement : undefined} flameAbility={involved ? event?.flame : undefined}

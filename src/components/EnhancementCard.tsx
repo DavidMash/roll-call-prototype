@@ -1,17 +1,7 @@
-import { Badge, Button, Card, Group, Text, Tooltip } from '@mantine/core';
+import { Badge, Button, Card, Group, Text } from '@mantine/core';
 import { enhancementCost, ENHANCEMENTS } from '../game/enhancements';
 import type { Enhancement, Offer } from '../game/types';
-
-const SHORT_DESCRIPTION: Record<Enhancement, string> = {
-  bonus: 'Adds Pips whenever this face scores.',
-  jumpingBean: 'Free-plays its matching Upper hand, then rerolls.', golden: 'Earns Gold whenever this face scores; max 3.',
-  workout: 'Permanently gains a Pip after scoring.', missingLink: 'Acts as a wild rank for straights.',
-  mirror: 'Acts as a wild rank for matching hands.', magnetic: 'Held anchors attract rerolled magnetic dice.',
-  sticky: 'Chance to prevent a scored reroll.', slippy: 'Rerolls after a played hand continues.',
-  hitchhiker: 'Chance to join as a scorer when held out.', weighted: 'Raises the roll weight of the opposite face.',
-  jackpot: 'Earns Gold when this face scores in the winning hand; max 3.', bump: 'Advances one face on this die’s next roll.',
-  vintage: 'Starts worth 0 Gold; gains +3 sell value whenever this face scores.',
-};
+import { InfoPopover } from './InfoPopover';
 const ICON: Record<Enhancement, string> = {
   bonus: '+', jumpingBean: '↯', golden: '●', workout: '▲', missingLink: '⛓', mirror: '◇',
   magnetic: '∩', sticky: '⚓', slippy: '↻', hitchhiker: '♟', weighted: '▼', jackpot: '★', bump: '↑', vintage: 'V',
@@ -26,10 +16,10 @@ export function EnhancementCard({ offer, selected, gold, busy, onSelect }: {
     data-testid={`offer-${offer.enhancement}`} draggable={enabled}
     onDragStart={event => { if (!enabled) { event.preventDefault(); return; } event.dataTransfer.setData('application/x-roll-call-offer', String(offer.id)); event.dataTransfer.effectAllowed = 'copy'; onSelect(); }}>
     <Group justify="space-between" align="center" wrap="nowrap">
-      <Group gap="xs" wrap="nowrap"><span className="offer-icon" aria-hidden="true">{ICON[offer.enhancement]}</span><Text fw={700} size="sm">{definition.name}</Text></Group>
+      <Group gap={4} wrap="nowrap"><span className="offer-icon" aria-hidden="true">{ICON[offer.enhancement]}</span><Text fw={700} size="sm">{definition.name}</Text>
+        <InfoPopover label={definition.name} description={definition.description} /></Group>
       <Badge size="sm" variant="light" color="yellow">{enhancementCost(offer.enhancement)} gold</Badge>
     </Group>
-    <Tooltip label={definition.description} multiline maw={320} withArrow><Text size="xs" c="dimmed" mt={5}>{SHORT_DESCRIPTION[offer.enhancement]}</Text></Tooltip>
     <Button mt="xs" size="compact-xs" fullWidth variant={selected ? 'filled' : 'light'} disabled={!enabled} onClick={onSelect} aria-pressed={selected}>
       {offer.purchased ? 'Purchased' : !affordable ? 'Need more gold' : selected ? 'Click an exposed face' : 'Select or drag'}
     </Button>

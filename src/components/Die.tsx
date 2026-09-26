@@ -3,10 +3,12 @@ import { activeFace, scoringPips } from '../game/dice';
 import { ENHANCEMENTS, ENHANCEMENT_IDS, FACE_TYPE_LIMIT, faceEnhancementTypes } from '../game/enhancements';
 import { activeFlameId, activeFlameInvestment, FLAMES } from '../game/flames';
 import type { Die as PhysicalDie, Enhancement, Flame } from '../game/types';
+import type { DiceDisplay } from '../uiSettings';
 import { PipFace } from './PipFace';
 
 interface Props {
   die: PhysicalDie;
+  display: DiceDisplay;
   selected: boolean;
   highlighted: boolean;
   rolling: boolean;
@@ -31,7 +33,7 @@ const BADGE_LABELS: Partial<Record<Enhancement, (count: number) => string>> = {
   workout: count => `Fit${count > 1 ? ` ×${count}` : ''}`,
 };
 
-export function Die({ die, selected, highlighted, rolling, ability, flameAbility, disabled, eligible,
+export function Die({ die, display, selected, highlighted, rolling, ability, flameAbility, disabled, eligible,
   wardenLocked = false, wardenSelectable = false, unlockAt, ineligibleReason, lockedReason, allowIneligibleClick = false, showCapacity = false, onClick, onDropOffer }: Props) {
   const face = activeFace(die);
   const enhancements = ENHANCEMENT_IDS.filter(id => face.enhancements[id])
@@ -77,7 +79,9 @@ export function Die({ die, selected, highlighted, rolling, ability, flameAbility
       </Tooltip>}
       {face.snakeEyed && <Badge className="boss-face-badge" size="xs" color="green">SNAKE EYES</Badge>}
       {face.infected && <Badge className="boss-face-badge" size="xs" color="red">INFECTED</Badge>}
-      <PipFace value={displayValue} label={`${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`} showing ${displayValue}`} />
+      {display === 'pips'
+        ? <PipFace value={displayValue} label={`${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`} showing ${displayValue}`} />
+        : <Text component="span" className="die-number" role="img" aria-label={`${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`} showing ${displayValue}`}>{displayValue}</Text>}
       <div className={`die-face-status${showCapacity ? ' with-capacity' : ''}`}>
         {pips !== face.rank && <Text size="xs" c="teal" fw={700} className="die-pips">{pips} Pips</Text>}
         <div className="die-badges">

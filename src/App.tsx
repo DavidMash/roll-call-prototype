@@ -1,5 +1,5 @@
 import { Alert, Button, Container, Group, Paper, Stack, Text, Title } from '@mantine/core';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { RunInfoModal } from './components/DebugPanel';
 import { DiceRow } from './components/DiceRow';
 import { BustScreen } from './components/BustScreen';
@@ -16,6 +16,7 @@ import { emptySelection } from './game/selection';
 import type { Action } from './game/types';
 import { useGame } from './useGame';
 import type { PlaybackSpeed } from './useGame';
+import { loadDiceDisplay, saveDiceDisplay } from './uiSettings';
 
 const freshSeed = () => `roll-${Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join('-')}`;
 const query = new URLSearchParams(window.location.search);
@@ -26,6 +27,7 @@ const initialSpeed = ['normal', 'fast', 'instant'].includes(query.get('speed') ?
 export default function App() {
   const [seedInput, setSeedInput] = useState(initialSeed);
   const [speed, setSpeed] = useState<PlaybackSpeed>(initialSpeed);
+  const [diceDisplay, setDiceDisplay] = useState(loadDiceDisplay);
   const [selection, setSelection] = useState(emptySelection);
   const [selectedOffer, setSelectedOffer] = useState<number | null>(null);
   const [selectedFlameOffer, setSelectedFlameOffer] = useState<number | null>(null);
@@ -38,6 +40,7 @@ export default function App() {
   const { board, state, busy, event, progress } = game;
   const theme = screenTheme(board);
   useLayoutEffect(() => setSeedInput(state.seed), [state.seed]);
+  useEffect(() => saveDiceDisplay(diceDisplay), [diceDisplay]);
   useLayoutEffect(() => {
     const hud = appRef.current?.querySelector<HTMLElement>('.top-hud');
     if (!hud) return;
@@ -70,17 +73,19 @@ export default function App() {
     className={`app-container screen-theme ${board.phase === 'round' ? 'active-gameplay' : ''}`}
     data-screen-theme={theme.id} style={{ '--screen-primary': theme.accent, '--screen-secondary': theme.accentStrong,
       '--hud-sticky-offset': `${hudHeight + 8}px` } as React.CSSProperties}>
-    <TopHud board={board} speed={speed} setSpeed={setSpeed} openRunInfo={() => setRunInfoOpen(true)} openHelp={() => setHelpOpen(true)}
+    <TopHud board={board} speed={speed} setSpeed={setSpeed} diceDisplay={diceDisplay} setDiceDisplay={setDiceDisplay}
+      openRunInfo={() => setRunInfoOpen(true)} openHelp={() => setHelpOpen(true)}
       openRestoreLives={() => setRestoreLivesOpen(true)} />
     {game.error && <Alert color="orange" withCloseButton onClose={game.clearError} my="xs" py={5} title="Action unavailable">{game.error}</Alert>}
     <main className="main-content">
       {event?.type === 'MAP_TRANSITION' ? <RunMapTransition key={event.id} seed={state.seed} event={event} onContinue={game.continuePlayback} />
         : board.phase === 'roundSummary' && board.roundSummary ? <RoundSummaryScreen board={board} busy={busy} submit={submit} />
-        : board.phase === 'flameSelection' && board.flameSelection ? <FlameSelectionScreen board={board} event={event} busy={busy} progress={progress}
+        : board.phase === 'flameSelection' && board.flameSelection ? <FlameSelectionScreen board={board} event={event} busy={busy} progress={progress} diceDisplay={diceDisplay}
         selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} />
-        : board.phase === 'shop' && board.shop ? <ShopScreen board={board} event={event} busy={busy} progress={progress}
+        : board.phase === 'shop' && board.shop ? <ShopScreen board={board} event={event} busy={busy} progress={progress} diceDisplay={diceDisplay}
         selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} submit={submit} skip={game.skip} />
       : (board.phase === 'bust' || (board.phase === 'lost' && board.bust)) ? <BustScreen board={board}
+          diceDisplay={diceDisplay}
           onContinue={event?.type === 'ROUND_BUST' && (board.bust?.livesAfter ?? 0) > 0 ? game.continuePlayback : undefined}
           restartSame={() => restart(state.seed)} newRun={() => restart(freshSeed())} />
         : board.phase === 'lost' || board.phase === 'error' ? <Stack gap="sm">
@@ -90,9 +95,10 @@ export default function App() {
             <Text size="sm" c="dimmed" mt="sm">Run details and event history are available in Run Info.</Text>
             <Group justify="center" mt="lg"><Button onClick={() => restart(state.seed)}>Restart same seed</Button><Button variant="default" onClick={() => restart(freshSeed())}>New seed</Button></Group>
           </Paper>
-          <Paper p="xs"><DiceRow dice={board.dice} event={null} disabled selected={[]} onClick={() => {}} /></Paper>
+          <Paper p="xs"><DiceRow dice={board.dice} display={diceDisplay} event={null} disabled selected={[]} onClick={() => {}} /></Paper>
         </Stack>
-        : <RoundScreen board={board} event={event} busy={busy} progress={progress} selection={selection} setSelection={setSelection} submit={submit} skip={game.skip} />}
+        : <RoundScreen board={board} event={event} busy={busy} progress={progress} diceDisplay={diceDisplay}
+          selection={selection} setSelection={setSelection} submit={submit} skip={game.skip} />}
     </main>
     <RunInfoModal state={state} visibleEventId={event?.id} busy={busy} opened={runInfoOpen} onClose={() => setRunInfoOpen(false)}
       seedInput={seedInput} setSeedInput={setSeedInput} startSeed={() => restart(seedInput.trim())}

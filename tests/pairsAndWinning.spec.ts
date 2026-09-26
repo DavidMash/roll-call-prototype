@@ -6,6 +6,7 @@ import { HANDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
 import { pairSelectionRun, winningSlippyRun } from './handFixtures';
+import { setPlaybackSpeed } from './uiHelpers';
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
@@ -34,7 +35,7 @@ async function perform(page: Page, game: GameState, action: Action) {
     await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   } else if (action.type === 'BUY') {
     const offer = game.shop!.offers.find(item => item.id === action.offerId)!;
-    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button').click();
+    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button', { name: 'Select or drag' }).click();
     await die(page, action.dieId).click();
   } else if (action.type === 'NEXT_ROUND') await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   else if (action.type === 'CHOOSE_FLAME') {
@@ -49,7 +50,7 @@ async function perform(page: Page, game: GameState, action: Action) {
   }
   else if (action.type === 'MANUAL_REROLL') {
     await select(page, action.dieIds);
-    await page.getByRole('button', { name: `Reroll Selected — ${action.dieIds.length}`, exact: true }).click();
+    await page.getByRole('button', { name: `Reroll ${CONFIG.manualRerollsPerRound - game.manualRerollsRemaining + action.dieIds.length} / ${CONFIG.manualRerollsPerRound}`, exact: true }).click();
   } else throw new Error(`Unexpected fixture action: ${action.type}`);
   await ready(page);
   return dispatch(game, action).state;
@@ -74,11 +75,11 @@ for (const hand of ['pair', 'twoPair'] as const) {
     for (const id of action.dieIds) await expect(die(page, id)).toHaveAttribute('aria-pressed', 'true');
     const score = handScore(game.dice, hand, action.dieIds);
     expect(score.multiplier).toBe(hand === 'pair' ? 1.5 : 2);
-    await expect(page.getByText(`${score.pips} pips × ${score.multiplier} = ${score.score} points`, { exact: true })).toBeVisible();
-    await expect(page.getByTestId('stat-score').getByText('0', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText(`${score.pips} x ${score.multiplier} • PLAY`);
+    await expect(page.getByTestId('round-score-progress')).toHaveText(`0 / ${game.target}`);
     await page.getByRole('button', { name: 'PLAY', exact: true }).click();
     await ready(page);
-    await expect(page.getByTestId('stat-score').getByText(String(score.score), { exact: true })).toBeVisible();
+    await expect(page.getByTestId('round-score-progress')).toHaveText(`${score.score} / ${game.target}`);
     await expect(handButton).toBeDisabled();
     await expect(handButton).toContainText('used');
     for (const physical of result.state.dice) {
@@ -103,7 +104,7 @@ test('winning hand shows final award and ROUND CLEARED without gameplay roll or 
   }
   await page.clock.install({ time: new Date('2026-09-17T12:00:00Z') });
   await page.clock.pauseAt(new Date('2026-09-17T12:00:01Z'));
-  await page.getByText('NORMAL', { exact: true }).click();
+  await setPlaybackSpeed(page, 'NORMAL');
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   const observed: string[] = [];
   for (const [index, event] of fixture.result.events.entries()) {
@@ -120,7 +121,6 @@ test('winning hand shows final award and ROUND CLEARED without gameplay roll or 
     }
     if (event.type === 'SCORE_ADDED') {
       await expect(page.locator('.score-tick')).toHaveText(`+${event.amount}`);
-      await expect(page.getByTestId('stat-score').getByText(String(event.board.score), { exact: true })).toBeVisible();
       observed.push(event.type);
     }
     if (event.type === 'ROUND_CLEARED') {
@@ -134,5 +134,5 @@ test('winning hand shows final award and ROUND CLEARED without gameplay roll or 
   await page.getByRole('button', { name: 'Skip playback' }).click();
   await ready(page);
   await expect(page.getByTestId('round-summary')).toBeVisible();
-  await expect(page.getByTestId('stat-score').getByText(String(fixture.result.state.score), { exact: true })).toBeVisible();
+  await expect(page.getByTestId('summary-score')).toContainText(`${fixture.result.state.score}`);
 });

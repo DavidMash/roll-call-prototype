@@ -8,6 +8,7 @@ import type { Action, GameState } from '../src/game/types';
 import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
 import { CONFIG } from '../src/game/config';
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
+import { setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 
 function bestHand(game: GameState, requiredDie?: number, requireHistory = false) {
   const dice = activeEncounterDice(game);
@@ -87,7 +88,7 @@ async function perform(page: Page, game: GameState, action: Extract<Action, { ty
   } else if (action.type === 'MANUAL_REROLL') {
     const die = game.dice.find(item => item.id === action.dieIds[0])!;
     await page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) }).click();
-    await page.getByRole('button', { name: 'Reroll Selected — 1', exact: true }).click();
+    await page.getByRole('button', { name: /^Reroll \d+ \/ 3$/ }).click();
   } else if (action.type === 'UNLOCK_WARDEN_DIE') {
     await page.getByRole('button', { name: new RegExp(`^Die ${action.dieId + 1},.*selectable to unlock$`) }).click();
     await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();
@@ -106,7 +107,7 @@ async function reachReward(page: Page, seed: string) {
   const initial = bestHand(game)!;
   const initialRow = page.getByRole('button', { name: new RegExp(`^${HANDS[initial.hand].name} `) });
   await initialRow.click();
-  await expect(page.locator('.selection-preview')).not.toContainText('XMult');
+  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).not.toContainText('*');
   await initialRow.click();
 
   while (game.phase !== 'flameSelection') {
@@ -127,7 +128,10 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   await expect(page.locator('[data-testid^="flame-offer-"]')).toHaveCount(3);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(await page.locator('.flame-offers').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(3);
   await expect(page.getByTestId('flame-die-4')).toBeVisible();
+  await expect(page.locator('.flame-die-card .die-number')).toHaveCount(5);
+  await setDiceDisplay(page, 'PIPS');
   await expect(page.locator('.flame-die-card .pip-face')).toHaveCount(5);
   const rewardFaces = game.dice.map(die => die.value);
 
@@ -137,6 +141,10 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
 
   const offer = game.flameSelection!.offers.find(item => item.flame === 'wellTrained')!;
   const card = page.getByTestId('flame-offer-wellTrained');
+  await expect(card).not.toContainText(FLAMES.wellTrained.description);
+  await card.getByRole('button', { name: `About ${FLAMES.wellTrained.name}` }).click();
+  await expect(page.getByRole('tooltip')).toContainText(FLAMES.wellTrained.description);
+  await page.keyboard.press('Escape');
   await card.getByRole('button', { name: 'Select Flame', exact: true }).click();
   await page.getByRole('button', { name: /^Die 1,/ }).click();
   game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId: 0 }).state;
@@ -189,14 +197,14 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
     if (selected !== choice.dieIds.includes(die.id)) await target.click();
   }
   const wellTrained = Number(wellTrainedMultiplier(2, game.handPlayCounts[choice.hand]).toFixed(4));
-  await expect(page.getByTestId(`well-trained-preview-${choice.hand}`)).toHaveText(`WELL TRAINED ×${wellTrained}`);
-  await expect(page.locator('.selection-preview')).toContainText('XMult');
+  await expect(page.getByTestId(`well-trained-preview-${choice.hand}`)).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toContainText(`* ${wellTrained} • PLAY`);
   await page.setViewportSize({ width: 500, height: 520 });
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   const panel = page.getByTestId('live-score-panel');
   await expect(panel).toBeInViewport();
   await page.clock.install({ time: new Date('2026-09-24T12:00:00Z') });
-  await page.getByText('NORMAL', { exact: true }).click();
+  await setPlaybackSpeed(page, 'NORMAL');
   await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
   const result = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds });
   const xMultIndex = result.events.findIndex(event => event.type === 'HAND_XMULT_CHANGED' && event.flame === 'wellTrained');
