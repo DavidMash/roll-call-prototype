@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { activeEncounterDice, bossTypeForRound, unavailableEncounterHands, wardenUnlockTarget } from '../src/game/bosses';
+import { activeEncounterDice, bossTypeForRound, createBossRuntime, createCursedDie, unavailableEncounterHands, wardenUnlockTarget } from '../src/game/bosses';
 import { dispatch, newRun } from '../src/game/engine';
 import { handOptions, HANDS, HAND_IDS, ultimateHands } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { BossType, GameState } from '../src/game/types';
+import { RUN_STORAGE_KEY } from '../src/game/persistence';
 
 const seedFor = (boss: BossType) => {
   for (let index = 0; index < 100; index++) {
@@ -168,6 +169,53 @@ for (const testCase of [
     await expect(page.locator(`[data-screen-theme="${testCase.type}"]`)).toBeVisible();
   });
 }
+
+test('every boss uses a readable compact mobile status without displacing core gameplay', async ({ page }) => {
+  const seed = 'mobile-boss-layout';
+  await page.setViewportSize({ width: 390, height: 667 });
+  await page.goto(`/?seed=${seed}&speed=instant`);
+  for (const [type, expected] of [
+    ['warden', '2/5 DICE · NEXT 410'],
+    ['caller', '3 PLAYS'],
+    ['fly', 'FLY LOOSE · ×0.5'],
+    ['marathon', '3× TARGET · 7-PLAY COOLDOWN'],
+    ['quickdraw', 'SHOT USED'],
+    ['hexer', 'CURSED DIE · REQUIRED'],
+    ['snakeEyes', '2 SNAKE-EYED'],
+    ['infected', '2 INFECTED FACES'],
+  ] as const) {
+    const game = newRun(seed).state;
+    game.round = 3;
+    game.target = 410;
+    game.boss = createBossRuntime(seed, game.round, type);
+    if (game.boss.type === 'warden') Object.assign(game.boss, { activeDieIds: [0, 1], nextUnlockTarget: 410, pendingReinforcements: 0 });
+    if (game.boss.type === 'marathon') game.boss.cooldowns.pair = 5;
+    if (game.boss.type === 'quickdraw') Object.assign(game.boss, { lowerShotUsed: true, playedLowerHand: 'fullHouse' });
+    if (game.boss.type === 'snakeEyes') game.boss.mutatedFaces = [{ dieId: 0, physicalFace: 1 }, { dieId: 1, physicalFace: 2 }];
+    if (game.boss.type === 'infected') game.boss.infectedFaces = [{ dieId: 0, physicalFace: 1 }, { dieId: 1, physicalFace: 2 }];
+    if (type === 'hexer') game.dice.push(createCursedDie());
+    await page.evaluate(([key, state]) => localStorage.setItem(key, JSON.stringify({ version: 1, state })), [RUN_STORAGE_KEY, game] as const);
+    await page.reload();
+    await ready(page);
+
+    const compact = page.locator('.boss-compact-row');
+    await expect(compact).toBeVisible();
+    await expect(compact).toContainText(expected);
+    await expect(page.locator('.boss-full-details')).toBeHidden();
+    await compact.click();
+    await expect(page.locator('.boss-full-details')).toBeVisible();
+    await compact.click();
+    const fits = await page.evaluate(() => {
+      const root = document.documentElement;
+      const rows = [...document.querySelectorAll<HTMLElement>('[data-testid^="scorecard-row-"]')];
+      const dock = document.querySelector<HTMLElement>('.gameplay-dock')!.getBoundingClientRect();
+      return root.scrollWidth <= innerWidth && root.scrollHeight <= innerHeight
+        && rows.length === 14 && rows.every(row => row.getBoundingClientRect().bottom <= innerHeight)
+        && dock.bottom <= innerHeight;
+    });
+    expect(fits).toBe(true);
+  }
+});
 
 test('scorecard Ultimate badges require the Flame or Bonfire and match the domain ranking', async ({ page }) => {
   const seed = 'ultimate-scorecard-badges';

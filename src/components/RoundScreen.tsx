@@ -65,10 +65,10 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
       <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} deadBoard={deadBoard} idleText={idleText} showXMult={showXMult} />
     </div>
     <BossPanel board={board} />
-    {!busy && !awaitingWardenChoice && deadBoard && board.manualRerollsRemaining > 0 && <Alert color="orange" py={5} title="No playable hands" role="status">
+    {!busy && !awaitingWardenChoice && deadBoard && board.manualRerollsRemaining > 0 && <Alert className="round-status" color="orange" py={5} title="No playable hands" role="status">
       Select dice and use a reroll.
     </Alert>}
-    {!busy && !awaitingWardenChoice && !deadBoard && <Group gap="xs" aria-label="Round options remaining">
+    {!busy && !awaitingWardenChoice && !deadBoard && <Group className="round-status" gap="xs" aria-label="Round options remaining">
       {board.manualRerollsRemaining === 0 && <Alert color="orange" py={4} title="NO REROLLS" />}
       <Text size="xs" fw={800} c={lastPlay ? 'red' : 'dimmed'}>{lastPlay ? 'LAST PLAY' : `${availablePlays} ${availablePlays === 1 ? 'PLAY' : 'PLAYS'} AVAILABLE`}</Text>
     </Group>}
@@ -93,7 +93,7 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
             ? setSelection({ dieIds: selectedWardenDieId === id ? [] : [id], hand: null })
             : setSelection(toggleDie(encounterDice, unavailableHands, effectiveSelection, id, requiredDieIds))} />
         <div className="gameplay-actions">
-          {(board.bonfires.includes('charge') || encounterDice.some(die => die.flame?.id === 'charge')) && <Group gap="xs" justify="flex-end" mb={4}>
+          {(board.bonfires.includes('charge') || encounterDice.some(die => die.flame?.id === 'charge')) && <Group className="charge-controls" gap="xs" justify="flex-end" mb={4}>
             <Text size="xs" fw={700}>⚡ Charge ×{Number(board.chargeXMult.toFixed(4))}</Text>
             <Button size="compact-xs" color={board.chargeArmed ? 'orange' : 'yellow'} variant={board.chargeArmed ? 'filled' : 'light'}
               disabled={busy || (!board.chargeArmed && board.chargeXMult <= 1)} onClick={() => submit({ type: 'TOGGLE_CHARGE' })}>

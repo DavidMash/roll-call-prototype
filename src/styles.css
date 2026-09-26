@@ -69,6 +69,8 @@ button { font: inherit; }
 .fly-marker { color: #d97706; font-size: .66rem; font-weight: 950; }
 .scorecard-totals { min-height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 4px 9px 0; font-variant-numeric: tabular-nums; }
 .scorecard-hint { padding: 4px 8px 0; }
+.compact-label, .hand-name-compact { display: none; }
+.scorecard-detail-line { display: contents; }
 
 .gameplay-dock { position: sticky; bottom: 6px; z-index: 10; }
 .gameplay-dock-content { display: flex; align-items: flex-end; justify-content: center; gap: 12px; }
@@ -248,6 +250,8 @@ button { font: inherit; }
 .screen-theme .hud-phase { color: color-mix(in srgb, var(--screen-secondary) 82%, white); background: color-mix(in srgb, var(--screen-primary) 22%, #11171b); }
 .screen-theme .top-hud .mantine-Progress-section { background: var(--screen-primary); }
 .boss-panel, .boss-preview { border: 1px solid color-mix(in srgb, var(--screen-primary) 45%, transparent); background: color-mix(in srgb, var(--screen-primary) 8%, var(--mantine-color-dark-7)); }
+.boss-compact-row { display: none; }
+.boss-details:not([open]) > .boss-full-details { display: block; }
 .hexer-rule { margin-top: 6px; padding: 6px 8px; border-radius: 6px; background: rgba(132,204,22,.08); }
 .die.cursed-die { border-color: #84cc16; color: #ecfccb; background: linear-gradient(145deg, rgba(77,124,15,.24), var(--mantine-color-dark-8)); box-shadow: inset 0 0 18px rgba(132,204,22,.08); }
 .die.cursed-die .die-id { color: #a3e635 !important; }
@@ -297,3 +301,145 @@ button { font: inherit; }
 @keyframes boss-flash { 35% { box-shadow: inset 0 0 80px color-mix(in srgb, var(--screen-primary) 28%, transparent); } }
 @media (max-width: 720px) { .run-map-track { --map-node-width: 64px; } .run-map-node { height: 54px; font-size: .58rem; } .run-map-transition { padding: 18px 8px; } }
 @media (prefers-reduced-motion: reduce) { .map-connector.route-active::after { transform: scaleX(1); } }
+
+/* Active rounds use a viewport-bound composition on phones and small tablets. */
+@media (max-width: 800px) {
+  html, body, #root { max-width: 100%; overflow-x: hidden; }
+  .app-container.active-gameplay {
+    width: 100%; height: 100dvh; min-height: 0; max-height: 100dvh; overflow: hidden;
+    display: flex; flex-direction: column; box-sizing: border-box;
+    padding-top: max(4px, env(safe-area-inset-top)) !important;
+    padding-bottom: max(4px, env(safe-area-inset-bottom)) !important;
+    padding-left: max(5px, env(safe-area-inset-left)) !important;
+    padding-right: max(5px, env(safe-area-inset-right)) !important;
+  }
+  .active-gameplay .top-hud { position: relative; top: auto; flex: none; }
+  .active-gameplay .top-hud-row { min-height: 0; row-gap: 2px; padding: 3px 5px; }
+  .active-gameplay .hud-stats { min-width: 0; gap: 2px !important; }
+  .active-gameplay .hud-phase { min-width: 0; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-inline: 5px; }
+  .active-gameplay .bonfire-strip { min-width: 0; flex-wrap: nowrap; gap: 2px !important; padding: 2px 4px; overflow: hidden; }
+  .active-gameplay .bonfire-strip > * { min-width: 0; flex-shrink: 1; }
+  .active-gameplay .bonfire-strip .mantine-Badge-root { max-width: 112px; height: 16px; padding-inline: 4px; overflow: hidden; text-overflow: ellipsis; }
+  .active-gameplay .main-content { flex: 1 1 auto; min-width: 0; min-height: 0; margin-top: 4px; overflow: hidden; }
+  .active-gameplay .round-screen {
+    position: relative; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden;
+    display: flex; flex-direction: column; gap: 4px !important;
+  }
+  .active-gameplay .round-screen > * { min-width: 0; flex: none; }
+
+  .active-gameplay .live-score-panel { position: relative; top: auto; z-index: 4; }
+  .active-gameplay .resolution { min-height: 42px; padding: 3px 6px; }
+  .active-gameplay .resolution.active { min-height: 70px; }
+  .active-gameplay .resolution-meta { min-height: 14px; }
+  .active-gameplay .score-accumulator { gap: 12px !important; }
+  .active-gameplay .score-accumulator .mantine-Text-root { font-size: .68rem; }
+  .active-gameplay .score-accumulator .mantine-Text-root:last-child { font-size: .9rem; }
+  .active-gameplay .score-tick { margin: 0; font-size: .86rem; line-height: 1.05; }
+  .active-gameplay .resolution-message { margin-top: 0; }
+
+  .active-gameplay .boss-panel { position: relative; z-index: 6; padding: 0 !important; overflow: visible; }
+  .active-gameplay .boss-details:not([open]) > .boss-full-details { display: none; }
+  .active-gameplay .boss-compact-row {
+    min-width: 0; min-height: 28px; display: flex; align-items: center; gap: 0;
+    padding: 3px 7px; cursor: pointer; list-style: none; overflow: hidden;
+    color: var(--mantine-color-gray-2); font-size: .68rem; letter-spacing: .035em; white-space: nowrap;
+  }
+  .active-gameplay .boss-compact-row::-webkit-details-marker { display: none; }
+  .active-gameplay .boss-compact-row > strong { flex: none; }
+  .active-gameplay .boss-compact-row > span:not(.boss-expand) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .active-gameplay .boss-expand { flex: none; margin-left: auto; padding-left: 6px; font-size: .9rem; }
+  .active-gameplay .boss-details[open] .boss-expand { transform: rotate(180deg); }
+  .active-gameplay .boss-full-details {
+    position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 30;
+    padding: 7px; border: 1px solid color-mix(in srgb, var(--screen-primary) 48%, transparent);
+    border-radius: var(--mantine-radius-md); background: color-mix(in srgb, var(--screen-primary) 10%, #151b20);
+    box-shadow: 0 12px 30px rgba(0,0,0,.55);
+  }
+  .active-gameplay .round-status { min-height: 18px; max-height: 24px; overflow: hidden; }
+  .active-gameplay .round-status.mantine-Alert-root { padding: 2px 6px; }
+  .active-gameplay .flame-goals { padding: 3px 5px !important; overflow: hidden; }
+  .active-gameplay .flame-goals .mantine-Group-root { min-width: 0; flex-wrap: nowrap; gap: 8px !important; }
+  .active-gameplay .flame-goals .mantine-Text-root { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .scorecard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; align-items: stretch; }
+  .scorecard-grid > *, .scorecard-row-copy, .scorecard-detail-line, .scorecard-row-result { min-width: 0; }
+  .active-gameplay .scorecard-panel { flex: 1 1 auto !important; min-height: 0; overflow: hidden; padding: 3px !important; }
+  .active-gameplay .scorecard { height: 100%; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; }
+  .active-gameplay .scorecard-header { grid-row: 1; min-height: 18px; padding: 0 2px 2px; }
+  .active-gameplay .scorecard-header .mantine-Text-root { font-size: .66rem; }
+  .active-gameplay .scorecard-header .mantine-Button-root { min-height: 18px; height: 18px; padding-inline: 5px; font-size: .57rem; }
+  .active-gameplay .scorecard-grid { grid-row: 2; min-height: 0; }
+  .active-gameplay .scorecard-hint { grid-row: 3; max-height: 18px; padding: 2px 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .58rem; }
+  .active-gameplay .scorecard-totals { grid-row: 4; min-height: 20px; padding: 2px 5px 0; }
+  .active-gameplay .scorecard-totals .mantine-Text-root { font-size: .65rem; }
+  .active-gameplay .scorecard-section { height: 100%; min-height: 0; display: grid; grid-template-rows: 17px minmax(0, 1fr); }
+  .active-gameplay .scorecard-section-title { height: 17px; padding-inline: 5px; font-size: .57rem; }
+  .active-gameplay .scorecard-rows { min-height: 0; grid-template-rows: repeat(8, minmax(0, 1fr)); }
+  .active-gameplay .scorecard-row {
+    --button-height: auto; width: 100%; height: auto; min-height: 0; padding: 1px 4px; overflow: hidden;
+  }
+  .active-gameplay .scorecard-row .mantine-Button-inner,
+  .active-gameplay .scorecard-row .mantine-Button-label { min-width: 0; height: 100%; }
+  .active-gameplay .scorecard-row .mantine-Button-label { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px; align-items: center; }
+  .active-gameplay .scorecard-row-copy { align-self: stretch; display: grid; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); gap: 0; align-items: center; overflow: hidden; }
+  .active-gameplay .scorecard-hand-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: .62rem; line-height: 1; }
+  .active-gameplay .scorecard-hand-name > .hand-level { font-size: .49rem; }
+  .active-gameplay .scorecard-detail-line { min-width: 0; display: flex; align-items: center; gap: 3px; overflow: hidden; line-height: 1; }
+  .active-gameplay .scorecard-base { flex: none; margin-left: 0; font-size: .52rem; }
+  .active-gameplay .ultimate-badge,
+  .active-gameplay .scorecard-row-result .mantine-Badge-root { flex: none; height: 12px; padding-inline: 2px; font-size: .4rem; }
+  .active-gameplay .ultimate-badge { width: 12px; }
+  .active-gameplay .well-trained-preview { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: .44rem; }
+  .active-gameplay .well-trained-preview::before { content: 'WT '; }
+  .active-gameplay .scorecard-row-result { flex-direction: column; gap: 0; font-size: .62rem; line-height: 1; }
+  .active-gameplay .wide-label { display: none; }
+  .active-gameplay .compact-label { display: inline; }
+
+  .active-gameplay .gameplay-dock { position: relative; bottom: auto; padding: 3px !important; }
+  .active-gameplay .gameplay-dock-content { min-width: 0; align-items: stretch; gap: 3px; }
+  .active-gameplay .gameplay-dock .dice-row { flex-basis: auto; }
+  .active-gameplay .dice-row { min-width: 0; gap: 3px; }
+  .active-gameplay .die { min-height: 54px; max-height: 66px; padding: 2px; }
+  .active-gameplay .ability-label { height: 14px; font-size: .42rem; }
+  .active-gameplay .pip-face { width: min(58%, 39px); }
+  .active-gameplay .gameplay-actions {
+    min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+    gap: 3px 6px; padding: 0; justify-items: stretch;
+  }
+  .active-gameplay .charge-controls { grid-column: 1 / -1; min-width: 0; margin: 0; flex-wrap: nowrap; }
+  .active-gameplay .selection-preview { min-width: 0; min-height: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+  .active-gameplay .gameplay-actions > .mantine-Group-root:last-child { width: auto; min-width: 0; flex-wrap: nowrap; justify-content: flex-end; }
+  .active-gameplay .gameplay-actions > .mantine-Group-root:last-child .mantine-Button-root { min-height: 40px; padding-inline: 9px; }
+}
+
+@media (max-width: 430px) {
+  .active-gameplay .hand-name-full { display: none; }
+  .active-gameplay .hand-name-compact { display: inline; }
+  .active-gameplay .game-title { font-size: .82rem; letter-spacing: .08em; }
+  .active-gameplay .hud-stat { padding-inline: 2px; font-size: .7rem; }
+  .active-gameplay .hud-lives { padding-inline: 3px; font-size: .72rem; }
+  .active-gameplay .hud-actions { gap: 2px !important; }
+  .active-gameplay .hud-actions .mantine-SegmentedControl-label { padding-inline: 4px; font-size: .53rem; }
+  .active-gameplay .gameplay-actions > .mantine-Group-root:last-child { gap: 4px !important; }
+  .active-gameplay .gameplay-actions > .mantine-Group-root:last-child .mantine-Button-root { padding-inline: 7px; font-size: .7rem; }
+}
+
+@media (max-width: 800px) and (max-height: 700px) {
+  .active-gameplay .top-hud-row { padding-block: 2px; }
+  .active-gameplay .game-title { display: none; }
+  .active-gameplay .top-hud-row { flex-wrap: nowrap !important; }
+  .active-gameplay .hud-stats { order: initial; flex-basis: auto; }
+  .active-gameplay .hud-actions .mantine-SegmentedControl-label {
+    display: block; width: 1ch; min-width: 1ch; max-width: 1ch; margin-inline: 7px; padding: 0;
+    overflow: hidden; text-align: left; white-space: nowrap; font-size: .52rem;
+  }
+  .active-gameplay .resolution { min-height: 36px; }
+  .active-gameplay .resolution.active { min-height: 62px; }
+  .active-gameplay .round-screen { gap: 3px !important; }
+  .active-gameplay .scorecard-header { min-height: 16px; }
+  .active-gameplay .scorecard-section { grid-template-rows: 15px minmax(0, 1fr); }
+  .active-gameplay .scorecard-section-title { height: 15px; }
+  .active-gameplay .scorecard-totals { min-height: 17px; padding-top: 0; }
+  .active-gameplay .die { min-height: 48px; max-height: 54px; }
+  .active-gameplay .gameplay-actions > .mantine-Group-root:last-child .mantine-Button-root { min-height: 36px; }
+}

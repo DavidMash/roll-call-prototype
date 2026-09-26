@@ -25,7 +25,7 @@ export const BOSSES: Record<BossType, BossDefinition> = {
   },
   hexer: {
     name: 'THE HEXER',
-    shortRule: 'A seven-sided Cursed Die joins the battle and must be used in every hand.',
+    shortRule: 'A Cursed Die joins the battle and must be used in every hand.',
     primary: '#84CC16',
     secondary: '#D9F99D',
   },

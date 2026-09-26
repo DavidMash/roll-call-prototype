@@ -5,6 +5,16 @@ import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
 import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands } from '../game/bosses';
 
+const MOBILE_HAND_NAMES: Partial<Record<HandId, string>> = {
+  twoPair: 'Two Pair',
+  threeKind: '3 of a Kind',
+  smallStraight: 'Sm Straight',
+  fullHouse: 'Full House',
+  fourKind: '4 of a Kind',
+  largeStraight: 'Lg Straight',
+  fiveKind: '5 of a Kind',
+};
+
 function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
   title: string; hands: HandId[]; board: Board; selection: Selection; busy: boolean; onSelect: (hand: HandId) => void;
 }) {
@@ -42,18 +52,26 @@ function ScorecardSection({ title, hands, board, selection, busy, onSelect }: {
           disabled={busy || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}
           aria-label={`${definition.name} · Lv. ${stats.level} ${stats.basePips} Pips · ×${stats.baseMultiplier}${isUltimate ? ' · Ultimate Hand' : ''} ${scoreLabel}${consumed ? ' used' : ''}`}>
           <span className="scorecard-row-copy">
-            <span className="scorecard-hand-name">{targeted && <span className="target-marker" title="Target Practice target">◎ TARGET </span>}{hotTarget && <span className="target-marker" title="Hot Streak goal">🔥 NEXT </span>}{board.boss?.type === 'fly' && board.boss.flyHand === hand && <span className="fly-marker" title="The Fly is here">● FLY </span>}{definition.name} <span>· Lv. {stats.level}</span></span>
-            {isUltimate && <Tooltip label="One of your three highest-ranked hands. Hand level ranks first, then trained scoring strength." multiline maw={300} withArrow>
-              <Badge className="ultimate-badge" size="xs" color="grape" variant="light" data-testid={`ultimate-badge-${hand}`}>ULTIMATE</Badge>
-            </Tooltip>}
-            <Tooltip label={`${stats.basePips} Base Pips · ×${stats.baseMultiplier} Base Mult`} position="right" withArrow>
-              <span className="scorecard-base" data-testid={`scorecard-stats-${hand}`}>{stats.basePips} · ×{stats.baseMultiplier}</span>
-            </Tooltip>
-            {showWellTrained && <span className="well-trained-preview" data-testid={`well-trained-preview-${hand}`}>WELL TRAINED ×{Number(wellTrained.toFixed(4))}</span>}
+            <span className="scorecard-hand-name" title={definition.name}>
+              {targeted && <span className="target-marker" title="Target Practice target"><span className="wide-label">◎ TARGET </span><span className="compact-label">◎ </span></span>}
+              {hotTarget && <span className="target-marker" title="Hot Streak goal"><span className="wide-label">🔥 NEXT </span><span className="compact-label">🔥 </span></span>}
+              {board.boss?.type === 'fly' && board.boss.flyHand === hand && <span className="fly-marker" title="The Fly is here"><span className="wide-label">● FLY </span><span className="compact-label">● </span></span>}
+              <span className="hand-name-full">{definition.name}</span><span className="hand-name-compact">{MOBILE_HAND_NAMES[hand] ?? definition.name}</span>
+              <span className="hand-level"> · Lv. {stats.level}</span>
+            </span>
+            <span className="scorecard-detail-line">
+              {isUltimate && <Tooltip label="One of your three highest-ranked hands. Hand level ranks first, then trained scoring strength." multiline maw={300} withArrow>
+                <Badge className="ultimate-badge" size="xs" color="grape" variant="light" data-testid={`ultimate-badge-${hand}`}><span className="wide-label">ULTIMATE</span><span className="compact-label">U</span></Badge>
+              </Tooltip>}
+              <Tooltip label={`${stats.basePips} Base Pips · ×${stats.baseMultiplier} Base Mult`} position="right" withArrow>
+                <span className="scorecard-base" data-testid={`scorecard-stats-${hand}`}>{stats.basePips} · ×{stats.baseMultiplier}</span>
+              </Tooltip>
+              {showWellTrained && <span className="well-trained-preview" data-testid={`well-trained-preview-${hand}`} title={`Well Trained ×${Number(wellTrained.toFixed(4))}`}><span className="wide-label">WELL TRAINED </span>×{Number(wellTrained.toFixed(4))}</span>}
+            </span>
           </span>
           <span className="scorecard-row-result">
             <span data-testid={`scorecard-score-${hand}`}>{score ?? '—'}</span>
-            {cooldown > 0 ? <Badge size="xs" color="orange" variant="light">COOLDOWN {cooldown}</Badge>
+            {cooldown > 0 ? <Badge className="scorecard-state-badge" size="xs" color="orange" variant="light" title={`Cooldown ${cooldown}`}><span className="wide-label">COOLDOWN </span><span className="compact-label">CD </span>{cooldown}</Badge>
               : quickdrawLocked ? <Badge size="xs" color="yellow" variant="light">LOCKED</Badge>
               : consumed && <Badge size="xs" color="gray" variant="light">used</Badge>}
           </span>

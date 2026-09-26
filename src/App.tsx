@@ -66,7 +66,8 @@ export default function App() {
     setRestoreLivesOpen(false);
     game.restart(seed);
   }
-  return <Container ref={appRef} size={1180} px={{ base: 6, sm: 'sm' }} py={8} className="app-container screen-theme"
+  return <Container ref={appRef} size={1180} px={{ base: 6, sm: 'sm' }} py={8}
+    className={`app-container screen-theme ${board.phase === 'round' ? 'active-gameplay' : ''}`}
     data-screen-theme={theme.id} style={{ '--screen-primary': theme.accent, '--screen-secondary': theme.accentStrong,
       '--hud-sticky-offset': `${hudHeight + 8}px` } as React.CSSProperties}>
     <TopHud board={board} speed={speed} setSpeed={setSpeed} openRunInfo={() => setRunInfoOpen(true)} openHelp={() => setHelpOpen(true)}

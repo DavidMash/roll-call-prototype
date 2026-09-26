@@ -350,7 +350,7 @@ test('successful normal encounter shows a reconciled Round Summary before the Sh
   await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
 });
 
-test('live scoring panel stays below the HUD and updates while a mobile scorecard is scrolled', async ({ page }) => {
+test('live scoring panel updates inside the fixed mobile gameplay viewport', async ({ page }) => {
   await page.setViewportSize({ width: 500, height: 520 });
   const game = newRun('sticky-panel').state;
   await page.goto('/?seed=sticky-panel&speed=instant');
@@ -367,15 +367,17 @@ test('live scoring panel stays below the HUD and updates while a mobile scorecar
   const scorecard = page.locator('.scorecard-panel');
   const before = await scorecard.boundingBox();
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
   const after = await scorecard.boundingBox();
-  expect(after!.y).toBeLessThan(before!.y);
+  expect(Math.abs(after!.y - before!.y)).toBeLessThan(1);
   const hudBox = await page.locator('.top-hud').boundingBox();
   const panelBox = await panel.boundingBox();
-  expect(await panel.evaluate(element => getComputedStyle(element).position)).toBe('sticky');
+  expect(await panel.evaluate(element => getComputedStyle(element).position)).toBe('relative');
   expect(panelBox!.y).toBeGreaterThanOrEqual(hudBox!.y + hudBox!.height - 1);
   expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(520);
   expect(panelBox!.height).toBeLessThan(260);
+  expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight
+    && document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
   await page.clock.install({ time: new Date('2026-09-24T12:00:00Z') });
   await page.getByText('NORMAL', { exact: true }).click();
@@ -387,7 +389,8 @@ test('live scoring panel stays below the HUD and updates while a mobile scorecar
   await expect(page.getByTestId('hand-pips')).toHaveText(String(update.handScore!.currentPips));
   await expect(page.getByTestId('hand-multiplier')).toHaveText(`x${update.handScore!.currentMultiplier}`);
   await expect(panel).toBeInViewport();
-  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await expect(page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ })).toBeInViewport();
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
 });
 
 test('HUD hearts are interactive only in Shop and the restore modal enforces the three-life maximum', async ({ page }) => {
@@ -905,6 +908,8 @@ test('purchased Jumping Bean visibly triggers and rerolls on the next initial ga
     if (next.events[index].type === 'MAP_TRANSITION') {
       await expect(page.getByTestId('run-map-transition')).toBeVisible();
       await page.getByTestId('run-map-transition').getByRole('button', { name: 'Continue', exact: true }).click();
+      await page.clock.runFor(281);
+      await expect(page.getByTestId('run-map-transition')).toHaveCount(0);
     } else {
       await expect(page.getByText(`EVENT ${index + 1} / ${next.events.length}`, { exact: true })).toBeVisible();
       if (index < beanIndex) await page.clock.runFor(CONFIG.tickMs.normal);
@@ -924,12 +929,38 @@ test('purchased Jumping Bean visibly triggers and rerolls on the next initial ga
   expect(next.events.filter(event => event.type === 'DIE_ROLLED' && event.dieIds?.includes(0)).length).toBeGreaterThan(1);
 });
 
-test('narrow browser remains usable without horizontal page overflow', async ({ page }) => {
+test('active mobile gameplay stays inside the viewport with a two-column scorecard', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/?speed=instant');
   await ready(page);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await expect(page.getByRole('button', { name: /^Die 5,/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeVisible();
+  for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 667 }, { width: 320, height: 568 }]) {
+    await page.setViewportSize(viewport);
+    const measurements = await page.evaluate(() => {
+      const upper = document.querySelector<HTMLElement>('#scorecard-upper')!.closest<HTMLElement>('.scorecard-section')!.getBoundingClientRect();
+      const lower = document.querySelector<HTMLElement>('#scorecard-lower')!.closest<HTMLElement>('.scorecard-section')!.getBoundingClientRect();
+      const rows = [...document.querySelectorAll<HTMLElement>('[data-testid^="scorecard-row-"]')].map(row => row.getBoundingClientRect());
+      const dock = document.querySelector<HTMLElement>('.gameplay-dock')!.getBoundingClientRect();
+      return {
+        scrollWidth: document.documentElement.scrollWidth,
+        scrollHeight: document.documentElement.scrollHeight,
+        innerWidth: window.innerWidth,
+        innerHeight: window.innerHeight,
+        upper: { x: upper.x, width: upper.width },
+        lower: { x: lower.x, width: lower.width },
+        rowsInside: rows.every(row => row.left >= 0 && row.right <= window.innerWidth && row.top >= 0 && row.bottom <= window.innerHeight),
+        dockBottom: dock.bottom,
+      };
+    });
+    expect(measurements.scrollWidth).toBeLessThanOrEqual(measurements.innerWidth);
+    expect(measurements.scrollHeight).toBeLessThanOrEqual(measurements.innerHeight);
+    expect(measurements.lower.x).toBeGreaterThan(measurements.upper.x + measurements.upper.width - 1);
+    expect(Math.abs(measurements.upper.width - measurements.lower.width)).toBeLessThan(1);
+    expect(measurements.rowsInside).toBe(true);
+    expect(measurements.dockBottom).toBeLessThanOrEqual(measurements.innerHeight);
+    await expect(page.locator('[data-testid^="scorecard-row-"]')).toHaveCount(14);
+    await expect(page.getByRole('button', { name: /^Die 5,/ })).toBeInViewport();
+    await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeInViewport();
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: test.info().outputPath('round-narrow.png'), fullPage: true });
 });

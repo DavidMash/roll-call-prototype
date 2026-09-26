@@ -204,7 +204,9 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   await page.clock.runFor(CONFIG.tickMs.normal * xMultIndex);
   await expect(page.getByTestId('hand-xmult')).toHaveText(`x${result.events[xMultIndex].handScore!.currentXMult}`);
   await expect(panel).toBeInViewport();
-  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight
+    && document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test('Flame Selection only acquires while Shop Manage Die supports arbitrary Stoke and optional acquisition', async ({ page }) => {
