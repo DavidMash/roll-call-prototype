@@ -106,10 +106,13 @@ export function RoundScreen({ board, event, busy, progress, selection, setSelect
             ? `${preview.pips} pips × ${preview.multiplier}${showXMult ? ` × ${preview.xMult} XMult` : ''}${preview.bossFactor !== 1 ? ` × ${preview.bossFactor} Boss` : ''} = ${preview.score} points`
             : effectiveSelection.dieIds.length ? 'Select a complete participating set' : 'Choose a hand or select dice'}</Text>
           <Group gap="xs" wrap="nowrap">
-            {awaitingWardenChoice ? <Button size="sm" color="cyan" disabled={busy || selectedWardenDieId === null}
+            {awaitingWardenChoice ? <Button className="unlock-action" size="sm" color="cyan" disabled={busy || selectedWardenDieId === null}
               onClick={() => submit({ type: 'UNLOCK_WARDEN_DIE', dieId: selectedWardenDieId! })}>UNLOCK DIE</Button> : <>
-              <Button size="sm" variant="default" disabled={busy || !canReroll} aria-label={`Reroll Selected — ${effectiveSelection.dieIds.length}`} onClick={() => submit(manualAction)}>↻ Reroll Selected — {effectiveSelection.dieIds.length}</Button>
-              <Button size="sm" color={lastPlay ? 'red' : undefined} disabled={busy || !valid} onClick={() => submit({ type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds })}>{lastPlay ? 'LAST PLAY' : 'PLAY'}</Button>
+              <Button className="reroll-action" size="sm" variant="default" disabled={busy || !canReroll} aria-label={`Reroll Selected — ${effectiveSelection.dieIds.length}`} onClick={() => submit(manualAction)}>↻ Reroll Selected — {effectiveSelection.dieIds.length}</Button>
+              <Text component="output" className="mobile-score-total" size="xs" fw={800} aria-live="polite" aria-label={preview ? `Projected score ${preview.score} points` : 'No projected score'}>
+                {preview ? `${preview.score} PTS` : ''}
+              </Text>
+              <Button className="play-action" size="sm" color={lastPlay ? 'red' : undefined} disabled={busy || !valid} onClick={() => submit({ type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds })}>{lastPlay ? 'LAST PLAY' : 'PLAY'}</Button>
             </>}
           </Group>
         </div>

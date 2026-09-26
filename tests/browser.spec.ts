@@ -365,6 +365,8 @@ test('live scoring panel updates inside the fixed mobile gameplay viewport', asy
   }
   const panel = page.getByTestId('live-score-panel');
   const scorecard = page.locator('.scorecard-panel');
+  await expect(page.locator('.mobile-score-total')).toHaveText(`${choice.score} PTS`);
+  await expect(page.locator('.mobile-score-total')).toHaveAccessibleName(`Projected score ${choice.score} points`);
   const before = await scorecard.boundingBox();
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
@@ -940,6 +942,8 @@ test('active mobile gameplay stays inside the viewport with a two-column scoreca
       const lower = document.querySelector<HTMLElement>('#scorecard-lower')!.closest<HTMLElement>('.scorecard-section')!.getBoundingClientRect();
       const rows = [...document.querySelectorAll<HTMLElement>('[data-testid^="scorecard-row-"]')].map(row => row.getBoundingClientRect());
       const dock = document.querySelector<HTMLElement>('.gameplay-dock')!.getBoundingClientRect();
+      const reroll = document.querySelector<HTMLElement>('.reroll-action')!.getBoundingClientRect();
+      const play = document.querySelector<HTMLElement>('.play-action')!.getBoundingClientRect();
       return {
         scrollWidth: document.documentElement.scrollWidth,
         scrollHeight: document.documentElement.scrollHeight,
@@ -949,6 +953,7 @@ test('active mobile gameplay stays inside the viewport with a two-column scoreca
         lower: { x: lower.x, width: lower.width },
         rowsInside: rows.every(row => row.left >= 0 && row.right <= window.innerWidth && row.top >= 0 && row.bottom <= window.innerHeight),
         dockBottom: dock.bottom,
+        actions: { rerollX: reroll.x, rerollWidth: reroll.width, playX: play.x, playWidth: play.width },
       };
     });
     expect(measurements.scrollWidth).toBeLessThanOrEqual(measurements.innerWidth);
@@ -957,6 +962,9 @@ test('active mobile gameplay stays inside the viewport with a two-column scoreca
     expect(Math.abs(measurements.upper.width - measurements.lower.width)).toBeLessThan(1);
     expect(measurements.rowsInside).toBe(true);
     expect(measurements.dockBottom).toBeLessThanOrEqual(measurements.innerHeight);
+    expect(measurements.actions.rerollX).toBeLessThan(measurements.actions.playX);
+    expect(measurements.actions.playWidth / measurements.actions.rerollWidth).toBeGreaterThan(1.9);
+    await expect(page.locator('.selection-preview')).toBeHidden();
     await expect(page.locator('[data-testid^="scorecard-row-"]')).toHaveCount(14);
     await expect(page.getByRole('button', { name: /^Die 5,/ })).toBeInViewport();
     await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeInViewport();

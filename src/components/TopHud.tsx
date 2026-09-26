@@ -3,7 +3,6 @@ import { CONFIG } from '../game/config';
 import type { Board } from '../game/types';
 import { FLAMES } from '../game/flames';
 import type { PlaybackSpeed } from '../useGame';
-import { BOSSES } from '../game/bosses';
 
 function HudStat({ testId, icon, label, value }: { testId: string; icon: string; label: string; value: number }) {
   return <div className="hud-stat" data-testid={testId} aria-label={`${label} ${value}`}>
@@ -38,8 +37,7 @@ export function TopHud({ board, speed, setSpeed, openRunInfo, openHelp, openRest
           ? <div className="hud-phase" aria-label={board.phase === 'shop' ? 'Shop phase' : board.phase === 'flameSelection' ? 'Flame Selection phase' : 'Round Summary phase'}>
             {board.phase === 'shop' ? 'SHOP' : board.phase === 'flameSelection' ? 'FLAME SELECTION' : 'SUMMARY'}
           </div>
-          : board.phase === 'round' ? <><HudStat testId="stat-rerolls" icon="↻" label="Rerolls" value={board.manualRerollsRemaining} />
-            {board.boss && <div className="hud-phase" data-testid="boss-hud-label">{BOSSES[board.boss.type].name}</div>}</>
+          : board.phase === 'round' ? <HudStat testId="stat-rerolls" icon="↻" label="Rerolls" value={board.manualRerollsRemaining} />
             : <div className="hud-phase" aria-label={board.phase === 'bust' ? 'Bust phase' : 'Run ended'}>{board.phase === 'bust' ? 'BUST' : 'OVER'}</div>}
       </Group>
       <Group className="hud-actions" gap={6} wrap="nowrap">

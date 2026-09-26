@@ -146,7 +146,7 @@ test('Caller preview hides the call, then encounter reveals it and its counter',
   if (game.boss?.type !== 'caller') throw new Error('Caller fixture failed');
   await expect(page.getByTestId('boss-panel')).toContainText(HANDS[game.boss.calledHand].name);
   await expect(page.getByTestId('boss-panel')).toContainText('3 PLAYS LEFT');
-  await expect(page.getByTestId('boss-hud-label')).toHaveText('THE CALLER');
+  await expect(page.getByTestId('boss-hud-label')).toHaveCount(0);
   await expect(page.locator('[data-screen-theme="caller"]')).toBeVisible();
   await expect(page.getByTestId('live-score-panel')).toHaveCSS('position', 'sticky');
 });
