@@ -1,4 +1,4 @@
-import { newRun } from './engine';
+import { newRun, normalizeGameState } from './engine';
 import type { GameState } from './types';
 
 export const RUN_STORAGE_KEY = 'roll-call:active-run';
@@ -54,7 +54,7 @@ export function loadPersistedRun(storage: RunStorage | null, requestedSeed: stri
     const saved: unknown = JSON.parse(raw);
     if (!isRecord(saved) || saved.version !== RUN_STORAGE_VERSION || !isGameState(saved.state)) return null;
     if (requestedSeed !== null && saved.state.seed !== requestedSeed) return null;
-    return structuredClone(saved.state);
+    return normalizeGameState(saved.state);
   } catch {
     return null;
   }

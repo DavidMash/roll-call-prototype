@@ -116,7 +116,9 @@ export interface StandaloneScoreRecord {
 }
 export interface Die { id: number; value: Rank; faces: Face[]; flame: ActiveFlame | null; owner: 'player' | 'boss' }
 export interface Offer { id: number; enhancement: Enhancement; purchased: boolean }
-export interface TrainingOffer { hand: HandId; purchased: boolean }
+export interface HandTrainingOffer { kind: 'hand'; hand: HandId; purchases: number }
+export interface TeamTrainingOffer { kind: 'team'; purchases: number }
+export type TrainingOffer = HandTrainingOffer | TeamTrainingOffer;
 export interface Shop {
   offers: Offer[];
   trainingOffers: TrainingOffer[];
@@ -273,7 +275,13 @@ export interface VintageGrowthRecord {
   round: number; attempt: number; dieId: number; face: Rank; hand: HandId; playSource: HandPlaySource;
   participation: 'selected' | 'hitchhiker'; from: number; to: number;
 }
-export interface TrainingPurchase { round: number; hand: HandId; fromLevel: number; toLevel: number; cost: number }
+export interface TrainingPurchase {
+  round: number;
+  hand: HandId | 'all';
+  fromLevel?: number;
+  toLevel?: number;
+  cost: number;
+}
 export interface FlameAcquisition { round: number; dieId: number; flame: Flame; replaced: Flame | null }
 export type FlameStokeSource = 'flame_selection' | 'shop';
 export interface FlameStoke {
@@ -459,6 +467,7 @@ export type Action =
   | { type: 'BUY'; offerId: number; dieId: number }
   | { type: 'SELL_ENHANCEMENT'; dieId: number; face: Rank; enhancement: Enhancement }
   | { type: 'TRAIN_HAND'; hand: HandId }
+  | { type: 'TRAIN_ALL_HANDS' }
   | { type: 'CHOOSE_FLAME'; offerId: number; dieId: number }
   | { type: 'STOKE_FLAME'; dieId: number; amount: number }
   | { type: 'CONTINUE_ROUND_SUMMARY' }

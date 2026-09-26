@@ -13,7 +13,8 @@ export const CONFIG = {
   interestCap: 10,
   diceRerollBase: 2,
   offerRerollBase: 3,
-  handTrainingCost: 3,
+  handTrainingCost: 2,
+  teamTrainingCost: 15,
   rerollCostGrowth: 2,
   bonusPips: 10,
   standaloneMultiplier: 1,
@@ -31,6 +32,12 @@ export const interestForGold = (heldGold: number) => Math.min(CONFIG.interestCap
   Math.floor(Math.max(0, heldGold) / CONFIG.interestInterval));
 export const diceRerollCost = (count: number) => CONFIG.diceRerollBase * CONFIG.rerollCostGrowth ** count;
 export const offerRerollCost = (count: number) => CONFIG.offerRerollBase * CONFIG.rerollCostGrowth ** count;
+function escalatingTrainingCost(base: number, purchases: number): number {
+  if (!Number.isInteger(purchases) || purchases < 0) throw new Error('Training purchase count must be a non-negative integer.');
+  return base * 2 ** purchases;
+}
+export const handTrainingCost = (purchases: number) => escalatingTrainingCost(CONFIG.handTrainingCost, purchases);
+export const teamTrainingCost = (purchases: number) => escalatingTrainingCost(CONFIG.teamTrainingCost, purchases);
 export function lifeRestoreCost(purchases: number): number {
   if (!Number.isInteger(purchases) || purchases < 0) throw new Error('Life restore count must be a non-negative integer.');
   const opening = [25, 40, 60, 90];

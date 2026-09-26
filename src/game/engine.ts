@@ -1,17 +1,30 @@
-import { CONFIG, diceRerollCost, lifeRestoreCost, offerRerollCost } from './config';
+import { CONFIG, diceRerollCost, handTrainingCost, lifeRestoreCost, offerRerollCost, teamTrainingCost } from './config';
 import { activeFace, createDice } from './dice';
 import { Resolver } from './effects';
 import { attachmentError, enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, stacks } from './enhancements';
 import { activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasOwnedFlame, isFlame } from './flames';
-import { HANDS, initialHandLevels, initialHandPlayCounts, isValidSelection } from './hands';
+import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, isValidSelection } from './hands';
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
 import { activeEncounterDice, bossSchedule, unavailableEncounterHands } from './bosses';
-import type { Action, Board, GameState, RandomSource, Resolution } from './types';
+import type { Action, Board, GameState, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
 
 const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`${seed}:round:${round}:attempt:${attempt}`);
 
-function normalizedState(state: GameState): GameState {
+function normalizedTrainingOffer(offer: TrainingOffer | { hand: HandId; purchased?: boolean }): TrainingOffer {
+  if ('kind' in offer) {
+    const purchases = Number.isFinite(offer.purchases) ? Math.max(0, Math.floor(offer.purchases)) : 0;
+    return { ...offer, purchases };
+  }
+  return { kind: 'hand', hand: offer.hand, purchases: offer.purchased ? 1 : 0 };
+}
+
+function normalizeShop(shop: Shop): void {
+  shop.trainingOffers = shop.trainingOffers.map(offer => normalizedTrainingOffer(offer));
+  shop.lifeRestores = Math.max(0, Math.floor(shop.lifeRestores ?? 0));
+}
+
+export function normalizeGameState(state: GameState): GameState {
   const next = structuredClone(state);
   const legacy = next as GameState & { flameReward?: GameState['flameSelection'] };
   if (!next.flameSelection && legacy.flameReward) next.flameSelection = legacy.flameReward;
@@ -39,8 +52,9 @@ function normalizedState(state: GameState): GameState {
   next.bonfires = next.bonfires.filter(isFlame);
   if (next.shop) {
     next.shop.offers = next.shop.offers.filter(offer => isEnhancement(offer.enhancement));
-    next.shop.lifeRestores = Math.max(0, Math.floor(next.shop.lifeRestores ?? 0));
+    normalizeShop(next.shop);
   }
+  if (next.roundCheckpoint?.shop) normalizeShop(next.roundCheckpoint.shop);
   if (next.flameSelection) next.flameSelection.offers = next.flameSelection.offers.filter(offer => isFlame(offer.flame));
   next.roundSummary ??= null;
   next.stats.jumpingBeanFreePlays ??= [];
@@ -173,9 +187,14 @@ export function validateAction(state: Board, action: Action): string | null {
     if (state.gold < lifeRestoreCost(state.shop.lifeRestores)) return 'Not enough gold to restore a life.';
   }
   if (action.type === 'TRAIN_HAND') {
-    const offer = state.shop.trainingOffers.find(item => item.hand === action.hand);
-    if (!offer || offer.purchased) return 'Choose an available hand training offer.';
-    if (state.gold < CONFIG.handTrainingCost) return 'Not enough gold to train this hand.';
+    const offer = state.shop.trainingOffers.find(item => item.kind === 'hand' && item.hand === action.hand);
+    if (!offer) return 'Choose an available hand training offer.';
+    if (state.gold < handTrainingCost(offer.purchases)) return 'Not enough gold to train this hand.';
+  }
+  if (action.type === 'TRAIN_ALL_HANDS') {
+    const offer = state.shop.trainingOffers.find(item => item.kind === 'team');
+    if (!offer) return 'Choose an available Team Training offer.';
+    if (state.gold < teamTrainingCost(offer.purchases)) return 'Not enough gold for Team Training.';
   }
   if (action.type === 'REROLL_DICE' && state.gold < diceRerollCost(state.shop.diceRerolls)) return 'Not enough gold to reroll the shop dice.';
   if (action.type === 'REROLL_OFFERS' && state.gold < offerRerollCost(state.shop.offerRerolls)) return 'Not enough gold to reroll enhancements.';
@@ -216,7 +235,7 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
 }
 
 export function dispatch(state: GameState, action: Action, random?: RandomSource): Resolution {
-  const normalized = normalizedState(state);
+  const normalized = normalizeGameState(state);
   const normalizationChangedState = JSON.stringify(normalized) !== JSON.stringify(state);
   const error = validateAction(normalized, action);
   if (error) return { state: normalizationChangedState ? normalized : state, events: [], error };
@@ -328,16 +347,31 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         resolver.emit({ type: 'OFFERS_REFRESHED', message: 'Three fresh distinct enhancement offers' });
         break;
       case 'TRAIN_HAND': {
-        const offer = next.shop!.trainingOffers.find(item => item.hand === action.hand)!;
+        const offer = next.shop!.trainingOffers.find(item => item.kind === 'hand' && item.hand === action.hand)!;
         const fromLevel = next.handLevels[action.hand];
         const toLevel = fromLevel + 1;
-        resolver.spendGold(CONFIG.handTrainingCost, `Trained ${HANDS[action.hand].name} to level ${toLevel}: −${CONFIG.handTrainingCost} gold`, 'handTraining');
+        const cost = handTrainingCost(offer.purchases);
+        resolver.spendGold(cost, `Trained ${HANDS[action.hand].name} to level ${toLevel}: −${cost} gold`, 'handTraining');
         next.handLevels[action.hand] = toLevel;
-        offer.purchased = true;
-        next.stats.trainingPurchases.push({ round: next.round, hand: action.hand, fromLevel, toLevel, cost: CONFIG.handTrainingCost });
+        offer.purchases++;
+        next.stats.trainingPurchases.push({ round: next.round, hand: action.hand, fromLevel, toLevel, cost });
         next.stats.trainingPurchasesTotal++;
-        next.stats.trainingGoldSpent += CONFIG.handTrainingCost;
-        resolver.emit({ type: 'TRAINING_PURCHASED', hand: action.hand, goldSpendSource: 'handTraining', message: `${HANDS[action.hand].name} trained to level ${toLevel}` });
+        next.stats.trainingGoldSpent += cost;
+        resolver.emit({ type: 'TRAINING_PURCHASED', hand: action.hand, goldSpendSource: 'handTraining', amount: cost,
+          message: `${HANDS[action.hand].name} trained to level ${toLevel} · next training ${handTrainingCost(offer.purchases)} Gold` });
+        break;
+      }
+      case 'TRAIN_ALL_HANDS': {
+        const offer = next.shop!.trainingOffers.find(item => item.kind === 'team')!;
+        const cost = teamTrainingCost(offer.purchases);
+        resolver.spendGold(cost, `Team Training: −${cost} gold`, 'handTraining');
+        for (const hand of HAND_IDS) next.handLevels[hand]++;
+        offer.purchases++;
+        next.stats.trainingPurchases.push({ round: next.round, hand: 'all', cost });
+        next.stats.trainingPurchasesTotal++;
+        next.stats.trainingGoldSpent += cost;
+        resolver.emit({ type: 'TRAINING_PURCHASED', goldSpendSource: 'handTraining', amount: cost,
+          message: `Team Training raised every hand by 1 level · next training ${teamTrainingCost(offer.purchases)} Gold` });
         break;
       }
       case 'RESTORE_LIFE': {

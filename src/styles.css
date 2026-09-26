@@ -144,6 +144,7 @@ button { font: inherit; }
 .flame-goals { border-color: rgba(255, 140, 70, .28); }
 .training-card, .offer { min-width: 0; background: var(--mantine-color-dark-8); border: 1px solid rgba(255,255,255,.045); }
 .training-card { min-height: 100px; }
+.team-training-card { border-color: rgba(250, 176, 5, .52); background: linear-gradient(145deg, rgba(250,176,5,.16), rgba(134,80,0,.08)); box-shadow: inset 0 0 22px rgba(250,176,5,.06); }
 .offer { min-height: 102px; }
 .offer[draggable="true"] { cursor: grab; user-select: none; }
 .offer.selected { border-color: var(--mantine-color-teal-5); background: rgba(18,184,134,.1); }

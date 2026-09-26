@@ -142,6 +142,7 @@ function findTrainingSeed() {
     if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
     if (game.phase !== 'shop' || game.bust) continue;
     for (const offer of game.shop!.trainingOffers) {
+      if (offer.kind !== 'hand') continue;
       const trained = dispatch(game, { type: 'TRAIN_HAND', hand: offer.hand }).state;
       const next = dispatch(trained, { type: 'NEXT_ROUND' }).state;
       const option = handOptions(next.dice, next.consumed).find(item => item.id === offer.hand && !item.consumed);
@@ -152,6 +153,16 @@ function findTrainingSeed() {
     }
   }
   throw new Error('No suitable Hand Training seed found');
+}
+function findTeamTrainingSeed() {
+  for (let i = 0; i < 1000; i++) {
+    const seed = `team-training-browser-${i}`;
+    let game = newRun(seed).state;
+    for (let step = 0; step < 12 && game.phase === 'round'; step++) game = dispatch(game, automaticAction(game)).state;
+    if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
+    if (game.phase === 'shop' && !game.bust && game.shop!.trainingOffers.some(offer => offer.kind === 'team')) return seed;
+  }
+  throw new Error('No Team Training seed found');
 }
 function findStickyStackSeed() {
   for (let i = 0; i < 3000; i++) {
@@ -451,6 +462,7 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   const hand = fixture.hand;
   const level1 = handStats(hand, 1);
   const level2 = handStats(hand, 2);
+  const level3 = handStats(hand, 3);
   await expect(page.locator('[data-testid^="training-offer-"]')).toHaveCount(3);
   await expect(page.getByTestId(`training-pips-${hand}`)).toHaveText(`${level1.basePips} → ${level2.basePips} Pips`);
   await expect(page.getByTestId(`training-mult-${hand}`)).toHaveText(`×${level1.baseMultiplier} → ×${level2.baseMultiplier} Mult`);
@@ -461,8 +473,11 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   await matchBoard(page, game);
   expect(game.gold).toBe(goldBefore - CONFIG.handTrainingCost);
   expect(game.handLevels[hand]).toBe(2);
-  await expect(page.getByTestId(`train-${hand}`)).toBeDisabled();
-  await expect(page.getByTestId(`training-offer-${hand}`)).toContainText('Purchased');
+  await expect(page.getByTestId(`train-${hand}`)).toBeEnabled();
+  await expect(page.getByTestId(`training-offer-${hand}`)).toContainText('Trained ×1');
+  await expect(page.getByTestId(`train-${hand}`)).toHaveText('Train · 4 gold');
+  await expect(page.getByTestId(`training-pips-${hand}`)).toHaveText(`${level2.basePips} → ${level3.basePips} Pips`);
+  await expect(page.getByTestId(`training-mult-${hand}`)).toHaveText(`×${level2.baseMultiplier} → ×${level3.baseMultiplier} Mult`);
 
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
@@ -504,6 +519,16 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   expect(Object.values(game.scoreByHand).every(Number.isInteger)).toBe(true);
   await expect(page.getByTestId(`scorecard-score-${hand}`)).toHaveText(String(scored.score));
   await expect(page.getByTestId('scorecard-round-total')).toHaveText(`${scored.score} / ${game.target}`);
+});
+
+test('Team Training occupies one existing slot and presents itself as a special all-hands offer', async ({ page }) => {
+  await reachShop(page, findTeamTrainingSeed());
+  await expect(page.locator('[data-testid^="training-offer-"]')).toHaveCount(3);
+  const team = page.getByTestId('training-offer-team');
+  await expect(team).toHaveClass(/team-training-card/);
+  await expect(team).toContainText('Team Training');
+  await expect(team).toContainText('Train ALL hands +1 level.');
+  await expect(page.getByTestId('train-team')).toHaveText('Train ALL · 15 gold');
 });
 
 test('full seeded run: select/play, clear, buy onto a face, reroll dice, next round, lose and export', async ({ page, context }) => {

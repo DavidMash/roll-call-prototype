@@ -93,9 +93,9 @@ export function ShopScreen({ board, event, busy, progress, selectedOffer, setSel
         <Group justify="space-between" className="section-heading">
           <Text fw={700} size="sm" tt="uppercase" lts=".08em">Hand Training</Text>
         </Group>
-        <div className="shop-grid training-grid">{shop.trainingOffers.map(item => <TrainingCard key={item.hand} offer={item}
-          level={board.handLevels[item.hand]} gold={board.gold} busy={busy}
-          onTrain={() => submit({ type: 'TRAIN_HAND', hand: item.hand })} />)}</div>
+        <div className="shop-grid training-grid">{shop.trainingOffers.map(item => <TrainingCard
+          key={item.kind === 'team' ? 'team' : item.hand} offer={item} handLevels={board.handLevels} gold={board.gold} busy={busy}
+          onTrain={() => submit(item.kind === 'team' ? { type: 'TRAIN_ALL_HANDS' } : { type: 'TRAIN_HAND', hand: item.hand })} />)}</div>
       </Paper>
       <Paper p="xs" className="shop-section">
         <Group justify="space-between" className="section-heading">

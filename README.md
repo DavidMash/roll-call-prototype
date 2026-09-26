@@ -72,7 +72,7 @@ One physical face on every player die starts infected. An infected face keeps it
 
 ## Gold and the Shop
 
-The normal Shop is the only place Gold is spent. It contains enhancement purchases and refreshes, Hand Training, paid dice rerolls, Flame Stoke controls, and life restoration. Gold may still be earned during scoring.
+The normal Shop is the only place Gold is spent. It contains enhancement purchases and refreshes, Hand Training, paid dice rerolls, Flame Stoke controls, and life restoration. Individual Hand Training offers are repeatable within a Shop and cost `2, 4, 8, 16…` independently per hand. Team Training can replace one of the three training slots, raises every hand by one level, and costs `15, 30, 60, 120…` independently. A newly reached Shop resets training prices; returning to the same Shop after a Bust preserves them. Gold may still be earned during scoring.
 
 Every successful clear pays, in order:
 

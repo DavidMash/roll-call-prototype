@@ -752,9 +752,12 @@ export class Resolver {
     });
   }
   freshTrainingOffers(): void {
-    const pool = [...HAND_IDS];
+    const pool: (HandId | 'team')[] = [...HAND_IDS, 'team'];
     this.state.shop!.trainingOffers = Array.from({ length: 3 }, () => {
-      const [hand] = pool.splice(randomIndex(this.rng, pool.length), 1); return { hand, purchased: false };
+      const [selection] = pool.splice(randomIndex(this.rng, pool.length), 1);
+      return selection === 'team'
+        ? { kind: 'team' as const, purchases: 0 }
+        : { kind: 'hand' as const, hand: selection, purchases: 0 };
     });
   }
   freshFlameOffers(): void {

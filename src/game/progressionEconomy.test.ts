@@ -83,7 +83,11 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     state.gold = 37;
     state.shop = {
       offers: [{ id: 41, enhancement: 'bonus', purchased: true }, { id: 42, enhancement: 'workout', purchased: false }],
-      trainingOffers: [{ hand: 'ones', purchased: true }, { hand: 'pair', purchased: false }],
+      trainingOffers: [
+        { kind: 'hand', hand: 'ones', purchases: 2 },
+        { kind: 'hand', hand: 'pair', purchases: 0 },
+        { kind: 'team', purchases: 1 },
+      ],
       diceRerolls: 2,
       offerRerolls: 1,
       lifeRestores: 0,
