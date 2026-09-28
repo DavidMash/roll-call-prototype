@@ -1,6 +1,6 @@
 import { CONFIG } from './config';
 import { hashSeed, SeededRng } from './rng';
-import { handStats, HANDS, HAND_IDS, LOWER_HAND_IDS } from './hands';
+import { handOptions, handStats, HANDS, HAND_IDS, LOWER_HAND_IDS } from './hands';
 import type { Board, BossRuntimeState, BossType, Die, HandId, HandLevels, Rank } from './types';
 
 export interface BossDefinition {
@@ -13,7 +13,7 @@ export interface BossDefinition {
 export const BOSSES: Record<BossType, BossDefinition> = {
   caller: {
     name: 'THE CALLER',
-    shortRule: 'Answer the called hand within three plays.',
+    shortRule: 'Answer Calls by fixed manual-hand deadlines: 3, 6, 9, …',
     primary: '#A855F7',
     secondary: '#D946EF',
   },
@@ -154,6 +154,8 @@ export function createBossRuntime(seed: string, round: number, type: BossType): 
       satisfyingSource: null,
       callsCompleted: 0,
       callsMissed: 0,
+      manualHandsPlayed: 0,
+      callDeadline: 3,
     };
     case 'warden': return {
       type,
@@ -218,11 +220,19 @@ export function bossHandAvailable(state: Pick<Board, 'boss' | 'consumed'>, hand:
   return !unavailableEncounterHands(state).includes(hand);
 }
 
+export function isLastPlay(state: Pick<Board, 'boss' | 'consumed' | 'dice' | 'manualRerollsRemaining'>): boolean {
+  if (state.manualRerollsRemaining !== 0) return false;
+  const required = requiredEncounterDieIds(state);
+  return handOptions(activeEncounterDice(state), unavailableEncounterHands(state), required)
+    .filter(option => !option.consumed).length === 1;
+}
+
 export function cleanupTemporaryBossFaces(dice: Die[]): void {
   for (const die of dice.filter(item => item.owner === 'player')) die.faces.forEach((face, index) => {
     if (face.snakeEyed) face.rank = (index + 1) as Rank;
     delete face.snakeEyed;
     delete face.infected;
+    delete face.magneticUsed;
   });
 }
 

@@ -21,7 +21,7 @@ export const ENHANCEMENTS: Record<Enhancement, EnhancementDefinition> = {
   workout: definition('Workout', `After scoring, this face permanently gains +${CONFIG.workoutIncrement} scoring pip.`, 3, 2, true),
   missingLink: definition('Missing Link', 'Wild rank for straights. Scores its actual pips.', 2, 1, false, 1),
   mirror: definition('Mirror', 'Wild matching rank for Pair, Two Pair, kind hands, and Full House. Scores actual pips.', 2, 1, false, 1),
-  magnetic: definition('Magnetic', 'A held Magnetic face attracts rerolled dice to one of their Magnetic faces. Bump takes priority.', 3, 2, false, 1),
+  magnetic: definition('Magnetic', 'Once per round, a held Magnetic face attracts rerolled dice to their Magnetic faces. Participating faces are then used. Bump takes priority.', 3, 2, false, 1),
   sticky: definition('Sticky', '50% chance to prevent a scoring or Jumping Bean reroll. Stacks cap at 3 (87.5%).', 2, 1, true, 3),
   slippy: definition('Slippy', 'Reroll this die after a played hand if the round continues, even if it did not score.', 2, 1, false, 1),
   hitchhiker: definition('Hitchhiker', 'When held out of a played hand, may join as a scoring die. Stacks cap at 3 (87.5%).', 2, 1, true, 3),

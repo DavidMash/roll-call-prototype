@@ -10,7 +10,7 @@ import type { Action, Board, GameEvent } from '../game/types';
 import { DiceRow } from './DiceRow';
 import { HandScorecard } from './HandList';
 import { ScoreResolution } from './ScoreResolution';
-import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands } from '../game/bosses';
+import { activeEncounterDice, isLastPlay, requiredEncounterDieIds, unavailableEncounterHands } from '../game/bosses';
 import { BossPanel } from './BossPanel';
 import { CONFIG } from '../game/config';
 import type { DiceDisplay } from '../uiSettings';
@@ -56,6 +56,16 @@ export function RoundScreen({ board, event, busy, progress, diceDisplay, selecti
   const manualAction: Action = { type: 'MANUAL_REROLL', dieIds: effectiveSelection.dieIds };
   const canReroll = validateAction(board, manualAction) === null;
   const deadBoard = !hasPlayableHand(encounterDice, unavailableHands, requiredDieIds);
+  const lastPlay = valid && isLastPlay(board);
+  const chargeAction: Action = { type: 'TOGGLE_CHARGE', hand: effectiveSelection.hand, dieIds: effectiveSelection.dieIds };
+  const canToggleCharge = validateAction(board, chargeAction) === null;
+  const chargeDieId = encounterDice.find(die => die.flame?.id === 'charge')?.id;
+  function changeSelection(next: Selection) {
+    if (board.chargeArmed && !board.bonfires.includes('charge') && chargeDieId !== undefined && !next.dieIds.includes(chargeDieId)) {
+      submit({ type: 'TOGGLE_CHARGE', hand: next.hand, dieIds: next.dieIds });
+    }
+    setSelection(next);
+  }
   const hotFlame = board.dice.find(die => die.flame?.id === 'hotStreak')?.flame;
   const hotInvestment = board.bonfires.includes('hotStreak') ? 100 : activeFlameInvestment(hotFlame);
   const targetFlame = board.dice.find(die => die.flame?.id === 'targetPractice')?.flame;
@@ -93,7 +103,7 @@ export function RoundScreen({ board, event, busy, progress, diceDisplay, selecti
     <Paper className="scorecard-panel" p="xs">
       <HandScorecard board={board} selection={effectiveSelection} busy={busy || awaitingWardenChoice} canSubmit={valid && !busy && !awaitingWardenChoice}
         submitPreview={preview}
-        onSelect={hand => setSelection(selectHand(encounterDice, unavailableHands, effectiveSelection, hand, requiredDieIds))}
+        onSelect={hand => changeSelection(selectHand(encounterDice, unavailableHands, effectiveSelection, hand, requiredDieIds))}
         onSubmit={() => submit({ type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds })} />
     </Paper>
     <Paper className="gameplay-dock" p="xs">
@@ -105,12 +115,12 @@ export function RoundScreen({ board, event, busy, progress, diceDisplay, selecti
           lockedUntilByDieId={wardenBoss ? lockedUntilByDieId : undefined}
           onClick={id => awaitingWardenChoice
             ? setSelection({ dieIds: selectedWardenDieId === id ? [] : [id], hand: null })
-            : setSelection(toggleDie(encounterDice, unavailableHands, effectiveSelection, id, requiredDieIds))} />
+            : changeSelection(toggleDie(encounterDice, unavailableHands, effectiveSelection, id, requiredDieIds))} />
         <div className="gameplay-actions">
           {(board.bonfires.includes('charge') || encounterDice.some(die => die.flame?.id === 'charge')) && <Group className="charge-controls" gap="xs" justify="flex-end" mb={4}>
             <Text size="xs" fw={700}>⚡ Charge ×{Number(board.chargeXMult.toFixed(4))}</Text>
             <Button size="compact-xs" color={board.chargeArmed ? 'orange' : 'yellow'} variant={board.chargeArmed ? 'filled' : 'light'}
-              disabled={busy || (!board.chargeArmed && board.chargeXMult <= 1)} onClick={() => submit({ type: 'TOGGLE_CHARGE' })}>
+              disabled={busy || !canToggleCharge} onClick={() => submit(chargeAction)}>
               {board.chargeArmed ? 'ARMED — cancel' : `Use Charge ×${Number(board.chargeXMult.toFixed(4))}`}
             </Button>
           </Group>}
@@ -122,9 +132,9 @@ export function RoundScreen({ board, event, busy, progress, diceDisplay, selecti
               onClick={() => submit({ type: 'UNLOCK_WARDEN_DIE', dieId: selectedWardenDieId! })}>UNLOCK DIE</Button> : <>
               <Button className="reroll-action" size="sm" variant="default" disabled={busy || !canReroll}
                 onClick={() => submit(manualAction)}>Reroll {CONFIG.manualRerollsPerRound - board.manualRerollsRemaining + effectiveSelection.dieIds.length} / {CONFIG.manualRerollsPerRound}</Button>
-              <Button className="play-action" size="sm" aria-label="PLAY" disabled={busy || !valid}
+              <Button className="play-action" size="sm" aria-label={lastPlay ? 'LAST PLAY' : 'PLAY'} disabled={busy || !valid}
                 onClick={() => submit({ type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds })}>
-                {preview ? `${preview.pips} x ${preview.multiplier}${preview.hasXMult ? ` * ${preview.effectiveXMult}` : ''} • PLAY` : 'PLAY'}
+                {preview ? `${preview.pips} x ${preview.multiplier}${preview.hasXMult ? ` * ${preview.effectiveXMult}` : ''} • ${lastPlay ? 'LAST PLAY' : 'PLAY'}` : 'PLAY'}
               </Button>
             </>}
           </Group>

@@ -6,7 +6,7 @@ export type Enhancement =
   | 'missingLink' | 'mirror' | 'magnetic' | 'sticky' | 'slippy'
   | 'hitchhiker' | 'weighted' | 'jackpot' | 'bump' | 'vintage';
 export type Flame =
-  | 'ultimate' | 'minigun' | 'hailMary' | 'charge' | 'personalTrainer'
+  | 'ultimate' | 'minigun' | 'hailMary' | 'fullOfGrace' | 'charge' | 'personalTrainer'
   | 'dragonsHoard' | 'wellTrained' | 'targetPractice'
   | 'hotStreak' | 'moneyToBurn' | 'lowball' | 'straightShooter' | 'doubleDown';
 export type HandId =
@@ -33,6 +33,8 @@ export interface CallerBossState {
   satisfyingSource: HandPlaySource | null;
   callsCompleted?: number;
   callsMissed?: number;
+  manualHandsPlayed?: number;
+  callDeadline?: number;
 }
 export interface WardenBossState {
   type: 'warden';
@@ -102,6 +104,7 @@ export interface Face {
   vintageSellValue?: number;
   snakeEyed?: boolean;
   infected?: boolean;
+  magneticUsed?: boolean;
 }
 export interface ActiveFlame { id: Flame; investedGold: number }
 export interface StandaloneScoreRecord {
@@ -463,7 +466,7 @@ export type Action =
   | { type: 'PLAY'; hand: HandId; dieIds: number[] }
   | { type: 'MANUAL_REROLL'; dieIds: number[] }
   | { type: 'UNLOCK_WARDEN_DIE'; dieId: number }
-  | { type: 'TOGGLE_CHARGE' }
+  | { type: 'TOGGLE_CHARGE'; hand?: HandId | null; dieIds?: number[] }
   | { type: 'BUY'; offerId: number; dieId: number }
   | { type: 'SELL_ENHANCEMENT'; dieId: number; face: Rank; enhancement: Enhancement }
   | { type: 'TRAIN_HAND'; hand: HandId }

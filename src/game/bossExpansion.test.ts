@@ -47,13 +47,13 @@ describe('The Caller continuous calls', () => {
     state.boss.calledHand = 'ones';
     state.dice[0].value = 1;
     state = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.3)).state;
-    expect(state.boss).toMatchObject({ type: 'caller', playsRemaining: 3, satisfied: false, callsCompleted: 1 });
+    expect(state.boss).toMatchObject({ type: 'caller', playsRemaining: 5, callDeadline: 6, manualHandsPlayed: 1, satisfied: false, callsCompleted: 1 });
     if (state.boss?.type !== 'caller') throw new Error('Caller fixture failed');
     expect(state.boss.calledHand).not.toBe('ones');
     expect(state.consumed).not.toContain(state.boss.calledHand);
   });
 
-  it('halves progress on the third miss before checking for a clear', () => {
+  it('checks the third scored hand before applying a missed-call penalty', () => {
     let state = bossRound('caller');
     if (state.boss?.type !== 'caller') throw new Error('Caller fixture failed');
     state.boss.calledHand = 'fullHouse';
@@ -62,12 +62,12 @@ describe('The Caller continuous calls', () => {
       state.dice[0].value = (index + 1) as Rank;
       state = dispatch(state, { type: 'PLAY', hand, dieIds: [0] }, constant(.2)).state;
     }
-    expect(state.score).toBe(14);
-    expect(state.phase).toBe('round');
-    expect(state.boss).toMatchObject({ type: 'caller', playsRemaining: 3, callsMissed: 1 });
+    expect(state.score).toBe(27);
+    expect(state.phase).toBe('roundSummary');
+    expect(state.boss).toMatchObject({ type: 'caller', playsRemaining: 0, callsMissed: 1 });
   });
 
-  it('clears only after the third-miss penalty when the halved score still meets target', () => {
+  it('clears without the third-miss penalty when the scored hand reaches target', () => {
     let state = bossRound('caller');
     if (state.boss?.type !== 'caller') throw new Error('Caller fixture failed');
     state.boss.calledHand = 'fullHouse';
@@ -79,7 +79,7 @@ describe('The Caller continuous calls', () => {
     expose(state, [6, 6, 6, 6, 6]);
     state = dispatch(state, { type: 'PLAY', hand: 'fiveKind', dieIds: [0, 1, 2, 3, 4] }, constant(.2)).state;
     expect(state.score).toBeGreaterThanOrEqual(100);
-    expect(state.score).toBeLessThan(242);
+    expect(state.score).toBe(242);
     expect(state.phase).toBe('roundSummary');
   });
 
@@ -93,7 +93,7 @@ describe('The Caller continuous calls', () => {
     state.dice[0].faces[0].enhancements.jumpingBean = 1;
     state.dice[0].faces[0].enhancements.sticky = 1;
     const result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(0)).state;
-    expect(result.boss).toMatchObject({ type: 'caller', playsRemaining: 3, callsCompleted: 1 });
+    expect(result.boss).toMatchObject({ type: 'caller', playsRemaining: 6, callDeadline: 6, manualHandsPlayed: 0, callsCompleted: 1 });
     expect(result.stats.callerEvents.at(-1)).toMatchObject({ calledHand: 'ones', satisfied: true, source: 'jumpingBean' });
   });
 });

@@ -1,8 +1,8 @@
-import { CONFIG, interestForGold, roundReward, targetForRound } from './config';
+import { bossRewardForRound, CONFIG, interestForGold, roundReward, targetForRound } from './config';
 import { activeFace, rollPhysicalDie, scoringPips, weightedSourceFace } from './dice';
 import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, stacks } from './enhancements';
 import {
-  activeFlameId, activeFlameInvestment, captureHandStart, chargeGainPerRoll,
+  activeFlameId, activeFlameInvestment, captureHandStart, chargeGainPerScoringDie,
   FLAMES, FLAME_IDS, handXMultContributions, HOT_STREAK_SEQUENCE,
   ownedFlameIds, trainerChance,
 } from './flames';
@@ -169,20 +169,24 @@ export class Resolver {
     return total;
   }
 
-  private addChargeForRoll(dieId: number): void {
-    let gain = 0;
-    let sourceDie: number | null = dieId;
-    if (this.state.bonfires.includes('charge')) { gain = 1; sourceDie = null; }
-    else {
-      const flame = this.state.dice.find(die => die.id === dieId)?.flame;
-      if (activeFlameId(flame) === 'charge') gain = chargeGainPerRoll(activeFlameInvestment(flame));
+  private addChargeForScoring(scoringDieIds: number[]): void {
+    const bonfire = this.state.bonfires.includes('charge');
+    const chargeDie = this.state.dice.find(die => activeFlameId(die.flame) === 'charge');
+    const investment = bonfire ? 100 : activeFlameInvestment(chargeDie?.flame);
+    const perDie = chargeGainPerScoringDie(investment);
+    if (perDie <= 0) return;
+    for (const dieId of [...new Set(scoringDieIds)].sort((a, b) => a - b)) {
+      const before = this.state.chargeXMult;
+      const after = Number(Math.min(5, before + perDie).toFixed(12));
+      const gain = Number((after - before).toFixed(12));
+      if (gain <= 0) break;
+      this.state.chargeXMult = after;
+      this.state.stats.chargeGained = Number((this.state.stats.chargeGained + gain).toFixed(12));
+      this.triggerFlame('charge', bonfire ? null : chargeDie!.id,
+        `D${dieId + 1} scored · stored factor +${this.format(gain)} → ×${this.format(after)}`);
+      this.emit({ type: 'CHARGE_CHANGED', flame: 'charge', dieIds: [dieId], xMult: after,
+        message: `D${dieId + 1} scored and grew Charge by ${this.format(gain)}: ×${this.format(after)}` });
     }
-    if (gain <= 0) return;
-    this.state.chargeXMult = Number((this.state.chargeXMult + gain).toFixed(12));
-    this.state.stats.chargeGained = Number((this.state.stats.chargeGained + gain).toFixed(12));
-    this.triggerFlame('charge', sourceDie, `stored factor +${this.format(gain)} → ×${this.format(this.state.chargeXMult)}`);
-    this.emit({ type: 'CHARGE_CHANGED', flame: 'charge', dieIds: [dieId], xMult: this.state.chargeXMult,
-      message: `Charge stored factor grew by ${this.format(gain)} from D${dieId + 1}: ×${this.format(this.state.chargeXMult)}` });
   }
   rollBatch(dieIds: number[], reason: string, context: RollContext, excludeStartingFace = false): void {
     const ids = [...new Set(dieIds)].sort((a, b) => a - b);
@@ -192,7 +196,9 @@ export class Resolver {
       : [];
     this.emit({ type: 'DICE_REROLL_STARTED', dieIds: ids, message: `${reason}: ${ids.map(id => `D${id + 1}`).join(', ')}` });
     const rolling = new Set(ids);
-    const anchors = context === 'gameplay' ? activeEncounterDice(this.state).filter(die => !rolling.has(die.id) && stacks(activeFace(die), 'magnetic')).map(die => die.id) : [];
+    const anchors = context === 'gameplay' ? activeEncounterDice(this.state)
+      .filter(die => !rolling.has(die.id) && stacks(activeFace(die), 'magnetic') && !activeFace(die).magneticUsed)
+      .map(die => die.id) : [];
     if (anchors.length) {
       this.state.stats.magneticAnchorBatches++;
       this.log({ type: 'ABILITY_EVALUATED', enhancement: 'magnetic', dieIds: anchors, message: `Held Magnetic anchor${anchors.length > 1 ? 's' : ''}: ${anchors.map(id => `D${id + 1}`).join(', ')}` });
@@ -208,7 +214,8 @@ export class Resolver {
       }
       const destinations = anchors.length
         ? die.faces.map((face, index) => ({ face, physicalFace: (index + 1) as import('./types').Rank }))
-          .filter(item => stacks(item.face, 'magnetic') && (!excludeStartingFace || item.physicalFace !== beforePhysical))
+          .filter(item => stacks(item.face, 'magnetic') && !item.face.magneticUsed
+            && (!excludeStartingFace || item.physicalFace !== beforePhysical))
         : [];
       if (destinations.length) {
         const destination = destinations[randomIndex(this.rng, destinations.length)];
@@ -216,6 +223,11 @@ export class Resolver {
       }
       return { dieId, before, beforePhysical, ...rollPhysicalDie(die, this.rng, excludeStartingFace ? beforePhysical : undefined), bumped: false, attracted: false };
     });
+    const attracted = results.filter(result => result.attracted);
+    if (attracted.length) {
+      for (const anchorId of anchors) activeFace(this.state.dice.find(die => die.id === anchorId)!).magneticUsed = true;
+      for (const result of attracted) this.state.dice.find(die => die.id === result.dieId)!.faces[result.physicalFace - 1].magneticUsed = true;
+    }
     const triggers: RollTrigger[] = [];
     for (const result of results) {
       const die = this.state.dice.find(item => item.id === result.dieId)!;
@@ -248,7 +260,6 @@ export class Resolver {
         this.emit({ type: 'MAGNETIC_ATTRACTION', enhancement: 'magnetic', dieIds: [die.id, ...anchors], face: face.rank,
           message: `Held Magnetic anchor attracted D${die.id + 1} to face ${face.rank}` });
       }
-      if (context === 'gameplay') this.addChargeForRoll(die.id);
       if (result.weighted) {
         const source = weightedSourceFace(die, result.physicalFace)!;
         const weightedStacks = stacks(source, 'weighted');
@@ -331,20 +342,29 @@ export class Resolver {
   private issueCallerCall(previous?: HandId): void {
     const boss = this.state.boss;
     if (boss?.type !== 'caller') return;
+    boss.manualHandsPlayed ??= Math.max(0, 3 - boss.playsRemaining);
+    boss.callDeadline ??= boss.manualHandsPlayed + boss.playsRemaining;
     let candidates = CALLER_HAND_POOL.filter(hand => !this.state.consumed.includes(hand));
     if (previous && candidates.length > 1) candidates = candidates.filter(hand => hand !== previous);
     if (!candidates.length) return;
     boss.calledHand = candidates[randomIndex(this.rng, candidates.length)];
-    boss.playsRemaining = 3;
+    boss.callDeadline += 3;
+    boss.playsRemaining = Math.max(0, boss.callDeadline - boss.manualHandsPlayed);
     boss.satisfied = false;
     boss.satisfyingSource = null;
-    this.emit({ type: 'CALLER_CALLED', boss: 'caller', hand: boss.calledHand, amount: 3,
-      message: `The Caller demands ${HANDS[boss.calledHand].name} within 3 plays` });
+    this.emit({ type: 'CALLER_CALLED', boss: 'caller', hand: boss.calledHand, amount: boss.playsRemaining,
+      message: `The Caller demands ${HANDS[boss.calledHand].name} by manual hand ${boss.callDeadline}` });
   }
   private resolveCallerCall(hand: HandId, source: HandPlaySource): void {
     const boss = this.state.boss;
     if (boss?.type !== 'caller') return;
+    boss.manualHandsPlayed ??= Math.max(0, 3 - boss.playsRemaining);
+    boss.callDeadline ??= boss.manualHandsPlayed + boss.playsRemaining;
     const previous = boss.calledHand;
+    if (source === 'manual') {
+      boss.manualHandsPlayed++;
+      boss.playsRemaining = Math.max(0, boss.callDeadline - boss.manualHandsPlayed);
+    }
     if (hand === boss.calledHand) {
       boss.satisfied = true;
       boss.satisfyingSource = source;
@@ -357,14 +377,18 @@ export class Resolver {
       return;
     }
     if (source === 'jumpingBean') return;
-    boss.playsRemaining--;
-    const expired = boss.playsRemaining <= 0;
+    const expired = boss.manualHandsPlayed >= boss.callDeadline;
     this.state.stats.callerEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
       calledHand: boss.calledHand, playsRemaining: boss.playsRemaining, satisfied: false, source, expired });
     this.emit({ type: 'CALLER_CHANGED', boss: 'caller', hand, playSource: source, amount: boss.playsRemaining,
       message: `${HANDS[hand].name} did not answer ${HANDS[boss.calledHand].name} · ${Math.max(0, boss.playsRemaining)} plays remain` });
     if (!expired) return;
     boss.callsMissed = (boss.callsMissed ?? 0) + 1;
+    if (this.state.score >= this.state.target) {
+      this.emit({ type: 'CALLER_CHANGED', boss: 'caller', amount: 0,
+        message: 'The Caller missed call, but the scored hand cleared the encounter before the penalty.' });
+      return;
+    }
     const before = this.state.score;
     const after = Math.round(before / 2);
     const penalty = after - before;
@@ -533,6 +557,7 @@ export class Resolver {
       this.state.stats.chargeConsumed = Number((this.state.stats.chargeConsumed + Math.max(0, consumed - 1)).toFixed(12));
       this.emit({ type: 'CHARGE_CHANGED', flame: 'charge', xMult: 1, message: `Charge ×${this.format(consumed)} consumed; meter reset to ×1` });
     }
+    this.addChargeForScoring(scoringIds);
     if (!freeBean) this.advanceHotStreak(hand, scoringIds);
     const personalTrainerSucceeded = this.resolvePersonalTrainer(hand, scoringIds);
     this.state.handPlayCounts[hand]++;
@@ -591,6 +616,11 @@ export class Resolver {
     const record = { round: this.state.round, dieIds: ids, charges: ids.length, remaining: this.state.manualRerollsRemaining, startedDeadBoard, rescuedDeadBoard: false };
     this.state.stats.manualRerolls.push(record);
     this.emit({ type: 'MANUAL_REROLL_STARTED', dieIds: ids, amount: ids.length, message: `Manual reroll; ${this.state.manualRerollsRemaining} remaining` });
+    if (this.state.chargeArmed && !this.state.bonfires.includes('charge')) {
+      this.state.chargeArmed = false;
+      this.emit({ type: 'CHARGE_ARMED', flame: 'charge', xMult: this.state.chargeXMult,
+        message: 'Charge disarmed because its intended hand selection was cleared.' });
+    }
     this.rollBatch(ids, 'Manual gameplay reroll', 'gameplay', true);
     this.drain();
     if (startedDeadBoard && (this.state.score >= this.state.target || hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state), requiredDieIds))) {
@@ -675,7 +705,7 @@ export class Resolver {
       if (encounter) {
         encounter.busted = true;
         encounter.calledHand = failedBoss.type === 'caller' ? failedBoss.calledHand : undefined;
-        encounter.callerManualPlays = failedBoss.type === 'caller' ? 3 - failedBoss.playsRemaining : undefined;
+        encounter.callerManualPlays = failedBoss.type === 'caller' ? failedBoss.manualHandsPlayed ?? Math.max(0, 3 - failedBoss.playsRemaining) : undefined;
         encounter.callerSatisfied = failedBoss.type === 'caller' ? failedBoss.satisfied : undefined;
         encounter.callerSatisfyingSource = failedBoss.type === 'caller' ? failedBoss.satisfyingSource : undefined;
         encounter.wardenUnlockTargets = failedBoss.type === 'warden' ? failedBoss.unlockTargets : undefined;
@@ -697,6 +727,7 @@ export class Resolver {
     this.state.hotStreakGoal = ownedFlameIds(this.state).has('hotStreak') ? 'pair' : null;
     this.state.flameSelection = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
+    for (const die of this.state.dice) for (const face of die.faces) delete face.magneticUsed;
     const bossType = this.state.bossSchedule[this.state.round]
       ?? (this.state.round > 60 ? bossTypeForRound(this.state.seed, this.state.round) : null);
     if (bossType) this.state.bossSchedule[this.state.round] = bossType;
@@ -815,7 +846,6 @@ export class Resolver {
     const current = this.state.stats.rounds.at(-1)!;
     current.finalScore = this.state.score;
     if (this.state.score >= this.state.target) {
-      if (this.state.boss?.type === 'warden' && this.state.boss.pendingReinforcements > 0) return;
       current.cleared = true; current.clearMargin = this.state.score - this.state.target;
       current.manualRerollsRemainingAtClear = this.state.manualRerollsRemaining;
       if (this.state.boss) {
@@ -824,7 +854,7 @@ export class Resolver {
         if (encounter?.round === this.state.round && encounter.attempt === this.state.roundAttemptNumber) {
           encounter.cleared = true;
           if (this.state.boss.type === 'caller') {
-            encounter.callerManualPlays = 3 - this.state.boss.playsRemaining;
+            encounter.callerManualPlays = this.state.boss.manualHandsPlayed ?? Math.max(0, 3 - this.state.boss.playsRemaining);
             encounter.callerSatisfied = this.state.boss.satisfied;
             encounter.callerSatisfyingSource = this.state.boss.satisfyingSource;
           }
@@ -838,7 +868,7 @@ export class Resolver {
       const heldGoldSnapshot = this.state.gold;
       const payout = { baseGold: roundReward(), unusedRerollGold: this.state.manualRerollsRemaining,
         interestGold: interestForGold(heldGoldSnapshot),
-        bossRewardGold: bossType ? CONFIG.bossRewardGold : 0, heldGoldSnapshot, totalRoundRewardGold: 0 };
+        bossRewardGold: bossType ? bossRewardForRound(this.state.round) : 0, heldGoldSnapshot, totalRoundRewardGold: 0 };
       payout.totalRoundRewardGold = payout.baseGold + payout.unusedRerollGold + payout.interestGold + payout.bossRewardGold;
       current.payout = payout; this.state.lastRoundPayout = payout;
       this.addGold(payout.baseGold, `Round clear base: +${payout.baseGold} gold`, 'roundBase');

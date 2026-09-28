@@ -140,7 +140,7 @@ test('Caller preview hides the call, then encounter reveals it and its counter',
   let game = await reachBossShop(page, 'caller');
   const preview = page.getByTestId('boss-preview');
   await expect(preview).toContainText('THE CALLER');
-  await expect(preview).toContainText('Answer the called hand within three plays.');
+  await expect(preview).toContainText('Answer Calls by fixed manual-hand deadlines: 3, 6, 9, …');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await ready(page);
@@ -247,17 +247,17 @@ test('scorecard Ultimate badges require the Flame or Bonfire and match the domai
   await page.evaluate(saved => localStorage.setItem('roll-call:active-run', JSON.stringify({ version: 1, state: saved })), game);
   await page.reload();
   await ready(page);
-  await expect(page.locator('[data-testid^="ultimate-badge-"]')).toHaveCount(3);
+  await expect(page.locator('[data-testid^="ultimate-badge-"]')).toHaveCount(1);
   for (const hand of HAND_IDS) await expect(page.getByTestId(`ultimate-badge-${hand}`)).toHaveCount(expected.includes(hand) ? 1 : 0);
   await page.getByTestId('ultimate-badge-ones').hover();
-  await expect(page.getByText('One of your three highest-ranked hands. Hand level ranks first, then trained scoring strength.')).toBeVisible();
+  await expect(page.getByText('Your highest-ranked hand. Hand level ranks first, then trained scoring strength.')).toBeVisible();
 
   game.dice[0].flame = null;
   game.bonfires.push('ultimate');
   await page.evaluate(saved => localStorage.setItem('roll-call:active-run', JSON.stringify({ version: 1, state: saved })), game);
   await page.reload();
   await ready(page);
-  await expect(page.locator('[data-testid^="ultimate-badge-"]')).toHaveCount(3);
+  await expect(page.locator('[data-testid^="ultimate-badge-"]')).toHaveCount(1);
   for (const hand of HAND_IDS) await expect(page.getByTestId(`ultimate-badge-${hand}`)).toHaveCount(expected.includes(hand) ? 1 : 0);
 });
 

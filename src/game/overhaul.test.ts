@@ -43,12 +43,15 @@ describe('flat round Gold economy', () => {
     expect(result.state.lastRoundPayout).toMatchObject({ heldGoldSnapshot: 49, interestGold: 9, totalRoundRewardGold: 17 });
     expect(result.state.gold).toBe(66);
   });
-  it.each([[1, 0], [2, 0], [3, 10], [4, 0], [6, 10], [9, 10]] as const)('round %s pays a %s Gold Boss Reward', (round, bossRewardGold) => {
+  it.each([[1, 0], [2, 0], [3, 10], [4, 0], [6, 11], [9, 12], [12, 13]] as const)('round %s pays a %s Gold Boss Reward', (round, bossRewardGold) => {
     const state = board(); state.round = round; state.stats.rounds[0].round = round; state.target = 1;
     if (bossRewardGold) state.boss = { type: 'caller', calledHand: 'ones', playsRemaining: 3, satisfied: true, satisfyingSource: 'manual' };
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant());
     expect(result.state.lastRoundPayout?.bossRewardGold).toBe(bossRewardGold);
     expect(result.state.lastRoundPayout?.totalRoundRewardGold).toBe(8 + bossRewardGold);
+    expect(result.state.roundSummary?.sources.bossRewardGold).toBe(bossRewardGold);
+    expect(result.state.stats.goldBySource.bossReward).toBe(bossRewardGold);
+    expect(result.events.find(event => event.type === 'ROUND_SUMMARY_SHOWN')?.bossRewardGold).toBe(bossRewardGold);
     expect(result.state.phase).toBe('roundSummary');
   });
   it('snapshots interest before the Boss Reward and keeps scoring Gold separate', () => {

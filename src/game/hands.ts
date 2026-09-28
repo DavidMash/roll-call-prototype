@@ -30,7 +30,7 @@ export const HANDS: Record<HandId, HandDefinition> = {
 export const HAND_IDS = Object.keys(HANDS) as HandId[];
 export const UPPER_HAND_IDS = HAND_IDS.filter(id => HANDS[id].rank) as HandId[];
 export const LOWER_HAND_IDS = HAND_IDS.filter(id => !HANDS[id].rank) as HandId[];
-export const ULTIMATE_HAND_COUNT = 3;
+export const ULTIMATE_HAND_COUNT = 1;
 
 export interface HandStats {
   level: number;

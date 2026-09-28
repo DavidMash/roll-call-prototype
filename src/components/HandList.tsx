@@ -75,7 +75,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
               </span>
               <span className="hand-level">Lv. {stats.level}</span>
             </span>
-            {isUltimate && <Tooltip label="One of your three highest-ranked hands. Hand level ranks first, then trained scoring strength." multiline maw={300} withArrow>
+            {isUltimate && <Tooltip label="Your highest-ranked hand. Hand level ranks first, then trained scoring strength." multiline maw={300} withArrow>
               <Badge className="ultimate-badge" size="xs" color="grape" variant="light" data-testid={`ultimate-badge-${hand}`}><span className="wide-label">ULTIMATE</span><span className="compact-label">U</span></Badge>
             </Tooltip>}
           </span>

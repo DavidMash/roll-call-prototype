@@ -283,6 +283,7 @@ test('arming and canceling Charge preserves the selected hand and dice', async (
   const game = newRun(seed).state;
   game.dice[0].flame = { id: 'charge', investedGold: 50 };
   game.chargeXMult = 1.5;
+  game.dice.forEach(die => { die.value = 1; });
   const choice = bestHand(game)!;
 
   await page.goto('/');
@@ -316,4 +317,11 @@ test('arming and canceling Charge preserves the selected hand and dice', async (
   for (const dieId of choice.dieIds) {
     await expect(page.getByRole('button', { name: new RegExp(`^Die ${dieId + 1},`) })).toHaveAttribute('aria-pressed', 'true');
   }
+
+  await chargeButton.click();
+  await ready(page);
+  await page.getByRole('button', { name: /^Die 1,/ }).click();
+  await ready(page);
+  await expect(page.getByRole('button', { name: 'Use Charge ×1.5', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Die 1,/ })).toHaveAttribute('aria-pressed', 'false');
 });

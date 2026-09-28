@@ -24,15 +24,15 @@ Every XMult contribution is a multiplicative factor composed centrally. Ordinary
 
 Progression follows one linear route: `Round 1 → Shop → Round 2 → Shop → Boss Round 3 → Flame Selection → Shop`, then repeats. A local map transition fades in before every normal Round, Boss, Shop, and Flame Selection, then fades out when it advances. It shows at most five nearby nodes and uses stable node IDs such as `round:2`, `boss:3`, `flame:after-round:3`, and `shop:before-round:4`. Forward travel lights the connector from left to right in the destination theme; falling back after a Bust relights the last connector in Shop gold from right to left. It continues when the player clicks Continue or after three seconds. The Continue button shows the remaining seconds and fills from left to right during the countdown. Reduced-motion preferences remove the fades and fill animation without skipping the three-second countdown. Normal Rounds use blue (`#3B82F6`), Shops gold (`#F59E0B`), and Flame Selections red (`#EF4444`) over the shared dark foundation.
 
-Every third round is a Boss encounter. Boss assignment is deterministic from the run seed and uses shuffled eight-boss bags: The Caller, The Warden, The Hexer, The Marathon, Quickdraw, The Fly, Snake Eyes, and The Infected all occur before a reshuffle, with boundary repeats avoided. The assignment is stored in run state, shown in the immediately preceding Shop, and remains stable on retry. Boss rounds add a 10-Gold Boss Reward on a successful clear. Clearing one proceeds through Round Summary, the Flame Selection map transition, Flame Selection, and then the Shop transition.
+Every third round is a Boss encounter. Boss assignment is deterministic from the run seed and uses shuffled eight-boss bags: The Caller, The Warden, The Hexer, The Marathon, Quickdraw, The Fly, Snake Eyes, and The Infected all occur before a reshuffle, with boundary repeats avoided. The assignment is stored in run state, shown in the immediately preceding Shop, and remains stable on retry. Boss Reward starts at 10 Gold on round 3 and rises by 1 each subsequent Boss. Clearing one proceeds through Round Summary, the Flame Selection map transition, Flame Selection, and then the Shop transition.
 
 ### The Caller
 
-The Caller (purple/magenta) continuously chooses an unused category from Ones through Sixes, Pair, Two Pair, Three of a Kind, Small Straight, and Full House. Answering within three manual plays immediately starts a fresh call. A matching Jumping Bean answers for free; other Bean plays do not affect the counter. On the third wrong manual hand, that hand scores, current round score is halved and rounded, and a new three-play call begins. The penalty resolves before checking for a clear and never causes an immediate Bust.
+The Caller (purple/magenta) continuously chooses an unused category from Ones through Sixes, Pair, Two Pair, Three of a Kind, Small Straight, and Full House. Calls are due on manual hands 3, 6, 9, and so on. An early answer reveals the next Call immediately without moving its deadline earlier. A matching Jumping Bean answers for free and does not advance the manual-hand counter. On a wrong hand at the deadline, that hand scores first; if it reaches the Boss target the encounter clears without a penalty, otherwise the current round score is halved and rounded before a new Call begins.
 
 ### The Warden
 
-The Warden (cyan/teal) rolls all five player dice at encounter start, resolves only their landing mechanics, and then locks all five on those faces. The player chooses any die and confirms `UNLOCK DIE`. Each unlock freezes the next target at the current score plus half of the theoretical baseline capacity of the still-unused hands naturally possible with the newly active dice, rounded to the game’s five-point target interval. Capacity uses the current Hand Training base Pips and Mult plus ideal natural dice contribution; Flames, Bonfires, XMult, Bonus, Workout growth, wild-card effects, and other enhancements do not inflate it. Reaching the target pauses play and allows another locked die to be chosen. Unlocking retains the rolled face and is never a roll. Every remaining lock shows the same current target. Locked dice cannot score, be manually rerolled, trigger gameplay effects, or contribute attached Flames; global Bonfires remain active. A retry restores the pre-attempt state, rerolls all five for the new attempt, and returns to the initial choice.
+The Warden (cyan/teal) rolls all five player dice at encounter start, resolves only their landing mechanics, and then locks all five on those faces. The player chooses any die and confirms `UNLOCK DIE`. Each unlock freezes the next target at the current score plus half of the theoretical baseline capacity of the still-unused hands naturally possible with the newly active dice, rounded to the game’s five-point target interval. Capacity uses the current Hand Training base Pips and Mult plus ideal natural dice contribution; Flames, Bonfires, XMult, Bonus, Workout growth, wild-card effects, and other enhancements do not inflate it. Reaching an unlock target pauses play and allows another locked die to be chosen, unless the Boss target has been reached—in that case the encounter clears immediately. Unlocking retains the rolled face and is never a roll. Every remaining lock shows the same current target. Locked dice cannot score, be manually rerolled, trigger gameplay effects, or contribute attached Flames; global Bonfires remain active. A retry restores the pre-attempt state, rerolls all five for the new attempt, and returns to the initial choice.
 
 ### The Hexer
 
@@ -79,9 +79,9 @@ Every successful clear pays, in order:
 - 5 base Gold;
 - 1 Gold per unused manual reroll;
 - `min(10, floor(heldGold / 5))` interest using the pre-payout Gold snapshot;
-- +10 Boss Reward after successfully defeating a Boss.
+- Escalating Boss Reward after successfully defeating a Boss: 10 Gold on round 3, 11 on round 6, 12 on round 9, and so on.
 
-A failed attempt pays none of these rewards. Interest is +1 per 5 Gold held, reaches its +10 maximum at 50 Gold, and is snapshotted after scoring Gold effects but before base, reroll, interest, or Boss Reward payouts are added. Thus the maximum standard normal-round payout is 18 Gold and the maximum standard Boss payout is 28 Gold, excluding scoring Gold such as Golden and Jackpot.
+A failed attempt pays none of these rewards. Interest is +1 per 5 Gold held, reaches its +10 maximum at 50 Gold, and is snapshotted after scoring Gold effects but before base, reroll, interest, or Boss Reward payouts are added. The maximum standard normal-round payout is 18 Gold; the Boss maximum rises with its round, excluding scoring Gold such as Golden and Jackpot.
 
 Every successful encounter pauses on a concise Round Summary before the next map transition. Its domain-owned snapshot shows score/target, Gold before and after, total Gold earned, and reconciled aggregate rows for Base Reward, unused rerolls, interest, Golden, Jackpot, other gameplay Gold, and Boss Reward when applicable. Bust attempts never create a successful summary.
 
@@ -122,7 +122,7 @@ Vintage has no value cap and may exceed its 3-Gold purchase price. Selling pays 
 
 ## Flame Selections, Embers, and Bonfires
 
-Every third successful clear adds the +10 Boss Reward, shows its Round Summary, and then opens the special Flame Selection before the Shop. This screen only allows the player to select one of the three deterministic distinct offers and assign it to a physical die, or skip. There are no paid offer rerolls and no Stoke controls on Flame Selections.
+Every third successful clear adds the escalating Boss Reward, shows its Round Summary, and then opens the special Flame Selection before the Shop. This screen only allows the player to select one of the three deterministic distinct offers and assign it to a physical die, or skip. There are no paid offer rerolls and no Stoke controls on Flame Selections.
 
 New Flames begin as 0-Gold Embers. The immediately following Shop shows a one-time controlled tooltip on the first Flame’s die, teaching the player to click the die, Stoke it, and reach Bonfire at 100 Gold. All Flame investment occurs through Manage Die in a normal Shop. Arbitrary positive whole-Gold Stoke amounts are supported and do not count toward Money to Burn spending.
 
@@ -132,11 +132,12 @@ Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a f
 
 | Flame | Active rule |
 |---|---|
-| Ultimate | One of exactly three ranked Ultimate Hands: `1 + 4p`, max ×5 |
+| Ultimate | The single highest-ranked hand: `1 + 4p`, max ×5 |
 | Minigun | Upper hand: `1 + 4p`, max ×5 |
 | Hail Mary | Zero rerolls: `1 + 4p`, max ×5 |
-| Charge | Gameplay rolls add `p` to its stored factor; armed factor multiplies XMult |
-| Personal Trainer | `min(75%, 150% × p)` training chance; no XMult |
+| Full of Grace | LAST PLAY (zero rerolls and exactly one playable hand): `1 + 4p`, max ×5 |
+| Charge | Each scoring die adds `0.5p`, capped at ×5; the armed factor multiplies XMult |
+| Personal Trainer | `75% × p` training chance; no XMult |
 | Dragon's Hoard | `1 + 4p × min(heldGold/100, 1)`, max ×5 |
 | Well Trained | `min(5, 1 + previousPlays × 0.2p)` |
 | Target Practice | Targeted Lower hand: `1 + 8p`, max ×9 |

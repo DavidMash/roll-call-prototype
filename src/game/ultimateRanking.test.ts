@@ -6,11 +6,10 @@ import { newRun } from './engine';
 const constant = (value = .2) => ({ next: () => value });
 
 describe('Ultimate Hand ranking', () => {
-  it('always returns exactly three hands and uses trained baseline strength at tied levels', () => {
+  it('returns exactly one hand and uses trained baseline strength at tied levels', () => {
     const levels = initialHandLevels();
-    expect(ultimateHands(levels)).toEqual(['fiveKind', 'fourKind', 'largeStraight']);
-    expect(ultimateHands(levels)).toHaveLength(3);
-    expect(new Set(ultimateHands(levels)).size).toBe(3);
+    expect(ultimateHands(levels)).toEqual(['fiveKind']);
+    expect(ultimateHands(levels)).toHaveLength(1);
     expect(trainedBaselineStrength('fiveKind', 1)).toBeGreaterThan(trainedBaselineStrength('fullHouse', 1));
   });
 
@@ -24,7 +23,7 @@ describe('Ultimate Hand ranking', () => {
   it('prefers Sixes through Ones for otherwise-identical Upper hands', () => {
     const levels = initialHandLevels();
     for (const hand of ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'] as const) levels[hand] = 2;
-    expect(ultimateHands(levels)).toEqual(['sixes', 'fives', 'fours']);
+    expect(ultimateHands(levels)).toEqual(['sixes']);
   });
 
   it('uses canonical hand order as the stable final tie-break', () => {
@@ -34,15 +33,15 @@ describe('Ultimate Hand ranking', () => {
     expect(ranked.indexOf('threeKind')).toBeLessThan(ranked.indexOf('smallStraight'));
   });
 
-  it('lets training move a hand into the top three and another out', () => {
+  it('lets training move a hand into the top rank and another out', () => {
     const levels = initialHandLevels();
     const before = ultimateHands(levels);
     levels.fullHouse++;
     const after = ultimateHands(levels);
-    expect(before).toContain('largeStraight');
+    expect(before).toContain('fiveKind');
     expect(before).not.toContain('fullHouse');
     expect(after).toContain('fullHouse');
-    expect(after).not.toContain('largeStraight');
+    expect(after).not.toContain('fiveKind');
   });
 
   it('keeps the existing investment curve and snapshots qualification at hand start', () => {
@@ -50,9 +49,9 @@ describe('Ultimate Hand ranking', () => {
     const state = newRun('ultimate-snapshot', constant()).state;
     state.bonfires = ['ultimate'];
 
-    const qualifiedSnapshot = captureHandStart(state, 'largeStraight');
-    for (const hand of HAND_IDS) state.handLevels[hand] = hand === 'largeStraight' ? 1 : 10;
-    expect(handXMultContributions(qualifiedSnapshot, 'largeStraight', 1, [0, 1, 2, 3, 4]))
+    const qualifiedSnapshot = captureHandStart(state, 'fiveKind');
+    for (const hand of HAND_IDS) state.handLevels[hand] = hand === 'fiveKind' ? 1 : 10;
+    expect(handXMultContributions(qualifiedSnapshot, 'fiveKind', 1, [0, 1, 2, 3, 4]))
       .toMatchObject([{ source: 'ultimate', value: 5, dieId: null }]);
 
     const unqualifiedState = newRun('ultimate-snapshot-unqualified', constant()).state;

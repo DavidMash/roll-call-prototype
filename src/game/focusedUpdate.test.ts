@@ -95,7 +95,7 @@ describe('focused enhancement roster and migration', () => {
     expect(result.state.dice[0].faces[0].enhancements.jackpot).toBe(3);
     expect(result.state.dice[0].flame).toBeNull();
     expect(result.state.bonfires).toEqual([]);
-    expect(FLAME_IDS).toHaveLength(13);
+    expect(FLAME_IDS).toHaveLength(14);
   });
 });
 
@@ -238,7 +238,7 @@ describe('Jumping Bean effects and Flames', () => {
     });
     expect(result.state.stats.handScores[0].xMultFactors.some(factor => factor.source === 'charge')).toBe(false);
     expect(result.state.chargeArmed).toBe(true);
-    expect(result.state.chargeXMult).toBe(4);
+    expect(result.state.chargeXMult).toBe(3.5);
     expect(result.state.stats.chargeConsumed).toBe(0);
   });
 });

@@ -1,4 +1,5 @@
 import { activeFace } from './dice';
+import { isLastPlay } from './bosses';
 import { LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from './hands';
 import type { ActiveFlame, Board, Die, Flame, GameState, HandId, XMultFactor } from './types';
 
@@ -10,11 +11,12 @@ export interface FlameDefinition {
   affectsXMult: boolean;
 }
 export const FLAMES: Record<Flame, FlameDefinition> = {
-  ultimate: { name: 'Ultimate', shortName: 'ULT', affectsXMult: true, description: 'Scores in one of your three Ultimate Hands: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Your three Ultimate Hands globally multiply XMult by ×5.' },
+  ultimate: { name: 'Ultimate', shortName: 'ULT', affectsXMult: true, description: 'Scores in your Ultimate Hand: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Your Ultimate Hand globally multiplies XMult by ×5.' },
   minigun: { name: 'Minigun', shortName: 'MINI', affectsXMult: true, description: 'Scores in an Upper hand: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Every Upper hand multiplies XMult by ×5.' },
   hailMary: { name: 'Hail Mary', shortName: 'HAIL', affectsXMult: true, description: 'Scores with 0 manual rerolls left: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Every hand played with 0 rerolls multiplies XMult by ×5.' },
-  charge: { name: 'Charge', shortName: 'CHG', affectsXMult: true, description: 'This die’s gameplay rolls grow its stored factor by up to +1; arm it to multiply a hand’s XMult.', bonfireDescription: 'Every gameplay die roll grows the global stored factor by +1.' },
-  personalTrainer: { name: 'Personal Trainer', shortName: 'TRAIN', affectsXMult: false, description: 'When this die scores, its training chance rises twice as fast, capped at 75%.', bonfireDescription: 'Every played hand gets one 75% training check.' },
+  fullOfGrace: { name: 'Full of Grace', shortName: 'GRACE', affectsXMult: true, description: 'Scores on LAST PLAY: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Every LAST PLAY hand globally multiplies XMult by ×5.' },
+  charge: { name: 'Charge', shortName: 'CHG', affectsXMult: true, description: 'Each scoring die grows the stored factor by up to +0.5; select this die to arm it.', bonfireDescription: 'Each scoring die grows the global stored factor by +0.5; arm it for any hand.' },
+  personalTrainer: { name: 'Personal Trainer', shortName: 'TRAIN', affectsXMult: false, description: 'When this die scores, its training chance rises linearly to 75%.', bonfireDescription: 'Every played hand gets one 75% training check.' },
   dragonsHoard: { name: "Dragon's Hoard", shortName: 'HOARD', affectsXMult: true, description: 'When this die scores, held Gold and investment multiply XMult by up to ×5.', bonfireDescription: 'Every hand receives the held-Gold factor, capped at ×5.' },
   wellTrained: { name: 'Well Trained', shortName: 'WELL', affectsXMult: true, description: 'When this die scores, previous plays and investment multiply XMult by up to ×5.', bonfireDescription: 'Every hand receives its play-history factor, capped at ×5.' },
   targetPractice: { name: 'Target Practice', shortName: 'TARGET', affectsXMult: true, description: 'Scores in the round target: multiplies XMult by ×1 to ×9.', bonfireDescription: 'The round target globally multiplies XMult by ×9.' },
@@ -30,8 +32,8 @@ export const HOT_STREAK_SEQUENCE: HandId[] = ['pair', 'twoPair', 'threeKind', 's
 export const flameProgress = (investedGold: number) => Math.max(0, Math.min(100, investedGold)) / 100;
 export const standardFlameMultiplier = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
 export const targetPracticeMultiplier = (investedGold: number) => 1 + 8 * flameProgress(investedGold);
-export const trainerChance = (investedGold: number) => Math.min(0.75, 1.5 * flameProgress(investedGold));
-export const chargeGainPerRoll = (investedGold: number) => flameProgress(investedGold);
+export const trainerChance = (investedGold: number) => 0.75 * flameProgress(investedGold);
+export const chargeGainPerScoringDie = (investedGold: number) => 0.5 * flameProgress(investedGold);
 export const dragonsHoardMultiplier = (investedGold: number, gold: number) => 1 + 4 * flameProgress(investedGold) * Math.min(Math.max(gold, 0) / 100, 1);
 export const wellTrainedMultiplier = (investedGold: number, previousPlays: number) => Math.min(5, 1 + previousPlays * 0.2 * flameProgress(investedGold));
 export const moneyToBurnMultiplier = (investedGold: number, lifetimeSpend: number) => 1 + 4 * flameProgress(investedGold) * Math.min(Math.max(lifetimeSpend, 0) / 100, 1);
@@ -50,7 +52,7 @@ type FlameDisplayContext = Pick<Board, 'gold' | 'lifetimeNormalShopGoldSpent'>;
 export function flameEffectText(id: Flame, investedGold: number, board: FlameDisplayContext): string {
   switch (id) {
     case 'personalTrainer': return `${displayNumber(trainerChance(investedGold) * 100)}% training chance`;
-    case 'charge': return `Stored factor +${displayNumber(chargeGainPerRoll(investedGold))} per gameplay roll`;
+    case 'charge': return `Stored factor +${displayNumber(chargeGainPerScoringDie(investedGold))} per scoring die, cap ×5`;
     case 'targetPractice': return `×${displayNumber(targetPracticeMultiplier(investedGold))} XMult on the round target`;
     case 'dragonsHoard': return `×${displayNumber(dragonsHoardMultiplier(investedGold, board.gold))} XMult at ${board.gold} held Gold`;
     case 'wellTrained': return `×(1 + ${displayNumber(0.2 * flameProgress(investedGold))} per previous play) XMult, cap ×5`;
@@ -63,7 +65,7 @@ export function flameEffectText(id: Flame, investedGold: number, board: FlameDis
 export function flameFullEffectText(id: Flame): string {
   switch (id) {
     case 'personalTrainer': return '75% training chance';
-    case 'charge': return 'Stored factor +1 per gameplay roll';
+    case 'charge': return 'Stored factor +0.5 per scoring die, cap ×5';
     case 'targetPractice': return '×9 XMult on the round target';
     case 'hotStreak': return '×(1 + charges) XMult';
     case 'dragonsHoard': return '×1–×5 XMult from held Gold';
@@ -100,12 +102,13 @@ export interface HandStartSnapshot {
   hotStreakCharges: number;
   chargeXMult: number;
   chargeArmed: boolean;
+  lastPlay: boolean;
   lifetimeNormalShopGoldSpent: number;
   bonfires: Flame[];
   dice: { dieId: number; flame: Flame | null; investedGold: number; faceValue: number }[];
 }
 
-export function captureHandStart(state: Pick<GameState, 'gold' | 'manualRerollsRemaining' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'chargeXMult' | 'chargeArmed' | 'bonfires' | 'dice' | 'lifetimeNormalShopGoldSpent'>, hand: HandId): HandStartSnapshot {
+export function captureHandStart(state: Pick<GameState, 'gold' | 'manualRerollsRemaining' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'chargeXMult' | 'chargeArmed' | 'bonfires' | 'dice' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'consumed'>, hand: HandId): HandStartSnapshot {
   return {
     gold: state.gold,
     manualRerollsRemaining: state.manualRerollsRemaining,
@@ -116,6 +119,7 @@ export function captureHandStart(state: Pick<GameState, 'gold' | 'manualRerollsR
     hotStreakCharges: state.hotStreakCharges,
     chargeXMult: state.chargeXMult,
     chargeArmed: state.chargeArmed,
+    lastPlay: isLastPlay(state),
     lifetimeNormalShopGoldSpent: state.lifetimeNormalShopGoldSpent,
     bonfires: [...state.bonfires],
     dice: state.dice.map(die => ({ dieId: die.id, flame: activeFlameId(die.flame), investedGold: activeFlameInvestment(die.flame), faceValue: activeFace(die).rank })),
@@ -127,6 +131,7 @@ const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId) => {
     case 'ultimate': return snapshot.ultimateHands.includes(hand);
     case 'minigun': return UPPER_HAND_IDS.includes(hand);
     case 'hailMary': return snapshot.manualRerollsRemaining === 0;
+    case 'fullOfGrace': return snapshot.lastPlay;
     case 'targetPractice': return hand === snapshot.targetPracticeHand;
     case 'straightShooter': return hand === 'smallStraight' || hand === 'largeStraight';
     case 'doubleDown': return hand === 'pair' || hand === 'twoPair';

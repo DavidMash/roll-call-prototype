@@ -7,7 +7,6 @@ export const CONFIG = {
   maxLives: 3,
   manualRerollsPerRound: 3,
   roundRewardBase: 5,
-  bossRewardGold: 10,
   infectedFacePipPenalty: 3,
   interestInterval: 5,
   interestCap: 10,
@@ -28,6 +27,7 @@ export const CONFIG = {
 export const targetForRound = (round: number) =>
   Math.round(CONFIG.baseTarget * CONFIG.targetGrowth ** (round - 1) / CONFIG.targetRounding) * CONFIG.targetRounding;
 export const roundReward = (_round?: number) => CONFIG.roundRewardBase;
+export const bossRewardForRound = (round: number) => 9 + round / 3;
 export const interestForGold = (heldGold: number) => Math.min(CONFIG.interestCap,
   Math.floor(Math.max(0, heldGold) / CONFIG.interestInterval));
 export const diceRerollCost = (count: number) => CONFIG.diceRerollBase * CONFIG.rerollCostGrowth ** count;

@@ -60,6 +60,10 @@ export function normalizeGameState(state: GameState): GameState {
   next.stats.jumpingBeanFreePlays ??= [];
   next.bossSchedule ??= bossSchedule(next.seed);
   next.boss ??= null;
+  if (next.boss?.type === 'caller') {
+    next.boss.manualHandsPlayed ??= Math.max(0, 3 - next.boss.playsRemaining);
+    next.boss.callDeadline ??= next.boss.manualHandsPlayed + next.boss.playsRemaining;
+  }
   next.currentNodeId ??= '';
   next.lives = Math.max(0, Math.min(CONFIG.maxLives, Math.floor(next.lives ?? CONFIG.maxLives)));
   next.roundAttemptNumber = Math.max(1, Math.floor(next.roundAttemptNumber ?? 1));
@@ -133,6 +137,10 @@ export function validateAction(state: Board, action: Action): string | null {
     if (unavailableEncounterHands(state).includes(action.hand)) return state.boss?.type === 'marathon'
       ? 'That hand is still cooling down.' : state.boss?.type === 'quickdraw' ? 'Quickdraw has no Lower shot remaining.' : 'That hand has already been consumed.';
     if (state.boss?.type === 'hexer' && !action.dieIds.includes(state.boss.cursedDieId)) return 'The Cursed Die must participate in every hand.';
+    if (state.chargeArmed && !state.bonfires.includes('charge')) {
+      const chargeDie = activeEncounterDice(state).find(die => activeFlameId(die.flame) === 'charge');
+      if (chargeDie && !action.dieIds.includes(chargeDie.id)) return 'The physical Charge die must participate while Charge is armed.';
+    }
     if (!isValidSelection(activeEncounterDice(state), action.hand, action.dieIds)) return 'Select a complete valid set of participating dice.';
     return null;
   }
@@ -148,6 +156,12 @@ export function validateAction(state: Board, action: Action): string | null {
     const owned = state.bonfires.includes('charge') || activeEncounterDice(state).some(die => activeFlameId(die.flame) === 'charge');
     if (!owned) return 'This run does not own Charge.';
     if (!state.chargeArmed && state.chargeXMult <= 1) return 'Charge has no stored bonus yet.';
+    if (!state.chargeArmed && !state.bonfires.includes('charge')) {
+      const chargeDie = activeEncounterDice(state).find(die => activeFlameId(die.flame) === 'charge');
+      if (!chargeDie || !action.dieIds?.includes(chargeDie.id) || !action.hand
+        || !isValidSelection(activeEncounterDice(state), action.hand, action.dieIds))
+        return 'Select the physical Charge die in the intended hand before arming Charge.';
+    }
     return null;
   }
   if (action.type === 'STOKE_FLAME') {

@@ -70,7 +70,7 @@ describe('The Caller', () => {
     state.dice[0].faces[0].enhancements.jumpingBean = 1;
     state.dice[0].faces[0].enhancements.sticky = 1;
     const result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(0));
-    expect(result.state.boss).toMatchObject({ type: 'caller', satisfied: false, playsRemaining: 3, satisfyingSource: null, callsCompleted: 1 });
+    expect(result.state.boss).toMatchObject({ type: 'caller', satisfied: false, playsRemaining: 6, callDeadline: 6, manualHandsPlayed: 0, satisfyingSource: null, callsCompleted: 1 });
     if (result.state.boss?.type !== 'caller') throw new Error('Caller fixture failed');
     expect(result.state.boss.calledHand).not.toBe('ones');
     expect(result.state.stats.callerEvents.at(-1)).toMatchObject({ satisfied: true, source: 'jumpingBean', expired: false });

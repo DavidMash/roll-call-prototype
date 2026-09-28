@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { dispatch, newRun, validateAction } from './engine';
 import { Resolver } from './effects';
 import {
-  captureHandStart, chargeGainPerRoll, composeXMult, dragonsHoardMultiplier, flameEffectText, FLAME_IDS,
+  captureHandStart, chargeGainPerScoringDie, composeXMult, dragonsHoardMultiplier, flameEffectText, FLAME_IDS,
   handXMultContributions, hotStreakMultiplier, lowballMultiplier, moneyToBurnMultiplier, standardFlameMultiplier,
   targetPracticeMultiplier, trainerChance, wellTrainedMultiplier, XMult_FLAME_IDS,
 } from './flames';
@@ -19,22 +19,22 @@ function flame(state: GameState, dieId: number, id: Flame, investedGold = 100) {
 const play = (state: GameState, hand = 'threeKind' as const, dieIds = [0, 1, 2], rng = constant()) => dispatch(state, { type: 'PLAY', hand, dieIds }, rng);
 
 describe('multiplicative Flame formulas', () => {
-  it('contains the final unique 13-Flame roster', () => {
-    expect(FLAME_IDS).toEqual(['ultimate', 'minigun', 'hailMary', 'charge', 'personalTrainer', 'dragonsHoard', 'wellTrained', 'targetPractice', 'hotStreak', 'moneyToBurn', 'lowball', 'straightShooter', 'doubleDown']);
+  it('contains the final unique 14-Flame roster', () => {
+    expect(FLAME_IDS).toEqual(['ultimate', 'minigun', 'hailMary', 'fullOfGrace', 'charge', 'personalTrainer', 'dragonsHoard', 'wellTrained', 'targetPractice', 'hotStreak', 'moneyToBurn', 'lowball', 'straightShooter', 'doubleDown']);
     expect(FLAME_IDS).not.toContain('weighted');
     expect(FLAME_IDS).not.toContain('clockwork');
   });
   it.each([[0, 1], [10, 1.4], [25, 2], [50, 3], [100, 5]] as const)('standard scale %s => ×%s', (gold, factor) => expect(standardFlameMultiplier(gold)).toBe(factor));
   it.each([
     [0, 1, 0, 0, 1, 1, 1, 1],
-    [10, 1.8, 0.15, 0.1, 1.4, 1.2, 1.4, 1.4],
-    [25, 3, 0.375, 0.25, 2, 1.5, 2, 2],
-    [50, 5, 0.75, 0.5, 3, 2, 3, 3],
-    [100, 9, 0.75, 1, 5, 3, 5, 5],
+    [10, 1.8, 0.075, 0.05, 1.4, 1.2, 1.4, 1.4],
+    [25, 3, 0.1875, 0.125, 2, 1.5, 2, 2],
+    [50, 5, 0.375, 0.25, 3, 2, 3, 3],
+    [100, 9, 0.75, 0.5, 5, 3, 5, 5],
   ] as const)('uses doubled bonus-above-neutral curves at %s%%', (gold, target, trainer, charge, dragon, trained, burn, lowball) => {
     expect(targetPracticeMultiplier(gold)).toBe(target);
     expect(trainerChance(gold)).toBeCloseTo(trainer);
-    expect(chargeGainPerRoll(gold)).toBe(charge);
+    expect(chargeGainPerScoringDie(gold)).toBe(charge);
     expect(dragonsHoardMultiplier(gold, 100)).toBe(dragon);
     expect(wellTrainedMultiplier(gold, 10)).toBe(trained);
     expect(moneyToBurnMultiplier(gold, 100)).toBe(burn);
@@ -57,8 +57,8 @@ describe('multiplicative Flame formulas', () => {
     const state = game(); state.gold = 100; state.lifetimeNormalShopGoldSpent = 100;
     expect(flameEffectText('ultimate', 25, state)).toContain('×2 XMult');
     expect(flameEffectText('targetPractice', 25, state)).toContain('×3 XMult');
-    expect(flameEffectText('charge', 25, state)).toContain('+0.25');
-    expect(flameEffectText('personalTrainer', 25, state)).toContain('37.5%');
+    expect(flameEffectText('charge', 25, state)).toContain('+0.125');
+    expect(flameEffectText('personalTrainer', 25, state)).toContain('18.75%');
     expect(flameEffectText('moneyToBurn', 25, state)).toContain('×2 XMult');
   });
   it('multiplies factors centrally and without order dependence', () => {
@@ -189,24 +189,25 @@ describe('investment, uniqueness, and reward lifecycle', () => {
 });
 
 describe('Charge, Trainer, and Hot Streak', () => {
-  it('stores Charge from qualifying rolls, only applies armed Charge, then resets', () => {
+  it('stores Charge from scoring dice, only applies armed Charge, then resets before rebuilding', () => {
     let state = game([1, 2, 3, 4, 5]); flame(state, 0, 'charge', 50);
     state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(0)).state;
-    expect(state.chargeXMult).toBe(1.5);
+    expect(state.chargeXMult).toBe(1);
     const unarmed = state; unarmed.dice[0].value = 4; unarmed.dice[1].value = 4; unarmed.dice[2].value = 4;
     const first = play(unarmed);
-    expect(first.state.stats.handScores[0].xMult).toBe(1); expect(first.state.chargeXMult).toBeGreaterThan(1);
+    expect(first.state.stats.handScores[0].xMult).toBe(1); expect(first.state.chargeXMult).toBe(1.75);
     first.state.dice.forEach((die, i) => { die.value = ([4, 4, 4, 2, 6] as Rank[])[i]; }); first.state.consumed = [];
-    const armed = dispatch(first.state, { type: 'TOGGLE_CHARGE' }).state;
+    const armed = dispatch(first.state, { type: 'TOGGLE_CHARGE', hand: 'threeKind', dieIds: [0, 1, 2] }).state;
     const second = play(armed);
-    expect(second.state.stats.handScores[1].xMult).toBeGreaterThan(1);
-    // Consumption resets first; the post-hand reroll is a fresh qualifying roll for the next hand.
-    expect(second.state.chargeXMult).toBe(1.5);
+    expect(second.state.stats.handScores[1].xMult).toBe(1.75);
+    expect(second.state.chargeXMult).toBe(1.75);
   });
-  it('Charge Bonfire grows its stored factor by +5 for a five-die gameplay batch', () => {
-    const state = game(); state.bonfires = ['charge']; state.chargeXMult = 1;
+  it('Charge Bonfire grows from each scoring die and not from gameplay rolls', () => {
+    const state = game([6, 6, 6, 6, 6]); state.bonfires = ['charge']; state.chargeXMult = 1;
     const resolver = new Resolver(state, constant(0)); resolver.rollBatch([0, 1, 2, 3, 4], 'test', 'gameplay');
-    expect(state.chargeXMult).toBe(6);
+    expect(state.chargeXMult).toBe(1);
+    const result = dispatch(state, { type: 'PLAY', hand: 'fiveKind', dieIds: [0, 1, 2, 3, 4] }, constant());
+    expect(result.state.chargeXMult).toBe(3.5);
   });
   it('Personal Trainer skips RNG at 0 and trains after scoring at full investment', () => {
     const zero = game(); flame(zero, 0, 'personalTrainer', 0); const rng = { next: vi.fn(() => 0) };
