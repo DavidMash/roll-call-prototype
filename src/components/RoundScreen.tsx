@@ -1,7 +1,7 @@
 import { Alert, Button, Group, Paper, Stack, Text } from '@mantine/core';
 import { useEffect } from 'react';
 import { validateAction } from '../game/engine';
-import { activeFlameInvestment, captureHandStart, composeXMult, handXMultContributions, hasXMultFlame, hotStreakMultiplier, targetPracticeMultiplier } from '../game/flames';
+import { captureHandStart, composeXMult, handXMultContributions, hasXMultFlame, isGuaranteedWinningPlay } from '../game/flames';
 import { handOptions, hasPlayableHand, HANDS } from '../game/hands';
 import { finalizeScore, handScore } from '../game/scoring';
 import { canPlay, selectHand, toggleDie } from '../game/selection';
@@ -10,13 +10,14 @@ import type { Action, Board, GameEvent } from '../game/types';
 import { DiceRow } from './DiceRow';
 import { HandScorecard } from './HandList';
 import { ScoreResolution } from './ScoreResolution';
-import { activeEncounterDice, isLastPlay, requiredEncounterDieIds, unavailableEncounterHands } from '../game/bosses';
+import { activeEncounterDice, lastPlayDanger, requiredEncounterDieIds, unavailableEncounterHands } from '../game/bosses';
 import { BossPanel } from './BossPanel';
 import { CONFIG } from '../game/config';
 import type { DiceDisplay } from '../uiSettings';
+import { formatScoreEquation, formatScoreProgress, playActionLabel } from '../game/copy';
 
-export function RoundScreen({ board, event, busy, progress, diceDisplay, selection, setSelection, submit, skip }: {
-  board: Board; event: GameEvent | null; busy: boolean; progress: { current: number; total: number };
+export function RoundScreen({ board, event, busy, diceDisplay, selection, setSelection, submit, skip }: {
+  board: Board; event: GameEvent | null; busy: boolean;
   diceDisplay: DiceDisplay;
   selection: Selection; setSelection: (selection: Selection) => void; submit: (action: Action) => void; skip: () => void;
 }) {
@@ -47,16 +48,17 @@ export function RoundScreen({ board, event, busy, progress, diceDisplay, selecti
   const preview = valid ? (() => {
     const hand = effectiveSelection.hand!;
     const base = handScore(encounterDice, hand, effectiveSelection.dieIds, board.handLevels[hand]);
-    const contributions = handXMultContributions(captureHandStart(board, hand), hand, board.handLevels[hand], effectiveSelection.dieIds);
+    const snapshot = captureHandStart(board, hand, effectiveSelection.dieIds);
+    const contributions = handXMultContributions(snapshot, hand, board.handLevels[hand], effectiveSelection.dieIds);
     const xMult = composeXMult(contributions);
-    const bossFactor = board.boss?.type === 'fly' && !board.boss.caught && hand !== board.boss.flyHand ? .5 : 1;
+    const bossFactor = snapshot.bossFactor;
     return { ...base, hasXMult: contributions.length > 0, effectiveXMult: Number((xMult * bossFactor).toFixed(12)),
-      score: finalizeScore(base.pips, base.multiplier, xMult * bossFactor).finalScore };
+      score: finalizeScore(base.pips, base.multiplier, xMult * bossFactor).finalScore,
+      danger: lastPlayDanger(board, hand), guaranteedWin: isGuaranteedWinningPlay(snapshot, hand) };
   })() : null;
   const manualAction: Action = { type: 'MANUAL_REROLL', dieIds: effectiveSelection.dieIds };
   const canReroll = validateAction(board, manualAction) === null;
   const deadBoard = !hasPlayableHand(encounterDice, unavailableHands, requiredDieIds);
-  const lastPlay = valid && isLastPlay(board);
   const chargeAction: Action = { type: 'TOGGLE_CHARGE', hand: effectiveSelection.hand, dieIds: effectiveSelection.dieIds };
   const canToggleCharge = validateAction(board, chargeAction) === null;
   const chargeDieId = encounterDice.find(die => die.flame?.id === 'charge')?.id;
@@ -66,10 +68,6 @@ export function RoundScreen({ board, event, busy, progress, diceDisplay, selecti
     }
     setSelection(next);
   }
-  const hotFlame = board.dice.find(die => die.flame?.id === 'hotStreak')?.flame;
-  const hotInvestment = board.bonfires.includes('hotStreak') ? 100 : activeFlameInvestment(hotFlame);
-  const targetFlame = board.dice.find(die => die.flame?.id === 'targetPractice')?.flame;
-  const targetInvestment = board.bonfires.includes('targetPractice') ? 100 : activeFlameInvestment(targetFlame);
   const idleText = effectiveSelection.hand
     ? `${HANDS[effectiveSelection.hand].name} · ${effectiveSelection.dieIds.length} ${effectiveSelection.dieIds.length === 1 ? 'die' : 'dice'} selected`
     : effectiveSelection.dieIds.length ? `${effectiveSelection.dieIds.length} ${effectiveSelection.dieIds.length === 1 ? 'die' : 'dice'} selected` : undefined;
@@ -89,16 +87,16 @@ export function RoundScreen({ board, event, busy, progress, diceDisplay, selecti
   }, [awaitingWardenChoice, busy, effectiveSelection.dieIds, effectiveSelection.hand, submit, valid]);
   return <Stack gap="xs" className="round-screen">
     <div className="live-score-panel" data-testid="live-score-panel">
-      <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} deadBoard={deadBoard} idleText={idleText}
-        idleMeta={`${board.score} / ${board.target}`} showXMult={showXMult} />
+      <ScoreResolution event={event} busy={busy} onSkip={skip} idleText={idleText}
+        scoreText={formatScoreProgress(board.score, board.target)} showXMult={showXMult} />
     </div>
     <BossPanel board={board} />
-    {!busy && !awaitingWardenChoice && deadBoard && board.manualRerollsRemaining > 0 && <Alert className="round-status" color="orange" py={5} title="No playable hands" role="status">
-      Select dice and use a reroll.
+    {!busy && !awaitingWardenChoice && deadBoard && board.manualRerollsRemaining > 0 && <Alert className="round-status" color="orange" py={5} title="NO PLAYABLE HANDS" role="status">
+      Use a Reroll.
     </Alert>}
     {(board.hotStreakGoal || board.targetPracticeHand) && <Paper p="xs" className="flame-goals"><Group gap="lg">
-      {board.hotStreakGoal && <Text size="xs"><strong>🔥 HOT STREAK</strong> · Next: {HANDS[board.hotStreakGoal].name} · Charges: {board.hotStreakCharges} · Hit now: ×{Number(hotStreakMultiplier(hotInvestment, board.hotStreakCharges + 1).toFixed(4))}</Text>}
-      {board.targetPracticeHand && <Text size="xs"><strong>◎ TARGET</strong> · {HANDS[board.targetPracticeHand].name} · ×{Number(targetPracticeMultiplier(targetInvestment).toFixed(4))}</Text>}
+      {board.hotStreakGoal && <Text size="xs"><strong>🔥 HOT STREAK → {HANDS[board.hotStreakGoal].name}</strong></Text>}
+      {board.targetPracticeHand && <Text size="xs"><strong>◎ TARGET: {HANDS[board.targetPracticeHand].name}</strong></Text>}
     </Group></Paper>}
     <Paper className="scorecard-panel" p="xs">
       <HandScorecard board={board} selection={effectiveSelection} busy={busy || awaitingWardenChoice} canSubmit={valid && !busy && !awaitingWardenChoice}
@@ -118,23 +116,23 @@ export function RoundScreen({ board, event, busy, progress, diceDisplay, selecti
             : changeSelection(toggleDie(encounterDice, unavailableHands, effectiveSelection, id, requiredDieIds))} />
         <div className="gameplay-actions">
           {(board.bonfires.includes('charge') || encounterDice.some(die => die.flame?.id === 'charge')) && <Group className="charge-controls" gap="xs" justify="flex-end" mb={4}>
-            <Text size="xs" fw={700}>⚡ Charge ×{Number(board.chargeXMult.toFixed(4))}</Text>
+            <Text size="xs" fw={700}>⚡ CHARGE ×{Number(board.chargeXMult.toFixed(4))}{board.chargeArmed ? ' · ARMED' : ''}</Text>
             <Button size="compact-xs" color={board.chargeArmed ? 'orange' : 'yellow'} variant={board.chargeArmed ? 'filled' : 'light'}
               disabled={busy || !canToggleCharge} onClick={() => submit(chargeAction)}>
-              {board.chargeArmed ? 'ARMED — cancel' : `Use Charge ×${Number(board.chargeXMult.toFixed(4))}`}
+              {board.chargeArmed ? 'DISARM' : 'ARM CHARGE'}
             </Button>
           </Group>}
           {awaitingWardenChoice && <Text size="xs" c="dimmed" className="selection-preview">
-            {selectedWardenDieId === null ? 'Choose any locked die to bring online' : `D${selectedWardenDieId + 1} will keep its current face`}
+            {selectedWardenDieId === null ? 'Choose a Locked Die to Unlock' : `D${selectedWardenDieId + 1} will keep its current Face`}
           </Text>}
           <Group gap="xs" wrap="nowrap">
             {awaitingWardenChoice ? <Button className="unlock-action" size="sm" color="cyan" disabled={busy || selectedWardenDieId === null}
               onClick={() => submit({ type: 'UNLOCK_WARDEN_DIE', dieId: selectedWardenDieId! })}>UNLOCK DIE</Button> : <>
               <Button className="reroll-action" size="sm" variant="default" disabled={busy || !canReroll}
-                onClick={() => submit(manualAction)}>Reroll {CONFIG.manualRerollsPerRound - board.manualRerollsRemaining + effectiveSelection.dieIds.length} / {CONFIG.manualRerollsPerRound}</Button>
-              <Button className="play-action" size="sm" aria-label={lastPlay ? 'LAST PLAY' : 'PLAY'} disabled={busy || !valid}
+                onClick={() => submit(manualAction)}>REROLL {CONFIG.manualRerollsPerRound - board.manualRerollsRemaining + effectiveSelection.dieIds.length} / {CONFIG.manualRerollsPerRound}</Button>
+              <Button className="play-action" size="sm" aria-label={preview ? playActionLabel(preview.danger, preview.guaranteedWin) : 'PLAY'} disabled={busy || !valid}
                 onClick={() => submit({ type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds })}>
-                {preview ? `${preview.pips} x ${preview.multiplier}${preview.hasXMult ? ` * ${preview.effectiveXMult}` : ''} • ${lastPlay ? 'LAST PLAY' : 'PLAY'}` : 'PLAY'}
+                {preview ? `${formatScoreEquation(preview.pips, preview.multiplier, preview.effectiveXMult, preview.score)} • ${playActionLabel(preview.danger, preview.guaranteedWin)}` : 'PLAY'}
               </Button>
             </>}
           </Group>

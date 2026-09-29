@@ -49,14 +49,14 @@ describe('Ultimate Hand ranking', () => {
     const state = newRun('ultimate-snapshot', constant()).state;
     state.bonfires = ['ultimate'];
 
-    const qualifiedSnapshot = captureHandStart(state, 'fiveKind');
+    const qualifiedSnapshot = captureHandStart(state, 'fiveKind', [0, 1, 2, 3, 4]);
     for (const hand of HAND_IDS) state.handLevels[hand] = hand === 'fiveKind' ? 1 : 10;
     expect(handXMultContributions(qualifiedSnapshot, 'fiveKind', 1, [0, 1, 2, 3, 4]))
       .toMatchObject([{ source: 'ultimate', value: 5, dieId: null }]);
 
     const unqualifiedState = newRun('ultimate-snapshot-unqualified', constant()).state;
     unqualifiedState.bonfires = ['ultimate'];
-    const unqualifiedSnapshot = captureHandStart(unqualifiedState, 'fullHouse');
+    const unqualifiedSnapshot = captureHandStart(unqualifiedState, 'fullHouse', [0, 1, 2, 3, 4]);
     unqualifiedState.handLevels.fullHouse = 10;
     expect(handXMultContributions(unqualifiedSnapshot, 'fullHouse', 1, [0, 1, 2, 3, 4])).toEqual([]);
   });

@@ -37,7 +37,7 @@ export default function App() {
   const [hudHeight, setHudHeight] = useState(60);
   const appRef = useRef<HTMLDivElement>(null);
   const game = useGame(requestedSeed, initialSeed, speed);
-  const { board, state, busy, event, progress } = game;
+  const { board, state, busy, event } = game;
   const theme = screenTheme(board);
   useLayoutEffect(() => setSeedInput(state.seed), [state.seed]);
   useEffect(() => saveDiceDisplay(diceDisplay), [diceDisplay]);
@@ -80,9 +80,9 @@ export default function App() {
     <main className="main-content">
       {event?.type === 'MAP_TRANSITION' ? <RunMapTransition key={event.id} seed={state.seed} event={event} onContinue={game.continuePlayback} />
         : board.phase === 'roundSummary' && board.roundSummary ? <RoundSummaryScreen board={board} busy={busy} submit={submit} />
-        : board.phase === 'flameSelection' && board.flameSelection ? <FlameSelectionScreen board={board} event={event} busy={busy} progress={progress} diceDisplay={diceDisplay}
+        : board.phase === 'flameSelection' && board.flameSelection ? <FlameSelectionScreen board={board} event={event} busy={busy} diceDisplay={diceDisplay}
         selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} />
-        : board.phase === 'shop' && board.shop ? <ShopScreen board={board} event={event} busy={busy} progress={progress} diceDisplay={diceDisplay}
+        : board.phase === 'shop' && board.shop ? <ShopScreen board={board} event={event} busy={busy} diceDisplay={diceDisplay}
         selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} submit={submit} skip={game.skip} />
       : (board.phase === 'bust' || (board.phase === 'lost' && board.bust)) ? <BustScreen board={board}
           diceDisplay={diceDisplay}
@@ -90,14 +90,14 @@ export default function App() {
           restartSame={() => restart(state.seed)} newRun={() => restart(freshSeed())} />
         : board.phase === 'lost' || board.phase === 'error' ? <Stack gap="sm">
           <Paper p="xl" ta="center" className="end-state">
-            <Title order={2}>{board.phase === 'lost' ? 'RUN OVER' : 'Resolution stopped'}</Title>
+            <Title order={2}>{board.phase === 'lost' ? 'Run Over' : 'Resolution stopped'}</Title>
             <Text mt="sm">{board.phase === 'lost' && board.bust ? `Bust on round ${board.bust.round}: ${board.bust.score} / ${board.bust.target}. No lives remain.` : state.stats.resolutionError}</Text>
             <Text size="sm" c="dimmed" mt="sm">Run details and event history are available in Run Info.</Text>
             <Group justify="center" mt="lg"><Button onClick={() => restart(state.seed)}>Restart same seed</Button><Button variant="default" onClick={() => restart(freshSeed())}>New seed</Button></Group>
           </Paper>
           <Paper p="xs"><DiceRow dice={board.dice} display={diceDisplay} event={null} disabled selected={[]} onClick={() => {}} /></Paper>
         </Stack>
-        : <RoundScreen board={board} event={event} busy={busy} progress={progress} diceDisplay={diceDisplay}
+        : <RoundScreen board={board} event={event} busy={busy} diceDisplay={diceDisplay}
           selection={selection} setSelection={setSelection} submit={submit} skip={game.skip} />}
     </main>
     <RunInfoModal state={state} visibleEventId={event?.id} busy={busy} opened={runInfoOpen} onClose={() => setRunInfoOpen(false)}

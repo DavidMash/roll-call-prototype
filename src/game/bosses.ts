@@ -13,49 +13,49 @@ export interface BossDefinition {
 export const BOSSES: Record<BossType, BossDefinition> = {
   caller: {
     name: 'THE CALLER',
-    shortRule: 'Answer Calls by fixed manual-hand deadlines: 3, 6, 9, …',
+    shortRule: 'Play the called hand before it comes due or lose half your total score.',
     primary: '#A855F7',
     secondary: '#D946EF',
   },
   warden: {
     name: 'THE WARDEN',
-    shortRule: 'All five dice roll locked; choose one now, then earn each next unlock.',
+    shortRule: 'Choose one die to start. Score enough to unlock the rest.',
     primary: '#06B6D4',
     secondary: '#14B8A6',
   },
   hexer: {
     name: 'THE HEXER',
-    shortRule: 'A Cursed Die joins the battle and must be used in every hand.',
+    shortRule: 'A Cursed Die joins you and must be used in every hand.',
     primary: '#84CC16',
     secondary: '#D9F99D',
   },
   marathon: {
     name: 'THE MARATHON',
-    shortRule: '3× TARGET · Hands recharge after 7 manual plays.',
+    shortRule: 'Extra large Goal. Played hands return after 7 other hands are played.',
     primary: '#F97316',
     secondary: '#FDBA74',
   },
   quickdraw: {
     name: 'QUICKDRAW',
-    shortRule: '⅓ TARGET · Only one Lower hand may be used.',
+    shortRule: 'Reduced Goal, but you can only play a single Lower hand.',
     primary: '#EAB308',
     secondary: '#FDE047',
   },
   fly: {
     name: 'THE FLY',
-    shortRule: 'Hands score ×0.5 until you catch the moving Fly.',
+    shortRule: 'Your played hands are weakened until you catch The Fly on the marked Lower hand.',
     primary: '#92400E',
     secondary: '#D97706',
   },
   snakeEyes: {
     name: 'SNAKE EYES',
-    shortRule: 'Scoring gradually turns your physical faces into 1s.',
+    shortRule: 'Scored faces turn into 1s.',
     primary: '#16A34A',
     secondary: '#4ADE80',
   },
   infected: {
     name: 'THE INFECTED',
-    shortRule: 'Infected faces spread, lose their enhancements, and contribute 3 fewer Pips (minimum 0).',
+    shortRule: 'Infected faces lose 3 Pips and their Enhancements. Played faces become infected.',
     primary: '#DC2626',
     secondary: '#FB7185',
   },
@@ -220,12 +220,33 @@ export function bossHandAvailable(state: Pick<Board, 'boss' | 'consumed'>, hand:
   return !unavailableEncounterHands(state).includes(hand);
 }
 
-export function isLastPlay(state: Pick<Board, 'boss' | 'consumed' | 'dice' | 'manualRerollsRemaining'>): boolean {
-  if (state.manualRerollsRemaining !== 0) return false;
+export type LastPlayDanger = 'none' | 'possible' | 'definite';
+
+export function lastPlayDanger(state: Pick<Board, 'boss' | 'consumed' | 'dice' | 'manualRerollsRemaining'>, hand: HandId): LastPlayDanger {
+  if (state.manualRerollsRemaining !== 0) return 'none';
   const required = requiredEncounterDieIds(state);
-  return handOptions(activeEncounterDice(state), unavailableEncounterHands(state), required)
-    .filter(option => !option.consumed).length === 1;
+  const playable = handOptions(activeEncounterDice(state), unavailableEncounterHands(state), required)
+    .filter(option => !option.consumed);
+  if (playable.length !== 1 || playable[0].id !== hand) return 'none';
+
+  const unavailableAfter = new Set(unavailableEncounterHands(state));
+  if (state.boss?.type === 'marathon') {
+    for (const id of HAND_IDS) {
+      const remaining = state.boss.cooldowns[id] ?? 0;
+      if (remaining <= 1) unavailableAfter.delete(id);
+    }
+    unavailableAfter.add(hand);
+  } else {
+    unavailableAfter.add(hand);
+    if (state.boss?.type === 'quickdraw' && LOWER_HAND_IDS.includes(hand)) {
+      for (const id of LOWER_HAND_IDS) unavailableAfter.add(id);
+    }
+  }
+  return HAND_IDS.every(id => unavailableAfter.has(id)) ? 'definite' : 'possible';
 }
+
+export const isLastPlay = (state: Pick<Board, 'boss' | 'consumed' | 'dice' | 'manualRerollsRemaining'>, hand: HandId) =>
+  lastPlayDanger(state, hand) !== 'none';
 
 export function cleanupTemporaryBossFaces(dice: Die[]): void {
   for (const die of dice.filter(item => item.owner === 'player')) die.faces.forEach((face, index) => {

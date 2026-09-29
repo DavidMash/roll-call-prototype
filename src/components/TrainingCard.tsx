@@ -11,14 +11,15 @@ export function TrainingCard({ offer, handLevels, gold, busy, onTrain }: {
     const cost = teamTrainingCost(offer.purchases);
     return <Card p="sm" className="training-card team-training-card" data-testid="training-offer-team">
       <Group className="training-card-header" justify="space-between" align="start" wrap="nowrap">
-        <Group className="training-title-row" gap={3} wrap="nowrap"><Text className="training-name" fw={800} size="sm" tt="uppercase">Team Training</Text>
-          <InfoPopover label="Team Training" description="Train every hand by one level." /></Group>
+        <Group className="training-title-row" gap={3} wrap="nowrap"><Text className="training-name" fw={800} size="sm" tt="uppercase">TEAM TRAINING</Text>
+          <InfoPopover label="Team Training" description="All hands +1 Lv." /></Group>
         <Badge size="xs" color="yellow" variant="filled">Special</Badge>
       </Group>
-      {offer.purchases > 0 && <Text size="xs" mt={5} c="dimmed">Purchased {offer.purchases}× this Shop</Text>}
+      <Text size="xs" mt={5}>All hands +1 Lv.</Text>
+      {offer.purchases > 0 && <Text size="xs" c="dimmed">Trained ×{offer.purchases}</Text>}
       <Button className="training-action" mt={6} size="compact-xs" fullWidth color="yellow" variant="light" disabled={busy || gold < cost}
         onClick={onTrain} data-testid="train-team">
-        Train ALL · {cost} gold
+        TRAIN ALL · {cost} GOLD
       </Button>
     </Card>;
   }
@@ -31,8 +32,8 @@ export function TrainingCard({ offer, handLevels, gold, busy, onTrain }: {
   return <Card p="sm" className="training-card" data-testid={`training-offer-${offer.hand}`}>
     <Group className="training-card-header" justify="space-between" align="start" wrap="nowrap">
       <div className="training-heading"><Group className="training-title-row" gap={3} wrap="nowrap"><Text className="training-name" fw={700} size="sm" tt="uppercase">{HANDS[offer.hand].name}</Text>
-        <InfoPopover label={`${HANDS[offer.hand].name} training`} description={`Train ${HANDS[offer.hand].name} by one level, increasing its base Pips and Mult.`} /></Group>
-        <Text className="training-level" size="xs" c="dimmed">Lv.{currentLevel} → {nextLevel}</Text></div>
+        <InfoPopover label={`${HANDS[offer.hand].name} training`} description="Gain +1 Lv. and improve this hand’s Pips and Mult." /></Group>
+        <Text className="training-level" size="xs" c="dimmed">Lv. {currentLevel} → {nextLevel}</Text></div>
       {offer.purchases > 0 && <Badge size="xs" color="teal" variant="light">Trained ×{offer.purchases}</Badge>}
     </Group>
     <Group className="training-stats" gap="md" mt={5} wrap="nowrap">
@@ -41,7 +42,7 @@ export function TrainingCard({ offer, handLevels, gold, busy, onTrain }: {
     </Group>
     <Button className="training-action" mt={6} size="compact-xs" fullWidth color="violet" variant="light" disabled={busy || gold < cost}
       onClick={onTrain} data-testid={`train-${offer.hand}`}>
-      Train · {cost} gold
+      TRAIN · {cost} GOLD
     </Button>
   </Card>;
 }

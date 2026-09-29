@@ -191,9 +191,6 @@ export class Resolver {
   rollBatch(dieIds: number[], reason: string, context: RollContext, excludeStartingFace = false): void {
     const ids = [...new Set(dieIds)].sort((a, b) => a - b);
     if (!ids.length) return;
-    const infectionSources = this.state.boss?.type === 'infected'
-      ? activeEncounterDice(this.state).filter(die => activeFace(die).infected).map(die => die.id)
-      : [];
     this.emit({ type: 'DICE_REROLL_STARTED', dieIds: ids, message: `${reason}: ${ids.map(id => `D${id + 1}`).join(', ')}` });
     const rolling = new Set(ids);
     const anchors = context === 'gameplay' ? activeEncounterDice(this.state)
@@ -232,13 +229,6 @@ export class Resolver {
     for (const result of results) {
       const die = this.state.dice.find(item => item.id === result.dieId)!;
       die.value = result.physicalFace;
-      if (context === 'gameplay' && this.state.boss?.type === 'infected' && !activeFace(die).infected
-        && infectionSources.some(sourceId => sourceId !== die.id)) {
-        activeFace(die).infected = true;
-        this.state.boss.infectedFaces.push({ dieId: die.id, physicalFace: die.value });
-        this.emit({ type: 'BOSS_FACE_CHANGED', boss: 'infected', dieIds: [die.id], face: activeFace(die).rank,
-          message: `D${die.id + 1} physical face ${die.value} became infected` });
-      }
       const face = structuredClone(activeFace(die));
       this.emit({ type: 'DIE_ROLLED', dieIds: [die.id], face: face.rank,
         rollSource: excludeStartingFace ? 'manual_reroll' : 'automatic', previousFace: result.before, resultFace: face.rank,
@@ -449,17 +439,27 @@ export class Resolver {
   private resolveSnakeEyes(scoringIds: number[]): void {
     const boss = this.state.boss;
     if (boss?.type !== 'snakeEyes') return;
-    const candidates = [...new Set(scoringIds)].map(id => this.state.dice.find(die => die.id === id)!)
+    const scoredDice = [...new Set(scoringIds)].map(id => this.state.dice.find(die => die.id === id)!)
       .filter(die => die.owner === 'player' && !activeFace(die).snakeEyed && activeFace(die).rank !== 1);
-    const chosen: typeof candidates = [];
-    while (candidates.length && chosen.length < 2) chosen.push(candidates.splice(randomIndex(this.rng, candidates.length), 1)[0]);
-    for (const die of chosen) {
+    for (const die of scoredDice) {
       const physicalFace = die.value;
       activeFace(die).snakeEyed = true;
       activeFace(die).rank = 1;
       boss.mutatedFaces.push({ dieId: die.id, physicalFace });
       this.emit({ type: 'BOSS_FACE_CHANGED', boss: 'snakeEyes', dieIds: [die.id], face: 1,
         message: `D${die.id + 1} physical face ${physicalFace} became Snake-Eyed (1)` });
+    }
+  }
+  private resolveInfected(scoringIds: number[]): void {
+    const boss = this.state.boss;
+    if (boss?.type !== 'infected') return;
+    for (const die of [...new Set(scoringIds)].map(id => this.state.dice.find(item => item.id === id)!)
+      .filter(item => item.owner === 'player' && !activeFace(item).infected)) {
+      const physicalFace = die.value;
+      activeFace(die).infected = true;
+      boss.infectedFaces.push({ dieId: die.id, physicalFace });
+      this.emit({ type: 'BOSS_FACE_CHANGED', boss: 'infected', dieIds: [die.id], face: activeFace(die).rank,
+        message: `D${die.id + 1} face ${physicalFace} became infected after scoring` });
     }
   }
   unlockWardenDie(dieId: number): void {
@@ -490,7 +490,7 @@ export class Resolver {
     const consumesHand = !freeBean && this.state.boss?.type !== 'marathon';
     const ids = [...dieIds].sort((a, b) => a - b);
     const handLevel = this.state.handLevels[hand];
-    const handStart = captureHandStart(this.state, hand);
+    const handStart = captureHandStart(this.state, hand, ids);
     if (freeBean) handStart.chargeArmed = false;
     const shapeParticipants = ids.map(id => ({ id, face: structuredClone(activeFace(this.state.dice.find(die => die.id === id)!)), role: 'selected' as const }));
     if (freeBean) this.emit({ type: 'JUMPING_BEAN_FREE_PLAY', enhancement: 'jumpingBean', hand, dieIds: ids,
@@ -573,6 +573,7 @@ export class Resolver {
     this.resolveQuickdraw(hand, playSource);
     this.resolveCallerCall(hand, playSource);
     this.resolveSnakeEyes(scoringIds);
+    this.resolveInfected(scoringIds);
     this.moveFly();
     const winning = this.state.score >= this.state.target;
     let jackpotPayout = 0;
@@ -697,7 +698,7 @@ export class Resolver {
     } else {
       this.state.stats.loss = { round: failure.round, afterHand: failureLastHand, score: failure.score, afterAction: failureLastAction,
         manualRerollsRemaining: 0, values: failureValues, consumed: failureConsumed };
-      this.emit({ type: 'RUN_LOST', message: `Run over: ${failure.score} / ${failure.target}; no lives remain` });
+      this.emit({ type: 'RUN_LOST', message: `Run Over: ${failure.score} / ${failure.target}; no Lives remain` });
     }
     if (failedBoss) {
       const encounter = [...this.state.stats.bossEncounters].reverse().find(item =>
@@ -762,17 +763,6 @@ export class Resolver {
       if (!playerDice.length) throw new Error('The Warden requires at least one player die.');
       this.rollBatch(playerDice.map(die => die.id), 'Warden opening roll', 'wardenSetup');
     } else this.rollBatch(activeEncounterDice(this.state).map(die => die.id), 'Initial round roll', 'gameplay');
-    if (this.state.boss?.type === 'infected') {
-      for (const die of this.state.dice.filter(item => item.owner === 'player').sort((a, b) => a.id - b.id)) {
-        const physicalFace = (randomIndex(this.rng, die.faces.length) + 1) as import('./types').Rank;
-        die.faces[physicalFace - 1].infected = true;
-        this.state.boss.infectedFaces.push({ dieId: die.id, physicalFace });
-        this.emit({ type: 'BOSS_FACE_CHANGED', boss: 'infected', dieIds: [die.id], face: die.faces[physicalFace - 1].rank,
-          message: `D${die.id + 1} physical face ${physicalFace} was infected at encounter start` });
-      }
-      this.queue = this.queue.filter(item => item.enhancement !== 'jumpingBean'
-        || !activeFace(this.state.dice.find(die => die.id === item.dieId)!).infected);
-    }
     this.drain(); this.evaluate();
   }
   freshOffers(): void {

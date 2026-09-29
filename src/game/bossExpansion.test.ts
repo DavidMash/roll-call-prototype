@@ -216,16 +216,38 @@ describe('The Fly', () => {
 });
 
 describe('Snake Eyes', () => {
-  it('mutates up to two eligible scoring physical faces into real 1s and keeps enhancements attached', () => {
+  it('turns every scored Face into 1 after scoring and keeps Enhancements attached', () => {
     let state = bossRound('snakeEyes');
     state.target = 1_000_000;
-    expose(state, [2, 2, 4, 5, 6]);
-    state.dice[0].faces[1].enhancements.bonus = 1;
-    state = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0)).state;
+    expose(state, [6, 6, 6, 6, 6]);
+    state.dice[0].faces[5].enhancements.bonus = 1;
+    const result = dispatch(state, { type: 'PLAY', hand: 'fiveKind', dieIds: [0, 1, 2, 3, 4] }, constant(0));
+    state = result.state;
     if (state.boss?.type !== 'snakeEyes') throw new Error('Snake Eyes fixture failed');
-    expect(state.boss.mutatedFaces).toHaveLength(2);
-    expect(state.dice[0].faces[1]).toMatchObject({ rank: 1, snakeEyed: true, enhancements: { bonus: 1 } });
-    expect(state.dice[1].faces[1]).toMatchObject({ rank: 1, snakeEyed: true });
+    expect(state.boss.mutatedFaces).toHaveLength(5);
+    expect(state.dice[0].faces[5]).toMatchObject({ rank: 1, snakeEyed: true, enhancements: { bonus: 1 } });
+    expect(state.dice.every(die => die.faces[5].snakeEyed && die.faces[5].rank === 1)).toBe(true);
+    const scoreIndex = result.events.findIndex(event => event.type === 'HAND_SCORE_FINALIZED');
+    const mutationIndex = result.events.findIndex(event => event.type === 'BOSS_FACE_CHANGED');
+    expect(mutationIndex).toBeGreaterThan(scoreIndex);
+  });
+
+  it('includes successful Hitchhiker and Jumping Bean free-play Faces', () => {
+    const hitchState = bossRound('snakeEyes');
+    hitchState.target = 1_000_000;
+    expose(hitchState, [4, 4, 5, 2, 6]);
+    activeFace(hitchState.dice[2]).enhancements.hitchhiker = 1;
+    const hitched = dispatch(hitchState, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0)).state;
+    expect(hitched.dice[0].faces[3].snakeEyed).toBe(true);
+    expect(hitched.dice[1].faces[3].snakeEyed).toBe(true);
+    expect(hitched.dice[2].faces[4].snakeEyed).toBe(true);
+
+    const beanState = bossRound('snakeEyes');
+    beanState.target = 1_000_000;
+    beanState.dice[0].value = 2;
+    activeFace(beanState.dice[0]).enhancements.jumpingBean = 1;
+    new Resolver(beanState, constant(0)).play('twos', [0], 'jumpingBean');
+    expect(beanState.dice[0].faces[1]).toMatchObject({ rank: 1, snakeEyed: true });
   });
 
   it('skips natural 1s and already-mutated faces and rollback restores permanent values', () => {
@@ -256,9 +278,25 @@ describe('The Infected', () => {
     if (state.boss?.type === 'infected') state.boss.infectedFaces = [];
   }
 
-  it('starts with an infected physical face on every die', () => {
+  it('starts with zero infected Faces', () => {
     const state = bossRound('infected', constant(.2));
-    expect(state.dice.every(die => die.faces.filter(face => face.infected).length === 1)).toBe(true);
+    expect(state.dice.every(die => die.faces.every(face => !face.infected))).toBe(true);
+    expect(state.boss).toMatchObject({ type: 'infected', infectedFaces: [] });
+  });
+
+  it('infects every scored Face after scoring without reducing the current hand', () => {
+    const state = bossRound('infected');
+    clearInfection(state);
+    state.target = 1_000_000;
+    expose(state, [4, 4, 4, 2, 6]);
+    const cleanScore = handScore(state.dice, 'threeKind', [0, 1, 2]).score;
+    const result = dispatch(state, { type: 'PLAY', hand: 'threeKind', dieIds: [0, 1, 2] }, constant(.2));
+    expect(result.state.stats.handScores.at(-1)?.score).toBe(cleanScore);
+    expect(result.state.dice.slice(0, 3).every(die => die.faces[3].infected)).toBe(true);
+    expect(result.state.dice.slice(3).every(die => !die.faces.some(face => face.infected))).toBe(true);
+    const scoreIndex = result.events.findIndex(event => event.type === 'HAND_SCORE_FINALIZED');
+    const infectionIndex = result.events.findIndex(event => event.type === 'BOSS_FACE_CHANGED');
+    expect(infectionIndex).toBeGreaterThan(scoreIndex);
   });
 
   it('subtracts 3 Pips from an infected scoring face without reducing Hand Base Pips', () => {
@@ -323,16 +361,24 @@ describe('The Infected', () => {
     expect(result.stats.handScores.at(-1)?.xMult).toBe(5);
   });
 
-  it('spreads from another die, never self-spreads, and does not recursively spread in the same batch', () => {
-    const state = bossRound('infected');
-    clearInfection(state);
-    expose(state, [1, 1, 1, 1, 1]);
-    state.dice[0].faces[0].infected = true;
-    if (state.boss?.type !== 'infected') throw new Error('Infected fixture failed');
-    state.boss.infectedFaces.push({ dieId: 0, physicalFace: 1 });
-    new Resolver(state, constant(.25)).rollBatch([0, 1], 'test batch', 'gameplay', true);
-    expect(activeFace(state.dice[0]).infected).not.toBe(true);
-    expect(activeFace(state.dice[1]).infected).toBe(true);
+  it('infects successful Hitchhiker and Jumping Bean free-play Faces', () => {
+    const hitchState = bossRound('infected');
+    clearInfection(hitchState);
+    hitchState.target = 1_000_000;
+    expose(hitchState, [4, 4, 5, 2, 6]);
+    activeFace(hitchState.dice[2]).enhancements.hitchhiker = 1;
+    const hitched = dispatch(hitchState, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0)).state;
+    expect(hitched.dice[0].faces[3].infected).toBe(true);
+    expect(hitched.dice[1].faces[3].infected).toBe(true);
+    expect(hitched.dice[2].faces[4].infected).toBe(true);
+
+    const beanState = bossRound('infected');
+    clearInfection(beanState);
+    beanState.target = 1_000_000;
+    beanState.dice[0].value = 2;
+    activeFace(beanState.dice[0]).enhancements.jumpingBean = 1;
+    new Resolver(beanState, constant(0)).play('twos', [0], 'jumpingBean');
+    expect(beanState.dice[0].faces[1].infected).toBe(true);
   });
 
   it('rolls all infection back to a clean permanent build on Bust', () => {
@@ -344,7 +390,8 @@ describe('The Infected', () => {
     expect(state.dice.every(die => die.faces.every(face => !face.infected))).toBe(true);
     state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.55)).state;
     expect(state.boss?.type).toBe('infected');
-    expect(state.dice.every(die => die.faces.filter(face => face.infected).length === 1)).toBe(true);
+    expect(state.dice.every(die => die.faces.every(face => !face.infected))).toBe(true);
+    expect(state.boss).toMatchObject({ type: 'infected', infectedFaces: [] });
   });
 
   it('uses boss-aware unavailable hands for Quickdraw and Marathon', () => {

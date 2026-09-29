@@ -18,10 +18,10 @@ export function EnhancementCard({ offer, selected, gold, busy, onSelect }: {
     <Group className="offer-card-header" justify="space-between" align="center" wrap="nowrap">
       <Group className="offer-identity" gap={4} wrap="nowrap"><span className="offer-icon" aria-hidden="true">{ICON[offer.enhancement]}</span><Text className="offer-name" fw={700} size="sm">{definition.name}</Text>
         <InfoPopover label={definition.name} description={definition.description} /></Group>
-      <Badge className="offer-price" size="sm" variant="light" color="yellow">{enhancementCost(offer.enhancement)} gold</Badge>
+      <Badge className="offer-price" size="sm" variant="light" color="yellow">{enhancementCost(offer.enhancement)} GOLD</Badge>
     </Group>
     <Button className="offer-action" mt="xs" size="compact-xs" fullWidth variant={selected ? 'filled' : 'light'} disabled={!enabled} onClick={onSelect} aria-pressed={selected}>
-      {offer.purchased ? 'Purchased' : !affordable ? 'Need more gold' : selected ? 'Click an exposed face' : 'Select or drag'}
+      {offer.purchased ? 'PURCHASED' : !affordable ? 'NEED MORE GOLD' : selected ? 'CHOOSE A FACE' : 'SELECT OR DRAG'}
     </Button>
   </Card>;
 }

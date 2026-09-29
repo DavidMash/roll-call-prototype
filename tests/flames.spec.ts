@@ -84,11 +84,11 @@ async function perform(page: Page, game: GameState, action: Extract<Action, { ty
       if (selected !== action.dieIds.includes(die.id)) await target.click();
     }
     if (await handRow.getAttribute('aria-pressed') !== 'true') await handRow.click();
-    await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
+    await page.getByRole('button', { name: /^(PLAY|LAST PLAY[?.])$/ }).click();
   } else if (action.type === 'MANUAL_REROLL') {
     const die = game.dice.find(item => item.id === action.dieIds[0])!;
     await page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) }).click();
-    await page.getByRole('button', { name: /^Reroll \d+ \/ 3$/ }).click();
+    await page.getByRole('button', { name: /^REROLL \d+ \/ 3$/ }).click();
   } else if (action.type === 'UNLOCK_WARDEN_DIE') {
     await page.getByRole('button', { name: new RegExp(`^Die ${action.dieId + 1},.*selectable to unlock$`) }).click();
     await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();
@@ -171,10 +171,9 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   await ready(page);
   expect(game.phase).toBe('shop');
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
-  await expect(page.getByRole('button', { name: new RegExp(`^Die 1, face ${rewardFaces[0]},.*Flame ${FLAMES.wellTrained.name}`) })).toBeVisible();
-  await expect(page.getByRole('tooltip')).toContainText('Your Flame is only an Ember—it has no effect yet.');
-  await expect(page.getByRole('tooltip')).toContainText('Stoke the Flame with Gold');
-  await expect(page.getByRole('tooltip')).toContainText('100 Gold');
+  await expect(page.getByRole('button', { name: new RegExp(`^Die 1, face ${rewardFaces[0]},.*Ember ${FLAMES.wellTrained.name}`) })).toBeVisible();
+  await expect(page.getByRole('tooltip')).toContainText('NEW EMBER');
+  await expect(page.getByRole('tooltip')).toContainText('Stoke Flames in the Shop. At 100 Gold, they become Bonfires.');
   await expect(page.locator('.flame-tutorial-anchor')).toHaveCount(1);
   await expect(page.getByText(`🔥 ${FLAMES.wellTrained.shortName} 0`, { exact: true })).toBeVisible();
   await expect(page.locator('[data-testid^="flame-offer-"]')).toHaveCount(0);
@@ -184,19 +183,20 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   game = dispatch(game, { type: 'DISMISS_FLAME_TUTORIAL' }).state;
   await ready(page);
   await expect(page.getByRole('tooltip')).toHaveCount(0);
-  const manager = page.getByRole('dialog', { name: 'D1 — Manage Die' });
+  const manager = page.getByRole('dialog', { name: 'D1 — MANAGE DIE' });
   await expect(manager.getByTestId('shop-flame-context')).toContainText('0 / 100 → BONFIRE');
-  await manager.getByRole('button', { name: 'Stoke Flame', exact: true }).click();
-  const shopStoke = page.getByRole('dialog', { name: `D1 — Stoke ${FLAMES.wellTrained.name}` });
+  await manager.getByRole('button', { name: 'STOKE', exact: true }).click();
+  const shopStoke = page.getByRole('dialog', { name: FLAMES.wellTrained.name });
   await shopStoke.getByLabel(`Stoke amount for ${FLAMES.wellTrained.name}`).fill('2');
-  await expect(shopStoke.getByText(/After Stoke · 2\/100/)).toBeVisible();
-  await shopStoke.getByRole('button', { name: 'Stoke 2 Gold', exact: true }).click();
+  await expect(shopStoke.getByText(/AFTER STOKE · 2\/100/)).toBeVisible();
+  await shopStoke.getByRole('button', { name: 'STOKE 2 GOLD', exact: true }).click();
   game = dispatch(game, { type: 'STOKE_FLAME', dieId: 0, amount: 2 }).state;
   await ready(page);
   expect(game.gold).toBe(goldBeforeStoke - 2);
   expect(game.dice[0].flame?.investedGold).toBe(2);
   expect(game.stats.flameStokes.at(-1)?.source).toBe('shop');
-  await expect(shopStoke).toContainText('2 / 100 → BONFIRE');
+  await expect(shopStoke).toContainText('2 / 100');
+  await expect(shopStoke).toContainText('BONFIRE AT 100');
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
 
@@ -212,19 +212,19 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   }
   const wellTrained = Number(wellTrainedMultiplier(2, game.handPlayCounts[choice.hand]).toFixed(4));
   await expect(page.getByTestId(`well-trained-preview-${choice.hand}`)).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toContainText(`* ${wellTrained} • PLAY`);
+  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toContainText(`× ${wellTrained} =`);
   await page.setViewportSize({ width: 500, height: 520 });
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   const panel = page.getByTestId('live-score-panel');
   await expect(panel).toBeInViewport();
   await page.clock.install({ time: new Date('2026-09-24T12:00:00Z') });
   await setPlaybackSpeed(page, 'NORMAL');
-  await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
+  await page.getByRole('button', { name: /^(PLAY|LAST PLAY[?.])$/ }).click();
   const result = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds });
   const xMultIndex = result.events.findIndex(event => event.type === 'HAND_XMULT_CHANGED' && event.flame === 'wellTrained');
   expect(xMultIndex).toBeGreaterThan(0);
   await page.clock.runFor(CONFIG.tickMs.normal * xMultIndex);
-  await expect(page.getByTestId('hand-xmult')).toHaveText(`x${result.events[xMultIndex].handScore!.currentXMult}`);
+  await expect(page.getByTestId('hand-xmult')).toHaveText(`×${result.events[xMultIndex].handScore!.currentXMult}`);
   await expect(panel).toBeInViewport();
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight
@@ -255,16 +255,17 @@ test('Flame Selection only acquires while Shop Manage Die supports arbitrary Sto
   await ready(page);
   await expect(page.getByRole('tooltip')).toHaveCount(0);
   await page.getByRole('button', { name: /^Die 1,/ }).click();
-  const manager = page.getByRole('dialog', { name: 'D1 — Manage Die' });
-  await manager.getByRole('button', { name: 'Stoke Flame', exact: true }).click();
-  const stoke = page.getByRole('dialog', { name: new RegExp(`Stoke ${FLAMES[offer.flame].name}`) });
-  await expect(stoke).toContainText('Current');
-  await expect(stoke).toContainText('At Bonfire');
+  const manager = page.getByRole('dialog', { name: 'D1 — MANAGE DIE' });
+  await manager.getByRole('button', { name: 'STOKE', exact: true }).click();
+  const stoke = page.getByRole('dialog', { name: FLAMES[offer.flame].name });
+  await expect(stoke).toContainText('BONFIRE AT 100');
+  await expect(stoke).not.toContainText('Full strength');
+  await expect(stoke).not.toContainText('At Bonfire');
   await stoke.getByLabel(`Stoke amount for ${FLAMES[offer.flame].name}`).fill('7');
-  await stoke.getByRole('button', { name: 'Stoke 7 Gold', exact: true }).click();
+  await stoke.getByRole('button', { name: 'STOKE 7 GOLD', exact: true }).click();
   game = dispatch(game, { type: 'STOKE_FLAME', dieId: 0, amount: 7 }).state;
   await ready(page);
-  await expect(stoke).toContainText('7 / 100 → BONFIRE');
+  await expect(stoke).toContainText('7 / 100');
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
 
@@ -303,7 +304,7 @@ test('arming and canceling Charge preserves the selected hand and dice', async (
   }
   await expect(handRow).toHaveAttribute('aria-pressed', 'true');
 
-  const chargeButton = page.getByRole('button', { name: 'Use Charge ×1.5', exact: true });
+  const chargeButton = page.getByRole('button', { name: 'ARM CHARGE', exact: true });
   await chargeButton.click();
   await ready(page);
   await expect(handRow).toHaveAttribute('aria-pressed', 'true');
@@ -311,7 +312,7 @@ test('arming and canceling Charge preserves the selected hand and dice', async (
     await expect(page.getByRole('button', { name: new RegExp(`^Die ${dieId + 1},`) })).toHaveAttribute('aria-pressed', 'true');
   }
 
-  await page.getByRole('button', { name: 'ARMED — cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'DISARM', exact: true }).click();
   await ready(page);
   await expect(handRow).toHaveAttribute('aria-pressed', 'true');
   for (const dieId of choice.dieIds) {
@@ -322,6 +323,6 @@ test('arming and canceling Charge preserves the selected hand and dice', async (
   await ready(page);
   await page.getByRole('button', { name: /^Die 1,/ }).click();
   await ready(page);
-  await expect(page.getByRole('button', { name: 'Use Charge ×1.5', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'ARM CHARGE', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /^Die 1,/ })).toHaveAttribute('aria-pressed', 'false');
 });

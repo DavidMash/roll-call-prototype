@@ -169,7 +169,7 @@ export function validateAction(state: Board, action: Action): string | null {
     const die = state.dice.find(item => item.id === action.dieId && item.owner === 'player');
     if (!die?.flame || !activeFlameId(die.flame)) return 'Choose an active Flame to invest in.';
     if (!Number.isInteger(action.amount) || action.amount <= 0) return 'Stoking requires a positive whole Gold amount.';
-    if (action.amount > state.gold) return 'Not enough gold to stoke that Ember.';
+    if (action.amount > state.gold) return 'Not enough Gold to Stoke that Ember.';
     if (activeFlameInvestment(die.flame) + action.amount > 100) return 'A Flame cannot hold more than 100 invested Gold.';
     return null;
   }
@@ -189,29 +189,29 @@ export function validateAction(state: Board, action: Action): string | null {
     const offer = state.shop.offers.find(item => item.id === action.offerId);
     const die = state.dice.find(item => item.id === action.dieId);
     if (!offer || offer.purchased || !die) return 'Choose an available offer and a physical die.';
-    if (state.gold < enhancementCost(offer.enhancement)) return 'Not enough gold for this enhancement.';
+    if (state.gold < enhancementCost(offer.enhancement)) return 'Not enough Gold for this Enhancement.';
     return attachmentError(activeFace(die), offer.enhancement);
   }
   if (action.type === 'SELL_ENHANCEMENT') {
     const die = state.dice.find(item => item.id === action.dieId);
-    if (!die || !Number.isInteger(action.face) || !stacks(die.faces[action.face - 1], action.enhancement)) return 'Choose an enhancement that exists on that physical face.';
+    if (!die || !Number.isInteger(action.face) || !stacks(die.faces[action.face - 1], action.enhancement)) return 'Choose an Enhancement on that Face.';
   }
   if (action.type === 'RESTORE_LIFE') {
     if (state.lives >= CONFIG.maxLives) return 'All lives are already restored.';
-    if (state.gold < lifeRestoreCost(state.shop.lifeRestores)) return 'Not enough gold to restore a life.';
+    if (state.gold < lifeRestoreCost(state.shop.lifeRestores)) return 'Not enough Gold to restore a Life.';
   }
   if (action.type === 'TRAIN_HAND') {
     const offer = state.shop.trainingOffers.find(item => item.kind === 'hand' && item.hand === action.hand);
     if (!offer) return 'Choose an available hand training offer.';
-    if (state.gold < handTrainingCost(offer.purchases)) return 'Not enough gold to train this hand.';
+    if (state.gold < handTrainingCost(offer.purchases)) return 'Not enough Gold to train this hand.';
   }
   if (action.type === 'TRAIN_ALL_HANDS') {
     const offer = state.shop.trainingOffers.find(item => item.kind === 'team');
     if (!offer) return 'Choose an available Team Training offer.';
-    if (state.gold < teamTrainingCost(offer.purchases)) return 'Not enough gold for Team Training.';
+    if (state.gold < teamTrainingCost(offer.purchases)) return 'Not enough Gold for Team Training.';
   }
-  if (action.type === 'REROLL_DICE' && state.gold < diceRerollCost(state.shop.diceRerolls)) return 'Not enough gold to reroll the shop dice.';
-  if (action.type === 'REROLL_OFFERS' && state.gold < offerRerollCost(state.shop.offerRerolls)) return 'Not enough gold to reroll enhancements.';
+  if (action.type === 'REROLL_DICE' && state.gold < diceRerollCost(state.shop.diceRerolls)) return 'Not enough Gold to reroll Shop dice.';
+  if (action.type === 'REROLL_OFFERS' && state.gold < offerRerollCost(state.shop.offerRerolls)) return 'Not enough Gold to reroll offers.';
   return null;
 }
 

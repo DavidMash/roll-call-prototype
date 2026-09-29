@@ -4,6 +4,7 @@ import { activeFlameId } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
 import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands } from '../game/bosses';
+import { EMPTY_TEXT, formatScoreEquation } from '../game/copy';
 
 const MOBILE_HAND_NAMES: Partial<Record<HandId, string>> = {
   twoPair: 'Two Pair',
@@ -57,14 +58,14 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
         const isUltimate = ownsUltimate && ultimate.has(hand);
         const score = board.scoreByHand[hand];
         const state = consumed ? 'consumed' : selected ? 'selected' : playable ? 'playable' : 'unavailable';
-        const scoreLabel = score === undefined ? 'no score' : `${score} points`;
+        const scoreLabel = score === undefined ? EMPTY_TEXT.score : `${score} points`;
         const showQuickPlay = selected && canSubmit;
         return <div key={hand} className={`scorecard-row-shell ${showQuickPlay ? 'has-quick-play' : ''}`}>
         <Button variant={selected ? 'light' : 'subtle'} color={selected ? 'teal' : 'gray'}
           className={`scorecard-row ${state} ${targeted ? 'targeted' : ''} ${board.boss?.type === 'caller' && board.boss.calledHand === hand ? 'caller-called' : ''} ${board.boss?.type === 'fly' && board.boss.flyHand === hand ? 'fly-row' : ''}`} data-testid={`scorecard-row-${hand}`} data-state={state}
           disabled={busy || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}
           aria-keyshortcuts={selected && canSubmit ? 'Enter' : undefined}
-          aria-label={`${definition.name} · Lv. ${stats.level} ${stats.basePips} Pips · ×${stats.baseMultiplier}${isUltimate ? ' · Ultimate Hand' : ''} ${scoreLabel}${consumed ? ' used' : ''}`}>
+          aria-label={`${definition.name} · Lv. ${stats.level} · ${stats.basePips} Pips · ×${stats.baseMultiplier} Mult${isUltimate ? ' · Ultimate Hand' : ''} · ${scoreLabel}${consumed ? ' · Used' : ''}`}>
           <span className="scorecard-row-copy">
             <span className="scorecard-hand-name" title={definition.name}>
               <span className="scorecard-name-line">
@@ -75,7 +76,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
               </span>
               <span className="hand-level">Lv. {stats.level}</span>
             </span>
-            {isUltimate && <Tooltip label="Your highest-ranked hand. Hand level ranks first, then trained scoring strength." multiline maw={300} withArrow>
+            {isUltimate && <Tooltip label="Your highest level hand." multiline maw={300} withArrow>
               <Badge className="ultimate-badge" size="xs" color="grape" variant="light" data-testid={`ultimate-badge-${hand}`}><span className="wide-label">ULTIMATE</span><span className="compact-label">U</span></Badge>
             </Tooltip>}
           </span>
@@ -83,14 +84,13 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
             <span data-testid={`scorecard-score-${hand}`}>{score ?? '—'}</span>
             {cooldown > 0 ? <Badge className="scorecard-state-badge" size="xs" color="orange" variant="light" title={`Cooldown ${cooldown}`}><span className="wide-label">COOLDOWN </span><span className="compact-label">CD </span>{cooldown}</Badge>
               : quickdrawLocked ? <Badge size="xs" color="yellow" variant="light">LOCKED</Badge>
-              : consumed && <Badge size="xs" color="gray" variant="light">used</Badge>}
+              : consumed && <Badge size="xs" color="gray" variant="light">USED</Badge>}
           </span>
         </Button>
         {showQuickPlay && submitPreview && <Button className="scorecard-quick-play" size="compact-xs"
           aria-label={`Play ${definition.name} for ${submitPreview.score} points`} onClick={onSubmit}>
           <span className="quick-score-expression">
-            {submitPreview.pips} x {submitPreview.multiplier}
-            {submitPreview.hasXMult && <> * {submitPreview.effectiveXMult}</>}
+            {formatScoreEquation(submitPreview.pips, submitPreview.multiplier, submitPreview.effectiveXMult, submitPreview.score)}
           </span>
           <SendIcon />
         </Button>}

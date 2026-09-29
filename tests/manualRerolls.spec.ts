@@ -34,7 +34,7 @@ async function matchRound(page: Page, game: GameState) {
 }
 async function reroll(page: Page, game: GameState, dieIds: number[]) {
   for (const id of dieIds) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
-  await page.getByRole('button', { name: `Reroll ${CONFIG.manualRerollsPerRound - game.manualRerollsRemaining + dieIds.length} / ${CONFIG.manualRerollsPerRound}`, exact: true }).click();
+  await page.getByRole('button', { name: `REROLL ${CONFIG.manualRerollsPerRound - game.manualRerollsRemaining + dieIds.length} / ${CONFIG.manualRerollsPerRound}`, exact: true }).click();
   const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds });
   await matchRound(page, next.state);
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
@@ -115,7 +115,7 @@ async function reachDeadBoard(page: Page, rescue: boolean) {
       await page.getByRole('button', { name: 'PLAY', exact: true }).click();
     } else if (action.type === 'MANUAL_REROLL') {
       for (const id of action.dieIds) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
-      await page.getByRole('button', { name: /^Reroll \d+ \/ 3$/ }).click();
+      await page.getByRole('button', { name: /^REROLL \d+ \/ 3$/ }).click();
     } else if (action.type === 'NEXT_ROUND') {
       await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
     } else if (action.type === 'CONTINUE_ROUND_SUMMARY') {
@@ -125,8 +125,8 @@ async function reachDeadBoard(page: Page, rescue: boolean) {
     }
   }
   await matchRound(page, fixture.game);
-  await expect(page.getByRole('heading', { name: 'Run over' })).toHaveCount(0);
-  await expect(page.getByText('Select dice and use a reroll.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Run Over' })).toHaveCount(0);
+  await expect(page.getByText('Use a Reroll.', { exact: true })).toBeVisible();
   return fixture.game;
 }
 
@@ -134,19 +134,19 @@ test('strategic single-die and multi-die rerolls cost charges, clear selection a
   let game = newRun('manual-browser').state;
   await page.goto('/?seed=manual-browser&speed=instant');
   await matchRound(page, game);
-  await expect(page.getByRole('button', { name: 'Reroll 0 / 3', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'REROLL 0 / 3', exact: true })).toBeDisabled();
   const single = await reroll(page, game, [1]);
   game = single.state;
   expect(game.manualRerollsRemaining).toBe(2);
   expect(single.events.filter(event => event.type === 'DIE_ROLLED').map(event => event.dieIds)).toEqual([[1]]);
   for (const id of [0, 2, 4]) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
-  await expect(page.getByRole('button', { name: 'Reroll 4 / 3', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'REROLL 4 / 3', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: /^Die 5,/ }).click();
-  const button = page.getByRole('button', { name: 'Reroll 3 / 3', exact: true });
+  const button = page.getByRole('button', { name: 'REROLL 3 / 3', exact: true });
   await expect(button).toBeEnabled();
   await setPlaybackSpeed(page, 'NORMAL');
   await button.click();
-  await expect(page.getByRole('button', { name: /^Reroll \d+ \/ 3$/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^REROLL \d+ \/ 3$/ })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: /^Die 1,/ })).toBeDisabled();
   await page.getByRole('button', { name: 'Skip playback' }).click();
@@ -157,7 +157,7 @@ test('strategic single-die and multi-die rerolls cost charges, clear selection a
   await setPlaybackSpeed(page, 'INSTANT');
   const option = handOptions(game.dice, game.consumed).find(hand => !hand.consumed)!;
   await page.getByRole('button', { name: new RegExp(`^${HANDS[option.id].name} `) }).click();
-  await expect(page.getByRole('button', { name: /^Reroll \d+ \/ 3$/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^REROLL \d+ \/ 3$/ })).toBeDisabled();
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   game = dispatch(game, { type: 'PLAY', hand: option.id, dieIds: option.combinations[0] }).state;
   await matchRound(page, game);
@@ -170,19 +170,19 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   for (const remaining of [2, 1]) {
     game = (await reroll(page, game, [0])).state;
     expect(game.manualRerollsRemaining).toBe(remaining);
-    await expect(page.getByRole('heading', { name: 'Run over' })).toHaveCount(0);
-    await expect(page.getByText('Select dice and use a reroll.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Run Over' })).toHaveCount(0);
+    await expect(page.getByText('Use a Reroll.', { exact: true })).toBeVisible();
   }
   if (playbackSpeed === 'normal') await setPlaybackSpeed(page, 'NORMAL');
   await page.getByRole('button', { name: /^Die 1,/ }).click();
-  await page.getByRole('button', { name: 'Reroll 3 / 3', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Run over' })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'BUST', exact: true })).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText('1 LIFE LOST', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'REROLL 3 / 3', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Run Over' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: `ROUND ${game.round} BUST`, exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText('1 Life Lost', { exact: true })).toBeVisible();
   const bustContinue = page.getByRole('button', { name: 'Continue', exact: true });
   await expect(bustContinue).toBeVisible();
   await page.waitForTimeout(1500);
-  await expect(page.getByRole('heading', { name: 'BUST', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: `ROUND ${game.round} BUST`, exact: true })).toBeVisible();
   const failedRound = game.round;
   const expectedShop = structuredClone(game.roundCheckpoint?.shop);
   game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
@@ -200,14 +200,15 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   expect(Number.parseFloat(fallbackConnectorStyle.transformOrigin)).toBeGreaterThan(0);
   await fallbackMap.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.getByTestId('bust-shop-banner')).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText(/ROUND \d+ BUST · 1 LIFE LOST/)).toBeVisible();
+  await expect(page.getByText(/ROUND \d+ BUST/)).toBeVisible();
+  await expect(page.getByText('1 Life Lost', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: `RETRY ROUND ${game.round}`, exact: true })).toBeVisible();
   expect(game.phase).toBe('shop');
   expect(game.lives).toBe(2);
   expect(game.shop).toEqual(expectedShop);
   await page.getByRole('button', { name: /^Die 1,/ }).click();
-  await expect(page.getByRole('dialog', { name: /D1 .* Manage Die/ })).toBeVisible();
-  await page.getByRole('dialog', { name: /D1 .* Manage Die/ }).getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByRole('dialog', { name: /D1 .* MANAGE DIE/ })).toBeVisible();
+  await page.getByRole('dialog', { name: /D1 .* MANAGE DIE/ }).getByRole('button', { name: 'Close' }).click();
   await page.getByTestId('stat-lives').click();
   await expect(page.getByRole('dialog', { name: 'RESTORE LIVES' })).toBeVisible();
   await page.keyboard.press('Escape');
@@ -222,7 +223,7 @@ test('a manual reroll rescues a dead board and restores legal hand controls', as
   const game = await reachDeadBoard(page, true);
   const result = await reroll(page, game, [0]);
   expect(result.state.stats.deadBoardRescues).toBe(1);
-  await expect(page.getByText('Select dice and use a reroll.', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Use a Reroll.', { exact: true })).toHaveCount(0);
   const option = handOptions(result.state.dice, result.state.consumed).find(hand => !hand.consumed)!;
   await page.getByRole('button', { name: new RegExp(`^${HANDS[option.id].name} `) }).click();
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeEnabled();

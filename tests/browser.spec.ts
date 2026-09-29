@@ -74,10 +74,10 @@ async function matchBoard(page: Page, game: GameState) {
     if (game.phase === 'shop' && game.bust) await expect(page.getByTestId('bust-shop-banner')).toBeVisible();
     else if (game.phase === 'shop') await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
     else await expect(page.getByRole('main').getByText('FLAME SELECTION', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Reroll \d+ \/ 3$/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^REROLL \d+ \/ 3$/ })).toHaveCount(0);
   } else if (game.phase === 'round') {
     await expect(page.getByTestId('round-score-progress')).toHaveText(`${game.score} / ${game.target}`);
-    await expect(page.getByTestId('round-goal-progress')).toHaveAttribute('aria-valuetext', `${game.score} of ${game.target} points`);
+    await expect(page.getByTestId('round-goal-progress')).toHaveAttribute('aria-valuetext', `${game.score} of ${game.target} points toward the Goal`);
   }
   const visibleDice = game.phase === 'round' ? activeEncounterDice(game) : game.dice;
   for (const die of visibleDice) await expect(page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`}, face ${die.value},`) })).toBeVisible();
@@ -96,7 +96,7 @@ async function playBest(page: Page, game: GameState): Promise<GameState> {
   if (game.boss?.type === 'caller' && !game.boss.satisfied && choice?.hand !== game.boss.calledHand && game.manualRerollsRemaining > 0) {
     const die = activeEncounterDice(game)[0];
     await page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},`) }).click();
-    await page.getByRole('button', { name: /^Reroll \d+ \/ 3$/ }).click();
+    await page.getByRole('button', { name: /^REROLL \d+ \/ 3$/ }).click();
     const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [die.id] }).state;
     await matchBoard(page, next);
     return next;
@@ -104,7 +104,7 @@ async function playBest(page: Page, game: GameState): Promise<GameState> {
   if (!choice) {
     const die = activeEncounterDice(game)[0];
     await page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) }).click();
-    await page.getByRole('button', { name: `Reroll ${CONFIG.manualRerollsPerRound - game.manualRerollsRemaining + 1} / ${CONFIG.manualRerollsPerRound}`, exact: true }).click();
+    await page.getByRole('button', { name: `REROLL ${CONFIG.manualRerollsPerRound - game.manualRerollsRemaining + 1} / ${CONFIG.manualRerollsPerRound}`, exact: true }).click();
     const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [die.id] }).state;
     await matchBoard(page, next);
     return next;
@@ -117,7 +117,7 @@ async function playBest(page: Page, game: GameState): Promise<GameState> {
     if (selected !== choice.dieIds.includes(die.id)) await target.click();
   }
   if (await handRow.getAttribute('aria-pressed') !== 'true') await handRow.click();
-  await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
+  await page.getByRole('button', { name: /^(PLAY|LAST PLAY[?.])$/ }).click();
   const next = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }).state;
   await matchBoard(page, next);
   return next;
@@ -271,7 +271,7 @@ test('scorecard keeps all fourteen categories visible with simplified actionable
   await expect(page.getByRole('button', { name: 'Clear selection' })).toHaveCount(0);
   await expect(page.getByTestId('round-score-progress')).toHaveText('0 / 50');
   await expect(page.getByTestId('round-score-progress')).toHaveClass(/round-score-readout/);
-  await expect(page.getByTestId('round-goal-progress')).toHaveAttribute('aria-valuetext', '0 of 50 points');
+  await expect(page.getByTestId('round-goal-progress')).toHaveAttribute('aria-valuetext', '0 of 50 points toward the Goal');
   await expect(page.locator('.hud-phase')).toHaveText('ROUND 1');
 
   const playable = page.locator('[data-state="playable"]').first();
@@ -297,7 +297,7 @@ test('selected hands expose desktop score-slot and Enter PLAY shortcuts without 
   await row.click();
   const quickPlay = shell.getByRole('button', { name: /^Play .* for \d+ points$/ });
   await expect(quickPlay).toBeVisible();
-  await expect(quickPlay.locator('.quick-score-expression')).toHaveText(/^\d+ x \d+(?:\.\d+)?(?: \* \d+(?:\.\d+)?)?$/);
+  await expect(quickPlay.locator('.quick-score-expression')).toHaveText(/^\d+ × \d+(?:\.\d+)? × \d+(?:\.\d+)? = [\d,]+$/);
   await expect(quickPlay).not.toContainText('PLAY');
   await expect(quickPlay.locator('.quick-submit-icon')).toBeVisible();
 
@@ -315,6 +315,39 @@ test('selected hands expose desktop score-slot and Enter PLAY shortcuts without 
   await keyboardRow.press('Enter');
   await ready(page);
   await expect(keyboardRow).toHaveAttribute('data-state', 'consumed');
+});
+
+test('Play action distinguishes possible, definite, and guaranteed final chances', async ({ page }) => {
+  const state = newRun('last-play-language').state;
+  const options = handOptions(state.dice, []);
+  const selected = options[0];
+  const unplayable = HAND_IDS.find(hand => !options.some(option => option.id === hand));
+  expect(unplayable).toBeDefined();
+  state.manualRerollsRemaining = 0;
+  state.target = 500;
+
+  await page.goto('/?seed=last-play-language&speed=instant');
+  async function load(consumed: typeof HAND_IDS, score: number) {
+    state.consumed = [...consumed];
+    state.score = score;
+    await page.evaluate(([key, stored]) => localStorage.setItem(key, JSON.stringify({ version: 1, state: stored })),
+      [RUN_STORAGE_KEY, state] as const);
+    await page.reload();
+    await ready(page);
+    await page.getByTestId(`scorecard-row-${selected.id}`).click();
+  }
+
+  await load(HAND_IDS.filter(hand => hand !== selected.id && hand !== unplayable), 0);
+  await expect(page.getByRole('button', { name: 'LAST PLAY?', exact: true })).toContainText('• LAST PLAY?');
+
+  const finalConsumed = HAND_IDS.filter(hand => hand !== selected.id);
+  await load(finalConsumed, 0);
+  await expect(page.getByRole('button', { name: 'LAST PLAY.', exact: true })).toContainText('• LAST PLAY.');
+
+  const preview = handScore(state.dice, selected.id, selected.combinations[0], state.handLevels[selected.id]);
+  await load(finalConsumed, state.target - preview.score);
+  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toContainText('• PLAY');
+  await expect(page.getByRole('button', { name: /LAST PLAY/ })).toHaveCount(0);
 });
 
 test('compact HUD, Run Info and Help keep secondary information off the gameplay surface', async ({ page }) => {
@@ -346,17 +379,19 @@ test('compact HUD, Run Info and Help keep secondary information off the gameplay
   await openMenuItem(page, 'How to Play');
   const help = page.getByRole('dialog', { name: 'How to Play' });
   await expect(help).toBeVisible();
-  await expect(help).toContainText('exact pre-attempt Shop reopens without refreshing');
-  await expect(help).toContainText('capped at +10 when holding 50 Gold');
+  await expect(help).toContainText('Reach the Goal before you run out of playable hands and Rerolls.');
+  await expect(help).toContainText('Pips × Mult × XMult = Score');
+  await expect(help).not.toContainText('pre-attempt');
+  await expect(help).not.toContainText('interpolation');
   await help.getByRole('tab', { name: 'Enhancements' }).click();
   await expect(help.getByText('Jackpot', { exact: true })).toBeVisible();
-  await expect(help.getByText(/scores in the round-clearing hand/)).toBeVisible();
+  await expect(help.getByText('Gain +3 Gold if this face scores in the hand that clears the Round.')).toBeVisible();
   await expect(help.getByText('Multiplier', { exact: true })).toHaveCount(0);
   await expect(help.getByText('Loose Cannon', { exact: true })).toHaveCount(0);
-  await expect(help.getByText('Bump', { exact: true }).locator('..').getByText('Buy 2', { exact: true })).toBeVisible();
+  await expect(help.getByText('Bump', { exact: true }).locator('..')).toContainText('next roll moves up one face');
   await expect(help.getByText('Vintage', { exact: true })).toBeVisible();
-  await expect(help.getByText('Golden', { exact: true }).locator('..').getByText('Max 3', { exact: true })).toBeVisible();
-  await expect(help.getByText('Jackpot', { exact: true }).locator('..').getByText('Max 3', { exact: true })).toBeVisible();
+  await expect(help.getByText('Golden', { exact: true }).locator('..')).toContainText('Gain +1 Gold');
+  await expect(help.getByText('Jackpot', { exact: true }).locator('..')).toContainText('Gain +3 Gold');
 });
 
 test('physical dice default to numerals and persist the Pips preference across gameplay, Shop, and Manage Die', async ({ page }) => {
@@ -379,7 +414,7 @@ test('physical dice default to numerals and persist the Pips preference across g
   const shop = await reachShop(page, findShopSeed());
   await expect(page.locator('.exposed-section .pip-face')).toHaveCount(5);
   await page.getByRole('button', { name: /^Die 1,/ }).click();
-  const manager = page.getByRole('dialog', { name: /D1 .* Manage Die/ });
+  const manager = page.getByRole('dialog', { name: /D1 .* MANAGE DIE/ });
   for (let face = 1; face <= 6; face++) await expect(manager.getByTestId(`manage-face-${face}`).locator('.pip')).toHaveCount(face);
   expect(shop.phase).toBe('shop');
 });
@@ -428,7 +463,9 @@ test('live scoring panel updates inside the fixed mobile gameplay viewport', asy
   const scorecard = page.locator('.scorecard-panel');
   const selectedScore = handScore(game.dice, choice.hand, choice.dieIds, game.handLevels[choice.hand]);
   await expect(page.locator('.mobile-score-total')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText(`${selectedScore.pips} x ${selectedScore.multiplier} • PLAY`);
+  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText(
+    `${selectedScore.pips} × ${selectedScore.multiplier} × 1 = ${selectedScore.score.toLocaleString('en-US')} • PLAY`,
+  );
   const before = await scorecard.boundingBox();
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
@@ -445,15 +482,15 @@ test('live scoring panel updates inside the fixed mobile gameplay viewport', asy
 
   await page.clock.install({ time: new Date('2026-09-24T12:00:00Z') });
   await setPlaybackSpeed(page, 'NORMAL');
-  await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
+  await page.getByRole('button', { name: /^(PLAY|LAST PLAY[?.])$/ }).click();
   const resolution = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds });
   const updateIndex = resolution.events.findIndex(event => event.type === 'HAND_PIPS_CHANGED');
   await page.clock.runFor(CONFIG.tickMs.normal * updateIndex);
   const update = resolution.events[updateIndex];
   await expect(page.getByTestId('hand-pips')).toHaveText(String(update.handScore!.currentPips));
-  await expect(page.getByTestId('hand-multiplier')).toHaveText(`x${update.handScore!.currentMultiplier}`);
+  await expect(page.getByTestId('hand-multiplier')).toHaveText(`×${update.handScore!.currentMultiplier}`);
   await expect(panel).toBeInViewport();
-  await expect(page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ })).toBeInViewport();
+  await expect(page.getByRole('button', { name: /^(PLAY|LAST PLAY[?.])$/ })).toBeInViewport();
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
 });
 
@@ -526,7 +563,7 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   expect(game.handLevels[hand]).toBe(2);
   await expect(page.getByTestId(`train-${hand}`)).toBeEnabled();
   await expect(page.getByTestId(`training-offer-${hand}`)).toContainText('Trained ×1');
-  await expect(page.getByTestId(`train-${hand}`)).toHaveText('Train · 4 gold');
+  await expect(page.getByTestId(`train-${hand}`)).toHaveText('TRAIN · 4 GOLD');
   await expect(page.getByTestId(`training-pips-${hand}`)).toHaveText(`${level2.basePips} → ${level3.basePips} Pips`);
   await expect(page.getByTestId(`training-mult-${hand}`)).toHaveText(`×${level2.baseMultiplier} → ×${level3.baseMultiplier} Mult`);
 
@@ -543,21 +580,25 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   const option = handOptions(game.dice, game.consumed).find(item => item.id === hand && !item.consumed)!;
   const scored = handScore(game.dice, hand, option.combinations[0], 2);
   expect(Number.isInteger(scored.rawScore)).toBe(false);
-  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText(`${scored.pips} x ${scored.multiplier} • PLAY`);
-  await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
+  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText(
+    `${scored.pips} × ${scored.multiplier} × 1 = ${scored.score.toLocaleString('en-US')} • PLAY`,
+  );
+  await page.getByRole('button', { name: /^(PLAY|LAST PLAY[?.])$/ }).click();
   const result = dispatch(game, { type: 'PLAY', hand, dieIds: option.combinations[0] });
   const finalizedIndex = result.events.findIndex(event => event.type === 'HAND_SCORE_FINALIZED');
   for (let index = 0; index <= finalizedIndex; index++) {
     const event = result.events[index];
-    await expect(page.getByText(`EVENT ${index + 1} / ${result.events.length}`, { exact: true })).toBeVisible();
+    await expect(page.getByTestId('round-score-progress')).toHaveText(
+      `${event.board.score.toLocaleString('en-US')} / ${event.board.target.toLocaleString('en-US')}`,
+    );
     if (event.type === 'HAND_STARTED') {
-      await expect(page.locator('.score-tick')).toHaveText(`${HANDS[hand].name} — LV. 2`);
+      await expect(page.locator('.score-tick')).toHaveText(`${HANDS[hand].name} — Lv. 2`);
       await expect(page.getByTestId('hand-pips')).toHaveText(String(level2.basePips));
-      await expect(page.getByTestId('hand-multiplier')).toHaveText(`x${level2.baseMultiplier}`);
+      await expect(page.getByTestId('hand-multiplier')).toHaveText(`×${level2.baseMultiplier}`);
     }
     if (event.type === 'HAND_SCORE_FINALIZED') {
       await expect(page.getByTestId('hand-pips')).toHaveText(String(scored.pips));
-      await expect(page.getByTestId('hand-multiplier')).toHaveText(`x${scored.multiplier}`);
+      await expect(page.getByTestId('hand-multiplier')).toHaveText(`×${scored.multiplier}`);
       await expect(page.locator('.score-tick')).toHaveText(`+${scored.score}`);
       await expect(page.locator('.score-tick')).not.toContainText(String(scored.rawScore));
     }
@@ -578,9 +619,9 @@ test('Team Training occupies one existing slot and presents itself as a special 
   await expect(page.locator('[data-testid^="training-offer-"]')).toHaveCount(3);
   const team = page.getByTestId('training-offer-team');
   await expect(team).toHaveClass(/team-training-card/);
-  await expect(team).toContainText('Team Training');
+  await expect(team).toContainText('TEAM TRAINING');
   await expect(team.getByRole('button', { name: 'About Team Training' })).toBeVisible();
-  await expect(page.getByTestId('train-team')).toHaveText('Train ALL · 15 gold');
+  await expect(page.getByTestId('train-team')).toHaveText('TRAIN ALL · 15 GOLD');
   for (const selector of ['.training-grid', '.enhancement-grid']) {
     const columns = await page.locator(selector).evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length);
     expect(columns).toBe(3);
@@ -621,17 +662,17 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
   await page.screenshot({ path: test.info().outputPath('shop-desktop.png'), fullPage: true });
   await expect(page.locator('.offer')).toHaveCount(3);
   const offer = game.shop!.offers.find(item => item.enhancement === 'sticky')!;
-  await page.getByTestId('offer-sticky').getByRole('button', { name: 'Select or drag' }).click();
+  await page.getByTestId('offer-sticky').getByRole('button', { name: 'SELECT OR DRAG' }).click();
   const physicalFace = game.dice[0].value;
   await page.getByRole('button', { name: /^Die 1,/ }).click();
   game = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 0 }).state;
   await matchBoard(page, game);
   await expect(page.getByTestId('offer-sticky').getByRole('button', { name: 'Purchased' })).toBeDisabled();
   expect(game.dice[0].faces[physicalFace - 1].enhancements.sticky).toBe(1);
-  await page.getByRole('button', { name: 'Reroll Dice · 2 gold', exact: true }).click();
+  await page.getByRole('button', { name: 'REROLL DICE · 2 GOLD', exact: true }).click();
   game = dispatch(game, { type: 'REROLL_DICE' }).state;
   await matchBoard(page, game);
-  await expect(page.getByRole('button', { name: 'Reroll Dice · 4 gold', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'REROLL DICE · 4 GOLD', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await matchBoard(page, game);
@@ -662,7 +703,7 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
     } else throw new Error(`Unexpected phase: ${game.phase}`);
   }
   expect(game.phase).toBe('lost');
-  await expect(page.getByRole('heading', { name: 'RUN OVER' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Run Over' })).toBeVisible();
   await expect(page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Restart same seed', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'New seed', exact: true })).toBeVisible();
@@ -680,7 +721,7 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
   expect(data.actions).toEqual(game.stats.actions);
   await runInfo.getByRole('tab', { name: /History/ }).click();
   await runInfo.getByRole('button', { name: 'COPY EVENT LOG' }).click();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('Run over');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('Run Over');
   await runInfo.getByRole('tab', { name: 'Debug' }).click();
   await runInfo.getByRole('button', { name: 'Restart same seed', exact: true }).click();
   await matchBoard(page, newRun(seed).state);
@@ -708,11 +749,11 @@ test('native drag-and-drop purchase and enhancement refresh', async ({ page }) =
   await expect(page.getByTestId('offer-slippy').getByRole('button', { name: 'Purchased' })).toBeDisabled();
   // Restart an independently reproducible shop with its complete reward to refresh offers.
   game = await reachShop(page, findShopSeed());
-  await page.getByRole('button', { name: 'Reroll Enhancements · 3 gold', exact: true }).click();
+  await page.getByRole('button', { name: 'REROLL OFFERS · 3 GOLD', exact: true }).click();
   game = dispatch(game, { type: 'REROLL_OFFERS' }).state;
   await matchBoard(page, game);
   await expect(page.locator('.offer')).toHaveCount(3);
-  await expect(page.getByRole('button', { name: 'Reroll Enhancements · 6 gold', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'REROLL OFFERS · 6 GOLD', exact: true })).toBeVisible();
   for (const item of game.shop!.offers) await expect(page.getByTestId(`offer-${item.enhancement}`).getByText(ENHANCEMENTS[item.enhancement].name, { exact: true })).toBeVisible();
 });
 
@@ -720,16 +761,16 @@ test('Vintage offer and Manage Die expose its authoritative dynamic sell value',
   let game = await reachShop(page, findShopSeed('vintage'));
   const offer = game.shop!.offers.find(item => item.enhancement === 'vintage')!;
   const card = page.getByTestId('offer-vintage');
-  await expect(card).toContainText('3 gold');
+  await expect(card).toContainText('3 GOLD');
   await card.getByRole('button', { name: 'About Vintage' }).click();
   await expect(page.getByRole('tooltip')).toContainText(ENHANCEMENTS.vintage.description);
   await page.keyboard.press('Escape');
-  await card.getByRole('button', { name: 'Select or drag' }).click();
+  await card.getByRole('button', { name: 'SELECT OR DRAG' }).click();
   await page.getByRole('button', { name: /^Die 1,/ }).click();
   game = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 0 }).state;
   await matchBoard(page, game);
   await page.getByRole('button', { name: /^Die 1,/ }).click();
-  const manager = page.getByRole('dialog', { name: 'D1 — Manage Die' });
+  const manager = page.getByRole('dialog', { name: 'D1 — MANAGE DIE' });
   const face = activeFace(game.dice[0]).rank;
   await expect(manager.getByTestId(`manage-face-${face}`)).toContainText('Vintage');
   await expect(manager.getByTestId(`manage-face-${face}`)).toContainText('Sell 0 Gold');
@@ -741,17 +782,17 @@ test('stackable enhancement purchases show a single readable count badge', async
   await setDiceDisplay(page, 'PIPS');
   const startingGold = game.gold;
   const first = game.shop!.offers.find(offer => offer.enhancement === 'sticky')!;
-  await page.getByTestId('offer-sticky').getByRole('button', { name: 'Select or drag' }).click();
+  await page.getByTestId('offer-sticky').getByRole('button', { name: 'SELECT OR DRAG' }).click();
   const physical = page.getByRole('button', { name: /^Die 1,/ });
   await physical.click();
   game = dispatch(game, { type: 'BUY', offerId: first.id, dieId: 0 }).state;
   await matchBoard(page, game);
 
-  await page.getByRole('button', { name: 'Reroll Enhancements · 3 gold', exact: true }).click();
+  await page.getByRole('button', { name: 'REROLL OFFERS · 3 GOLD', exact: true }).click();
   game = dispatch(game, { type: 'REROLL_OFFERS' }).state;
   await matchBoard(page, game);
   const second = game.shop!.offers.find(offer => offer.enhancement === 'sticky')!;
-  await page.getByTestId('offer-sticky').getByRole('button', { name: 'Select or drag' }).click();
+  await page.getByTestId('offer-sticky').getByRole('button', { name: 'SELECT OR DRAG' }).click();
   await physical.click();
   game = dispatch(game, { type: 'BUY', offerId: second.id, dieId: 0 }).state;
   await matchBoard(page, game);
@@ -763,14 +804,14 @@ test('stackable enhancement purchases show a single readable count badge', async
   const face = game.dice[0].value;
   await expect(page.getByText('Manage faces', { exact: true })).toHaveCount(0);
   await physical.click();
-  const manager = page.getByRole('dialog', { name: 'D1 — Manage Die' });
+  const manager = page.getByRole('dialog', { name: 'D1 — MANAGE DIE' });
   await expect(manager).toBeVisible();
   await expect(manager.locator('[data-testid^="manage-face-"]')).toHaveCount(6);
-  await expect(manager.getByTestId(`manage-face-${face}`)).toContainText('1 / 3 TYPES');
+  await expect(manager.getByTestId(`manage-face-${face}`)).toContainText('1 / 3 ENHANCEMENTS');
   await manager.getByRole('button', { name: `Sell Sticky from D1 face ${face} for 2 Gold`, exact: true }).click();
-  const confirmation = page.getByRole('dialog', { name: 'Sell enhancement?' });
-  await expect(confirmation).toContainText('2 Sticky stacks');
-  await confirmation.getByRole('button', { name: 'Sell for 2 Gold', exact: true }).click();
+  const confirmation = page.getByRole('dialog', { name: 'SELL STICKY?' });
+  await expect(confirmation).toContainText('+2 GOLD');
+  await confirmation.getByRole('button', { name: 'SELL', exact: true }).click();
   game = dispatch(game, { type: 'SELL_ENHANCEMENT', dieId: 0, face, enhancement: 'sticky' }).state;
   await manager.getByRole('button', { name: 'Close', exact: true }).click();
   await matchBoard(page, game);
@@ -793,31 +834,32 @@ test('a fourth enhancement type opens Manage Die and preserves the offer through
   expect(game.round).toBe(2);
   const initial = [...game.shop!.offers];
   for (const offer of initial) {
-    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button', { name: 'Select or drag' }).click();
+    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button', { name: 'SELECT OR DRAG' }).click();
     await page.getByRole('button', { name: /^Die 1,/ }).click();
     game = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 0 }).state;
     await matchBoard(page, game);
   }
   const face = game.dice[0].value;
   await expect(page.getByRole('button', { name: /^Die 1,/ })).toContainText('3 / 3');
-  await page.getByRole('button', { name: 'Reroll Enhancements · 3 gold', exact: true }).click();
+  await page.getByRole('button', { name: 'REROLL OFFERS · 3 GOLD', exact: true }).click();
   game = dispatch(game, { type: 'REROLL_OFFERS' }).state;
   await matchBoard(page, game);
   const pending = game.shop!.offers.find(item => !initial.some(old => old.enhancement === item.enhancement))!;
-  await page.getByTestId(`offer-${pending.enhancement}`).getByRole('button', { name: 'Select or drag' }).click();
+  await page.getByTestId(`offer-${pending.enhancement}`).getByRole('button', { name: 'SELECT OR DRAG' }).click();
   const target = page.getByRole('button', { name: /^Die 1,/ });
   await expect(target).toHaveAttribute('aria-disabled', 'false');
-  await expect(target).toHaveAttribute('title', /already has 3 enhancement types/);
+  await expect(target).toHaveAttribute('title', /This Face is full/);
   await target.click();
-  const manager = page.getByRole('dialog', { name: 'D1 — Manage Die' });
-  await expect(manager).toContainText(`Sell one to make room for ${ENHANCEMENTS[pending.enhancement].name}`);
+  const manager = page.getByRole('dialog', { name: 'D1 — MANAGE DIE' });
+  await expect(manager).toContainText('Sell an Enhancement to make room.');
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(manager.getByTestId('manage-face-6')).toBeVisible();
   const removed = initial[0].enhancement;
   const proceeds = ENHANCEMENTS[removed].baseSellPrice;
   await manager.getByRole('button', { name: `Sell ${ENHANCEMENTS[removed].name} from D1 face ${face} for ${proceeds} Gold`, exact: true }).click();
-  await page.getByRole('dialog', { name: 'Sell enhancement?' }).getByRole('button', { name: `Sell for ${proceeds} Gold`, exact: true }).click();
+  await page.getByRole('dialog', { name: `SELL ${ENHANCEMENTS[removed].name.toUpperCase()}?` })
+    .getByRole('button', { name: 'SELL', exact: true }).click();
   game = dispatch(game, { type: 'SELL_ENHANCEMENT', dieId: 0, face, enhancement: removed }).state;
   const apply = manager.getByRole('button', { name: `Apply ${ENHANCEMENTS[pending.enhancement].name}`, exact: true });
   await expect(apply).toBeEnabled();
@@ -856,7 +898,7 @@ test('ambiguous physical dice can be changed and filtering never ends the run', 
   await matchBoard(page, game);
   if (game.phase === 'round') {
     for (const die of game.dice) await page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},`) }).click();
-    await expect(page.getByRole('heading', { name: 'Run over' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Run Over' })).toHaveCount(0);
     for (const die of game.dice) {
       const button = page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},`) });
       if (await button.getAttribute('aria-pressed') === 'true') await button.click();
@@ -884,8 +926,8 @@ for (const direction of ['hand-first', 'dice-first'] as const) {
     await expect(preservedDie).toHaveAttribute('aria-pressed', 'false');
     await expect(playedDie).toHaveAttribute('aria-pressed', 'true');
     await expect(fours).toHaveAttribute('aria-pressed', 'true');
-    await expect(fours).toHaveAccessibleName(/^Fours · Lv\. 1 7 Pips · ×1 /);
-    await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText('11 x 1 • PLAY');
+    await expect(fours).toHaveAccessibleName(/^Fours · Lv\. 1 · 7 Pips · ×1 Mult /);
+    await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText('11 × 1 × 1 = 11 • PLAY');
     await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeEnabled();
     await matchBoard(page, game); // Selection alone never scores or rolls.
     await page.getByRole('button', { name: 'PLAY', exact: true }).click();
@@ -912,7 +954,7 @@ test('fast event playback and skipping produce the same outcome as instant playb
   const choice = bestHand(game);
   await page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) }).click();
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
-  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Skip playback' })).toBeVisible();
   await page.getByRole('button', { name: 'Skip playback' }).click();
   await matchBoard(page, dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }).state);
 });
@@ -939,7 +981,8 @@ test('settled progress resumes across reloads and return visits with seed-aware 
   await page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) }).click();
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   game = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }).state;
-  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Skip playback' })).toBeVisible();
+  await expect(page.getByTestId('round-score-progress')).toHaveText(`0 / ${game.target}`);
 
   await page.reload();
   await page.locator('main').waitFor();
@@ -1006,7 +1049,7 @@ test('purchased Jumping Bean visibly triggers and rerolls on the next initial ga
   expect(seed).not.toBeNull();
   let game = await reachShop(page, seed!);
   const offer = game.shop!.offers.find(item => item.enhancement === 'jumpingBean')!;
-  await page.getByTestId('offer-jumpingBean').getByRole('button', { name: 'Select or drag' }).click();
+  await page.getByTestId('offer-jumpingBean').getByRole('button', { name: 'SELECT OR DRAG' }).click();
   await page.getByRole('button', { name: /^Die 1,/ }).click();
   game = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 0 }).state;
   await matchBoard(page, game);
@@ -1026,7 +1069,10 @@ test('purchased Jumping Bean visibly triggers and rerolls on the next initial ga
       await page.clock.runFor(281);
       await expect(page.getByTestId('run-map-transition')).toHaveCount(0);
     } else {
-      await expect(page.getByText(`EVENT ${index + 1} / ${next.events.length}`, { exact: true })).toBeVisible();
+      const event = next.events[index];
+      await expect(page.getByTestId('round-score-progress')).toHaveText(
+        `${event.board.score.toLocaleString('en-US')} / ${event.board.target.toLocaleString('en-US')}`,
+      );
       if (index < beanIndex) await page.clock.runFor(CONFIG.tickMs.normal);
     }
   }

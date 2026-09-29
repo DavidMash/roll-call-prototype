@@ -49,9 +49,9 @@ export function Die({ die, display, selected, highlighted, rolling, ability, fla
   const capacity = faceEnhancementTypes(face).length;
   const dieLabel = die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`;
   const displayValue = face.rank;
-  const temporaryState = face.snakeEyed ? ', Snake-Eyed temporary face' : face.infected ? ', infected face; 3 fewer pips; enhancements disabled'
+  const temporaryState = face.snakeEyed ? ', Snake-Eyed Face' : face.infected ? ', Infected Face; 3 fewer Pips; Enhancements disabled'
     : face.magneticUsed && face.enhancements.magnetic ? ', Magnetic used for this round' : '';
-  const dieDetails = `${dieLabel}, face ${displayValue}, ${pips} scoring pips${temporaryState}${flameId ? `, Flame ${FLAMES[flameId].name}, ${flameInvestment} of 100 Gold` : ''}${enhancementSummary ? `, ${enhancementSummary}` : ''}`;
+  const dieDetails = `${dieLabel}, face ${displayValue}, ${pips} Pips${temporaryState}${flameId ? `, Ember ${FLAMES[flameId].name}, ${flameInvestment} of 100 Gold` : ''}${enhancementSummary ? `, ${enhancementSummary}` : ''}`;
   const accessibilityLabel = wardenLocked
     ? `${dieDetails}, locked${unlockAt === undefined ? '' : ` until ${unlockAt} points`}${wardenSelectable ? ', selectable to unlock' : ''}`
     : `${dieDetails}${lockedReason ? `, required: ${lockedReason}` : ineligibleReason ? `, unavailable: ${ineligibleReason}` : ''}`;
@@ -75,7 +75,7 @@ export function Die({ die, display, selected, highlighted, rolling, ability, fla
         <span className="die-lock-symbol">🔒</span>
         <span>{unlockAt === undefined ? 'SELECT' : `${unlockAt} PTS`}</span>
       </div>}
-      {flameId && <Tooltip label={`${FLAMES[flameId].name}: ${flameInvestment}/100 Gold. ${FLAMES[flameId].description}`} multiline maw={320} withArrow>
+      {flameId && <Tooltip label={`Ember ${FLAMES[flameId].name}: ${flameInvestment}/100 Gold. ${FLAMES[flameId].description}`} multiline maw={320} withArrow>
         <Badge className="flame-badge" size="xs" color="orange" variant="light">🔥 {FLAMES[flameId].shortName} {flameInvestment}</Badge>
       </Tooltip>}
       {face.snakeEyed && <Badge className="boss-face-badge" size="xs" color="green">SNAKE EYES</Badge>}

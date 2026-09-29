@@ -1,14 +1,15 @@
 import { Badge, Button, Card, Group, Modal, Paper, Progress, Stack, Text, Tooltip } from '@mantine/core';
 import { useState } from 'react';
-import { activeFlameId, activeFlameInvestment, flameEffectText, flameFullEffectText, FLAMES, hasXMultFlame } from '../game/flames';
+import { activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasXMultFlame } from '../game/flames';
 import type { Action, Board, GameEvent } from '../game/types';
 import { Die } from './Die';
 import { ScoreResolution } from './ScoreResolution';
 import type { DiceDisplay } from '../uiSettings';
 import { InfoPopover } from './InfoPopover';
+import { EMPTY_TEXT } from '../game/copy';
 
-export function FlameSelectionScreen({ board, event, busy, progress, diceDisplay, selectedOffer, setSelectedOffer, submit, skip }: {
-  board: Board; event: GameEvent | null; busy: boolean; progress: { current: number; total: number };
+export function FlameSelectionScreen({ board, event, busy, diceDisplay, selectedOffer, setSelectedOffer, submit, skip }: {
+  board: Board; event: GameEvent | null; busy: boolean;
   diceDisplay: DiceDisplay;
   selectedOffer: number | null; setSelectedOffer: (id: number | null) => void; submit: (action: Action) => void; skip: () => void;
 }) {
@@ -34,18 +35,18 @@ export function FlameSelectionScreen({ board, event, busy, progress, diceDisplay
   return <>
     <Stack gap="xs" className="flame-selection-screen">
       <Group justify="space-between" className="shop-summary flame-selection-header phase-sticky-header">
-        <div><Text fw={800}>FLAME SELECTION</Text><Text size="xs" c="dimmed">Choose one new Flame and assign it to a physical die, or skip.</Text></div>
+        <Text fw={800}>FLAME SELECTION</Text>
         <Badge color="yellow" variant="light">{board.gold} Gold</Badge>
       </Group>
-      {busy && <ScoreResolution event={event} busy={busy} {...progress} onSkip={skip} showXMult={hasXMultFlame(board.dice, board.bonfires)} />}
+      {busy && <ScoreResolution event={event} busy={busy} onSkip={skip} showXMult={hasXMultFlame(board.dice, board.bonfires)} />}
       {board.bonfires.length > 0 && <Paper p="xs" className="shop-section bonfire-strip" data-testid="bonfires">
         <Group gap="xs"><Text fw={700} size="sm" tt="uppercase">Bonfires</Text>{board.bonfires.map(id => <Tooltip key={id} label={FLAMES[id].bonfireDescription} withArrow>
-          <Badge color="red" variant="light">🔥 {FLAMES[id].name} · {flameFullEffectText(id)}</Badge>
+          <Badge color="red" variant="light">🔥 {FLAMES[id].name}</Badge>
         </Tooltip>)}</Group>
       </Paper>}
       <Paper p="xs" className="shop-section flame-offers-section">
         <Group justify="space-between" className="section-heading">
-          <div><Text fw={700} size="sm" tt="uppercase">Flame offers</Text><Text size="xs" c="dimmed">{reward.acquired ? 'Acquisition complete.' : 'Taking a Flame is optional. Offers cannot be refreshed.'}</Text></div>
+          <Text fw={700} size="sm" tt="uppercase">Flame Offers</Text>
         </Group>
         <div className="shop-grid flame-offers">{reward.offers.map(item => <Card key={item.id} p="sm" className={`flame-offer ${selectedOffer === item.id && !reward.acquired ? 'selected' : ''}`} data-testid={`flame-offer-${item.flame}`}>
           <Group className="flame-offer-header" justify="space-between" wrap="nowrap"><Group className="flame-offer-identity" gap={3} wrap="nowrap">
@@ -56,8 +57,8 @@ export function FlameSelectionScreen({ board, event, busy, progress, diceDisplay
         </Card>)}</div>
       </Paper>
       <Paper p="md" className="shop-section flame-dice-section">
-        <Group className="flame-dice-heading" justify="space-between" mb="xs"><div><Text fw={700} size="sm" tt="uppercase">Physical Dice & Embers</Text><Text size="xs" c="dimmed">Flames stay with their die until they become global Bonfires.</Text></div>
-          <Text className="flame-dice-instruction" size="xs" c={offer ? 'orange' : 'dimmed'}>{offer ? `${FLAMES[offer.flame].name} selected — choose a die` : 'Active Ember progress is shown for context only'}</Text></Group>
+        <Group className="flame-dice-heading" justify="space-between" mb="xs"><div><Text fw={700} size="sm" tt="uppercase">Dice & Embers</Text><Text size="xs" c="dimmed">Each Ember stays with its Die until it becomes a Bonfire.</Text></div>
+          {offer && <Text className="flame-dice-instruction" size="xs" c="orange">{FLAMES[offer.flame].name} selected — choose a Die</Text>}</Group>
         <div className="flame-dice-grid">{board.dice.map(die => {
           const flameId = activeFlameId(die.flame);
           const invested = activeFlameInvestment(die.flame);
@@ -71,17 +72,16 @@ export function FlameSelectionScreen({ board, event, busy, progress, diceDisplay
               <Group className="ember-heading" justify="space-between" gap={4} wrap="nowrap"><Text className="ember-name" size="xs" fw={800} c="orange">🔥 <span className="ember-name-full">{FLAMES[flameId].name}</span><span className="ember-name-compact">{FLAMES[flameId].shortName}</span></Text><Badge size="xs" color="orange" variant="light">EMBER</Badge></Group>
               <Text className="ember-investment" size="xs" fw={700}>{invested} / 100 <span className="ember-bonfire-label">→ BONFIRE</span></Text>
               <Progress value={invested} color="orange" size="sm" my={4} />
-              <Text className="ember-effect" size="xs" c="dimmed">Current: {flameEffectText(flameId, invested, board)}</Text>
-            </div> : <div className="ember-details empty"><Text size="xs" c="dimmed"><span className="ember-empty-full">Empty Flame slot</span><span className="ember-empty-compact">EMPTY</span></Text></div>}
+              <Text className="ember-effect" size="xs" c="dimmed">{flameEffectText(flameId, invested, board)}</Text>
+            </div> : <div className="ember-details empty"><Text size="xs" c="dimmed"><span className="ember-empty-full">{EMPTY_TEXT.flameSlot}</span><span className="ember-empty-compact">EMPTY</span></Text></div>}
           </Card>;
         })}</div>
       </Paper>
-      <div className="shop-action-dock"><Text size="xs" c="dimmed">These exposed faces carry into the shop. No second free roll.</Text><Button disabled={busy} onClick={() => submit({ type: 'CONTINUE_FLAME_SELECTION' })}>CONTINUE TO SHOP →</Button></div>
+      <div className="shop-action-dock"><Button disabled={busy} onClick={() => submit({ type: 'CONTINUE_FLAME_SELECTION' })}>CONTINUE TO SHOP →</Button></div>
     </Stack>
 
     <Modal opened={replacementDie !== null} onClose={() => setReplacementDie(null)} title="Replace Flame?" centered transitionProps={{ duration: 0 }}>
       {replacingId && offer && <><Text>Replace <strong>{FLAMES[replacingId].name}</strong> ({activeFlameInvestment(replacing?.flame)} Gold invested) with <strong>{FLAMES[offer.flame].name}</strong>?</Text>
-        <Text size="sm" c="dimmed" mt="xs">The old Flame and all its investment are destroyed. Its type may return in a future selection.</Text>
         <Group justify="flex-end" mt="lg"><Button variant="default" onClick={() => setReplacementDie(null)}>Cancel</Button><Button color="orange" onClick={confirmReplacement}>Replace Flame</Button></Group></>}
     </Modal>
   </>;

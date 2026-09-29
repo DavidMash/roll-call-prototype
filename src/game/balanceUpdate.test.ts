@@ -4,6 +4,8 @@ import { Resolver } from './effects';
 import { dispatch, newRun, validateAction } from './engine';
 import { captureHandStart, handXMultContributions, trainerChance } from './flames';
 import { HAND_IDS } from './hands';
+import { lastPlayDanger } from './bosses';
+import { playActionLabel } from './copy';
 import type { GameState, HandId, RandomSource, Rank } from './types';
 
 const constant = (value = 0): RandomSource => ({ next: () => value });
@@ -79,17 +81,35 @@ describe('focused balance update', () => {
     consumeExcept(state, 'ones');
     state.dice[0].flame = { id: 'fullOfGrace', investedGold: 50 };
     state.bonfires = ['hailMary'];
-    expect(handXMultContributions(captureHandStart(state, 'ones'), 'ones', 1, [0]))
+    expect(handXMultContributions(captureHandStart(state, 'ones', [0]), 'ones', 1, [0]))
       .toMatchObject([{ source: 'hailMary', value: 5 }, { source: 'fullOfGrace', value: 3, dieId: 0 }]);
-    expect(handXMultContributions(captureHandStart(state, 'ones'), 'ones', 1, [1]))
+    expect(handXMultContributions(captureHandStart(state, 'ones', [1]), 'ones', 1, [1]))
       .toMatchObject([{ source: 'hailMary', value: 5 }]);
 
     state.bonfires = ['hailMary', 'fullOfGrace'];
     state.dice[0].flame = null;
-    expect(handXMultContributions(captureHandStart(state, 'ones'), 'ones', 1, [1]).map(factor => factor.source))
+    expect(handXMultContributions(captureHandStart(state, 'ones', [1]), 'ones', 1, [1]).map(factor => factor.source))
       .toEqual(['hailMary', 'fullOfGrace']);
     state.manualRerollsRemaining = 1;
-    expect(handXMultContributions(captureHandStart(state, 'ones'), 'ones', 1, [1])).toEqual([]);
+    expect(handXMultContributions(captureHandStart(state, 'ones', [1]), 'ones', 1, [1])).toEqual([]);
+  });
+
+  it('distinguishes possible and definite Last Plays and suppresses Full of Grace on a guaranteed win', () => {
+    const state = game([1, 2, 3, 4, 5]);
+    state.manualRerollsRemaining = 0;
+    state.consumed = HAND_IDS.filter(hand => hand !== 'ones' && hand !== 'fiveKind');
+    expect(lastPlayDanger(state, 'ones')).toBe('possible');
+    expect(playActionLabel(lastPlayDanger(state, 'ones'), false)).toBe('LAST PLAY?');
+
+    state.consumed = HAND_IDS.filter(hand => hand !== 'ones');
+    expect(lastPlayDanger(state, 'ones')).toBe('definite');
+    expect(playActionLabel(lastPlayDanger(state, 'ones'), false)).toBe('LAST PLAY.');
+
+    state.bonfires = ['fullOfGrace'];
+    state.score = state.target - 1;
+    const snapshot = captureHandStart(state, 'ones', [0]);
+    expect(handXMultContributions(snapshot, 'ones', 1, [0])).toEqual([]);
+    expect(playActionLabel(snapshot.lastPlayDanger, true)).toBe('PLAY');
   });
 
   it('builds Charge from selected scorers and successful Hitchhikers, never from rolls, and caps at ×5', () => {

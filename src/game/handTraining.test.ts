@@ -185,7 +185,7 @@ describe('Hand Training purchases and persistence', () => {
     expect(game.gold).toBe(12);
 
     const poor = shopState(1);
-    expect(validateAction(poor, { type: 'TRAIN_HAND', hand: 'pair' })).toContain('Not enough gold');
+    expect(validateAction(poor, { type: 'TRAIN_HAND', hand: 'pair' })).toContain('Not enough Gold');
     const rejected = dispatch(poor, { type: 'TRAIN_HAND', hand: 'pair' });
     expect(rejected.state).toBe(poor);
     expect(rejected.state.handLevels.pair).toBe(1);

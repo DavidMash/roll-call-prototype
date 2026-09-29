@@ -37,10 +37,10 @@ async function perform(page: Page, game: GameState, action: Action) {
       if (selected !== action.dieIds.includes(physical.id)) await target.click();
     }
     if (await row.getAttribute('aria-pressed') !== 'true') await row.click();
-    await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
+    await page.getByRole('button', { name: /^(PLAY|LAST PLAY[?.])$/ }).click();
   } else if (action.type === 'BUY') {
     const offer = game.shop!.offers.find(item => item.id === action.offerId)!;
-    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button', { name: 'Select or drag' }).click();
+    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button', { name: 'SELECT OR DRAG' }).click();
     await selectDice(page, [action.dieId]);
   } else if (action.type === 'NEXT_ROUND') {
     await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
@@ -59,7 +59,7 @@ async function perform(page: Page, game: GameState, action: Action) {
       const selected = await target.getAttribute('aria-pressed') === 'true';
       if (selected !== action.dieIds.includes(physical.id)) await target.click();
     }
-    await page.getByRole('button', { name: `Reroll ${CONFIG.manualRerollsPerRound - game.manualRerollsRemaining + action.dieIds.length} / ${CONFIG.manualRerollsPerRound}`, exact: true }).click();
+    await page.getByRole('button', { name: `REROLL ${CONFIG.manualRerollsPerRound - game.manualRerollsRemaining + action.dieIds.length} / ${CONFIG.manualRerollsPerRound}`, exact: true }).click();
   } else if (action.type === 'UNLOCK_WARDEN_DIE') {
     await page.getByRole('button', { name: new RegExp(`^Die ${action.dieId + 1},.*selectable to unlock$`) }).click();
     await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();
@@ -89,18 +89,22 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
   }
   if (await finalRow.getAttribute('aria-pressed') !== 'true') await finalRow.click();
   const deterministicPreview = handScore(activeEncounterDice(game), fixture.action.hand, fixture.action.dieIds, game.handLevels[fixture.action.hand]);
-  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText(`${deterministicPreview.pips} x ${deterministicPreview.multiplier} • PLAY`);
+  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText(
+    `${deterministicPreview.pips} × ${deterministicPreview.multiplier} × 1 = ${deterministicPreview.score.toLocaleString('en-US')} • PLAY`,
+  );
 
   await page.clock.install({ time: new Date('2026-09-17T12:00:00Z') });
   await page.clock.pauseAt(new Date('2026-09-17T12:00:01Z'));
   await setPlaybackSpeed(page, 'NORMAL');
-  await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
+  await page.getByRole('button', { name: /^(PLAY|LAST PLAY[?.])$/ }).click();
   const observed: [string, number, number][] = [];
-  for (const [index, event] of fixture.result.events.entries()) {
-    await expect(page.getByText(`EVENT ${index + 1} / ${fixture.result.events.length}`, { exact: true })).toBeVisible();
+  for (const event of fixture.result.events) {
+    await expect(page.getByTestId('round-score-progress')).toHaveText(
+      `${event.board.score.toLocaleString('en-US')} / ${event.board.target.toLocaleString('en-US')}`,
+    );
     if (event.handScore) {
       await expect(page.getByTestId('hand-pips')).toHaveText(String(event.handScore.currentPips));
-      await expect(page.getByTestId('hand-multiplier')).toHaveText(`x${event.handScore.currentMultiplier}`);
+      await expect(page.getByTestId('hand-multiplier')).toHaveText(`×${event.handScore.currentMultiplier}`);
       if (event.type !== 'SCORE_ADDED') expect(event.board.score).toBe(game.score);
       if (event.type === 'HAND_STARTED') {
         expect(event.handScore.basePips).toBe(started.handScore!.basePips);

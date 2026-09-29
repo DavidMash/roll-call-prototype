@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { activeEncounterDice, bossTypeForRound, createBossRuntime, createCursedDie, unavailableEncounterHands, wardenUnlockTarget } from '../src/game/bosses';
+import { activeEncounterDice, BOSSES, bossTypeForRound, createBossRuntime, createCursedDie, unavailableEncounterHands, wardenUnlockTarget } from '../src/game/bosses';
 import { dispatch, newRun } from '../src/game/engine';
 import { handOptions, HANDS, HAND_IDS, ultimateHands } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
@@ -44,7 +44,7 @@ async function playOne(page: Page, game: GameState) {
   if (!choice) {
     const die = activeEncounterDice(game)[0];
     await page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) }).click();
-    await page.getByRole('button', { name: /^Reroll \d+ \/ 3$/ }).click();
+    await page.getByRole('button', { name: /^REROLL \d+ \/ 3$/ }).click();
     const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [die.id] }).state;
     await ready(page);
     return next;
@@ -57,7 +57,7 @@ async function playOne(page: Page, game: GameState) {
     if (selected !== choice.dieIds.includes(die.id)) await button.click();
   }
   if (await handRow.getAttribute('aria-pressed') !== 'true') await handRow.click();
-  await page.getByRole('button', { name: /^(PLAY|LAST PLAY)$/ }).click();
+  await page.getByRole('button', { name: /^(PLAY|LAST PLAY[?.])$/ }).click();
   const next = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }).state;
   await ready(page);
   return next;
@@ -140,24 +140,24 @@ test('Caller preview hides the call, then encounter reveals it and its counter',
   let game = await reachBossShop(page, 'caller');
   const preview = page.getByTestId('boss-preview');
   await expect(preview).toContainText('THE CALLER');
-  await expect(preview).toContainText('Answer Calls by fixed manual-hand deadlines: 3, 6, 9, …');
+  await expect(preview).toContainText('Play the called hand before it comes due or lose half your total score.');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await ready(page);
   if (game.boss?.type !== 'caller') throw new Error('Caller fixture failed');
-  await expect(page.getByTestId('boss-panel')).toContainText(HANDS[game.boss.calledHand].name);
-  await expect(page.getByTestId('boss-panel')).toContainText('3 PLAYS LEFT');
+  await expect(page.getByTestId('boss-panel')).toContainText(HANDS[game.boss.calledHand].name.toUpperCase());
+  await expect(page.getByTestId('boss-panel')).toContainText(`CALL: ${HANDS[game.boss.calledHand].name.toUpperCase()} · DUE IN 3`);
   await expect(page.getByTestId('boss-hud-label')).toHaveCount(0);
   await expect(page.locator('[data-screen-theme="caller"]')).toBeVisible();
   await expect(page.getByTestId('live-score-panel')).toHaveCSS('position', 'sticky');
 });
 
 for (const testCase of [
-  { type: 'marathon', name: 'THE MARATHON', preview: '3× TARGET · Hands recharge after 7 manual plays.', hud: '3× TARGET' },
-  { type: 'quickdraw', name: 'QUICKDRAW', preview: '⅓ TARGET · Only one Lower hand may be used.', hud: '1 SHOT AVAILABLE' },
-  { type: 'fly', name: 'THE FLY', preview: 'Hands score ×0.5 until you catch the moving Fly.', hud: 'FLY LOOSE · ×0.5' },
-  { type: 'snakeEyes', name: 'SNAKE EYES', preview: 'Scoring gradually turns your physical faces into 1s.', hud: 'SNAKE-EYED' },
-  { type: 'infected', name: 'THE INFECTED', preview: 'Infected faces spread, lose their enhancements, and contribute 3 fewer Pips (minimum 0).', hud: 'INFECTED FACES' },
+  { type: 'marathon', name: 'THE MARATHON', preview: 'Extra large Goal. Played hands return after 7 other hands are played.', hud: 'EXTRA LARGE GOAL' },
+  { type: 'quickdraw', name: 'QUICKDRAW', preview: 'Reduced Goal, but you can only play a single Lower hand.', hud: 'LOWER HAND AVAILABLE' },
+  { type: 'fly', name: 'THE FLY', preview: 'Your played hands are weakened until you catch The Fly on the marked Lower hand.', hud: 'FLY LOOSE' },
+  { type: 'snakeEyes', name: 'SNAKE EYES', preview: 'Scored faces turn into 1s.', hud: 'SNAKE-EYED' },
+  { type: 'infected', name: 'THE INFECTED', preview: 'Infected faces lose 3 Pips and their Enhancements. Played faces become infected.', hud: 'INFECTED' },
 ] as const) {
   test(`${testCase.name} preview, HUD, and theme use the boss architecture`, async ({ page }) => {
     let game = await reachBossShop(page, testCase.type);
@@ -176,14 +176,14 @@ test('every boss uses a readable compact mobile status without displacing core g
   await page.setViewportSize({ width: 390, height: 667 });
   await page.goto(`/?seed=${seed}&speed=instant`);
   for (const [type, expected] of [
-    ['warden', '2/5 DICE · NEXT 410'],
-    ['caller', '3 PLAYS'],
-    ['fly', 'FLY LOOSE · ×0.5'],
-    ['marathon', '3× TARGET · 7-PLAY COOLDOWN'],
-    ['quickdraw', 'SHOT USED'],
-    ['hexer', 'CURSED DIE · REQUIRED'],
+    ['warden', '2 / 5 DICE · NEXT AT 410'],
+    ['caller', 'DUE IN 3'],
+    ['fly', 'FLY LOOSE'],
+    ['marathon', 'EXTRA LARGE GOAL'],
+    ['quickdraw', 'LOWER HAND USED'],
+    ['hexer', 'CURSED DIE REQUIRED'],
     ['snakeEyes', '2 SNAKE-EYED'],
-    ['infected', '2 INFECTED FACES'],
+    ['infected', '2 INFECTED'],
   ] as const) {
     const game = newRun(seed).state;
     game.round = 3;
@@ -202,10 +202,7 @@ test('every boss uses a readable compact mobile status without displacing core g
     const compact = page.locator('.boss-compact-row');
     await expect(compact).toBeVisible();
     await expect(compact).toContainText(expected);
-    await expect(page.locator('.boss-full-details')).toBeHidden();
-    await compact.click();
-    await expect(page.locator('.boss-full-details')).toBeVisible();
-    await compact.click();
+    await expect(page.locator('.boss-full-details')).toHaveCount(0);
     const fits = await page.evaluate(() => {
       const root = document.documentElement;
       const rows = [...document.querySelectorAll<HTMLElement>('[data-testid^="scorecard-row-"]')];
@@ -218,7 +215,7 @@ test('every boss uses a readable compact mobile status without displacing core g
   }
 });
 
-test('boss details start expanded when the compact mobile header is unavailable', async ({ page }) => {
+test('desktop boss HUD stays concise and does not repeat the full rule', async ({ page }) => {
   const seed = 'desktop-boss-layout';
   const game = newRun(seed).state;
   game.round = 3;
@@ -229,9 +226,9 @@ test('boss details start expanded when the compact mobile header is unavailable'
   await page.reload();
   await ready(page);
 
-  await expect(page.locator('.boss-details')).toHaveAttribute('open', '');
-  await expect(page.locator('.boss-full-details')).toBeVisible();
-  await expect(page.locator('.boss-compact-row')).toBeHidden();
+  await expect(page.locator('.boss-compact-row')).toBeVisible();
+  await expect(page.getByTestId('boss-panel')).toContainText('CALL:');
+  await expect(page.getByTestId('boss-panel')).not.toContainText(BOSSES.caller.shortRule);
 });
 
 test('scorecard Ultimate badges require the Flame or Bonfire and match the domain ranking', async ({ page }) => {
@@ -250,7 +247,7 @@ test('scorecard Ultimate badges require the Flame or Bonfire and match the domai
   await expect(page.locator('[data-testid^="ultimate-badge-"]')).toHaveCount(1);
   for (const hand of HAND_IDS) await expect(page.getByTestId(`ultimate-badge-${hand}`)).toHaveCount(expected.includes(hand) ? 1 : 0);
   await page.getByTestId('ultimate-badge-ones').hover();
-  await expect(page.getByText('Your highest-ranked hand. Hand level ranks first, then trained scoring strength.')).toBeVisible();
+  await expect(page.getByText('Your highest level hand.')).toBeVisible();
 
   game.dice[0].flame = null;
   game.bonfires.push('ultimate');
@@ -264,15 +261,15 @@ test('scorecard Ultimate badges require the Flame or Bonfire and match the domai
 test('Warden rolls all dice locked and lets the player choose the first die without rerolling', async ({ page }) => {
   let game = await reachBossShop(page, 'warden');
   const preview = page.getByTestId('boss-preview');
-  await expect(preview).toContainText('All five dice roll locked; choose one now, then earn each next unlock.');
+  await expect(preview).toContainText('Choose one die to start. Score enough to unlock the rest.');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await ready(page);
   const panel = page.getByTestId('boss-panel');
-  await expect(panel).toContainText('0 / 5 DICE UNLOCKED');
+  await expect(panel).toContainText('0 / 5 DICE · CHOOSE DIE');
   await expect(panel.getByTestId('warden-next-target')).toHaveCount(0);
   await expect(panel.locator('[role="progressbar"]')).toHaveCount(0);
-  await expect(panel.locator('.mantine-Badge-root')).toHaveCount(1);
+  await expect(panel.locator('.mantine-Badge-root')).toHaveCount(0);
   if (game.boss?.type !== 'warden') throw new Error('Warden fixture failed');
   await expect(page.locator('.gameplay-dock .die')).toHaveCount(5);
   await expect(page.locator('.gameplay-dock .die.warden-locked')).toHaveCount(5);
@@ -293,9 +290,8 @@ test('Warden rolls all dice locked and lets the player choose the first die with
   if (game.boss?.type !== 'warden') throw new Error('Warden fixture failed');
   const firstTarget = game.boss.nextUnlockTarget!;
   expect(firstTarget).toBe(wardenUnlockTarget(0, game.handLevels, [], 1));
-  await expect(panel.getByTestId('warden-active-dice')).toHaveText('1 / 5 DICE UNLOCKED');
-  await expect(panel.getByTestId('warden-next-target')).toHaveText(`NEXT DIE AT ${firstTarget}`);
-  await expect(panel.locator('.mantine-Badge-root')).toHaveCount(1);
+  await expect(panel.getByTestId('boss-status-warden')).toHaveText(`1 / 5 DICE · NEXT AT ${firstTarget}`);
+  await expect(panel.locator('.mantine-Badge-root')).toHaveCount(0);
   await expect(page.locator('.gameplay-dock .die.warden-locked')).toHaveCount(4);
   for (const id of [1, 2, 3, 4]) {
     const locked = page.getByRole('button', { name: new RegExp(`^Die ${id}, face .* locked until ${firstTarget} points$`) });
@@ -341,8 +337,7 @@ test('Warden target pauses play and updates the shared lock target after the cho
   const secondThreshold = game.boss.nextUnlockTarget!;
   expect(secondThreshold).toBe(wardenUnlockTarget(game.score, game.handLevels, game.consumed, 2));
   expect(secondThreshold).not.toBe(threshold);
-  await expect(page.getByTestId('warden-active-dice')).toHaveText('2 / 5 DICE UNLOCKED');
-  await expect(page.getByTestId('warden-next-target')).toHaveText(`NEXT DIE AT ${secondThreshold}`);
+  await expect(page.getByTestId('boss-status-warden')).toHaveText(`2 / 5 DICE · NEXT AT ${secondThreshold}`);
   await expect(page.locator('.gameplay-dock .die.warden-locked')).toHaveCount(3);
   for (const id of [1, 3, 5]) {
     const locked = page.getByRole('button', { name: new RegExp(`^Die ${id}, face .* locked until ${secondThreshold} points$`) });
@@ -355,7 +350,7 @@ test('Hexer preview keeps its faces secret and encounter fits all six dice on on
   let game = await reachBossShop(page, 'hexer');
   const preview = page.getByTestId('boss-preview');
   await expect(preview).toContainText('THE HEXER');
-  await expect(preview).toContainText('A Cursed Die joins the battle and must be used in every hand.');
+  await expect(preview).toContainText('A Cursed Die joins you and must be used in every hand.');
   await expect(preview).not.toContainText('Weighted');
   await expect(preview).not.toContainText('Jackpot');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
@@ -379,7 +374,7 @@ test('Hexer preview keeps its faces secret and encounter fits all six dice on on
   await expect(cursedButton).toHaveAttribute('aria-pressed', 'false');
   await expect(playerButton).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.die.cursed-die')).toHaveCount(1);
-  await expect(page.getByTestId('hexer-rule')).toHaveText('CURSE: Include the Cursed Die whenever you play a hand.');
+  await expect(page.getByTestId('boss-status-hexer')).toHaveText('CURSED DIE REQUIRED');
   const dice = page.locator('.gameplay-dock .die');
   await expect(dice).toHaveCount(6);
   const boxes = await dice.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().top));

@@ -37,10 +37,10 @@ async function perform(page: Page, game: GameState, action: Action) {
     await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   } else if (action.type === 'MANUAL_REROLL') {
     for (const id of action.dieIds) await die(page, id).click();
-    await page.getByRole('button', { name: /^Reroll \d+ \/ 3$/ }).click();
+    await page.getByRole('button', { name: /^REROLL \d+ \/ 3$/ }).click();
   } else if (action.type === 'BUY') {
     const offer = game.shop!.offers.find(item => item.id === action.offerId)!;
-    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button', { name: 'Select or drag' }).click();
+    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button', { name: 'SELECT OR DRAG' }).click();
     await die(page, action.dieId).click();
   } else if (action.type === 'NEXT_ROUND') {
     await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
@@ -70,7 +70,10 @@ test('scoring Jackpot pays on a played-hand clear before the no-reroll transitio
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   const jackpotIndex = fixture.result.events.findIndex(event => event.enhancement === 'jackpot');
   for (let index = 0; index <= jackpotIndex; index++) {
-    await expect(page.getByText(`EVENT ${index + 1} / ${fixture.result.events.length}`, { exact: true })).toBeVisible();
+    const event = fixture.result.events[index];
+    await expect(page.getByTestId('round-score-progress')).toHaveText(
+      `${event.board.score.toLocaleString('en-US')} / ${event.board.target.toLocaleString('en-US')}`,
+    );
     if (index < jackpotIndex) await page.clock.runFor(CONFIG.tickMs.normal);
   }
   await expect(page.locator('.score-tick')).toHaveText('JACKPOT');

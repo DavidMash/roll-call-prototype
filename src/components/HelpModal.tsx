@@ -1,54 +1,63 @@
-import { Badge, Group, Modal, SimpleGrid, Tabs, Text } from '@mantine/core';
-import { CONFIG, lifeRestoreCost } from '../game/config';
-import { enhancementCost, ENHANCEMENTS, ENHANCEMENT_IDS, FACE_TYPE_LIMIT } from '../game/enhancements';
+import { Modal, SimpleGrid, Stack, Tabs, Text, Title } from '@mantine/core';
+import { CONFIG } from '../game/config';
+import { ENHANCEMENTS, ENHANCEMENT_IDS } from '../game/enhancements';
 import { FLAMES, FLAME_IDS } from '../game/flames';
-import { handStats, HANDS, HAND_IDS } from '../game/hands';
+import { HANDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from '../game/hands';
+import { BOSSES, BOSS_TYPES } from '../game/bosses';
 import type { HandId } from '../game/types';
 
-const HAND_RULES: Record<HandId, string> = {
-  ones: 'Any non-empty subset of Ones.', twos: 'Any non-empty subset of Twos.', threes: 'Any non-empty subset of Threes.',
-  fours: 'Any non-empty subset of Fours.', fives: 'Any non-empty subset of Fives.', sixes: 'Any non-empty subset of Sixes.',
-  pair: 'Two matching dice.', twoPair: 'Two different pairs using four dice.', threeKind: 'Three matching dice.',
-  smallStraight: 'Four consecutive ranks; The Hexer enables 4-5-6-7.', fullHouse: 'Three of one rank and two of another.', fourKind: 'Four matching dice.',
-  largeStraight: 'Five consecutive ranks; The Hexer enables 3-4-5-6-7.', fiveKind: 'Five matching dice.',
+const LOWER_HAND_RULES: Partial<Record<HandId, string>> = {
+  pair: 'Two matching Faces.',
+  twoPair: 'Two different pairs.',
+  threeKind: 'Three matching Faces.',
+  smallStraight: 'Four consecutive Faces.',
+  fullHouse: 'Three of one Face and two of another.',
+  fourKind: 'Four matching Faces.',
+  largeStraight: 'Five consecutive Faces.',
+  fiveKind: 'Five matching Faces.',
 };
+
+function RuleSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return <div className="help-item"><Title order={4}>{title}</Title><Text size="sm" mt={3}>{children}</Text></div>;
+}
 
 export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   return <Modal opened={opened} onClose={onClose} title="How to Play" size="xl" centered transitionProps={{ duration: 0 }}>
     <Tabs defaultValue="play">
-      <Tabs.List grow><Tabs.Tab value="play">How to Play</Tabs.Tab><Tabs.Tab value="bosses">Bosses</Tabs.Tab><Tabs.Tab value="scoring">Scoring</Tabs.Tab><Tabs.Tab value="hands">Hands</Tabs.Tab><Tabs.Tab value="enhancements">Enhancements</Tabs.Tab><Tabs.Tab value="flames">Flames</Tabs.Tab><Tabs.Tab value="shop">Shop</Tabs.Tab></Tabs.List>
-      <Tabs.Panel value="play" pt="md">
-        <Text size="sm">Select a scorecard hand and its participating dice, then Play. Every hand is consumed after use. Each round grants {CONFIG.manualRerollsPerRound} manual die rerolls, charged once per selected die. A manual gameplay reroll always changes the printed face; automatic and effect-driven rolls may repeat.</Text>
-        <Text size="sm" mt="sm">A run starts with 3 lives. With no playable hands and no rerolls, the attempt Busts: one life is lost, failed-attempt gains are rolled back, and the exact pre-attempt Shop reopens without refreshing. Prepare there, then use Retry Round to try that round again. A Bust at 1 life leaves 0 and ends the run instead.</Text>
-        <Text size="sm" mt="sm">Every clear pays 5 base Gold, 1 per unused reroll, and +1 interest per 5 Gold held, capped at +10 when holding 50 Gold. Scoring Gold is included in the pre-payout interest snapshot; the payout itself is not. Boss Reward starts at 10 Gold on round 3 and rises by 1 each Boss. A Gold-focused Round Summary reconciles every successful encounter before the next map transition.</Text>
-      </Tabs.Panel>
-      <Tabs.Panel value="bosses" pt="md">
-        <Text size="sm">Every third round is a Boss battle. Each Boss changes the rules, and victory leads to a Flame Selection.</Text>
-        <div className="help-item"><Text fw={800}>THE CALLER</Text><Text size="sm">Calls are due on manual hands 3, 6, 9, and so on. Early answers reveal the next Call without moving its deadline; a miss halves the score only if the scoring hand did not clear the Boss. Matching Jumping Beans answer for free without advancing the counter.</Text></div>
-        <div className="help-item"><Text fw={800}>THE WARDEN</Text><Text size="sm">All five dice roll, then remain locked. Choose one without rerolling; each capacity-based score target lets you choose another.</Text></div>
-        <div className="help-item"><Text fw={800}>THE HEXER</Text><Text size="sm">A Cursed Die joins the battle. Include it whenever you play a hand, and expect surprises on its faces.</Text></div>
-        <div className="help-item"><Text fw={800}>THE MARATHON</Text><Text size="sm">The target is tripled. Manual hands enter a seven-manual-play cooldown instead of being permanently consumed.</Text></div>
-        <div className="help-item"><Text fw={800}>QUICKDRAW</Text><Text size="sm">The target is one third of normal, but only one Lower-section hand may be played. Upper hands remain normal.</Text></div>
-        <div className="help-item"><Text fw={800}>THE FLY</Text><Text size="sm">Hands score ×0.5 until the marked Lower hand catches the Fly. A miss moves it to another unused Lower row.</Text></div>
-        <div className="help-item"><Text fw={800}>SNAKE EYES</Text><Text size="sm">After a hand, up to two participating physical faces permanently show and score as 1 for that attempt.</Text></div>
-        <div className="help-item"><Text fw={800}>THE INFECTED</Text><Text size="sm">Each die starts with an infected face. An infected face keeps its rank, contributes 3 fewer Pips (minimum 0), and loses only its attached enhancements. Exposed infection spreads to clean faces on other rolling dice.</Text></div>
-      </Tabs.Panel>
-      <Tabs.Panel value="scoring" pt="md"><Text size="sm"><strong>Score = round(Pips × Mult × XMult).</strong> Ordinary Mult comes only from the played hand’s trained Base Mult. Every applicable Flame produces a factor and resolves as <strong>XMult ×= factor</strong>; multiple factors multiply and XMult defaults to ×1.</Text><Text size="sm" mt="sm">Jumping Bean free-plays the matching Upper hand using only its die. It uses trained hand stats, counts in play history, can trigger applicable Flames and Vintage, and may chain, but never consumes that hand’s normal use. Hitchhiker does not join a Bean free play.</Text></Tabs.Panel>
-      <Tabs.Panel value="hands" pt="md"><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{HAND_IDS.map(hand => { const stats = handStats(hand, 1); return <div key={hand} className="help-item"><Group justify="space-between"><Text size="sm" fw={700}>{HANDS[hand].name}</Text><Text size="xs" c="violet">{stats.basePips} · ×{stats.baseMultiplier}</Text></Group><Text size="xs" c="dimmed">{HAND_RULES[hand]}</Text></div>; })}</SimpleGrid></Tabs.Panel>
-      <Tabs.Panel value="enhancements" pt="md">
-        <Text size="sm" mb="sm">A physical face holds at most {FACE_TYPE_LIMIT} distinct enhancement types. Extra stacks of an existing type use no new slot. Selling in a normal Shop removes every stack of that type from the face and immediately pays the displayed total sale value.</Text>
-        <Text size="sm" mb="sm"><strong>Vintage:</strong> costs 3 Gold, starts with a 0-Gold sell value, and gains +3 whenever its physical face scores in a hand—including successful Hitchhiker and Jumping Bean free plays. It has no scoring bonus or value cap, and failed-attempt growth rolls back.</Text>
-        <Text size="sm" mb="sm"><strong>Roll priority:</strong> Bump first, then attraction from a held Magnetic anchor, then Weighted/random. Landing on Bump only arms the next separate roll.</Text>
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{ENHANCEMENT_IDS.map(id => <div key={id} className="help-item"><Group justify="space-between"><Text size="sm" fw={700}>{ENHANCEMENTS[id].name}</Text><Group gap={4}><Badge size="xs" color="yellow">Buy {enhancementCost(id)}</Badge><Badge size="xs" color="teal">Sell {id === 'vintage' ? '0+' : ENHANCEMENTS[id].baseSellPrice}</Badge><Badge size="xs">{ENHANCEMENTS[id].maxStacks ? `Max ${ENHANCEMENTS[id].maxStacks}` : ENHANCEMENTS[id].stackable ? 'Stackable' : 'Unique'}</Badge></Group></Group><Text size="xs" c="dimmed">{ENHANCEMENTS[id].description}</Text></div>)}</SimpleGrid>
-      </Tabs.Panel>
-      <Tabs.Panel value="flames" pt="md">
-        <Text size="sm" mb="sm">Every third clear adds an escalating Boss Reward (10 Gold, then 11, 12, and so on), shows the Round Summary, and opens the special Flame Selection only to choose and assign one new Flame, or skip. Its three offers cannot be rerolled and no Gold is spent there.</Text>
-        <Text size="sm" mb="sm">New Flames begin as 0-Gold Embers. Click their physical die in a normal Shop to open Manage Die and Stoke any whole Gold amount. At exactly 100, a Flame becomes a global Bonfire and detaches. Replacing an active Flame destroys its investment.</Text>
-        <Text size="sm" mb="sm">Charge gains up to +0.5 per scoring die after each hand, including Hitchhikers and Jumping Bean free plays, and caps at ×5. Before Bonfire, select its physical die in the intended hand to arm it; deselecting or omitting that die unarms or blocks it. Using Charge resets it to ×1 before the hand rebuilds it. Hot Streak follows Pair → Two Pair → Three Kind → Small Straight → Full House → Four Kind → Large Straight → Five Kind.</Text>
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{FLAME_IDS.map(id => <div key={id} className="help-item"><Text size="sm" fw={700}>🔥 {FLAMES[id].name}</Text><Text size="xs" c="dimmed">{FLAMES[id].description}</Text><Text size="xs" c="orange">Bonfire: {FLAMES[id].bonfireDescription}</Text></div>)}</SimpleGrid>
-        <Text size="xs" c="dimmed" mt="sm">Money to Burn tracks normal-Shop spending on purchases, training, rerolls, and restored lives. Stoke and sales do not increase it.</Text>
-      </Tabs.Panel>
-      <Tabs.Panel value="shop" pt="md"><Text size="sm"><strong>The normal Shop is the only place Gold is spent.</strong> Individual Hand Training starts at {CONFIG.handTrainingCost} Gold and Team Training starts at {CONFIG.teamTrainingCost}; repeat purchases double that offer's price for the current Shop. It also contains enhancement purchases/refreshes, paid dice rerolls, Flame Stoke controls, and life restoration. Each new Shop starts restore prices at {lifeRestoreCost(0)} Gold, then {lifeRestoreCost(1)}, {lifeRestoreCost(2)}, {lifeRestoreCost(3)}, and higher. A Bust return keeps that Shop's current prices.</Text><Text size="sm" mt="sm">With no offer selected, select a die to open Manage Die, inspect all six faces, sell enhancements, and Stoke its Ember. A fourth-type attempt preserves the pending offer while you sell one type to make room.</Text><Text size="sm" mt="sm">Flame Selection dice carry into the following Shop. The carried roll is not a paid reroll and the first paid reroll still costs 2.</Text></Tabs.Panel>
+      <Tabs.List grow><Tabs.Tab value="play">How to Play</Tabs.Tab><Tabs.Tab value="scoring">Scoring</Tabs.Tab><Tabs.Tab value="hands">Hands</Tabs.Tab><Tabs.Tab value="enhancements">Enhancements</Tabs.Tab><Tabs.Tab value="flames">Flames</Tabs.Tab><Tabs.Tab value="bosses">Bosses</Tabs.Tab><Tabs.Tab value="shop">Shop</Tabs.Tab></Tabs.List>
+      <Tabs.Panel value="play" pt="md"><Stack gap="xs">
+        <RuleSection title="PLAY HANDS">Choose a hand, select the dice that score, and Play.</RuleSection>
+        <RuleSection title="CLEAR THE GOAL">Reach the Goal before you run out of playable hands and Rerolls.</RuleSection>
+        <RuleSection title="REROLLS">You get {CONFIG.manualRerollsPerRound} Rerolls each Round. Each die rerolled costs one.</RuleSection>
+        <RuleSection title="LIVES">Busting costs a Life and sends you back to the Shop. Lose all {CONFIG.maxLives} Lives and the run ends.</RuleSection>
+      </Stack></Tabs.Panel>
+      <Tabs.Panel value="scoring" pt="md"><Stack gap="xs">
+        <Title order={3}>Pips × Mult × XMult = Score</Title>
+        <Text size="sm">Pips come from the hand and scoring dice.</Text>
+        <Text size="sm">Mult comes from the hand.</Text>
+        <Text size="sm">XMult comes from effects such as Flames.</Text>
+      </Stack></Tabs.Panel>
+      <Tabs.Panel value="hands" pt="md"><Stack gap="md">
+        <div><Title order={4}>UPPER HANDS</Title><Text size="sm">Upper hands score any number of matching Faces.</Text>
+          <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="xs" mt="xs">{UPPER_HAND_IDS.map(hand => <div key={hand} className="help-item"><Text size="sm" fw={700}>{HANDS[hand].name}</Text></div>)}</SimpleGrid></div>
+        <div><Title order={4}>LOWER HANDS</Title><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" mt="xs">{LOWER_HAND_IDS.map(hand => <div key={hand} className="help-item">
+          <Text size="sm" fw={700}>{HANDS[hand].name}</Text><Text size="xs" c="dimmed">{LOWER_HAND_RULES[hand]}</Text>
+        </div>)}</SimpleGrid></div>
+      </Stack></Tabs.Panel>
+      <Tabs.Panel value="enhancements" pt="md"><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{ENHANCEMENT_IDS.map(id => <div key={id} className="help-item">
+        <Text size="sm" fw={700}>{ENHANCEMENTS[id].name}</Text><Text size="xs" c="dimmed">{ENHANCEMENTS[id].description}</Text>
+      </div>)}</SimpleGrid></Tabs.Panel>
+      <Tabs.Panel value="flames" pt="md"><Stack gap="sm">
+        <Text size="sm">Flames begin as Embers. Stoke them in the Shop; at 100 Gold, an Ember becomes a Bonfire and works globally.</Text>
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{FLAME_IDS.map(id => <div key={id} className="help-item">
+          <Text size="sm" fw={700}>🔥 {FLAMES[id].name}</Text><Text size="xs" c="dimmed">{FLAMES[id].description}</Text>
+          {(id === 'charge' || id === 'personalTrainer') && <Text size="xs" c="orange">Bonfire: {FLAMES[id].bonfireDescription}</Text>}
+        </div>)}</SimpleGrid>
+      </Stack></Tabs.Panel>
+      <Tabs.Panel value="bosses" pt="md"><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{BOSS_TYPES.map(id => <div key={id} className="help-item">
+        <Text size="sm" fw={700}>{BOSSES[id].name}</Text><Text size="xs" c="dimmed">{BOSSES[id].shortRule}</Text>
+      </div>)}</SimpleGrid></Tabs.Panel>
+      <Tabs.Panel value="shop" pt="md"><Text size="sm">Spend Gold between Rounds to train hands, buy Enhancements, Stoke Flames, reroll offers, and restore Lives.</Text></Tabs.Panel>
     </Tabs>
   </Modal>;
 }

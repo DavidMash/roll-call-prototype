@@ -70,13 +70,13 @@ describe('multiplicative Flame formulas', () => {
 describe('conditional Flames and Bonfires', () => {
   it('uses investment and die participation before Bonfire', () => {
     const state = game(); state.handLevels.threeKind = 3; flame(state, 0, 'ultimate', 50);
-    const factors = handXMultContributions(captureHandStart(state, 'threeKind'), 'threeKind', 3, [0, 1, 2]);
+    const factors = handXMultContributions(captureHandStart(state, 'threeKind', [0, 1, 2]), 'threeKind', 3, [0, 1, 2]);
     expect(factors).toMatchObject([{ source: 'ultimate', value: 3, dieId: 0 }]);
-    expect(handXMultContributions(captureHandStart(state, 'threeKind'), 'threeKind', 3, [1, 2])).toEqual([]);
+    expect(handXMultContributions(captureHandStart(state, 'threeKind', [1, 2]), 'threeKind', 3, [1, 2])).toEqual([]);
   });
   it('applies each Bonfire once globally', () => {
     const state = game(); state.bonfires = ['ultimate', 'minigun']; state.handLevels.fours = 2;
-    const factors = handXMultContributions(captureHandStart(state, 'fours'), 'fours', 1, [0]);
+    const factors = handXMultContributions(captureHandStart(state, 'fours', [0]), 'fours', 1, [0]);
     expect(factors.map(item => item.value)).toEqual([5, 5]);
     expect(composeXMult(factors)).toBe(25);
   });
@@ -84,13 +84,13 @@ describe('conditional Flames and Bonfires', () => {
     const state = game([1, 2, 3, 4, 6]);
     flame(state, 0, 'straightShooter'); flame(state, 1, 'doubleDown'); flame(state, 2, 'targetPractice'); flame(state, 3, 'lowball');
     state.targetPracticeHand = 'smallStraight';
-    const factors = handXMultContributions(captureHandStart(state, 'smallStraight'), 'smallStraight', 1, [0, 1, 2, 3]);
+    const factors = handXMultContributions(captureHandStart(state, 'smallStraight', [0, 1, 2, 3]), 'smallStraight', 1, [0, 1, 2, 3]);
     expect(factors.map(item => [item.source, item.value])).toEqual([['straightShooter', 5], ['targetPractice', 9], ['lowball', 4]]);
   });
   it('uses previous plays and the held-Gold/shop-spend snapshots', () => {
     const state = game(); state.gold = 50; state.handPlayCounts.threeKind = 10; state.lifetimeNormalShopGoldSpent = 75;
     flame(state, 0, 'dragonsHoard'); flame(state, 1, 'wellTrained'); flame(state, 2, 'moneyToBurn');
-    expect(handXMultContributions(captureHandStart(state, 'threeKind'), 'threeKind', 1, [0, 1, 2]).map(item => item.value)).toEqual([3, 3, 4]);
+    expect(handXMultContributions(captureHandStart(state, 'threeKind', [0, 1, 2]), 'threeKind', 1, [0, 1, 2]).map(item => item.value)).toEqual([3, 3, 4]);
   });
   it('exposes all XMult Flames as factors and multiplies simultaneous real factors', () => {
     expect(XMult_FLAME_IDS).toEqual(FLAME_IDS.filter(id => id !== 'personalTrainer'));
@@ -98,7 +98,7 @@ describe('conditional Flames and Bonfires', () => {
     state.bonfires = ['ultimate', 'dragonsHoard']; flame(state, 0, 'wellTrained', 50);
     state.handLevels.threeKind = 2;
     state.handPlayCounts.threeKind = 10;
-    const factors = handXMultContributions(captureHandStart(state, 'threeKind'), 'threeKind', 1, [0, 1, 2]);
+    const factors = handXMultContributions(captureHandStart(state, 'threeKind', [0, 1, 2]), 'threeKind', 1, [0, 1, 2]);
     expect(factors.map(factor => [factor.source, factor.value])).toEqual([['ultimate', 5], ['dragonsHoard', 2], ['wellTrained', 2]]);
     expect(composeXMult(factors)).toBe(20);
     expect(flameEffectText('dragonsHoard', 50, state)).toContain('×1.5 XMult');
@@ -110,7 +110,7 @@ describe('conditional Flames and Bonfires', () => {
     const messages = result.events.filter(event => event.type === 'HAND_XMULT_CHANGED').map(event => event.message);
     expect(messages).toEqual([
       'Ultimate: XMult ×1 × factor ×5 = ×5',
-      "Dragon's Hoard: XMult ×5 × factor ×2 = ×10",
+      'Dragon’s Hoard: XMult ×5 × factor ×2 = ×10',
       'Well Trained: XMult ×10 × factor ×2 = ×20',
     ]);
     expect(result.state.stats.handScores[0].xMult).toBe(20);

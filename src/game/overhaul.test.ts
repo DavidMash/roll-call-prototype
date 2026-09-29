@@ -114,7 +114,7 @@ describe('enhancement metadata, face slots, caps, and selling', () => {
   it('rejects a fourth type authoritatively during purchase', () => {
     const state = shop(); const face = activeFace(state.dice[0]);
     face.enhancements.bonus = 1; face.enhancements.workout = 1; face.enhancements.golden = 1; offer(state, 1, 'bump');
-    expect(validateAction(state, { type: 'BUY', offerId: 1, dieId: 0 })).toContain('3 enhancement types');
+    expect(validateAction(state, { type: 'BUY', offerId: 1, dieId: 0 })).toContain('This Face is full');
   });
   it('excludes Sustainable and includes Bump in the offer catalog', () => {
     expect(ENHANCEMENT_IDS).toContain('bump'); expect(ENHANCEMENT_IDS).not.toContain('sustainable');

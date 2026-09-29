@@ -35,7 +35,7 @@ async function perform(page: Page, game: GameState, action: Action) {
     await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   } else if (action.type === 'BUY') {
     const offer = game.shop!.offers.find(item => item.id === action.offerId)!;
-    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button', { name: 'Select or drag' }).click();
+    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button', { name: 'SELECT OR DRAG' }).click();
     await die(page, action.dieId).click();
   } else if (action.type === 'NEXT_ROUND') await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   else if (action.type === 'CHOOSE_FLAME') {
@@ -50,7 +50,7 @@ async function perform(page: Page, game: GameState, action: Action) {
   }
   else if (action.type === 'MANUAL_REROLL') {
     await select(page, action.dieIds);
-    await page.getByRole('button', { name: `Reroll ${CONFIG.manualRerollsPerRound - game.manualRerollsRemaining + action.dieIds.length} / ${CONFIG.manualRerollsPerRound}`, exact: true }).click();
+    await page.getByRole('button', { name: `REROLL ${CONFIG.manualRerollsPerRound - game.manualRerollsRemaining + action.dieIds.length} / ${CONFIG.manualRerollsPerRound}`, exact: true }).click();
   } else throw new Error(`Unexpected fixture action: ${action.type}`);
   await ready(page);
   return dispatch(game, action).state;
@@ -75,13 +75,15 @@ for (const hand of ['pair', 'twoPair'] as const) {
     for (const id of action.dieIds) await expect(die(page, id)).toHaveAttribute('aria-pressed', 'true');
     const score = handScore(game.dice, hand, action.dieIds);
     expect(score.multiplier).toBe(hand === 'pair' ? 1.5 : 2);
-    await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText(`${score.pips} x ${score.multiplier} • PLAY`);
+    await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText(
+      `${score.pips} × ${score.multiplier} × 1 = ${score.score.toLocaleString('en-US')} • PLAY`,
+    );
     await expect(page.getByTestId('round-score-progress')).toHaveText(`0 / ${game.target}`);
     await page.getByRole('button', { name: 'PLAY', exact: true }).click();
     await ready(page);
     await expect(page.getByTestId('round-score-progress')).toHaveText(`${score.score} / ${game.target}`);
     await expect(handButton).toBeDisabled();
-    await expect(handButton).toContainText('used');
+    await expect(handButton).toHaveAccessibleName(/· Used$/);
     for (const physical of result.state.dice) {
       await expect(page.getByRole('button', { name: new RegExp(`^Die ${physical.id + 1}, face ${physical.value},`) })).toBeVisible();
       if (!action.dieIds.includes(physical.id)) expect(physical.value).toBe(game.dice[physical.id].value);
@@ -107,8 +109,10 @@ test('winning hand shows final award and ROUND CLEARED without gameplay roll or 
   await setPlaybackSpeed(page, 'NORMAL');
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   const observed: string[] = [];
-  for (const [index, event] of fixture.result.events.entries()) {
-    await expect(page.getByText(`EVENT ${index + 1} / ${fixture.result.events.length}`, { exact: true })).toBeVisible();
+  for (const event of fixture.result.events) {
+    await expect(page.getByTestId('round-score-progress')).toHaveText(
+      `${event.board.score.toLocaleString('en-US')} / ${event.board.target.toLocaleString('en-US')}`,
+    );
     await expect(page.locator('.die.rolling')).toHaveCount(0);
     await expect(page.locator('.ability-label').filter({ hasText: 'SLIPPY' })).toHaveCount(0);
     expect(['DICE_REROLL_STARTED', 'DIE_ROLLED', 'DIE_FLIPPED']).not.toContain(event.type);

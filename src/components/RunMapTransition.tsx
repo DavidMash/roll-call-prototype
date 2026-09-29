@@ -53,7 +53,7 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
   return <Paper className={`run-map-transition ${event.boss ? 'boss-reveal' : ''} ${exiting ? 'map-exiting' : ''}`} data-testid="run-map-transition"
     data-destination={destination} role="status" aria-live="polite"
     style={{ '--map-exit-duration': `${MAP_EXIT_MS}ms` } as React.CSSProperties}>
-    <div className="map-kicker">{event.direction === 'backward' ? 'FALL BACK' : 'ROUTE ADVANCE'}</div>
+    <div className="map-kicker">{event.direction === 'backward' ? 'BACK TO SHOP' : 'ONWARD'}</div>
     <div className="run-map-track" aria-label="Local run route">
       {Array.from({ length: leadingPlaceholders }, (_, index) => <span className="map-node-placeholder" key={`placeholder-${index}`} aria-hidden="true" />)}
       {nodes.map((node, index) => {
@@ -69,7 +69,7 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
             title={nodeDescription(node)} aria-current={node.id === destination ? 'step' : undefined}>
             <span className="node-glyph">{node.type === 'shop' ? '¤' : node.type === 'flame_selection' ? '◆' : node.type === 'boss_round' ? '!' : '•'}</span>
             <span className="node-label">{nodeLabel(node)}</span>
-            {target !== null && <span className="node-target">{target.toLocaleString()} pts</span>}
+            {target !== null && <span className="node-target">Goal {target.toLocaleString()}</span>}
           </div>
         </div>;
       })}

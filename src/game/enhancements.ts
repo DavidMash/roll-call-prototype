@@ -15,20 +15,20 @@ const definition = (name: string, description: string, purchasePrice: number, ba
   ({ name, description, purchasePrice, baseSellPrice, stackable, maxStacks, countsTowardFaceTypeLimit: true });
 
 export const ENHANCEMENTS: Record<Enhancement, EnhancementDefinition> = {
-  bonus: definition('Bonus', `+${CONFIG.bonusPips} scoring pips each time this face scores.`, 3, 1, true),
-  jumpingBean: definition('Jumping Bean', 'When rolled, free-play the matching Upper hand using this die, then reroll it. The free play does not use up that hand.', 2, 1, false, 1),
-  golden: definition('Golden', `+${CONFIG.goldenGold} gold per stack whenever this face scores. Stacks cap at 3.`, 2, 1, true, 3),
-  workout: definition('Workout', `After scoring, this face permanently gains +${CONFIG.workoutIncrement} scoring pip.`, 3, 2, true),
-  missingLink: definition('Missing Link', 'Wild rank for straights. Scores its actual pips.', 2, 1, false, 1),
-  mirror: definition('Mirror', 'Wild matching rank for Pair, Two Pair, kind hands, and Full House. Scores actual pips.', 2, 1, false, 1),
-  magnetic: definition('Magnetic', 'Once per round, a held Magnetic face attracts rerolled dice to their Magnetic faces. Participating faces are then used. Bump takes priority.', 3, 2, false, 1),
-  sticky: definition('Sticky', '50% chance to prevent a scoring or Jumping Bean reroll. Stacks cap at 3 (87.5%).', 2, 1, true, 3),
-  slippy: definition('Slippy', 'Reroll this die after a played hand if the round continues, even if it did not score.', 2, 1, false, 1),
-  hitchhiker: definition('Hitchhiker', 'When held out of a played hand, may join as a scoring die. Stacks cap at 3 (87.5%).', 2, 1, true, 3),
-  weighted: definition('Weighted', 'Adds +1 roll weight to this face\'s opposite side per stack, including in the shop.', 3, 2, true),
-  jackpot: definition('Jackpot', `Gain ${CONFIG.jackpotGold} gold per stack when this face scores in the round-clearing hand. Stacks cap at 3.`, 3, 1, true, 3),
-  bump: definition('Bump', 'While showing, this die\'s next actual roll advances one face (6 wraps to 1).', 2, 1, false, 1),
-  vintage: definition('Vintage', 'Whenever this face scores in a hand, its sell value increases by 3 Gold.', 3, 0, false, 1),
+  bonus: definition('Bonus', `+${CONFIG.bonusPips} Pips when this face scores.`, 3, 1, true),
+  jumpingBean: definition('Jumping Bean', 'When rolled, plays the matching Upper hand for free, then rerolls.', 2, 1, false, 1),
+  golden: definition('Golden', `Gain +${CONFIG.goldenGold} Gold when this face scores.`, 2, 1, true, 3),
+  workout: definition('Workout', `After scoring, this face permanently gains +${CONFIG.workoutIncrement} Pip.`, 3, 2, true),
+  missingLink: definition('Missing Link', 'Counts as any face in a Straight. Scores its own Pips.', 2, 1, false, 1),
+  mirror: definition('Mirror', 'Counts as any matching face in group hands. Scores its own Pips.', 2, 1, false, 1),
+  magnetic: definition('Magnetic', 'Once per Round, held Magnets pull rolling dice toward other Magnets.', 3, 2, false, 1),
+  sticky: definition('Sticky', 'May keep this die from rerolling after it scores.', 2, 1, true, 3),
+  slippy: definition('Slippy', 'Rerolls after you play a hand, even if this die did not score.', 2, 1, false, 1),
+  hitchhiker: definition('Hitchhiker', 'When left out of a hand, it may jump in and score anyway.', 2, 1, true, 3),
+  weighted: definition('Weighted', 'Makes the opposite face more likely to roll.', 3, 2, true),
+  jackpot: definition('Jackpot', `Gain +${CONFIG.jackpotGold} Gold if this face scores in the hand that clears the Round.`, 3, 1, true, 3),
+  bump: definition('Bump', 'While showing, this die’s next roll moves up one face.', 2, 1, false, 1),
+  vintage: definition('Vintage', 'Each time this face scores, its sell value increases by 3 Gold.', 3, 0, false, 1),
 };
 export const ENHANCEMENT_IDS = Object.keys(ENHANCEMENTS) as Enhancement[];
 export const isEnhancement = (value: unknown): value is Enhancement => typeof value === 'string' && Object.hasOwn(ENHANCEMENTS, value);
@@ -43,10 +43,10 @@ export const faceEnhancementTypes = (face: Face) => ENHANCEMENT_IDS.filter(id =>
 export function attachmentError(face: Face, enhancement: Enhancement): string | null {
   const metadata = ENHANCEMENTS[enhancement];
   const current = stacks(face, enhancement);
-  if (!metadata.stackable && current > 0) return `${metadata.name} is already on this physical face.`;
+  if (!metadata.stackable && current > 0) return `${metadata.name} is already on this Face.`;
   if (metadata.maxStacks !== null && current >= metadata.maxStacks) return `${metadata.name} is capped at ${metadata.maxStacks} stacks.`;
   if (current === 0 && metadata.countsTowardFaceTypeLimit && faceEnhancementTypes(face).length >= FACE_TYPE_LIMIT) {
-    return `This face already has ${FACE_TYPE_LIMIT} enhancement types. Sell one before adding ${metadata.name}.`;
+    return `This Face is full. Sell an Enhancement before adding ${metadata.name}.`;
   }
   return null;
 }

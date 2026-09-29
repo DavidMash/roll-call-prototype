@@ -1,6 +1,7 @@
 import { activeFace } from './dice';
-import { isLastPlay } from './bosses';
+import { lastPlayDanger } from './bosses';
 import { LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from './hands';
+import { finalizeScore, handScore } from './scoring';
 import type { ActiveFlame, Board, Die, Flame, GameState, HandId, XMultFactor } from './types';
 
 export interface FlameDefinition {
@@ -10,21 +11,22 @@ export interface FlameDefinition {
   bonfireDescription: string;
   affectsXMult: boolean;
 }
+const GLOBAL_BONFIRE = 'This Flame now works globally.';
 export const FLAMES: Record<Flame, FlameDefinition> = {
-  ultimate: { name: 'Ultimate', shortName: 'ULT', affectsXMult: true, description: 'Scores in your Ultimate Hand: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Your Ultimate Hand globally multiplies XMult by ×5.' },
-  minigun: { name: 'Minigun', shortName: 'MINI', affectsXMult: true, description: 'Scores in an Upper hand: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Every Upper hand multiplies XMult by ×5.' },
-  hailMary: { name: 'Hail Mary', shortName: 'HAIL', affectsXMult: true, description: 'Scores with 0 manual rerolls left: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Every hand played with 0 rerolls multiplies XMult by ×5.' },
-  fullOfGrace: { name: 'Full of Grace', shortName: 'GRACE', affectsXMult: true, description: 'Scores on LAST PLAY: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Every LAST PLAY hand globally multiplies XMult by ×5.' },
-  charge: { name: 'Charge', shortName: 'CHG', affectsXMult: true, description: 'Each scoring die grows the stored factor by up to +0.5; select this die to arm it.', bonfireDescription: 'Each scoring die grows the global stored factor by +0.5; arm it for any hand.' },
-  personalTrainer: { name: 'Personal Trainer', shortName: 'TRAIN', affectsXMult: false, description: 'When this die scores, its training chance rises linearly to 75%.', bonfireDescription: 'Every played hand gets one 75% training check.' },
-  dragonsHoard: { name: "Dragon's Hoard", shortName: 'HOARD', affectsXMult: true, description: 'When this die scores, held Gold and investment multiply XMult by up to ×5.', bonfireDescription: 'Every hand receives the held-Gold factor, capped at ×5.' },
-  wellTrained: { name: 'Well Trained', shortName: 'WELL', affectsXMult: true, description: 'When this die scores, previous plays and investment multiply XMult by up to ×5.', bonfireDescription: 'Every hand receives its play-history factor, capped at ×5.' },
-  targetPractice: { name: 'Target Practice', shortName: 'TARGET', affectsXMult: true, description: 'Scores in the round target: multiplies XMult by ×1 to ×9.', bonfireDescription: 'The round target globally multiplies XMult by ×9.' },
-  hotStreak: { name: 'Hot Streak', shortName: 'STREAK', affectsXMult: true, description: 'Complete the Lower-hand sequence with this die; each charge adds up to +1 inside its multiplicative factor.', bonfireDescription: 'The sequence no longer requires a particular die; each charge adds +1 inside its factor.' },
-  moneyToBurn: { name: 'Money to Burn', shortName: 'BURN', affectsXMult: true, description: 'When this die scores, normal-shop spend and investment multiply XMult by up to ×5.', bonfireDescription: 'Every hand receives the shop-spend factor, capped at ×5.' },
-  lowball: { name: 'Lowball', shortName: 'LOW', affectsXMult: true, description: 'When this die scores, low printed values multiply XMult by up to ×5.', bonfireDescription: 'Every normal hand receives its printed-value factor, up to ×5.' },
-  straightShooter: { name: 'Straight Shooter', shortName: 'STR8', affectsXMult: true, description: 'Scores in Small or Large Straight: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Every Small or Large Straight multiplies XMult by ×5.' },
-  doubleDown: { name: 'Double Down', shortName: 'DBL', affectsXMult: true, description: 'Scores in Pair or Two Pair: multiplies XMult by ×1 to ×5.', bonfireDescription: 'Every Pair and Two Pair multiplies XMult by ×5.' },
+  ultimate: { name: 'Ultimate', shortName: 'ULT', affectsXMult: true, description: 'Your highest level hand gains up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  minigun: { name: 'Minigun', shortName: 'MINI', affectsXMult: true, description: 'Upper hands gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  hailMary: { name: 'Hail Mary', shortName: 'HAIL', affectsXMult: true, description: 'Hands played with no Rerolls left gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  fullOfGrace: { name: 'Full of Grace', shortName: 'GRACE', affectsXMult: true, description: 'Last Play gains up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  charge: { name: 'Charge', shortName: 'CHG', affectsXMult: true, description: 'Scoring dice build Charge. Arm it for up to ×5 XMult.', bonfireDescription: 'This Flame now works globally. Arm Charge for any hand.' },
+  personalTrainer: { name: 'Personal Trainer', shortName: 'TRAIN', affectsXMult: false, description: 'When this die scores, it may train the hand. Up to 75% chance.', bonfireDescription: 'This Flame now works globally. Every played hand may train.' },
+  dragonsHoard: { name: 'Dragon’s Hoard', shortName: 'HOARD', affectsXMult: true, description: 'Holding more Gold earns up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  wellTrained: { name: 'Well Trained', shortName: 'WELL', affectsXMult: true, description: 'Hands you play often gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  targetPractice: { name: 'Target Practice', shortName: 'TARGET', affectsXMult: true, description: 'Hit your Target for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  hotStreak: { name: 'Hot Streak', shortName: 'STREAK', affectsXMult: true, description: 'Chain Lower hands in order to build XMult, up to ×9.', bonfireDescription: GLOBAL_BONFIRE },
+  moneyToBurn: { name: 'Money to Burn', shortName: 'BURN', affectsXMult: true, description: 'Spending Gold in Shops earns up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  lowball: { name: 'Lowball', shortName: 'LOW', affectsXMult: true, description: 'Low face values earn up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  straightShooter: { name: 'Straight Shooter', shortName: 'STR8', affectsXMult: true, description: 'Straights gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  doubleDown: { name: 'Double Down', shortName: 'DBL', affectsXMult: true, description: 'Pair and Two Pair gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
 };
 export const FLAME_IDS = Object.keys(FLAMES) as Flame[];
 export const XMult_FLAME_IDS = FLAME_IDS.filter(flame => FLAMES[flame].affectsXMult);
@@ -51,29 +53,19 @@ const displayNumber = (value: number) => Number(value.toFixed(4));
 type FlameDisplayContext = Pick<Board, 'gold' | 'lifetimeNormalShopGoldSpent'>;
 export function flameEffectText(id: Flame, investedGold: number, board: FlameDisplayContext): string {
   switch (id) {
-    case 'personalTrainer': return `${displayNumber(trainerChance(investedGold) * 100)}% training chance`;
-    case 'charge': return `Stored factor +${displayNumber(chargeGainPerScoringDie(investedGold))} per scoring die, cap ×5`;
-    case 'targetPractice': return `×${displayNumber(targetPracticeMultiplier(investedGold))} XMult on the round target`;
-    case 'dragonsHoard': return `×${displayNumber(dragonsHoardMultiplier(investedGold, board.gold))} XMult at ${board.gold} held Gold`;
-    case 'wellTrained': return `×(1 + ${displayNumber(0.2 * flameProgress(investedGold))} per previous play) XMult, cap ×5`;
-    case 'hotStreak': return `×(1 + charges × ${displayNumber(flameProgress(investedGold))}) XMult`;
-    case 'moneyToBurn': return `×${displayNumber(moneyToBurnMultiplier(investedGold, board.lifetimeNormalShopGoldSpent))} XMult at ${board.lifetimeNormalShopGoldSpent} shop Gold`;
-    case 'lowball': return `×1–×${displayNumber(lowballMultiplier(investedGold, 2))} XMult from printed-face average`;
-    default: return `×${displayNumber(standardFlameMultiplier(investedGold))} XMult when its condition is met`;
+    case 'personalTrainer': return `${displayNumber(trainerChance(investedGold) * 100)}% chance to train the hand.`;
+    case 'charge': return `Scoring dice build +${displayNumber(chargeGainPerScoringDie(investedGold))} Charge.`;
+    case 'targetPractice': return `Target gains ×${displayNumber(targetPracticeMultiplier(investedGold))} XMult.`;
+    case 'dragonsHoard': return `${board.gold} held Gold currently grants ×${displayNumber(dragonsHoardMultiplier(investedGold, board.gold))} XMult.`;
+    case 'wellTrained': return 'Frequently played hands build toward ×5 XMult.';
+    case 'hotStreak': return `A full Lower-hand chain reaches ×${displayNumber(hotStreakMultiplier(investedGold, HOT_STREAK_SEQUENCE.length))} XMult.`;
+    case 'moneyToBurn': return `${board.lifetimeNormalShopGoldSpent} Gold spent in Shops currently grants ×${displayNumber(moneyToBurnMultiplier(investedGold, board.lifetimeNormalShopGoldSpent))} XMult.`;
+    case 'lowball': return `Low Faces gain up to ×${displayNumber(lowballMultiplier(investedGold, 2))} XMult.`;
+    default: return `The condition grants ×${displayNumber(standardFlameMultiplier(investedGold))} XMult.`;
   }
 }
 export function flameFullEffectText(id: Flame): string {
-  switch (id) {
-    case 'personalTrainer': return '75% training chance';
-    case 'charge': return 'Stored factor +0.5 per scoring die, cap ×5';
-    case 'targetPractice': return '×9 XMult on the round target';
-    case 'hotStreak': return '×(1 + charges) XMult';
-    case 'dragonsHoard': return '×1–×5 XMult from held Gold';
-    case 'wellTrained': return '×(1 + 0.2 per previous play) XMult, cap ×5';
-    case 'moneyToBurn': return '×1–×5 XMult from normal-shop spend';
-    case 'lowball': return '×1–×5 XMult from printed-face average';
-    default: return '×5 XMult when its condition is met';
-  }
+  return FLAMES[id].bonfireDescription;
 }
 export const isFlame = (value: unknown): value is Flame => typeof value === 'string' && Object.hasOwn(FLAMES, value);
 export const activeFlameId = (flame: ActiveFlame | null | unknown): Flame | null => {
@@ -93,6 +85,8 @@ export const hasXMultFlame = (dice: Die[], bonfires: Flame[] = []) =>
   });
 
 export interface HandStartSnapshot {
+  score: number;
+  target: number;
   gold: number;
   manualRerollsRemaining: number;
   previousPlays: number;
@@ -102,14 +96,21 @@ export interface HandStartSnapshot {
   hotStreakCharges: number;
   chargeXMult: number;
   chargeArmed: boolean;
-  lastPlay: boolean;
+  lastPlayDanger: import('./bosses').LastPlayDanger;
+  selectedBasePips: number;
+  selectedBaseMultiplier: number;
+  selectedDieIds: number[];
+  bossFactor: number;
   lifetimeNormalShopGoldSpent: number;
   bonfires: Flame[];
   dice: { dieId: number; flame: Flame | null; investedGold: number; faceValue: number }[];
 }
 
-export function captureHandStart(state: Pick<GameState, 'gold' | 'manualRerollsRemaining' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'chargeXMult' | 'chargeArmed' | 'bonfires' | 'dice' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'consumed'>, hand: HandId): HandStartSnapshot {
+export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'gold' | 'manualRerollsRemaining' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'chargeXMult' | 'chargeArmed' | 'bonfires' | 'dice' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'consumed'>, hand: HandId, selectedDieIds: number[]): HandStartSnapshot {
+  const selectedScore = handScore(state.dice, hand, selectedDieIds, state.handLevels[hand]);
   return {
+    score: state.score,
+    target: state.target,
     gold: state.gold,
     manualRerollsRemaining: state.manualRerollsRemaining,
     previousPlays: state.handPlayCounts[hand],
@@ -119,7 +120,11 @@ export function captureHandStart(state: Pick<GameState, 'gold' | 'manualRerollsR
     hotStreakCharges: state.hotStreakCharges,
     chargeXMult: state.chargeXMult,
     chargeArmed: state.chargeArmed,
-    lastPlay: isLastPlay(state),
+    lastPlayDanger: lastPlayDanger(state, hand),
+    selectedBasePips: selectedScore.pips,
+    selectedBaseMultiplier: selectedScore.multiplier,
+    selectedDieIds: [...selectedDieIds],
+    bossFactor: state.boss?.type === 'fly' && !state.boss.caught && hand !== state.boss.flyHand ? .5 : 1,
     lifetimeNormalShopGoldSpent: state.lifetimeNormalShopGoldSpent,
     bonfires: [...state.bonfires],
     dice: state.dice.map(die => ({ dieId: die.id, flame: activeFlameId(die.flame), investedGold: activeFlameInvestment(die.flame), faceValue: activeFace(die).rank })),
@@ -131,7 +136,7 @@ const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId) => {
     case 'ultimate': return snapshot.ultimateHands.includes(hand);
     case 'minigun': return UPPER_HAND_IDS.includes(hand);
     case 'hailMary': return snapshot.manualRerollsRemaining === 0;
-    case 'fullOfGrace': return snapshot.lastPlay;
+    case 'fullOfGrace': return snapshot.lastPlayDanger !== 'none';
     case 'targetPractice': return hand === snapshot.targetPracticeHand;
     case 'straightShooter': return hand === 'smallStraight' || hand === 'largeStraight';
     case 'doubleDown': return hand === 'pair' || hand === 'twoPair';
@@ -167,12 +172,12 @@ function factorInput(id: Flame, snapshot: HandStartSnapshot, scoringDieIds: numb
   if (id === 'hotStreak') return { input: snapshot.hotStreakCharges + 1, detail: `successful sequence charge ${snapshot.hotStreakCharges + 1}` };
   return {};
 }
-export function handXMultContributions(snapshot: HandStartSnapshot, hand: HandId, _handLevel: number, scoringDieIds: number[]): XMultFactor[] {
+function contributions(snapshot: HandStartSnapshot, hand: HandId, scoringDieIds: number[], includeFullOfGrace: boolean): XMultFactor[] {
   const scoring = new Set(scoringDieIds);
   const result: XMultFactor[] = [];
   if (snapshot.chargeArmed && snapshot.chargeXMult > 1) result.push({ source: 'charge', value: snapshot.chargeXMult, dieId: null, detail: 'armed stored Charge' });
   for (const id of snapshot.bonfires) {
-    if (!FLAMES[id]?.affectsXMult || id === 'charge' || !qualifies(id, snapshot, hand)) continue;
+    if (!FLAMES[id]?.affectsXMult || id === 'charge' || (!includeFullOfGrace && id === 'fullOfGrace') || !qualifies(id, snapshot, hand)) continue;
     const value = factorValue(id, 100, snapshot, scoringDieIds);
     if (value > 1) {
       const context = factorInput(id, snapshot, scoringDieIds);
@@ -181,11 +186,24 @@ export function handXMultContributions(snapshot: HandStartSnapshot, hand: HandId
   }
   for (const die of snapshot.dice) {
     const id = die.flame;
-    if (!id || !scoring.has(die.dieId) || !FLAMES[id].affectsXMult || id === 'charge' || !qualifies(id, snapshot, hand)) continue;
+    if (!id || !scoring.has(die.dieId) || !FLAMES[id].affectsXMult || id === 'charge'
+      || (!includeFullOfGrace && id === 'fullOfGrace') || !qualifies(id, snapshot, hand)) continue;
     const value = factorValue(id, die.investedGold, snapshot, scoringDieIds);
     if (value > 1) result.push({ source: id, value, dieId: die.dieId, ...factorInput(id, snapshot, scoringDieIds) });
   }
   return result;
+}
+export function handXMultContributions(snapshot: HandStartSnapshot, hand: HandId, _handLevel: number, scoringDieIds: number[]): XMultFactor[] {
+  const guaranteedFactors = contributions(snapshot, hand, snapshot.selectedDieIds, false);
+  const xMult = composeXMult(guaranteedFactors);
+  const guaranteed = snapshot.score + finalizeScore(snapshot.selectedBasePips, snapshot.selectedBaseMultiplier,
+    xMult * snapshot.bossFactor).finalScore >= snapshot.target;
+  return contributions(snapshot, hand, scoringDieIds, !guaranteed);
+}
+export function isGuaranteedWinningPlay(snapshot: HandStartSnapshot, hand: HandId): boolean {
+  const xMult = composeXMult(contributions(snapshot, hand, snapshot.selectedDieIds, false));
+  return snapshot.score + finalizeScore(snapshot.selectedBasePips, snapshot.selectedBaseMultiplier,
+    xMult * snapshot.bossFactor).finalScore >= snapshot.target;
 }
 export const composeXMult = (factors: readonly (number | XMultFactor)[]) =>
   Number(factors.map(item => typeof item === 'number' ? item : item.value).sort((a, b) => a - b)
