@@ -143,5 +143,10 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
   ]));
   await page.getByRole('button', { name: 'Skip playback' }).click();
   await ready(page);
-  await expect(page.getByTestId('round-score-progress')).toHaveText(`${fixture.result.state.score} / ${fixture.result.state.target}`);
+  if (fixture.result.state.phase === 'roundSummary') {
+    await expect(page.getByRole('heading', { name: /DEFEATED|CLEARED/ })).toBeVisible();
+    await expect(page.getByText(`${fixture.result.state.score.toLocaleString('en-US')} / ${fixture.result.state.target.toLocaleString('en-US')}`, { exact: true })).toBeVisible();
+  } else {
+    await expect(page.getByTestId('round-score-progress')).toHaveText(`${fixture.result.state.score} / ${fixture.result.state.target}`);
+  }
 });

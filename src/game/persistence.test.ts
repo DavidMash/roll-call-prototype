@@ -67,6 +67,25 @@ describe('run persistence', () => {
     expect(loaded?.roundCheckpoint?.maxCharge).toBe(3);
   });
 
+  it('infers Six Pack progress for saves made before the Upper-hand counter', () => {
+    const storage = new MemoryStorage();
+    const state = newRun('legacy-six-pack').state;
+    state.dice[0].flame = { id: 'sixPack', investedGold: 100 };
+    state.sixPackXMult = 4.333333333333;
+    delete (state as Partial<typeof state>).sixPackUpperHandsPlayed;
+    if (!state.roundCheckpoint) throw new Error('Expected initial round checkpoint');
+    state.roundCheckpoint.dice[0].flame = { id: 'sixPack', investedGold: 100 };
+    state.roundCheckpoint.sixPackXMult = 5.166666666667;
+    delete (state.roundCheckpoint as Partial<typeof state.roundCheckpoint>).sixPackUpperHandsPlayed;
+    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION, state }));
+
+    const loaded = loadPersistedRun(storage, null);
+    expect(loaded?.sixPackUpperHandsPlayed).toBe(2);
+    expect(loaded?.sixPackXMult).toBeCloseTo(4.333333333333);
+    expect(loaded?.roundCheckpoint?.sixPackUpperHandsPlayed).toBe(1);
+    expect(loaded?.roundCheckpoint?.sixPackXMult).toBeCloseTo(5.166666666667);
+  });
+
   it('treats storage read and write failures as non-fatal', () => {
     const broken = {
       getItem(): string | null { throw new Error('blocked'); },

@@ -204,7 +204,10 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     state = dispatch(busted, { type: 'RETRY_ROUND' }, constant(0.2)).state;
     state.target = 1;
     state.stats.rounds.at(-1)!.target = 1;
-    const choice = state.dice.find(die => die.value === 1) ?? state.dice[0];
+    const cursedId = state.boss?.type === 'hexer' ? state.boss.cursedDieId : null;
+    const choice = cursedId !== null
+      ? state.dice.find(die => die.id === cursedId)!
+      : state.dice.find(die => die.value === 1) ?? state.dice[0];
     choice.value = 1;
     const cleared = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [choice.id] }, constant()).state;
     expect(cleared.stats.goldBySource.roundBase).toBe(5);

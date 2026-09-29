@@ -22,7 +22,7 @@ export const FLAMES: Record<Flame, FlameDefinition> = {
   jumpStart: { name: 'Jump Start', shortName: 'JUMP', affectsXMult: true, description: 'Rerolls build Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
   powerSurge: { name: 'Power Surge', shortName: 'SURGE', affectsXMult: true, description: 'Playing your highest level hand triples your current Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
   speedDemon: { name: 'Speed Demon', shortName: 'SPEED', affectsXMult: true, description: 'Play quickly for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  sixPack: { name: 'Six Pack', shortName: 'SIX', affectsXMult: true, description: 'Starts at up to ×6 XMult. Reduces by 1 when an Upper hand is played.', bonfireDescription: GLOBAL_BONFIRE },
+  sixPack: { name: 'Six Pack', shortName: 'SIX', affectsXMult: true, description: 'Starts at up to ×6 XMult. Reduces when an Upper hand is played.', bonfireDescription: GLOBAL_BONFIRE },
   fluxCapacitor: { name: 'Flux Capacitor', shortName: 'FLUX', affectsXMult: true, description: 'Using a Magnetic face to pull another die builds Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
   dragonsHoard: { name: 'Dragon’s Hoard', shortName: 'HOARD', affectsXMult: true, description: 'Holding more Gold earns up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   wellTrained: { name: 'Well Trained', shortName: 'WELL', affectsXMult: true, description: 'Hands you play often gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
@@ -52,6 +52,8 @@ export const speedDemonMultiplier = (investedGold: number, decisionMs: number) =
   return Number((1 + 8 * flameProgress(investedGold) * strength).toFixed(12));
 };
 export const sixPackStartingMultiplier = (investedGold: number) => 1 + 5 * flameProgress(investedGold);
+export const sixPackMultiplierAfterUpperHands = (startingFactor: number, upperHandsPlayed: number) =>
+  Number(Math.max(1, 1 + (Math.max(1, startingFactor) - 1) * (1 - Math.min(6, Math.max(0, upperHandsPlayed)) / 6)).toFixed(12));
 export const maxChargeContribution = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
 export const dragonsHoardMultiplier = (investedGold: number, gold: number) => 1 + 4 * flameProgress(investedGold) * Math.min(Math.max(gold, 0) / 100, 1);
 export const wellTrainedMultiplier = (investedGold: number, previousPlays: number) => Math.min(5, 1 + previousPlays * 0.2 * flameProgress(investedGold));

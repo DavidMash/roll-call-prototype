@@ -252,15 +252,16 @@ describe('The Hexer', () => {
     expect(die.owner).toBe('boss');
     expect(die.faces).toHaveLength(7);
     expect(die.faces.map(face => ({ rank: face.rank, weightedTarget: face.weightedTarget ?? null, enhancements: face.enhancements }))).toEqual([
-      { rank: 1, weightedTarget: 6, enhancements: { golden: 1, jumpingBean: 1, weighted: 1 } },
-      { rank: 2, weightedTarget: 5, enhancements: { bonus: 1, jumpingBean: 1, weighted: 1 } },
-      { rank: 3, weightedTarget: 4, enhancements: { workout: 1, jumpingBean: 1, weighted: 1 } },
-      { rank: 4, weightedTarget: null, enhancements: { workout: 5, bump: 1 } },
-      { rank: 5, weightedTarget: null, enhancements: { workout: 10, bump: 1 } },
-      { rank: 6, weightedTarget: null, enhancements: { workout: 20, bump: 1 } },
-      { rank: 7, weightedTarget: null, enhancements: { bonus: 5, jackpot: 1, sticky: 1 } },
+      { rank: 1, weightedTarget: 6, enhancements: { golden: 1, weighted: 1 } },
+      { rank: 2, weightedTarget: 5, enhancements: { golden: 1, weighted: 1 } },
+      { rank: 3, weightedTarget: 4, enhancements: { golden: 1, weighted: 1 } },
+      { rank: 4, weightedTarget: null, enhancements: { missingLink: 1, mirror: 1 } },
+      { rank: 5, weightedTarget: null, enhancements: { workout: 5, mirror: 1 } },
+      { rank: 6, weightedTarget: null, enhancements: { workout: 10, bump: 1 } },
+      { rank: 7, weightedTarget: null, enhancements: { bonus: 5, mirror: 1 } },
     ]);
-    expect(die.faces.every(face => Object.keys(face.enhancements).length <= 3)).toBe(true);
+    expect(die.faces.every(face => Object.keys(face.enhancements).length === 2)).toBe(true);
+    expect(die.faces.every(face => !face.enhancements.jumpingBean)).toBe(true);
     expect(rollWeights(die)).toEqual([1, 1, 1, 2, 2, 2, 1]);
   });
 
@@ -298,8 +299,9 @@ describe('The Hexer', () => {
   it('busts when ordinary hands remain but none can include the Cursed Die', () => {
     const state = bossRound('hexer');
     const cursed = state.dice.find(die => die.owner === 'boss')!;
-    state.dice.filter(die => die.owner === 'player').forEach(die => { die.value = 1; });
+    [1, 2, 3, 4, 6].forEach((rank, index) => { state.dice[index].value = rank as 1 | 2 | 3 | 4 | 6; });
     cursed.value = 7;
+    state.consumed = HAND_IDS.filter(hand => hand !== 'smallStraight');
     state.manualRerollsRemaining = 0;
 
     expect(hasPlayableHand(activeEncounterDice(state), state.consumed)).toBe(true);
@@ -312,18 +314,18 @@ describe('The Hexer', () => {
     expect(state.boss).toBeNull();
   });
 
-  it('supports extended straights with rank 7 without treating it as a matching wild', () => {
+  it('supports extended straights with rank 7 while face 7 Mirror works in group hands', () => {
     const cursed = createCursedDie();
     const players = newRun('seven-hands', constant(.2)).state.dice;
     [3, 4, 5, 6].forEach((rank, index) => { players[index].value = rank as 3 | 4 | 5 | 6; });
     cursed.value = 7;
     expect(combinationsForHand([...players.slice(0, 4), cursed], 'largeStraight')).toContainEqual([0, 1, 2, 3, cursed.id]);
     players[0].value = 2;
-    expect(combinationsForHand([players[0], cursed], 'pair')).not.toContainEqual([0, cursed.id]);
+    expect(combinationsForHand([players[0], cursed], 'pair')).toContainEqual([0, cursed.id]);
     expect(activeFace(cursed).rank).toBe(7);
   });
 
-  it('uses no-wrap Bump, temporary Workout growth, Sticky, and Jackpot on authored faces', () => {
+  it('uses Hexer-specific 6 → 7 Bump and the authored Workout and Bonus faces', () => {
     let state = bossRound('hexer');
     let cursed = state.dice.find(die => die.owner === 'boss')!;
     cursed.value = 6;
@@ -338,25 +340,15 @@ describe('The Hexer', () => {
     cursed.value = 7;
     state = dispatch(state, { type: 'PLAY', hand: 'smallStraight', dieIds: [0, 1, 2, cursed.id] }, constant(0)).state;
     cursed = state.dice.find(die => die.owner === 'boss')!;
-    expect(cursed.value).toBe(7);
-    expect(state.stats.triggers.sticky).toBe(1);
+    expect(state.stats.handScores.at(-1)?.bonusPips).toBe(50);
 
-    state.dice[0].value = 3;
-    cursed.value = 3;
-    state = dispatch(state, { type: 'PLAY', hand: 'threes', dieIds: [cursed.id] }, constant(.95)).state;
+    state.dice[0].value = 5;
+    cursed.value = 5;
+    state = dispatch(state, { type: 'PLAY', hand: 'fives', dieIds: [cursed.id] }, constant(.95)).state;
     cursed = state.dice.find(die => die.owner === 'boss')!;
-    expect(cursed.faces[2].workoutPips).toBe(1);
-
-    const jackpotState = bossRound('hexer');
-    const jackpotCursed = jackpotState.dice.find(die => die.owner === 'boss')!;
-    jackpotState.dice[0].value = 4;
-    jackpotState.dice[1].value = 5;
-    jackpotState.dice[2].value = 6;
-    jackpotCursed.value = 7;
-    jackpotState.target = 1;
-    const cleared = dispatch(jackpotState, { type: 'PLAY', hand: 'smallStraight', dieIds: [0, 1, 2, jackpotCursed.id] }, constant(.2)).state;
-    expect(cleared.stats.goldBySource.jackpot).toBe(3);
-    expect(cleared.gold).toBe(21);
+    expect(cursed.faces[4].workoutPips).toBe(5);
+    expect(state.stats.goldBySource.jackpot).toBe(0);
+    expect(state.stats.triggers.sticky ?? 0).toBe(0);
   });
 
   it('removes the Cursed Die on failed-attempt rollback and recreates it for the retry', () => {

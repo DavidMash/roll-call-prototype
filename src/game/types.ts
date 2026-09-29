@@ -107,6 +107,7 @@ export interface Face {
   vintageSellValue?: number;
   snakeEyed?: boolean;
   infected?: boolean;
+  snakeEyesOriginalRank?: Rank;
   magneticDestinationUsed?: boolean;
 }
 export interface ActiveFlame { id: Flame; investedGold: number }
@@ -183,6 +184,7 @@ export interface Board {
   chargeArmed: boolean;
   decisionId: number;
   sixPackXMult: number;
+  sixPackUpperHandsPlayed: number;
   hotStreakGoal: HandId | null;
   hotStreakCharges: number;
   lifetimeNormalShopGoldSpent: number;

@@ -5,7 +5,7 @@ import { Resolver } from './effects';
 import { dispatch, newRun } from './engine';
 import {
   calculateMaxCharge, captureHandStart, fluxCapacitorChargeGain, handXMultContributions,
-  sixPackStartingMultiplier, speedDemonMultiplier,
+  sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, speedDemonMultiplier,
 } from './flames';
 import type { Flame, GameState, RandomSource, Rank } from './types';
 
@@ -69,17 +69,22 @@ describe('Six Pack', () => {
     expect(sixPackStartingMultiplier(0)).toBe(1);
     expect(sixPackStartingMultiplier(50)).toBe(3.5);
     expect(sixPackStartingMultiplier(100)).toBe(6);
+    expect(sixPackMultiplierAfterUpperHands(6, 1)).toBeCloseTo(5.166666666667);
+    expect(sixPackMultiplierAfterUpperHands(1.4, 1)).toBeCloseTo(1.333333333333);
+    expect(sixPackMultiplierAfterUpperHands(6, 6)).toBe(1);
   });
 
-  it('applies the current factor before Upper-hand reduction and floors at ×1', () => {
+  it('applies the current factor before six equal Upper-hand reductions and floors at ×1', () => {
     const state = game([1, 2, 3, 4, 5]);
     flame(state, 0, 'sixPack', 100);
-    state.sixPackXMult = 2;
+    state.sixPackXMult = 6;
     const resolver = new Resolver(state, constant(.8));
-    resolver.play('ones', [0], 'jumpingBean');
-    resolver.play('ones', [0], 'jumpingBean');
-    expect(state.stats.handScores.map(score => score.xMult)).toEqual([2, 1]);
+    for (let count = 0; count < 7; count++) resolver.play('ones', [0], 'jumpingBean');
+    expect(state.stats.handScores.map(score => score.xMult)).toEqual([
+      6, 5.166666666667, 4.333333333333, 3.5, 2.666666666667, 1.833333333333, 1,
+    ]);
     expect(state.sixPackXMult).toBe(1);
+    expect(state.sixPackUpperHandsPlayed).toBe(6);
   });
 
   it('reduces after a manual Upper hand but not after a Lower hand', () => {
@@ -88,7 +93,7 @@ describe('Six Pack', () => {
     upper.sixPackXMult = 6;
     const played = dispatch(upper, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.8));
     expect(played.state.stats.handScores[0].xMult).toBe(6);
-    expect(played.state.sixPackXMult).toBe(5);
+    expect(played.state.sixPackXMult).toBeCloseTo(5.166666666667);
 
     const lower = game([2, 2, 3, 4, 5]);
     flame(lower, 0, 'sixPack', 100);
@@ -101,12 +106,13 @@ describe('Six Pack', () => {
     flame(state, 0, 'sixPack', 50);
     state.sixPackXMult = 3.5;
     new Resolver(state, constant(.8)).play('ones', [0], 'jumpingBean');
-    expect(state.sixPackXMult).toBe(2.5);
+    expect(state.sixPackXMult).toBeCloseTo(3.083333333333);
 
     state.phase = 'shop';
     state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     new Resolver(state, constant(.8)).startRound();
     expect(state.sixPackXMult).toBe(3.5);
+    expect(state.sixPackUpperHandsPlayed).toBe(0);
   });
 });
 

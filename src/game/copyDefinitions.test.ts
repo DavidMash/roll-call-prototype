@@ -35,7 +35,7 @@ describe('canonical player-facing definitions', () => {
       jumpStart: 'Rerolls build Charge.',
       powerSurge: 'Playing your highest level hand triples your current Charge.',
       speedDemon: 'Play quickly for up to ×9 XMult.',
-      sixPack: 'Starts at up to ×6 XMult. Reduces by 1 when an Upper hand is played.',
+      sixPack: 'Starts at up to ×6 XMult. Reduces when an Upper hand is played.',
       fluxCapacitor: 'Using a Magnetic face to pull another die builds Charge.',
       dragonsHoard: 'Holding more Gold earns up to ×5 XMult.',
       wellTrained: 'Hands you play often gain up to ×5 XMult.',

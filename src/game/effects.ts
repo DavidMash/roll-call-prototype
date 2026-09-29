@@ -4,7 +4,7 @@ import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, stacks } from './
 import {
   activeFlameId, activeFlameInvestment, captureHandStart, FLAMES, FLAME_IDS, handXMultContributions,
   fluxCapacitorChargeGain, hasChargeBonfire, HOT_STREAK_SEQUENCE, jumpStartChargeGain, momentumChargeGain,
-  ownedFlameIds, recalculateMaxCharge, sixPackStartingMultiplier, thirdRailChargeGain,
+  ownedFlameIds, recalculateMaxCharge, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, thirdRailChargeGain,
 } from './flames';
 import { hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
@@ -460,8 +460,10 @@ export class Resolver {
       .filter(die => die.owner === 'player' && !activeFace(die).snakeEyed && activeFace(die).rank !== 1);
     for (const die of scoredDice) {
       const physicalFace = die.value;
-      activeFace(die).snakeEyed = true;
-      activeFace(die).rank = 1;
+      const face = activeFace(die);
+      face.snakeEyesOriginalRank = face.rank;
+      face.snakeEyed = true;
+      face.rank = 1;
       boss.mutatedFaces.push({ dieId: die.id, physicalFace });
       this.emit({ type: 'BOSS_FACE_CHANGED', boss: 'snakeEyes', dieIds: [die.id], face: 1,
         message: `D${die.id + 1} physical face ${physicalFace} became Snake-Eyed (1)` });
@@ -583,7 +585,10 @@ export class Resolver {
     this.applyPowerSurge(hand, handStart.ultimateHands.includes(hand));
     if (UPPER_HAND_IDS.includes(hand) && ownedFlameIds(this.state).has('sixPack')) {
       const before = this.state.sixPackXMult;
-      this.state.sixPackXMult = Number(Math.max(1, before - 1).toFixed(12));
+      const startingFactor = this.state.bonfires.includes('sixPack') ? sixPackStartingMultiplier(100)
+        : sixPackStartingMultiplier(activeFlameInvestment(this.state.dice.find(die => activeFlameId(die.flame) === 'sixPack')?.flame ?? null));
+      this.state.sixPackUpperHandsPlayed = Math.min(6, this.state.sixPackUpperHandsPlayed + 1);
+      this.state.sixPackXMult = sixPackMultiplierAfterUpperHands(startingFactor, this.state.sixPackUpperHandsPlayed);
       this.emit({ type: 'SIX_PACK_CHANGED', flame: 'sixPack', hand, xMult: this.state.sixPackXMult,
         message: `Six Pack ×${this.format(before)} → ×${this.format(this.state.sixPackXMult)}` });
     }
@@ -762,6 +767,7 @@ export class Resolver {
     const sixPackInvestment = this.state.bonfires.includes('sixPack') ? 100
       : activeFlameInvestment(this.state.dice.find(die => activeFlameId(die.flame) === 'sixPack')?.flame ?? null);
     this.state.sixPackXMult = sixPackStartingMultiplier(sixPackInvestment);
+    this.state.sixPackUpperHandsPlayed = 0;
     this.state.hotStreakGoal = ownedFlameIds(this.state).has('hotStreak') ? 'pair' : null;
     this.state.flameSelection = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');

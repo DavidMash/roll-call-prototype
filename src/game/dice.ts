@@ -10,7 +10,7 @@ export const oppositeFace = (rank: Rank): Rank => {
   return (7 - rank) as Rank;
 };
 export const baseScoringPips = (face: Face) =>
-  Math.max(0, face.rank + face.workoutPips - (face.infected ? CONFIG.infectedFacePipPenalty : 0));
+  Math.max(0, (face.snakeEyed ? 1 : face.rank) + face.workoutPips - (face.infected ? CONFIG.infectedFacePipPenalty : 0));
 export const scoringPips = (face: Face) => baseScoringPips(face) + stacks(face, 'bonus') * CONFIG.bonusPips;
 export function createDice(): Die[] {
   return Array.from({ length: CONFIG.diceCount }, (_, id) => ({

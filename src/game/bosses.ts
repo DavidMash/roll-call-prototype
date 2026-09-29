@@ -184,13 +184,13 @@ export function createCursedDie(): Die {
     value: 1,
     flame: null,
     faces: [
-      face(1, { golden: 1, jumpingBean: 1, weighted: 1 }, 6),
-      face(2, { bonus: 1, jumpingBean: 1, weighted: 1 }, 5),
-      face(3, { workout: 1, jumpingBean: 1, weighted: 1 }, 4),
-      face(4, { workout: 5, bump: 1 }),
-      face(5, { workout: 10, bump: 1 }),
-      face(6, { workout: 20, bump: 1 }),
-      face(7, { bonus: 5, jackpot: 1, sticky: 1 }),
+      face(1, { golden: 1, weighted: 1 }, 6),
+      face(2, { golden: 1, weighted: 1 }, 5),
+      face(3, { golden: 1, weighted: 1 }, 4),
+      face(4, { missingLink: 1, mirror: 1 }),
+      face(5, { workout: 5, mirror: 1 }),
+      face(6, { workout: 10, bump: 1 }),
+      face(7, { bonus: 5, mirror: 1 }),
     ],
   };
 }
@@ -250,8 +250,9 @@ export const isLastPlay = (state: Pick<Board, 'boss' | 'consumed' | 'dice' | 'ma
 
 export function cleanupTemporaryBossFaces(dice: Die[]): void {
   for (const die of dice.filter(item => item.owner === 'player')) die.faces.forEach((face, index) => {
-    if (face.snakeEyed) face.rank = (index + 1) as Rank;
+    if (face.snakeEyed) face.rank = face.snakeEyesOriginalRank ?? (index + 1) as Rank;
     delete face.snakeEyed;
+    delete face.snakeEyesOriginalRank;
     delete face.infected;
     delete face.magneticDestinationUsed;
   });

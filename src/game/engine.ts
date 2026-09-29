@@ -4,7 +4,7 @@ import { Resolver } from './effects';
 import { attachmentError, enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, stacks } from './enhancements';
 import {
   activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasChargeBonfire, hasOwnedChargeFlame,
-  hasOwnedFlame, isChargeFlame, isFlame, recalculateMaxCharge,
+  hasOwnedFlame, isChargeFlame, isFlame, recalculateMaxCharge, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier,
 } from './flames';
 import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, isValidSelection } from './hands';
 import { hashSeed, SeededRng } from './rng';
@@ -25,6 +25,16 @@ function normalizedTrainingOffer(offer: TrainingOffer | { hand: HandId; purchase
 function normalizeShop(shop: Shop): void {
   shop.trainingOffers = shop.trainingOffers.map(offer => normalizedTrainingOffer(offer));
   shop.lifeRestores = Math.max(0, Math.floor(shop.lifeRestores ?? 0));
+}
+
+function normalizeSixPackRuntime(state: Pick<Board, 'dice' | 'bonfires' | 'sixPackXMult' | 'sixPackUpperHandsPlayed'>): void {
+  const startingFactor = state.bonfires.includes('sixPack') ? sixPackStartingMultiplier(100)
+    : sixPackStartingMultiplier(activeFlameInvestment(state.dice.find(die => activeFlameId(die.flame) === 'sixPack')?.flame ?? null));
+  const missingCount = state.sixPackUpperHandsPlayed === undefined;
+  const inferred = startingFactor <= 1 ? 0 : Math.round(6 * (startingFactor - Math.max(1, state.sixPackXMult ?? 1)) / (startingFactor - 1));
+  state.sixPackUpperHandsPlayed = Math.max(0, Math.min(6, Math.floor(missingCount ? inferred : state.sixPackUpperHandsPlayed)));
+  state.sixPackXMult = missingCount ? sixPackMultiplierAfterUpperHands(startingFactor, state.sixPackUpperHandsPlayed)
+    : Math.max(1, state.sixPackXMult ?? 1);
 }
 
 export function normalizeGameState(state: GameState): GameState {
@@ -85,7 +95,7 @@ export function normalizeGameState(state: GameState): GameState {
       .map(id => (id as string) === 'charge' ? 'momentum' : id).filter(isFlame))];
     recalculateMaxCharge(next.roundCheckpoint);
     next.roundCheckpoint.decisionId = Math.max(0, Math.floor(next.roundCheckpoint.decisionId ?? 0));
-    next.roundCheckpoint.sixPackXMult = Math.max(1, next.roundCheckpoint.sixPackXMult ?? 1);
+    normalizeSixPackRuntime(next.roundCheckpoint);
   }
   if (next.flameSelection) next.flameSelection.offers = next.flameSelection.offers
     .map(offer => ({ ...offer, flame: (offer.flame as string) === 'charge' ? 'momentum' as const : offer.flame }))
@@ -150,7 +160,7 @@ export function normalizeGameState(state: GameState): GameState {
   next.stats.goldBySource.enhancementSale ??= 0;
   next.stats.goldSpentBySource.lifeRestore ??= 0;
   next.decisionId = Math.max(0, Math.floor(next.decisionId ?? 0));
-  next.sixPackXMult = Math.max(1, next.sixPackXMult ?? 1);
+  normalizeSixPackRuntime(next);
   recalculateMaxCharge(next);
   return next;
 }
@@ -282,7 +292,7 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
     score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, roundAttemptNumber: 1,
     bossSchedule: bossSchedule(seed), boss: null, currentNodeId: '',
     bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], chargeXMult: 1, maxCharge: 1,
-    chargeArmed: false, decisionId: 0, sixPackXMult: 1, hotStreakGoal: null, hotStreakCharges: 0, lifetimeNormalShopGoldSpent: 0, consumed: [], shop: null,
+    chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, lifetimeNormalShopGoldSpent: 0, consumed: [], shop: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
     scoreByHand: {}, effectScore: 0, lastRoundPayout: null, roundSummary: null, flameSelection: null,
     manualRerollsRemaining: CONFIG.manualRerollsPerRound, nextOfferId: 0, stats: createStats(seed), history: [], roundCheckpoint: null,

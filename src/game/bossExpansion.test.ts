@@ -112,10 +112,13 @@ describe('The Hexer selection contract', () => {
   it('only exposes and selects combinations that genuinely include the Cursed Die', () => {
     const state = bossRound('hexer');
     const cursed = state.dice.find(die => die.owner === 'boss')!;
-    expose(state, [2, 2, 4, 5, 6]);
+    expose(state, [2, 2, 3, 4, 5]);
     cursed.value = 7;
     const legal = handOptions(activeEncounterDice(state), state.consumed, [cursed.id]);
     expect(legal.every(option => option.combinations.every(set => set.includes(cursed.id)))).toBe(true);
+    const mirroredPair = selectHand(activeEncounterDice(state), state.consumed, { dieIds: [], hand: null }, 'pair', [cursed.id]);
+    expect(mirroredPair.dieIds).toContain(cursed.id);
+    cursed.value = 6;
     const pairSelection = selectHand(activeEncounterDice(state), state.consumed, { dieIds: [], hand: null }, 'pair', [cursed.id]);
     expect(pairSelection.hand).toBeNull();
     cursed.value = 2;
@@ -216,6 +219,27 @@ describe('The Fly', () => {
 });
 
 describe('Snake Eyes', () => {
+  it.each([
+    { label: 'no Workout', workoutPips: 0, bonus: 0, expected: 1 },
+    { label: 'Workout growth', workoutPips: 8, bonus: 0, expected: 9 },
+    { label: 'Bonus', workoutPips: 0, bonus: 1, expected: 11 },
+    { label: 'Workout and Bonus', workoutPips: 8, bonus: 1, expected: 19 },
+  ])('replaces only base face value for $label', ({ workoutPips, bonus, expected }) => {
+    const state = bossRound('snakeEyes');
+    const face = state.dice[0].faces[5];
+    face.workoutPips = workoutPips;
+    if (bonus) face.enhancements.bonus = bonus;
+    face.enhancements.mirror = 1;
+    face.snakeEyesOriginalRank = face.rank;
+    face.snakeEyed = true;
+    face.rank = 1;
+    state.dice[0].value = 6;
+
+    expect(scoringPips(face)).toBe(expected);
+    expect(handScore(state.dice, 'ones', [0]).pips).toBe(7 + expected);
+    expect(face.enhancements).toMatchObject({ mirror: 1, ...(bonus ? { bonus } : {}) });
+  });
+
   it('turns every scored Face into 1 after scoring and keeps Enhancements attached', () => {
     let state = bossRound('snakeEyes');
     state.target = 1_000_000;
@@ -225,7 +249,7 @@ describe('Snake Eyes', () => {
     state = result.state;
     if (state.boss?.type !== 'snakeEyes') throw new Error('Snake Eyes fixture failed');
     expect(state.boss.mutatedFaces).toHaveLength(5);
-    expect(state.dice[0].faces[5]).toMatchObject({ rank: 1, snakeEyed: true, enhancements: { bonus: 1 } });
+    expect(state.dice[0].faces[5]).toMatchObject({ rank: 1, snakeEyed: true, snakeEyesOriginalRank: 6, enhancements: { bonus: 1 } });
     expect(state.dice.every(die => die.faces[5].snakeEyed && die.faces[5].rank === 1)).toBe(true);
     const scoreIndex = result.events.findIndex(event => event.type === 'HAND_SCORE_FINALIZED');
     const mutationIndex = result.events.findIndex(event => event.type === 'BOSS_FACE_CHANGED');
@@ -266,6 +290,7 @@ describe('Snake Eyes', () => {
     resolver.evaluate();
     expect(state.phase).toBe('shop');
     expect(state.dice.every(die => die.faces.every((face, index) => face.rank === index + 1 && !face.snakeEyed))).toBe(true);
+    expect(state.dice.every(die => die.faces.every(face => face.snakeEyesOriginalRank === undefined))).toBe(true);
     const retry = dispatch(state, { type: 'RETRY_ROUND' }, constant(.55)).state;
     expect(retry.boss).toMatchObject({ type: 'snakeEyes', mutatedFaces: [] });
     expect(retry.dice.every(die => die.faces.every(face => !face.snakeEyed))).toBe(true);

@@ -40,15 +40,15 @@ The Hexer (toxic green) adds a temporary boss-owned Cursed Die that must genuine
 
 | Face | Enhancements |
 |---:|---|
-| 1 | Golden 1, Jumping Bean, Weighted → 6 |
-| 2 | Bonus 1, Jumping Bean, Weighted → 5 |
-| 3 | Workout 1, Jumping Bean, Weighted → 4 |
-| 4 | Workout 5, Bump |
-| 5 | Workout 10, Bump |
-| 6 | Workout 20, Bump |
-| 7 | Bonus 5, Jackpot 1, Sticky 1 |
+| 1 | Golden 1, Weighted → 6 |
+| 2 | Golden 1, Weighted → 5 |
+| 3 | Golden 1, Weighted → 4 |
+| 4 | Missing Link, Mirror |
+| 5 | Workout 5, Mirror |
+| 6 | Workout 10, Bump |
+| 7 | Bonus 5, Mirror |
 
-Bump advances `4 → 5 → 6 → 7` and does not wrap. Seven is a genuine rank, so Small Straight recognizes `4-5-6-7` and Large Straight recognizes `3-4-5-6-7`. The Cursed Die cannot own Flames and is removed after a clear or failed-attempt rollback.
+Bump on face 6 advances `6 → 7` and does not wrap. Seven is a genuine rank, so Small Straight recognizes `4-5-6-7` and Large Straight recognizes `3-4-5-6-7`. The Cursed Die cannot own Flames and is removed after a clear or failed-attempt rollback.
 
 ### The Marathon
 
@@ -148,7 +148,7 @@ Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a f
 | Jump Start | Each manual Reroll spent adds `2p` Charge |
 | Power Surge | The single Ultimate-ranked hand triples current Charge |
 | Speed Demon | Actual unblocked decision time: full strength for 1 second, then smooth decay to ×1 at about 10 seconds; peak `1 + 8p` |
-| Six Pack | Starts each Round at `1 + 5p`; each played Upper hand uses the current factor, then reduces it by 1 to a ×1 floor |
+| Six Pack | Starts each Round at `S = 1 + 5p`; after `n` played Upper hands its factor is `1 + (S - 1)(1 - n/6)`, floored at ×1 |
 | Flux Capacitor | Each successful pull to a new Magnetic destination adds `2p` Charge |
 | Dragon's Hoard | `1 + 4p × min(heldGold/100, 1)`, max ×5 |
 | Well Trained | `min(5, 1 + previousPlays × 0.2p)` |

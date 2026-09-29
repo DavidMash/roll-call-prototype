@@ -382,7 +382,7 @@ test('Hexer preview keeps its faces secret and encounter fits all six dice on on
   expect(game.dice).toHaveLength(6);
 });
 
-test('Hexer face 7 renders seven pips without Mirror and remains freely selectable', async ({ page }) => {
+test('Hexer face 7 renders seven pips with Bonus and Mirror and remains freely selectable', async ({ page }) => {
   let game = await reachBossShop(page, 'hexer');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
@@ -399,10 +399,10 @@ test('Hexer face 7 renders seven pips without Mirror and remains freely selectab
   const button = page.getByRole('button', { name: /^Cursed Die, face 7,/ });
   await expect(button.locator('.pip-face')).toHaveAttribute('aria-label', 'Cursed Die showing 7');
   await expect(button.locator('.pip')).toHaveCount(7);
-  await expect(button).not.toContainText('Mirror');
+  await expect(button).toContainText('Mirror');
   await expect(button).toContainText('B+5');
-  await expect(button).toContainText('Jackpot');
-  await expect(button).toContainText('Sticky');
+  await expect(button).not.toContainText('Jackpot');
+  await expect(button).not.toContainText('Sticky');
   await expect(button).toHaveAttribute('aria-pressed', 'false');
   await expect(button).toHaveAttribute('aria-disabled', 'false');
   await button.click();
