@@ -141,7 +141,10 @@ Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a f
 | Minigun | Ones–Sixes: `1 + 4p`, max ×5 |
 | Hail Mary | Zero rerolls: `1 + 4p`, max ×5 |
 | Full of Grace | LAST PLAY (zero rerolls and exactly one playable hand): `1 + 4p`, max ×5 |
-| Charge | Each scoring die adds `0.5p`, capped at ×5; the armed factor multiplies XMult |
+| Momentum | Each manually played or Jumping Bean hand adds `0.5p` Charge |
+| Third Rail | Each gameplay die that rolls a 3 adds `0.5p` Charge |
+| Jump Start | Each manual Reroll spent adds `2p` Charge |
+| Power Surge | The single Ultimate-ranked hand triples current Charge |
 | Dragon's Hoard | `1 + 4p × min(heldGold/100, 1)`, max ×5 |
 | Well Trained | `min(5, 1 + previousPlays × 0.2p)` |
 | Target Practice | Targeted Lower hand: `1 + 8p`, max ×9 |
@@ -152,6 +155,8 @@ Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a f
 | Double Down | Pair/Two Pair: `1 + 4p`, max ×5 |
 | Three’s Company | Three of a Kind/Full House: `1 + 4p`, max ×5 |
 | Box Set | Four of a Kind/Five of a Kind: `1 + 4p`, max ×5 |
+
+Each owned Charge-family Flame contributes `1 + 4p` Max Charge. Their capacity stacks into one shared meter. Before any Charge-family Bonfire, every attached family die must participate in the hand that spends Charge; any family Bonfire unlocks global use.
 
 ## Dice visuals and live scoring
 

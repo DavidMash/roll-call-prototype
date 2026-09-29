@@ -28,7 +28,7 @@ export function RunInfoModal({ state, visibleEventId, busy, opened, onClose, see
             <OverviewStat label="Attempt" value={state.roundAttemptNumber} /><OverviewStat label="Lives" value={`${state.lives} / 3`} />
             <OverviewStat label="Score / goal" value={`${state.score} / ${state.target}`} /><OverviewStat label="Gold" value={state.gold} />
             <OverviewStat label="Shop spend" value={state.lifetimeNormalShopGoldSpent} /><OverviewStat label="Flame investment" value={state.stats.totalFlameInvestment} />
-            <OverviewStat label="Charge" value={`×${Number(state.chargeXMult.toFixed(4))}${state.chargeArmed ? ' armed' : ''}`} /><OverviewStat label="Bonfires" value={state.bonfires.length} />
+            <OverviewStat label="Charge" value={`×${Number(state.chargeXMult.toFixed(4))} / ×${Number(state.maxCharge.toFixed(4))}${state.chargeArmed ? ' armed' : ''}`} /><OverviewStat label="Bonfires" value={state.bonfires.length} />
             <OverviewStat label="Bean free plays" value={state.stats.jumpingBeanFreePlays.length} /><OverviewStat label="Jackpot Gold" value={state.stats.goldBySource.jackpot} />
             <OverviewStat label="Busts" value={state.stats.busts.length} /><OverviewStat label="Life restores" value={state.stats.lifeRestores.length} />
             <OverviewStat label="Enhancement sales" value={state.stats.sales.length} /><OverviewStat label="Vintage growth" value={state.stats.vintageGrowth.length} />

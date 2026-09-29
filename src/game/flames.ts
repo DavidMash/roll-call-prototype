@@ -17,7 +17,10 @@ export const FLAMES: Record<Flame, FlameDefinition> = {
   minigun: { name: 'Minigun', shortName: 'MINI', affectsXMult: true, description: 'Ones–Sixes gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   hailMary: { name: 'Hail Mary', shortName: 'HAIL', affectsXMult: true, description: 'Hands played with no Rerolls left gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   fullOfGrace: { name: 'Full of Grace', shortName: 'GRACE', affectsXMult: true, description: 'Last Play gains up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  charge: { name: 'Charge', shortName: 'CHG', affectsXMult: true, description: 'Scoring dice build Charge. Arm it for up to ×5 XMult.', bonfireDescription: 'This Flame now works globally. Arm Charge for any hand.' },
+  momentum: { name: 'Momentum', shortName: 'MOM', affectsXMult: true, description: 'Playing a hand builds Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
+  thirdRail: { name: 'Third Rail', shortName: 'RAIL', affectsXMult: true, description: 'Rolling 3s builds Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
+  jumpStart: { name: 'Jump Start', shortName: 'JUMP', affectsXMult: true, description: 'Rerolls build Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
+  powerSurge: { name: 'Power Surge', shortName: 'SURGE', affectsXMult: true, description: 'Playing your highest level hand triples your current Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
   dragonsHoard: { name: 'Dragon’s Hoard', shortName: 'HOARD', affectsXMult: true, description: 'Holding more Gold earns up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   wellTrained: { name: 'Well Trained', shortName: 'WELL', affectsXMult: true, description: 'Hands you play often gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   targetPractice: { name: 'Target Practice', shortName: 'TARGET', affectsXMult: true, description: 'Hit your Target for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
@@ -31,11 +34,16 @@ export const FLAMES: Record<Flame, FlameDefinition> = {
 };
 export const FLAME_IDS = Object.keys(FLAMES) as Flame[];
 export const XMult_FLAME_IDS = FLAME_IDS.filter(flame => FLAMES[flame].affectsXMult);
+export const CHARGE_FLAME_IDS = ['momentum', 'thirdRail', 'jumpStart', 'powerSurge'] as const satisfies readonly Flame[];
+export type ChargeFlame = typeof CHARGE_FLAME_IDS[number];
 export const HOT_STREAK_SEQUENCE: HandId[] = ['pair', 'twoPair', 'threeKind', 'smallStraight', 'fullHouse', 'fourKind', 'largeStraight', 'fiveKind'];
 export const flameProgress = (investedGold: number) => Math.max(0, Math.min(100, investedGold)) / 100;
 export const standardFlameMultiplier = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
 export const targetPracticeMultiplier = (investedGold: number) => 1 + 8 * flameProgress(investedGold);
-export const chargeGainPerScoringDie = (investedGold: number) => 0.5 * flameProgress(investedGold);
+export const momentumChargeGain = (investedGold: number) => 0.5 * flameProgress(investedGold);
+export const thirdRailChargeGain = (investedGold: number) => 0.5 * flameProgress(investedGold);
+export const jumpStartChargeGain = (investedGold: number) => 2 * flameProgress(investedGold);
+export const maxChargeContribution = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
 export const dragonsHoardMultiplier = (investedGold: number, gold: number) => 1 + 4 * flameProgress(investedGold) * Math.min(Math.max(gold, 0) / 100, 1);
 export const wellTrainedMultiplier = (investedGold: number, previousPlays: number) => Math.min(5, 1 + previousPlays * 0.2 * flameProgress(investedGold));
 export const moneyToBurnMultiplier = (investedGold: number, lifetimeSpend: number) => 1 + 4 * flameProgress(investedGold) * Math.min(Math.max(lifetimeSpend, 0) / 100, 1);
@@ -53,7 +61,10 @@ const displayNumber = (value: number) => Number(value.toFixed(4));
 type FlameDisplayContext = Pick<Board, 'gold' | 'lifetimeNormalShopGoldSpent'>;
 export function flameEffectText(id: Flame, investedGold: number, board: FlameDisplayContext): string {
   switch (id) {
-    case 'charge': return `Scoring dice build +${displayNumber(chargeGainPerScoringDie(investedGold))} Charge.`;
+    case 'momentum': return `Hands build +${displayNumber(momentumChargeGain(investedGold))} Charge.`;
+    case 'thirdRail': return `Rolled 3s build +${displayNumber(thirdRailChargeGain(investedGold))} Charge.`;
+    case 'jumpStart': return `Each Reroll builds +${displayNumber(jumpStartChargeGain(investedGold))} Charge.`;
+    case 'powerSurge': return 'Your highest level hand triples current Charge.';
     case 'targetPractice': return `Target gains ×${displayNumber(targetPracticeMultiplier(investedGold))} XMult.`;
     case 'dragonsHoard': return `${board.gold} held Gold currently grants ×${displayNumber(dragonsHoardMultiplier(investedGold, board.gold))} XMult.`;
     case 'wellTrained': return 'Frequently played hands build toward ×5 XMult.';
@@ -77,6 +88,24 @@ export const activeFlameInvestment = (flame: ActiveFlame | null | unknown) =>
     ? Math.max(0, Math.min(100, (flame as ActiveFlame).investedGold)) : 0;
 export const hasOwnedFlame = (state: Pick<GameState, 'dice' | 'bonfires'>, id: Flame) =>
   state.bonfires.includes(id) || state.dice.some(die => activeFlameId(die.flame) === id);
+export const isChargeFlame = (id: Flame | null | undefined): id is ChargeFlame =>
+  id !== null && id !== undefined && (CHARGE_FLAME_IDS as readonly Flame[]).includes(id);
+export const hasChargeBonfire = (state: Pick<Board, 'bonfires'>) => state.bonfires.some(isChargeFlame);
+export const hasOwnedChargeFlame = (state: Pick<Board, 'dice' | 'bonfires'>) =>
+  hasChargeBonfire(state) || state.dice.some(die => isChargeFlame(activeFlameId(die.flame)));
+export const chargeFlameDieIds = (state: Pick<Board, 'dice'>) => state.dice
+  .filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id).sort((a, b) => a - b);
+export function calculateMaxCharge(state: Pick<Board, 'dice' | 'bonfires'>): number {
+  const emberCapacity = state.dice.reduce((sum, die) => isChargeFlame(activeFlameId(die.flame))
+    ? sum + maxChargeContribution(activeFlameInvestment(die.flame)) : sum, 0);
+  const bonfireCapacity = state.bonfires.filter(isChargeFlame).length * maxChargeContribution(100);
+  return Number(Math.max(1, emberCapacity + bonfireCapacity).toFixed(12));
+}
+export function recalculateMaxCharge(state: Pick<Board, 'dice' | 'bonfires' | 'chargeXMult' | 'maxCharge' | 'chargeArmed'>): void {
+  state.maxCharge = calculateMaxCharge(state);
+  state.chargeXMult = Number(Math.min(Math.max(1, state.chargeXMult), state.maxCharge).toFixed(12));
+  if (state.chargeXMult <= 1) state.chargeArmed = false;
+}
 export const hasXMultFlame = (dice: Die[], bonfires: Flame[] = []) =>
   bonfires.some(id => FLAMES[id]?.affectsXMult) || dice.some(die => {
     const id = activeFlameId(die.flame);
@@ -178,7 +207,7 @@ function contributions(snapshot: HandStartSnapshot, hand: HandId, scoringDieIds:
   const result: XMultFactor[] = [];
   if (snapshot.chargeArmed && snapshot.chargeXMult > 1) result.push({ source: 'charge', value: snapshot.chargeXMult, dieId: null, detail: 'armed stored Charge' });
   for (const id of snapshot.bonfires) {
-    if (!FLAMES[id]?.affectsXMult || id === 'charge' || (!includeFullOfGrace && id === 'fullOfGrace') || !qualifies(id, snapshot, hand)) continue;
+    if (!FLAMES[id]?.affectsXMult || isChargeFlame(id) || (!includeFullOfGrace && id === 'fullOfGrace') || !qualifies(id, snapshot, hand)) continue;
     const value = factorValue(id, 100, snapshot, scoringDieIds);
     if (value > 1) {
       const context = factorInput(id, snapshot, scoringDieIds);
@@ -187,7 +216,7 @@ function contributions(snapshot: HandStartSnapshot, hand: HandId, scoringDieIds:
   }
   for (const die of snapshot.dice) {
     const id = die.flame;
-    if (!id || !scoring.has(die.dieId) || !FLAMES[id].affectsXMult || id === 'charge'
+    if (!id || !scoring.has(die.dieId) || !FLAMES[id].affectsXMult || isChargeFlame(id)
       || (!includeFullOfGrace && id === 'fullOfGrace') || !qualifies(id, snapshot, hand)) continue;
     const value = factorValue(id, die.investedGold, snapshot, scoringDieIds);
     if (value > 1) result.push({ source: id, value, dieId: die.dieId, ...factorInput(id, snapshot, scoringDieIds) });

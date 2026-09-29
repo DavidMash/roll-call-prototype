@@ -6,7 +6,8 @@ export type Enhancement =
   | 'missingLink' | 'mirror' | 'magnetic' | 'sticky' | 'slippy'
   | 'hitchhiker' | 'weighted' | 'jackpot' | 'personalTrainer' | 'bump' | 'vintage';
 export type Flame =
-  | 'ultimate' | 'minigun' | 'hailMary' | 'fullOfGrace' | 'charge'
+  | 'ultimate' | 'minigun' | 'hailMary' | 'fullOfGrace'
+  | 'momentum' | 'thirdRail' | 'jumpStart' | 'powerSurge'
   | 'dragonsHoard' | 'wellTrained' | 'targetPractice'
   | 'hotStreak' | 'moneyToBurn' | 'lowball' | 'straightShooter' | 'doubleDown'
   | 'threesCompany' | 'boxSet';
@@ -177,6 +178,7 @@ export interface Board {
   dice: Die[];
   bonfires: Flame[];
   chargeXMult: number;
+  maxCharge: number;
   chargeArmed: boolean;
   hotStreakGoal: HandId | null;
   hotStreakCharges: number;

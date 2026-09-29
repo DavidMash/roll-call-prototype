@@ -1,7 +1,10 @@
 import { Alert, Button, Group, Paper, Stack, Text } from '@mantine/core';
 import { useEffect } from 'react';
 import { validateAction } from '../game/engine';
-import { captureHandStart, composeXMult, handXMultContributions, hasXMultFlame, isGuaranteedWinningPlay } from '../game/flames';
+import {
+  activeFlameId, captureHandStart, composeXMult, handXMultContributions, hasChargeBonfire,
+  hasOwnedChargeFlame, hasXMultFlame, isChargeFlame, isGuaranteedWinningPlay,
+} from '../game/flames';
 import { handOptions, hasPlayableHand, HANDS } from '../game/hands';
 import { finalizeScore, handScore } from '../game/scoring';
 import { canPlay, selectHand, toggleDie } from '../game/selection';
@@ -61,9 +64,13 @@ export function RoundScreen({ board, event, busy, diceDisplay, selection, setSel
   const deadBoard = !hasPlayableHand(encounterDice, unavailableHands, requiredDieIds);
   const chargeAction: Action = { type: 'TOGGLE_CHARGE', hand: effectiveSelection.hand, dieIds: effectiveSelection.dieIds };
   const canToggleCharge = validateAction(board, chargeAction) === null;
-  const chargeDieId = encounterDice.find(die => die.flame?.id === 'charge')?.id;
+  const chargeDieIds = encounterDice.filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id);
+  const chargeGloballyUnlocked = hasChargeBonfire(board);
+  const missingChargeDie = !chargeGloballyUnlocked && chargeDieIds.some(id => !effectiveSelection.dieIds.includes(id));
+  const chargeAtMax = board.chargeXMult >= board.maxCharge - 1e-9;
+  const displayCharge = (value: number) => Number(value.toFixed(4));
   function changeSelection(next: Selection) {
-    if (board.chargeArmed && !board.bonfires.includes('charge') && chargeDieId !== undefined && !next.dieIds.includes(chargeDieId)) {
+    if (board.chargeArmed && !chargeGloballyUnlocked && chargeDieIds.some(id => !next.dieIds.includes(id))) {
       submit({ type: 'TOGGLE_CHARGE', hand: next.hand, dieIds: next.dieIds });
     }
     setSelection(next);
@@ -115,9 +122,16 @@ export function RoundScreen({ board, event, busy, diceDisplay, selection, setSel
             ? setSelection({ dieIds: selectedWardenDieId === id ? [] : [id], hand: null })
             : changeSelection(toggleDie(encounterDice, unavailableHands, effectiveSelection, id, requiredDieIds))} />
         <div className="gameplay-actions">
-          {(board.bonfires.includes('charge') || encounterDice.some(die => die.flame?.id === 'charge')) && <Group className="charge-controls" gap="xs" justify="flex-end" mb={4}>
-            <Text size="xs" fw={700}>⚡ CHARGE ×{Number(board.chargeXMult.toFixed(4))}{board.chargeArmed ? ' · ARMED' : ''}</Text>
-            <Button size="compact-xs" color={board.chargeArmed ? 'orange' : 'yellow'} variant={board.chargeArmed ? 'filled' : 'light'}
+          {hasOwnedChargeFlame(board) && <Group className={`charge-controls${chargeAtMax ? ' is-max' : ''}${board.chargeArmed ? ' is-armed' : ''}`} gap="xs" justify="flex-end" mb={4}>
+            <Stack gap={0} className="charge-status">
+              <Text size="xs" fw={800} data-testid="charge-status">{board.chargeArmed
+                ? `⚡ ×${displayCharge(board.chargeXMult)} ARMED`
+                : chargeAtMax ? `⚡ MAX CHARGE ×${displayCharge(board.maxCharge)}`
+                  : `CHARGE ×${displayCharge(board.chargeXMult)} / ×${displayCharge(board.maxCharge)}`}</Text>
+              {chargeAtMax && missingChargeDie && !board.chargeArmed
+                && <Text size="10px" fw={800} c="yellow" data-testid="charge-guidance">SELECT CHARGE DIE TO USE</Text>}
+            </Stack>
+            <Button className={`charge-action${chargeAtMax ? ' is-max' : ''}`} size="compact-xs" color={board.chargeArmed ? 'orange' : 'yellow'} variant={board.chargeArmed || chargeAtMax ? 'filled' : 'light'}
               disabled={busy || !canToggleCharge} onClick={() => submit(chargeAction)}>
               {board.chargeArmed ? 'DISARM' : 'ARM CHARGE'}
             </Button>

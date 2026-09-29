@@ -148,7 +148,7 @@ describe('The Warden', () => {
     state.dice[4].faces[face - 1].enhancements.bonus = 2;
     state.dice[4].faces[face - 1].enhancements.workout = 3;
     state.dice[4].faces[face - 1].workoutPips = 50;
-    state.dice[4].flame = { id: 'charge', investedGold: 100 };
+    state.dice[4].flame = { id: 'momentum', investedGold: 100 };
     state.bonfires = ['ultimate'];
     state.chargeXMult = 5;
     const result = dispatch(state, { type: 'UNLOCK_WARDEN_DIE', dieId: 4 }, constant(0));
@@ -222,13 +222,13 @@ describe('The Warden', () => {
       die.faces[die.value - 1].enhancements.bump = 1;
       die.faces.forEach(face => { face.enhancements.jumpingBean = 1; });
     });
-    state.dice[0].flame = { id: 'charge', investedGold: 100 };
+    state.dice[0].flame = { id: 'momentum', investedGold: 100 };
     const result = dispatch(state, { type: 'NEXT_ROUND' }, constant(0));
     expect(result.state.dice.map(die => die.value)).toEqual(before.map(value => value === 6 ? 1 : value + 1));
     expect(result.state.stats.bumpControlledRolls).toBe(5);
     expect(result.state.stats.jumpingBeanFreePlays).toHaveLength(0);
     expect(result.state.chargeXMult).toBe(1);
-    expect(result.state.stats.flameTriggers.charge ?? 0).toBe(0);
+    expect(result.state.stats.flameTriggers.momentum ?? 0).toBe(0);
   });
 
   it('resets the rolled-and-locked choice state on Bust and retry', () => {

@@ -282,8 +282,8 @@ test('Flame Selection only acquires while Shop Manage Die supports arbitrary Sto
 test('arming and canceling Charge preserves the selected hand and dice', async ({ page }) => {
   const seed = 'charge-selection-preservation';
   const game = newRun(seed).state;
-  game.dice[0].flame = { id: 'charge', investedGold: 50 };
-  game.chargeXMult = 1.5;
+  game.dice[0].flame = { id: 'momentum', investedGold: 50 };
+  game.chargeXMult = 3;
   game.dice.forEach(die => { die.value = 1; });
   const choice = bestHand(game)!;
 
@@ -294,6 +294,8 @@ test('arming and canceling Charge preserves the selected hand and dice', async (
   });
   await page.goto(`/?seed=${seed}&speed=instant`);
   await ready(page);
+  await expect(page.getByTestId('charge-status')).toHaveText('⚡ MAX CHARGE ×3');
+  await expect(page.getByTestId('charge-guidance')).toHaveText('SELECT CHARGE DIE TO USE');
 
   const handRow = page.getByTestId(`scorecard-row-${choice.hand}`);
   await handRow.click();
@@ -303,10 +305,12 @@ test('arming and canceling Charge preserves the selected hand and dice', async (
     if (selected !== choice.dieIds.includes(die.id)) await dieButton.click();
   }
   await expect(handRow).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('charge-guidance')).toHaveCount(0);
 
   const chargeButton = page.getByRole('button', { name: 'ARM CHARGE', exact: true });
   await chargeButton.click();
   await ready(page);
+  await expect(page.getByTestId('charge-status')).toHaveText('⚡ ×3 ARMED');
   await expect(handRow).toHaveAttribute('aria-pressed', 'true');
   for (const dieId of choice.dieIds) {
     await expect(page.getByRole('button', { name: new RegExp(`^Die ${dieId + 1},`) })).toHaveAttribute('aria-pressed', 'true');

@@ -18,7 +18,7 @@ The final rounded award is written once to the round total and category total. X
 
 Jumping Bean uses the same hand pipeline with source `jumpingBean`. Rank 1–6 maps to Ones–Sixes and only the triggering die scores. The free play neither requires nor consumes normal category availability, does not run Hitchhiker or generic post-hand rerolls, and does not consume armed Charge. It does increment run-wide hand history after factors that use the previous-play snapshot have evaluated.
 
-If the free play does not clear the round, Sticky may prevent its one follow-up reroll. Otherwise that die passes through the centralized gameplay roll pipeline, preserving Bump, held-anchor Magnetic, Weighted, Charge gain, and deterministic Bean chaining.
+If the free play does not clear the round, Sticky may prevent its one follow-up reroll. Otherwise that die passes through the centralized gameplay roll pipeline, preserving Bump, held-anchor Magnetic, Weighted, Third Rail generation, and deterministic Bean chaining. The free-played hand also qualifies for Momentum and Power Surge.
 
 ## Telemetry
 

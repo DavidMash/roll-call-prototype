@@ -2,9 +2,9 @@ import { bossRewardForRound, CONFIG, interestForGold, roundReward, targetForRoun
 import { activeFace, rollPhysicalDie, scoringPips, weightedSourceFace } from './dice';
 import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, stacks } from './enhancements';
 import {
-  activeFlameId, activeFlameInvestment, captureHandStart, chargeGainPerScoringDie,
-  FLAMES, FLAME_IDS, handXMultContributions, HOT_STREAK_SEQUENCE,
-  ownedFlameIds,
+  activeFlameId, activeFlameInvestment, captureHandStart, FLAMES, FLAME_IDS, handXMultContributions,
+  hasChargeBonfire, HOT_STREAK_SEQUENCE, jumpStartChargeGain, momentumChargeGain,
+  ownedFlameIds, recalculateMaxCharge, thirdRailChargeGain,
 } from './flames';
 import { hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
@@ -27,7 +27,7 @@ export class Resolver {
   readonly events: GameEvent[] = [];
   private queue: RollTrigger[] = [];
   private handAccumulator: HandScoreAccumulator | null = null;
-  constructor(readonly state: GameState, readonly rng: RandomSource) {}
+  constructor(readonly state: GameState, readonly rng: RandomSource) { recalculateMaxCharge(state); }
 
   format(value: number): string { return Number(value.toFixed(4)).toString(); }
   emit(event: Omit<EventRecord, 'id' | 'round'>): void {
@@ -169,24 +169,37 @@ export class Resolver {
     return total;
   }
 
-  private addChargeForScoring(scoringDieIds: number[]): void {
-    const bonfire = this.state.bonfires.includes('charge');
-    const chargeDie = this.state.dice.find(die => activeFlameId(die.flame) === 'charge');
-    const investment = bonfire ? 100 : activeFlameInvestment(chargeDie?.flame);
-    const perDie = chargeGainPerScoringDie(investment);
-    if (perDie <= 0) return;
-    for (const dieId of [...new Set(scoringDieIds)].sort((a, b) => a - b)) {
-      const before = this.state.chargeXMult;
-      const after = Number(Math.min(5, before + perDie).toFixed(12));
-      const gain = Number((after - before).toFixed(12));
-      if (gain <= 0) break;
-      this.state.chargeXMult = after;
-      this.state.stats.chargeGained = Number((this.state.stats.chargeGained + gain).toFixed(12));
-      this.triggerFlame('charge', bonfire ? null : chargeDie!.id,
-        `D${dieId + 1} scored · stored factor +${this.format(gain)} → ×${this.format(after)}`);
-      this.emit({ type: 'CHARGE_CHANGED', flame: 'charge', dieIds: [dieId], xMult: after,
-        message: `D${dieId + 1} scored and grew Charge by ${this.format(gain)}: ×${this.format(after)}` });
-    }
+  private chargeFlameSource(flame: 'momentum' | 'thirdRail' | 'jumpStart' | 'powerSurge'):
+    { investment: number; dieId: number | null } | null {
+    if (this.state.bonfires.includes(flame)) return { investment: 100, dieId: null };
+    const die = this.state.dice.find(item => activeFlameId(item.flame) === flame);
+    return die ? { investment: activeFlameInvestment(die.flame), dieId: die.id } : null;
+  }
+  private growCharge(flame: 'momentum' | 'thirdRail' | 'jumpStart' | 'powerSurge', requestedGain: number,
+    detail: string, dieIds?: number[]): void {
+    const source = this.chargeFlameSource(flame);
+    if (!source || requestedGain <= 0) return;
+    const before = this.state.chargeXMult;
+    const after = Number(Math.min(this.state.maxCharge, before + requestedGain).toFixed(12));
+    const gain = Number((after - before).toFixed(12));
+    if (gain <= 0) return;
+    this.state.chargeXMult = after;
+    this.state.stats.chargeGained = Number((this.state.stats.chargeGained + gain).toFixed(12));
+    this.triggerFlame(flame, source.dieId, `${detail} · Charge +${this.format(gain)} → ×${this.format(after)}`);
+    this.emit({ type: 'CHARGE_CHANGED', flame, dieIds, xMult: after,
+      message: `${FLAMES[flame].name}: Charge +${this.format(gain)} → ×${this.format(after)}` });
+  }
+  private addMomentumCharge(hand: HandId): void {
+    const source = this.chargeFlameSource('momentum');
+    if (!source) return;
+    this.growCharge('momentum', momentumChargeGain(source.investment), `${HANDS[hand].name} played`);
+  }
+  private applyPowerSurge(hand: HandId, isHighestLevelHand: boolean): void {
+    const source = this.chargeFlameSource('powerSurge');
+    if (!source || !isHighestLevelHand) return;
+    const before = this.state.chargeXMult;
+    const requestedGain = before * 2;
+    this.growCharge('powerSurge', requestedGain, `${HANDS[hand].name} tripled current Charge`);
   }
   rollBatch(dieIds: number[], reason: string, context: RollContext, excludeStartingFace = false): void {
     const ids = [...new Set(dieIds)].sort((a, b) => a - b);
@@ -234,6 +247,10 @@ export class Resolver {
         rollSource: excludeStartingFace ? 'manual_reroll' : 'automatic', previousFace: result.before, resultFace: face.rank,
         sameFaceExcluded: excludeStartingFace && !result.bumped,
         message: `D${die.id + 1} rolled: ${result.before} → ${face.rank}${excludeStartingFace ? ' · previous physical face excluded' : ''}` });
+      if ((context === 'gameplay' || context === 'wardenSetup') && face.rank === 3) {
+        const source = this.chargeFlameSource('thirdRail');
+        if (source) this.growCharge('thirdRail', thirdRailChargeGain(source.investment), `D${die.id + 1} rolled a 3`, [die.id]);
+      }
       if (isCursedDie(die)) {
         this.state.stats.hexerEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
           kind: reason.startsWith('Manual') ? 'manual_reroll' : face.rank === 7 ? 'seven' : 'roll', face: face.rank });
@@ -530,7 +547,7 @@ export class Resolver {
       if (factor.source === 'moneyToBurn') this.state.stats.moneyToBurnMultipliers.push(factor.value);
       if (factor.source === 'lowball' && factor.input !== undefined) this.state.stats.lowballAverages.push(factor.input);
       if (factor.source !== 'charge') this.triggerFlame(factor.source, factor.dieId, `factor ×${this.format(factor.value)}`, hand, factor.value);
-      this.emit({ type: 'HAND_XMULT_CHANGED', flame: factor.source === 'charge' ? 'charge' : factor.source, hand,
+      this.emit({ type: 'HAND_XMULT_CHANGED', flame: factor.source === 'charge' ? undefined : factor.source, hand,
         dieIds: factor.dieId === null ? undefined : [factor.dieId], xMult: this.handAccumulator.currentXMult, xMultFactor: factor,
         message: `${factor.source === 'charge' ? 'Charge' : FLAMES[factor.source].name}: XMult ×${this.format(beforeXMult)} × factor ×${this.format(factor.value)} = ×${this.format(this.handAccumulator.currentXMult)}` });
     }
@@ -552,9 +569,10 @@ export class Resolver {
       const consumed = this.state.chargeXMult;
       this.state.chargeXMult = 1; this.state.chargeArmed = false;
       this.state.stats.chargeConsumed = Number((this.state.stats.chargeConsumed + Math.max(0, consumed - 1)).toFixed(12));
-      this.emit({ type: 'CHARGE_CHANGED', flame: 'charge', xMult: 1, message: `Charge ×${this.format(consumed)} consumed; meter reset to ×1` });
+      this.emit({ type: 'CHARGE_CHANGED', xMult: 1, message: `Charge ×${this.format(consumed)} consumed; meter reset to ×1` });
     }
-    this.addChargeForScoring(scoringIds);
+    this.addMomentumCharge(hand);
+    this.applyPowerSurge(hand, handStart.ultimateHands.includes(hand));
     if (!freeBean) this.advanceHotStreak(hand, scoringIds);
     const personalTrainerSucceeded = this.resolvePersonalTrainer(hand, scoringParticipants);
     this.state.handPlayCounts[hand]++;
@@ -614,11 +632,14 @@ export class Resolver {
     const record = { round: this.state.round, dieIds: ids, charges: ids.length, remaining: this.state.manualRerollsRemaining, startedDeadBoard, rescuedDeadBoard: false };
     this.state.stats.manualRerolls.push(record);
     this.emit({ type: 'MANUAL_REROLL_STARTED', dieIds: ids, amount: ids.length, message: `Manual reroll; ${this.state.manualRerollsRemaining} remaining` });
-    if (this.state.chargeArmed && !this.state.bonfires.includes('charge')) {
+    if (this.state.chargeArmed && !hasChargeBonfire(this.state)) {
       this.state.chargeArmed = false;
-      this.emit({ type: 'CHARGE_ARMED', flame: 'charge', xMult: this.state.chargeXMult,
+      this.emit({ type: 'CHARGE_ARMED', xMult: this.state.chargeXMult,
         message: 'Charge disarmed because its intended hand selection was cleared.' });
     }
+    const jumpStart = this.chargeFlameSource('jumpStart');
+    if (jumpStart) for (const dieId of ids) this.growCharge('jumpStart', jumpStartChargeGain(jumpStart.investment),
+      `1 Reroll spent on D${dieId + 1}`, [dieId]);
     this.rollBatch(ids, 'Manual gameplay reroll', 'gameplay', true);
     this.drain();
     if (startedDeadBoard && (this.state.score >= this.state.target || hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state), requiredDieIds))) {

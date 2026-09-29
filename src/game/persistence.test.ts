@@ -50,6 +50,23 @@ describe('run persistence', () => {
     expect(loaded?.stats.probabilityProcs.personalTrainer).toEqual({ checks: 0, successes: 0, failures: 0, stacksAtCheck: [] });
   });
 
+  it('migrates the retired Charge Flame to Momentum and derives capacity in the run and checkpoint', () => {
+    const storage = new MemoryStorage();
+    const state = newRun('legacy-charge-flame').state;
+    state.dice[0].flame = { id: 'charge', investedGold: 50 } as unknown as typeof state.dice[0]['flame'];
+    if (!state.roundCheckpoint) throw new Error('Expected initial round checkpoint');
+    state.roundCheckpoint.dice[0].flame = { id: 'charge', investedGold: 50 } as unknown as typeof state.dice[0]['flame'];
+    delete (state as Partial<typeof state>).maxCharge;
+    delete (state.roundCheckpoint as Partial<typeof state.roundCheckpoint>).maxCharge;
+    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION, state }));
+
+    const loaded = loadPersistedRun(storage, null);
+    expect(loaded?.dice[0].flame).toEqual({ id: 'momentum', investedGold: 50 });
+    expect(loaded?.maxCharge).toBe(3);
+    expect(loaded?.roundCheckpoint?.dice[0].flame).toEqual({ id: 'momentum', investedGold: 50 });
+    expect(loaded?.roundCheckpoint?.maxCharge).toBe(3);
+  });
+
   it('treats storage read and write failures as non-fatal', () => {
     const broken = {
       getItem(): string | null { throw new Error('blocked'); },

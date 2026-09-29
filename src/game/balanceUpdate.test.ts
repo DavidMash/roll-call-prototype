@@ -108,29 +108,29 @@ describe('focused balance update', () => {
     expect(playActionLabel(snapshot.lastPlayDanger, true)).toBe('PLAY');
   });
 
-  it('builds Charge from selected scorers and successful Hitchhikers, never from rolls, and caps at ×5', () => {
+  it('builds Momentum Charge once per hand, never from ordinary rolls, and caps at its capacity', () => {
     let state = game([4, 4, 4, 2, 6]);
-    state.dice[4].flame = { id: 'charge', investedGold: 100 };
+    state.dice[4].flame = { id: 'momentum', investedGold: 100 };
     activeFace(state.dice[3]).enhancements.hitchhiker = 1;
     state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [4] }, constant(.8)).state;
     expect(state.chargeXMult).toBe(1);
     state.dice[4].value = 6;
     const scored = dispatch(state, { type: 'PLAY', hand: 'threeKind', dieIds: [0, 1, 2] }, constant(0));
     expect(scored.state.stats.handScores[0].dieIds).toEqual([0, 1, 2, 3]);
-    expect(scored.state.chargeXMult).toBe(3);
+    expect(scored.state.chargeXMult).toBe(1.5);
     scored.state.chargeXMult = 4.8;
     scored.state.consumed = [];
     scored.state.dice[0].value = 1;
     const capped = dispatch(scored.state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.8));
     expect(capped.state.chargeXMult).toBe(5);
-    expect(capped.state.stats.chargeGained).toBe(2.2);
+    expect(capped.state.stats.chargeGained).toBe(.7);
   });
 
-  it('requires the physical Charge die to arm and commit before Bonfire, then removes that restriction', () => {
+  it('requires the attached Charge-family die to arm and commit before a family Bonfire, then removes that restriction', () => {
     let state = game([4, 4, 5, 2, 6]);
-    state.dice[0].flame = { id: 'charge', investedGold: 100 };
+    state.dice[0].flame = { id: 'momentum', investedGold: 100 };
     state.chargeXMult = 2;
-    expect(validateAction(state, { type: 'TOGGLE_CHARGE', hand: 'fives', dieIds: [2] })).toContain('physical Charge die');
+    expect(validateAction(state, { type: 'TOGGLE_CHARGE', hand: 'fives', dieIds: [2] })).toContain('every Charge Flame die');
     expect(validateAction(state, { type: 'TOGGLE_CHARGE', hand: 'pair', dieIds: [0, 1] })).toBeNull();
     state = dispatch(state, { type: 'TOGGLE_CHARGE', hand: 'pair', dieIds: [0, 1] }).state;
     expect(validateAction(state, { type: 'PLAY', hand: 'fives', dieIds: [2] })).toContain('must participate');
@@ -138,7 +138,7 @@ describe('focused balance update', () => {
     expect(state.chargeArmed).toBe(false);
 
     state.dice[0].flame = null;
-    state.bonfires = ['charge'];
+    state.bonfires = ['momentum'];
     expect(validateAction(state, { type: 'TOGGLE_CHARGE', hand: 'fives', dieIds: [2] })).toBeNull();
     state = dispatch(state, { type: 'TOGGLE_CHARGE', hand: 'fives', dieIds: [2] }).state;
     expect(validateAction(state, { type: 'PLAY', hand: 'fives', dieIds: [2] })).toBeNull();

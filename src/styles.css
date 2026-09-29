@@ -89,6 +89,15 @@ button { font: inherit; }
 .gameplay-dock-content { display: flex; align-items: flex-end; justify-content: center; gap: 12px; }
 .gameplay-dock .dice-row { flex: 1 1 560px; }
 .gameplay-actions { flex: 0 1 330px; display: grid; justify-items: end; gap: 7px; padding: 0 4px 5px; }
+.charge-controls { padding: 4px 6px; border: 1px solid transparent; border-radius: var(--mantine-radius-sm); }
+.charge-status { min-width: 142px; text-align: right; }
+.charge-controls.is-max { border-color: var(--mantine-color-yellow-5); background: color-mix(in srgb, var(--mantine-color-yellow-7) 14%, transparent); animation: charge-ready-pulse 650ms ease-out 1; }
+.charge-action.is-max { box-shadow: 0 0 0 2px color-mix(in srgb, var(--mantine-color-yellow-4) 48%, transparent), 0 0 16px rgba(250, 176, 5, .45); }
+@keyframes charge-ready-pulse {
+  0% { transform: scale(.96); filter: brightness(1); }
+  45% { transform: scale(1.035); filter: brightness(1.45); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
 .selection-preview { min-height: 17px; text-align: right; }
 .mobile-score-total { display: none; }
 .dice-row { display: grid; grid-template-columns: repeat(var(--dice-columns, 5), minmax(74px, 104px)); justify-content: center; gap: 8px; min-width: 0; }

@@ -21,8 +21,11 @@ function hasTemplateShape(value: unknown, template: unknown): boolean {
   if (template === null) return value === null || isRecord(value) || typeof value === 'string';
   if (Array.isArray(template)) return Array.isArray(value);
   if (isRecord(template)) {
+    // Max Charge is derived during normalization, including in checkpoints,
+    // so pre-family saves may omit that one field at either depth.
     return isRecord(value) && Object.entries(template).every(([key, child]) =>
-      Object.hasOwn(value, key) && hasTemplateShape(value[key], child));
+      (key === 'maxCharge' && !Object.hasOwn(value, key))
+      || (Object.hasOwn(value, key) && hasTemplateShape(value[key], child)));
   }
   return typeof value === typeof template;
 }

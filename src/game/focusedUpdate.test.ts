@@ -96,7 +96,7 @@ describe('focused enhancement roster and migration', () => {
     expect(result.state.dice[0].faces[0].enhancements.jackpot).toBe(3);
     expect(result.state.dice[0].flame).toBeNull();
     expect(result.state.bonfires).toEqual([]);
-    expect(FLAME_IDS).toHaveLength(15);
+    expect(FLAME_IDS).toHaveLength(18);
   });
 });
 
@@ -233,7 +233,7 @@ describe('Jumping Bean effects and Flames', () => {
 
   it('never consumes armed Charge while qualifying rolls still build its meter', () => {
     const result = deterministicBean(4, game => {
-      game.bonfires = ['charge'];
+      game.bonfires = ['momentum'];
       game.chargeXMult = 3;
       game.chargeArmed = true;
     });

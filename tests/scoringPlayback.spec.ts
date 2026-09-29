@@ -8,6 +8,8 @@ import type { Action, GameState } from '../src/game/types';
 import { scoringPlaybackRun } from './scoringFixture';
 import { activeEncounterDice } from '../src/game/bosses';
 import { setPlaybackSpeed } from './uiHelpers';
+import { captureHandStart, composeXMult, handXMultContributions } from '../src/game/flames';
+import { finalizeScore } from '../src/game/scoring';
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
@@ -89,8 +91,13 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
   }
   if (await finalRow.getAttribute('aria-pressed') !== 'true') await finalRow.click();
   const deterministicPreview = handScore(activeEncounterDice(game), fixture.action.hand, fixture.action.dieIds, game.handLevels[fixture.action.hand]);
+  const snapshot = captureHandStart(game, fixture.action.hand, fixture.action.dieIds);
+  const xMult = composeXMult(handXMultContributions(snapshot, fixture.action.hand,
+    game.handLevels[fixture.action.hand], fixture.action.dieIds));
+  const effectiveXMult = Number((xMult * snapshot.bossFactor).toFixed(12));
+  const previewScore = finalizeScore(deterministicPreview.pips, deterministicPreview.multiplier, effectiveXMult).finalScore;
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText(
-    `${deterministicPreview.pips} × ${deterministicPreview.multiplier} × 1 = ${deterministicPreview.score.toLocaleString('en-US')} • PLAY`,
+    `${deterministicPreview.pips} × ${deterministicPreview.multiplier} × ${effectiveXMult} = ${previewScore.toLocaleString('en-US')} • PLAY`,
   );
 
   await page.clock.install({ time: new Date('2026-09-17T12:00:00Z') });

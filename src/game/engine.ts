@@ -2,7 +2,10 @@ import { CONFIG, diceRerollCost, handTrainingCost, lifeRestoreCost, offerRerollC
 import { activeFace, createDice } from './dice';
 import { Resolver } from './effects';
 import { attachmentError, enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, stacks } from './enhancements';
-import { activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasOwnedFlame, isFlame } from './flames';
+import {
+  activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasChargeBonfire, hasOwnedChargeFlame,
+  hasOwnedFlame, isChargeFlame, isFlame, recalculateMaxCharge,
+} from './flames';
 import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, isValidSelection } from './hands';
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
@@ -46,16 +49,37 @@ export function normalizeGameState(state: GameState): GameState {
       if ((face.enhancements.vintage ?? 0) > 0) face.vintageSellValue = Math.max(0, Math.floor(face.vintageSellValue ?? 0));
       else delete face.vintageSellValue;
     }
+    const rawFlame = die.flame as unknown;
+    const rawId = typeof rawFlame === 'string' ? rawFlame
+      : rawFlame && typeof rawFlame === 'object' && 'id' in rawFlame ? (rawFlame as { id: unknown }).id : null;
+    if (rawId === 'charge') die.flame = typeof rawFlame === 'object'
+      ? { id: 'momentum', investedGold: activeFlameInvestment(rawFlame) } : { id: 'momentum', investedGold: 0 };
     const id = activeFlameId(die.flame);
     die.flame = id ? { id, investedGold: activeFlameInvestment(die.flame) } : null;
   }
-  next.bonfires = next.bonfires.filter(isFlame);
+  next.bonfires = [...new Set(next.bonfires.map(id => (id as string) === 'charge' ? 'momentum' : id).filter(isFlame))];
   if (next.shop) {
     next.shop.offers = next.shop.offers.filter(offer => isEnhancement(offer.enhancement));
     normalizeShop(next.shop);
   }
-  if (next.roundCheckpoint?.shop) normalizeShop(next.roundCheckpoint.shop);
-  if (next.flameSelection) next.flameSelection.offers = next.flameSelection.offers.filter(offer => isFlame(offer.flame));
+  if (next.roundCheckpoint) {
+    if (next.roundCheckpoint.shop) normalizeShop(next.roundCheckpoint.shop);
+    for (const die of next.roundCheckpoint.dice) {
+      const rawFlame = die.flame as unknown;
+      const rawId = typeof rawFlame === 'string' ? rawFlame
+        : rawFlame && typeof rawFlame === 'object' && 'id' in rawFlame ? (rawFlame as { id: unknown }).id : null;
+      if (rawId === 'charge') die.flame = typeof rawFlame === 'object'
+        ? { id: 'momentum', investedGold: activeFlameInvestment(rawFlame) } : { id: 'momentum', investedGold: 0 };
+      const id = activeFlameId(die.flame);
+      die.flame = id ? { id, investedGold: activeFlameInvestment(die.flame) } : null;
+    }
+    next.roundCheckpoint.bonfires = [...new Set(next.roundCheckpoint.bonfires
+      .map(id => (id as string) === 'charge' ? 'momentum' : id).filter(isFlame))];
+    recalculateMaxCharge(next.roundCheckpoint);
+  }
+  if (next.flameSelection) next.flameSelection.offers = next.flameSelection.offers
+    .map(offer => ({ ...offer, flame: (offer.flame as string) === 'charge' ? 'momentum' as const : offer.flame }))
+    .filter(offer => isFlame(offer.flame));
   next.roundSummary ??= null;
   next.stats.jumpingBeanFreePlays ??= [];
   next.bossSchedule ??= bossSchedule(next.seed);
@@ -115,8 +139,12 @@ export function normalizeGameState(state: GameState): GameState {
     ? { type: 'CONTINUE_FLAME_SELECTION' } : action);
   next.stats.goldBySource.enhancementSale ??= 0;
   next.stats.goldSpentBySource.lifeRestore ??= 0;
+  recalculateMaxCharge(next);
   return next;
 }
+
+const requiredChargeFlameDieIds = (state: Board) => activeEncounterDice(state)
+  .filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id).sort((a, b) => a - b);
 
 export function validateAction(state: Board, action: Action): string | null {
   if (action.type === 'CONTINUE_ROUND_SUMMARY') return state.phase === 'roundSummary' && !!state.roundSummary
@@ -138,9 +166,9 @@ export function validateAction(state: Board, action: Action): string | null {
     if (unavailableEncounterHands(state).includes(action.hand)) return state.boss?.type === 'marathon'
       ? 'That hand is still cooling down.' : state.boss?.type === 'quickdraw' ? 'Quickdraw has no Lower shot remaining.' : 'That hand has already been consumed.';
     if (state.boss?.type === 'hexer' && !action.dieIds.includes(state.boss.cursedDieId)) return 'The Cursed Die must participate in every hand.';
-    if (state.chargeArmed && !state.bonfires.includes('charge')) {
-      const chargeDie = activeEncounterDice(state).find(die => activeFlameId(die.flame) === 'charge');
-      if (chargeDie && !action.dieIds.includes(chargeDie.id)) return 'The physical Charge die must participate while Charge is armed.';
+    if (state.chargeArmed && !hasChargeBonfire(state)) {
+      const missing = requiredChargeFlameDieIds(state).filter(id => !action.dieIds.includes(id));
+      if (missing.length) return 'Every Charge Flame die must participate while Charge is armed.';
     }
     if (!isValidSelection(activeEncounterDice(state), action.hand, action.dieIds)) return 'Select a complete valid set of participating dice.';
     return null;
@@ -154,14 +182,14 @@ export function validateAction(state: Board, action: Action): string | null {
   }
   if (action.type === 'TOGGLE_CHARGE') {
     if (state.phase !== 'round') return 'Charge can only be armed during a gameplay round.';
-    const owned = state.bonfires.includes('charge') || activeEncounterDice(state).some(die => activeFlameId(die.flame) === 'charge');
-    if (!owned) return 'This run does not own Charge.';
+    if (!hasOwnedChargeFlame(state)) return 'This run does not own a Charge Flame.';
     if (!state.chargeArmed && state.chargeXMult <= 1) return 'Charge has no stored bonus yet.';
-    if (!state.chargeArmed && !state.bonfires.includes('charge')) {
-      const chargeDie = activeEncounterDice(state).find(die => activeFlameId(die.flame) === 'charge');
-      if (!chargeDie || !action.dieIds?.includes(chargeDie.id) || !action.hand
-        || !isValidSelection(activeEncounterDice(state), action.hand, action.dieIds))
-        return 'Select the physical Charge die in the intended hand before arming Charge.';
+    if (!state.chargeArmed && !hasChargeBonfire(state)) {
+      const required = requiredChargeFlameDieIds(state);
+      const selected = action.dieIds ?? [];
+      if (!required.length || required.some(id => !selected.includes(id)) || !action.hand
+        || !isValidSelection(activeEncounterDice(state), action.hand, selected))
+        return 'Select every Charge Flame die in the intended hand before arming Charge.';
     }
     return null;
   }
@@ -240,7 +268,7 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
     phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: CONFIG.baseTarget,
     score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, roundAttemptNumber: 1,
     bossSchedule: bossSchedule(seed), boss: null, currentNodeId: '',
-    bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], chargeXMult: 1,
+    bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], chargeXMult: 1, maxCharge: 1,
     chargeArmed: false, hotStreakGoal: null, hotStreakCharges: 0, lifetimeNormalShopGoldSpent: 0, consumed: [], shop: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
     scoreByHand: {}, effectScore: 0, lastRoundPayout: null, roundSummary: null, flameSelection: null,
@@ -267,7 +295,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       case 'TOGGLE_CHARGE':
         next.chargeArmed = !next.chargeArmed;
         if (next.chargeArmed) next.stats.chargeArmed++;
-        resolver.emit({ type: 'CHARGE_ARMED', flame: 'charge', xMult: next.chargeXMult,
+        resolver.emit({ type: 'CHARGE_ARMED', xMult: next.chargeXMult,
           message: `Charge ${next.chargeArmed ? `armed at ×${resolver.format(next.chargeXMult)}` : 'disarmed'}` });
         break;
       case 'BUY': {
@@ -309,6 +337,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const replaced = activeFlameId(die.flame);
         const firstFlame = next.stats.flameAcquisitions.length === 0;
         die.flame = { id: offer.flame, investedGold: 0 };
+        recalculateMaxCharge(next);
         next.flameSelection!.acquired = true;
         next.stats.flameAcquisitions.push({ round: next.round, dieId: die.id, flame: offer.flame, replaced });
         if (firstFlame && !next.flameTutorial.completed) next.flameTutorial.pendingDieId = die.id;
@@ -325,6 +354,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const from = flame.investedGold;
         resolver.spendGold(action.amount, `Stoked ${FLAMES[flame.id].name}: −${action.amount} Gold (Shop)`, 'flameInvestment');
         flame.investedGold += action.amount;
+        recalculateMaxCharge(next);
         next.stats.flameStokes.push({ round: next.round, dieId: die.id, flame: flame.id, amount: action.amount,
           from, total: flame.investedGold, source });
         next.stats.totalFlameInvestment += action.amount;
@@ -334,6 +364,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
           const id = flame.id;
           die.flame = null;
           if (!next.bonfires.includes(id)) next.bonfires.push(id);
+          recalculateMaxCharge(next);
           next.stats.bonfiresCreated.push({ round: next.round, flame: id });
           resolver.emit({ type: 'BONFIRE_CREATED', flame: id, dieIds: [die.id],
             message: `${FLAMES[id].name} became a Bonfire and detached from D${die.id + 1}` });
