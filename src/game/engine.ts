@@ -85,6 +85,7 @@ export function normalizeGameState(state: GameState): GameState {
     returnedToShop: bust.returnedToShop ?? bust.livesAfter > 0 }));
   next.stats.lifeRestores ??= [];
   next.stats.vintageGrowth ??= [];
+  next.stats.probabilityProcs.personalTrainer ??= { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] };
   next.stats.rounds = next.stats.rounds.map(round => {
     const legacyPayout = round.payout as (typeof round.payout & { flameBonusGold?: number }) | null;
     const payout = legacyPayout ? { ...legacyPayout,

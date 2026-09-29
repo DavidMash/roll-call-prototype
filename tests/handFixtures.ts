@@ -1,4 +1,5 @@
 import { activeFace } from '../src/game/dice';
+import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands } from '../src/game/bosses';
 import { dispatch, newRun } from '../src/game/engine';
 import { stacks } from '../src/game/enhancements';
 import { combinationsForHand, handOptions } from '../src/game/hands';
@@ -20,7 +21,7 @@ export function pairSelectionRun(hand: 'pair' | 'twoPair') {
 }
 
 function choices(game: GameState) {
-  return handOptions(game.dice, game.consumed).filter(option => !option.consumed)
+  return handOptions(activeEncounterDice(game), unavailableEncounterHands(game), requiredEncounterDieIds(game)).filter(option => !option.consumed)
     .flatMap(option => option.combinations.map(dieIds => ({ type: 'PLAY' as const, hand: option.id, dieIds })))
     .sort((a, b) => handScore(game.dice, b.hand, b.dieIds).score - handScore(game.dice, a.hand, a.dieIds).score);
 }
@@ -47,9 +48,20 @@ export function winningSlippyRun() {
           boughtSlippy = true;
         } else action = game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' };
       } else {
+        if (game.boss?.type === 'warden' && game.boss.pendingReinforcements > 0) {
+          const activeDieIds = game.boss.activeDieIds;
+          const die = game.dice.find(item => item.owner === 'player' && !activeDieIds.includes(item.id));
+          if (!die) throw new Error('Warden fixture has no locked die to unlock');
+          action = { type: 'UNLOCK_WARDEN_DIE', dieId: die.id };
+          const result = dispatch(game, action);
+          if (result.error) throw new Error(result.error);
+          actions.push(action);
+          game = result.state;
+          continue;
+        }
         const hands = choices(game);
         const winning = hands.find(choice => game.score + handScore(game.dice, choice.hand, choice.dieIds).score >= game.target);
-        if (winning && stacks(activeFace(game.dice[4]), 'slippy')) {
+        if (winning && !game.boss && stacks(activeFace(game.dice[4]), 'slippy')) {
           return { seed, game, actions, action: winning, result: dispatch(game, winning) };
         }
         action = hands[0] ?? { type: 'MANUAL_REROLL', dieIds: [0] };

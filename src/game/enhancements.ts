@@ -15,18 +15,19 @@ const definition = (name: string, description: string, purchasePrice: number, ba
   ({ name, description, purchasePrice, baseSellPrice, stackable, maxStacks, countsTowardFaceTypeLimit: true });
 
 export const ENHANCEMENTS: Record<Enhancement, EnhancementDefinition> = {
-  bonus: definition('Bonus', `+${CONFIG.bonusPips} Pips when this face scores.`, 3, 1, true),
+  bonus: definition('Bonus', `+${CONFIG.bonusPips} Pips when this face scores. Stack for more Pips.`, 3, 1, true),
   jumpingBean: definition('Jumping Bean', 'When rolled, plays the matching Upper hand for free, then rerolls.', 2, 1, false, 1),
-  golden: definition('Golden', `Gain +${CONFIG.goldenGold} Gold when this face scores.`, 2, 1, true, 3),
-  workout: definition('Workout', `After scoring, this face permanently gains +${CONFIG.workoutIncrement} Pip.`, 3, 2, true),
+  golden: definition('Golden', `Gain +${CONFIG.goldenGold} Gold when this face scores. Stack up to three for more Gold.`, 2, 1, true, 3),
+  workout: definition('Workout', `After scoring, this face permanently gains +${CONFIG.workoutIncrement} Pip. Stack for faster growth.`, 3, 2, true),
   missingLink: definition('Missing Link', 'Counts as any face in a Straight. Scores its own Pips.', 2, 1, false, 1),
   mirror: definition('Mirror', 'Counts as any matching face in group hands. Scores its own Pips.', 2, 1, false, 1),
   magnetic: definition('Magnetic', 'Once per Round, held Magnets pull rolling dice toward other Magnets.', 3, 2, false, 1),
-  sticky: definition('Sticky', 'May keep this die from rerolling after it scores.', 2, 1, true, 3),
+  sticky: definition('Sticky', 'May keep this die from rerolling after it scores. Stack up to three to increase the odds.', 2, 1, true, 3),
   slippy: definition('Slippy', 'Rerolls after you play a hand, even if this die did not score.', 2, 1, false, 1),
-  hitchhiker: definition('Hitchhiker', 'When left out of a hand, it may jump in and score anyway.', 2, 1, true, 3),
-  weighted: definition('Weighted', 'Makes the opposite face more likely to roll.', 3, 2, true),
-  jackpot: definition('Jackpot', `Gain +${CONFIG.jackpotGold} Gold if this face scores in the hand that clears the Round.`, 3, 1, true, 3),
+  hitchhiker: definition('Hitchhiker', 'When left out of a hand, it may jump in and score anyway. Stack up to three to increase the odds.', 2, 1, true, 3),
+  weighted: definition('Weighted', 'Makes the opposite face more likely to roll. Stack to increase the odds.', 3, 2, true),
+  jackpot: definition('Jackpot', `Gain +${CONFIG.jackpotGold} Gold if this face scores in the hand that clears the Round. Stack up to three for more Gold.`, 3, 1, true, 3),
+  personalTrainer: definition('Personal Trainer', 'When this face scores, it may train the hand. Stack up to three to increase the odds.', 8, 4, true, 3),
   bump: definition('Bump', 'While showing, this die’s next roll moves up one face.', 2, 1, false, 1),
   vintage: definition('Vintage', 'Each time this face scores, its sell value increases by 3 Gold.', 3, 0, false, 1),
 };

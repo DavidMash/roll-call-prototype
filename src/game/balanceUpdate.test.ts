@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { activeFace } from './dice';
 import { Resolver } from './effects';
 import { dispatch, newRun, validateAction } from './engine';
-import { captureHandStart, handXMultContributions, trainerChance } from './flames';
+import { captureHandStart, handXMultContributions } from './flames';
 import { HAND_IDS } from './hands';
 import { lastPlayDanger } from './bosses';
 import { playActionLabel } from './copy';
@@ -23,10 +23,6 @@ function consumeExcept(state: GameState, hand: HandId): void {
 }
 
 describe('focused balance update', () => {
-  it('scales Personal Trainer linearly at 0, 50, and 100 Gold', () => {
-    expect([0, 50, 100].map(trainerChance)).toEqual([0, .375, .75]);
-  });
-
   it('clears The Warden immediately with locked dice and a pending reinforcement', () => {
     const state = game([1, 2, 3, 4, 5]);
     state.target = 1;

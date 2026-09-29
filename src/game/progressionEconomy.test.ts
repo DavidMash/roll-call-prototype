@@ -159,8 +159,8 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
   it('rolls back failed-attempt Gold, Workout, Trainer, history, and Vintage growth', () => {
     const state = newRun('rollback', constant(0.2)).state;
     state.gold = 10;
-    state.bonfires.push('personalTrainer');
     const face = state.dice[0].faces[0];
+    face.enhancements.personalTrainer = 1;
     face.enhancements.golden = 1;
     face.enhancements.workout = 1;
     face.enhancements.vintage = 1;
@@ -180,6 +180,8 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     expect(result.state.dice[0].faces[0]).toMatchObject({ workoutPips: 0, vintageSellValue: 0 });
     expect(result.state.handLevels.ones).toBe(1);
     expect(result.state.handPlayCounts.ones).toBe(0);
+    expect(result.state.stats.personalTrainerLevelsGranted).toBe(0);
+    expect(result.state.stats.probabilityProcs.personalTrainer.checks).toBe(0);
     expect(result.state.stats.goldBySource.golden).toBe(0);
     expect(result.state.stats.goldBySource.jackpot).toBe(0);
     expect(result.state.stats.vintageGrowth).toEqual([]);
@@ -299,6 +301,7 @@ describe('enhancement selling and Vintage', () => {
       sticky: [2, 1], slippy: [2, 1], jumpingBean: [2, 1], golden: [2, 1], missingLink: [2, 1],
       mirror: [2, 1], hitchhiker: [2, 1], bump: [2, 1], bonus: [3, 1], workout: [3, 2],
       magnetic: [3, 2], weighted: [3, 2], jackpot: [3, 1], vintage: [3, 0],
+      personalTrainer: [8, 4],
     } as const;
     for (const id of ENHANCEMENT_IDS) {
       expect([ENHANCEMENTS[id].purchasePrice, ENHANCEMENTS[id].baseSellPrice]).toEqual(expected[id]);

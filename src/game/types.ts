@@ -4,11 +4,12 @@ export type RunNodeType = 'normal_round' | 'boss_round' | 'shop' | 'flame_select
 export type Enhancement =
   | 'bonus' | 'jumpingBean' | 'golden' | 'workout'
   | 'missingLink' | 'mirror' | 'magnetic' | 'sticky' | 'slippy'
-  | 'hitchhiker' | 'weighted' | 'jackpot' | 'bump' | 'vintage';
+  | 'hitchhiker' | 'weighted' | 'jackpot' | 'personalTrainer' | 'bump' | 'vintage';
 export type Flame =
-  | 'ultimate' | 'minigun' | 'hailMary' | 'fullOfGrace' | 'charge' | 'personalTrainer'
+  | 'ultimate' | 'minigun' | 'hailMary' | 'fullOfGrace' | 'charge'
   | 'dragonsHoard' | 'wellTrained' | 'targetPractice'
-  | 'hotStreak' | 'moneyToBurn' | 'lowball' | 'straightShooter' | 'doubleDown';
+  | 'hotStreak' | 'moneyToBurn' | 'lowball' | 'straightShooter' | 'doubleDown'
+  | 'threesCompany' | 'boxSet';
 export type HandId =
   | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes'
   | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
@@ -370,7 +371,7 @@ export interface RunStats {
   goldSpent: number;
   goldSpentBySource: Record<GoldSpendSource, number>;
   triggers: Partial<Record<Enhancement, number>>;
-  probabilityProcs: Record<'sticky' | 'hitchhiker', ProbabilityProcStats>;
+  probabilityProcs: Record<'sticky' | 'hitchhiker' | 'personalTrainer', ProbabilityProcStats>;
   scoreBySource: Record<ScoreSource, number>;
   scoreByHand: Partial<Record<HandId, number>>;
   handScores: HandScoreRecord[];
@@ -441,7 +442,7 @@ export interface EventRecord {
   bossRewardGold?: number;
   goldenGold?: number;
   jackpotGold?: number;
-  probability?: { enhancement: 'sticky' | 'hitchhiker'; stacks: number; chance: number; succeeded: boolean };
+  probability?: { enhancement: 'sticky' | 'hitchhiker' | 'personalTrainer'; stacks: number; chance: number; succeeded: boolean };
   handScore?: HandScoreAccumulator;
 }
 export interface GameEvent extends EventRecord { board: Board }

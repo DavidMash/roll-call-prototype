@@ -14,19 +14,20 @@ export interface FlameDefinition {
 const GLOBAL_BONFIRE = 'This Flame now works globally.';
 export const FLAMES: Record<Flame, FlameDefinition> = {
   ultimate: { name: 'Ultimate', shortName: 'ULT', affectsXMult: true, description: 'Your highest level hand gains up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  minigun: { name: 'Minigun', shortName: 'MINI', affectsXMult: true, description: 'Upper hands gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  minigun: { name: 'Minigun', shortName: 'MINI', affectsXMult: true, description: 'Ones–Sixes gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   hailMary: { name: 'Hail Mary', shortName: 'HAIL', affectsXMult: true, description: 'Hands played with no Rerolls left gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   fullOfGrace: { name: 'Full of Grace', shortName: 'GRACE', affectsXMult: true, description: 'Last Play gains up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   charge: { name: 'Charge', shortName: 'CHG', affectsXMult: true, description: 'Scoring dice build Charge. Arm it for up to ×5 XMult.', bonfireDescription: 'This Flame now works globally. Arm Charge for any hand.' },
-  personalTrainer: { name: 'Personal Trainer', shortName: 'TRAIN', affectsXMult: false, description: 'When this die scores, it may train the hand. Up to 75% chance.', bonfireDescription: 'This Flame now works globally. Every played hand may train.' },
   dragonsHoard: { name: 'Dragon’s Hoard', shortName: 'HOARD', affectsXMult: true, description: 'Holding more Gold earns up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   wellTrained: { name: 'Well Trained', shortName: 'WELL', affectsXMult: true, description: 'Hands you play often gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   targetPractice: { name: 'Target Practice', shortName: 'TARGET', affectsXMult: true, description: 'Hit your Target for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   hotStreak: { name: 'Hot Streak', shortName: 'STREAK', affectsXMult: true, description: 'Chain Lower hands in order to build XMult, up to ×9.', bonfireDescription: GLOBAL_BONFIRE },
   moneyToBurn: { name: 'Money to Burn', shortName: 'BURN', affectsXMult: true, description: 'Spending Gold in Shops earns up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   lowball: { name: 'Lowball', shortName: 'LOW', affectsXMult: true, description: 'Low face values earn up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  straightShooter: { name: 'Straight Shooter', shortName: 'STR8', affectsXMult: true, description: 'Straights gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  straightShooter: { name: 'Straight Shooter', shortName: 'STR8', affectsXMult: true, description: 'Small Straight and Large Straight gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   doubleDown: { name: 'Double Down', shortName: 'DBL', affectsXMult: true, description: 'Pair and Two Pair gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  threesCompany: { name: 'Three’s Company', shortName: 'THREE', affectsXMult: true, description: 'Three of a Kind and Full House gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  boxSet: { name: 'Box Set', shortName: 'BOX', affectsXMult: true, description: 'Four of a Kind and Five of a Kind gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
 };
 export const FLAME_IDS = Object.keys(FLAMES) as Flame[];
 export const XMult_FLAME_IDS = FLAME_IDS.filter(flame => FLAMES[flame].affectsXMult);
@@ -34,7 +35,6 @@ export const HOT_STREAK_SEQUENCE: HandId[] = ['pair', 'twoPair', 'threeKind', 's
 export const flameProgress = (investedGold: number) => Math.max(0, Math.min(100, investedGold)) / 100;
 export const standardFlameMultiplier = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
 export const targetPracticeMultiplier = (investedGold: number) => 1 + 8 * flameProgress(investedGold);
-export const trainerChance = (investedGold: number) => 0.75 * flameProgress(investedGold);
 export const chargeGainPerScoringDie = (investedGold: number) => 0.5 * flameProgress(investedGold);
 export const dragonsHoardMultiplier = (investedGold: number, gold: number) => 1 + 4 * flameProgress(investedGold) * Math.min(Math.max(gold, 0) / 100, 1);
 export const wellTrainedMultiplier = (investedGold: number, previousPlays: number) => Math.min(5, 1 + previousPlays * 0.2 * flameProgress(investedGold));
@@ -53,7 +53,6 @@ const displayNumber = (value: number) => Number(value.toFixed(4));
 type FlameDisplayContext = Pick<Board, 'gold' | 'lifetimeNormalShopGoldSpent'>;
 export function flameEffectText(id: Flame, investedGold: number, board: FlameDisplayContext): string {
   switch (id) {
-    case 'personalTrainer': return `${displayNumber(trainerChance(investedGold) * 100)}% chance to train the hand.`;
     case 'charge': return `Scoring dice build +${displayNumber(chargeGainPerScoringDie(investedGold))} Charge.`;
     case 'targetPractice': return `Target gains ×${displayNumber(targetPracticeMultiplier(investedGold))} XMult.`;
     case 'dragonsHoard': return `${board.gold} held Gold currently grants ×${displayNumber(dragonsHoardMultiplier(investedGold, board.gold))} XMult.`;
@@ -140,6 +139,8 @@ const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId) => {
     case 'targetPractice': return hand === snapshot.targetPracticeHand;
     case 'straightShooter': return hand === 'smallStraight' || hand === 'largeStraight';
     case 'doubleDown': return hand === 'pair' || hand === 'twoPair';
+    case 'threesCompany': return hand === 'threeKind' || hand === 'fullHouse';
+    case 'boxSet': return hand === 'fourKind' || hand === 'fiveKind';
     case 'hotStreak': return hand === snapshot.hotStreakGoal;
     default: return true;
   }

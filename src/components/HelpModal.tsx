@@ -51,7 +51,7 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
         <Text size="sm">Flames begin as Embers. Stoke them in the Shop; at 100 Gold, an Ember becomes a Bonfire and works globally.</Text>
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{FLAME_IDS.map(id => <div key={id} className="help-item">
           <Text size="sm" fw={700}>🔥 {FLAMES[id].name}</Text><Text size="xs" c="dimmed">{FLAMES[id].description}</Text>
-          {(id === 'charge' || id === 'personalTrainer') && <Text size="xs" c="orange">Bonfire: {FLAMES[id].bonfireDescription}</Text>}
+          {id === 'charge' && <Text size="xs" c="orange">Bonfire: {FLAMES[id].bonfireDescription}</Text>}
         </div>)}</SimpleGrid>
       </Stack></Tabs.Panel>
       <Tabs.Panel value="bosses" pt="md"><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{BOSS_TYPES.map(id => <div key={id} className="help-item">

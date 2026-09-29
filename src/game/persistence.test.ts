@@ -36,6 +36,20 @@ describe('run persistence', () => {
     expect(loadPersistedRun(storage, null)).toBeNull();
   });
 
+  it('loads an older run while removing retired Personal Trainer Flames', () => {
+    const storage = new MemoryStorage();
+    const state = newRun('retired-trainer-flame').state;
+    delete (state.stats.probabilityProcs as Partial<typeof state.stats.probabilityProcs>).personalTrainer;
+    state.dice[0].flame = { id: 'personalTrainer', investedGold: 75 } as unknown as typeof state.dice[0]['flame'];
+    state.bonfires = ['personalTrainer' as unknown as typeof state.bonfires[number]];
+    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION, state }));
+
+    const loaded = loadPersistedRun(storage, null);
+    expect(loaded?.dice[0].flame).toBeNull();
+    expect(loaded?.bonfires).toEqual([]);
+    expect(loaded?.stats.probabilityProcs.personalTrainer).toEqual({ checks: 0, successes: 0, failures: 0, stacksAtCheck: [] });
+  });
+
   it('treats storage read and write failures as non-fatal', () => {
     const broken = {
       getItem(): string | null { throw new Error('blocked'); },

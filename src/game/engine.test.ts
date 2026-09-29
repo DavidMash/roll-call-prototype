@@ -484,7 +484,7 @@ describe('shop', () => {
     const bought = dispatch(game, { type: 'BUY', offerId: 0, dieId: 2 }).state;
     expect(dispatch(bought, { type: 'BUY', offerId: 0, dieId: 2 }).state).toBe(bought);
   });
-  it.each(ENHANCEMENT_IDS.filter(id => !['bonus', 'golden', 'workout', 'sticky', 'weighted', 'jackpot', 'hitchhiker'].includes(id)))('rejects redundant %s without charging', enhancement => {
+  it.each(ENHANCEMENT_IDS.filter(id => !['bonus', 'golden', 'workout', 'sticky', 'weighted', 'jackpot', 'hitchhiker', 'personalTrainer'].includes(id)))('rejects redundant %s without charging', enhancement => {
     const game = shop();
     game.shop!.offers[0].enhancement = enhancement;
     enhance(game, 0, enhancement);
@@ -493,7 +493,7 @@ describe('shop', () => {
     expect(result.state).toBe(game);
     expect(game.gold).toBe(100);
   });
-  it.each<Enhancement>(['bonus', 'golden', 'workout', 'sticky', 'weighted', 'jackpot', 'hitchhiker'])('allows stacking %s', enhancement => {
+  it.each<Enhancement>(['bonus', 'golden', 'workout', 'sticky', 'weighted', 'jackpot', 'hitchhiker', 'personalTrainer'])('allows stacking %s', enhancement => {
     const game = shop();
     game.shop!.offers[0].enhancement = enhancement;
     enhance(game, 0, enhancement);

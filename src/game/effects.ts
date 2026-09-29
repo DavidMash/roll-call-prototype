@@ -4,7 +4,7 @@ import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, stacks } from './
 import {
   activeFlameId, activeFlameInvestment, captureHandStart, chargeGainPerScoringDie,
   FLAMES, FLAME_IDS, handXMultContributions, HOT_STREAK_SEQUENCE,
-  ownedFlameIds, trainerChance,
+  ownedFlameIds,
 } from './flames';
 import { hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
@@ -58,7 +58,7 @@ export class Resolver {
     this.emit({ type: 'FLAME_TRIGGERED', flame, dieIds: dieId === null ? undefined : [dieId], hand, xMult,
       message: `${dieId === null ? 'Bonfire' : `D${dieId + 1}`} ${FLAMES[flame].name}${detail ? `: ${detail}` : ''}` });
   }
-  checkProbability(enhancement: 'sticky' | 'hitchhiker', stackCount: number, dieIds: number[], hand?: HandId): boolean {
+  checkProbability(enhancement: 'sticky' | 'hitchhiker' | 'personalTrainer', stackCount: number, dieIds: number[], hand?: HandId): boolean {
     const chance = diminishingHalfChance(stackCount);
     const succeeded = probabilityCheck(this.rng, chance);
     const stats = this.state.stats.probabilityProcs[enhancement];
@@ -294,25 +294,22 @@ export class Resolver {
     this.queue = [];
   }
 
-  private resolvePersonalTrainer(hand: HandId, scoringIds: number[]): boolean | null {
-    let chance = 0;
-    let dieId: number | null = null;
-    if (this.state.bonfires.includes('personalTrainer')) chance = 0.75;
-    else {
-      const trainer = this.state.dice.find(die => scoringIds.includes(die.id) && activeFlameId(die.flame) === 'personalTrainer');
-      if (trainer) { chance = trainerChance(activeFlameInvestment(trainer.flame)); dieId = trainer.id; }
+  private resolvePersonalTrainer(hand: HandId, scoringParticipants: { id: number; face: Face }[]): boolean | null {
+    let attempts = 0;
+    let successes = 0;
+    for (const { id, face } of scoringParticipants) {
+      const count = stacks(face, 'personalTrainer');
+      if (!count) continue;
+      attempts++;
+      this.state.stats.personalTrainerAttempts++;
+      if (!this.checkProbability('personalTrainer', count, [id], hand)) continue;
+      const before = this.state.handLevels[hand]++;
+      successes++;
+      this.state.stats.personalTrainerSuccesses++;
+      this.state.stats.personalTrainerLevelsGranted++;
+      this.trigger('personalTrainer', id, face, `${HANDS[hand].name} Lv. ${before} → ${this.state.handLevels[hand]}`, { hand });
     }
-    if (chance <= 0) return null;
-    this.state.stats.personalTrainerAttempts++;
-    const success = probabilityCheck(this.rng, chance);
-    this.log({ type: 'ABILITY_CHECKED', flame: 'personalTrainer', dieIds: dieId === null ? undefined : [dieId], hand,
-      message: `Personal Trainer ${this.format(chance * 100)}%: ${success ? 'succeeded' : 'failed'}` });
-    if (!success) return false;
-    const before = this.state.handLevels[hand]++;
-    this.state.stats.personalTrainerSuccesses++;
-    this.state.stats.personalTrainerLevelsGranted++;
-    this.triggerFlame('personalTrainer', dieId, `${HANDS[hand].name} Lv. ${before} → ${this.state.handLevels[hand]}`, hand);
-    return true;
+    return attempts === 0 ? null : successes > 0;
   }
   private advanceHotStreak(hand: HandId, scoringIds: number[]): void {
     if (this.state.hotStreakGoal !== hand) return;
@@ -559,7 +556,7 @@ export class Resolver {
     }
     this.addChargeForScoring(scoringIds);
     if (!freeBean) this.advanceHotStreak(hand, scoringIds);
-    const personalTrainerSucceeded = this.resolvePersonalTrainer(hand, scoringIds);
+    const personalTrainerSucceeded = this.resolvePersonalTrainer(hand, scoringParticipants);
     this.state.handPlayCounts[hand]++;
     this.state.stats.handsPlayed[hand] = (this.state.stats.handsPlayed[hand] ?? 0) + 1;
     this.log({ type: 'ABILITY_EVALUATED', enhancement: freeBean ? 'jumpingBean' : undefined, hand, dieIds: scoringIds, playSource,

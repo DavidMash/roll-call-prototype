@@ -111,6 +111,7 @@ Selling removes every stack of the selected enhancement type from that face. Nor
 | Weighted | 3 | 2 |
 | Jackpot | 3 | 1 |
 | Vintage | 3 | dynamic |
+| Personal Trainer | 8 | 4 |
 
 Sticky and Slippy now cost 2 Gold; their gameplay behavior is unchanged.
 
@@ -119,6 +120,10 @@ Sticky and Slippy now cost 2 Gold; their gameplay behavior is unchanged.
 Vintage is unique and non-stackable. A new instance starts with a 0-Gold sell value and has no direct scoring effect. Whenever its physical face participates in a resolved scoring hand, its sell value increases by 3 Gold exactly once. Selected dice, successful Hitchhikers, and Jumping Bean free plays qualify; rolls, displayed faces, failed Hitchhikers, Shop rolls, and Flame Selection rolls do not. Separate Bean-chain hand resolutions may each grow it.
 
 Vintage has no value cap and may exceed its 3-Gold purchase price. Selling pays its current value and deletes that accumulated state; repurchasing starts at 0. Failed-attempt growth rolls back with the round checkpoint.
+
+### Personal Trainer
+
+Personal Trainer is stackable to three. Each scoring face checks independently after its hand's score is awarded, using the same diminishing chance as Sticky and Hitchhiker: 50%, 75%, then 87.5%. A success raises that hand by one level. Selected scoring dice, successful Hitchhikers, and Jumping Bean free plays qualify; rolls and merely exposed faces do not. Multiple successes can train one hand multiple times, and failed-attempt gains roll back with the round checkpoint.
 
 ## Flame Selections, Embers, and Bonfires
 
@@ -133,11 +138,10 @@ Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a f
 | Flame | Active rule |
 |---|---|
 | Ultimate | The single highest-ranked hand: `1 + 4p`, max ×5 |
-| Minigun | Upper hand: `1 + 4p`, max ×5 |
+| Minigun | Ones–Sixes: `1 + 4p`, max ×5 |
 | Hail Mary | Zero rerolls: `1 + 4p`, max ×5 |
 | Full of Grace | LAST PLAY (zero rerolls and exactly one playable hand): `1 + 4p`, max ×5 |
 | Charge | Each scoring die adds `0.5p`, capped at ×5; the armed factor multiplies XMult |
-| Personal Trainer | `75% × p` training chance; no XMult |
 | Dragon's Hoard | `1 + 4p × min(heldGold/100, 1)`, max ×5 |
 | Well Trained | `min(5, 1 + previousPlays × 0.2p)` |
 | Target Practice | Targeted Lower hand: `1 + 8p`, max ×9 |
@@ -146,6 +150,8 @@ Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a f
 | Lowball | `1 + 2 × (printedFaceTier − 1) × p`, max ×5 |
 | Straight Shooter | Small/Large Straight: `1 + 4p`, max ×5 |
 | Double Down | Pair/Two Pair: `1 + 4p`, max ×5 |
+| Three’s Company | Three of a Kind/Full House: `1 + 4p`, max ×5 |
+| Box Set | Four of a Kind/Five of a Kind: `1 + 4p`, max ×5 |
 
 ## Dice visuals and live scoring
 

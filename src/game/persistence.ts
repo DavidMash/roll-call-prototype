@@ -31,6 +31,9 @@ function isGameState(value: unknown): value is GameState {
   if (!isRecord(value) || typeof value.seed !== 'string' || !value.seed ||
     typeof value.phase !== 'string' || !PHASES.has(value.phase)) return false;
   const template = newRun(value.seed).state;
+  // This telemetry bucket was added without invalidating otherwise compatible
+  // active runs. Normalization fills it before Personal Trainer can be used.
+  delete (template.stats.probabilityProcs as Partial<typeof template.stats.probabilityProcs>).personalTrainer;
   if (!hasTemplateShape(value, template)) return false;
   if (value.roundCheckpoint !== null) {
     if (!isRecord(value.roundCheckpoint)) return false;

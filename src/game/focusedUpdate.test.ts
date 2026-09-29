@@ -36,14 +36,14 @@ function deterministicBean(rank: Rank, configure?: (game: GameState) => void, rn
 }
 
 describe('focused enhancement roster and migration', () => {
-  it('contains the current 14 enhancements and locks their prices', () => {
+  it('contains the current 15 enhancements and locks their prices', () => {
     expect(ENHANCEMENT_IDS).toEqual([
       'bonus', 'jumpingBean', 'golden', 'workout', 'missingLink', 'mirror', 'magnetic',
-      'sticky', 'slippy', 'hitchhiker', 'weighted', 'jackpot', 'bump', 'vintage',
+      'sticky', 'slippy', 'hitchhiker', 'weighted', 'jackpot', 'personalTrainer', 'bump', 'vintage',
     ]);
     expect(Object.fromEntries(ENHANCEMENT_IDS.map(id => [id, enhancementCost(id)]))).toEqual({
       bonus: 3, jumpingBean: 2, golden: 2, workout: 3, missingLink: 2, mirror: 2,
-      magnetic: 3, sticky: 2, slippy: 2, hitchhiker: 2, weighted: 3, jackpot: 3, bump: 2, vintage: 3,
+      magnetic: 3, sticky: 2, slippy: 2, hitchhiker: 2, weighted: 3, jackpot: 3, personalTrainer: 8, bump: 2, vintage: 3,
     });
     expect((ENHANCEMENTS as Record<string, unknown>).multiplier).toBeUndefined();
   });
@@ -51,7 +51,8 @@ describe('focused enhancement roster and migration', () => {
   it('uses authoritative stack metadata and rejects a fourth capped stack', () => {
     expect(ENHANCEMENTS.golden.maxStacks).toBe(3);
     expect(ENHANCEMENTS.jackpot.maxStacks).toBe(3);
-    for (const enhancement of ['sticky', 'hitchhiker', 'golden', 'jackpot'] as const) {
+    expect(ENHANCEMENTS.personalTrainer.maxStacks).toBe(3);
+    for (const enhancement of ['sticky', 'hitchhiker', 'golden', 'jackpot', 'personalTrainer'] as const) {
       const face = baseState().dice[0].faces[0];
       face.enhancements[enhancement] = 3;
       expect(attachmentError(face, enhancement)).toContain('capped at 3');
@@ -95,7 +96,7 @@ describe('focused enhancement roster and migration', () => {
     expect(result.state.dice[0].faces[0].enhancements.jackpot).toBe(3);
     expect(result.state.dice[0].flame).toBeNull();
     expect(result.state.bonfires).toEqual([]);
-    expect(FLAME_IDS).toHaveLength(14);
+    expect(FLAME_IDS).toHaveLength(15);
   });
 });
 
@@ -201,7 +202,7 @@ describe('Jumping Bean effects and Flames', () => {
 
   it('allows Personal Trainer after finalization and reads Well Trained history before increment', () => {
     const trainer = deterministicBean(5, game => {
-      game.dice[0].flame = { id: 'personalTrainer', investedGold: 100 };
+      add(game, 0, 'personalTrainer', 5);
     }, constant(0));
     expect(trainer.state.stats.handScores[0]).toMatchObject({ handLevel: 1, score: 12 });
     expect(trainer.state.handLevels.fives).toBe(2);

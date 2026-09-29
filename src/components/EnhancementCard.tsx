@@ -4,7 +4,7 @@ import type { Enhancement, Offer } from '../game/types';
 import { InfoPopover } from './InfoPopover';
 const ICON: Record<Enhancement, string> = {
   bonus: '+', jumpingBean: '↯', golden: '●', workout: '▲', missingLink: '⛓', mirror: '◇',
-  magnetic: '∩', sticky: '⚓', slippy: '↻', hitchhiker: '♟', weighted: '▼', jackpot: '★', bump: '↑', vintage: 'V',
+  magnetic: '∩', sticky: '⚓', slippy: '↻', hitchhiker: '♟', weighted: '▼', jackpot: '★', personalTrainer: 'T', bump: '↑', vintage: 'V',
 };
 export function EnhancementCard({ offer, selected, gold, busy, onSelect }: {
   offer: Offer; selected: boolean; gold: number; busy: boolean; onSelect: () => void;
