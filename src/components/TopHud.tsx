@@ -14,7 +14,7 @@ function HudStat({ testId, icon, label, value }: { testId: string; icon: string;
   </div>;
 }
 
-export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, openRunInfo, openHelp, openRestoreLives }: {
+export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, openRunInfo, openHelp, openRestoreLives, onMenuOpenChange }: {
   board: Board;
   speed: PlaybackSpeed;
   setSpeed: (speed: PlaybackSpeed) => void;
@@ -23,12 +23,18 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
   openRunInfo: () => void;
   openHelp: () => void;
   openRestoreLives: () => void;
+  onMenuOpenChange?: (opened: boolean) => void;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const hearts = Array.from({ length: CONFIG.maxLives }, (_, index) => index < board.lives ? '♥' : '♡').join(' ');
   function launch(action: () => void) {
     setDrawerOpen(false);
+    onMenuOpenChange?.(false);
     action();
+  }
+  function setMenu(opened: boolean) {
+    setDrawerOpen(opened);
+    onMenuOpenChange?.(opened);
   }
   return <>
   <Box component="header" className="top-hud">
@@ -48,7 +54,7 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
           : board.phase === 'round' ? <div className="hud-phase" aria-label="Round phase">ROUND {board.round}</div>
             : <div className="hud-phase" aria-label={board.phase === 'bust' ? 'Bust phase' : 'Run ended'}>{board.phase === 'bust' ? 'BUST' : 'OVER'}</div>}
       </Group>
-      <ActionIcon className="menu-trigger" variant="subtle" color="gray" size="lg" aria-label="Open menu" onClick={() => setDrawerOpen(true)}>
+      <ActionIcon className="menu-trigger" variant="subtle" color="gray" size="lg" aria-label="Open menu" onClick={() => setMenu(true)}>
         <span aria-hidden="true" className="hamburger-icon"><i /><i /><i /></span>
       </ActionIcon>
     </Group>
@@ -59,7 +65,7 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
       <Text size="xs" fw={700} c="orange">BONFIRES</Text>{board.bonfires.map(id => <Tooltip key={id} label={FLAMES[id].bonfireDescription} withArrow><Badge size="xs" color="red" variant="light">🔥 {FLAMES[id].shortName}</Badge></Tooltip>)}
     </Group>}
   </Box>
-  <Drawer opened={drawerOpen} onClose={() => setDrawerOpen(false)} position="right" size={320} title="Menu"
+  <Drawer opened={drawerOpen} onClose={() => setMenu(false)} position="right" size={320} title="Menu"
     transitionProps={{ duration: 0 }} classNames={{ content: 'game-menu-drawer', header: 'game-menu-header' }}>
     <Stack gap="md">
       <div><Text size="xs" fw={800} tt="uppercase" mb={6}>Game speed</Text>

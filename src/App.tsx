@@ -34,6 +34,7 @@ export default function App() {
   const [runInfoOpen, setRunInfoOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [restoreLivesOpen, setRestoreLivesOpen] = useState(false);
+  const [gameMenuOpen, setGameMenuOpen] = useState(false);
   const [hudHeight, setHudHeight] = useState(60);
   const appRef = useRef<HTMLDivElement>(null);
   const game = useGame(requestedSeed, initialSeed, speed);
@@ -75,7 +76,7 @@ export default function App() {
       '--hud-sticky-offset': `${hudHeight + 8}px` } as React.CSSProperties}>
     <TopHud board={board} speed={speed} setSpeed={setSpeed} diceDisplay={diceDisplay} setDiceDisplay={setDiceDisplay}
       openRunInfo={() => setRunInfoOpen(true)} openHelp={() => setHelpOpen(true)}
-      openRestoreLives={() => setRestoreLivesOpen(true)} />
+      openRestoreLives={() => setRestoreLivesOpen(true)} onMenuOpenChange={setGameMenuOpen} />
     {game.error && <Alert color="orange" withCloseButton onClose={game.clearError} my="xs" py={5} title="Action unavailable">{game.error}</Alert>}
     <main className="main-content">
       {event?.type === 'MAP_TRANSITION' ? <RunMapTransition key={event.id} seed={state.seed} event={event} onContinue={game.continuePlayback} />
@@ -97,7 +98,7 @@ export default function App() {
           </Paper>
           <Paper p="xs"><DiceRow dice={board.dice} display={diceDisplay} event={null} disabled selected={[]} onClick={() => {}} /></Paper>
         </Stack>
-        : <RoundScreen board={board} event={event} busy={busy} diceDisplay={diceDisplay}
+        : <RoundScreen board={board} event={event} busy={busy} inputBlocked={busy || gameMenuOpen || runInfoOpen || helpOpen || restoreLivesOpen} diceDisplay={diceDisplay}
           selection={selection} setSelection={setSelection} submit={submit} skip={game.skip} />}
     </main>
     <RunInfoModal state={state} visibleEventId={event?.id} busy={busy} opened={runInfoOpen} onClose={() => setRunInfoOpen(false)}

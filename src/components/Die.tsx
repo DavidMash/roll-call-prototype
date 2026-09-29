@@ -50,7 +50,7 @@ export function Die({ die, display, selected, highlighted, rolling, ability, fla
   const dieLabel = die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`;
   const displayValue = face.rank;
   const temporaryState = face.snakeEyed ? ', Snake-Eyed Face' : face.infected ? ', Infected Face; 3 fewer Pips; Enhancements disabled'
-    : face.magneticUsed && face.enhancements.magnetic ? ', Magnetic used for this round' : '';
+    : face.magneticDestinationUsed && face.enhancements.magnetic ? ', Magnetic destination used this round' : '';
   const dieDetails = `${dieLabel}, face ${displayValue}, ${pips} Pips${temporaryState}${flameId ? `, Ember ${FLAMES[flameId].name}, ${flameInvestment} of 100 Gold` : ''}${enhancementSummary ? `, ${enhancementSummary}` : ''}`;
   const accessibilityLabel = wardenLocked
     ? `${dieDetails}, locked${unlockAt === undefined ? '' : ` until ${unlockAt} points`}${wardenSelectable ? ', selectable to unlock' : ''}`
@@ -58,7 +58,7 @@ export function Die({ die, display, selected, highlighted, rolling, ability, fla
   return <div className="die-wrap">
     <div className="ability-label" aria-hidden="true">{activeAbility.toUpperCase()}</div>
     <Paper component="button" type="button" withBorder
-      className={`die ${die.owner === 'boss' ? 'cursed-die' : ''} ${face.snakeEyed ? 'snake-eyed-face' : ''} ${face.infected ? 'infected-face' : ''} ${face.magneticUsed ? 'magnetic-used' : ''} ${selected ? 'selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${ability || flameAbility ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''} ${wardenLocked ? 'warden-locked' : ''}`}
+      className={`die ${die.owner === 'boss' ? 'cursed-die' : ''} ${face.snakeEyed ? 'snake-eyed-face' : ''} ${face.infected ? 'infected-face' : ''} ${face.magneticDestinationUsed ? 'magnetic-used' : ''} ${selected ? 'selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${ability || flameAbility ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''} ${wardenLocked ? 'warden-locked' : ''}`}
       disabled={interactionDisabled} aria-disabled={interactionDisabled} aria-pressed={selected}
       title={wardenLocked ? `${dieLabel} locked${unlockAt === undefined ? '' : ` until ${unlockAt} points`}${wardenSelectable ? ' · choose to unlock' : ''}` : lockedReason ?? ineligibleReason}
       aria-label={accessibilityLabel} data-locked-until={unlockAt}
@@ -90,7 +90,7 @@ export function Die({ die, display, selected, highlighted, rolling, ability, fla
             const count = face.enhancements[id]!;
             const label = BADGE_LABELS[id]?.(count) ?? `${ENHANCEMENTS[id].name}${count > 1 ? ` ×${count}` : ''}`;
             return <Tooltip key={id} label={`${ENHANCEMENTS[id].name}: ${ENHANCEMENTS[id].description}`} withArrow>
-              <Badge size="xs" variant="light" color={id === 'magnetic' && face.magneticUsed ? 'gray' : id === 'golden' ? 'yellow' : id === 'jackpot' ? 'orange' : 'teal'}>{label}{id === 'magnetic' && face.magneticUsed ? ' · USED' : ''}</Badge>
+              <Badge size="xs" variant="light" color={id === 'magnetic' && face.magneticDestinationUsed ? 'gray' : id === 'golden' ? 'yellow' : id === 'jackpot' ? 'orange' : 'teal'}>{label}{id === 'magnetic' && face.magneticDestinationUsed ? ' · PULL USED' : ''}</Badge>
             </Tooltip>;
           })}
           {hiddenEnhancements.length > 0 && <Tooltip label={hiddenEnhancements.map(id => `${ENHANCEMENTS[id].name} ×${face.enhancements[id]}`).join(', ')} multiline maw={320} withArrow>

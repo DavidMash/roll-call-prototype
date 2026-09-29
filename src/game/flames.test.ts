@@ -20,7 +20,7 @@ const play = (state: GameState, hand = 'threeKind' as const, dieIds = [0, 1, 2],
 
 describe('multiplicative Flame formulas', () => {
   it('contains the final unique 15-Flame roster without Personal Trainer', () => {
-    expect(FLAME_IDS).toEqual(['ultimate', 'minigun', 'hailMary', 'fullOfGrace', 'momentum', 'thirdRail', 'jumpStart', 'powerSurge', 'dragonsHoard', 'wellTrained', 'targetPractice', 'hotStreak', 'moneyToBurn', 'lowball', 'straightShooter', 'doubleDown', 'threesCompany', 'boxSet']);
+    expect(FLAME_IDS).toEqual(['ultimate', 'minigun', 'hailMary', 'fullOfGrace', 'momentum', 'thirdRail', 'jumpStart', 'powerSurge', 'speedDemon', 'sixPack', 'fluxCapacitor', 'dragonsHoard', 'wellTrained', 'targetPractice', 'hotStreak', 'moneyToBurn', 'lowball', 'straightShooter', 'doubleDown', 'threesCompany', 'boxSet']);
     expect(FLAME_IDS).not.toContain('personalTrainer');
     expect(FLAME_IDS).not.toContain('weighted');
     expect(FLAME_IDS).not.toContain('clockwork');

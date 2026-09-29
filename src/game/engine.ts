@@ -36,6 +36,9 @@ export function normalizeGameState(state: GameState): GameState {
   for (const die of next.dice) {
     die.owner ??= 'player';
     for (const face of die.faces) {
+      const legacyMagnetic = face as typeof face & { magneticUsed?: boolean };
+      if (legacyMagnetic.magneticUsed) face.magneticDestinationUsed = true;
+      delete legacyMagnetic.magneticUsed;
       delete (face.enhancements as Record<string, number | undefined>).multiplier;
       for (const id of ENHANCEMENT_IDS) {
         const value = face.enhancements[id];
@@ -65,6 +68,11 @@ export function normalizeGameState(state: GameState): GameState {
   if (next.roundCheckpoint) {
     if (next.roundCheckpoint.shop) normalizeShop(next.roundCheckpoint.shop);
     for (const die of next.roundCheckpoint.dice) {
+      for (const face of die.faces) {
+        const legacyMagnetic = face as typeof face & { magneticUsed?: boolean };
+        if (legacyMagnetic.magneticUsed) face.magneticDestinationUsed = true;
+        delete legacyMagnetic.magneticUsed;
+      }
       const rawFlame = die.flame as unknown;
       const rawId = typeof rawFlame === 'string' ? rawFlame
         : rawFlame && typeof rawFlame === 'object' && 'id' in rawFlame ? (rawFlame as { id: unknown }).id : null;
@@ -76,6 +84,8 @@ export function normalizeGameState(state: GameState): GameState {
     next.roundCheckpoint.bonfires = [...new Set(next.roundCheckpoint.bonfires
       .map(id => (id as string) === 'charge' ? 'momentum' : id).filter(isFlame))];
     recalculateMaxCharge(next.roundCheckpoint);
+    next.roundCheckpoint.decisionId = Math.max(0, Math.floor(next.roundCheckpoint.decisionId ?? 0));
+    next.roundCheckpoint.sixPackXMult = Math.max(1, next.roundCheckpoint.sixPackXMult ?? 1);
   }
   if (next.flameSelection) next.flameSelection.offers = next.flameSelection.offers
     .map(offer => ({ ...offer, flame: (offer.flame as string) === 'charge' ? 'momentum' as const : offer.flame }))
@@ -139,6 +149,8 @@ export function normalizeGameState(state: GameState): GameState {
     ? { type: 'CONTINUE_FLAME_SELECTION' } : action);
   next.stats.goldBySource.enhancementSale ??= 0;
   next.stats.goldSpentBySource.lifeRestore ??= 0;
+  next.decisionId = Math.max(0, Math.floor(next.decisionId ?? 0));
+  next.sixPackXMult = Math.max(1, next.sixPackXMult ?? 1);
   recalculateMaxCharge(next);
   return next;
 }
@@ -163,6 +175,7 @@ export function validateAction(state: Board, action: Action): string | null {
   if (action.type === 'PLAY') {
     if (state.phase !== 'round') return 'Hands can only be played during a round.';
     if (state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0) return 'Unlock a Warden die before committing another hand.';
+    if (action.decisionMs !== undefined && (!Number.isFinite(action.decisionMs) || action.decisionMs < 0)) return 'Decision time must be a nonnegative number.';
     if (unavailableEncounterHands(state).includes(action.hand)) return state.boss?.type === 'marathon'
       ? 'That hand is still cooling down.' : state.boss?.type === 'quickdraw' ? 'Quickdraw has no Lower shot remaining.' : 'That hand has already been consumed.';
     if (state.boss?.type === 'hexer' && !action.dieIds.includes(state.boss.cursedDieId)) return 'The Cursed Die must participate in every hand.';
@@ -269,7 +282,7 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
     score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, roundAttemptNumber: 1,
     bossSchedule: bossSchedule(seed), boss: null, currentNodeId: '',
     bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], chargeXMult: 1, maxCharge: 1,
-    chargeArmed: false, hotStreakGoal: null, hotStreakCharges: 0, lifetimeNormalShopGoldSpent: 0, consumed: [], shop: null,
+    chargeArmed: false, decisionId: 0, sixPackXMult: 1, hotStreakGoal: null, hotStreakCharges: 0, lifetimeNormalShopGoldSpent: 0, consumed: [], shop: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
     scoreByHand: {}, effectScore: 0, lastRoundPayout: null, roundSummary: null, flameSelection: null,
     manualRerollsRemaining: CONFIG.manualRerollsPerRound, nextOfferId: 0, stats: createStats(seed), history: [], roundCheckpoint: null,
@@ -289,7 +302,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
     const next = resolver.state;
     next.stats.actions.push(structuredClone(action));
     switch (action.type) {
-      case 'PLAY': resolver.play(action.hand, action.dieIds); break;
+      case 'PLAY': resolver.play(action.hand, action.dieIds, 'manual', action.decisionMs ?? null); break;
       case 'MANUAL_REROLL': resolver.manualReroll(action.dieIds); break;
       case 'UNLOCK_WARDEN_DIE': resolver.unlockWardenDie(action.dieId); break;
       case 'TOGGLE_CHARGE':

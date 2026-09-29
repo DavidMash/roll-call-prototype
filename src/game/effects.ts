@@ -3,16 +3,17 @@ import { activeFace, rollPhysicalDie, scoringPips, weightedSourceFace } from './
 import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, stacks } from './enhancements';
 import {
   activeFlameId, activeFlameInvestment, captureHandStart, FLAMES, FLAME_IDS, handXMultContributions,
-  hasChargeBonfire, HOT_STREAK_SEQUENCE, jumpStartChargeGain, momentumChargeGain,
-  ownedFlameIds, recalculateMaxCharge, thirdRailChargeGain,
+  fluxCapacitorChargeGain, hasChargeBonfire, HOT_STREAK_SEQUENCE, jumpStartChargeGain, momentumChargeGain,
+  ownedFlameIds, recalculateMaxCharge, sixPackStartingMultiplier, thirdRailChargeGain,
 } from './flames';
-import { hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS } from './hands';
+import { hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
 import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, handContributions } from './scoring';
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie,
   isCursedDie, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands, wardenUnlockTarget } from './bosses';
 import { encounterNode, flameNodeAfter, shopNodeBefore } from './progression';
+import type { ChargeFlame } from './flames';
 import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameStateBase, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, RunNode, ScoreSource } from './types';
 
 type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number };
@@ -169,13 +170,13 @@ export class Resolver {
     return total;
   }
 
-  private chargeFlameSource(flame: 'momentum' | 'thirdRail' | 'jumpStart' | 'powerSurge'):
+  private chargeFlameSource(flame: ChargeFlame):
     { investment: number; dieId: number | null } | null {
     if (this.state.bonfires.includes(flame)) return { investment: 100, dieId: null };
     const die = this.state.dice.find(item => activeFlameId(item.flame) === flame);
     return die ? { investment: activeFlameInvestment(die.flame), dieId: die.id } : null;
   }
-  private growCharge(flame: 'momentum' | 'thirdRail' | 'jumpStart' | 'powerSurge', requestedGain: number,
+  private growCharge(flame: ChargeFlame, requestedGain: number,
     detail: string, dieIds?: number[]): void {
     const source = this.chargeFlameSource(flame);
     if (!source || requestedGain <= 0) return;
@@ -207,7 +208,7 @@ export class Resolver {
     this.emit({ type: 'DICE_REROLL_STARTED', dieIds: ids, message: `${reason}: ${ids.map(id => `D${id + 1}`).join(', ')}` });
     const rolling = new Set(ids);
     const anchors = context === 'gameplay' ? activeEncounterDice(this.state)
-      .filter(die => !rolling.has(die.id) && stacks(activeFace(die), 'magnetic') && !activeFace(die).magneticUsed)
+      .filter(die => !rolling.has(die.id) && stacks(activeFace(die), 'magnetic'))
       .map(die => die.id) : [];
     if (anchors.length) {
       this.state.stats.magneticAnchorBatches++;
@@ -224,7 +225,7 @@ export class Resolver {
       }
       const destinations = anchors.length
         ? die.faces.map((face, index) => ({ face, physicalFace: (index + 1) as import('./types').Rank }))
-          .filter(item => stacks(item.face, 'magnetic') && !item.face.magneticUsed
+          .filter(item => stacks(item.face, 'magnetic') && !item.face.magneticDestinationUsed
             && (!excludeStartingFace || item.physicalFace !== beforePhysical))
         : [];
       if (destinations.length) {
@@ -235,8 +236,7 @@ export class Resolver {
     });
     const attracted = results.filter(result => result.attracted);
     if (attracted.length) {
-      for (const anchorId of anchors) activeFace(this.state.dice.find(die => die.id === anchorId)!).magneticUsed = true;
-      for (const result of attracted) this.state.dice.find(die => die.id === result.dieId)!.faces[result.physicalFace - 1].magneticUsed = true;
+      for (const result of attracted) this.state.dice.find(die => die.id === result.dieId)!.faces[result.physicalFace - 1].magneticDestinationUsed = true;
     }
     const triggers: RollTrigger[] = [];
     for (const result of results) {
@@ -266,6 +266,9 @@ export class Resolver {
         this.state.stats.triggers.magnetic = (this.state.stats.triggers.magnetic ?? 0) + 1;
         this.emit({ type: 'MAGNETIC_ATTRACTION', enhancement: 'magnetic', dieIds: [die.id, ...anchors], face: face.rank,
           message: `Held Magnetic anchor attracted D${die.id + 1} to face ${face.rank}` });
+        const flux = this.chargeFlameSource('fluxCapacitor');
+        if (flux) this.growCharge('fluxCapacitor', fluxCapacitorChargeGain(flux.investment),
+          `D${die.id + 1} pulled to a new Magnetic destination`, [die.id]);
       }
       if (result.weighted) {
         const source = weightedSourceFace(die, result.physicalFace)!;
@@ -498,13 +501,14 @@ export class Resolver {
       message: `${starting ? 'Starting die' : 'Reinforcement'} D${dieId + 1} unlocked · face ${this.state.dice.find(die => die.id === dieId)!.value} retained` });
     this.updateWardenUnlockTarget();
     this.evaluate();
+    if (this.state.phase === 'round' && boss.pendingReinforcements === 0) this.state.decisionId++;
   }
-  play(hand: HandId, dieIds: number[], playSource: HandPlaySource = 'manual'): { winning: boolean; beanRecordIndex: number | null } {
+  play(hand: HandId, dieIds: number[], playSource: HandPlaySource = 'manual', decisionMs: number | null = null): { winning: boolean; beanRecordIndex: number | null } {
     const freeBean = playSource === 'jumpingBean';
     const consumesHand = !freeBean && this.state.boss?.type !== 'marathon';
     const ids = [...dieIds].sort((a, b) => a - b);
     const handLevel = this.state.handLevels[hand];
-    const handStart = captureHandStart(this.state, hand, ids);
+    const handStart = captureHandStart(this.state, hand, ids, playSource === 'manual' ? decisionMs : null);
     if (freeBean) handStart.chargeArmed = false;
     const shapeParticipants = ids.map(id => ({ id, face: structuredClone(activeFace(this.state.dice.find(die => die.id === id)!)), role: 'selected' as const }));
     if (freeBean) this.emit({ type: 'JUMPING_BEAN_FREE_PLAY', enhancement: 'jumpingBean', hand, dieIds: ids,
@@ -542,6 +546,10 @@ export class Resolver {
     }
     for (const { id, face, role } of scoringParticipants) this.whenScored(id, face, hand, playSource, role === 'hitchhiker' ? 'hitchhiker' : 'selected');
     for (const factor of handXMultContributions(handStart, hand, handLevel, scoringIds)) {
+      if (factor.source === 'speedDemon') this.emit({ type: 'SPEED_DEMON_REVEALED', flame: 'speedDemon', hand,
+        dieIds: factor.dieId === null ? undefined : [factor.dieId], xMult: factor.value, xMultFactor: factor,
+        decisionMs: handStart.speedDemonDecisionMs ?? undefined,
+        message: `Speed Demon ×${this.format(factor.value)}` });
       const beforeXMult = this.handAccumulator.currentXMult;
       applyXMult(this.handAccumulator, factor);
       if (factor.source === 'moneyToBurn') this.state.stats.moneyToBurnMultipliers.push(factor.value);
@@ -573,6 +581,12 @@ export class Resolver {
     }
     this.addMomentumCharge(hand);
     this.applyPowerSurge(hand, handStart.ultimateHands.includes(hand));
+    if (UPPER_HAND_IDS.includes(hand) && ownedFlameIds(this.state).has('sixPack')) {
+      const before = this.state.sixPackXMult;
+      this.state.sixPackXMult = Number(Math.max(1, before - 1).toFixed(12));
+      this.emit({ type: 'SIX_PACK_CHANGED', flame: 'sixPack', hand, xMult: this.state.sixPackXMult,
+        message: `Six Pack ×${this.format(before)} → ×${this.format(this.state.sixPackXMult)}` });
+    }
     if (!freeBean) this.advanceHotStreak(hand, scoringIds);
     const personalTrainerSucceeded = this.resolvePersonalTrainer(hand, scoringParticipants);
     this.state.handPlayCounts[hand]++;
@@ -618,6 +632,7 @@ export class Resolver {
     this.rollBatch([...rerolls], 'Post-hand reroll', 'gameplay');
     this.drain();
     this.evaluate();
+    if (this.state.phase === 'round') this.state.decisionId++;
     return { winning: this.state.score >= this.state.target, beanRecordIndex: null };
   }
 
@@ -647,6 +662,7 @@ export class Resolver {
       this.emit({ type: 'DEAD_BOARD_RESCUED', dieIds: ids, message: 'Dead board rescued' });
     }
     this.evaluate();
+    if (this.state.phase === 'round') this.state.decisionId++;
   }
   private captureRoundCheckpoint(): void {
     const clone = structuredClone(this.state);
@@ -743,10 +759,13 @@ export class Resolver {
     this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound; this.state.target = targetForRound(this.state.round);
     this.state.consumed = []; this.state.targetPracticeHand = null; this.state.lastRoundPayout = null; this.state.roundSummary = null;
     this.state.chargeXMult = 1; this.state.chargeArmed = false; this.state.hotStreakCharges = 0;
+    const sixPackInvestment = this.state.bonfires.includes('sixPack') ? 100
+      : activeFlameInvestment(this.state.dice.find(die => activeFlameId(die.flame) === 'sixPack')?.flame ?? null);
+    this.state.sixPackXMult = sixPackStartingMultiplier(sixPackInvestment);
     this.state.hotStreakGoal = ownedFlameIds(this.state).has('hotStreak') ? 'pair' : null;
     this.state.flameSelection = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
-    for (const die of this.state.dice) for (const face of die.faces) delete face.magneticUsed;
+    for (const die of this.state.dice) for (const face of die.faces) delete face.magneticDestinationUsed;
     const bossType = this.state.bossSchedule[this.state.round]
       ?? (this.state.round > 60 ? bossTypeForRound(this.state.seed, this.state.round) : null);
     if (bossType) this.state.bossSchedule[this.state.round] = bossType;
@@ -782,6 +801,7 @@ export class Resolver {
       this.rollBatch(playerDice.map(die => die.id), 'Warden opening roll', 'wardenSetup');
     } else this.rollBatch(activeEncounterDice(this.state).map(die => die.id), 'Initial round roll', 'gameplay');
     this.drain(); this.evaluate();
+    if (this.state.phase === 'round') this.state.decisionId++;
   }
   freshOffers(): void {
     const pool = [...ENHANCEMENT_IDS];

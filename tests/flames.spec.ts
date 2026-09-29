@@ -8,7 +8,7 @@ import type { Action, GameState } from '../src/game/types';
 import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
 import { CONFIG } from '../src/game/config';
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
-import { setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
+import { openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 
 function bestHand(game: GameState, requiredDie?: number, requireHistory = false) {
   const dice = activeEncounterDice(game);
@@ -329,4 +329,61 @@ test('arming and canceling Charge preserves the selected hand and dice', async (
   await ready(page);
   await expect(page.getByRole('button', { name: 'ARM CHARGE', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /^Die 1,/ })).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('Speed Demon meter pauses in modals, stays out of preview, and reveals the frozen Play factor', async ({ page }) => {
+  const seed = 'speed-demon-browser';
+  const game = newRun(seed).state;
+  game.dice.forEach(die => { die.value = 1; });
+  game.dice[0].flame = { id: 'speedDemon', investedGold: 100 };
+  game.target = 1_000_000;
+  game.stats.rounds[0].target = game.target;
+
+  await page.goto('/');
+  await page.evaluate(({ key, state }) => localStorage.setItem(key, JSON.stringify({ version: 1, state })), {
+    key: RUN_STORAGE_KEY,
+    state: game,
+  });
+  await page.clock.install({ time: new Date('2026-09-29T12:00:00Z') });
+  await page.clock.pauseAt(new Date('2026-09-29T12:00:01Z'));
+  await page.goto(`/?seed=${seed}&speed=normal`);
+  await ready(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByTestId('scorecard-row-ones').click();
+  const play = page.getByTestId('play-action');
+  const previewText = await play.textContent();
+  await expect(page.getByTestId('speed-demon-meter')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  await page.clock.runFor(1500);
+  await openMenuItem(page, 'How to Play');
+  await expect(page.getByRole('dialog', { name: 'How to Play' })).toBeVisible();
+  const beforePause = await page.locator('.speed-demon-meter-fill').getAttribute('style');
+  await page.clock.runFor(4000);
+  expect(await page.locator('.speed-demon-meter-fill').getAttribute('style')).toBe(beforePause);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'How to Play' })).toHaveCount(0);
+  await page.clock.runFor(4000);
+  await expect(play).toHaveText(previewText!);
+
+  await play.evaluate(element => (element as HTMLElement).click());
+  const storedAction = await page.evaluate(key => {
+    const saved = JSON.parse(localStorage.getItem(key)!).state as GameState;
+    return saved.stats.actions.at(-1)!;
+  }, RUN_STORAGE_KEY);
+  if (storedAction.type !== 'PLAY' || storedAction.decisionMs === undefined) throw new Error('Missing frozen Speed Demon decision time');
+  expect(storedAction.decisionMs).toBeGreaterThanOrEqual(5400);
+  expect(storedAction.decisionMs).toBeLessThan(6000);
+  const result = dispatch(game, storedAction);
+  const revealIndex = result.events.findIndex(event => event.type === 'SPEED_DEMON_REVEALED');
+  expect(revealIndex).toBeGreaterThan(0);
+  let revealed = false;
+  for (let index = 0; index <= result.events.length; index++) {
+    if (await page.getByTestId('speed-demon-reveal').count()) { revealed = true; break; }
+    await page.clock.runFor(CONFIG.tickMs.normal);
+  }
+  expect(revealed).toBe(true);
+  await expect(page.getByTestId('speed-demon-reveal')).toHaveText(/SPEED DEMON ×/);
+  await page.clock.runFor(CONFIG.tickMs.normal);
+  await expect(play).not.toHaveText(previewText!);
 });

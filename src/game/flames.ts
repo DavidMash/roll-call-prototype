@@ -21,6 +21,9 @@ export const FLAMES: Record<Flame, FlameDefinition> = {
   thirdRail: { name: 'Third Rail', shortName: 'RAIL', affectsXMult: true, description: 'Rolling 3s builds Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
   jumpStart: { name: 'Jump Start', shortName: 'JUMP', affectsXMult: true, description: 'Rerolls build Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
   powerSurge: { name: 'Power Surge', shortName: 'SURGE', affectsXMult: true, description: 'Playing your highest level hand triples your current Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
+  speedDemon: { name: 'Speed Demon', shortName: 'SPEED', affectsXMult: true, description: 'Play quickly for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  sixPack: { name: 'Six Pack', shortName: 'SIX', affectsXMult: true, description: 'Starts at up to ×6 XMult. Reduces by 1 when an Upper hand is played.', bonfireDescription: GLOBAL_BONFIRE },
+  fluxCapacitor: { name: 'Flux Capacitor', shortName: 'FLUX', affectsXMult: true, description: 'Using a Magnetic face to pull another die builds Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
   dragonsHoard: { name: 'Dragon’s Hoard', shortName: 'HOARD', affectsXMult: true, description: 'Holding more Gold earns up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   wellTrained: { name: 'Well Trained', shortName: 'WELL', affectsXMult: true, description: 'Hands you play often gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   targetPractice: { name: 'Target Practice', shortName: 'TARGET', affectsXMult: true, description: 'Hit your Target for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
@@ -34,7 +37,7 @@ export const FLAMES: Record<Flame, FlameDefinition> = {
 };
 export const FLAME_IDS = Object.keys(FLAMES) as Flame[];
 export const XMult_FLAME_IDS = FLAME_IDS.filter(flame => FLAMES[flame].affectsXMult);
-export const CHARGE_FLAME_IDS = ['momentum', 'thirdRail', 'jumpStart', 'powerSurge'] as const satisfies readonly Flame[];
+export const CHARGE_FLAME_IDS = ['momentum', 'thirdRail', 'jumpStart', 'powerSurge', 'fluxCapacitor'] as const satisfies readonly Flame[];
 export type ChargeFlame = typeof CHARGE_FLAME_IDS[number];
 export const HOT_STREAK_SEQUENCE: HandId[] = ['pair', 'twoPair', 'threeKind', 'smallStraight', 'fullHouse', 'fourKind', 'largeStraight', 'fiveKind'];
 export const flameProgress = (investedGold: number) => Math.max(0, Math.min(100, investedGold)) / 100;
@@ -43,6 +46,12 @@ export const targetPracticeMultiplier = (investedGold: number) => 1 + 8 * flameP
 export const momentumChargeGain = (investedGold: number) => 0.5 * flameProgress(investedGold);
 export const thirdRailChargeGain = (investedGold: number) => 0.5 * flameProgress(investedGold);
 export const jumpStartChargeGain = (investedGold: number) => 2 * flameProgress(investedGold);
+export const fluxCapacitorChargeGain = (investedGold: number) => 2 * flameProgress(investedGold);
+export const speedDemonMultiplier = (investedGold: number, decisionMs: number) => {
+  const strength = decisionMs <= 1000 ? 1 : Math.max(0, Math.min(1, (10000 - decisionMs) / 9000));
+  return Number((1 + 8 * flameProgress(investedGold) * strength).toFixed(12));
+};
+export const sixPackStartingMultiplier = (investedGold: number) => 1 + 5 * flameProgress(investedGold);
 export const maxChargeContribution = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
 export const dragonsHoardMultiplier = (investedGold: number, gold: number) => 1 + 4 * flameProgress(investedGold) * Math.min(Math.max(gold, 0) / 100, 1);
 export const wellTrainedMultiplier = (investedGold: number, previousPlays: number) => Math.min(5, 1 + previousPlays * 0.2 * flameProgress(investedGold));
@@ -65,6 +74,9 @@ export function flameEffectText(id: Flame, investedGold: number, board: FlameDis
     case 'thirdRail': return `Rolled 3s build +${displayNumber(thirdRailChargeGain(investedGold))} Charge.`;
     case 'jumpStart': return `Each Reroll builds +${displayNumber(jumpStartChargeGain(investedGold))} Charge.`;
     case 'powerSurge': return 'Your highest level hand triples current Charge.';
+    case 'fluxCapacitor': return `Magnetic pulls build +${displayNumber(fluxCapacitorChargeGain(investedGold))} Charge.`;
+    case 'speedDemon': return `A quick play reaches ×${displayNumber(speedDemonMultiplier(investedGold, 0))} XMult.`;
+    case 'sixPack': return `Each Round starts at ×${displayNumber(sixPackStartingMultiplier(investedGold))} XMult.`;
     case 'targetPractice': return `Target gains ×${displayNumber(targetPracticeMultiplier(investedGold))} XMult.`;
     case 'dragonsHoard': return `${board.gold} held Gold currently grants ×${displayNumber(dragonsHoardMultiplier(investedGold, board.gold))} XMult.`;
     case 'wellTrained': return 'Frequently played hands build toward ×5 XMult.';
@@ -124,6 +136,8 @@ export interface HandStartSnapshot {
   hotStreakCharges: number;
   chargeXMult: number;
   chargeArmed: boolean;
+  speedDemonDecisionMs: number | null;
+  sixPackXMult: number;
   lastPlayDanger: import('./bosses').LastPlayDanger;
   selectedBasePips: number;
   selectedBaseMultiplier: number;
@@ -134,7 +148,7 @@ export interface HandStartSnapshot {
   dice: { dieId: number; flame: Flame | null; investedGold: number; faceValue: number }[];
 }
 
-export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'gold' | 'manualRerollsRemaining' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'chargeXMult' | 'chargeArmed' | 'bonfires' | 'dice' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'consumed'>, hand: HandId, selectedDieIds: number[]): HandStartSnapshot {
+export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'gold' | 'manualRerollsRemaining' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'bonfires' | 'dice' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'consumed'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null): HandStartSnapshot {
   const selectedScore = handScore(state.dice, hand, selectedDieIds, state.handLevels[hand]);
   return {
     score: state.score,
@@ -148,6 +162,8 @@ export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'go
     hotStreakCharges: state.hotStreakCharges,
     chargeXMult: state.chargeXMult,
     chargeArmed: state.chargeArmed,
+    speedDemonDecisionMs,
+    sixPackXMult: state.sixPackXMult,
     lastPlayDanger: lastPlayDanger(state, hand),
     selectedBasePips: selectedScore.pips,
     selectedBaseMultiplier: selectedScore.multiplier,
@@ -171,6 +187,7 @@ const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId) => {
     case 'threesCompany': return hand === 'threeKind' || hand === 'fullHouse';
     case 'boxSet': return hand === 'fourKind' || hand === 'fiveKind';
     case 'hotStreak': return hand === snapshot.hotStreakGoal;
+    case 'speedDemon': return snapshot.speedDemonDecisionMs !== null;
     default: return true;
   }
 };
@@ -186,6 +203,8 @@ function factorValue(id: Flame, investedGold: number, snapshot: HandStartSnapsho
       return lowballMultiplier(investedGold, average);
     }
     case 'hotStreak': return hotStreakMultiplier(investedGold, snapshot.hotStreakCharges + 1);
+    case 'speedDemon': return speedDemonMultiplier(investedGold, snapshot.speedDemonDecisionMs ?? 10000);
+    case 'sixPack': return snapshot.sixPackXMult;
     default: return standardFlameMultiplier(investedGold);
   }
 }
@@ -209,7 +228,7 @@ function contributions(snapshot: HandStartSnapshot, hand: HandId, scoringDieIds:
   for (const id of snapshot.bonfires) {
     if (!FLAMES[id]?.affectsXMult || isChargeFlame(id) || (!includeFullOfGrace && id === 'fullOfGrace') || !qualifies(id, snapshot, hand)) continue;
     const value = factorValue(id, 100, snapshot, scoringDieIds);
-    if (value > 1) {
+    if (value > 1 || id === 'speedDemon') {
       const context = factorInput(id, snapshot, scoringDieIds);
       result.push({ source: id, value, dieId: null, ...context, detail: `Bonfire${context.detail ? `; ${context.detail}` : ''}` });
     }
@@ -219,7 +238,7 @@ function contributions(snapshot: HandStartSnapshot, hand: HandId, scoringDieIds:
     if (!id || !scoring.has(die.dieId) || !FLAMES[id].affectsXMult || isChargeFlame(id)
       || (!includeFullOfGrace && id === 'fullOfGrace') || !qualifies(id, snapshot, hand)) continue;
     const value = factorValue(id, die.investedGold, snapshot, scoringDieIds);
-    if (value > 1) result.push({ source: id, value, dieId: die.dieId, ...factorInput(id, snapshot, scoringDieIds) });
+    if (value > 1 || id === 'speedDemon') result.push({ source: id, value, dieId: die.dieId, ...factorInput(id, snapshot, scoringDieIds) });
   }
   return result;
 }

@@ -13,6 +13,9 @@ Direct XMult Flames below produce an `XMultFactor`. Charge-family Flames instead
 | Third Rail | Charge generator | â€” | Gameplay dice rolling 3 add `0.5p` Charge | Shared | Yes |
 | Jump Start | Charge generator | â€” | Manual Rerolls spent add `2p` Charge | Shared | Yes |
 | Power Surge | Charge transformer | â€” | The Ultimate-ranked hand triples current Charge | Shared | Capacity |
+| Speed Demon | Decision-time factor | — | 1-second grace, then smooth decay from `1 + 8p` to ×1 by 10 seconds | Yes | Yes |
+| Six Pack | Round-depleting factor | — | Starts at `1 + 5p`; played Upper hands reduce it after scoring | Yes | Yes |
+| Flux Capacitor | Charge generator | — | Successful Magnetic destination pulls add `2p` Charge | Shared | Yes |
 | Dragon's Hoard | Held-Gold factor | `1 + 2pg`, max ×3 | `1 + 4pg`, max ×5 | Yes | Yes |
 | Well Trained | Hand-history factor | `min(3, 1 + 0.1np)` | `min(5, 1 + 0.2np)` | Yes | Yes |
 | Target Practice | Targeted Lower-hand factor | `1 + 4p`, max ×5 | `1 + 8p`, max ×9 | Yes | Yes |

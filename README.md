@@ -115,6 +115,8 @@ Selling removes every stack of the selected enhancement type from that face. Nor
 
 Sticky and Slippy now cost 2 Gold; their gameplay behavior is unchanged.
 
+Each physical Magnetic face can be used as a pull destination once per Round. Natural rolls do not spend it, and a spent destination can still act as a held source for pulls toward other unused Magnetic faces. Destination use resets at the start of each Round.
+
 ### Vintage
 
 Vintage is unique and non-stackable. A new instance starts with a 0-Gold sell value and has no direct scoring effect. Whenever its physical face participates in a resolved scoring hand, its sell value increases by 3 Gold exactly once. Selected dice, successful Hitchhikers, and Jumping Bean free plays qualify; rolls, displayed faces, failed Hitchhikers, Shop rolls, and Flame Selection rolls do not. Separate Bean-chain hand resolutions may each grow it.
@@ -145,6 +147,9 @@ Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a f
 | Third Rail | Each gameplay die that rolls a 3 adds `0.5p` Charge |
 | Jump Start | Each manual Reroll spent adds `2p` Charge |
 | Power Surge | The single Ultimate-ranked hand triples current Charge |
+| Speed Demon | Actual unblocked decision time: full strength for 1 second, then smooth decay to ×1 at about 10 seconds; peak `1 + 8p` |
+| Six Pack | Starts each Round at `1 + 5p`; each played Upper hand uses the current factor, then reduces it by 1 to a ×1 floor |
+| Flux Capacitor | Each successful pull to a new Magnetic destination adds `2p` Charge |
 | Dragon's Hoard | `1 + 4p × min(heldGold/100, 1)`, max ×5 |
 | Well Trained | `min(5, 1 + previousPlays × 0.2p)` |
 | Target Practice | Targeted Lower hand: `1 + 8p`, max ×9 |

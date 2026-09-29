@@ -21,7 +21,7 @@ export const ENHANCEMENTS: Record<Enhancement, EnhancementDefinition> = {
   workout: definition('Workout', `After scoring, this face permanently gains +${CONFIG.workoutIncrement} Pip. Stack for faster growth.`, 3, 2, true),
   missingLink: definition('Missing Link', 'Counts as any face in a Straight. Scores its own Pips.', 2, 1, false, 1),
   mirror: definition('Mirror', 'Counts as any matching face in group hands. Scores its own Pips.', 2, 1, false, 1),
-  magnetic: definition('Magnetic', 'Once per Round, held Magnets pull rolling dice toward other Magnets.', 3, 2, false, 1),
+  magnetic: definition('Magnetic', 'Held Magnets pull rolling dice toward unused Magnetic destinations.', 3, 2, false, 1),
   sticky: definition('Sticky', 'May keep this die from rerolling after it scores. Stack up to three to increase the odds.', 2, 1, true, 3),
   slippy: definition('Slippy', 'Rerolls after you play a hand, even if this die did not score.', 2, 1, false, 1),
   hitchhiker: definition('Hitchhiker', 'When left out of a hand, it may jump in and score anyway. Stack up to three to increase the odds.', 2, 1, true, 3),

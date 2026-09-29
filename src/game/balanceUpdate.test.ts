@@ -37,7 +37,7 @@ describe('focused balance update', () => {
     expect(result.events.some(event => event.type === 'BOSS_CLEARED' && event.boss === 'warden')).toBe(true);
   });
 
-  it('exhausts every participating Magnetic face for the round and resets them next round', () => {
+  it('exhausts only each Magnetic destination and resets destinations next round', () => {
     const state = game([1, 2, 3, 4, 6]);
     activeFace(state.dice[4]).enhancements.magnetic = 1;
     state.dice[0].faces[2].enhancements.magnetic = 1;
@@ -45,16 +45,16 @@ describe('focused balance update', () => {
     const resolver = new Resolver(state, constant(0));
     resolver.rollBatch([0], 'first attraction', 'gameplay');
     expect(state.stats.magneticAttractions).toBe(1);
-    expect(activeFace(state.dice[4]).magneticUsed).toBe(true);
-    expect(state.dice[0].faces[2].magneticUsed).toBe(true);
+    expect(activeFace(state.dice[4]).magneticDestinationUsed).toBeUndefined();
+    expect(state.dice[0].faces[2].magneticDestinationUsed).toBe(true);
     resolver.rollBatch([1], 'second roll', 'gameplay');
-    expect(state.stats.magneticAttractions).toBe(1);
+    expect(state.stats.magneticAttractions).toBe(2);
 
     state.phase = 'shop';
     state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     state.round++;
     new Resolver(state, constant(.8)).startRound();
-    expect(state.dice.flatMap(die => die.faces).some(face => face.magneticUsed)).toBe(false);
+    expect(state.dice.flatMap(die => die.faces).some(face => face.magneticDestinationUsed)).toBe(false);
   });
 
   it('keeps Caller deadlines fixed at manual hands 3, 6, and 9 after early answers', () => {

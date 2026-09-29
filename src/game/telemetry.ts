@@ -30,12 +30,12 @@ export function createStats(seed: string): RunStats {
 }
 export function boardSnapshot(state: GameState): Board {
   const { phase, round, target, score, gold, lives, roundAttemptNumber, bossSchedule, boss, currentNodeId, bust, flameTutorial,
-    manualRerollsRemaining, dice, bonfires, chargeXMult, maxCharge,
+    manualRerollsRemaining, dice, bonfires, chargeXMult, maxCharge, decisionId, sixPackXMult,
     chargeArmed, hotStreakGoal, hotStreakCharges, lifetimeNormalShopGoldSpent, consumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, lastRoundPayout, roundSummary, shop, flameSelection } = state;
   return structuredClone({ phase, round, target, score, gold, lives, roundAttemptNumber, bossSchedule, boss, currentNodeId, bust, flameTutorial,
     manualRerollsRemaining, dice, bonfires,
-    chargeXMult, maxCharge, chargeArmed, hotStreakGoal, hotStreakCharges, lifetimeNormalShopGoldSpent, consumed, scoreByHand, effectScore,
+    chargeXMult, maxCharge, chargeArmed, decisionId, sixPackXMult, hotStreakGoal, hotStreakCharges, lifetimeNormalShopGoldSpent, consumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, lastRoundPayout, roundSummary, shop, flameSelection });
 }
 export function exportRun(state: GameState) {

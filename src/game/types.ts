@@ -8,6 +8,7 @@ export type Enhancement =
 export type Flame =
   | 'ultimate' | 'minigun' | 'hailMary' | 'fullOfGrace'
   | 'momentum' | 'thirdRail' | 'jumpStart' | 'powerSurge'
+  | 'speedDemon' | 'sixPack' | 'fluxCapacitor'
   | 'dragonsHoard' | 'wellTrained' | 'targetPractice'
   | 'hotStreak' | 'moneyToBurn' | 'lowball' | 'straightShooter' | 'doubleDown'
   | 'threesCompany' | 'boxSet';
@@ -106,7 +107,7 @@ export interface Face {
   vintageSellValue?: number;
   snakeEyed?: boolean;
   infected?: boolean;
-  magneticUsed?: boolean;
+  magneticDestinationUsed?: boolean;
 }
 export interface ActiveFlame { id: Flame; investedGold: number }
 export interface StandaloneScoreRecord {
@@ -180,6 +181,8 @@ export interface Board {
   chargeXMult: number;
   maxCharge: number;
   chargeArmed: boolean;
+  decisionId: number;
+  sixPackXMult: number;
   hotStreakGoal: HandId | null;
   hotStreakCharges: number;
   lifetimeNormalShopGoldSpent: number;
@@ -397,6 +400,7 @@ export type EventType =
   | 'FLAME_SELECTION_OPENED' | 'FLAME_OFFERS_REFRESHED' | 'FLAME_ACQUIRED' | 'FLAME_REPLACED'
   | 'FLAME_SKIPPED' | 'FLAME_INVESTED' | 'BONFIRE_CREATED' | 'FLAME_TRIGGERED' | 'HAND_XMULT_CHANGED'
   | 'TARGET_PRACTICE_SELECTED' | 'CHARGE_CHANGED' | 'CHARGE_ARMED' | 'HOT_STREAK_CHANGED'
+  | 'SPEED_DEMON_REVEALED' | 'SIX_PACK_CHANGED'
   | 'ENHANCEMENT_SOLD' | 'VINTAGE_GROWN' | 'MAGNETIC_ATTRACTION' | 'BUMP_ROLL'
   | 'JUMPING_BEAN_FREE_PLAY' | 'JUMPING_BEAN_FOLLOWUP'
   | 'ROUND_BUST' | 'SHOP_REOPENED_AFTER_BUST' | 'ROUND_RETRY_STARTED' | 'LIFE_RESTORED' | 'FLAME_TUTORIAL_COMPLETED'
@@ -445,6 +449,7 @@ export interface EventRecord {
   goldenGold?: number;
   jackpotGold?: number;
   probability?: { enhancement: 'sticky' | 'hitchhiker' | 'personalTrainer'; stacks: number; chance: number; succeeded: boolean };
+  decisionMs?: number;
   handScore?: HandScoreAccumulator;
 }
 export interface GameEvent extends EventRecord { board: Board }
@@ -466,7 +471,7 @@ export interface GameStateBase extends Board {
 }
 export interface GameState extends GameStateBase { roundCheckpoint: GameStateBase | null }
 export type Action =
-  | { type: 'PLAY'; hand: HandId; dieIds: number[] }
+  | { type: 'PLAY'; hand: HandId; dieIds: number[]; decisionMs?: number }
   | { type: 'MANUAL_REROLL'; dieIds: number[] }
   | { type: 'UNLOCK_WARDEN_DIE'; dieId: number }
   | { type: 'TOGGLE_CHARGE'; hand?: HandId | null; dieIds?: number[] }

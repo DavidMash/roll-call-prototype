@@ -1,9 +1,9 @@
 import { Alert, Button, Group, Paper, Stack, Text } from '@mantine/core';
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { validateAction } from '../game/engine';
 import {
   activeFlameId, captureHandStart, composeXMult, handXMultContributions, hasChargeBonfire,
-  hasOwnedChargeFlame, hasXMultFlame, isChargeFlame, isGuaranteedWinningPlay,
+  hasOwnedChargeFlame, hasOwnedFlame, hasXMultFlame, isChargeFlame, isGuaranteedWinningPlay, speedDemonMultiplier,
 } from '../game/flames';
 import { handOptions, hasPlayableHand, HANDS } from '../game/hands';
 import { finalizeScore, handScore } from '../game/scoring';
@@ -18,9 +18,10 @@ import { BossPanel } from './BossPanel';
 import { CONFIG } from '../game/config';
 import type { DiceDisplay } from '../uiSettings';
 import { formatScoreEquation, formatScoreProgress, playActionLabel } from '../game/copy';
+import { DecisionTimer } from '../game/decisionTimer';
 
-export function RoundScreen({ board, event, busy, diceDisplay, selection, setSelection, submit, skip }: {
-  board: Board; event: GameEvent | null; busy: boolean;
+export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, selection, setSelection, submit, skip }: {
+  board: Board; event: GameEvent | null; busy: boolean; inputBlocked: boolean;
   diceDisplay: DiceDisplay;
   selection: Selection; setSelection: (selection: Selection) => void; submit: (action: Action) => void; skip: () => void;
 }) {
@@ -33,6 +34,25 @@ export function RoundScreen({ board, event, busy, diceDisplay, selection, setSel
     ? wardenDice.filter(die => !wardenBoss.activeDieIds.includes(die.id)).map(die => die.id)
     : [];
   const awaitingWardenChoice = !!wardenBoss && wardenBoss.pendingReinforcements > 0;
+  const speedDemonOwned = hasOwnedFlame(board, 'speedDemon');
+  const decisionTimer = useRef(new DecisionTimer());
+  const [decisionMs, setDecisionMs] = useState(0);
+  const blocked = inputBlocked || awaitingWardenChoice;
+  useLayoutEffect(() => {
+    const now = performance.now();
+    decisionTimer.current.reset(now, blocked);
+    setDecisionMs(0);
+  }, [board.decisionId]);
+  useLayoutEffect(() => {
+    const now = performance.now();
+    decisionTimer.current.setBlocked(blocked, now);
+    setDecisionMs(decisionTimer.current.elapsed(now));
+  }, [blocked]);
+  useEffect(() => {
+    if (blocked || !speedDemonOwned) return;
+    const interval = window.setInterval(() => setDecisionMs(decisionTimer.current.elapsed(performance.now())), 50);
+    return () => window.clearInterval(interval);
+  }, [blocked, speedDemonOwned]);
   const nextWardenThreshold = wardenBoss?.nextUnlockTarget ?? undefined;
   const lockedUntilByDieId: Record<number, number> = {};
   if (nextWardenThreshold !== undefined) wardenLockedIds.forEach(id => { lockedUntilByDieId[id] = nextWardenThreshold; });
@@ -69,6 +89,19 @@ export function RoundScreen({ board, event, busy, diceDisplay, selection, setSel
   const missingChargeDie = !chargeGloballyUnlocked && chargeDieIds.some(id => !effectiveSelection.dieIds.includes(id));
   const chargeAtMax = board.chargeXMult >= board.maxCharge - 1e-9;
   const displayCharge = (value: number) => Number(value.toFixed(4));
+  const speedStrength = (speedDemonMultiplier(100, decisionMs) - 1) / 8;
+  const speedReveal = event?.type === 'SPEED_DEMON_REVEALED' ? event : null;
+  const speedEquation = event?.flame === 'speedDemon' && event.handScore && event.type !== 'SPEED_DEMON_REVEALED'
+    ? (() => {
+      const effectiveXMult = event.handScore.currentXMult * event.handScore.bossFactor;
+      const score = finalizeScore(event.handScore.currentPips, event.handScore.currentMultiplier, effectiveXMult).finalScore;
+      return formatScoreEquation(event.handScore.currentPips, event.handScore.currentMultiplier, effectiveXMult, score);
+    })() : null;
+  function submitPlay() {
+    const action: Action = { type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds };
+    if (speedDemonOwned) action.decisionMs = decisionTimer.current.freeze(performance.now());
+    submit(action);
+  }
   function changeSelection(next: Selection) {
     if (board.chargeArmed && !chargeGloballyUnlocked && chargeDieIds.some(id => !next.dieIds.includes(id))) {
       submit({ type: 'TOGGLE_CHARGE', hand: next.hand, dieIds: next.dieIds });
@@ -87,11 +120,11 @@ export function RoundScreen({ board, event, busy, diceDisplay, selection, setSel
       const control = target?.closest('button, a, [role="button"]');
       if (control && !control.closest('.scorecard-row, .die')) return;
       keyEvent.preventDefault();
-      submit({ type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds });
+      submitPlay();
     }
     window.addEventListener('keydown', playOnEnter, true);
     return () => window.removeEventListener('keydown', playOnEnter, true);
-  }, [awaitingWardenChoice, busy, effectiveSelection.dieIds, effectiveSelection.hand, submit, valid]);
+  }, [awaitingWardenChoice, busy, effectiveSelection.dieIds, effectiveSelection.hand, submit, valid, speedDemonOwned]);
   return <Stack gap="xs" className="round-screen">
     <div className="live-score-panel" data-testid="live-score-panel">
       <ScoreResolution event={event} busy={busy} onSkip={skip} idleText={idleText}
@@ -109,7 +142,7 @@ export function RoundScreen({ board, event, busy, diceDisplay, selection, setSel
       <HandScorecard board={board} selection={effectiveSelection} busy={busy || awaitingWardenChoice} canSubmit={valid && !busy && !awaitingWardenChoice}
         submitPreview={preview}
         onSelect={hand => changeSelection(selectHand(encounterDice, unavailableHands, effectiveSelection, hand, requiredDieIds))}
-        onSubmit={() => submit({ type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds })} />
+        onSubmit={submitPlay} />
     </Paper>
     <Paper className="gameplay-dock" p="xs">
       <div className="gameplay-dock-content">
@@ -144,9 +177,14 @@ export function RoundScreen({ board, event, busy, diceDisplay, selection, setSel
               onClick={() => submit({ type: 'UNLOCK_WARDEN_DIE', dieId: selectedWardenDieId! })}>UNLOCK DIE</Button> : <>
               <Button className="reroll-action" size="sm" variant="default" disabled={busy || !canReroll}
                 onClick={() => submit(manualAction)}>REROLL {CONFIG.manualRerollsPerRound - board.manualRerollsRemaining + effectiveSelection.dieIds.length} / {CONFIG.manualRerollsPerRound}</Button>
+              {speedDemonOwned && <div className={`speed-demon-meter${speedReveal ? ' is-revealed' : ''}`} data-testid="speed-demon-meter"
+                aria-label="Speed Demon time remaining">
+                <div className="speed-demon-meter-fill" style={{ transform: `scaleX(${speedStrength})` }} />
+                {speedReveal && <span data-testid="speed-demon-reveal">SPEED DEMON ×{displayCharge(speedReveal.xMult ?? 1)}</span>}
+              </div>}
               <Button className="play-action" size="sm" aria-label={preview ? playActionLabel(preview.danger, preview.guaranteedWin) : 'PLAY'} disabled={busy || !valid}
-                onClick={() => submit({ type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds })}>
-                {preview ? `${formatScoreEquation(preview.pips, preview.multiplier, preview.effectiveXMult, preview.score)} • ${playActionLabel(preview.danger, preview.guaranteedWin)}` : 'PLAY'}
+                data-testid="play-action" onClick={submitPlay}>
+                {speedEquation ?? (preview ? `${formatScoreEquation(preview.pips, preview.multiplier, preview.effectiveXMult, preview.score)} • ${playActionLabel(preview.danger, preview.guaranteedWin)}` : 'PLAY')}
               </Button>
             </>}
           </Group>
