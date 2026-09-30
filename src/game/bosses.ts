@@ -1,6 +1,6 @@
 import { CONFIG } from './config';
 import { hashSeed, SeededRng } from './rng';
-import { handOptions, handStats, HANDS, HAND_IDS, LOWER_HAND_IDS } from './hands';
+import { handOptions, handStats, HANDS, HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import type { Board, BossRuntimeState, BossType, Die, HandId, HandLevels, Rank } from './types';
 
 export interface BossDefinition {
@@ -139,9 +139,58 @@ export function wardenBaselineCapacity(handLevels: HandLevels, consumed: HandId[
   }, 0);
 }
 
+const roundWardenCost = (score: number) =>
+  Math.max(0, Math.round(score / CONFIG.targetRounding) * CONFIG.targetRounding);
+
+export function wardenBaselineHandScore(handLevels: HandLevels, hand: HandId, activeDice: number): number {
+  const stats = handStats(hand, handLevels[hand]);
+  return Math.round((stats.basePips + wardenIdealNaturalPips(hand, activeDice)) * stats.baseMultiplier);
+}
+
+export function wardenUnlockCost(
+  handLevels: HandLevels,
+  consumed: HandId[],
+  activeDice: number,
+  previousUnlockCost = 0,
+): number {
+  const normalCost = roundWardenCost(wardenBaselineCapacity(handLevels, consumed, activeDice) * 0.5);
+  if (activeDice === 1) {
+    const weakestUpperCap = [...UPPER_HAND_IDS]
+      .map(hand => wardenBaselineHandScore(handLevels, hand, 1))
+      .sort((a, b) => a - b)
+      .slice(0, 2)
+      .reduce((sum, score) => sum + score, 0);
+    const pairCap = wardenBaselineHandScore(handLevels, 'pair', 2) * 0.5;
+    return roundWardenCost(Math.min(normalCost, weakestUpperCap, pairCap));
+  }
+  if (activeDice === 2) {
+    const pairMaximum = roundWardenCost(wardenBaselineHandScore(handLevels, 'pair', 2));
+    return Math.min(pairMaximum, Math.max(normalCost, previousUnlockCost * 2));
+  }
+  return normalCost;
+}
+
+export function wardenUnlockCosts(handLevels: HandLevels, consumed: HandId[], goal: number): number[] {
+  const costs: number[] = [];
+  for (let activeDice = 1; activeDice < CONFIG.diceCount; activeDice++) {
+    costs.push(wardenUnlockCost(handLevels, consumed, activeDice, costs[0] ?? 0));
+  }
+  const cumulativeCost = costs.reduce((sum, cost) => sum + cost, 0);
+  const halfwayGoal = roundWardenCost(goal * 0.5);
+  if (cumulativeCost <= halfwayGoal) return costs;
+
+  const scale = halfwayGoal / cumulativeCost;
+  const scaled = costs.map(cost => roundWardenCost(cost * scale));
+  scaled[0] = Math.max(CONFIG.targetRounding, scaled[0]);
+  scaled[1] = Math.max(scaled[0] * 2, scaled[1]);
+  scaled[2] = Math.max(scaled[1], scaled[2]);
+  scaled[3] = halfwayGoal - scaled[0] - scaled[1] - scaled[2];
+  return scaled;
+}
+
 export function wardenUnlockTarget(currentScore: number, handLevels: HandLevels, consumed: HandId[], activeDice: number): number {
-  const rawTarget = currentScore + wardenBaselineCapacity(handLevels, consumed, activeDice) * 0.5;
-  return Math.max(currentScore, Math.round(rawTarget / CONFIG.targetRounding) * CONFIG.targetRounding);
+  const cost = wardenUnlockCost(handLevels, consumed, activeDice);
+  return Math.max(currentScore, Math.round((currentScore + cost) / CONFIG.targetRounding) * CONFIG.targetRounding);
 }
 
 export function createBossRuntime(seed: string, round: number, type: BossType): BossRuntimeState {
@@ -162,6 +211,7 @@ export function createBossRuntime(seed: string, round: number, type: BossType): 
       activeDieIds: [],
       startingDieId: null,
       nextUnlockTarget: null,
+      unlockCosts: [],
       unlockTargets: [],
       pendingReinforcements: 1,
     };

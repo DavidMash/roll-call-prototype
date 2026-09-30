@@ -80,7 +80,7 @@ async function matchBoard(page: Page, game: GameState) {
     await expect(page.getByTestId('round-goal-progress')).toHaveAttribute('aria-valuetext', `${game.score} of ${game.target} points toward the Goal`);
   }
   const visibleDice = game.phase === 'round' ? activeEncounterDice(game) : game.dice;
-  for (const die of visibleDice) await expect(page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`}, face ${die.value},`) })).toBeVisible();
+  for (const die of visibleDice) await expect(page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`}, face ${activeFace(die).rank},`) })).toBeVisible();
 }
 async function playBest(page: Page, game: GameState): Promise<GameState> {
   if (game.boss?.type === 'warden' && game.boss.pendingReinforcements > 0) {

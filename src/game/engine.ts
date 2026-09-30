@@ -104,10 +104,12 @@ export function normalizeGameState(state: GameState): GameState {
   next.stats.jumpingBeanFreePlays ??= [];
   next.bossSchedule ??= bossSchedule(next.seed);
   next.boss ??= null;
+  if (next.boss?.type === 'warden') next.boss.unlockCosts ??= [];
   if (next.boss?.type === 'caller') {
     next.boss.manualHandsPlayed ??= Math.max(0, 3 - next.boss.playsRemaining);
     next.boss.callDeadline ??= next.boss.manualHandsPlayed + next.boss.playsRemaining;
   }
+  if (next.roundCheckpoint?.boss?.type === 'warden') next.roundCheckpoint.boss.unlockCosts ??= [];
   next.currentNodeId ??= '';
   next.lives = Math.max(0, Math.min(CONFIG.maxLives, Math.floor(next.lives ?? CONFIG.maxLives)));
   next.roundAttemptNumber = Math.max(1, Math.floor(next.roundAttemptNumber ?? 1));

@@ -29,7 +29,7 @@ describe('focused balance update', () => {
     state.stats.rounds[0].target = 1;
     state.boss = {
       type: 'warden', activeDieIds: [0], startingDieId: 0, nextUnlockTarget: 1,
-      unlockTargets: [1], pendingReinforcements: 0,
+      unlockCosts: [1, 1, 1, 1], unlockTargets: [1], pendingReinforcements: 0,
     };
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.8));
     expect(result.state.phase).toBe('roundSummary');

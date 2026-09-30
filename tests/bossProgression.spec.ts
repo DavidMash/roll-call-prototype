@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { activeEncounterDice, BOSSES, bossTypeForRound, createBossRuntime, createCursedDie, unavailableEncounterHands, wardenUnlockTarget } from '../src/game/bosses';
+import { activeEncounterDice, BOSSES, bossTypeForRound, createBossRuntime, createCursedDie, unavailableEncounterHands } from '../src/game/bosses';
 import { dispatch, newRun } from '../src/game/engine';
 import { handOptions, HANDS, HAND_IDS, ultimateHands } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
@@ -289,7 +289,7 @@ test('Warden rolls all dice locked and lets the player choose the first die with
   expect(game.boss).toMatchObject({ type: 'warden', startingDieId: 4, activeDieIds: [4] });
   if (game.boss?.type !== 'warden') throw new Error('Warden fixture failed');
   const firstTarget = game.boss.nextUnlockTarget!;
-  expect(firstTarget).toBe(wardenUnlockTarget(0, game.handLevels, [], 1));
+  expect(firstTarget).toBe(game.boss.unlockCosts[0]);
   await expect(panel.getByTestId('boss-status-warden')).toHaveText(`1 / 5 DICE · NEXT AT ${firstTarget}`);
   await expect(panel.locator('.mantine-Badge-root')).toHaveCount(0);
   await expect(page.locator('.gameplay-dock .die.warden-locked')).toHaveCount(4);
@@ -335,7 +335,7 @@ test('Warden target pauses play and updates the shared lock target after the cho
   if (game.boss?.type !== 'warden') throw new Error('Warden fixture failed');
   expect(game.boss.activeDieIds).toEqual([3, 1]);
   const secondThreshold = game.boss.nextUnlockTarget!;
-  expect(secondThreshold).toBe(wardenUnlockTarget(game.score, game.handLevels, game.consumed, 2));
+  expect(secondThreshold).toBe(game.boss.unlockCosts[0] + game.boss.unlockCosts[1]);
   expect(secondThreshold).not.toBe(threshold);
   await expect(page.getByTestId('boss-status-warden')).toHaveText(`2 / 5 DICE · NEXT AT ${secondThreshold}`);
   await expect(page.locator('.gameplay-dock .die.warden-locked')).toHaveCount(3);

@@ -44,6 +44,7 @@ export interface WardenBossState {
   activeDieIds: number[];
   startingDieId: number | null;
   nextUnlockTarget: number | null;
+  unlockCosts: number[];
   unlockTargets: number[];
   pendingReinforcements: number;
 }

@@ -11,7 +11,7 @@ import { probabilityCheck, randomIndex } from './rng';
 import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, handContributions } from './scoring';
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie,
-  isCursedDie, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands, wardenUnlockTarget } from './bosses';
+  isCursedDie, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
 import { encounterNode, flameNodeAfter, shopNodeBefore } from './progression';
 import type { ChargeFlame } from './flames';
 import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameStateBase, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, RunNode, ScoreSource } from './types';
@@ -488,8 +488,11 @@ export class Resolver {
     boss.activeDieIds.push(dieId);
     if (starting) boss.startingDieId = dieId;
     boss.pendingReinforcements--;
+    if (!boss.unlockCosts.length) {
+      boss.unlockCosts = wardenUnlockCosts(this.state.handLevels, this.state.consumed, this.state.target);
+    }
     boss.nextUnlockTarget = boss.activeDieIds.length < CONFIG.diceCount
-      ? wardenUnlockTarget(this.state.score, this.state.handLevels, this.state.consumed, boss.activeDieIds.length)
+      ? boss.unlockCosts.slice(0, boss.activeDieIds.length).reduce((sum, cost) => sum + cost, 0)
       : null;
     if (boss.nextUnlockTarget !== null) boss.unlockTargets.push(boss.nextUnlockTarget);
     this.state.stats.wardenEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
@@ -777,6 +780,9 @@ export class Resolver {
     if (bossType) this.state.bossSchedule[this.state.round] = bossType;
     if (bossType) this.state.target = targetForBoss(bossType, this.state.target);
     this.state.boss = bossType ? createBossRuntime(this.state.seed, this.state.round, bossType) : null;
+    if (this.state.boss?.type === 'warden') {
+      this.state.boss.unlockCosts = wardenUnlockCosts(this.state.handLevels, [], this.state.target);
+    }
     this.captureRoundCheckpoint();
     this.state.shop = null;
     this.mapTransition(encounterNode(this.state.round, bossType));
