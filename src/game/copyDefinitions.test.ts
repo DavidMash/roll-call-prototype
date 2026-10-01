@@ -18,7 +18,7 @@ describe('canonical player-facing definitions', () => {
       hitchhiker: 'When left out of a hand, it may jump in and score anyway. Stack up to three to increase the odds.',
       weighted: 'Makes the opposite face more likely to roll. Stack to increase the odds.',
       jackpot: 'Gain +3 Gold if this face scores in the hand that clears the Round. Stack up to three for more Gold.',
-      personalTrainer: 'When this face scores, it may train the hand. Stack up to three to increase the odds.',
+      personalTrainer: 'When this face scores, it may train the hand. Your below-average hands are more likely to train.\nStack up to three to increase the odds.',
       bump: 'While showing, this die’s next roll moves up one face.',
       vintage: 'Each time this face scores, its sell value increases by 3 Gold.',
     });

@@ -3,6 +3,7 @@ import { lastPlayDanger } from './bosses';
 import { LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from './hands';
 import { finalizeScore, handScore } from './scoring';
 import type { ActiveFlame, Board, Die, Flame, GameState, HandId, XMultFactor } from './types';
+import { formatPlayerNumber } from './copy';
 
 export interface FlameDefinition {
   name: string;
@@ -68,24 +69,23 @@ export function lowballFullMultiplier(averageFace: number): number {
 }
 export const lowballMultiplier = (investedGold: number, averageFace: number) =>
   1 + 2 * (lowballFullMultiplier(averageFace) - 1) * flameProgress(investedGold);
-const displayNumber = (value: number) => Number(value.toFixed(4));
 type FlameDisplayContext = Pick<Board, 'gold' | 'lifetimeNormalShopGoldSpent'>;
 export function flameEffectText(id: Flame, investedGold: number, board: FlameDisplayContext): string {
   switch (id) {
-    case 'momentum': return `Hands build +${displayNumber(momentumChargeGain(investedGold))} Charge.`;
-    case 'thirdRail': return `Rolled 3s build +${displayNumber(thirdRailChargeGain(investedGold))} Charge.`;
-    case 'jumpStart': return `Each Reroll builds +${displayNumber(jumpStartChargeGain(investedGold))} Charge.`;
+    case 'momentum': return `Hands build +${formatPlayerNumber(momentumChargeGain(investedGold))} Charge.`;
+    case 'thirdRail': return `Rolled 3s build +${formatPlayerNumber(thirdRailChargeGain(investedGold))} Charge.`;
+    case 'jumpStart': return `Each Reroll builds +${formatPlayerNumber(jumpStartChargeGain(investedGold))} Charge.`;
     case 'powerSurge': return 'Your highest level hand triples current Charge.';
-    case 'fluxCapacitor': return `Magnetic pulls build +${displayNumber(fluxCapacitorChargeGain(investedGold))} Charge.`;
-    case 'speedDemon': return `A quick play reaches ×${displayNumber(speedDemonMultiplier(investedGold, 0))} XMult.`;
-    case 'sixPack': return `Each Round starts at ×${displayNumber(sixPackStartingMultiplier(investedGold))} XMult.`;
-    case 'targetPractice': return `Target gains ×${displayNumber(targetPracticeMultiplier(investedGold))} XMult.`;
-    case 'dragonsHoard': return `${board.gold} held Gold currently grants ×${displayNumber(dragonsHoardMultiplier(investedGold, board.gold))} XMult.`;
+    case 'fluxCapacitor': return `Magnetic pulls build +${formatPlayerNumber(fluxCapacitorChargeGain(investedGold))} Charge.`;
+    case 'speedDemon': return `A quick play reaches ×${formatPlayerNumber(speedDemonMultiplier(investedGold, 0))} XMult.`;
+    case 'sixPack': return `Each Round starts at ×${formatPlayerNumber(sixPackStartingMultiplier(investedGold))} XMult.`;
+    case 'targetPractice': return `Target gains ×${formatPlayerNumber(targetPracticeMultiplier(investedGold))} XMult.`;
+    case 'dragonsHoard': return `${formatPlayerNumber(board.gold)} held Gold currently grants ×${formatPlayerNumber(dragonsHoardMultiplier(investedGold, board.gold))} XMult.`;
     case 'wellTrained': return 'Frequently played hands build toward ×5 XMult.';
-    case 'hotStreak': return `A full Lower-hand chain reaches ×${displayNumber(hotStreakMultiplier(investedGold, HOT_STREAK_SEQUENCE.length))} XMult.`;
-    case 'moneyToBurn': return `${board.lifetimeNormalShopGoldSpent} Gold spent in Shops currently grants ×${displayNumber(moneyToBurnMultiplier(investedGold, board.lifetimeNormalShopGoldSpent))} XMult.`;
-    case 'lowball': return `Low Faces gain up to ×${displayNumber(lowballMultiplier(investedGold, 2))} XMult.`;
-    default: return `The condition grants ×${displayNumber(standardFlameMultiplier(investedGold))} XMult.`;
+    case 'hotStreak': return `A full Lower-hand chain reaches ×${formatPlayerNumber(hotStreakMultiplier(investedGold, HOT_STREAK_SEQUENCE.length))} XMult.`;
+    case 'moneyToBurn': return `${formatPlayerNumber(board.lifetimeNormalShopGoldSpent)} Gold spent in Shops currently grants ×${formatPlayerNumber(moneyToBurnMultiplier(investedGold, board.lifetimeNormalShopGoldSpent))} XMult.`;
+    case 'lowball': return `Low Faces gain up to ×${formatPlayerNumber(lowballMultiplier(investedGold, 2))} XMult.`;
+    default: return `The condition grants ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult.`;
   }
 }
 export function flameFullEffectText(id: Flame): string {
@@ -211,16 +211,15 @@ function factorValue(id: Flame, investedGold: number, snapshot: HandStartSnapsho
   }
 }
 function factorInput(id: Flame, snapshot: HandStartSnapshot, scoringDieIds: number[]): { input?: number; detail?: string } {
-  if (id === 'dragonsHoard') return { input: snapshot.gold, detail: `${snapshot.gold} held Gold at hand start` };
-  if (id === 'wellTrained') return { input: snapshot.previousPlays, detail: `${snapshot.previousPlays} previous plays` };
-  if (id === 'moneyToBurn') return { input: snapshot.lifetimeNormalShopGoldSpent, detail: `${snapshot.lifetimeNormalShopGoldSpent} lifetime normal-shop Gold spent` };
+  if (id === 'dragonsHoard') return { input: snapshot.gold, detail: `${formatPlayerNumber(snapshot.gold)} held Gold at hand start` };
+  if (id === 'wellTrained') return { input: snapshot.previousPlays, detail: `${formatPlayerNumber(snapshot.previousPlays)} previous plays` };
+  if (id === 'moneyToBurn') return { input: snapshot.lifetimeNormalShopGoldSpent, detail: `${formatPlayerNumber(snapshot.lifetimeNormalShopGoldSpent)} lifetime normal-shop Gold spent` };
   if (id === 'lowball') {
     const scorers = snapshot.dice.filter(die => scoringDieIds.includes(die.dieId));
     const average = scorers.reduce((sum, die) => sum + die.faceValue, 0) / Math.max(1, scorers.length);
-    const formattedAverage = Number(average.toFixed(4));
-    return { input: formattedAverage, detail: `${formattedAverage} average printed face` };
+    return { input: average, detail: `${formatPlayerNumber(average)} average printed face` };
   }
-  if (id === 'hotStreak') return { input: snapshot.hotStreakCharges + 1, detail: `successful sequence charge ${snapshot.hotStreakCharges + 1}` };
+  if (id === 'hotStreak') return { input: snapshot.hotStreakCharges + 1, detail: `successful sequence charge ${formatPlayerNumber(snapshot.hotStreakCharges + 1)}` };
   return {};
 }
 function contributions(snapshot: HandStartSnapshot, hand: HandId, scoringDieIds: number[], includeFullOfGrace: boolean): XMultFactor[] {

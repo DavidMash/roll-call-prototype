@@ -125,11 +125,11 @@ Vintage has no value cap and may exceed its 3-Gold purchase price. Selling pays 
 
 ### Personal Trainer
 
-Personal Trainer is stackable to three. Each scoring face checks independently after its hand's score is awarded, using the same diminishing chance as Sticky and Hitchhiker: 50%, 75%, then 87.5%. A success raises that hand by one level. Selected scoring dice, successful Hitchhikers, and Jumping Bean free plays qualify; rolls and merely exposed faces do not. Multiple successes can train one hand multiple times, and failed-attempt gains roll back with the round checkpoint.
+Personal Trainer is stackable to three. Each scoring face checks independently after its hand's score is awarded, starting from a 50%, 75%, or 87.5% base chance and scaling down according to the played hand's level relative to the full scorecard. Lowest-level hands retain the full base chance, average-level hands use 75% of it, above-average hands fall off more quickly, and the effective chance never drops below 1%. Each check recalculates immediately before it rolls, so one success can affect the next check in the same hand. A success raises that hand by one level. Selected scoring dice, successful Hitchhikers, and Jumping Bean free plays qualify; rolls and merely exposed faces do not. Multiple successes can train one hand multiple times, and failed-attempt gains roll back with the round checkpoint.
 
 ## Flame Selections, Embers, and Bonfires
 
-Every third successful clear adds the escalating Boss Reward, shows its Round Summary, and then opens the special Flame Selection before the Shop. This screen only allows the player to select one of the three deterministic distinct offers and assign it to a physical die, or skip. There are no paid offer rerolls and no Stoke controls on Flame Selections.
+Every third successful clear adds the escalating Boss Reward, shows its Round Summary, and then opens the special Flame Selection before the Shop. This screen only allows the player to select one of the three deterministic distinct offers and assign it to a physical die, or skip. There are no paid offer rerolls and no Stoke controls on Flame Selections. If every Flame is currently owned as an Ember or Bonfire, the screen reports that all Flames are collected and continues normally to the Shop; a replaced Ember becomes eligible for a later selection again.
 
 New Flames begin as 0-Gold Embers. The immediately following Shop shows a one-time controlled tooltip on the first Flame’s die, teaching the player to click the die, Stoke it, and reach Bonfire at 100 Gold. All Flame investment occurs through Manage Die in a normal Shop. Arbitrary positive whole-Gold Stoke amounts are supported and do not count toward Money to Burn spending.
 

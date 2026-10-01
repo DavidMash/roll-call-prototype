@@ -205,6 +205,27 @@ describe('investment, uniqueness, and reward lifecycle', () => {
     expect(new Set(first).size).toBe(first.length);
     expect(first).not.toContain('personalTrainer');
   });
+  it('offers nothing when every current Flame is owned and still continues to the Shop', () => {
+    const state = game();
+    state.phase = 'flameSelection';
+    state.flameSelection = { offers: [], acquired: false };
+    state.bonfires = [...FLAME_IDS];
+    new Resolver(state, constant(0.42)).freshFlameOffers();
+    expect(state.flameSelection.offers).toEqual([]);
+    const continued = dispatch(state, { type: 'CONTINUE_FLAME_SELECTION' }, constant(0));
+    expect(continued.error).toBeUndefined();
+    expect(continued.state.phase).toBe('shop');
+  });
+  it('makes a Flame eligible again after it is no longer currently owned', () => {
+    const missing = FLAME_IDS[0];
+    const state = game();
+    state.phase = 'flameSelection';
+    state.flameSelection = { offers: [], acquired: false };
+    state.bonfires = FLAME_IDS.filter(id => id !== missing);
+    state.dice.forEach(die => { die.flame = null; });
+    new Resolver(state, constant(0)).freshFlameOffers();
+    expect(state.flameSelection.offers.map(offer => offer.flame)).toEqual([missing]);
+  });
   it('safely ignores deprecated Flame IDs and normalizes legacy current IDs on investment', () => {
     const deprecated = reward();
     deprecated.dice[0].flame = { id: 'personalTrainer', investedGold: 100 } as unknown as GameState['dice'][number]['flame'];

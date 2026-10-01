@@ -1,6 +1,7 @@
 import { Button, Group, Modal, Stack, Text } from '@mantine/core';
 import { CONFIG, lifeRestoreCost } from '../game/config';
 import type { Action, Board } from '../game/types';
+import { formatPlayerNumber } from '../game/copy';
 
 const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
 
@@ -16,10 +17,10 @@ export function RestoreLivesModal({ board, opened, busy, onClose, submit }: {
       <Text size="xl" fw={800} c="red" aria-label={`${board.lives} of ${CONFIG.maxLives} lives`}>{hearts(board.lives)}</Text>
       {full ? <Text>All lives restored.</Text> : <>
         <Text>Restore one lost life.</Text>
-        <Text fw={800}>{cost} Gold</Text>
+        <Text fw={800}>{formatPlayerNumber(cost)} Gold</Text>
       </>}
-      <Text size="sm" c="dimmed">Next restore: {full ? cost : nextCost} Gold</Text>
-      <Text size="sm" c="dimmed">Gold held: {board.gold}</Text>
+      <Text size="sm" c="dimmed">Next restore: {formatPlayerNumber(full ? cost : nextCost)} Gold</Text>
+      <Text size="sm" c="dimmed">Gold held: {formatPlayerNumber(board.gold)}</Text>
       <Group justify="flex-end"><Button variant="default" onClick={onClose}>Close</Button>
         <Button color="red" disabled={busy || full || board.gold < cost} onClick={() => submit({ type: 'RESTORE_LIFE' })}>
           {full ? 'ALL LIVES RESTORED' : board.gold < cost ? 'NOT ENOUGH GOLD' : 'RESTORE LIFE'}

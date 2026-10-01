@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { activeFace } from './dice';
 import { dispatch, newRun } from './engine';
-import { attachmentError, diminishingHalfChance, ENHANCEMENTS, enhancementCost, enhancementSellValue } from './enhancements';
+import { attachmentError, diminishingHalfChance, ENHANCEMENTS, enhancementCost, enhancementSellValue, personalTrainerChance } from './enhancements';
 import type { Enhancement, GameState, RandomSource, Rank } from './types';
 
 const constant = (value = 0.99): RandomSource => ({ next: () => value });
@@ -48,6 +48,30 @@ describe('Personal Trainer enhancement', () => {
     const untrained = playThreeKind(failure, constant(chance));
     expect(untrained.state.handLevels.threeKind).toBe(1);
     expect(untrained.state.stats.probabilityProcs.personalTrainer.failures).toBe(1);
+  });
+
+  it('scales from the lowest level through the average and clamps extreme outliers', () => {
+    const levels = [1, 2, 3];
+    expect(personalTrainerChance(1, 1, levels)).toBe(0.5);
+    expect(personalTrainerChance(1, 2, levels)).toBe(0.375);
+    expect(personalTrainerChance(1, 3, levels)).toBe(0.1875);
+    expect(personalTrainerChance(3, 100, levels)).toBe(0.01);
+    expect(personalTrainerChance(2, 5, [5, 5, 5])).toBe(0.75);
+  });
+
+  it('recalculates the effective chance before each independent check', () => {
+    const state = game();
+    enhance(state, 0, 'personalTrainer');
+    enhance(state, 1, 'personalTrainer');
+    const result = playThreeKind(state, sequence(0.49, 0.02));
+    const checks = result.state.history.filter(event => event.probability?.enhancement === 'personalTrainer');
+    expect(checks.map(event => event.probability?.chance)).toEqual([0.5, 0.01]);
+    expect(checks.map(event => event.probability?.succeeded)).toEqual([true, false]);
+    expect(checks.map(event => event.message)).toEqual([
+      expect.stringContaining('50%'),
+      expect.stringContaining('1%'),
+    ]);
+    expect(result.state.handLevels.threeKind).toBe(2);
   });
 
   it('checks each scoring Trainer face independently and allows multiple levels from one hand', () => {

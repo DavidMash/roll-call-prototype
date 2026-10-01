@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { BOSSES } from '../game/bosses';
 import { encounterTarget, nodeDescription, nodeLabel, routeWindow } from '../game/progression';
 import type { GameEvent } from '../game/types';
+import { formatPlayerNumber } from '../game/copy';
 
 const MAP_AUTO_CONTINUE_SECONDS = 3;
 const MAP_AUTO_CONTINUE_MS = MAP_AUTO_CONTINUE_SECONDS * 1000;
@@ -69,7 +70,7 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
             title={nodeDescription(node)} aria-current={node.id === destination ? 'step' : undefined}>
             <span className="node-glyph">{node.type === 'shop' ? '¤' : node.type === 'flame_selection' ? '◆' : node.type === 'boss_round' ? '!' : '•'}</span>
             <span className="node-label">{nodeLabel(node)}</span>
-            {target !== null && <span className="node-target">Goal {target.toLocaleString()}</span>}
+            {target !== null && <span className="node-target">Goal {formatPlayerNumber(target)}</span>}
           </div>
         </div>;
       })}

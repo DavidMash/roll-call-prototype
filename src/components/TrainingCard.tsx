@@ -3,6 +3,7 @@ import { handTrainingCost, teamTrainingCost } from '../game/config';
 import { handStats, HANDS } from '../game/hands';
 import type { HandLevels, TrainingOffer } from '../game/types';
 import { InfoPopover } from './InfoPopover';
+import { formatPlayerNumber } from '../game/copy';
 
 export function TrainingCard({ offer, handLevels, gold, busy, onTrain }: {
   offer: TrainingOffer; handLevels: HandLevels; gold: number; busy: boolean; onTrain: () => void;
@@ -16,10 +17,10 @@ export function TrainingCard({ offer, handLevels, gold, busy, onTrain }: {
         <Badge size="xs" color="yellow" variant="filled">Special</Badge>
       </Group>
       <Text size="xs" mt={5}>All hands +1 Lv.</Text>
-      {offer.purchases > 0 && <Text size="xs" c="dimmed">Trained ×{offer.purchases}</Text>}
+      {offer.purchases > 0 && <Text size="xs" c="dimmed">Trained ×{formatPlayerNumber(offer.purchases)}</Text>}
       <Button className="training-action" mt={6} size="compact-xs" fullWidth color="yellow" variant="light" disabled={busy || gold < cost}
         onClick={onTrain} data-testid="train-team">
-        TRAIN ALL · {cost} GOLD
+        TRAIN ALL · {formatPlayerNumber(cost)} GOLD
       </Button>
     </Card>;
   }
@@ -33,16 +34,16 @@ export function TrainingCard({ offer, handLevels, gold, busy, onTrain }: {
     <Group className="training-card-header" justify="space-between" align="start" wrap="nowrap">
       <div className="training-heading"><Group className="training-title-row" gap={3} wrap="nowrap"><Text className="training-name" fw={700} size="sm" tt="uppercase">{HANDS[offer.hand].name}</Text>
         <InfoPopover label={`${HANDS[offer.hand].name} training`} description="Gain +1 Lv. and improve this hand’s Pips and Mult." /></Group>
-        <Text className="training-level" size="xs" c="dimmed">Lv. {currentLevel} → {nextLevel}</Text></div>
-      {offer.purchases > 0 && <Badge size="xs" color="teal" variant="light">Trained ×{offer.purchases}</Badge>}
+        <Text className="training-level" size="xs" c="dimmed">Lv. {formatPlayerNumber(currentLevel)} → {formatPlayerNumber(nextLevel)}</Text></div>
+      {offer.purchases > 0 && <Badge size="xs" color="teal" variant="light">Trained ×{formatPlayerNumber(offer.purchases)}</Badge>}
     </Group>
     <Group className="training-stats" gap="md" mt={5} wrap="nowrap">
-      <Text size="xs" data-testid={`training-pips-${offer.hand}`}>{current.basePips} → {next.basePips} Pips</Text>
-      <Text size="xs" fw={600} c="violet" data-testid={`training-mult-${offer.hand}`}>×{current.baseMultiplier} → ×{next.baseMultiplier} Mult</Text>
+      <Text size="xs" data-testid={`training-pips-${offer.hand}`}>{formatPlayerNumber(current.basePips)} → {formatPlayerNumber(next.basePips)} Pips</Text>
+      <Text size="xs" fw={600} c="violet" data-testid={`training-mult-${offer.hand}`}>×{formatPlayerNumber(current.baseMultiplier)} → ×{formatPlayerNumber(next.baseMultiplier)} Mult</Text>
     </Group>
     <Button className="training-action" mt={6} size="compact-xs" fullWidth color="violet" variant="light" disabled={busy || gold < cost}
       onClick={onTrain} data-testid={`train-${offer.hand}`}>
-      TRAIN · {cost} GOLD
+      TRAIN · {formatPlayerNumber(cost)} GOLD
     </Button>
   </Card>;
 }

@@ -5,12 +5,14 @@ import type { Board } from '../game/types';
 import { FLAMES } from '../game/flames';
 import type { PlaybackSpeed } from '../useGame';
 import type { DiceDisplay } from '../uiSettings';
+import { formatPlayerNumber } from '../game/copy';
 
 function HudStat({ testId, icon, label, value }: { testId: string; icon: string; label: string; value: number }) {
-  return <div className="hud-stat" data-testid={testId} aria-label={`${label} ${value}`}>
+  const formatted = formatPlayerNumber(value);
+  return <div className="hud-stat" data-testid={testId} aria-label={`${label} ${formatted}`}>
     <span aria-hidden="true" className="hud-stat-icon">{icon}</span>
     <span className="hud-stat-label">{label}</span>
-    <strong>{value}</strong>
+    <strong>{formatted}</strong>
   </div>;
 }
 
@@ -51,7 +53,7 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
           ? <div className="hud-phase" aria-label={board.phase === 'shop' ? 'Shop phase' : board.phase === 'flameSelection' ? 'Flame Selection phase' : 'Round Summary phase'}>
             {board.phase === 'shop' ? 'SHOP' : board.phase === 'flameSelection' ? 'FLAME SELECTION' : 'SUMMARY'}
           </div>
-          : board.phase === 'round' ? <div className="hud-phase" aria-label="Round phase">ROUND {board.round}</div>
+          : board.phase === 'round' ? <div className="hud-phase" aria-label="Round phase">ROUND {formatPlayerNumber(board.round)}</div>
             : <div className="hud-phase" aria-label={board.phase === 'bust' ? 'Bust phase' : 'Run ended'}>{board.phase === 'bust' ? 'BUST' : 'OVER'}</div>}
       </Group>
       <ActionIcon className="menu-trigger" variant="subtle" color="gray" size="lg" aria-label="Open menu" onClick={() => setMenu(true)}>
@@ -60,7 +62,7 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
     </Group>
     {board.phase === 'round' && <Progress data-testid="round-goal-progress"
       value={Math.min(100, board.score / board.target * 100)} size={4} radius={0}
-      aria-label="Round Goal progress" aria-valuetext={`${board.score} of ${board.target} points toward the Goal`} />}
+      aria-label="Round Goal progress" aria-valuetext={`${formatPlayerNumber(board.score)} of ${formatPlayerNumber(board.target)} points toward the Goal`} />}
     {board.bonfires.length > 0 && <Group gap={4} px="xs" py={3} className="bonfire-strip" aria-label="Active Bonfires">
       <Text size="xs" fw={700} c="orange">BONFIRES</Text>{board.bonfires.map(id => <Tooltip key={id} label={FLAMES[id].bonfireDescription} withArrow><Badge size="xs" color="red" variant="light">🔥 {FLAMES[id].shortName}</Badge></Tooltip>)}
     </Group>}

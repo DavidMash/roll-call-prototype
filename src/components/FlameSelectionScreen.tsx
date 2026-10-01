@@ -6,7 +6,7 @@ import { Die } from './Die';
 import { ScoreResolution } from './ScoreResolution';
 import type { DiceDisplay } from '../uiSettings';
 import { InfoPopover } from './InfoPopover';
-import { EMPTY_TEXT } from '../game/copy';
+import { EMPTY_TEXT, formatPlayerNumber } from '../game/copy';
 
 export function FlameSelectionScreen({ board, event, busy, diceDisplay, selectedOffer, setSelectedOffer, submit, skip }: {
   board: Board; event: GameEvent | null; busy: boolean;
@@ -36,7 +36,7 @@ export function FlameSelectionScreen({ board, event, busy, diceDisplay, selected
     <Stack gap="xs" className="flame-selection-screen">
       <Group justify="space-between" className="shop-summary flame-selection-header phase-sticky-header">
         <Text fw={800}>FLAME SELECTION</Text>
-        <Badge color="yellow" variant="light">{board.gold} Gold</Badge>
+        <Badge color="yellow" variant="light">{formatPlayerNumber(board.gold)} Gold</Badge>
       </Group>
       {busy && <ScoreResolution event={event} busy={busy} onSkip={skip} showXMult={hasXMultFlame(board.dice, board.bonfires)} />}
       {board.bonfires.length > 0 && <Paper p="xs" className="shop-section bonfire-strip" data-testid="bonfires">
@@ -48,6 +48,7 @@ export function FlameSelectionScreen({ board, event, busy, diceDisplay, selected
         <Group justify="space-between" className="section-heading">
           <Text fw={700} size="sm" tt="uppercase">Flame Offers</Text>
         </Group>
+        {reward.offers.length === 0 && <Text ta="center" fw={900} py="md" data-testid="all-flames-collected">ALL FLAMES COLLECTED</Text>}
         <div className="shop-grid flame-offers">{reward.offers.map(item => <Card key={item.id} p="sm" className={`flame-offer ${selectedOffer === item.id && !reward.acquired ? 'selected' : ''}`} data-testid={`flame-offer-${item.flame}`}>
           <Group className="flame-offer-header" justify="space-between" wrap="nowrap"><Group className="flame-offer-identity" gap={3} wrap="nowrap">
             <span className="flame-offer-icon" aria-hidden="true">🔥</span><Text className="flame-offer-name" fw={750}>{FLAMES[item.flame].name}</Text>
@@ -70,7 +71,7 @@ export function FlameSelectionScreen({ board, event, busy, diceDisplay, selected
               disabled={busy} eligible={!!offer} onClick={() => chooseOrManage(die.id)} />
             {flameId ? <div className="ember-details" data-testid={`active-flame-${flameId}`}>
               <Group className="ember-heading" justify="space-between" gap={4} wrap="nowrap"><Text className="ember-name" size="xs" fw={800} c="orange">🔥 <span className="ember-name-full">{FLAMES[flameId].name}</span><span className="ember-name-compact">{FLAMES[flameId].shortName}</span></Text><Badge size="xs" color="orange" variant="light">EMBER</Badge></Group>
-              <Text className="ember-investment" size="xs" fw={700}>{invested} / 100 <span className="ember-bonfire-label">→ BONFIRE</span></Text>
+              <Text className="ember-investment" size="xs" fw={700}>{formatPlayerNumber(invested)} / 100 <span className="ember-bonfire-label">→ BONFIRE</span></Text>
               <Progress value={invested} color="orange" size="sm" my={4} />
               <Text className="ember-effect" size="xs" c="dimmed">{flameEffectText(flameId, invested, board)}</Text>
             </div> : <div className="ember-details empty"><Text size="xs" c="dimmed"><span className="ember-empty-full">{EMPTY_TEXT.flameSlot}</span><span className="ember-empty-compact">EMPTY</span></Text></div>}
@@ -81,7 +82,7 @@ export function FlameSelectionScreen({ board, event, busy, diceDisplay, selected
     </Stack>
 
     <Modal opened={replacementDie !== null} onClose={() => setReplacementDie(null)} title="Replace Flame?" centered transitionProps={{ duration: 0 }}>
-      {replacingId && offer && <><Text>Replace <strong>{FLAMES[replacingId].name}</strong> ({activeFlameInvestment(replacing?.flame)} Gold invested) with <strong>{FLAMES[offer.flame].name}</strong>?</Text>
+      {replacingId && offer && <><Text>Replace <strong>{FLAMES[replacingId].name}</strong> ({formatPlayerNumber(activeFlameInvestment(replacing?.flame))} Gold invested) with <strong>{FLAMES[offer.flame].name}</strong>?</Text>
         <Group justify="flex-end" mt="lg"><Button variant="default" onClick={() => setReplacementDie(null)}>Cancel</Button><Button color="orange" onClick={confirmReplacement}>Replace Flame</Button></Group></>}
     </Modal>
   </>;

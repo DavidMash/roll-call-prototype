@@ -14,7 +14,7 @@ import { TrainingCard } from './TrainingCard';
 import { BossPreview } from './BossPanel';
 import type { DiceDisplay } from '../uiSettings';
 import { BOSSES } from '../game/bosses';
-import { EMPTY_TEXT } from '../game/copy';
+import { EMPTY_TEXT, formatPlayerNumber } from '../game/copy';
 
 interface SaleTarget { face: Rank; enhancement: Enhancement; stacks: number; proceeds: number }
 const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
@@ -36,7 +36,7 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
   const placementErrors = Object.fromEntries(board.dice.map(die => {
     const faceError = offer ? attachmentError(activeFace(die), offer.enhancement) : null;
     const costError = offer && board.gold < enhancementCost(offer.enhancement)
-      ? `Need ${enhancementCost(offer.enhancement)} Gold; you have ${board.gold}.` : null;
+      ? `Need ${formatPlayerNumber(enhancementCost(offer.enhancement))} Gold; you have ${formatPlayerNumber(board.gold)}.` : null;
     return [die.id, faceError ?? costError ?? ''];
   })) as Record<number, string>;
   const eligibleIds = offer ? board.dice.filter(die => !placementErrors[die.id]).map(die => die.id) : [];
@@ -85,12 +85,12 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
     <Stack gap="xs" className="shop-screen">
       <div className="shop-summary phase-sticky-header">{returnedFromBust ? <Paper px="sm" py={6} className="bust-shop-banner" data-testid="bust-shop-banner">
         <Group justify="space-between" gap="xs" wrap="wrap">
-          <div><Text size="sm" fw={850} c="red">ROUND {returnedFromBust.round} BUST</Text>
+          <div><Text size="sm" fw={850} c="red">ROUND {formatPlayerNumber(returnedFromBust.round)} BUST</Text>
             <Text size="xs" c="dimmed">1 Life Lost</Text></div>
           <Text fw={800} c="red" aria-label={`${board.lives} of ${CONFIG.maxLives} lives`}>{hearts(board.lives)}</Text>
         </Group>
       </Paper> : <Group justify="space-between"><Text fw={800}>SHOP</Text><Text size="xs" c="dimmed">{upcomingBoss
-        ? `Prepare for ${BOSSES[upcomingBoss].name}` : `Prepare for Round ${board.round + 1}`}</Text></Group>}</div>
+        ? `Prepare for ${BOSSES[upcomingBoss].name}` : `Prepare for Round ${formatPlayerNumber(board.round + 1)}`}</Text></Group>}</div>
       {busy && <ScoreResolution event={event} busy={busy} onSkip={skip} showXMult={hasXMultFlame(board.dice, board.bonfires)} />}
       <BossPreview board={board} />
       <Paper p="xs" className="shop-section">
@@ -105,8 +105,8 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
         <Group justify="space-between" className="section-heading">
           <Text fw={700} size="sm" tt="uppercase" lts=".08em">Enhancements</Text>
           <Button size="compact-xs" variant="default" disabled={busy || board.gold < offerRerollCost(shop.offerRerolls)}
-            aria-label={`REROLL OFFERS · ${offerRerollCost(shop.offerRerolls)} GOLD`}
-            onClick={() => submit({ type: 'REROLL_OFFERS' })}>REROLL OFFERS · {offerRerollCost(shop.offerRerolls)} GOLD</Button>
+            aria-label={`REROLL OFFERS · ${formatPlayerNumber(offerRerollCost(shop.offerRerolls))} GOLD`}
+            onClick={() => submit({ type: 'REROLL_OFFERS' })}>REROLL OFFERS · {formatPlayerNumber(offerRerollCost(shop.offerRerolls))} GOLD</Button>
         </Group>
         <div className="shop-grid enhancement-grid">{shop.offers.map(item => <EnhancementCard key={item.id} offer={item} selected={selectedOffer === item.id}
           gold={board.gold} busy={busy} onSelect={() => setSelectedOffer(selectedOffer === item.id ? null : item.id)} />)}</div>
@@ -119,8 +119,8 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
             {offer && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setSelectedOffer(null)}>Cancel placement</Button>}
             {tutorialDieId !== null && <Button size="compact-xs" variant="subtle" color="orange" onClick={() => submit({ type: 'DISMISS_FLAME_TUTORIAL' })}>Dismiss Flame tip</Button>}
             <Button size="compact-xs" variant="default" disabled={busy || board.gold < diceRerollCost(shop.diceRerolls)}
-              aria-label={`REROLL DICE · ${diceRerollCost(shop.diceRerolls)} GOLD`}
-              onClick={() => submit({ type: 'REROLL_DICE' })}>REROLL DICE · {diceRerollCost(shop.diceRerolls)} GOLD</Button>
+              aria-label={`REROLL DICE · ${formatPlayerNumber(diceRerollCost(shop.diceRerolls))} GOLD`}
+              onClick={() => submit({ type: 'REROLL_DICE' })}>REROLL DICE · {formatPlayerNumber(diceRerollCost(shop.diceRerolls))} GOLD</Button>
           </Group>
         </Group>
         <DiceRow dice={board.dice} display={diceDisplay} event={event} disabled={busy} eligibleIds={offer ? eligibleIds : undefined} restrictToEligible={!!offer}
@@ -128,10 +128,10 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
           onClick={clickDie} onDropOffer={attemptPurchase} tutorialDieId={tutorialDieId} tutorialLabel={tutorialLabel} />
       </Paper>
       <div className="shop-action-dock">
-        <Button size="sm" disabled={busy} aria-label={returnedFromBust ? `RETRY ROUND ${board.round}` : 'NEXT ROUND'}
+        <Button size="sm" disabled={busy} aria-label={returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(board.round)}` : 'NEXT ROUND'}
           color={returnedFromBust ? 'red' : undefined}
           onClick={() => submit(returnedFromBust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' })}>
-          {returnedFromBust ? `RETRY ROUND ${board.round}` : 'NEXT ROUND'} →
+          {returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(board.round)}` : 'NEXT ROUND'} →
         </Button>
       </div>
     </Stack>
@@ -143,7 +143,7 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
             <Text size="xs" c="dimmed" mt={5}>{flameEffectText(managedFlame, activeFlameInvestment(managedDie.flame), board)}</Text></div>
             <Button color="orange" variant="light" disabled={busy || board.gold < 1} onClick={() => setStokeDieId(managedDie.id)}>STOKE</Button>
           </Group>
-          <Group justify="space-between" mt="xs"><Text size="xs" fw={700}>{activeFlameInvestment(managedDie.flame)} / 100 → BONFIRE</Text><Text size="xs" c="dimmed">{board.gold} Gold held</Text></Group>
+          <Group justify="space-between" mt="xs"><Text size="xs" fw={700}>{formatPlayerNumber(activeFlameInvestment(managedDie.flame))} / 100 → BONFIRE</Text><Text size="xs" c="dimmed">{formatPlayerNumber(board.gold)} Gold held</Text></Group>
           <Progress value={activeFlameInvestment(managedDie.flame)} color="orange" size="sm" mt={4} />
         </Paper>}
         {offer && focused && managedActiveFace?.rank === focused.rank && focusedError?.startsWith('This Face is full.') && <Alert color="orange" title="FACE FULL">
@@ -163,7 +163,7 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
               <Text size="xs" c={typeCount === FACE_TYPE_LIMIT ? 'orange' : 'dimmed'} fw={700} mt={4}>{typeCount} / {FACE_TYPE_LIMIT} ENHANCEMENTS</Text>
               <Stack gap={4} mt="xs">{ids.length === 0 ? <Text size="xs" c="dimmed">{EMPTY_TEXT.enhancements}</Text> : ids.map(id => <Group key={id} justify="space-between" gap={4} wrap="nowrap">
                 <div><Text size="xs">{ENHANCEMENTS[id].name}{id === 'vintage' ? '' : ` ×${face.enhancements[id]}`}</Text>
-                  <Text size="xs" c="dimmed">Sell {enhancementSellValue(face, id)} Gold</Text></div>
+                  <Text size="xs" c="dimmed">Sell {formatPlayerNumber(enhancementSellValue(face, id))} Gold</Text></div>
                 <Button size="compact-xs" variant="subtle" color="red" disabled={busy}
                   aria-label={`Sell ${ENHANCEMENTS[id].name} from D${managedDie.id + 1} face ${face.rank} for ${enhancementSellValue(face, id)} Gold`}
                   onClick={event => { event.stopPropagation(); sell(face.rank, id, face.enhancements[id]!); }}>Sell</Button>
@@ -183,7 +183,7 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
 
     <Modal opened={saleTarget !== null} onClose={() => setSaleTarget(null)} title={saleTarget ? `SELL ${ENHANCEMENTS[saleTarget.enhancement].name.toUpperCase()}?` : 'SELL ENHANCEMENT?'} centered transitionProps={{ duration: 0 }}>
       {saleTarget && managedDie && <>
-        <Text fw={900} size="xl">+{saleTarget.proceeds} GOLD</Text>
+        <Text fw={900} size="xl">+{formatPlayerNumber(saleTarget.proceeds)} GOLD</Text>
         <Group justify="flex-end" mt="lg"><Button variant="default" onClick={() => setSaleTarget(null)}>CANCEL</Button><Button color="red" onClick={() => {
           submit({ type: 'SELL_ENHANCEMENT', dieId: managedDie.id, face: saleTarget.face, enhancement: saleTarget.enhancement }); setSaleTarget(null);
         }}>SELL</Button></Group>

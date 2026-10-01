@@ -17,7 +17,7 @@ import { activeEncounterDice, lastPlayDanger, requiredEncounterDieIds, unavailab
 import { BossPanel } from './BossPanel';
 import { CONFIG } from '../game/config';
 import type { DiceDisplay } from '../uiSettings';
-import { formatScoreEquation, formatScoreProgress, playActionLabel } from '../game/copy';
+import { formatPlayerNumber, formatScoreEquation, formatScoreProgress, playActionLabel } from '../game/copy';
 import { DecisionTimer } from '../game/decisionTimer';
 
 export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, selection, setSelection, submit, skip }: {
@@ -88,7 +88,6 @@ export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, sel
   const chargeGloballyUnlocked = hasChargeBonfire(board);
   const missingChargeDie = !chargeGloballyUnlocked && chargeDieIds.some(id => !effectiveSelection.dieIds.includes(id));
   const chargeAtMax = board.chargeXMult >= board.maxCharge - 1e-9;
-  const displayCharge = (value: number) => Number(value.toFixed(4));
   const speedStrength = (speedDemonMultiplier(100, decisionMs) - 1) / 8;
   const speedReveal = event?.type === 'SPEED_DEMON_REVEALED' ? event : null;
   const speedEquation = event?.flame === 'speedDemon' && event.handScore && event.type !== 'SPEED_DEMON_REVEALED'
@@ -158,9 +157,9 @@ export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, sel
           {hasOwnedChargeFlame(board) && <Group className={`charge-controls${chargeAtMax ? ' is-max' : ''}${board.chargeArmed ? ' is-armed' : ''}`} gap="xs" justify="flex-end" mb={4}>
             <Stack gap={0} className="charge-status">
               <Text size="xs" fw={800} data-testid="charge-status">{board.chargeArmed
-                ? `⚡ ×${displayCharge(board.chargeXMult)} ARMED`
-                : chargeAtMax ? `⚡ MAX CHARGE ×${displayCharge(board.maxCharge)}`
-                  : `CHARGE ×${displayCharge(board.chargeXMult)} / ×${displayCharge(board.maxCharge)}`}</Text>
+                ? `⚡ ×${formatPlayerNumber(board.chargeXMult)} ARMED`
+                : chargeAtMax ? `⚡ MAX CHARGE ×${formatPlayerNumber(board.maxCharge)}`
+                  : `CHARGE ×${formatPlayerNumber(board.chargeXMult)} / ×${formatPlayerNumber(board.maxCharge)}`}</Text>
               {chargeAtMax && missingChargeDie && !board.chargeArmed
                 && <Text size="10px" fw={800} c="yellow" data-testid="charge-guidance">SELECT CHARGE DIE TO USE</Text>}
             </Stack>
@@ -180,7 +179,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, sel
               {speedDemonOwned && <div className={`speed-demon-meter${speedReveal ? ' is-revealed' : ''}`} data-testid="speed-demon-meter"
                 aria-label="Speed Demon time remaining">
                 <div className="speed-demon-meter-fill" style={{ transform: `scaleX(${speedStrength})` }} />
-                {speedReveal && <span data-testid="speed-demon-reveal">SPEED DEMON ×{displayCharge(speedReveal.xMult ?? 1)}</span>}
+                {speedReveal && <span data-testid="speed-demon-reveal">SPEED DEMON ×{formatPlayerNumber(speedReveal.xMult ?? 1)}</span>}
               </div>}
               <Button className="play-action" size="sm" aria-label={preview ? playActionLabel(preview.danger, preview.guaranteedWin) : 'PLAY'} disabled={busy || !valid}
                 data-testid="play-action" onClick={submitPlay}>

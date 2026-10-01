@@ -10,6 +10,7 @@ import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, isValidSelec
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
 import { activeEncounterDice, bossSchedule, unavailableEncounterHands } from './bosses';
+import { formatPlayerNumber } from './copy';
 import type { Action, Board, GameState, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
 
 const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`${seed}:round:${round}:attempt:${attempt}`);
@@ -328,7 +329,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const die = next.dice[action.dieId];
         const face = activeFace(die);
         const cost = enhancementCost(offer.enhancement);
-        resolver.spendGold(cost, `Bought ${ENHANCEMENTS[offer.enhancement].name}: −${cost} gold`, 'enhancement');
+        resolver.spendGold(cost, `Bought ${ENHANCEMENTS[offer.enhancement].name}: −${formatPlayerNumber(cost)} gold`, 'enhancement');
         face.enhancements[offer.enhancement] = (face.enhancements[offer.enhancement] ?? 0) + 1;
         if (offer.enhancement === 'vintage') face.vintageSellValue = 0;
         offer.purchased = true;
@@ -349,11 +350,11 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const vintageSellValue = action.enhancement === 'vintage' ? totalProceeds : undefined;
         delete face.enhancements[action.enhancement];
         if (action.enhancement === 'vintage') delete face.vintageSellValue;
-        resolver.addGold(totalProceeds, `Sold ${definition.name} ×${stacksSold}: +${totalProceeds} Gold`, 'enhancementSale', die.id, action.enhancement, face.rank);
+        resolver.addGold(totalProceeds, `Sold ${definition.name} ×${formatPlayerNumber(stacksSold)}: +${formatPlayerNumber(totalProceeds)} Gold`, 'enhancementSale', die.id, action.enhancement, face.rank);
         next.stats.sales.push({ round: next.round, enhancement: action.enhancement, dieId: die.id, face: face.rank, stacksSold,
           baseSellPrice: definition.baseSellPrice, totalProceeds, goldBefore, goldAfter: next.gold, vintageSellValue });
         resolver.emit({ type: 'ENHANCEMENT_SOLD', enhancement: action.enhancement, dieIds: [die.id], face: face.rank,
-          amount: totalProceeds, message: `Sold all ${stacksSold} ${definition.name} stack${stacksSold === 1 ? '' : 's'} from D${die.id + 1} face ${face.rank} for ${totalProceeds} Gold` });
+          amount: totalProceeds, message: `Sold all ${formatPlayerNumber(stacksSold)} ${definition.name} stack${stacksSold === 1 ? '' : 's'} from D${die.id + 1} face ${face.rank} for ${formatPlayerNumber(totalProceeds)} Gold` });
         break;
       }
       case 'CHOOSE_FLAME': {
@@ -377,14 +378,14 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const flame = die.flame = { id, investedGold: activeFlameInvestment(die.flame) };
         const source = 'shop' as const;
         const from = flame.investedGold;
-        resolver.spendGold(action.amount, `Stoked ${FLAMES[flame.id].name}: −${action.amount} Gold (Shop)`, 'flameInvestment');
+        resolver.spendGold(action.amount, `Stoked ${FLAMES[flame.id].name}: −${formatPlayerNumber(action.amount)} Gold (Shop)`, 'flameInvestment');
         flame.investedGold += action.amount;
         recalculateMaxCharge(next);
         next.stats.flameStokes.push({ round: next.round, dieId: die.id, flame: flame.id, amount: action.amount,
           from, total: flame.investedGold, source });
         next.stats.totalFlameInvestment += action.amount;
         resolver.emit({ type: 'FLAME_INVESTED', flame: flame.id, dieIds: [die.id], amount: action.amount,
-          message: `Stoked ${FLAMES[flame.id].name}: ${from} → ${flame.investedGold} / 100 · ${flameEffectText(flame.id, flame.investedGold, next)}` });
+          message: `Stoked ${FLAMES[flame.id].name}: ${formatPlayerNumber(from)} → ${formatPlayerNumber(flame.investedGold)} / 100 · ${flameEffectText(flame.id, flame.investedGold, next)}` });
         if (flame.investedGold === 100) {
           const id = flame.id;
           die.flame = null;
@@ -400,7 +401,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       case 'CONTINUE_FLAME_SELECTION':
         if (!next.flameSelection!.acquired) {
           next.stats.flameSkips.push(next.round);
-          resolver.emit({ type: 'FLAME_SKIPPED', message: `Skipped Flame acquisition for round ${next.round}` });
+          resolver.emit({ type: 'FLAME_SKIPPED', message: `Skipped Flame acquisition for round ${formatPlayerNumber(next.round)}` });
         }
         resolver.openShop(false);
         break;
@@ -422,27 +423,27 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const fromLevel = next.handLevels[action.hand];
         const toLevel = fromLevel + 1;
         const cost = handTrainingCost(offer.purchases);
-        resolver.spendGold(cost, `Trained ${HANDS[action.hand].name} to level ${toLevel}: −${cost} gold`, 'handTraining');
+        resolver.spendGold(cost, `Trained ${HANDS[action.hand].name} to level ${formatPlayerNumber(toLevel)}: −${formatPlayerNumber(cost)} gold`, 'handTraining');
         next.handLevels[action.hand] = toLevel;
         offer.purchases++;
         next.stats.trainingPurchases.push({ round: next.round, hand: action.hand, fromLevel, toLevel, cost });
         next.stats.trainingPurchasesTotal++;
         next.stats.trainingGoldSpent += cost;
         resolver.emit({ type: 'TRAINING_PURCHASED', hand: action.hand, goldSpendSource: 'handTraining', amount: cost,
-          message: `${HANDS[action.hand].name} trained to level ${toLevel} · next training ${handTrainingCost(offer.purchases)} Gold` });
+          message: `${HANDS[action.hand].name} trained to level ${formatPlayerNumber(toLevel)} · next training ${formatPlayerNumber(handTrainingCost(offer.purchases))} Gold` });
         break;
       }
       case 'TRAIN_ALL_HANDS': {
         const offer = next.shop!.trainingOffers.find(item => item.kind === 'team')!;
         const cost = teamTrainingCost(offer.purchases);
-        resolver.spendGold(cost, `Team Training: −${cost} gold`, 'handTraining');
+        resolver.spendGold(cost, `Team Training: −${formatPlayerNumber(cost)} gold`, 'handTraining');
         for (const hand of HAND_IDS) next.handLevels[hand]++;
         offer.purchases++;
         next.stats.trainingPurchases.push({ round: next.round, hand: 'all', cost });
         next.stats.trainingPurchasesTotal++;
         next.stats.trainingGoldSpent += cost;
         resolver.emit({ type: 'TRAINING_PURCHASED', goldSpendSource: 'handTraining', amount: cost,
-          message: `Team Training raised every hand by 1 level · next training ${teamTrainingCost(offer.purchases)} Gold` });
+          message: `Team Training raised every hand by 1 level · next training ${formatPlayerNumber(teamTrainingCost(offer.purchases))} Gold` });
         break;
       }
       case 'RESTORE_LIFE': {
@@ -451,13 +452,13 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const goldBefore = next.gold;
         const livesBefore = next.lives;
         const lifetimeSpendBefore = next.lifetimeNormalShopGoldSpent;
-        resolver.spendGold(cost, `Restored life #${purchaseNumber}: −${cost} Gold`, 'lifeRestore');
+        resolver.spendGold(cost, `Restored life #${formatPlayerNumber(purchaseNumber)}: −${formatPlayerNumber(cost)} Gold`, 'lifeRestore');
         next.lives++;
         next.shop!.lifeRestores++;
         next.stats.lifeRestores.push({ round: next.round, purchaseNumber, cost, goldBefore, goldAfter: next.gold,
           livesBefore, livesAfter: next.lives, lifetimeSpendBefore, lifetimeSpendAfter: next.lifetimeNormalShopGoldSpent });
         resolver.emit({ type: 'LIFE_RESTORED', amount: cost,
-          message: `Restore #${purchaseNumber}: ${cost} Gold · lives ${livesBefore} → ${next.lives} · lifetime shop spend +${cost}` });
+          message: `Restore #${formatPlayerNumber(purchaseNumber)}: ${formatPlayerNumber(cost)} Gold · lives ${formatPlayerNumber(livesBefore)} → ${formatPlayerNumber(next.lives)} · lifetime shop spend +${formatPlayerNumber(cost)}` });
         break;
       }
       case 'DISMISS_FLAME_TUTORIAL':

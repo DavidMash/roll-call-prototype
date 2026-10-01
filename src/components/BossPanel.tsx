@@ -2,6 +2,7 @@ import { Badge, Group, Paper, Text } from '@mantine/core';
 import { BOSSES } from '../game/bosses';
 import { HANDS } from '../game/hands';
 import type { Board } from '../game/types';
+import { formatPlayerNumber } from '../game/copy';
 
 export function BossPanel({ board }: { board: Board }) {
   const boss = board.boss;
@@ -9,14 +10,14 @@ export function BossPanel({ board }: { board: Board }) {
   const definition = BOSSES[boss.type];
   const compactStatus = (() => {
     switch (boss.type) {
-      case 'caller': return `CALL: ${HANDS[boss.calledHand].name.toUpperCase()} · DUE IN ${boss.playsRemaining}`;
-      case 'warden': return `${boss.activeDieIds.length} / 5 DICE${boss.nextUnlockTarget === null ? ' · CHOOSE DIE' : ` · NEXT AT ${boss.nextUnlockTarget}`}`;
+      case 'caller': return `CALL: ${HANDS[boss.calledHand].name.toUpperCase()} · DUE IN ${formatPlayerNumber(boss.playsRemaining)}`;
+      case 'warden': return `${formatPlayerNumber(boss.activeDieIds.length)} / 5 DICE${boss.nextUnlockTarget === null ? ' · CHOOSE DIE' : ` · NEXT AT ${formatPlayerNumber(boss.nextUnlockTarget)}`}`;
       case 'hexer': return 'CURSED DIE REQUIRED';
       case 'marathon': return 'EXTRA LARGE GOAL';
       case 'quickdraw': return boss.lowerShotUsed ? 'LOWER HAND USED' : 'LOWER HAND AVAILABLE';
       case 'fly': return boss.caught ? 'FLY CAUGHT' : 'FLY LOOSE';
-      case 'snakeEyes': return `${boss.mutatedFaces.length} SNAKE-EYED`;
-      case 'infected': return `${boss.infectedFaces.length} INFECTED`;
+      case 'snakeEyes': return `${formatPlayerNumber(boss.mutatedFaces.length)} SNAKE-EYED`;
+      case 'infected': return `${formatPlayerNumber(boss.infectedFaces.length)} INFECTED`;
     }
   })();
   return <Paper p="xs" className={`boss-panel boss-${boss.type}`} data-testid="boss-panel">
@@ -34,7 +35,7 @@ export function BossPreview({ board }: { board: Board }) {
   if (!bossType) return null;
   const boss = BOSSES[bossType];
   return <Paper p="sm" className={`boss-preview boss-${bossType}`} data-testid="boss-preview">
-    <Group justify="space-between"><div><Text size="xs" fw={900} tt="uppercase" lts=".14em">Incoming · Round {nextRound}</Text>
+    <Group justify="space-between"><div><Text size="xs" fw={900} tt="uppercase" lts=".14em">Incoming · Round {formatPlayerNumber(nextRound)}</Text>
       <Text fw={950}>{boss.name}</Text></div><Badge variant="light">BOSS</Badge></Group>
     <Text size="sm" mt={5}>{boss.shortRule}</Text>
   </Paper>;

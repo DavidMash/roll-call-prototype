@@ -17,6 +17,7 @@ import type { Action } from './game/types';
 import { useGame } from './useGame';
 import type { PlaybackSpeed } from './useGame';
 import { loadDiceDisplay, saveDiceDisplay } from './uiSettings';
+import { formatPlayerNumber, formatScoreProgress } from './game/copy';
 
 const freshSeed = () => `roll-${Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join('-')}`;
 const query = new URLSearchParams(window.location.search);
@@ -92,7 +93,7 @@ export default function App() {
         : board.phase === 'lost' || board.phase === 'error' ? <Stack gap="sm">
           <Paper p="xl" ta="center" className="end-state">
             <Title order={2}>{board.phase === 'lost' ? 'Run Over' : 'Resolution stopped'}</Title>
-            <Text mt="sm">{board.phase === 'lost' && board.bust ? `Bust on round ${board.bust.round}: ${board.bust.score} / ${board.bust.target}. No lives remain.` : state.stats.resolutionError}</Text>
+            <Text mt="sm">{board.phase === 'lost' && board.bust ? `Bust on round ${formatPlayerNumber(board.bust.round)}: ${formatScoreProgress(board.bust.score, board.bust.target)}. No lives remain.` : state.stats.resolutionError}</Text>
             <Text size="sm" c="dimmed" mt="sm">Run details and event history are available in Run Info.</Text>
             <Group justify="center" mt="lg"><Button onClick={() => restart(state.seed)}>Restart same seed</Button><Button variant="default" onClick={() => restart(freshSeed())}>New seed</Button></Group>
           </Paper>

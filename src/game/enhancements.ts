@@ -27,7 +27,7 @@ export const ENHANCEMENTS: Record<Enhancement, EnhancementDefinition> = {
   hitchhiker: definition('Hitchhiker', 'When left out of a hand, it may jump in and score anyway. Stack up to three to increase the odds.', 2, 1, true, 3),
   weighted: definition('Weighted', 'Makes the opposite face more likely to roll. Stack to increase the odds.', 3, 2, true),
   jackpot: definition('Jackpot', `Gain +${CONFIG.jackpotGold} Gold if this face scores in the hand that clears the Round. Stack up to three for more Gold.`, 3, 1, true, 3),
-  personalTrainer: definition('Personal Trainer', 'When this face scores, it may train the hand. Stack up to three to increase the odds.', 8, 4, true, 3),
+  personalTrainer: definition('Personal Trainer', 'When this face scores, it may train the hand. Your below-average hands are more likely to train.\nStack up to three to increase the odds.', 8, 4, true, 3),
   bump: definition('Bump', 'While showing, this die’s next roll moves up one face.', 2, 1, false, 1),
   vintage: definition('Vintage', 'Each time this face scores, its sell value increases by 3 Gold.', 3, 0, false, 1),
 };
@@ -57,3 +57,16 @@ export const enhancementSellValue = (face: Face, enhancement: Enhancement) => en
   ? Math.max(0, Math.floor(face.vintageSellValue ?? 0))
   : stacks(face, enhancement) * ENHANCEMENTS[enhancement].baseSellPrice;
 export const diminishingHalfChance = (stackCount: number) => stackCount <= 0 ? 0 : Math.min(1 - Number.EPSILON, 1 - 0.5 ** stackCount);
+export function personalTrainerChance(stackCount: number, handLevel: number, allHandLevels: readonly number[]): number {
+  const baseChance = diminishingHalfChance(stackCount);
+  if (baseChance === 0 || allHandLevels.length === 0) return baseChance;
+  const lowestLevel = Math.min(...allHandLevels);
+  const averageLevel = allHandLevels.reduce((sum, level) => sum + level, 0) / allHandLevels.length;
+  const span = averageLevel - lowestLevel;
+  if (span <= 0) return baseChance;
+  const position = (handLevel - lowestLevel) / span;
+  const scaledChance = position <= 1
+    ? baseChance * 0.75 ** position
+    : baseChance * 0.75 * 0.5 ** (position - 1);
+  return Math.min(baseChance, Math.max(0.01, scaledChance));
+}
