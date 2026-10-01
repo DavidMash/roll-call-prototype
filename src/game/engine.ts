@@ -1,7 +1,7 @@
 import { CONFIG, diceRerollCost, handTrainingCost, lifeRestoreCost, offerRerollCost, teamTrainingCost } from './config';
 import { activeFace, createDice } from './dice';
 import { Resolver } from './effects';
-import { attachmentError, enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, stacks } from './enhancements';
+import { enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, placementError, stacks } from './enhancements';
 import {
   activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasChargeBonfire, hasOwnedChargeFlame,
   hasOwnedFlame, isChargeFlame, isFlame, recalculateMaxCharge, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier,
@@ -245,7 +245,7 @@ export function validateAction(state: Board, action: Action): string | null {
     const die = state.dice.find(item => item.id === action.dieId);
     if (!offer || offer.purchased || !die) return 'Choose an available offer and a physical die.';
     if (state.gold < enhancementCost(offer.enhancement)) return 'Not enough Gold for this Enhancement.';
-    return attachmentError(activeFace(die), offer.enhancement);
+    return placementError(die, activeFace(die), offer.enhancement);
   }
   if (action.type === 'SELL_ENHANCEMENT') {
     const die = state.dice.find(item => item.id === action.dieId);

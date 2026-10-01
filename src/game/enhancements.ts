@@ -1,5 +1,5 @@
 import { CONFIG } from './config';
-import type { Enhancement, Face } from './types';
+import type { Die, Enhancement, Face } from './types';
 
 export interface EnhancementDefinition {
   name: string;
@@ -8,20 +8,21 @@ export interface EnhancementDefinition {
   baseSellPrice: number;
   stackable: boolean;
   maxStacks: number | null;
+  maxFacesPerDie: number | null;
   countsTowardFaceTypeLimit: boolean;
 }
 const definition = (name: string, description: string, purchasePrice: number, baseSellPrice: number,
-  stackable: boolean, maxStacks: number | null = null): EnhancementDefinition =>
-  ({ name, description, purchasePrice, baseSellPrice, stackable, maxStacks, countsTowardFaceTypeLimit: true });
+  stackable: boolean, maxStacks: number | null = null, maxFacesPerDie: number | null = null): EnhancementDefinition =>
+  ({ name, description, purchasePrice, baseSellPrice, stackable, maxStacks, maxFacesPerDie, countsTowardFaceTypeLimit: true });
 
 export const ENHANCEMENTS: Record<Enhancement, EnhancementDefinition> = {
   bonus: definition('Bonus', `+${CONFIG.bonusPips} Pips when this face scores. Stack for more Pips.`, 3, 1, true),
-  jumpingBean: definition('Jumping Bean', 'When rolled, plays the matching Upper hand for free, then rerolls.', 2, 1, false, 1),
+  jumpingBean: definition('Jumping Bean', 'When rolled, plays the matching Upper hand for free, then rerolls.\nOne Jumping Bean per die.', 2, 1, false, 1, 1),
   golden: definition('Golden', `Gain +${CONFIG.goldenGold} Gold when this face scores. Stack up to three for more Gold.`, 2, 1, true, 3),
   workout: definition('Workout', `After scoring, this face permanently gains +${CONFIG.workoutIncrement} Pip. Stack for faster growth.`, 3, 2, true),
   missingLink: definition('Missing Link', 'Counts as any face in a Straight. Scores its own Pips.', 2, 1, false, 1),
   mirror: definition('Mirror', 'Counts as any matching face in group hands. Scores its own Pips.', 2, 1, false, 1),
-  magnetic: definition('Magnetic', 'Held Magnets pull rolling dice toward unused Magnetic destinations.', 3, 2, false, 1),
+  magnetic: definition('Magnetic', 'A showing Magnet can pull rolling dice toward their Magnetic faces.\nOne Magnetic face per die.', 3, 2, false, 1, 1),
   sticky: definition('Sticky', 'May keep this die from rerolling after it scores. Stack up to three to increase the odds.', 2, 1, true, 3),
   slippy: definition('Slippy', 'Rerolls after you play a hand, even if this die did not score.', 2, 1, false, 1),
   hitchhiker: definition('Hitchhiker', 'When left out of a hand, it may jump in and score anyway. Stack up to three to increase the odds.', 2, 1, true, 3),
@@ -51,7 +52,17 @@ export function attachmentError(face: Face, enhancement: Enhancement): string | 
   }
   return null;
 }
+export function placementError(die: Pick<Die, 'faces'>, face: Face, enhancement: Enhancement): string | null {
+  const faceError = attachmentError(face, enhancement);
+  if (faceError) return faceError;
+  const limit = ENHANCEMENTS[enhancement].maxFacesPerDie;
+  if (limit !== null && die.faces.filter(candidate => (candidate.enhancements[enhancement] ?? 0) > 0).length >= limit) {
+    return `${ENHANCEMENTS[enhancement].name} is limited to ${limit === 1 ? 'one Face' : `${limit} Faces`} per Die.`;
+  }
+  return null;
+}
 export const canAttach = (face: Face, enhancement: Enhancement) => attachmentError(face, enhancement) === null;
+export const canPlace = (die: Pick<Die, 'faces'>, face: Face, enhancement: Enhancement) => placementError(die, face, enhancement) === null;
 export const enhancementCost = (enhancement: Enhancement) => ENHANCEMENTS[enhancement].purchasePrice;
 export const enhancementSellValue = (face: Face, enhancement: Enhancement) => enhancement === 'vintage'
   ? Math.max(0, Math.floor(face.vintageSellValue ?? 0))

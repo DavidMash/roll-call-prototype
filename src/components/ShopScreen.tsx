@@ -2,7 +2,7 @@ import { Alert, Badge, Button, Group, Modal, Paper, Progress, SimpleGrid, Stack,
 import { useState } from 'react';
 import { CONFIG, diceRerollCost, offerRerollCost } from '../game/config';
 import { activeFace } from '../game/dice';
-import { attachmentError, enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, FACE_TYPE_LIMIT, faceEnhancementTypes } from '../game/enhancements';
+import { enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, FACE_TYPE_LIMIT, faceEnhancementTypes, placementError } from '../game/enhancements';
 import { activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasXMultFlame } from '../game/flames';
 import type { Action, Board, Enhancement, GameEvent, Rank } from '../game/types';
 import { DiceRow } from './DiceRow';
@@ -34,7 +34,7 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
   const managedDie = managedDieId === null ? null : board.dice.find(die => die.id === managedDieId) ?? null;
 
   const placementErrors = Object.fromEntries(board.dice.map(die => {
-    const faceError = offer ? attachmentError(activeFace(die), offer.enhancement) : null;
+    const faceError = offer ? placementError(die, activeFace(die), offer.enhancement) : null;
     const costError = offer && board.gold < enhancementCost(offer.enhancement)
       ? `Need ${formatPlayerNumber(enhancementCost(offer.enhancement))} Gold; you have ${formatPlayerNumber(board.gold)}.` : null;
     return [die.id, faceError ?? costError ?? ''];
@@ -49,7 +49,8 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
   function attemptPurchase(offerId: number, dieId: number) {
     const selected = shop.offers.find(item => item.id === offerId && !item.purchased);
     if (!selected) return;
-    const error = attachmentError(activeFace(board.dice[dieId]), selected.enhancement);
+    const die = board.dice[dieId];
+    const error = placementError(die, activeFace(die), selected.enhancement);
     if (error?.startsWith('This Face is full.')) {
       setSelectedOffer(offerId);
       openManager(dieId);
@@ -73,7 +74,7 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
   const managedFlame = activeFlameId(managedDie?.flame);
   const managedActiveFace = managedDie ? activeFace(managedDie) : null;
   const focused = managedDie && focusedFace ? managedDie.faces[focusedFace - 1] : null;
-  const focusedError = offer && focused && managedActiveFace?.rank === focused.rank ? attachmentError(focused, offer.enhancement) : null;
+  const focusedError = offer && focused && managedDie && managedActiveFace?.rank === focused.rank ? placementError(managedDie, focused, offer.enhancement) : null;
   const canApplyFocused = !!(offer && focused && managedDie && managedActiveFace?.rank === focused.rank
     && !focusedError && board.gold >= enhancementCost(offer.enhancement));
   const tutorialDieId = !board.flameTutorial.completed ? board.flameTutorial.pendingDieId : null;

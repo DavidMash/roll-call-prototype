@@ -7,12 +7,12 @@ describe('canonical player-facing definitions', () => {
   it('keeps Enhancement descriptions centralized and exact', () => {
     expect(Object.fromEntries(Object.entries(ENHANCEMENTS).map(([id, item]) => [id, item.description]))).toEqual({
       bonus: '+10 Pips when this face scores. Stack for more Pips.',
-      jumpingBean: 'When rolled, plays the matching Upper hand for free, then rerolls.',
+      jumpingBean: 'When rolled, plays the matching Upper hand for free, then rerolls.\nOne Jumping Bean per die.',
       golden: 'Gain +1 Gold when this face scores. Stack up to three for more Gold.',
       workout: 'After scoring, this face permanently gains +1 Pip. Stack for faster growth.',
       missingLink: 'Counts as any face in a Straight. Scores its own Pips.',
       mirror: 'Counts as any matching face in group hands. Scores its own Pips.',
-      magnetic: 'Held Magnets pull rolling dice toward unused Magnetic destinations.',
+      magnetic: 'A showing Magnet can pull rolling dice toward their Magnetic faces.\nOne Magnetic face per die.',
       sticky: 'May keep this die from rerolling after it scores. Stack up to three to increase the odds.',
       slippy: 'Rerolls after you play a hand, even if this die did not score.',
       hitchhiker: 'When left out of a hand, it may jump in and score anyway. Stack up to three to increase the odds.',

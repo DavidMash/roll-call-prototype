@@ -117,6 +117,8 @@ Sticky and Slippy now cost 2 Gold; their gameplay behavior is unchanged.
 
 Each physical Magnetic face can be used as a pull destination once per Round. Natural rolls do not spend it, and a spent destination can still act as a held source for pulls toward other unused Magnetic faces. Destination use resets at the start of each Round.
 
+Jumping Bean and Magnetic remain nonstackable on a Face, and each is limited to one Face per physical die. Different dice may each carry their own Jumping Bean and Magnetic Face.
+
 ### Vintage
 
 Vintage is unique and non-stackable. A new instance starts with a 0-Gold sell value and has no direct scoring effect. Whenever its physical face participates in a resolved scoring hand, its sell value increases by 3 Gold exactly once. Selected dice, successful Hitchhikers, and Jumping Bean free plays qualify; rolls, displayed faces, failed Hitchhikers, Shop rolls, and Flame Selection rolls do not. Separate Bean-chain hand resolutions may each grow it.
