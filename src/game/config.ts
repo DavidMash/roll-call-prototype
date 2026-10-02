@@ -1,7 +1,9 @@
 export const CONFIG = {
   diceCount: 5,
-  baseTarget: 50,
-  targetGrowth: 1.35,
+  baseTarget: 75,
+  baseBossTarget: 150,
+  targetGrowth: 1.32,
+  targetBlockSize: 3,
   targetRounding: 5,
   startingGold: 0,
   maxLives: 3,
@@ -24,8 +26,30 @@ export const CONFIG = {
   resolutionEventCap: 10000,
 } as const;
 
-export const targetForRound = (round: number) =>
-  Math.round(CONFIG.baseTarget * CONFIG.targetGrowth ** (round - 1) / CONFIG.targetRounding) * CONFIG.targetRounding;
+export const TARGET_BLOCK_RATIOS = [1 / 2, 5 / 6, 1] as const;
+export const TARGET_BLOCK_GROWTH = CONFIG.targetGrowth ** CONFIG.targetBlockSize;
+
+export function targetRoundingIncrement(rawTarget: number): number {
+  const magnitude = Math.floor(Math.log10(Math.max(1, Math.abs(rawTarget))));
+  return magnitude < 3 ? 25 : 50 * 10 ** (magnitude - 3);
+}
+
+export function prettyRoundTarget(rawTarget: number): number {
+  const increment = targetRoundingIncrement(rawTarget);
+  return Math.round(rawTarget / increment) * increment;
+}
+
+export function bossAnchorForBlock(block: number): number {
+  const blockIndex = Math.max(0, Math.floor(block));
+  return prettyRoundTarget(CONFIG.baseBossTarget * TARGET_BLOCK_GROWTH ** blockIndex);
+}
+
+export function targetForRound(round: number): number {
+  const roundIndex = Math.max(0, Math.floor(round) - 1);
+  const block = Math.floor(roundIndex / CONFIG.targetBlockSize);
+  const position = roundIndex % CONFIG.targetBlockSize;
+  return prettyRoundTarget(bossAnchorForBlock(block) * TARGET_BLOCK_RATIOS[position]);
+}
 export const roundReward = (_round?: number) => CONFIG.roundRewardBase;
 export const bossRewardForRound = (round: number) => 9 + round / 3;
 export const interestForGold = (heldGold: number) => Math.min(CONFIG.interestCap,

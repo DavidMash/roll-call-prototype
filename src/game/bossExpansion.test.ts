@@ -5,7 +5,7 @@ import { dispatch, newRun, validateAction } from './engine';
 import { handOptions, HAND_IDS, LOWER_HAND_IDS } from './hands';
 import { handScore } from './scoring';
 import { selectHand, toggleDie } from './selection';
-import { activeEncounterDice, BOSS_TYPES, bossSchedule, requiredEncounterDieIds, unavailableEncounterHands } from './bosses';
+import { activeEncounterDice, BOSS_TYPES, bossSchedule, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands } from './bosses';
 import { targetForRound } from './config';
 import type { BossType, GameState, RandomSource, Rank } from './types';
 
@@ -161,10 +161,21 @@ describe('The Marathon', () => {
   });
 });
 
+describe('base target modifier boundary', () => {
+  it('applies existing Boss modifiers only after the block target is determined', () => {
+    expect(targetForBoss('marathon', targetForRound(3))).toBe(450);
+    expect(targetForBoss('quickdraw', targetForRound(3))).toBe(50);
+    expect(targetForBoss('quickdraw', targetForRound(6))).toBe(115);
+    for (const boss of ['caller', 'warden', 'hexer', 'fly', 'snakeEyes', 'infected'] as const) {
+      expect(targetForBoss(boss, targetForRound(6))).toBe(350);
+    }
+  });
+});
+
 describe('Quickdraw', () => {
   it('uses one third target, spends one Lower shot, and leaves Upper hands available', () => {
     let state = bossRound('quickdraw');
-    expect(state.target).toBe(30);
+    expect(state.target).toBe(50);
     state.target = 1_000_000;
     expose(state, [2, 2, 3, 4, 5]);
     state = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.2)).state;
