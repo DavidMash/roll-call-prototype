@@ -304,7 +304,7 @@ export function cleanupTemporaryBossFaces(dice: Die[]): void {
     delete face.snakeEyed;
     delete face.snakeEyesOriginalRank;
     delete face.infected;
-    delete face.magneticDestinationUsed;
+    delete face.magneticSourceUsed;
   });
 }
 

@@ -1,6 +1,6 @@
 import { Badge, Button, Text, Tooltip } from '@mantine/core';
 import { combinationsForHand, handStats, HANDS, LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from '../game/hands';
-import { activeFlameId } from '../game/flames';
+import { activeFlameId, handFamilyFlameTargets } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
 import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands } from '../game/bosses';
@@ -40,6 +40,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
   const ultimate = new Set(ultimateHands(board.handLevels));
   const ownsUltimate = board.bonfires.includes('ultimate')
     || board.dice.some(die => activeFlameId(die.flame) === 'ultimate');
+  const flameTargets = new Set(handFamilyFlameTargets(board));
   return <section className="scorecard-section" aria-labelledby={`scorecard-${title.toLowerCase()}`}>
     <Text id={`scorecard-${title.toLowerCase()}`} className="scorecard-section-title" size="xs" fw={700} tt="uppercase">{title}</Text>
     <div className="scorecard-rows">
@@ -53,7 +54,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
           .some(set => selection.dieIds.every(dieId => set.includes(dieId)) && requiredDieIds.every(dieId => set.includes(dieId)));
         const playable = !consumed && compatible;
         const selected = selection.hand === hand;
-        const targeted = board.targetPracticeHand === hand;
+        const targeted = board.targetPracticeHand === hand || flameTargets.has(hand);
         const hotTarget = board.hotStreakGoal === hand;
         const isUltimate = ownsUltimate && ultimate.has(hand);
         const score = board.scoreByHand[hand];
@@ -69,7 +70,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
           <span className="scorecard-row-copy">
             <span className="scorecard-hand-name" title={definition.name}>
               <span className="scorecard-name-line">
-                {targeted && <span className="target-marker" title="Target Practice target"><span className="wide-label">◎ TARGET </span><span className="compact-label">◎ </span></span>}
+                {targeted && <span className="target-marker" title={board.targetPracticeHand === hand ? 'Target Practice target' : 'Flame target'}><span className="wide-label">◎ TARGET </span><span className="compact-label">◎ </span></span>}
                 {hotTarget && <span className="target-marker" title="Hot Streak goal"><span className="wide-label">🔥 NEXT </span><span className="compact-label">🔥 </span></span>}
                 {board.boss?.type === 'fly' && board.boss.flyHand === hand && <span className="fly-marker" title="The Fly is here"><span className="wide-label">● FLY </span><span className="compact-label">● </span></span>}
                 <span className="hand-name-full">{definition.name}</span><span className="hand-name-compact">{MOBILE_HAND_NAMES[hand] ?? definition.name}</span>

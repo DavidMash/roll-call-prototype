@@ -3,8 +3,9 @@ import { activeFace, rollPhysicalDie, scoringPips, weightedSourceFace } from './
 import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, personalTrainerChance, stacks } from './enhancements';
 import {
   activeFlameId, activeFlameInvestment, captureHandStart, FLAMES, FLAME_IDS, handXMultContributions,
-  fluxCapacitorChargeGain, hasChargeBonfire, HOT_STREAK_SEQUENCE, jumpStartChargeGain, momentumChargeGain,
-  ownedFlameIds, recalculateMaxCharge, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, thirdRailChargeGain,
+  fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, hasChargeBonfire, HOT_STREAK_SEQUENCE,
+  initialHandFamilyFlameStages, jumpStartChargeGain, momentumChargeGain, ownedFlameIds, recalculateMaxCharge,
+  sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, thirdRailChargeGain,
 } from './flames';
 import { hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
@@ -203,13 +204,39 @@ export class Resolver {
     const requestedGain = before * 2;
     this.growCharge('powerSurge', requestedGain, `${HANDS[hand].name} tripled current Charge`);
   }
+  private advanceHandFamilyFlames(hand: HandId, appliedFactors: readonly import('./types').XMultFactor[]): void {
+    const applied = new Set(appliedFactors.map(factor => factor.source));
+    for (const id of HAND_FAMILY_FLAME_IDS) {
+      const stage = this.state.handFamilyFlameStages[id];
+      if (stage === 'setup' && hand === HAND_FAMILY_FLAMES[id].setup) {
+        this.state.handFamilyFlameStages[id] = 'payoff';
+      } else if (stage === 'payoff' && hand === HAND_FAMILY_FLAMES[id].payoff && applied.has(id)) {
+        this.state.handFamilyFlameStages[id] = 'spent';
+      }
+    }
+  }
+  private applyFluxCapacitor(pulledMagneticFaces: number, dieIds: number[]): void {
+    const source = this.chargeFlameSource('fluxCapacitor');
+    if (!source || pulledMagneticFaces <= 0) return;
+    const before = this.state.chargeXMult;
+    const multiplier = fluxCapacitorChargeMultiplier(source.investment, pulledMagneticFaces);
+    const after = Number(Math.min(this.state.maxCharge, before * multiplier).toFixed(12));
+    const gain = Number((after - before).toFixed(12));
+    this.state.chargeXMult = after;
+    this.state.stats.chargeGained = Number((this.state.stats.chargeGained + gain).toFixed(12));
+    if (multiplier <= 1) return;
+    this.triggerFlame('fluxCapacitor', source.dieId,
+      `${this.format(pulledMagneticFaces)} Magnetic face${pulledMagneticFaces === 1 ? '' : 's'} pulled · Charge ×${this.format(multiplier)} → ×${this.format(after)}`);
+    this.emit({ type: 'CHARGE_CHANGED', flame: 'fluxCapacitor', dieIds, xMult: after,
+      message: `${FLAMES.fluxCapacitor.name}: Charge ×${this.format(before)} × ${this.format(multiplier)} = ×${this.format(after)}` });
+  }
   rollBatch(dieIds: number[], reason: string, context: RollContext, excludeStartingFace = false): void {
     const ids = [...new Set(dieIds)].sort((a, b) => a - b);
     if (!ids.length) return;
     this.emit({ type: 'DICE_REROLL_STARTED', dieIds: ids, message: `${reason}: ${ids.map(id => `D${id + 1}`).join(', ')}` });
     const rolling = new Set(ids);
     const anchors = context === 'gameplay' ? activeEncounterDice(this.state)
-      .filter(die => !rolling.has(die.id) && stacks(activeFace(die), 'magnetic'))
+      .filter(die => !rolling.has(die.id) && stacks(activeFace(die), 'magnetic') && !activeFace(die).magneticSourceUsed)
       .map(die => die.id) : [];
     if (anchors.length) {
       this.state.stats.magneticAnchorBatches++;
@@ -226,8 +253,7 @@ export class Resolver {
       }
       const destinations = anchors.length
         ? die.faces.map((face, index) => ({ face, physicalFace: (index + 1) as import('./types').Rank }))
-          .filter(item => stacks(item.face, 'magnetic') && !item.face.magneticDestinationUsed
-            && (!excludeStartingFace || item.physicalFace !== beforePhysical))
+          .filter(item => stacks(item.face, 'magnetic') && (!excludeStartingFace || item.physicalFace !== beforePhysical))
         : [];
       if (destinations.length) {
         const destination = destinations[randomIndex(this.rng, destinations.length)];
@@ -237,7 +263,7 @@ export class Resolver {
     });
     const attracted = results.filter(result => result.attracted);
     if (attracted.length) {
-      for (const result of attracted) this.state.dice.find(die => die.id === result.dieId)!.faces[result.physicalFace - 1].magneticDestinationUsed = true;
+      for (const anchor of anchors) activeFace(this.state.dice.find(die => die.id === anchor)!).magneticSourceUsed = true;
     }
     const triggers: RollTrigger[] = [];
     for (const result of results) {
@@ -267,9 +293,6 @@ export class Resolver {
         this.state.stats.triggers.magnetic = (this.state.stats.triggers.magnetic ?? 0) + 1;
         this.emit({ type: 'MAGNETIC_ATTRACTION', enhancement: 'magnetic', dieIds: [die.id, ...anchors], face: face.rank,
           message: `Held Magnetic anchor attracted D${die.id + 1} to face ${face.rank}` });
-        const flux = this.chargeFlameSource('fluxCapacitor');
-        if (flux) this.growCharge('fluxCapacitor', fluxCapacitorChargeGain(flux.investment),
-          `D${die.id + 1} pulled to a new Magnetic destination`, [die.id]);
       }
       if (result.weighted) {
         const source = weightedSourceFace(die, result.physicalFace)!;
@@ -278,6 +301,7 @@ export class Resolver {
       }
       if (context === 'gameplay' && stacks(face, 'jumpingBean')) triggers.push({ dieId: die.id, face, enhancement: 'jumpingBean' });
     }
+    if (attracted.length) this.applyFluxCapacitor(attracted.length, attracted.map(result => result.dieId));
     if (context === 'gameplay') this.queue.push(...triggers);
     else for (const item of triggers) this.trigger('weighted', item.dieId, item.face, `source face ${item.weightedSourceFace} ×${this.format(item.weightedStacks ?? 0)}; destination weight ${this.format(item.rollWeight ?? 0)}`);
   }
@@ -552,7 +576,8 @@ export class Resolver {
         message: `D${dieId + 1}${role === 'hitchhiker' ? ' Hitchhiker' : ''} added ${this.format(amount)} Pips` });
     }
     for (const { id, face, role } of scoringParticipants) this.whenScored(id, face, hand, playSource, role === 'hitchhiker' ? 'hitchhiker' : 'selected');
-    for (const factor of handXMultContributions(handStart, hand, handLevel, scoringIds)) {
+    const xMultFactors = handXMultContributions(handStart, hand, handLevel, scoringIds);
+    for (const factor of xMultFactors) {
       if (factor.source === 'speedDemon') this.emit({ type: 'SPEED_DEMON_REVEALED', flame: 'speedDemon', hand,
         dieIds: factor.dieId === null ? undefined : [factor.dieId], xMult: factor.value, xMultFactor: factor,
         decisionMs: handStart.speedDemonDecisionMs ?? undefined,
@@ -566,6 +591,7 @@ export class Resolver {
         dieIds: factor.dieId === null ? undefined : [factor.dieId], xMult: this.handAccumulator.currentXMult, xMultFactor: factor,
         message: `${factor.source === 'charge' ? 'Charge' : FLAMES[factor.source].name}: XMult ×${this.format(beforeXMult)} × factor ×${this.format(factor.value)} = ×${this.format(this.handAccumulator.currentXMult)}` });
     }
+    this.advanceHandFamilyFlames(hand, xMultFactors);
     const bossFactor = this.flyFactor(hand, playSource);
     const { pips, multiplier, xMult, rawScore, score } = finalizeHandScore(this.handAccumulator, bossFactor);
     this.state.stats.handScores.push({ round: this.state.round, hand, handLevel, dieIds: scoringIds,
@@ -774,9 +800,10 @@ export class Resolver {
     this.state.sixPackXMult = sixPackStartingMultiplier(sixPackInvestment);
     this.state.sixPackUpperHandsPlayed = 0;
     this.state.hotStreakGoal = ownedFlameIds(this.state).has('hotStreak') ? 'pair' : null;
+    this.state.handFamilyFlameStages = initialHandFamilyFlameStages(this.state);
     this.state.flameSelection = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
-    for (const die of this.state.dice) for (const face of die.faces) delete face.magneticDestinationUsed;
+    for (const die of this.state.dice) for (const face of die.faces) delete face.magneticSourceUsed;
     const bossType = this.state.bossSchedule[this.state.round]
       ?? (this.state.round > 60 ? bossTypeForRound(this.state.seed, this.state.round) : null);
     if (bossType) this.state.bossSchedule[this.state.round] = bossType;

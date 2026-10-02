@@ -4,7 +4,7 @@ import { DecisionTimer } from './decisionTimer';
 import { Resolver } from './effects';
 import { dispatch, newRun } from './engine';
 import {
-  calculateMaxCharge, captureHandStart, fluxCapacitorChargeGain, handXMultContributions,
+  calculateMaxCharge, captureHandStart, fluxCapacitorChargeMultiplier, handXMultContributions,
   sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, speedDemonMultiplier,
 } from './flames';
 import type { Flame, GameState, RandomSource, Rank } from './types';
@@ -116,36 +116,41 @@ describe('Six Pack', () => {
   });
 });
 
-describe('Magnetic destination exhaustion and Flux Capacitor', () => {
-  it('spends only a successful destination; that spent face can still be a source', () => {
+describe('Magnetic source use and Flux Capacitor', () => {
+  it('spends a held source after one successful pull while destinations remain reusable', () => {
+    const state = game([1, 2, 3, 4, 6]);
+    magnetic(state, 4, 6);
+    magnetic(state, 0, 3);
+    const resolver = new Resolver(state, constant(0));
+    resolver.rollBatch([0], 'first pull', 'gameplay');
+    expect(state.dice[0].value).toBe(3);
+    expect(activeFace(state.dice[4]).magneticSourceUsed).toBe(true);
+    expect(state.dice[0].faces[2].magneticSourceUsed).toBeUndefined();
+
+    magnetic(state, 3, 4);
+    resolver.rollBatch([0], 'same destination pulled by another source', 'gameplay');
+    expect(state.dice[0].value).toBe(3);
+    expect(state.stats.magneticAttractions).toBe(2);
+    expect(activeFace(state.dice[3]).magneticSourceUsed).toBe(true);
+  });
+
+  it('lets a pulled Magnetic face remain unused, then act as its own held source', () => {
     const state = game([1, 2, 3, 4, 6]);
     magnetic(state, 4, 6);
     magnetic(state, 0, 3);
     magnetic(state, 1, 4);
     const resolver = new Resolver(state, constant(0));
-    resolver.rollBatch([0], 'first pull', 'gameplay');
-    expect(state.dice[0].faces[2].magneticDestinationUsed).toBe(true);
-    expect(activeFace(state.dice[4]).magneticDestinationUsed).toBeUndefined();
+    resolver.rollBatch([0], 'pull a future source', 'gameplay');
+    expect(state.dice[0].value).toBe(3);
+    expect(activeFace(state.dice[0]).magneticSourceUsed).toBeUndefined();
 
-    resolver.rollBatch([1], 'spent destination acts as source', 'gameplay');
+    resolver.rollBatch([1], 'pulled face uses its own source pull', 'gameplay');
     expect(state.dice[1].value).toBe(4);
+    expect(activeFace(state.dice[0]).magneticSourceUsed).toBe(true);
     expect(state.stats.magneticAttractions).toBe(2);
   });
 
-  it('does not spend a naturally rolled Magnetic face and will pull to it later', () => {
-    const state = game([1, 2, 3, 4, 5]);
-    magnetic(state, 0, 3);
-    const resolver = new Resolver(state, constant(.4));
-    resolver.rollBatch([0], 'natural roll', 'gameplay');
-    expect(state.dice[0].value).toBe(3);
-    expect(state.dice[0].faces[2].magneticDestinationUsed).toBeUndefined();
-
-    magnetic(state, 4, 5);
-    resolver.rollBatch([0], 'later pull', 'gameplay');
-    expect(state.dice[0].faces[2].magneticDestinationUsed).toBe(true);
-  });
-
-  it('allows multiple unique destinations and builds Flux Charge once per successful pull', () => {
+  it('counts all pulled Magnetic faces once per activation for investment-scaled Flux', () => {
     const state = game([1, 2, 3, 4, 6]);
     flame(state, 3, 'fluxCapacitor', 50);
     magnetic(state, 4, 6);
@@ -153,30 +158,35 @@ describe('Magnetic destination exhaustion and Flux Capacitor', () => {
     magnetic(state, 1, 3);
     const resolver = new Resolver(state, constant(0));
     resolver.rollBatch([0, 1], 'two pulls', 'gameplay');
-    expect(fluxCapacitorChargeGain(50)).toBe(1);
-    expect(fluxCapacitorChargeGain(0)).toBe(0);
-    expect(fluxCapacitorChargeGain(100)).toBe(2);
+    expect(fluxCapacitorChargeMultiplier(50, 2)).toBe(2);
+    expect(fluxCapacitorChargeMultiplier(100, 1)).toBe(2);
+    expect(fluxCapacitorChargeMultiplier(100, 2)).toBe(3);
+    expect(fluxCapacitorChargeMultiplier(100, 3)).toBe(4);
     expect(state.stats.magneticAttractions).toBe(2);
-    expect(state.chargeXMult).toBe(3);
-    expect(state.stats.flameTriggers.fluxCapacitor).toBe(2);
+    expect(state.chargeXMult).toBe(2);
+    expect(state.stats.flameTriggers.fluxCapacitor).toBe(1);
     expect(calculateMaxCharge(state)).toBe(3);
     flame(state, 3, 'fluxCapacitor', 100);
     expect(calculateMaxCharge(state)).toBe(5);
   });
 
-  it('prevents reuse of the same destination until the Round reset', () => {
+  it('clamps one Flux multiplication to Max Charge and resets source use next Round', () => {
     const state = game([1, 2, 3, 4, 6]);
+    flame(state, 3, 'fluxCapacitor', 100);
+    state.chargeXMult = 4;
     magnetic(state, 4, 6);
     magnetic(state, 0, 3);
+    magnetic(state, 1, 4);
     const resolver = new Resolver(state, constant(0));
-    resolver.rollBatch([0], 'first pull', 'gameplay');
-    resolver.rollBatch([0], 'second roll', 'gameplay');
-    expect(state.stats.magneticAttractions).toBe(1);
+    resolver.rollBatch([0, 1], 'clamped pull', 'gameplay');
+    expect(state.chargeXMult).toBe(5);
+    expect(state.stats.flameTriggers.fluxCapacitor).toBe(1);
+    expect(activeFace(state.dice[4]).magneticSourceUsed).toBe(true);
 
     state.phase = 'shop';
     state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     new Resolver(state, constant(.8)).startRound();
-    expect(state.dice.flatMap(die => die.faces).some(face => face.magneticDestinationUsed)).toBe(false);
+    expect(state.dice.flatMap(die => die.faces).some(face => face.magneticSourceUsed)).toBe(false);
     expect(state.chargeXMult).toBe(1);
   });
 });

@@ -15,17 +15,19 @@ Direct XMult Flames below produce an `XMultFactor`. Charge-family Flames instead
 | Power Surge | Charge transformer | â€” | The Ultimate-ranked hand triples current Charge | Shared | Capacity |
 | Speed Demon | Decision-time factor | — | 1-second grace, then smooth decay from `1 + 8p` to ×1 by 10 seconds | Yes | Yes |
 | Six Pack | Round-depleting factor | — | Starts at `S = 1 + 5p`; six played Upper hands reduce the full bonus in equal steps after scoring | Yes | Yes |
-| Flux Capacitor | Charge generator | — | Successful Magnetic destination pulls add `2p` Charge | Shared | Yes |
+| Flux Capacitor | Charge multiplier | — | One source activation pulling `m` Magnetic faces multiplies current Charge by `1 + mp`, once | Shared | Yes |
 | Dragon's Hoard | Held-Gold factor | `1 + 2pg`, max ×3 | `1 + 4pg`, max ×5 | Yes | Yes |
 | Well Trained | Hand-history factor | `min(3, 1 + 0.1np)` | `min(5, 1 + 0.2np)` | Yes | Yes |
 | Target Practice | Targeted Lower-hand factor | `1 + 4p`, max ×5 | `1 + 8p`, max ×9 | Yes | Yes |
 | Hot Streak | Ordered Lower-sequence factor | `1 + 0.5cp` | `1 + cp` | Yes | Yes |
 | Money to Burn | Normal-shop-spend factor | `1 + 2ps`, max ×3 | `1 + 4ps`, max ×5 | Yes | Yes |
 | Lowball | Printed-face-average factor | `1 + (T − 1)p`, max ×3 | `1 + 2(T − 1)p`, max ×5 | Yes | Yes |
-| Straight Shooter | Straight-hand factor | `1 + 2p`, max ×3 | `1 + 4p`, max ×5 | Yes | Yes |
-| Double Down | Pair-hand factor | `1 + 2p`, max ×3 | `1 + 4p`, max ×5 | Yes | Yes |
-| Three’s Company | Three of a Kind/Full House factor | — | `1 + 4p`, max ×5 | Yes | Yes |
-| Box Set | Four of a Kind/Five of a Kind factor | — | `1 + 4p`, max ×5 | Yes | Yes |
+| Straight Shooter | Small Straight setup → Large Straight payoff | `1 + 2p`, max ×3 | Once per Round after setup: `1 + 8p`, max ×9 | Yes | Yes |
+| Double Down | Pair setup → Two Pair payoff | `1 + 2p`, max ×3 | Once per Round after setup: `1 + 8p`, max ×9 | Yes | Yes |
+| Three’s Company | Three of a Kind setup → Full House payoff | — | Once per Round after setup: `1 + 8p`, max ×9 | Yes | Yes |
+| Box Set | Four of a Kind setup → Five of a Kind payoff | — | Once per Round after setup: `1 + 8p`, max ×9 | Yes | Yes |
+| Missing Pair | Pair/Three of a Kind factor | — | `1 + 4p`, max ×5 | Yes | Yes |
+| One Short | Small Straight/Four of a Kind factor | — | `1 + 4p`, max ×5 | Yes | Yes |
 
 Bonfires continue to use each Flame's full-progress formula globally and still require exactly 100 invested Gold. Each Charge-family Flame contributes `1 + 4p` Max Charge; any family Bonfire unlocks spending the shared meter on any hand.
 

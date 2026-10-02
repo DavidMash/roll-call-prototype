@@ -96,7 +96,7 @@ describe('focused enhancement roster and migration', () => {
     expect(result.state.dice[0].faces[0].enhancements.jackpot).toBe(3);
     expect(result.state.dice[0].flame).toBeNull();
     expect(result.state.bonfires).toEqual([]);
-    expect(FLAME_IDS).toHaveLength(21);
+    expect(FLAME_IDS).toHaveLength(23);
   });
 });
 

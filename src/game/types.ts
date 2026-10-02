@@ -11,7 +11,7 @@ export type Flame =
   | 'speedDemon' | 'sixPack' | 'fluxCapacitor'
   | 'dragonsHoard' | 'wellTrained' | 'targetPractice'
   | 'hotStreak' | 'moneyToBurn' | 'lowball' | 'straightShooter' | 'doubleDown'
-  | 'threesCompany' | 'boxSet';
+  | 'threesCompany' | 'boxSet' | 'missingPair' | 'oneShort';
 export type HandId =
   | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes'
   | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
@@ -21,6 +21,7 @@ export type HandPlaySource = 'manual' | 'jumpingBean';
 export type GoldSource = 'golden' | 'jackpot' | 'enhancementSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward';
 export type GoldSpendSource = 'enhancement' | 'shopDiceReroll' | 'enhancementReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore';
 export type HandLevels = Record<HandId, number>;
+export type HandFamilyFlameStage = 'setup' | 'payoff' | 'spent';
 
 export interface RunNode {
   id: string;
@@ -109,7 +110,7 @@ export interface Face {
   snakeEyed?: boolean;
   infected?: boolean;
   snakeEyesOriginalRank?: Rank;
-  magneticDestinationUsed?: boolean;
+  magneticSourceUsed?: boolean;
 }
 export interface ActiveFlame { id: Flame; investedGold: number }
 export interface StandaloneScoreRecord {
@@ -188,6 +189,7 @@ export interface Board {
   sixPackUpperHandsPlayed: number;
   hotStreakGoal: HandId | null;
   hotStreakCharges: number;
+  handFamilyFlameStages: Partial<Record<Flame, HandFamilyFlameStage>>;
   lifetimeNormalShopGoldSpent: number;
   consumed: HandId[];
   scoreByHand: Partial<Record<HandId, number>>;

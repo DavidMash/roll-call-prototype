@@ -3,7 +3,7 @@ import { dispatch, newRun, validateAction } from './engine';
 import { Resolver } from './effects';
 import {
   captureHandStart, composeXMult, dragonsHoardMultiplier, flameEffectText, FLAME_IDS, momentumChargeGain,
-  handXMultContributions, hotStreakMultiplier, lowballMultiplier, moneyToBurnMultiplier, standardFlameMultiplier,
+  handFamilyFlameMultiplier, handXMultContributions, hotStreakMultiplier, lowballMultiplier, moneyToBurnMultiplier, standardFlameMultiplier,
   targetPracticeMultiplier, wellTrainedMultiplier, XMult_FLAME_IDS,
 } from './flames';
 import type { Flame, GameState, RandomSource, Rank } from './types';
@@ -20,12 +20,13 @@ const play = (state: GameState, hand = 'threeKind' as const, dieIds = [0, 1, 2],
 
 describe('multiplicative Flame formulas', () => {
   it('contains the final unique 15-Flame roster without Personal Trainer', () => {
-    expect(FLAME_IDS).toEqual(['ultimate', 'minigun', 'hailMary', 'fullOfGrace', 'momentum', 'thirdRail', 'jumpStart', 'powerSurge', 'speedDemon', 'sixPack', 'fluxCapacitor', 'dragonsHoard', 'wellTrained', 'targetPractice', 'hotStreak', 'moneyToBurn', 'lowball', 'straightShooter', 'doubleDown', 'threesCompany', 'boxSet']);
+    expect(FLAME_IDS).toEqual(['ultimate', 'minigun', 'hailMary', 'fullOfGrace', 'momentum', 'thirdRail', 'jumpStart', 'powerSurge', 'speedDemon', 'sixPack', 'fluxCapacitor', 'dragonsHoard', 'wellTrained', 'targetPractice', 'hotStreak', 'moneyToBurn', 'lowball', 'straightShooter', 'doubleDown', 'threesCompany', 'boxSet', 'missingPair', 'oneShort']);
     expect(FLAME_IDS).not.toContain('personalTrainer');
     expect(FLAME_IDS).not.toContain('weighted');
     expect(FLAME_IDS).not.toContain('clockwork');
   });
   it.each([[0, 1], [10, 1.4], [25, 2], [50, 3], [100, 5]] as const)('standard scale %s => ×%s', (gold, factor) => expect(standardFlameMultiplier(gold)).toBe(factor));
+  it.each([[0, 1], [25, 3], [50, 5], [100, 9]] as const)('hand-family payoff scale %s => ×%s', (gold, factor) => expect(handFamilyFlameMultiplier(gold)).toBe(factor));
   it.each([
     [0, 1, 0, 1, 1, 1, 1],
     [10, 1.8, 0.05, 1.4, 1.2, 1.4, 1.4],
@@ -79,29 +80,32 @@ describe('conditional Flames and Bonfires', () => {
     expect(factors.map(item => item.value)).toEqual([5, 5]);
     expect(composeXMult(factors)).toBe(25);
   });
-  it('supports Straight Shooter, Double Down, Target Practice and Lowball conditions', () => {
+  it('supports armed Straight Shooter, Target Practice and Lowball conditions', () => {
     const state = game([1, 2, 3, 4, 6]);
-    flame(state, 0, 'straightShooter'); flame(state, 1, 'doubleDown'); flame(state, 2, 'targetPractice'); flame(state, 3, 'lowball');
+    flame(state, 0, 'straightShooter'); flame(state, 2, 'targetPractice'); flame(state, 3, 'lowball');
+    state.handFamilyFlameStages.straightShooter = 'payoff';
     state.targetPracticeHand = 'smallStraight';
     const factors = handXMultContributions(captureHandStart(state, 'smallStraight', [0, 1, 2, 3]), 'smallStraight', 1, [0, 1, 2, 3]);
-    expect(factors.map(item => [item.source, item.value])).toEqual([['straightShooter', 5], ['targetPractice', 9], ['lowball', 4]]);
+    expect(factors.map(item => [item.source, item.value])).toEqual([['targetPractice', 9], ['lowball', 4]]);
   });
   it.each([
-    ['threesCompany', 'threeKind'],
+    ['doubleDown', 'twoPair'],
     ['threesCompany', 'fullHouse'],
-    ['boxSet', 'fourKind'],
+    ['straightShooter', 'largeStraight'],
     ['boxSet', 'fiveKind'],
-  ] as const)('%s scales for %s, requires its die before Bonfire, and applies globally after Bonfire', (id, hand) => {
+  ] as const)('%s scales for its armed %s payoff, requires its die before Bonfire, and applies globally after Bonfire', (id, hand) => {
     const ember = game(); flame(ember, 0, id, 50);
+    ember.handFamilyFlameStages[id] = 'payoff';
     const participating = handXMultContributions(captureHandStart(ember, hand, [0, 1, 2]), hand, 1, [0, 1, 2]);
-    expect(participating).toMatchObject([{ source: id, value: 3, dieId: 0 }]);
+    expect(participating).toMatchObject([{ source: id, value: 5, dieId: 0 }]);
     expect(handXMultContributions(captureHandStart(ember, hand, [1, 2]), hand, 1, [1, 2])).toEqual([]);
     expect(handXMultContributions(captureHandStart(ember, 'ones', [0]), 'ones', 1, [0])).toEqual([]);
 
     ember.dice[0].flame = null;
     ember.bonfires = [id];
+    ember.handFamilyFlameStages[id] = 'payoff';
     expect(handXMultContributions(captureHandStart(ember, hand, [1, 2]), hand, 1, [1, 2]))
-      .toMatchObject([{ source: id, value: 5, dieId: null }]);
+      .toMatchObject([{ source: id, value: 9, dieId: null }]);
   });
   it('uses previous plays and the held-Gold/shop-spend snapshots', () => {
     const state = game(); state.gold = 50; state.handPlayCounts.threeKind = 10; state.lifetimeNormalShopGoldSpent = 75;

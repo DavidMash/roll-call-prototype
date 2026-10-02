@@ -115,7 +115,7 @@ Selling removes every stack of the selected enhancement type from that face. Nor
 
 Sticky and Slippy now cost 2 Gold; their gameplay behavior is unchanged.
 
-Each physical Magnetic face can be used as a pull destination once per Round. Natural rolls do not spend it, and a spent destination can still act as a held source for pulls toward other unused Magnetic faces. Destination use resets at the start of each Round.
+While held, a showing Magnetic face pulls eligible rolling dice onto their Magnetic faces. A physical Magnetic face can perform this source pull once per Round; being pulled does not spend its source use, destinations do not exhaust, and source use resets at the start of each Round. Bump retains roll-resolution priority.
 
 Jumping Bean and Magnetic remain nonstackable on a Face, and each is limited to one Face per physical die. Different dice may each carry their own Jumping Bean and Magnetic Face.
 
@@ -151,17 +151,19 @@ Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a f
 | Power Surge | The single Ultimate-ranked hand triples current Charge |
 | Speed Demon | Actual unblocked decision time: full strength for 1 second, then smooth decay to ×1 at about 10 seconds; peak `1 + 8p` |
 | Six Pack | Starts each Round at `S = 1 + 5p`; after `n` played Upper hands its factor is `1 + (S - 1)(1 - n/6)`, floored at ×1 |
-| Flux Capacitor | Each successful pull to a new Magnetic destination adds `2p` Charge |
+| Flux Capacitor | One Magnetic source activation that pulls `m` Magnetic faces multiplies current Charge by `1 + mp`, clamped to Max Charge |
 | Dragon's Hoard | `1 + 4p × min(heldGold/100, 1)`, max ×5 |
 | Well Trained | `min(5, 1 + previousPlays × 0.2p)` |
 | Target Practice | Targeted Lower hand: `1 + 8p`, max ×9 |
 | Hot Streak | `1 + successfulCharges × p` |
 | Money to Burn | `1 + 4p × min(shopSpend/100, 1)`, max ×5 |
 | Lowball | `1 + 2 × (printedFaceTier − 1) × p`, max ×5 |
-| Straight Shooter | Small/Large Straight: `1 + 4p`, max ×5 |
-| Double Down | Pair/Two Pair: `1 + 4p`, max ×5 |
-| Three’s Company | Three of a Kind/Full House: `1 + 4p`, max ×5 |
-| Box Set | Four of a Kind/Five of a Kind: `1 + 4p`, max ×5 |
+| Straight Shooter | Play Small Straight, then pay once on Large Straight: `1 + 8p`, max ×9 |
+| Double Down | Play Pair, then pay once on Two Pair: `1 + 8p`, max ×9 |
+| Three’s Company | Play Three of a Kind, then pay once on Full House: `1 + 8p`, max ×9 |
+| Box Set | Play Four of a Kind, then pay once on Five of a Kind: `1 + 8p`, max ×9 |
+| Missing Pair | Pair/Three of a Kind: `1 + 4p`, max ×5 |
+| One Short | Small Straight/Four of a Kind: `1 + 4p`, max ×5 |
 
 Each owned Charge-family Flame contributes `1 + 4p` Max Charge. Their capacity stacks into one shared meter. Before any Charge-family Bonfire, every attached family die must participate in the hand that spends Charge; any family Bonfire unlocks global use.
 
@@ -171,7 +173,7 @@ Physical die faces use a shared scalable pip layout in gameplay, the Shop, Manag
 
 ## Telemetry and validation
 
-Run Info exports schema 16 / `round-summary-boss-reward-v1`, including route transitions, destination and direction, boss assignment and attempts, Round Summary Gold reconciliation, manual-reroll face exclusion, Caller calls and outcomes, Warden unlock targets and choices, Hexer die activity, round attempts, Bust/checkpoint lifecycle, economy, enhancements, Vintage growth, source-aware scoring, Flame factors, Stoke records, and Shop spending.
+Run Info exports schema 17 / `flame-magnetic-sequences-v1`, including route transitions, destination and direction, boss assignment and attempts, Round Summary Gold reconciliation, manual-reroll face exclusion, Caller calls and outcomes, Warden unlock targets and choices, Hexer die activity, round attempts, Bust/checkpoint lifecycle, economy, enhancements, Vintage growth, source-aware scoring, Flame factors and sequence stages, Magnetic source use, Stoke records, and Shop spending.
 
 Validation commands:
 

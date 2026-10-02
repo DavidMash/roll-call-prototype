@@ -4,7 +4,8 @@ import { Resolver } from './effects';
 import { enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, placementError, stacks } from './enhancements';
 import {
   activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasChargeBonfire, hasOwnedChargeFlame,
-  hasOwnedFlame, isChargeFlame, isFlame, recalculateMaxCharge, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier,
+  HAND_FAMILY_FLAME_IDS, hasOwnedFlame, isChargeFlame, isFlame, ownedFlameIds, recalculateMaxCharge,
+  sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier,
 } from './flames';
 import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, isValidSelection } from './hands';
 import { hashSeed, SeededRng } from './rng';
@@ -38,6 +39,15 @@ function normalizeSixPackRuntime(state: Pick<Board, 'dice' | 'bonfires' | 'sixPa
     : Math.max(1, state.sixPackXMult ?? 1);
 }
 
+function normalizeHandFamilyFlameRuntime(state: Pick<Board, 'dice' | 'bonfires' | 'handFamilyFlameStages'>): void {
+  const stages = state.handFamilyFlameStages ?? {};
+  const owned = ownedFlameIds(state as Pick<GameState, 'dice' | 'bonfires'>);
+  state.handFamilyFlameStages = Object.fromEntries(HAND_FAMILY_FLAME_IDS.filter(id => owned.has(id)).map(id => {
+    const stage = stages[id];
+    return [id, stage === 'payoff' || stage === 'spent' ? stage : 'setup'];
+  }));
+}
+
 export function normalizeGameState(state: GameState): GameState {
   const next = structuredClone(state);
   const legacy = next as GameState & { flameReward?: GameState['flameSelection'] };
@@ -47,9 +57,9 @@ export function normalizeGameState(state: GameState): GameState {
   for (const die of next.dice) {
     die.owner ??= 'player';
     for (const face of die.faces) {
-      const legacyMagnetic = face as typeof face & { magneticUsed?: boolean };
-      if (legacyMagnetic.magneticUsed) face.magneticDestinationUsed = true;
+      const legacyMagnetic = face as typeof face & { magneticUsed?: boolean; magneticDestinationUsed?: boolean };
       delete legacyMagnetic.magneticUsed;
+      delete legacyMagnetic.magneticDestinationUsed;
       delete (face.enhancements as Record<string, number | undefined>).multiplier;
       for (const id of ENHANCEMENT_IDS) {
         const value = face.enhancements[id];
@@ -80,9 +90,9 @@ export function normalizeGameState(state: GameState): GameState {
     if (next.roundCheckpoint.shop) normalizeShop(next.roundCheckpoint.shop);
     for (const die of next.roundCheckpoint.dice) {
       for (const face of die.faces) {
-        const legacyMagnetic = face as typeof face & { magneticUsed?: boolean };
-        if (legacyMagnetic.magneticUsed) face.magneticDestinationUsed = true;
+        const legacyMagnetic = face as typeof face & { magneticUsed?: boolean; magneticDestinationUsed?: boolean };
         delete legacyMagnetic.magneticUsed;
+        delete legacyMagnetic.magneticDestinationUsed;
       }
       const rawFlame = die.flame as unknown;
       const rawId = typeof rawFlame === 'string' ? rawFlame
@@ -97,6 +107,7 @@ export function normalizeGameState(state: GameState): GameState {
     recalculateMaxCharge(next.roundCheckpoint);
     next.roundCheckpoint.decisionId = Math.max(0, Math.floor(next.roundCheckpoint.decisionId ?? 0));
     normalizeSixPackRuntime(next.roundCheckpoint);
+    normalizeHandFamilyFlameRuntime(next.roundCheckpoint);
   }
   if (next.flameSelection) next.flameSelection.offers = next.flameSelection.offers
     .map(offer => ({ ...offer, flame: (offer.flame as string) === 'charge' ? 'momentum' as const : offer.flame }))
@@ -164,6 +175,7 @@ export function normalizeGameState(state: GameState): GameState {
   next.stats.goldSpentBySource.lifeRestore ??= 0;
   next.decisionId = Math.max(0, Math.floor(next.decisionId ?? 0));
   normalizeSixPackRuntime(next);
+  normalizeHandFamilyFlameRuntime(next);
   recalculateMaxCharge(next);
   return next;
 }
@@ -295,7 +307,7 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
     score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, roundAttemptNumber: 1,
     bossSchedule: bossSchedule(seed), boss: null, currentNodeId: '',
     bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], chargeXMult: 1, maxCharge: 1,
-    chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, lifetimeNormalShopGoldSpent: 0, consumed: [], shop: null,
+    chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], shop: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
     scoreByHand: {}, effectScore: 0, lastRoundPayout: null, roundSummary: null, flameSelection: null,
     manualRerollsRemaining: CONFIG.manualRerollsPerRound, nextOfferId: 0, stats: createStats(seed), history: [], roundCheckpoint: null,
@@ -363,6 +375,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const replaced = activeFlameId(die.flame);
         const firstFlame = next.stats.flameAcquisitions.length === 0;
         die.flame = { id: offer.flame, investedGold: 0 };
+        normalizeHandFamilyFlameRuntime(next);
         recalculateMaxCharge(next);
         next.flameSelection!.acquired = true;
         next.stats.flameAcquisitions.push({ round: next.round, dieId: die.id, flame: offer.flame, replaced });

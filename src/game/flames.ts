@@ -24,22 +24,32 @@ export const FLAMES: Record<Flame, FlameDefinition> = {
   powerSurge: { name: 'Power Surge', shortName: 'SURGE', affectsXMult: true, description: 'Playing your highest level hand triples your current Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
   speedDemon: { name: 'Speed Demon', shortName: 'SPEED', affectsXMult: true, description: 'Play quickly for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   sixPack: { name: 'Six Pack', shortName: 'SIX', affectsXMult: true, description: 'Starts at up to ×6 XMult. Reduces when an Upper hand is played.', bonfireDescription: GLOBAL_BONFIRE },
-  fluxCapacitor: { name: 'Flux Capacitor', shortName: 'FLUX', affectsXMult: true, description: 'Using a Magnetic face to pull another die builds Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
+  fluxCapacitor: { name: 'Flux Capacitor', shortName: 'FLUX', affectsXMult: true, description: 'Pulling Magnetic faces multiplies your XMult Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
   dragonsHoard: { name: 'Dragon’s Hoard', shortName: 'HOARD', affectsXMult: true, description: 'Holding more Gold earns up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   wellTrained: { name: 'Well Trained', shortName: 'WELL', affectsXMult: true, description: 'Hands you play often gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   targetPractice: { name: 'Target Practice', shortName: 'TARGET', affectsXMult: true, description: 'Hit your Target for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   hotStreak: { name: 'Hot Streak', shortName: 'STREAK', affectsXMult: true, description: 'Chain Lower hands in order to build XMult, up to ×9.', bonfireDescription: GLOBAL_BONFIRE },
   moneyToBurn: { name: 'Money to Burn', shortName: 'BURN', affectsXMult: true, description: 'Spending Gold in Shops earns up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   lowball: { name: 'Lowball', shortName: 'LOW', affectsXMult: true, description: 'Low face values earn up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  straightShooter: { name: 'Straight Shooter', shortName: 'STR8', affectsXMult: true, description: 'Small Straight and Large Straight gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  doubleDown: { name: 'Double Down', shortName: 'DBL', affectsXMult: true, description: 'Pair and Two Pair gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  threesCompany: { name: 'Three’s Company', shortName: 'THREE', affectsXMult: true, description: 'Three of a Kind and Full House gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  boxSet: { name: 'Box Set', shortName: 'BOX', affectsXMult: true, description: 'Four of a Kind and Five of a Kind gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  straightShooter: { name: 'Straight Shooter', shortName: 'STR8', affectsXMult: true, description: 'Play Small Straight before Large Straight for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  doubleDown: { name: 'Double Down', shortName: 'DBL', affectsXMult: true, description: 'Play Pair before Two Pair for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  threesCompany: { name: 'Three’s Company', shortName: 'THREE', affectsXMult: true, description: 'Play Three of a Kind before Full House for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  boxSet: { name: 'Box Set', shortName: 'BOX', affectsXMult: true, description: 'Play Four of a Kind before Five of a Kind for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  missingPair: { name: 'Missing Pair', shortName: 'MISS', affectsXMult: true, description: 'Pair and Three of a Kind gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  oneShort: { name: 'One Short', shortName: 'SHORT', affectsXMult: true, description: 'Small Straight and Four of a Kind gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
 };
 export const FLAME_IDS = Object.keys(FLAMES) as Flame[];
 export const XMult_FLAME_IDS = FLAME_IDS.filter(flame => FLAMES[flame].affectsXMult);
 export const CHARGE_FLAME_IDS = ['momentum', 'thirdRail', 'jumpStart', 'powerSurge', 'fluxCapacitor'] as const satisfies readonly Flame[];
 export type ChargeFlame = typeof CHARGE_FLAME_IDS[number];
+export const HAND_FAMILY_FLAMES = {
+  doubleDown: { setup: 'pair', payoff: 'twoPair' },
+  threesCompany: { setup: 'threeKind', payoff: 'fullHouse' },
+  straightShooter: { setup: 'smallStraight', payoff: 'largeStraight' },
+  boxSet: { setup: 'fourKind', payoff: 'fiveKind' },
+} as const satisfies Partial<Record<Flame, { setup: HandId; payoff: HandId }>>;
+export type HandFamilyFlame = keyof typeof HAND_FAMILY_FLAMES;
+export const HAND_FAMILY_FLAME_IDS = Object.keys(HAND_FAMILY_FLAMES) as HandFamilyFlame[];
 export const HOT_STREAK_SEQUENCE: HandId[] = ['pair', 'twoPair', 'threeKind', 'smallStraight', 'fullHouse', 'fourKind', 'largeStraight', 'fiveKind'];
 export const flameProgress = (investedGold: number) => Math.max(0, Math.min(100, investedGold)) / 100;
 export const standardFlameMultiplier = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
@@ -47,7 +57,9 @@ export const targetPracticeMultiplier = (investedGold: number) => 1 + 8 * flameP
 export const momentumChargeGain = (investedGold: number) => 0.5 * flameProgress(investedGold);
 export const thirdRailChargeGain = (investedGold: number) => 0.5 * flameProgress(investedGold);
 export const jumpStartChargeGain = (investedGold: number) => 2 * flameProgress(investedGold);
-export const fluxCapacitorChargeGain = (investedGold: number) => 2 * flameProgress(investedGold);
+export const fluxCapacitorChargeMultiplier = (investedGold: number, pulledMagneticFaces: number) =>
+  1 + Math.max(0, pulledMagneticFaces) * flameProgress(investedGold);
+export const handFamilyFlameMultiplier = (investedGold: number) => 1 + 8 * flameProgress(investedGold);
 export const speedDemonMultiplier = (investedGold: number, decisionMs: number) => {
   const strength = decisionMs <= 1000 ? 1 : Math.max(0, Math.min(1, (10000 - decisionMs) / 9000));
   return Number((1 + 8 * flameProgress(investedGold) * strength).toFixed(12));
@@ -76,7 +88,7 @@ export function flameEffectText(id: Flame, investedGold: number, board: FlameDis
     case 'thirdRail': return `Rolled 3s build +${formatPlayerNumber(thirdRailChargeGain(investedGold))} Charge.`;
     case 'jumpStart': return `Each Reroll builds +${formatPlayerNumber(jumpStartChargeGain(investedGold))} Charge.`;
     case 'powerSurge': return 'Your highest level hand triples current Charge.';
-    case 'fluxCapacitor': return `Magnetic pulls build +${formatPlayerNumber(fluxCapacitorChargeGain(investedGold))} Charge.`;
+    case 'fluxCapacitor': return `Each activation multiplies Charge by 1 + (${formatPlayerNumber(flameProgress(investedGold))} × pulled faces).`;
     case 'speedDemon': return `A quick play reaches ×${formatPlayerNumber(speedDemonMultiplier(investedGold, 0))} XMult.`;
     case 'sixPack': return `Each Round starts at ×${formatPlayerNumber(sixPackStartingMultiplier(investedGold))} XMult.`;
     case 'targetPractice': return `Target gains ×${formatPlayerNumber(targetPracticeMultiplier(investedGold))} XMult.`;
@@ -85,6 +97,10 @@ export function flameEffectText(id: Flame, investedGold: number, board: FlameDis
     case 'hotStreak': return `A full Lower-hand chain reaches ×${formatPlayerNumber(hotStreakMultiplier(investedGold, HOT_STREAK_SEQUENCE.length))} XMult.`;
     case 'moneyToBurn': return `${formatPlayerNumber(board.lifetimeNormalShopGoldSpent)} Gold spent in Shops currently grants ×${formatPlayerNumber(moneyToBurnMultiplier(investedGold, board.lifetimeNormalShopGoldSpent))} XMult.`;
     case 'lowball': return `Low Faces gain up to ×${formatPlayerNumber(lowballMultiplier(investedGold, 2))} XMult.`;
+    case 'straightShooter':
+    case 'doubleDown':
+    case 'threesCompany':
+    case 'boxSet': return `The payoff reaches ×${formatPlayerNumber(handFamilyFlameMultiplier(investedGold))} XMult after its setup hand.`;
     default: return `The condition grants ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult.`;
   }
 }
@@ -136,6 +152,7 @@ export interface HandStartSnapshot {
   targetPracticeHand: HandId | null;
   hotStreakGoal: HandId | null;
   hotStreakCharges: number;
+  handFamilyFlameStages: Partial<Record<Flame, import('./types').HandFamilyFlameStage>>;
   chargeXMult: number;
   chargeArmed: boolean;
   speedDemonDecisionMs: number | null;
@@ -150,7 +167,7 @@ export interface HandStartSnapshot {
   dice: { dieId: number; flame: Flame | null; investedGold: number; faceValue: number }[];
 }
 
-export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'gold' | 'manualRerollsRemaining' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'bonfires' | 'dice' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'consumed'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null): HandStartSnapshot {
+export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'gold' | 'manualRerollsRemaining' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'bonfires' | 'dice' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'consumed'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null): HandStartSnapshot {
   const selectedScore = handScore(state.dice, hand, selectedDieIds, state.handLevels[hand]);
   return {
     score: state.score,
@@ -162,6 +179,7 @@ export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'go
     targetPracticeHand: state.targetPracticeHand,
     hotStreakGoal: state.hotStreakGoal,
     hotStreakCharges: state.hotStreakCharges,
+    handFamilyFlameStages: { ...state.handFamilyFlameStages },
     chargeXMult: state.chargeXMult,
     chargeArmed: state.chargeArmed,
     speedDemonDecisionMs,
@@ -184,10 +202,12 @@ const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId) => {
     case 'hailMary': return snapshot.manualRerollsRemaining === 0;
     case 'fullOfGrace': return snapshot.lastPlayDanger !== 'none';
     case 'targetPractice': return hand === snapshot.targetPracticeHand;
-    case 'straightShooter': return hand === 'smallStraight' || hand === 'largeStraight';
-    case 'doubleDown': return hand === 'pair' || hand === 'twoPair';
-    case 'threesCompany': return hand === 'threeKind' || hand === 'fullHouse';
-    case 'boxSet': return hand === 'fourKind' || hand === 'fiveKind';
+    case 'straightShooter':
+    case 'doubleDown':
+    case 'threesCompany':
+    case 'boxSet': return snapshot.handFamilyFlameStages[id] === 'payoff' && hand === HAND_FAMILY_FLAMES[id].payoff;
+    case 'missingPair': return hand === 'pair' || hand === 'threeKind';
+    case 'oneShort': return hand === 'smallStraight' || hand === 'fourKind';
     case 'hotStreak': return hand === snapshot.hotStreakGoal;
     case 'speedDemon': return snapshot.speedDemonDecisionMs !== null;
     default: return true;
@@ -207,6 +227,10 @@ function factorValue(id: Flame, investedGold: number, snapshot: HandStartSnapsho
     case 'hotStreak': return hotStreakMultiplier(investedGold, snapshot.hotStreakCharges + 1);
     case 'speedDemon': return speedDemonMultiplier(investedGold, snapshot.speedDemonDecisionMs ?? 10000);
     case 'sixPack': return snapshot.sixPackXMult;
+    case 'straightShooter':
+    case 'doubleDown':
+    case 'threesCompany':
+    case 'boxSet': return handFamilyFlameMultiplier(investedGold);
     default: return standardFlameMultiplier(investedGold);
   }
 }
@@ -229,7 +253,7 @@ function contributions(snapshot: HandStartSnapshot, hand: HandId, scoringDieIds:
   for (const id of snapshot.bonfires) {
     if (!FLAMES[id]?.affectsXMult || isChargeFlame(id) || (!includeFullOfGrace && id === 'fullOfGrace') || !qualifies(id, snapshot, hand)) continue;
     const value = factorValue(id, 100, snapshot, scoringDieIds);
-    if (value > 1 || id === 'speedDemon') {
+    if (value > 1 || id === 'speedDemon' || isHandFamilyFlame(id)) {
       const context = factorInput(id, snapshot, scoringDieIds);
       result.push({ source: id, value, dieId: null, ...context, detail: `Bonfire${context.detail ? `; ${context.detail}` : ''}` });
     }
@@ -239,7 +263,7 @@ function contributions(snapshot: HandStartSnapshot, hand: HandId, scoringDieIds:
     if (!id || !scoring.has(die.dieId) || !FLAMES[id].affectsXMult || isChargeFlame(id)
       || (!includeFullOfGrace && id === 'fullOfGrace') || !qualifies(id, snapshot, hand)) continue;
     const value = factorValue(id, die.investedGold, snapshot, scoringDieIds);
-    if (value > 1 || id === 'speedDemon') result.push({ source: id, value, dieId: die.dieId, ...factorInput(id, snapshot, scoringDieIds) });
+    if (value > 1 || id === 'speedDemon' || isHandFamilyFlame(id)) result.push({ source: id, value, dieId: die.dieId, ...factorInput(id, snapshot, scoringDieIds) });
   }
   return result;
 }
@@ -262,4 +286,18 @@ export const ownedFlameIds = (state: Pick<GameState, 'dice' | 'bonfires'>) => ne
   ...state.bonfires,
   ...state.dice.map(die => activeFlameId(die.flame)).filter((id): id is Flame => id !== null),
 ]);
+export const isHandFamilyFlame = (id: Flame | null | undefined): id is HandFamilyFlame =>
+  id !== null && id !== undefined && Object.hasOwn(HAND_FAMILY_FLAMES, id);
+export function initialHandFamilyFlameStages(state: Pick<GameState, 'dice' | 'bonfires'>): Pick<Partial<Record<Flame, import('./types').HandFamilyFlameStage>>, HandFamilyFlame> {
+  const owned = ownedFlameIds(state);
+  return Object.fromEntries(HAND_FAMILY_FLAME_IDS.filter(id => owned.has(id)).map(id => [id, 'setup'])) as Pick<Partial<Record<Flame, import('./types').HandFamilyFlameStage>>, HandFamilyFlame>;
+}
+export function handFamilyFlameTargets(state: Pick<Board, 'dice' | 'bonfires' | 'handFamilyFlameStages'>): HandId[] {
+  const owned = ownedFlameIds(state as Pick<GameState, 'dice' | 'bonfires'>);
+  return HAND_FAMILY_FLAME_IDS.flatMap(id => {
+    if (!owned.has(id)) return [];
+    const stage = state.handFamilyFlameStages[id];
+    return stage === 'setup' ? [HAND_FAMILY_FLAMES[id].setup] : stage === 'payoff' ? [HAND_FAMILY_FLAMES[id].payoff] : [];
+  });
+}
 export const lowerHand = (hand: HandId) => LOWER_HAND_IDS.includes(hand);

@@ -31,15 +31,15 @@ export function createStats(seed: string): RunStats {
 export function boardSnapshot(state: GameState): Board {
   const { phase, round, target, score, gold, lives, roundAttemptNumber, bossSchedule, boss, currentNodeId, bust, flameTutorial,
     manualRerollsRemaining, dice, bonfires, chargeXMult, maxCharge, decisionId, sixPackXMult, sixPackUpperHandsPlayed,
-    chargeArmed, hotStreakGoal, hotStreakCharges, lifetimeNormalShopGoldSpent, consumed, scoreByHand, effectScore,
+    chargeArmed, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, lifetimeNormalShopGoldSpent, consumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, lastRoundPayout, roundSummary, shop, flameSelection } = state;
   return structuredClone({ phase, round, target, score, gold, lives, roundAttemptNumber, bossSchedule, boss, currentNodeId, bust, flameTutorial,
     manualRerollsRemaining, dice, bonfires,
-    chargeXMult, maxCharge, chargeArmed, decisionId, sixPackXMult, sixPackUpperHandsPlayed, hotStreakGoal, hotStreakCharges, lifetimeNormalShopGoldSpent, consumed, scoreByHand, effectScore,
+    chargeXMult, maxCharge, chargeArmed, decisionId, sixPackXMult, sixPackUpperHandsPlayed, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, lifetimeNormalShopGoldSpent, consumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, lastRoundPayout, roundSummary, shop, flameSelection });
 }
 export function exportRun(state: GameState) {
-  return { schemaVersion: 16, scoringModel: 'round-summary-boss-reward-v1', ...state.stats,
+  return { schemaVersion: 17, scoringModel: 'flame-magnetic-sequences-v1', ...state.stats,
     bonfires: [...state.bonfires], finalHandLevels: structuredClone(state.handLevels),
     finalFlames: state.dice.filter(die => die.owner === 'player').map(die => ({ dieId: die.id, flame: activeFlameId(die.flame), investedGold: die.flame?.investedGold ?? 0 })),
     rngState: state.rngState, board: boardSnapshot(state) };
