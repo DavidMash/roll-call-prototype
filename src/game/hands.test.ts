@@ -59,7 +59,7 @@ describe('hand detection', () => {
     expect(HAND_IDS).not.toContain('chance');
   });
   it('uses the centralized progression formula', () => {
-    expect(Array.from({ length: 6 }, (_, i) => targetForRound(i + 1))).toEqual([75, 125, 150, 175, 300, 350]);
+    expect(Array.from({ length: 6 }, (_, i) => targetForRound(i + 1))).toEqual([100, 175, 200, 225, 375, 450]);
     expect(ENHANCEMENTS.weighted.purchasePrice).toBe(3);
   });
 });

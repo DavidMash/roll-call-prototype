@@ -68,7 +68,7 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
             data-testid={joinsTravel ? 'active-map-connector' : undefined} aria-hidden="true" />}
           <div className={`run-map-node node-${node.type} ${node.id === destination ? 'destination' : ''}`}
             title={nodeDescription(node)} aria-current={node.id === destination ? 'step' : undefined}>
-            <span className="node-glyph">{node.type === 'shop' ? '¤' : node.type === 'flame_selection' ? '◆' : node.type === 'boss_round' ? '!' : '•'}</span>
+            <span className="node-glyph">{node.type === 'shop' ? '¤' : node.type === 'flame_selection' || node.type === 'special_offer' ? '◆' : node.type === 'boss_round' ? '!' : '•'}</span>
             <span className="node-label">{nodeLabel(node)}</span>
             {target !== null && <span className="node-target">Goal {formatPlayerNumber(target)}</span>}
           </div>

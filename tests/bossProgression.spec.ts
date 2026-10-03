@@ -66,7 +66,7 @@ async function reachBossShop(page: Page, boss: BossType, seed = seedFor(boss)) {
   let game = newRun(seed).state;
   await page.goto(`/?seed=${seed}&speed=instant`);
   await ready(page);
-  while (!(game.phase === 'shop' && game.round === 2)) {
+  while (!(game.phase === 'shop' && game.round === 2 && !game.bust)) {
     if (game.phase === 'round') game = await playOne(page, game);
     else if (game.phase === 'roundSummary') {
       await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();

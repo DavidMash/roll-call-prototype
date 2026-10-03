@@ -11,6 +11,7 @@ import { ShopScreen } from './components/ShopScreen';
 import { TopHud } from './components/TopHud';
 import { RunMapTransition } from './components/RunMapTransition';
 import { RoundSummaryScreen } from './components/RoundSummaryScreen';
+import { SpecialOfferScreen } from './components/SpecialOfferScreen';
 import { screenTheme } from './game/screenThemes';
 import { emptySelection } from './game/selection';
 import type { Action } from './game/types';
@@ -84,6 +85,7 @@ export default function App() {
         : board.phase === 'roundSummary' && board.roundSummary ? <RoundSummaryScreen board={board} busy={busy} submit={submit} />
         : board.phase === 'flameSelection' && board.flameSelection ? <FlameSelectionScreen board={board} event={event} busy={busy} diceDisplay={diceDisplay}
         selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} />
+        : board.phase === 'specialOffer' && board.specialOffer ? <SpecialOfferScreen board={board} busy={busy} submit={submit} />
         : board.phase === 'shop' && board.shop ? <ShopScreen board={board} event={event} busy={busy} diceDisplay={diceDisplay}
         selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} submit={submit} skip={game.skip} />
       : (board.phase === 'bust' || (board.phase === 'lost' && board.bust)) ? <BustScreen board={board}

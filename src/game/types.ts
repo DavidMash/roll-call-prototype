@@ -1,6 +1,6 @@
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type BossType = 'caller' | 'warden' | 'hexer' | 'marathon' | 'quickdraw' | 'fly' | 'snakeEyes' | 'infected';
-export type RunNodeType = 'normal_round' | 'boss_round' | 'shop' | 'flame_selection';
+export type RunNodeType = 'normal_round' | 'boss_round' | 'shop' | 'flame_selection' | 'special_offer';
 export type Enhancement =
   | 'bonus' | 'jumpingBean' | 'golden' | 'workout'
   | 'missingLink' | 'mirror' | 'magnetic' | 'sticky' | 'slippy'
@@ -15,10 +15,10 @@ export type Flame =
 export type HandId =
   | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes'
   | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
-export type Phase = 'round' | 'roundSummary' | 'bust' | 'flameSelection' | 'shop' | 'lost' | 'error';
+export type Phase = 'round' | 'roundSummary' | 'bust' | 'flameSelection' | 'specialOffer' | 'shop' | 'lost' | 'error';
 export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker' | 'boss';
 export type HandPlaySource = 'manual' | 'jumpingBean';
-export type GoldSource = 'golden' | 'jackpot' | 'enhancementSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward';
+export type GoldSource = 'golden' | 'jackpot' | 'enhancementSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward' | 'specialOffer' | 'cashBonus';
 export type GoldSpendSource = 'enhancement' | 'shopDiceReroll' | 'enhancementReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore';
 export type HandLevels = Record<HandId, number>;
 export type HandFamilyFlameStage = 'setup' | 'payoff' | 'spent';
@@ -134,9 +134,28 @@ export interface Shop {
   diceRerolls: number;
   offerRerolls: number;
   lifeRestores: number;
+  freeEnhancementOfferIds?: number[];
+  freeTrainingOfferKeys?: string[];
 }
 export interface FlameOffer { id: number; flame: Flame }
 export interface FlameSelection { offers: FlameOffer[]; acquired: boolean }
+export type SpecialOfferType = 'onTheHouse' | 'greatFairy' | 'focus' | 'timeTravel' | 'carePackage'
+  | 'silence' | 'sommelier' | 'taxEvasion' | 'fireKeeper' | 'cashBonus' | 'orangeTheory'
+  | 'powerball' | 'bottledFairy' | 'badDream';
+export interface SpecialOffer { id: number; type: SpecialOfferType; hand?: HandId }
+export interface SpecialOfferSelection { offers: SpecialOffer[]; acquired: boolean; chosen?: SpecialOffer }
+export interface SpecialOfferEffects {
+  onTheHouse: boolean;
+  carePackageRerolls: number;
+  silence: boolean;
+  taxEvasionRounds: number;
+  cashBonusRounds: number;
+  powerballRounds: number;
+  powerballAvailable: boolean;
+  bottledFairyRounds: number;
+  bottledFairyTriggeredThisRound: boolean;
+  badDreamRounds: number;
+}
 export interface RoundPayout {
   baseGold: number;
   unusedRerollGold: number;
@@ -175,10 +194,13 @@ export interface Board {
   roundAttemptNumber: number;
   bossSchedule: Partial<Record<number, BossType>>;
   boss: BossRuntimeState | null;
+  bossSilenced: boolean;
   currentNodeId: string;
   bust: BustSummary | null;
   flameTutorial: { pendingDieId: number | null; completed: boolean };
   manualRerollsRemaining: number;
+  specialOfferEffects: SpecialOfferEffects;
+  suppressedPostBossRewardRounds: number[];
   dice: Die[];
   bonfires: Flame[];
   chargeXMult: number;
@@ -201,6 +223,7 @@ export interface Board {
   roundSummary: RoundSummary | null;
   shop: Shop | null;
   flameSelection: FlameSelection | null;
+  specialOffer: SpecialOfferSelection | null;
 }
 export interface RoundStats {
   round: number;
@@ -403,6 +426,7 @@ export type EventType =
   | 'ROUND_SUMMARY_SHOWN'
   | 'SHOP_OPENED' | 'OFFER_PURCHASED' | 'TRAINING_PURCHASED' | 'OFFERS_REFRESHED' | 'GOLD_SPENT'
   | 'FLAME_SELECTION_OPENED' | 'FLAME_OFFERS_REFRESHED' | 'FLAME_ACQUIRED' | 'FLAME_REPLACED'
+  | 'SPECIAL_OFFER_OPENED' | 'SPECIAL_OFFER_SELECTED' | 'SPECIAL_EFFECT_TRIGGERED'
   | 'FLAME_SKIPPED' | 'FLAME_INVESTED' | 'BONFIRE_CREATED' | 'FLAME_TRIGGERED' | 'HAND_XMULT_CHANGED'
   | 'TARGET_PRACTICE_SELECTED' | 'CHARGE_CHANGED' | 'CHARGE_ARMED' | 'HOT_STREAK_CHANGED'
   | 'SPEED_DEMON_REVEALED' | 'SIX_PACK_CHANGED'
@@ -474,7 +498,10 @@ export interface GameStateBase extends Board {
   stats: RunStats;
   history: EventRecord[];
 }
-export interface GameState extends GameStateBase { roundCheckpoint: GameStateBase | null }
+export interface GameState extends GameStateBase {
+  roundCheckpoint: GameStateBase | null;
+  badDreamCheckpoint: GameStateBase | null;
+}
 export type Action =
   | { type: 'PLAY'; hand: HandId; dieIds: number[]; decisionMs?: number }
   | { type: 'MANUAL_REROLL'; dieIds: number[] }
@@ -488,6 +515,8 @@ export type Action =
   | { type: 'STOKE_FLAME'; dieId: number; amount: number }
   | { type: 'CONTINUE_ROUND_SUMMARY' }
   | { type: 'CONTINUE_FLAME_SELECTION' }
+  | { type: 'CHOOSE_SPECIAL_OFFER'; offerId: number }
+  | { type: 'CONTINUE_SPECIAL_OFFER' }
   | { type: 'RESTORE_LIFE' }
   | { type: 'DISMISS_FLAME_TUTORIAL' }
   | { type: 'RETRY_ROUND' }

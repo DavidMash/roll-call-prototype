@@ -392,7 +392,7 @@ describe('round boundaries and losing', () => {
     }
     const data = exportRun(game);
     expect(data.roundReached).toBe(5);
-    expect(data.rounds.map(round => round.target)).toEqual([75, 125, 150, 175, 300]);
+    expect(data.rounds.map(round => round.target)).toEqual([100, 175, 200, 225, 375]);
     expect(data.goldEarned).toBe(41);
     expect(data.goldSpent).toBe(0);
   });
@@ -432,14 +432,14 @@ describe('round boundaries and losing', () => {
   it('initial-roll effects can clear a round after the complete chain', () => {
     const game = shop();
     enhance(game, 0, 'jumpingBean', 1, 6);
-    enhance(game, 0, 'bonus', 12, 6);
+    enhance(game, 0, 'bonus', 17, 6);
     const result = dispatch(game, { type: 'NEXT_ROUND' }, sequence(0.99, 0, 0, 0, 0, 0));
     expect(result.state.round).toBe(2);
     expect(result.state.phase).toBe('roundSummary');
-    expect(result.state.score).toBe(133);
+    expect(result.state.score).toBe(183);
     expect(result.state.gold).toBe(118);
     expect(result.state.consumed).toEqual([]);
-    expect(result.state.stats.rounds.at(-1)!.firstCrossedScore).toBe(133);
+    expect(result.state.stats.rounds.at(-1)!.firstCrossedScore).toBe(183);
   });
   it('valid consumed hands do not prevent loss on the complete board', () => {
     const game = state([1, 2, 2, 4, 5]);
@@ -532,7 +532,7 @@ describe('shop', () => {
     game.shop!.diceRerolls = 4;
     game.shop!.offerRerolls = 3;
     enhance(game, 0, 'jumpingBean', 1, 6);
-    enhance(game, 0, 'bonus', 12, 6);
+    enhance(game, 0, 'bonus', 17, 6);
     enhance(game, 0, 'sticky', 1, 6);
     const result = dispatch(game, { type: 'NEXT_ROUND' }, sequence(0.99, 0.99, 0.99, 0.99, 0.99, 0));
     expect(result.state.phase).toBe('roundSummary');

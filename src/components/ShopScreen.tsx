@@ -15,6 +15,7 @@ import { BossPreview } from './BossPanel';
 import type { DiceDisplay } from '../uiSettings';
 import { BOSSES } from '../game/bosses';
 import { EMPTY_TEXT, formatPlayerNumber } from '../game/copy';
+import { enhancementOfferIsFree, trainingOfferIsFree } from '../game/specialOffers';
 
 interface SaleTarget { face: Rank; enhancement: Enhancement; stacks: number; proceeds: number }
 const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
@@ -35,7 +36,7 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
 
   const placementErrors = Object.fromEntries(board.dice.map(die => {
     const faceError = offer ? placementError(die, activeFace(die), offer.enhancement) : null;
-    const costError = offer && board.gold < enhancementCost(offer.enhancement)
+    const costError = offer && !enhancementOfferIsFree(shop, offer.id) && board.gold < enhancementCost(offer.enhancement)
       ? `Need ${formatPlayerNumber(enhancementCost(offer.enhancement))} Gold; you have ${formatPlayerNumber(board.gold)}.` : null;
     return [die.id, faceError ?? costError ?? ''];
   })) as Record<number, string>;
@@ -56,7 +57,7 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
       openManager(dieId);
       return;
     }
-    if (!error && board.gold >= enhancementCost(selected.enhancement)) submit({ type: 'BUY', offerId, dieId });
+    if (!error && (enhancementOfferIsFree(shop, selected.id) || board.gold >= enhancementCost(selected.enhancement))) submit({ type: 'BUY', offerId, dieId });
   }
   function clickDie(dieId: number) {
     if (board.flameTutorial.pendingDieId === dieId && !board.flameTutorial.completed) submit({ type: 'DISMISS_FLAME_TUTORIAL' });
@@ -76,7 +77,7 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
   const focused = managedDie && focusedFace ? managedDie.faces[focusedFace - 1] : null;
   const focusedError = offer && focused && managedDie && managedActiveFace?.rank === focused.rank ? placementError(managedDie, focused, offer.enhancement) : null;
   const canApplyFocused = !!(offer && focused && managedDie && managedActiveFace?.rank === focused.rank
-    && !focusedError && board.gold >= enhancementCost(offer.enhancement));
+    && !focusedError && (enhancementOfferIsFree(shop, offer.id) || board.gold >= enhancementCost(offer.enhancement)));
   const tutorialDieId = !board.flameTutorial.completed ? board.flameTutorial.pendingDieId : null;
   const tutorialLabel = <Stack gap={3}><Text size="sm" fw={800}>NEW EMBER</Text>
     <Text size="xs">Stoke Flames in the Shop. At 100 Gold, they become Bonfires.</Text></Stack>;
@@ -99,7 +100,7 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
           <Text fw={700} size="sm" tt="uppercase" lts=".08em">Hand Training</Text>
         </Group>
         <div className="shop-grid training-grid">{shop.trainingOffers.map(item => <TrainingCard
-          key={item.kind === 'team' ? 'team' : item.hand} offer={item} handLevels={board.handLevels} gold={board.gold} busy={busy}
+          key={item.kind === 'team' ? 'team' : item.hand} offer={item} handLevels={board.handLevels} gold={board.gold} busy={busy} free={trainingOfferIsFree(shop, item)}
           onTrain={() => submit(item.kind === 'team' ? { type: 'TRAIN_ALL_HANDS' } : { type: 'TRAIN_HAND', hand: item.hand })} />)}</div>
       </Paper>
       <Paper p="xs" className="shop-section">
@@ -110,7 +111,7 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
             onClick={() => submit({ type: 'REROLL_OFFERS' })}>REROLL OFFERS · {formatPlayerNumber(offerRerollCost(shop.offerRerolls))} GOLD</Button>
         </Group>
         <div className="shop-grid enhancement-grid">{shop.offers.map(item => <EnhancementCard key={item.id} offer={item} selected={selectedOffer === item.id}
-          gold={board.gold} busy={busy} onSelect={() => setSelectedOffer(selectedOffer === item.id ? null : item.id)} />)}</div>
+          gold={board.gold} busy={busy} free={enhancementOfferIsFree(shop, item.id)} onSelect={() => setSelectedOffer(selectedOffer === item.id ? null : item.id)} />)}</div>
       </Paper>
       <Paper p="md" className="shop-section exposed-section">
         <Group justify="space-between" className="section-heading">

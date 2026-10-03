@@ -30,7 +30,7 @@ button { font: inherit; }
 .hamburger-icon i { height: 2px; display: block; border-radius: 999px; background: currentColor; }
 .game-menu-drawer, .game-menu-header { background: var(--mantine-color-dark-8); }
 
-.round-screen, .shop-screen { min-width: 0; }
+.round-screen, .shop-screen, .special-offer-screen { min-width: 0; }
 .live-score-panel {
   position: sticky; top: var(--hud-sticky-offset, 68px); z-index: 15;
   border-radius: var(--mantine-radius-md); background: rgba(20, 26, 30, .98);
@@ -382,6 +382,9 @@ button { font: inherit; }
 .run-map-node { width: var(--map-node-width); min-height: 72px; display: grid; place-content: center; gap: 1px; flex: none; border: 1px solid rgba(255,255,255,.18); border-radius: 13px;
   color: var(--mantine-color-gray-5); background: #13191e; font-size: .68rem; font-weight: 850; transform: scale(.86); }
 .run-map-node.destination { color: white; border-color: var(--screen-primary); background: color-mix(in srgb, var(--screen-primary) 22%, #12181d); box-shadow: 0 0 30px color-mix(in srgb, var(--screen-primary) 30%, transparent); animation: map-arrive 1400ms cubic-bezier(.2,.8,.2,1) both; }
+.run-map-node.node-special_offer { border-color: color-mix(in srgb, #2ED68F 55%, transparent); color: #8ff3c8; }
+.special-offer-heading, .special-offer-card { border-color: color-mix(in srgb, #2ED68F 32%, transparent); }
+.special-offer-card.selected { border-color: #2ED68F; box-shadow: 0 0 24px color-mix(in srgb, #2ED68F 18%, transparent); }
 .node-glyph { font-size: 1.1rem; color: var(--screen-secondary); }
 .node-label { line-height: 1.1; }
 .node-target { margin-top: 3px; color: var(--screen-secondary); font-size: .6rem; font-weight: 900; letter-spacing: .04em; white-space: nowrap; }

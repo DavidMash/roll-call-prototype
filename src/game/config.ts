@@ -1,7 +1,7 @@
 export const CONFIG = {
   diceCount: 5,
-  baseTarget: 75,
-  baseBossTarget: 150,
+  baseTarget: 100,
+  baseBossTarget: 200,
   targetGrowth: 1.32,
   targetBlockSize: 3,
   targetRounding: 5,

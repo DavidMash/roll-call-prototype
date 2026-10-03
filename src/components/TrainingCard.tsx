@@ -5,11 +5,11 @@ import type { HandLevels, TrainingOffer } from '../game/types';
 import { InfoPopover } from './InfoPopover';
 import { formatPlayerNumber } from '../game/copy';
 
-export function TrainingCard({ offer, handLevels, gold, busy, onTrain }: {
-  offer: TrainingOffer; handLevels: HandLevels; gold: number; busy: boolean; onTrain: () => void;
+export function TrainingCard({ offer, handLevels, gold, busy, free = false, onTrain }: {
+  offer: TrainingOffer; handLevels: HandLevels; gold: number; busy: boolean; free?: boolean; onTrain: () => void;
 }) {
   if (offer.kind === 'team') {
-    const cost = teamTrainingCost(offer.purchases);
+    const cost = free ? 0 : teamTrainingCost(offer.purchases);
     return <Card p="sm" className="training-card team-training-card" data-testid="training-offer-team">
       <Group className="training-card-header" justify="space-between" align="start" wrap="nowrap">
         <Group className="training-title-row" gap={3} wrap="nowrap"><Text className="training-name" fw={800} size="sm" tt="uppercase">TEAM TRAINING</Text>
@@ -20,7 +20,7 @@ export function TrainingCard({ offer, handLevels, gold, busy, onTrain }: {
       {offer.purchases > 0 && <Text size="xs" c="dimmed">Trained ×{formatPlayerNumber(offer.purchases)}</Text>}
       <Button className="training-action" mt={6} size="compact-xs" fullWidth color="yellow" variant="light" disabled={busy || gold < cost}
         onClick={onTrain} data-testid="train-team">
-        TRAIN ALL · {formatPlayerNumber(cost)} GOLD
+        TRAIN ALL · {free ? 'FREE' : `${formatPlayerNumber(cost)} GOLD`}
       </Button>
     </Card>;
   }
@@ -29,7 +29,7 @@ export function TrainingCard({ offer, handLevels, gold, busy, onTrain }: {
   const nextLevel = currentLevel + 1;
   const current = handStats(offer.hand, currentLevel);
   const next = handStats(offer.hand, nextLevel);
-  const cost = handTrainingCost(offer.purchases);
+  const cost = free ? 0 : handTrainingCost(offer.purchases);
   return <Card p="sm" className="training-card" data-testid={`training-offer-${offer.hand}`}>
     <Group className="training-card-header" justify="space-between" align="start" wrap="nowrap">
       <div className="training-heading"><Group className="training-title-row" gap={3} wrap="nowrap"><Text className="training-name" fw={700} size="sm" tt="uppercase">{HANDS[offer.hand].name}</Text>
@@ -43,7 +43,7 @@ export function TrainingCard({ offer, handLevels, gold, busy, onTrain }: {
     </Group>
     <Button className="training-action" mt={6} size="compact-xs" fullWidth color="violet" variant="light" disabled={busy || gold < cost}
       onClick={onTrain} data-testid={`train-${offer.hand}`}>
-      TRAIN · {formatPlayerNumber(cost)} GOLD
+      TRAIN · {free ? 'FREE' : `${formatPlayerNumber(cost)} GOLD`}
     </Button>
   </Card>;
 }

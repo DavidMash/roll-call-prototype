@@ -269,9 +269,9 @@ test('scorecard keeps all fourteen categories visible with simplified actionable
   await expect(page.locator('[data-state="unavailable"]')).not.toHaveCount(0);
   await expect(page.getByText('Scorecard', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Clear selection' })).toHaveCount(0);
-  await expect(page.getByTestId('round-score-progress')).toHaveText('0 / 75');
+  await expect(page.getByTestId('round-score-progress')).toHaveText('0 / 100');
   await expect(page.getByTestId('round-score-progress')).toHaveClass(/round-score-readout/);
-  await expect(page.getByTestId('round-goal-progress')).toHaveAttribute('aria-valuetext', '0 of 75 points toward the Goal');
+  await expect(page.getByTestId('round-goal-progress')).toHaveAttribute('aria-valuetext', '0 of 100 points toward the Goal');
   await expect(page.locator('.hud-phase')).toHaveText('ROUND 1');
 
   const playable = page.locator('[data-state="playable"]').first();
@@ -284,7 +284,7 @@ test('scorecard keeps all fourteen categories visible with simplified actionable
   await expect(playableRow).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.die[aria-pressed="true"]')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
-  await expect(page.getByTestId('round-score-progress')).toHaveText('0 / 75');
+  await expect(page.getByTestId('round-score-progress')).toHaveText('0 / 100');
 });
 
 test('selected hands expose desktop score-slot and Enter PLAY shortcuts without adding the button to mobile', async ({ page }) => {

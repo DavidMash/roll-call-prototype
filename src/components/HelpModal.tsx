@@ -5,6 +5,7 @@ import { FLAMES, FLAME_IDS, isChargeFlame } from '../game/flames';
 import { HANDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from '../game/hands';
 import { BOSSES, BOSS_TYPES } from '../game/bosses';
 import type { HandId } from '../game/types';
+import { SPECIAL_OFFERS, SPECIAL_OFFER_IDS } from '../game/specialOffers';
 
 const LOWER_HAND_RULES: Partial<Record<HandId, string>> = {
   pair: 'Two matching Faces.',
@@ -24,13 +25,16 @@ function RuleSection({ title, children }: { title: string; children: React.React
 export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   return <Modal opened={opened} onClose={onClose} title="How to Play" size="xl" centered transitionProps={{ duration: 0 }}>
     <Tabs defaultValue="play">
-      <Tabs.List grow><Tabs.Tab value="play">How to Play</Tabs.Tab><Tabs.Tab value="scoring">Scoring</Tabs.Tab><Tabs.Tab value="hands">Hands</Tabs.Tab><Tabs.Tab value="enhancements">Enhancements</Tabs.Tab><Tabs.Tab value="flames">Flames</Tabs.Tab><Tabs.Tab value="bosses">Bosses</Tabs.Tab><Tabs.Tab value="shop">Shop</Tabs.Tab></Tabs.List>
+      <Tabs.List grow><Tabs.Tab value="play">How to Play</Tabs.Tab><Tabs.Tab value="scoring">Scoring</Tabs.Tab><Tabs.Tab value="hands">Hands</Tabs.Tab><Tabs.Tab value="enhancements">Enhancements</Tabs.Tab><Tabs.Tab value="flames">Flames</Tabs.Tab><Tabs.Tab value="offers">Offers</Tabs.Tab><Tabs.Tab value="bosses">Bosses</Tabs.Tab><Tabs.Tab value="shop">Shop</Tabs.Tab></Tabs.List>
       <Tabs.Panel value="play" pt="md"><Stack gap="xs">
         <RuleSection title="PLAY HANDS">Choose a hand, select the dice that score, and Play.</RuleSection>
         <RuleSection title="CLEAR THE GOAL">Reach the Goal before you run out of playable hands and Rerolls.</RuleSection>
         <RuleSection title="REROLLS">You get {CONFIG.manualRerollsPerRound} Rerolls each Round. Each die rerolled costs one.</RuleSection>
         <RuleSection title="LIVES">Busting costs a Life and sends you back to the Shop. Lose all {CONFIG.maxLives} Lives and the run ends.</RuleSection>
       </Stack></Tabs.Panel>
+      <Tabs.Panel value="offers" pt="md"><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{SPECIAL_OFFER_IDS.map(id => <div key={id} className="help-item">
+        <Text size="sm" fw={700}>{SPECIAL_OFFERS[id].name}</Text><Text size="xs" c="dimmed">{SPECIAL_OFFERS[id].description}</Text>
+      </div>)}</SimpleGrid></Tabs.Panel>
       <Tabs.Panel value="scoring" pt="md"><Stack gap="xs">
         <Title order={3}>Pips × Mult × XMult = Score</Title>
         <Text size="sm">Pips come from the hand and scoring dice.</Text>

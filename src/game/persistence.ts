@@ -11,7 +11,7 @@ interface PersistedRun {
   state: GameState;
 }
 
-const PHASES = new Set(['round', 'roundSummary', 'bust', 'flameSelection', 'shop', 'lost', 'error']);
+const PHASES = new Set(['round', 'roundSummary', 'bust', 'flameSelection', 'specialOffer', 'shop', 'lost', 'error']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -23,7 +23,8 @@ function hasTemplateShape(value: unknown, template: unknown): boolean {
   if (isRecord(template)) {
     // Derived/runtime fields are filled during normalization, including in checkpoints.
     return isRecord(value) && Object.entries(template).every(([key, child]) =>
-      (['maxCharge', 'decisionId', 'sixPackXMult', 'sixPackUpperHandsPlayed', 'handFamilyFlameStages'].includes(key) && !Object.hasOwn(value, key))
+      (['maxCharge', 'decisionId', 'sixPackXMult', 'sixPackUpperHandsPlayed', 'handFamilyFlameStages', 'bossSilenced',
+        'specialOfferEffects', 'suppressedPostBossRewardRounds', 'specialOffer', 'badDreamCheckpoint'].includes(key) && !Object.hasOwn(value, key))
       || (Object.hasOwn(value, key) && hasTemplateShape(value[key], child)));
   }
   return typeof value === typeof template;
@@ -37,10 +38,13 @@ function isGameState(value: unknown): value is GameState {
   // active runs. Normalization fills it before Personal Trainer can be used.
   delete (template.stats.probabilityProcs as Partial<typeof template.stats.probabilityProcs>).personalTrainer;
   if (!hasTemplateShape(value, template)) return false;
+  const { roundCheckpoint: _checkpoint, badDreamCheckpoint: _badDream, ...baseTemplate } = template;
   if (value.roundCheckpoint !== null) {
     if (!isRecord(value.roundCheckpoint)) return false;
-    const { roundCheckpoint: _checkpoint, ...baseTemplate } = template;
     if (!hasTemplateShape(value.roundCheckpoint, baseTemplate)) return false;
+  }
+  if (value.badDreamCheckpoint !== undefined && value.badDreamCheckpoint !== null) {
+    if (!isRecord(value.badDreamCheckpoint) || !hasTemplateShape(value.badDreamCheckpoint, baseTemplate)) return false;
   }
   return true;
 }

@@ -34,10 +34,10 @@ describe('linear route and deterministic boss schedule', () => {
   });
 
   it('reports the gameplay target for every encounter node, including target-changing bosses', () => {
-    expect(encounterTarget({ id: 'round:2', type: 'normal_round', round: 2 })).toBe(125);
-    expect(encounterTarget({ id: 'boss:3', type: 'boss_round', round: 3, boss: 'caller' })).toBe(150);
-    expect(encounterTarget({ id: 'boss:6', type: 'boss_round', round: 6, boss: 'marathon' })).toBe(1_050);
-    expect(encounterTarget({ id: 'boss:6', type: 'boss_round', round: 6, boss: 'quickdraw' })).toBe(115);
+    expect(encounterTarget({ id: 'round:2', type: 'normal_round', round: 2 })).toBe(175);
+    expect(encounterTarget({ id: 'boss:3', type: 'boss_round', round: 3, boss: 'caller' })).toBe(200);
+    expect(encounterTarget({ id: 'boss:6', type: 'boss_round', round: 6, boss: 'marathon' })).toBe(1_350);
+    expect(encounterTarget({ id: 'boss:6', type: 'boss_round', round: 6, boss: 'quickdraw' })).toBe(150);
     expect(encounterTarget({ id: 'shop:before-round:2', type: 'shop', round: 2 })).toBeNull();
   });
 
@@ -188,7 +188,7 @@ describe('The Warden', () => {
     state.chargeXMult = 5;
     const result = dispatch(state, { type: 'UNLOCK_WARDEN_DIE', dieId: 4 }, constant(0));
     expect(result.state.boss).toMatchObject({ type: 'warden', startingDieId: 4, activeDieIds: [4],
-      unlockCosts: [5, 10, 20, 40], nextUnlockTarget: 5, unlockTargets: [5], pendingReinforcements: 0 });
+      unlockCosts: [5, 10, 25, 60], nextUnlockTarget: 5, unlockTargets: [5], pendingReinforcements: 0 });
     expect(result.state.dice[4].value).toBe(face);
     expect(result.state.boss?.type === 'warden' && result.state.boss.nextUnlockTarget).toBe(5);
     expect(result.events.some(event => event.type === 'DIE_ROLLED' || event.type === 'JUMPING_BEAN_FREE_PLAY' || event.type === 'CHARGE_CHANGED')).toBe(false);

@@ -26,7 +26,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, sel
   selection: Selection; setSelection: (selection: Selection) => void; submit: (action: Action) => void; skip: () => void;
 }) {
   const encounterDice = activeEncounterDice(board);
-  const wardenBoss = board.boss?.type === 'warden' ? board.boss : null;
+  const wardenBoss = !board.bossSilenced && board.boss?.type === 'warden' ? board.boss : null;
   const wardenDice = wardenBoss
     ? board.dice.filter(die => die.owner === 'player').sort((a, b) => a.id - b.id)
     : null;
@@ -81,6 +81,12 @@ export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, sel
   })() : null;
   const manualAction: Action = { type: 'MANUAL_REROLL', dieIds: effectiveSelection.dieIds };
   const canReroll = validateAction(board, manualAction) === null;
+  const normalRerollsAfterSelection = Math.max(0, board.manualRerollsRemaining - effectiveSelection.dieIds.length);
+  const reserveRerollsAfterSelection = Math.max(0, board.specialOfferEffects.carePackageRerolls
+    - Math.max(0, effectiveSelection.dieIds.length - board.manualRerollsRemaining));
+  const rerollSpendPreview = board.specialOfferEffects.carePackageRerolls
+    ? CONFIG.manualRerollsPerRound - normalRerollsAfterSelection
+    : CONFIG.manualRerollsPerRound - board.manualRerollsRemaining + effectiveSelection.dieIds.length;
   const deadBoard = !hasPlayableHand(encounterDice, unavailableHands, requiredDieIds);
   const chargeAction: Action = { type: 'TOGGLE_CHARGE', hand: effectiveSelection.hand, dieIds: effectiveSelection.dieIds };
   const canToggleCharge = validateAction(board, chargeAction) === null;
@@ -130,7 +136,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, sel
         scoreText={formatScoreProgress(board.score, board.target)} showXMult={showXMult} />
     </div>
     <BossPanel board={board} />
-    {!busy && !awaitingWardenChoice && deadBoard && board.manualRerollsRemaining > 0 && <Alert className="round-status" color="orange" py={5} title="NO PLAYABLE HANDS" role="status">
+    {!busy && !awaitingWardenChoice && deadBoard && board.manualRerollsRemaining + board.specialOfferEffects.carePackageRerolls > 0 && <Alert className="round-status" color="orange" py={5} title="NO PLAYABLE HANDS" role="status">
       Use a Reroll.
     </Alert>}
     {(board.hotStreakGoal || board.targetPracticeHand) && <Paper p="xs" className="flame-goals"><Group gap="lg">
@@ -175,7 +181,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, sel
             {awaitingWardenChoice ? <Button className="unlock-action" size="sm" color="cyan" disabled={busy || selectedWardenDieId === null}
               onClick={() => submit({ type: 'UNLOCK_WARDEN_DIE', dieId: selectedWardenDieId! })}>UNLOCK DIE</Button> : <>
               <Button className="reroll-action" size="sm" variant="default" disabled={busy || !canReroll}
-                onClick={() => submit(manualAction)}>REROLL {CONFIG.manualRerollsPerRound - board.manualRerollsRemaining + effectiveSelection.dieIds.length} / {CONFIG.manualRerollsPerRound}</Button>
+                onClick={() => submit(manualAction)}>REROLL {rerollSpendPreview} / {CONFIG.manualRerollsPerRound}{board.specialOfferEffects.carePackageRerolls ? ` · ${reserveRerollsAfterSelection} RESERVE` : ''}</Button>
               {speedDemonOwned && <div className={`speed-demon-meter${speedReveal ? ' is-revealed' : ''}`} data-testid="speed-demon-meter"
                 aria-label="Speed Demon time remaining">
                 <div className="speed-demon-meter-fill" style={{ transform: `scaleX(${speedStrength})` }} />

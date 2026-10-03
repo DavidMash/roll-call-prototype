@@ -1,6 +1,6 @@
 import type { Board, BossType } from './types';
 
-export type ScreenThemeId = 'round' | 'shop' | 'flame' | BossType;
+export type ScreenThemeId = 'round' | 'shop' | 'flame' | 'specialOffer' | BossType;
 export interface ScreenTheme {
   id: ScreenThemeId;
   label: string;
@@ -27,6 +27,7 @@ export const SCREEN_THEMES: Record<ScreenThemeId, ScreenTheme> = {
   round: theme('round', 'NORMAL ROUND', '◈', '#3B82F6', '#60A5FA'),
   shop: theme('shop', 'SHOP', '●', '#F59E0B', '#FBBF24'),
   flame: theme('flame', 'FLAME SELECTION', '🔥', '#EF4444', '#F97316'),
+  specialOffer: theme('specialOffer', 'SPECIAL OFFER', '◆', '#2ED68F', '#5EEBAD'),
   caller: theme('caller', 'THE CALLER', '◉', '#A855F7', '#D946EF'),
   warden: theme('warden', 'THE WARDEN', '🔒', '#06B6D4', '#14B8A6'),
   hexer: theme('hexer', 'THE HEXER', '⦿', '#84CC16', '#D9F99D'),
@@ -40,6 +41,7 @@ export const SCREEN_THEMES: Record<ScreenThemeId, ScreenTheme> = {
 export function screenThemeId(board: Pick<Board, 'phase' | 'boss' | 'roundSummary'>): ScreenThemeId {
   if (board.phase === 'shop') return 'shop';
   if (board.phase === 'flameSelection') return 'flame';
+  if (board.phase === 'specialOffer') return 'specialOffer';
   if (board.phase === 'roundSummary' && board.roundSummary?.bossType) return board.roundSummary.bossType;
   if (board.phase === 'round' && board.boss) return board.boss.type;
   return 'round';

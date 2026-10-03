@@ -13,10 +13,11 @@ import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandS
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie,
   isCursedDie, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
-import { encounterNode, flameNodeAfter, shopNodeBefore } from './progression';
+import { encounterNode, flameNodeAfter, postBossRewardForRound, shopNodeBefore, specialOfferNodeAfter } from './progression';
 import { formatPercentage, formatPlayerNumber } from './copy';
+import { eligibleSpecialOfferTypes, specialOfferDescription, specialOfferName, trainingOfferKey } from './specialOffers';
 import type { ChargeFlame } from './flames';
-import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameStateBase, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, RunNode, ScoreSource } from './types';
+import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameStateBase, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, RunNode, ScoreSource, SpecialOffer } from './types';
 
 type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number };
 type RollContext = 'gameplay' | 'wardenSetup' | 'shop' | 'flameSelection';
@@ -28,6 +29,7 @@ const UPPER_HAND_BY_FACE: Partial<Record<import('./types').Rank, HandId>> = {
 // Rules resolve synchronously into immutable snapshots. Playback speed only changes how React reads them.
 export class Resolver {
   readonly events: GameEvent[] = [];
+  rngStateAfterResolution: number | null = null;
   private queue: RollTrigger[] = [];
   private handAccumulator: HandScoreAccumulator | null = null;
   constructor(readonly state: GameState, readonly rng: RandomSource) { recalculateMaxCharge(state); }
@@ -108,6 +110,7 @@ export class Resolver {
     this.updateWardenUnlockTarget();
   }
   private updateWardenUnlockTarget(): void {
+    if (this.state.bossSilenced) return;
     const boss = this.state.boss;
     if (boss?.type !== 'warden' || boss.nextUnlockTarget === null || boss.pendingReinforcements > 0
       || boss.activeDieIds.length >= CONFIG.diceCount || this.state.score < boss.nextUnlockTarget) return;
@@ -118,7 +121,7 @@ export class Resolver {
       message: `Warden unlock target ${this.format(boss.nextUnlockTarget)} reached · next reinforcement released` });
   }
   whenScored(dieId: number, snapshot: Face, hand: HandId, playSource: HandPlaySource, participation: 'selected' | 'hitchhiker'): void {
-    if (this.state.boss?.type === 'hexer' && dieId === this.state.boss.cursedDieId) {
+    if (!this.state.bossSilenced && this.state.boss?.type === 'hexer' && dieId === this.state.boss.cursedDieId) {
       this.state.stats.hexerEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
         kind: playSource === 'jumpingBean' ? 'jumping_bean' : 'hand', face: snapshot.rank, hand });
     }
@@ -128,6 +131,12 @@ export class Resolver {
       this.addGold(golden * CONFIG.goldenGold, `D${dieId + 1} Golden ×${this.format(golden)}: +${this.format(golden * CONFIG.goldenGold)} gold`, 'golden', dieId);
     }
     const workout = stacks(snapshot, 'workout');
+    const bonus = stacks(snapshot, 'bonus');
+    if (bonus && this.state.specialOfferEffects.cashBonusRounds > 0) {
+      this.addGold(bonus, `Cash Bonus · Bonus ×${this.format(bonus)}: +${this.format(bonus)} Gold`, 'cashBonus', dieId, 'bonus', snapshot.rank);
+      this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', enhancement: 'bonus', dieIds: [dieId], amount: bonus,
+        message: `Cash Bonus paid ${this.format(bonus)} Gold` });
+    }
     if (workout) {
       this.state.stats.triggers.workout = (this.state.stats.triggers.workout ?? 0) + 1;
       const live = activeFace(this.state.dice.find(die => die.id === dieId)!);
@@ -136,7 +145,7 @@ export class Resolver {
       this.emit({ type: 'WORKOUT_INCREMENTED', enhancement: 'workout', dieIds: [dieId], face: snapshot.rank,
         message: `D${dieId + 1} face ${snapshot.rank} Workout ×${this.format(workout)}: ${this.format(before)} → ${this.format(scoringPips(live))} future pips` });
     }
-    if (workout && this.state.boss?.type === 'hexer' && dieId === this.state.boss.cursedDieId) this.state.stats.hexerEvents.push({
+    if (workout && !this.state.bossSilenced && this.state.boss?.type === 'hexer' && dieId === this.state.boss.cursedDieId) this.state.stats.hexerEvents.push({
       round: this.state.round, attempt: this.state.roundAttemptNumber, kind: 'workout', face: snapshot.rank, hand, amount: workout });
     if (stacks(snapshot, 'vintage')) {
       const live = activeFace(this.state.dice.find(die => die.id === dieId)!);
@@ -161,7 +170,14 @@ export class Resolver {
           message: `D${die.id + 1} Jackpot did not trigger: die did not score in winning hand` });
         continue;
       }
-      const payout = count * CONFIG.jackpotGold;
+      const powerball = this.state.specialOfferEffects.powerballAvailable && this.state.specialOfferEffects.powerballRounds > 0;
+      const payout = powerball ? 50 : count * CONFIG.jackpotGold;
+      if (powerball) {
+        this.state.specialOfferEffects.powerballAvailable = false;
+        this.state.specialOfferEffects.powerballRounds = 0;
+        this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', enhancement: 'jackpot', dieIds: [die.id], amount: 50,
+          message: 'Powerball paid 50 Gold and was consumed' });
+      }
       this.state.stats.triggers.jackpot = (this.state.stats.triggers.jackpot ?? 0) + 1;
       this.addGold(payout, `D${die.id + 1} Jackpot ×${this.format(count)}: +${this.format(payout)} gold`, 'jackpot', die.id, 'jackpot', face.rank);
       if (isCursedDie(die)) this.state.stats.hexerEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
@@ -373,6 +389,7 @@ export class Resolver {
       message: `Hot Streak ${qualified ? `gained charge ${this.format(this.state.hotStreakCharges)}` : 'advanced without charge'}; next ${this.state.hotStreakGoal ? HANDS[this.state.hotStreakGoal].name : 'complete'}` });
   }
   private issueCallerCall(previous?: HandId): void {
+    if (this.state.bossSilenced) return;
     const boss = this.state.boss;
     if (boss?.type !== 'caller') return;
     boss.manualHandsPlayed ??= Math.max(0, 3 - boss.playsRemaining);
@@ -389,6 +406,7 @@ export class Resolver {
       message: `The Caller demands ${HANDS[boss.calledHand].name} by manual hand ${this.format(boss.callDeadline)}` });
   }
   private resolveCallerCall(hand: HandId, source: HandPlaySource): void {
+    if (this.state.bossSilenced) return;
     const boss = this.state.boss;
     if (boss?.type !== 'caller') return;
     boss.manualHandsPlayed ??= Math.max(0, 3 - boss.playsRemaining);
@@ -431,6 +449,7 @@ export class Resolver {
   }
 
   private advanceMarathon(hand: HandId, source: HandPlaySource): void {
+    if (this.state.bossSilenced) return;
     const boss = this.state.boss;
     if (boss?.type !== 'marathon' || source !== 'manual') return;
     for (const id of HAND_IDS) {
@@ -445,6 +464,7 @@ export class Resolver {
   }
 
   private resolveQuickdraw(hand: HandId, source: HandPlaySource): void {
+    if (this.state.bossSilenced) return;
     const boss = this.state.boss;
     if (boss?.type !== 'quickdraw' || source !== 'manual' || !LOWER_HAND_IDS.includes(hand)) return;
     boss.lowerShotUsed = true;
@@ -454,6 +474,7 @@ export class Resolver {
   }
 
   private flyFactor(hand: HandId, source: HandPlaySource): number {
+    if (this.state.bossSilenced) return 1;
     const boss = this.state.boss;
     if (boss?.type !== 'fly' || boss.caught) return 1;
     if (source === 'manual' && hand === boss.flyHand) {
@@ -467,6 +488,7 @@ export class Resolver {
   }
 
   private moveFly(): void {
+    if (this.state.bossSilenced) return;
     const boss = this.state.boss;
     if (boss?.type !== 'fly' || boss.caught || boss.flyHand === null) return;
     const previous = boss.flyHand;
@@ -480,6 +502,7 @@ export class Resolver {
   }
 
   private resolveSnakeEyes(scoringIds: number[]): void {
+    if (this.state.bossSilenced) return;
     const boss = this.state.boss;
     if (boss?.type !== 'snakeEyes') return;
     const scoredDice = [...new Set(scoringIds)].map(id => this.state.dice.find(die => die.id === id)!)
@@ -496,6 +519,7 @@ export class Resolver {
     }
   }
   private resolveInfected(scoringIds: number[]): void {
+    if (this.state.bossSilenced) return;
     const boss = this.state.boss;
     if (boss?.type !== 'infected') return;
     for (const die of [...new Set(scoringIds)].map(id => this.state.dice.find(item => item.id === id)!)
@@ -536,7 +560,7 @@ export class Resolver {
   }
   play(hand: HandId, dieIds: number[], playSource: HandPlaySource = 'manual', decisionMs: number | null = null): { winning: boolean; beanRecordIndex: number | null } {
     const freeBean = playSource === 'jumpingBean';
-    const consumesHand = !freeBean && this.state.boss?.type !== 'marathon';
+    const consumesHand = !freeBean && (this.state.bossSilenced || this.state.boss?.type !== 'marathon');
     const ids = [...dieIds].sort((a, b) => a - b);
     const handLevel = this.state.handLevels[hand];
     const handStart = captureHandStart(this.state, hand, ids, playSource === 'manual' ? decisionMs : null);
@@ -676,13 +700,16 @@ export class Resolver {
     const ids = [...dieIds].sort((a, b) => a - b);
     const requiredDieIds = requiredEncounterDieIds(this.state);
     const startedDeadBoard = !hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state), requiredDieIds);
-    this.state.manualRerollsRemaining -= ids.length;
+    const normalSpent = Math.min(this.state.manualRerollsRemaining, ids.length);
+    this.state.manualRerollsRemaining -= normalSpent;
+    this.state.specialOfferEffects.carePackageRerolls -= ids.length - normalSpent;
     const round = this.state.stats.rounds.at(-1)!;
     round.lastAction = 'MANUAL_REROLL'; round.manualRerollChargesSpent += ids.length; round.manualRerollActions++;
     this.state.stats.manualRerollActions++; this.state.stats.manualDiceRerolled += ids.length;
     const record = { round: this.state.round, dieIds: ids, charges: ids.length, remaining: this.state.manualRerollsRemaining, startedDeadBoard, rescuedDeadBoard: false };
     this.state.stats.manualRerolls.push(record);
-    this.emit({ type: 'MANUAL_REROLL_STARTED', dieIds: ids, amount: ids.length, message: `Manual reroll; ${this.format(this.state.manualRerollsRemaining)} remaining` });
+    const totalRemaining = this.state.manualRerollsRemaining + this.state.specialOfferEffects.carePackageRerolls;
+    this.emit({ type: 'MANUAL_REROLL_STARTED', dieIds: ids, amount: ids.length, message: `Manual reroll; ${this.format(totalRemaining)} remaining` });
     if (this.state.chargeArmed && !hasChargeBonfire(this.state)) {
       this.state.chargeArmed = false;
       this.emit({ type: 'CHARGE_ARMED', xMult: this.state.chargeXMult,
@@ -702,13 +729,17 @@ export class Resolver {
   }
   private captureRoundCheckpoint(): void {
     const clone = structuredClone(this.state);
-    const { roundCheckpoint: _checkpoint, ...base } = clone;
+    const { roundCheckpoint: _checkpoint, badDreamCheckpoint: _badDream, ...base } = clone;
     // The checkpoint is a round-ready gameplay baseline plus the exact Shop
     // session that launched it. Bust restoration reopens this Shop without
     // generating offers, reroll allowances, exposed faces, or rewards.
     base.phase = 'shop';
-    base.shop ??= { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    base.shop ??= { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
+      freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
+    if (base.bossSilenced) base.specialOfferEffects.silence = true;
+    base.bossSilenced = false;
     base.flameSelection = null;
+    base.specialOffer = null;
     base.roundSummary = null;
     base.bust = null;
     base.boss = null;
@@ -734,6 +765,19 @@ export class Resolver {
     const failureLastAction = current.lastAction;
     const failedBoss = structuredClone(this.state.boss);
     const failedNodeId = this.state.currentNodeId;
+    const bottledFairyAlreadyTriggered = this.state.specialOfferEffects.bottledFairyTriggeredThisRound;
+    const badDreamCheckpoint = this.state.badDreamCheckpoint;
+    if (failure.livesAfter === 0 && this.state.specialOfferEffects.badDreamRounds > 0 && badDreamCheckpoint) {
+      Object.assign(this.state, structuredClone(badDreamCheckpoint));
+      this.state.roundCheckpoint = null;
+      this.state.badDreamCheckpoint = null;
+      this.state.specialOfferEffects.badDreamRounds = 0;
+      this.state.lives = 1;
+      this.rngStateAfterResolution = this.state.rngState;
+      this.state.bust = null;
+      this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', message: 'Bad Dream returned the run to its checkpoint with 1 Life' });
+      return;
+    }
     const progressionTelemetry = {
       mapTransitions: structuredClone(this.state.stats.mapTransitions),
       bossEncounters: structuredClone(this.state.stats.bossEncounters),
@@ -744,8 +788,10 @@ export class Resolver {
     const history = this.state.history;
     const actions = this.state.stats.actions;
     Object.assign(this.state, structuredClone(checkpoint));
+    this.state.specialOfferEffects.bottledFairyTriggeredThisRound ||= bottledFairyAlreadyTriggered;
     this.state.roundCheckpoint = structuredClone(checkpoint);
-    this.state.shop ??= { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    this.state.shop ??= { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
+      freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
     this.state.shop.lifeRestores ??= 0;
     this.state.history = history;
     this.state.stats.actions = actions;
@@ -792,6 +838,7 @@ export class Resolver {
     }
     if (this.state.chargeXMult !== 1 || this.state.chargeArmed) this.state.stats.chargeResets++;
     this.state.phase = 'round'; this.state.score = 0; this.state.scoreByHand = {}; this.state.effectScore = 0;
+    if (!retry) this.state.specialOfferEffects.bottledFairyTriggeredThisRound = false;
     this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound; this.state.target = targetForRound(this.state.round);
     this.state.consumed = []; this.state.targetPracticeHand = null; this.state.lastRoundPayout = null; this.state.roundSummary = null;
     this.state.chargeXMult = 1; this.state.chargeArmed = false; this.state.hotStreakCharges = 0;
@@ -801,7 +848,7 @@ export class Resolver {
     this.state.sixPackUpperHandsPlayed = 0;
     this.state.hotStreakGoal = ownedFlameIds(this.state).has('hotStreak') ? 'pair' : null;
     this.state.handFamilyFlameStages = initialHandFamilyFlameStages(this.state);
-    this.state.flameSelection = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
+    this.state.flameSelection = null; this.state.specialOffer = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
     for (const die of this.state.dice) for (const face of die.faces) delete face.magneticSourceUsed;
     const bossType = this.state.bossSchedule[this.state.round]
@@ -809,7 +856,9 @@ export class Resolver {
     if (bossType) this.state.bossSchedule[this.state.round] = bossType;
     if (bossType) this.state.target = targetForBoss(bossType, this.state.target);
     this.state.boss = bossType ? createBossRuntime(this.state.seed, this.state.round, bossType) : null;
-    if (this.state.boss?.type === 'warden') {
+    this.state.bossSilenced = !!this.state.boss && this.state.specialOfferEffects.silence;
+    if (this.state.bossSilenced) this.state.specialOfferEffects.silence = false;
+    if (!this.state.bossSilenced && this.state.boss?.type === 'warden') {
       this.state.boss.unlockCosts = wardenUnlockCosts(this.state.handLevels, [], this.state.target);
     }
     this.captureRoundCheckpoint();
@@ -829,14 +878,16 @@ export class Resolver {
         wardenStartingDieId: boss.type === 'warden' ? boss.startingDieId : undefined });
       this.emit({ type: 'BOSS_STARTED', boss: boss.type,
         message: `${boss.type.toUpperCase()} · Round ${this.format(this.state.round)} · Attempt ${this.format(this.state.roundAttemptNumber)} · goal ${this.format(this.state.target)}` });
-      if (boss.type === 'caller') this.emit({ type: 'CALLER_CALLED', boss: 'caller', hand: boss.calledHand, amount: 3,
+      if (this.state.bossSilenced) this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', boss: boss.type,
+        message: `Silence disabled ${boss.type.toUpperCase()} for this encounter` });
+      if (!this.state.bossSilenced && boss.type === 'caller') this.emit({ type: 'CALLER_CALLED', boss: 'caller', hand: boss.calledHand, amount: 3,
         message: `The Caller demands ${HANDS[boss.calledHand].name} within 3 plays` });
     }
     if (!this.state.boss) this.emit({ type: retry ? 'ROUND_RETRY_STARTED' : 'ROUND_STARTED',
       message: `Round ${this.format(this.state.round)} — Attempt ${this.format(this.state.roundAttemptNumber)} — goal ${this.format(this.state.target)}; Charge reset to ×1` });
     this.selectTargetPractice();
-    if (this.state.boss?.type === 'hexer') this.state.dice.push(createCursedDie());
-    if (this.state.boss?.type === 'warden') {
+    if (!this.state.bossSilenced && this.state.boss?.type === 'hexer') this.state.dice.push(createCursedDie());
+    if (!this.state.bossSilenced && this.state.boss?.type === 'warden') {
       const playerDice = this.state.dice.filter(die => die.owner === 'player').sort((a, b) => a.id - b.id);
       if (!playerDice.length) throw new Error('The Warden requires at least one player die.');
       this.rollBatch(playerDice.map(die => die.id), 'Warden opening roll', 'wardenSetup');
@@ -867,6 +918,15 @@ export class Resolver {
       const [flame] = pool.splice(randomIndex(this.rng, pool.length), 1); return { id: this.state.nextOfferId++, flame };
     });
   }
+  freshSpecialOffers(): void {
+    const pool = eligibleSpecialOfferTypes(this.state);
+    this.state.specialOffer!.offers = Array.from({ length: Math.min(3, pool.length) }, () => {
+      const [type] = pool.splice(randomIndex(this.rng, pool.length), 1);
+      const offer: SpecialOffer = { id: this.state.nextOfferId++, type };
+      if (type === 'focus') offer.hand = HAND_IDS[randomIndex(this.rng, HAND_IDS.length)];
+      return offer;
+    });
+  }
   selectTargetPractice(): void {
     if (!ownedFlameIds(this.state).has('targetPractice')) return;
     const candidates: HandId[] = [];
@@ -881,35 +941,145 @@ export class Resolver {
     this.emit({ type: 'TARGET_PRACTICE_SELECTED', flame: 'targetPractice', hand: this.state.targetPracticeHand,
       message: `Target Practice: ${HANDS[this.state.targetPracticeHand].name}` });
   }
-  openShop(rollDice = true): void {
+  openShop(rollDice = true, direction: 'forward' | 'backward' = 'forward'): void {
     cleanupTemporaryBossFaces(this.state.dice);
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
-    this.state.boss = null;
-    this.state.phase = 'shop'; this.state.flameSelection = null; this.state.roundSummary = null;
-    this.state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    this.state.boss = null; this.state.bossSilenced = false;
+    this.state.phase = 'shop'; this.state.flameSelection = null; this.state.specialOffer = null; this.state.roundSummary = null;
+    this.state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
+      freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
     const upcomingBoss = this.state.round + 1 > 60 ? bossTypeForRound(this.state.seed, this.state.round + 1) : null;
     if (upcomingBoss) this.state.bossSchedule[this.state.round + 1] = upcomingBoss;
-    this.mapTransition(shopNodeBefore(this.state.round + 1));
+    this.mapTransition(shopNodeBefore(this.state.round + 1), direction);
     if (rollDice) this.rollBatch(this.state.dice.map(die => die.id), 'Free shop roll', 'shop');
     this.freshOffers(); this.freshTrainingOffers();
+    if (this.state.specialOfferEffects.onTheHouse) {
+      this.state.shop.freeEnhancementOfferIds = this.state.shop.offers.map(offer => offer.id);
+      this.state.shop.freeTrainingOfferKeys = this.state.shop.trainingOffers.map(trainingOfferKey);
+      this.state.specialOfferEffects.onTheHouse = false;
+      this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', message: 'On The House made this Shop’s initial displayed purchases free' });
+    }
     this.emit({ type: 'SHOP_OPENED', message: `Shop opened${rollDice ? '' : '; Flame Selection faces preserved'}` });
   }
   openFlameSelection(): void {
     cleanupTemporaryBossFaces(this.state.dice);
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
-    this.state.boss = null;
-    this.state.phase = 'flameSelection'; this.state.shop = null; this.state.roundSummary = null;
+    this.state.boss = null; this.state.bossSilenced = false;
+    this.state.phase = 'flameSelection'; this.state.shop = null; this.state.specialOffer = null; this.state.roundSummary = null;
     this.state.flameSelection = { offers: [], acquired: false };
     this.mapTransition(flameNodeAfter(this.state.round));
     this.rollBatch(this.state.dice.map(die => die.id), 'Flame Selection roll', 'flameSelection');
     this.freshFlameOffers();
     this.emit({ type: 'FLAME_SELECTION_OPENED', message: 'Flame Selection — choose and assign one new Flame, or skip' });
   }
+  openSpecialOffer(): void {
+    cleanupTemporaryBossFaces(this.state.dice);
+    this.state.dice = this.state.dice.filter(die => die.owner === 'player');
+    this.state.boss = null; this.state.bossSilenced = false;
+    this.state.phase = 'specialOffer'; this.state.shop = null; this.state.flameSelection = null; this.state.roundSummary = null;
+    this.state.specialOffer = { offers: [], acquired: false };
+    this.mapTransition(specialOfferNodeAfter(this.state.round));
+    this.freshSpecialOffers();
+    this.emit({ type: 'SPECIAL_OFFER_OPENED', message: 'Special Offer — choose one' });
+  }
+  chooseSpecialOffer(offerId: number): void {
+    const selection = this.state.specialOffer!;
+    const offer = selection.offers.find(item => item.id === offerId)!;
+    selection.acquired = true;
+    selection.chosen = structuredClone(offer);
+    let captureBadDream = false;
+    let timeTravelDestination: number | null = null;
+    switch (offer.type) {
+      case 'onTheHouse': this.state.specialOfferEffects.onTheHouse = true; break;
+      case 'greatFairy':
+        if (this.state.lives >= CONFIG.maxLives) this.addGold(15, 'Great Fairy: +15 Gold', 'specialOffer');
+        else this.state.lives = CONFIG.maxLives;
+        break;
+      case 'focus':
+        if (!offer.hand) throw new Error('Focus offer is missing its fixed hand.');
+        this.state.handLevels[offer.hand] += 4;
+        break;
+      case 'timeTravel': {
+        const repeatedBossRound = this.state.round;
+        if (!this.state.suppressedPostBossRewardRounds.includes(repeatedBossRound))
+          this.state.suppressedPostBossRewardRounds.push(repeatedBossRound);
+        timeTravelDestination = Math.max(0, this.state.round - 3);
+        break;
+      }
+      case 'carePackage': this.state.specialOfferEffects.carePackageRerolls += 3; break;
+      case 'silence': this.state.specialOfferEffects.silence = true; break;
+      case 'sommelier':
+        for (const die of this.state.dice.filter(item => item.owner === 'player')) for (const face of die.faces)
+          if (stacks(face, 'vintage')) face.vintageSellValue = Math.max(0, face.vintageSellValue ?? 0) * 2;
+        break;
+      case 'taxEvasion': this.state.specialOfferEffects.taxEvasionRounds += 3; break;
+      case 'fireKeeper': {
+        const embers = this.state.dice.filter(die => die.owner === 'player' && die.flame && die.flame.investedGold < 100);
+        const die = embers[randomIndex(this.rng, embers.length)];
+        const flame = die.flame!;
+        const from = flame.investedGold;
+        flame.investedGold = from + Math.ceil((100 - from) / 2);
+        this.emit({ type: 'FLAME_INVESTED', flame: flame.id, dieIds: [die.id], amount: flame.investedGold - from,
+          message: `Fire Keeper stoked ${FLAMES[flame.id].name}: ${this.format(from)} → ${this.format(flame.investedGold)} / 100` });
+        if (flame.investedGold === 100) {
+          const id = flame.id;
+          die.flame = null;
+          if (!this.state.bonfires.includes(id)) this.state.bonfires.push(id);
+          this.state.stats.bonfiresCreated.push({ round: this.state.round, flame: id });
+          this.emit({ type: 'BONFIRE_CREATED', flame: id, dieIds: [die.id], message: `${FLAMES[id].name} became a Bonfire` });
+        }
+        recalculateMaxCharge(this.state);
+        break;
+      }
+      case 'cashBonus': this.state.specialOfferEffects.cashBonusRounds += 3; break;
+      case 'orangeTheory':
+        for (const die of this.state.dice.filter(item => item.owner === 'player')) for (const face of die.faces) {
+          const workout = stacks(face, 'workout');
+          if (workout) face.workoutPips += workout * 5;
+        }
+        break;
+      case 'powerball':
+        this.state.specialOfferEffects.powerballRounds = 3;
+        this.state.specialOfferEffects.powerballAvailable = true;
+        break;
+      case 'bottledFairy': this.state.specialOfferEffects.bottledFairyRounds += 3; break;
+      case 'badDream':
+        this.state.specialOfferEffects.badDreamRounds = 3;
+        captureBadDream = true;
+        break;
+    }
+    this.emit({ type: 'SPECIAL_OFFER_SELECTED', hand: offer.hand,
+      message: `${specialOfferName(offer)} — ${specialOfferDescription(offer)}` });
+    if (timeTravelDestination !== null) this.state.round = timeTravelDestination;
+    if (captureBadDream) {
+      const clone = structuredClone(this.state);
+      const { roundCheckpoint: _round, badDreamCheckpoint: _dream, ...base } = clone;
+      this.state.badDreamCheckpoint = base as GameStateBase;
+    }
+  }
+  continueSpecialOffer(): void {
+    const timeTravel = this.state.specialOffer?.chosen?.type === 'timeTravel';
+    this.openShop(false, timeTravel ? 'backward' : 'forward');
+  }
   continueRoundSummary(): void {
     const summary = this.state.roundSummary;
     if (!summary) throw new Error('Round Summary is not available.');
-    if (summary.encounterType === 'boss') this.openFlameSelection();
+    if (summary.encounterType === 'boss') {
+      const suppressed = this.state.suppressedPostBossRewardRounds.includes(summary.round);
+      if (suppressed) {
+        this.state.suppressedPostBossRewardRounds = this.state.suppressedPostBossRewardRounds.filter(round => round !== summary.round);
+        this.openShop();
+      } else if (postBossRewardForRound(summary.round) === 'flame') this.openFlameSelection();
+      else this.openSpecialOffer();
+    }
     else this.openShop();
+  }
+  private completeSpecialOfferRound(): void {
+    const effects = this.state.specialOfferEffects;
+    for (const key of ['taxEvasionRounds', 'cashBonusRounds', 'powerballRounds', 'bottledFairyRounds', 'badDreamRounds'] as const)
+      if (effects[key] > 0) effects[key]--;
+    if (effects.powerballRounds === 0) effects.powerballAvailable = false;
+    if (effects.badDreamRounds === 0) this.state.badDreamCheckpoint = null;
   }
   evaluate(): void {
     const current = this.state.stats.rounds.at(-1)!;
@@ -936,7 +1106,7 @@ export class Resolver {
       const bossType = this.state.boss?.type ?? null;
       const heldGoldSnapshot = this.state.gold;
       const payout = { baseGold: roundReward(), unusedRerollGold: this.state.manualRerollsRemaining,
-        interestGold: interestForGold(heldGoldSnapshot),
+        interestGold: interestForGold(heldGoldSnapshot) * (this.state.specialOfferEffects.taxEvasionRounds > 0 ? 2 : 1),
         bossRewardGold: bossType ? bossRewardForRound(this.state.round) : 0, heldGoldSnapshot, totalRoundRewardGold: 0 };
       payout.totalRoundRewardGold = payout.baseGold + payout.unusedRerollGold + payout.interestGold + payout.bossRewardGold;
       current.payout = payout; this.state.lastRoundPayout = payout;
@@ -959,15 +1129,24 @@ export class Resolver {
       if (Object.values(summary.sources).reduce((sum, amount) => sum + amount, 0) !== totalGoldEarned)
         throw new Error('Round Summary Gold sources do not reconcile.');
       this.state.phase = 'roundSummary';
+      this.completeSpecialOfferRound();
       this.state.stats.roundSummaries.push({ ...structuredClone(summary), shown: true });
       this.emit({ type: 'ROUND_SUMMARY_SHOWN', boss: bossType ?? undefined, roundSummary: structuredClone(summary), amount: totalGoldEarned,
         encounterType: summary.encounterType, goldBefore: summary.goldBefore, goldAfter: summary.goldAfter,
         goldEarnedTotal: totalGoldEarned, baseRewardGold: payout.baseGold, unusedRerollGold: payout.unusedRerollGold,
         interestGold: payout.interestGold, bossRewardGold: payout.bossRewardGold, goldenGold, jackpotGold,
         message: `${bossType ? 'Boss defeated' : `Round ${this.format(this.state.round)} cleared`} · Gold ${this.format(summary.goldBefore)} → ${this.format(summary.goldAfter)} (+${this.format(totalGoldEarned)})` });
-    } else if (this.state.boss?.type !== 'warden' || (this.state.boss.startingDieId !== null && this.state.boss.pendingReinforcements === 0)) {
+    } else if (this.state.bossSilenced || this.state.boss?.type !== 'warden' || (this.state.boss.startingDieId !== null && this.state.boss.pendingReinforcements === 0)) {
       if (hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state), requiredEncounterDieIds(this.state))) return;
-      if (this.state.manualRerollsRemaining > 0) { this.emit({ type: 'DEAD_BOARD', message: `No playable hands — ${this.format(this.state.manualRerollsRemaining)} rerolls remain` }); return; }
+      const rerolls = this.state.manualRerollsRemaining + this.state.specialOfferEffects.carePackageRerolls;
+      if (rerolls > 0) { this.emit({ type: 'DEAD_BOARD', message: `No playable hands — ${this.format(rerolls)} rerolls remain` }); return; }
+      if (this.state.specialOfferEffects.bottledFairyRounds > 0 && !this.state.specialOfferEffects.bottledFairyTriggeredThisRound) {
+        this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound;
+        this.state.specialOfferEffects.bottledFairyTriggeredThisRound = true;
+        this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', amount: CONFIG.manualRerollsPerRound,
+          message: `Bottled Fairy refilled ${this.format(CONFIG.manualRerollsPerRound)} manual Rerolls` });
+        return;
+      }
       this.resolveBust();
     }
   }

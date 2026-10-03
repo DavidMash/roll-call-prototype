@@ -7,6 +7,7 @@ import { HANDS, HAND_IDS } from '../game/hands';
 import { exportRun } from '../game/telemetry';
 import type { GameState } from '../game/types';
 import { formatPlayerNumber, formatScoreProgress } from '../game/copy';
+import { activeSpecialOfferStatuses } from '../game/specialOffers';
 
 function OverviewStat({ label, value }: { label: string; value: string | number }) {
   return <div className="modal-stat"><Text size="xs" c="dimmed" tt="uppercase">{label}</Text><Text fw={700}>{typeof value === 'number' ? formatPlayerNumber(value) : value}</Text></div>;
@@ -39,6 +40,7 @@ export function RunInfoModal({ state, visibleEventId, busy, opened, onClose, see
           <Text size="sm" mt="sm"><strong>Probability:</strong> Sticky {formatPlayerNumber(state.stats.probabilityProcs.sticky.successes)}/{formatPlayerNumber(state.stats.probabilityProcs.sticky.checks)} · Hitchhiker {formatPlayerNumber(state.stats.probabilityProcs.hitchhiker.successes)}/{formatPlayerNumber(state.stats.probabilityProcs.hitchhiker.checks)} · Trainer {formatPlayerNumber(state.stats.personalTrainerSuccesses)}/{formatPlayerNumber(state.stats.personalTrainerAttempts)}</Text>
           <Text size="sm" mt="sm"><strong>Active Flames:</strong> {state.dice.filter(die => activeFlameId(die.flame)).map(die => `D${die.id + 1} ${FLAMES[activeFlameId(die.flame)!].name} ${formatPlayerNumber(die.flame!.investedGold)}/100`).join(' · ') || 'None'}</Text>
           <Text size="sm" mt="sm"><strong>Bonfires:</strong> {state.bonfires.map(id => FLAMES[id].name).join(' · ') || 'None'}</Text>
+          <Text size="sm" mt="sm"><strong>Special Offers:</strong> {activeSpecialOfferStatuses(state.specialOfferEffects).join(' · ') || 'None active'}</Text>
           <Table.ScrollContainer minWidth={760} mt="md"><Table striped><Table.Thead><Table.Tr><Table.Th>Round</Table.Th><Table.Th>Attempt</Table.Th><Table.Th>Goal</Table.Th><Table.Th>Final</Table.Th><Table.Th>Margin</Table.Th><Table.Th>Base</Table.Th><Table.Th>Rerolls</Table.Th><Table.Th>Interest</Table.Th><Table.Th>Boss Reward</Table.Th><Table.Th>Total</Table.Th></Table.Tr></Table.Thead>
             <Table.Tbody>{state.stats.rounds.map(round => <Table.Tr key={`${round.round}:${round.attempt}`}><Table.Td>{formatPlayerNumber(round.round)}</Table.Td><Table.Td>{formatPlayerNumber(round.attempt)}</Table.Td><Table.Td>{formatPlayerNumber(round.target)}</Table.Td><Table.Td>{formatPlayerNumber(round.finalScore)}</Table.Td><Table.Td>{round.clearMargin === null ? '—' : formatPlayerNumber(round.clearMargin)}</Table.Td><Table.Td>{round.payout ? formatPlayerNumber(round.payout.baseGold) : '—'}</Table.Td><Table.Td>{round.payout ? formatPlayerNumber(round.payout.unusedRerollGold) : '—'}</Table.Td><Table.Td>{round.payout ? formatPlayerNumber(round.payout.interestGold) : '—'}</Table.Td><Table.Td>{round.payout ? formatPlayerNumber(round.payout.bossRewardGold) : '—'}</Table.Td><Table.Td>{round.payout ? formatPlayerNumber(round.payout.totalRoundRewardGold) : '—'}</Table.Td></Table.Tr>)}</Table.Tbody>
           </Table></Table.ScrollContainer>

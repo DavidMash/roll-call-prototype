@@ -8,6 +8,9 @@ export function BossPanel({ board }: { board: Board }) {
   const boss = board.boss;
   if (!boss) return null;
   const definition = BOSSES[boss.type];
+  if (board.bossSilenced) return <Paper p="xs" className={`boss-panel boss-${boss.type}`} data-testid="boss-panel">
+    <Group justify="space-between"><Text fw={900}>{definition.name}</Text><Badge color="teal">SILENCED</Badge></Group>
+  </Paper>;
   const compactStatus = (() => {
     switch (boss.type) {
       case 'caller': return `CALL: ${HANDS[boss.calledHand].name.toUpperCase()} · DUE IN ${formatPlayerNumber(boss.playsRemaining)}`;

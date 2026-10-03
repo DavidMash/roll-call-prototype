@@ -7,15 +7,15 @@ import { newRun } from './engine';
 import { enhancementCost } from './enhancements';
 
 describe('prototype balance progression', () => {
-  it('starts at 75 / 125 / 150 and uses the centralized three-round cadence', () => {
-    expect(CONFIG.baseTarget).toBe(75);
-    expect(CONFIG.baseBossTarget).toBe(150);
+  it('starts at 100 / 175 / 200 and uses the centralized three-round cadence', () => {
+    expect(CONFIG.baseTarget).toBe(100);
+    expect(CONFIG.baseBossTarget).toBe(200);
     expect(CONFIG.targetGrowth).toBe(1.32);
     expect(CONFIG.targetBlockSize).toBe(3);
     expect(CONFIG.targetRounding).toBe(5);
     expect(TARGET_BLOCK_RATIOS).toEqual([1 / 2, 5 / 6, 1]);
     expect(Array.from({ length: 9 }, (_, index) => targetForRound(index + 1)))
-      .toEqual([75, 125, 150, 175, 300, 350, 400, 675, 800]);
+      .toEqual([100, 175, 200, 225, 375, 450, 525, 875, 1_050]);
   });
 
   it('derives every block from one rounded Boss anchor at 1/2, 5/6, and 1', () => {
@@ -45,10 +45,10 @@ describe('prototype balance progression', () => {
 
   it('calculates later Boss anchors from the unrounded base formula without accumulated drift', () => {
     for (const block of [1, 5, 10, 15, 20]) {
-      expect(bossAnchorForBlock(block)).toBe(prettyRoundTarget(150 * (1.32 ** 3) ** block));
+      expect(bossAnchorForBlock(block)).toBe(prettyRoundTarget(200 * (1.32 ** 3) ** block));
     }
-    expect(bossAnchorForBlock(3)).toBe(1_800);
-    expect(bossAnchorForBlock(3)).not.toBe(1_850); // recursively growing rounded 350 and 800 anchors would drift here
+    expect(bossAnchorForBlock(3)).toBe(2_450);
+    expect(bossAnchorForBlock(3)).not.toBe(2_400); // recursively growing rounded anchors would drift here
   });
 
   it('grants a flat five-gold base reward in every round', () => {

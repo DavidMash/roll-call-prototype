@@ -49,9 +49,9 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
           ? <Tooltip label="Restore lost lives" withArrow><UnstyledButton className="hud-lives interactive" data-testid="stat-lives"
             aria-label={`${board.lives} of ${CONFIG.maxLives} lives; restore lives`} onClick={openRestoreLives}>{hearts}</UnstyledButton></Tooltip>
           : <div className="hud-lives" data-testid="stat-lives" aria-label={`${board.lives} of ${CONFIG.maxLives} lives`}>{hearts}</div>}
-        {board.phase === 'shop' || board.phase === 'flameSelection' || board.phase === 'roundSummary'
-          ? <div className="hud-phase" aria-label={board.phase === 'shop' ? 'Shop phase' : board.phase === 'flameSelection' ? 'Flame Selection phase' : 'Round Summary phase'}>
-            {board.phase === 'shop' ? 'SHOP' : board.phase === 'flameSelection' ? 'FLAME SELECTION' : 'SUMMARY'}
+        {board.phase === 'shop' || board.phase === 'flameSelection' || board.phase === 'specialOffer' || board.phase === 'roundSummary'
+          ? <div className="hud-phase" aria-label={board.phase === 'shop' ? 'Shop phase' : board.phase === 'flameSelection' ? 'Flame Selection phase' : board.phase === 'specialOffer' ? 'Special Offer phase' : 'Round Summary phase'}>
+            {board.phase === 'shop' ? 'SHOP' : board.phase === 'flameSelection' ? 'FLAME SELECTION' : board.phase === 'specialOffer' ? 'SPECIAL OFFER' : 'SUMMARY'}
           </div>
           : board.phase === 'round' ? <div className="hud-phase" aria-label="Round phase">ROUND {formatPlayerNumber(board.round)}</div>
             : <div className="hud-phase" aria-label={board.phase === 'bust' ? 'Bust phase' : 'Run ended'}>{board.phase === 'bust' ? 'BUST' : 'OVER'}</div>}

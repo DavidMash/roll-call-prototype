@@ -15,7 +15,7 @@ export function createStats(seed: string): RunStats {
     lifetimeNormalShopGoldSpent: 0, moneyToBurnMultipliers: [], lowballAverages: [], magneticAnchorBatches: 0, magneticAttractions: 0,
     bumpControlledRolls: 0, enhancedFaces: [], enhancementShopRerolls: 0, shopDiceRerolls: 0,
     goldEarned: 0,
-    goldBySource: { golden: 0, jackpot: 0, enhancementSale: 0, roundBase: 0, unusedRerolls: 0, interest: 0, bossReward: 0 },
+    goldBySource: { golden: 0, jackpot: 0, enhancementSale: 0, roundBase: 0, unusedRerolls: 0, interest: 0, bossReward: 0, specialOffer: 0, cashBonus: 0 },
     goldSpent: 0,
     goldSpentBySource: { enhancement: 0, shopDiceReroll: 0, enhancementReroll: 0, handTraining: 0, flameInvestment: 0, lifeRestore: 0 },
     manualRerollActions: 0, manualDiceRerolled: 0, manualRerolls: [], deadBoardRescues: 0, roundSummaries: [],
@@ -30,13 +30,13 @@ export function createStats(seed: string): RunStats {
 }
 export function boardSnapshot(state: GameState): Board {
   const { phase, round, target, score, gold, lives, roundAttemptNumber, bossSchedule, boss, currentNodeId, bust, flameTutorial,
-    manualRerollsRemaining, dice, bonfires, chargeXMult, maxCharge, decisionId, sixPackXMult, sixPackUpperHandsPlayed,
+    manualRerollsRemaining, specialOfferEffects, suppressedPostBossRewardRounds, bossSilenced, dice, bonfires, chargeXMult, maxCharge, decisionId, sixPackXMult, sixPackUpperHandsPlayed,
     chargeArmed, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, lifetimeNormalShopGoldSpent, consumed, scoreByHand, effectScore,
-    handLevels, handPlayCounts, targetPracticeHand, lastRoundPayout, roundSummary, shop, flameSelection } = state;
+    handLevels, handPlayCounts, targetPracticeHand, lastRoundPayout, roundSummary, shop, flameSelection, specialOffer } = state;
   return structuredClone({ phase, round, target, score, gold, lives, roundAttemptNumber, bossSchedule, boss, currentNodeId, bust, flameTutorial,
-    manualRerollsRemaining, dice, bonfires,
+    manualRerollsRemaining, specialOfferEffects, suppressedPostBossRewardRounds, bossSilenced, dice, bonfires,
     chargeXMult, maxCharge, chargeArmed, decisionId, sixPackXMult, sixPackUpperHandsPlayed, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, lifetimeNormalShopGoldSpent, consumed, scoreByHand, effectScore,
-    handLevels, handPlayCounts, targetPracticeHand, lastRoundPayout, roundSummary, shop, flameSelection });
+    handLevels, handPlayCounts, targetPracticeHand, lastRoundPayout, roundSummary, shop, flameSelection, specialOffer });
 }
 export function exportRun(state: GameState) {
   return { schemaVersion: 17, scoringModel: 'flame-magnetic-sequences-v1', ...state.stats,

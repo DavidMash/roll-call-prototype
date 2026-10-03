@@ -163,11 +163,11 @@ describe('The Marathon', () => {
 
 describe('base target modifier boundary', () => {
   it('applies existing Boss modifiers only after the block target is determined', () => {
-    expect(targetForBoss('marathon', targetForRound(3))).toBe(450);
-    expect(targetForBoss('quickdraw', targetForRound(3))).toBe(50);
-    expect(targetForBoss('quickdraw', targetForRound(6))).toBe(115);
+    expect(targetForBoss('marathon', targetForRound(3))).toBe(600);
+    expect(targetForBoss('quickdraw', targetForRound(3))).toBe(65);
+    expect(targetForBoss('quickdraw', targetForRound(6))).toBe(150);
     for (const boss of ['caller', 'warden', 'hexer', 'fly', 'snakeEyes', 'infected'] as const) {
-      expect(targetForBoss(boss, targetForRound(6))).toBe(350);
+      expect(targetForBoss(boss, targetForRound(6))).toBe(450);
     }
   });
 });
@@ -175,7 +175,7 @@ describe('base target modifier boundary', () => {
 describe('Quickdraw', () => {
   it('uses one third target, spends one Lower shot, and leaves Upper hands available', () => {
     let state = bossRound('quickdraw');
-    expect(state.target).toBe(50);
+    expect(state.target).toBe(65);
     state.target = 1_000_000;
     expose(state, [2, 2, 3, 4, 5]);
     state = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.2)).state;

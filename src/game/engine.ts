@@ -12,6 +12,7 @@ import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
 import { activeEncounterDice, bossSchedule, unavailableEncounterHands } from './bosses';
 import { formatPlayerNumber } from './copy';
+import { enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey } from './specialOffers';
 import type { Action, Board, GameState, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
 
 const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`${seed}:round:${round}:attempt:${attempt}`);
@@ -27,6 +28,17 @@ function normalizedTrainingOffer(offer: TrainingOffer | { hand: HandId; purchase
 function normalizeShop(shop: Shop): void {
   shop.trainingOffers = shop.trainingOffers.map(offer => normalizedTrainingOffer(offer));
   shop.lifeRestores = Math.max(0, Math.floor(shop.lifeRestores ?? 0));
+}
+
+function normalizeSpecialRuntime(state: GameState | GameState['roundCheckpoint']): void {
+  if (!state) return;
+  state.specialOfferEffects = { ...initialSpecialOfferEffects(), ...(state.specialOfferEffects ?? {}) };
+  state.specialOfferEffects.carePackageRerolls = Math.max(0, Math.floor(state.specialOfferEffects.carePackageRerolls));
+  for (const key of ['taxEvasionRounds', 'cashBonusRounds', 'powerballRounds', 'bottledFairyRounds', 'badDreamRounds'] as const)
+    state.specialOfferEffects[key] = Math.max(0, Math.floor(state.specialOfferEffects[key]));
+  state.suppressedPostBossRewardRounds ??= [];
+  state.bossSilenced ??= false;
+  state.specialOffer ??= null;
 }
 
 function normalizeSixPackRuntime(state: Pick<Board, 'dice' | 'bonfires' | 'sixPackXMult' | 'sixPackUpperHandsPlayed'>): void {
@@ -50,6 +62,7 @@ function normalizeHandFamilyFlameRuntime(state: Pick<Board, 'dice' | 'bonfires' 
 
 export function normalizeGameState(state: GameState): GameState {
   const next = structuredClone(state);
+  normalizeSpecialRuntime(next);
   const legacy = next as GameState & { flameReward?: GameState['flameSelection'] };
   if (!next.flameSelection && legacy.flameReward) next.flameSelection = legacy.flameReward;
   delete legacy.flameReward;
@@ -87,6 +100,7 @@ export function normalizeGameState(state: GameState): GameState {
     normalizeShop(next.shop);
   }
   if (next.roundCheckpoint) {
+    normalizeSpecialRuntime(next.roundCheckpoint);
     if (next.roundCheckpoint.shop) normalizeShop(next.roundCheckpoint.shop);
     for (const die of next.roundCheckpoint.dice) {
       for (const face of die.faces) {
@@ -128,6 +142,7 @@ export function normalizeGameState(state: GameState): GameState {
   next.bust ??= null;
   next.flameTutorial ??= { pendingDieId: null, completed: false };
   next.roundCheckpoint ??= null;
+  next.badDreamCheckpoint ??= null;
   next.stats.sales ??= [];
   next.stats.mapTransitions ??= [];
   next.stats.mapTransitions = next.stats.mapTransitions.map(record => ({ ...record,
@@ -166,12 +181,17 @@ export function normalizeGameState(state: GameState): GameState {
   next.stats.goldBySource.bossReward ??= legacyGold.flameBonus ?? 0;
   delete legacyGold.flameBonus;
   next.stats.roundSummaries ??= [];
-  next.history = next.history.map(record => ({ ...record,
-    type: (record.type as string) === 'FLAME_REWARD_OPENED' ? 'FLAME_SELECTION_OPENED' : record.type,
-    nodeType: (record.nodeType as string) === 'flame_reward' ? 'flame_selection' : record.nodeType }));
+  next.history = next.history.map(record => {
+    if ((record.type as string) !== 'FLAME_REWARD_OPENED' && (record.nodeType as string) !== 'flame_reward') return record;
+    return { ...record,
+      type: (record.type as string) === 'FLAME_REWARD_OPENED' ? 'FLAME_SELECTION_OPENED' as const : record.type,
+      nodeType: (record.nodeType as string) === 'flame_reward' ? 'flame_selection' as const : record.nodeType };
+  });
   next.stats.actions = next.stats.actions.map(action => (action.type as string) === 'CONTINUE_FLAME_REWARD'
     ? { type: 'CONTINUE_FLAME_SELECTION' } : action);
   next.stats.goldBySource.enhancementSale ??= 0;
+  next.stats.goldBySource.specialOffer ??= 0;
+  next.stats.goldBySource.cashBonus ??= 0;
   next.stats.goldSpentBySource.lifeRestore ??= 0;
   next.decisionId = Math.max(0, Math.floor(next.decisionId ?? 0));
   normalizeSixPackRuntime(next);
@@ -190,20 +210,20 @@ export function validateAction(state: Board, action: Action): string | null {
     ? null : 'A returned Bust Shop is required to retry the round.';
   if (action.type === 'MANUAL_REROLL') {
     if (state.phase !== 'round') return 'Manual rerolls can only be used during a gameplay round.';
-    if (state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0) return 'Unlock a Warden die before taking another action.';
+    if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0) return 'Unlock a Warden die before taking another action.';
     if (!action.dieIds.length) return 'Select at least one die to reroll.';
     if (new Set(action.dieIds).size !== action.dieIds.length
       || action.dieIds.some(id => !Number.isInteger(id) || !activeEncounterDice(state).some(die => die.id === id))) return 'Select distinct unlocked dice that are on the board.';
-    if (action.dieIds.length > state.manualRerollsRemaining) return 'Not enough manual rerolls for these dice.';
+    if (action.dieIds.length > state.manualRerollsRemaining + state.specialOfferEffects.carePackageRerolls) return 'Not enough manual rerolls for these dice.';
     return null;
   }
   if (action.type === 'PLAY') {
     if (state.phase !== 'round') return 'Hands can only be played during a round.';
-    if (state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0) return 'Unlock a Warden die before committing another hand.';
+    if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0) return 'Unlock a Warden die before committing another hand.';
     if (action.decisionMs !== undefined && (!Number.isFinite(action.decisionMs) || action.decisionMs < 0)) return 'Decision time must be a nonnegative number.';
     if (unavailableEncounterHands(state).includes(action.hand)) return state.boss?.type === 'marathon'
       ? 'That hand is still cooling down.' : state.boss?.type === 'quickdraw' ? 'Quickdraw has no Lower shot remaining.' : 'That hand has already been consumed.';
-    if (state.boss?.type === 'hexer' && !action.dieIds.includes(state.boss.cursedDieId)) return 'The Cursed Die must participate in every hand.';
+    if (!state.bossSilenced && state.boss?.type === 'hexer' && !action.dieIds.includes(state.boss.cursedDieId)) return 'The Cursed Die must participate in every hand.';
     if (state.chargeArmed && !hasChargeBonfire(state)) {
       const missing = requiredChargeFlameDieIds(state).filter(id => !action.dieIds.includes(id));
       if (missing.length) return 'Every Charge Flame die must participate while Charge is armed.';
@@ -212,7 +232,7 @@ export function validateAction(state: Board, action: Action): string | null {
     return null;
   }
   if (action.type === 'UNLOCK_WARDEN_DIE') {
-    if (state.phase !== 'round' || state.boss?.type !== 'warden') return 'Dice can only be unlocked during The Warden encounter.';
+    if (state.phase !== 'round' || state.bossSilenced || state.boss?.type !== 'warden') return 'Dice can only be unlocked during The Warden encounter.';
     if (state.boss.pendingReinforcements <= 0) return 'No Warden reinforcement is ready.';
     const die = state.dice.find(item => item.id === action.dieId && item.owner === 'player');
     if (!die || state.boss.activeDieIds.includes(die.id)) return 'Choose a locked player die.';
@@ -250,13 +270,22 @@ export function validateAction(state: Board, action: Action): string | null {
     }
     return null;
   }
+  if (action.type === 'CHOOSE_SPECIAL_OFFER' || action.type === 'CONTINUE_SPECIAL_OFFER') {
+    if (state.phase !== 'specialOffer' || !state.specialOffer) return 'This action requires an open Special Offer.';
+    if (action.type === 'CHOOSE_SPECIAL_OFFER') {
+      if (state.specialOffer.acquired) return 'Only one Special Offer may be chosen.';
+      if (!state.specialOffer.offers.some(offer => offer.id === action.offerId)) return 'Choose an available Special Offer.';
+    } else if (!state.specialOffer.acquired) return 'Choose one Special Offer before continuing.';
+    return null;
+  }
   if (state.phase !== 'shop' || !state.shop) return 'This action requires an open shop.';
   if (action.type === 'NEXT_ROUND' && state.bust) return 'Use Retry Round after preparing for the failed round.';
   if (action.type === 'BUY') {
     const offer = state.shop.offers.find(item => item.id === action.offerId);
     const die = state.dice.find(item => item.id === action.dieId);
     if (!offer || offer.purchased || !die) return 'Choose an available offer and a physical die.';
-    if (state.gold < enhancementCost(offer.enhancement)) return 'Not enough Gold for this Enhancement.';
+    const cost = enhancementOfferIsFree(state.shop, offer.id) ? 0 : enhancementCost(offer.enhancement);
+    if (state.gold < cost) return 'Not enough Gold for this Enhancement.';
     return placementError(die, activeFace(die), offer.enhancement);
   }
   if (action.type === 'SELL_ENHANCEMENT') {
@@ -270,12 +299,12 @@ export function validateAction(state: Board, action: Action): string | null {
   if (action.type === 'TRAIN_HAND') {
     const offer = state.shop.trainingOffers.find(item => item.kind === 'hand' && item.hand === action.hand);
     if (!offer) return 'Choose an available hand training offer.';
-    if (state.gold < handTrainingCost(offer.purchases)) return 'Not enough Gold to train this hand.';
+    if (state.gold < (trainingOfferIsFree(state.shop, offer) ? 0 : handTrainingCost(offer.purchases))) return 'Not enough Gold to train this hand.';
   }
   if (action.type === 'TRAIN_ALL_HANDS') {
     const offer = state.shop.trainingOffers.find(item => item.kind === 'team');
     if (!offer) return 'Choose an available Team Training offer.';
-    if (state.gold < teamTrainingCost(offer.purchases)) return 'Not enough Gold for Team Training.';
+    if (state.gold < (trainingOfferIsFree(state.shop, offer) ? 0 : teamTrainingCost(offer.purchases))) return 'Not enough Gold for Team Training.';
   }
   if (action.type === 'REROLL_DICE' && state.gold < diceRerollCost(state.shop.diceRerolls)) return 'Not enough Gold to reroll Shop dice.';
   if (action.type === 'REROLL_OFFERS' && state.gold < offerRerollCost(state.shop.offerRerolls)) return 'Not enough Gold to reroll offers.';
@@ -297,7 +326,7 @@ function execute(state: GameState, run: (resolver: Resolver) => void, random?: R
     next.history.push(record);
     resolver.events.push({ ...record, board: boardSnapshot(next) });
   }
-  next.rngState = seeded.state;
+  next.rngState = resolver.rngStateAfterResolution ?? seeded.state;
   return { state: next, events: resolver.events };
 }
 
@@ -305,12 +334,13 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
   const state: GameState = {
     phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: CONFIG.baseTarget,
     score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, roundAttemptNumber: 1,
-    bossSchedule: bossSchedule(seed), boss: null, currentNodeId: '',
+    bossSchedule: bossSchedule(seed), boss: null, bossSilenced: false, currentNodeId: '',
     bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], chargeXMult: 1, maxCharge: 1,
     chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], shop: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
-    scoreByHand: {}, effectScore: 0, lastRoundPayout: null, roundSummary: null, flameSelection: null,
-    manualRerollsRemaining: CONFIG.manualRerollsPerRound, nextOfferId: 0, stats: createStats(seed), history: [], roundCheckpoint: null,
+    scoreByHand: {}, effectScore: 0, lastRoundPayout: null, roundSummary: null, flameSelection: null, specialOffer: null,
+    manualRerollsRemaining: CONFIG.manualRerollsPerRound, specialOfferEffects: initialSpecialOfferEffects(), suppressedPostBossRewardRounds: [],
+    nextOfferId: 0, stats: createStats(seed), history: [], roundCheckpoint: null, badDreamCheckpoint: null,
   };
   return execute(state, resolver => resolver.startRound(), random, random ? undefined : attemptSeed(seed, 1, 1));
 }
@@ -340,8 +370,9 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const offer = next.shop!.offers.find(item => item.id === action.offerId)!;
         const die = next.dice[action.dieId];
         const face = activeFace(die);
-        const cost = enhancementCost(offer.enhancement);
-        resolver.spendGold(cost, `Bought ${ENHANCEMENTS[offer.enhancement].name}: −${formatPlayerNumber(cost)} gold`, 'enhancement');
+        const cost = enhancementOfferIsFree(next.shop!, offer.id) ? 0 : enhancementCost(offer.enhancement);
+        if (cost) resolver.spendGold(cost, `Bought ${ENHANCEMENTS[offer.enhancement].name}: −${formatPlayerNumber(cost)} gold`, 'enhancement');
+        next.shop!.freeEnhancementOfferIds = (next.shop!.freeEnhancementOfferIds ?? []).filter(id => id !== offer.id);
         face.enhancements[offer.enhancement] = (face.enhancements[offer.enhancement] ?? 0) + 1;
         if (offer.enhancement === 'vintage') face.vintageSellValue = 0;
         offer.purchased = true;
@@ -418,6 +449,8 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         }
         resolver.openShop(false);
         break;
+      case 'CHOOSE_SPECIAL_OFFER': resolver.chooseSpecialOffer(action.offerId); break;
+      case 'CONTINUE_SPECIAL_OFFER': resolver.continueSpecialOffer(); break;
       case 'REROLL_DICE':
         resolver.spendGold(diceRerollCost(next.shop!.diceRerolls), 'Paid for shop dice reroll', 'shopDiceReroll');
         next.shop!.diceRerolls++;
@@ -435,8 +468,10 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const offer = next.shop!.trainingOffers.find(item => item.kind === 'hand' && item.hand === action.hand)!;
         const fromLevel = next.handLevels[action.hand];
         const toLevel = fromLevel + 1;
-        const cost = handTrainingCost(offer.purchases);
-        resolver.spendGold(cost, `Trained ${HANDS[action.hand].name} to level ${formatPlayerNumber(toLevel)}: −${formatPlayerNumber(cost)} gold`, 'handTraining');
+        const key = trainingOfferKey(offer);
+        const cost = trainingOfferIsFree(next.shop!, offer) ? 0 : handTrainingCost(offer.purchases);
+        if (cost) resolver.spendGold(cost, `Trained ${HANDS[action.hand].name} to level ${formatPlayerNumber(toLevel)}: −${formatPlayerNumber(cost)} gold`, 'handTraining');
+        next.shop!.freeTrainingOfferKeys = (next.shop!.freeTrainingOfferKeys ?? []).filter(item => item !== key);
         next.handLevels[action.hand] = toLevel;
         offer.purchases++;
         next.stats.trainingPurchases.push({ round: next.round, hand: action.hand, fromLevel, toLevel, cost });
@@ -448,8 +483,10 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       }
       case 'TRAIN_ALL_HANDS': {
         const offer = next.shop!.trainingOffers.find(item => item.kind === 'team')!;
-        const cost = teamTrainingCost(offer.purchases);
-        resolver.spendGold(cost, `Team Training: −${formatPlayerNumber(cost)} gold`, 'handTraining');
+        const key = trainingOfferKey(offer);
+        const cost = trainingOfferIsFree(next.shop!, offer) ? 0 : teamTrainingCost(offer.purchases);
+        if (cost) resolver.spendGold(cost, `Team Training: −${formatPlayerNumber(cost)} gold`, 'handTraining');
+        next.shop!.freeTrainingOfferKeys = (next.shop!.freeTrainingOfferKeys ?? []).filter(item => item !== key);
         for (const hand of HAND_IDS) next.handLevels[hand]++;
         offer.purchases++;
         next.stats.trainingPurchases.push({ round: next.round, hand: 'all', cost });

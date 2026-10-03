@@ -35,7 +35,7 @@ describe('authoritative Round Summary', () => {
     });
   });
 
-  it('adds the escalating Boss Reward after interest and preserves Summary → map → Flame Selection sequencing', () => {
+  it('adds the escalating Boss Reward after interest and preserves the alternating Special Offer sequencing', () => {
     const state = clearState(50);
     state.round = 6;
     state.stats.rounds[0].round = 6;
@@ -50,8 +50,8 @@ describe('authoritative Round Summary', () => {
     expect(goldEvents).toEqual(['roundBase', 'unusedRerolls', 'interest', 'bossReward']);
     expect(result.events.some(event => event.type === 'MAP_TRANSITION')).toBe(false);
     const continued = dispatch(result.state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant());
-    expect(continued.events[0]).toMatchObject({ type: 'MAP_TRANSITION', nodeType: 'flame_selection' });
-    expect(continued.state.phase).toBe('flameSelection');
+    expect(continued.events[0]).toMatchObject({ type: 'MAP_TRANSITION', nodeType: 'special_offer' });
+    expect(continued.state.phase).toBe('specialOffer');
   });
 
   it('continues a normal summary through the map to Shop and never summarizes a Bust', () => {
