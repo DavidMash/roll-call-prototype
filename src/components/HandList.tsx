@@ -49,6 +49,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
         const stats = handStats(hand, board.handLevels[hand]);
         const consumed = unavailableHands.includes(hand);
         const cooldown = board.boss?.type === 'marathon' ? board.boss.cooldowns[hand] ?? 0 : 0;
+        const neglected = board.boss?.type === 'neglected' && board.boss.neglectedHands.includes(hand);
         const quickdrawLocked = board.boss?.type === 'quickdraw' && board.boss.lowerShotUsed && LOWER_HAND_IDS.includes(hand);
         const compatible = combinationsForHand(encounterDice, hand)
           .some(set => selection.dieIds.every(dieId => set.includes(dieId)) && requiredDieIds.every(dieId => set.includes(dieId)));
@@ -66,7 +67,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
           className={`scorecard-row ${state} ${targeted ? 'targeted' : ''} ${board.boss?.type === 'caller' && board.boss.calledHand === hand ? 'caller-called' : ''} ${board.boss?.type === 'fly' && board.boss.flyHand === hand ? 'fly-row' : ''}`} data-testid={`scorecard-row-${hand}`} data-state={state}
           disabled={busy || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}
           aria-keyshortcuts={selected && canSubmit ? 'Enter' : undefined}
-          aria-label={`${definition.name} · Lv. ${formatPlayerNumber(stats.level)} · ${formatPlayerNumber(stats.basePips)} Pips · ×${formatPlayerNumber(stats.baseMultiplier)} Mult${isUltimate ? ' · Ultimate Hand' : ''} · ${scoreLabel}${consumed ? ' · Used' : ''}`}>
+          aria-label={`${definition.name} · Lv. ${formatPlayerNumber(stats.level)} · ${formatPlayerNumber(stats.basePips)} Pips · ×${formatPlayerNumber(stats.baseMultiplier)} Mult${isUltimate ? ' · Ultimate Hand' : ''} · ${scoreLabel}${consumed ? ' · Used' : ''}${neglected ? ' · Neglected' : ''}`}>
           <span className="scorecard-row-copy">
             <span className="scorecard-hand-name" title={definition.name}>
               <span className="scorecard-name-line">
@@ -85,6 +86,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
             <span data-testid={`scorecard-score-${hand}`}>{score === undefined ? '—' : formatPlayerNumber(score)}</span>
             {cooldown > 0 ? <Badge className="scorecard-state-badge" size="xs" color="orange" variant="light" title={`Cooldown ${cooldown}`}><span className="wide-label">COOLDOWN </span><span className="compact-label">CD </span>{cooldown}</Badge>
               : quickdrawLocked ? <Badge size="xs" color="yellow" variant="light">LOCKED</Badge>
+              : neglected ? <Badge size="xs" color="gray" variant="light">NEGLECTED</Badge>
               : consumed && <Badge size="xs" color="gray" variant="light">USED</Badge>}
           </span>
         </Button>

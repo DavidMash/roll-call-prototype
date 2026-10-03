@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { activeFace, rollWeights } from './dice';
 import { dispatch, newRun, validateAction } from './engine';
-import { activeEncounterDice, BOSS_TYPES, bossSchedule, createCursedDie, requiredEncounterDieIds, wardenBaselineCapacity, wardenBaselineHandScore, wardenIdealNaturalPips, wardenNaturalHands, wardenUnlockCost, wardenUnlockCosts } from './bosses';
+import { activeEncounterDice, BOSS_TYPES, bossSchedule, createCursedDie, MINI_BOSS_TYPES, requiredEncounterDieIds, wardenBaselineCapacity, wardenBaselineHandScore, wardenIdealNaturalPips, wardenNaturalHands, wardenUnlockCost, wardenUnlockCosts } from './bosses';
 import { combinationsForHand, HAND_IDS, hasPlayableHand, initialHandLevels, UPPER_HAND_IDS } from './hands';
 import { encounterTarget, routeThrough, routeWindow } from './progression';
 import type { BossType, GameState, RandomSource } from './types';
@@ -22,7 +22,7 @@ describe('linear route and deterministic boss schedule', () => {
   it('uses stable cadence and node identifiers', () => {
     expect(routeThrough('route', 4).map(node => node.id)).toEqual([
       'round:1', 'shop:before-round:2', 'round:2', 'shop:before-round:3',
-      'boss:3', 'flame:after-round:3', 'shop:before-round:4', 'round:4', 'shop:before-round:5',
+      'boss:3', 'special:after-round:3', 'shop:before-round:4', 'round:4', 'shop:before-round:5',
     ]);
   });
 
@@ -42,20 +42,23 @@ describe('linear route and deterministic boss schedule', () => {
   });
 
   it('draws all eight bosses before reshuffling without adjacent repeats', () => {
-    const sequence = Object.values(bossSchedule('bag-seed', 72));
-    expect(sequence).toHaveLength(24);
-    for (let index = 0; index < sequence.length; index += BOSS_TYPES.length) {
-      expect(new Set(sequence.slice(index, index + BOSS_TYPES.length))).toEqual(new Set(BOSS_TYPES));
+    const schedule = bossSchedule('bag-seed', 96);
+    const miniSequence = Object.entries(schedule).filter(([round]) => Number(round) % 6 === 3).map(([, boss]) => boss!);
+    const bigSequence = Object.entries(schedule).filter(([round]) => Number(round) % 6 === 0).map(([, boss]) => boss!);
+    for (const [sequence, types] of [[miniSequence, MINI_BOSS_TYPES], [bigSequence, BOSS_TYPES]] as const) {
+      expect(sequence).toHaveLength(16);
+      for (let index = 0; index < sequence.length; index += types.length)
+        expect(new Set(sequence.slice(index, index + types.length))).toEqual(new Set(types));
+      sequence.slice(1).forEach((boss, index) => expect(boss).not.toBe(sequence[index]));
     }
-    sequence.slice(1).forEach((boss, index) => expect(boss).not.toBe(sequence[index]));
-    expect(Object.values(bossSchedule('bag-seed', 72))).toEqual(sequence);
+    expect(bossSchedule('bag-seed', 96)).toEqual(schedule);
   });
 
   it('emits auditable movement into a boss node', () => {
     const state = bossRound('caller');
     expect(state.currentNodeId).toBe('boss:3');
     expect(state.stats.mapTransitions.at(-1)).toMatchObject({
-      fromNode: 'shop:before-round:3', toNode: 'boss:3', nodeType: 'boss_round', boss: 'caller', direction: 'forward',
+      fromNode: 'shop:before-round:3', toNode: 'boss:3', nodeType: 'mini_boss_round', boss: 'caller', direction: 'forward',
     });
   });
 });
@@ -327,7 +330,7 @@ describe('The Hexer', () => {
     expect(state.phase).toBe('roundSummary');
     expect(state.lastRoundPayout).toMatchObject({ baseGold: 5, unusedRerollGold: 3, interestGold: 0, bossRewardGold: 10, totalRoundRewardGold: 18 });
     state = dispatch(state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
-    expect(state.phase).toBe('flameSelection');
+    expect(state.phase).toBe('specialOffer');
     expect(state.dice.every(die => die.owner === 'player')).toBe(true);
   });
 

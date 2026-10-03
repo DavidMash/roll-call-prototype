@@ -1,6 +1,9 @@
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7;
-export type BossType = 'caller' | 'warden' | 'hexer' | 'marathon' | 'quickdraw' | 'fly' | 'snakeEyes' | 'infected';
-export type RunNodeType = 'normal_round' | 'boss_round' | 'shop' | 'flame_selection' | 'special_offer';
+export type BigBossType = 'caller' | 'warden' | 'hexer' | 'marathon' | 'quickdraw' | 'fly' | 'snakeEyes' | 'infected';
+export type MiniBossType = 'juggler' | 'capitalReturn' | 'neglected' | 'clockmaker'
+  | 'tightrope' | 'crawler' | 'magician' | 'mugger';
+export type BossType = BigBossType | MiniBossType;
+export type RunNodeType = 'normal_round' | 'mini_boss_round' | 'boss_round' | 'shop' | 'flame_selection' | 'special_offer';
 export type Enhancement =
   | 'bonus' | 'jumpingBean' | 'golden' | 'workout'
   | 'missingLink' | 'mirror' | 'magnetic' | 'sticky' | 'slippy'
@@ -55,8 +58,25 @@ export interface QuickdrawBossState { type: 'quickdraw'; lowerShotUsed: boolean;
 export interface FlyBossState { type: 'fly'; flyHand: HandId | null; caught: boolean; moves: number }
 export interface SnakeEyesBossState { type: 'snakeEyes'; mutatedFaces: { dieId: number; physicalFace: Rank }[] }
 export interface InfectedBossState { type: 'infected'; infectedFaces: { dieId: number; physicalFace: Rank }[] }
+export interface JugglerBossState { type: 'juggler' }
+export interface CapitalReturnBossState { type: 'capitalReturn' }
+export interface NeglectedBossState { type: 'neglected'; neglectedHands: HandId[] }
+export interface ClockmakerBossState { type: 'clockmaker' }
+export interface TightropeBossState { type: 'tightrope' }
+export interface CrawlerBossState { type: 'crawler' }
+export interface MagicianBossState {
+  type: 'magician';
+  missingDieId: number;
+  hiddenFlame: ActiveFlame | null;
+  calledHands: HandId[];
+  completedHands: HandId[];
+  returned: boolean;
+}
+export interface MuggerBossState { type: 'mugger'; hiddenHand: HandId; revealedHand: HandId | null; spent: boolean }
 export type BossRuntimeState = CallerBossState | WardenBossState | HexerBossState | MarathonBossState
-  | QuickdrawBossState | FlyBossState | SnakeEyesBossState | InfectedBossState;
+  | QuickdrawBossState | FlyBossState | SnakeEyesBossState | InfectedBossState
+  | JugglerBossState | CapitalReturnBossState | NeglectedBossState | ClockmakerBossState
+  | TightropeBossState | CrawlerBossState | MagicianBossState | MuggerBossState;
 
 export interface XMultFactor {
   source: Flame | 'charge';

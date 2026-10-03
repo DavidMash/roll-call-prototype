@@ -24,6 +24,21 @@ describe('run persistence', () => {
     expect(loadPersistedRun(storage, 'another-run')).toBeNull();
   });
 
+  it('round-trips an active Mini-Boss encounter and its retry checkpoint', () => {
+    const storage = new MemoryStorage();
+    const rng = { next: () => .2 };
+    const state = newRun('saved-mini-boss', rng).state;
+    state.phase = 'shop';
+    state.round = 2;
+    state.currentNodeId = 'shop:before-round:3';
+    state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    state.bossSchedule[3] = 'magician';
+    const encounter = dispatch(state, { type: 'NEXT_ROUND' }, rng).state;
+
+    expect(savePersistedRun(storage, encounter)).toBe(true);
+    expect(loadPersistedRun(storage, encounter.seed)).toEqual(encounter);
+  });
+
   it('rejects malformed, unsupported, and incomplete saves', () => {
     const storage = new MemoryStorage();
     storage.setItem(RUN_STORAGE_KEY, '{not-json');

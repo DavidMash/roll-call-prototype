@@ -24,6 +24,10 @@ export function scoringPlaybackRun() {
         action = game.flameSelection!.acquired
           ? { type: 'CONTINUE_FLAME_SELECTION' }
           : { type: 'CHOOSE_FLAME', offerId: game.flameSelection!.offers[0].id, dieId: Math.floor(game.round / 3 - 1) % 5 };
+      } else if (game.phase === 'specialOffer') {
+        const offer = game.specialOffer!.offers.find(item => item.type !== 'timeTravel') ?? game.specialOffer!.offers[0];
+        action = game.specialOffer!.acquired ? { type: 'CONTINUE_SPECIAL_OFFER' }
+          : { type: 'CHOOSE_SPECIAL_OFFER', offerId: offer.id };
       } else if (game.phase === 'shop') {
         if (game.bust) action = { type: 'RETRY_ROUND' };
         else {

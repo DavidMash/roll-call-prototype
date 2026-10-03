@@ -4,14 +4,14 @@ import { activeEncounterDice, BOSSES, bossTypeForRound, createBossRuntime, creat
 import { dispatch, newRun } from '../src/game/engine';
 import { handOptions, HANDS, HAND_IDS, ultimateHands } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
-import type { BossType, GameState } from '../src/game/types';
+import type { BigBossType, GameState } from '../src/game/types';
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
 import { setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 
-const seedFor = (boss: BossType) => {
+const seedFor = (boss: BigBossType) => {
   for (let index = 0; index < 100; index++) {
     const seed = `boss-browser-${index}`;
-    if (bossTypeForRound(seed, 3) === boss) return seed;
+    if (bossTypeForRound(seed, 6) === boss) return seed;
   }
   throw new Error(`No seed found for ${boss}`);
 };
@@ -62,23 +62,17 @@ async function playOne(page: Page, game: GameState) {
   await ready(page);
   return next;
 }
-async function reachBossShop(page: Page, boss: BossType, seed = seedFor(boss)) {
+async function reachBossShop(page: Page, boss: BigBossType, seed = seedFor(boss)) {
   let game = newRun(seed).state;
+  game.phase = 'shop';
+  game.round = 5;
+  game.currentNodeId = 'shop:before-round:6';
+  game.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  game.bossSchedule[6] = boss;
   await page.goto(`/?seed=${seed}&speed=instant`);
+  await page.evaluate(([key, state]) => localStorage.setItem(key, JSON.stringify({ version: 1, state })), [RUN_STORAGE_KEY, game] as const);
+  await page.reload();
   await ready(page);
-  while (!(game.phase === 'shop' && game.round === 2 && !game.bust)) {
-    if (game.phase === 'round') game = await playOne(page, game);
-    else if (game.phase === 'roundSummary') {
-      await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
-      game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
-      await ready(page);
-    }
-    else if (game.phase === 'shop') {
-      await page.getByRole('button', { name: game.bust ? `RETRY ROUND ${game.round}` : 'NEXT ROUND', exact: true }).click();
-      game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' }).state;
-      await ready(page);
-    } else throw new Error(`Unexpected phase ${game.phase}`);
-  }
   return game;
 }
 
@@ -411,7 +405,7 @@ test('Hexer face 7 renders seven pips with Bonus and Mirror and remains freely s
   await expect(button).toHaveAttribute('aria-pressed', 'false');
 });
 
-test('Boss clear shows +10 Boss Reward summary before the Flame Selection map', async ({ page }) => {
+test('Boss clear shows its Boss Reward summary before the Flame Selection map', async ({ page }) => {
   let game = await reachBossShop(page, 'hexer');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
@@ -427,7 +421,7 @@ test('Boss clear shows +10 Boss Reward summary before the Flame Selection map', 
   expect(game.phase).toBe('roundSummary');
   await expect(page.getByRole('heading', { name: 'BOSS DEFEATED' })).toBeVisible();
   await expect(page.getByTestId('summary-gold-breakdown')).toContainText('Boss Reward');
-  await expect(page.getByTestId('summary-gold-breakdown')).toContainText('+10');
+  await expect(page.getByTestId('summary-gold-breakdown')).toContainText('+11');
   await expect(page.getByText('Flame Bonus')).toHaveCount(0);
   await expect(page.locator('[data-screen-theme="hexer"]')).toBeVisible();
 

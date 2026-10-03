@@ -7,6 +7,7 @@ import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
 import { pairSelectionRun, winningSlippyRun } from './handFixtures';
 import { setPlaybackSpeed } from './uiHelpers';
+import { specialOfferName } from '../src/game/specialOffers';
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
@@ -47,6 +48,11 @@ async function perform(page: Page, game: GameState, action: Action) {
     await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
   } else if (action.type === 'CONTINUE_ROUND_SUMMARY') {
     await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
+  } else if (action.type === 'CHOOSE_SPECIAL_OFFER') {
+    const offer = game.specialOffer!.offers.find(item => item.id === action.offerId)!;
+    await page.getByRole('heading', { name: specialOfferName(offer), exact: true }).locator('..').getByRole('button', { name: 'CHOOSE' }).click();
+  } else if (action.type === 'CONTINUE_SPECIAL_OFFER') {
+    await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
   }
   else if (action.type === 'MANUAL_REROLL') {
     await select(page, action.dieIds);
@@ -54,6 +60,8 @@ async function perform(page: Page, game: GameState, action: Action) {
   } else if (action.type === 'UNLOCK_WARDEN_DIE') {
     await page.getByRole('button', { name: new RegExp(`^Die ${action.dieId + 1},.*selectable to unlock$`) }).click();
     await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();
+  } else if (action.type === 'RETRY_ROUND') {
+    await page.getByRole('button', { name: /^RETRY ROUND / }).click();
   } else throw new Error(`Unexpected fixture action: ${action.type}`);
   await ready(page);
   return dispatch(game, action).state;

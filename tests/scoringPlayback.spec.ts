@@ -10,6 +10,7 @@ import { activeEncounterDice } from '../src/game/bosses';
 import { setPlaybackSpeed } from './uiHelpers';
 import { captureHandStart, composeXMult, handXMultContributions } from '../src/game/flames';
 import { finalizeScore } from '../src/game/scoring';
+import { specialOfferName } from '../src/game/specialOffers';
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
@@ -54,6 +55,11 @@ async function perform(page: Page, game: GameState, action: Action) {
   } else if (action.type === 'CONTINUE_FLAME_SELECTION') {
     await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
   } else if (action.type === 'CONTINUE_ROUND_SUMMARY') {
+    await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
+  } else if (action.type === 'CHOOSE_SPECIAL_OFFER') {
+    const offer = game.specialOffer!.offers.find(item => item.id === action.offerId)!;
+    await page.getByRole('heading', { name: specialOfferName(offer), exact: true }).locator('..').getByRole('button', { name: 'CHOOSE' }).click();
+  } else if (action.type === 'CONTINUE_SPECIAL_OFFER') {
     await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
   } else if (action.type === 'MANUAL_REROLL') {
     for (const physical of activeEncounterDice(game)) {

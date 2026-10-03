@@ -11,7 +11,7 @@ export function SpecialOfferScreen({ board, busy, submit }: {
   return <Stack gap="md" className="special-offer-screen">
     <Paper p="lg" className="special-offer-heading">
       <Group justify="space-between" align="flex-start">
-        <div><Text size="xs" fw={850} tt="uppercase" lts=".14em" c="teal">Boss Reward</Text>
+        <div><Text size="xs" fw={850} tt="uppercase" lts=".14em" c="teal">Mini-Boss Reward</Text>
           <Title order={2}>SPECIAL OFFER</Title></div>
         <Badge color="teal" variant="light">CHOOSE 1</Badge>
       </Group>

@@ -12,7 +12,7 @@ import { probabilityCheck, randomIndex } from './rng';
 import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, handContributions } from './scoring';
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie,
-  isCursedDie, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
+  isCursedDie, isMiniBossType, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
 import { encounterNode, flameNodeAfter, postBossRewardForRound, shopNodeBefore, specialOfferNodeAfter } from './progression';
 import { formatPercentage, formatPlayerNumber } from './copy';
 import { eligibleSpecialOfferTypes, specialOfferDescription, specialOfferName, trainingOfferKey } from './specialOffers';
@@ -501,6 +501,75 @@ export class Resolver {
       message: `The Fly moved from ${HANDS[previous].name} to ${HANDS[boss.flyHand].name}` });
   }
 
+  private resolveMiniBossHand(hand: HandId): boolean {
+    if (this.state.bossSilenced) return false;
+    const boss = this.state.boss;
+    if (!boss) return false;
+    if (boss.type === 'capitalReturn' && LOWER_HAND_IDS.includes(hand)) {
+      const lost = Math.min(1, this.state.gold);
+      this.state.gold -= lost;
+      this.emit({ type: 'BOSS_HAND_CHANGED', boss: boss.type, hand, amount: lost,
+        message: `Capital Return charged ${this.format(lost)} Gold for ${HANDS[hand].name}` });
+    }
+    if (boss.type === 'mugger' && !boss.spent && hand === boss.hiddenHand) {
+      const stolen = Math.min(5, this.state.gold);
+      this.state.gold -= stolen;
+      boss.spent = true;
+      boss.revealedHand = hand;
+      this.emit({ type: 'BOSS_HAND_CHANGED', boss: boss.type, hand, amount: stolen,
+        message: `The Mugger revealed ${HANDS[hand].name} and stole ${this.format(stolen)} Gold` });
+    }
+    if (boss.type !== 'magician' || boss.returned || !boss.calledHands.includes(hand)
+      || boss.completedHands.includes(hand)) return false;
+    boss.completedHands.push(hand);
+    this.emit({ type: 'BOSS_HAND_CHANGED', boss: boss.type, hand, amount: boss.completedHands.length,
+      message: `The Magician call completed: ${HANDS[hand].name} (${this.format(boss.completedHands.length)} / 3)` });
+    if (boss.completedHands.length < boss.calledHands.length) return false;
+    const die = this.state.dice.find(item => item.id === boss.missingDieId);
+    if (!die) throw new Error('The Magician could not return its missing die.');
+    die.flame = boss.hiddenFlame;
+    boss.hiddenFlame = null;
+    boss.returned = true;
+    recalculateMaxCharge(this.state);
+    this.emit({ type: 'BOSS_HAND_CHANGED', boss: boss.type, dieIds: [die.id],
+      message: `The Magician returned D${die.id + 1}` });
+    this.rollBatch([die.id], 'The Magician return roll', 'gameplay');
+    return true;
+  }
+
+  private restoreMagicianDie(): void {
+    const boss = this.state.boss;
+    if (boss?.type !== 'magician' || boss.returned) return;
+    const die = this.state.dice.find(item => item.id === boss.missingDieId);
+    if (die) die.flame = boss.hiddenFlame;
+    boss.hiddenFlame = null;
+    boss.returned = true;
+    recalculateMaxCharge(this.state);
+  }
+
+  private advanceClockmakerDice(): void {
+    if (this.state.bossSilenced || this.state.boss?.type !== 'clockmaker') return;
+    for (const die of [...activeEncounterDice(this.state)].sort((a, b) => a.id - b.id)) {
+      const before = activeFace(die).rank;
+      die.value = (die.value === die.faces.length ? 1 : die.value + 1) as import('./types').Rank;
+      this.emit({ type: 'DIE_FLIPPED', boss: 'clockmaker', dieIds: [die.id], face: activeFace(die).rank,
+        previousFace: before, resultFace: activeFace(die).rank,
+        message: `The Clockmaker advanced D${die.id + 1}: ${before} → ${activeFace(die).rank}` });
+    }
+  }
+
+  private addJugglerReroll(rerolls: Set<number>, scoringDieIds: number[]): void {
+    if (this.state.bossSilenced || this.state.boss?.type !== 'juggler') return;
+    const candidates = activeEncounterDice(this.state)
+      .filter(die => !scoringDieIds.includes(die.id) && !rerolls.has(die.id))
+      .sort((a, b) => a.id - b.id);
+    if (!candidates.length) return;
+    const die = candidates[randomIndex(this.rng, candidates.length)];
+    rerolls.add(die.id);
+    this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'juggler', dieIds: [die.id],
+      message: `The Juggler added D${die.id + 1} to the post-hand reroll` });
+  }
+
   private resolveSnakeEyes(scoringIds: number[]): void {
     if (this.state.bossSilenced) return;
     const boss = this.state.boss;
@@ -664,7 +733,13 @@ export class Resolver {
     this.resolveSnakeEyes(scoringIds);
     this.resolveInfected(scoringIds);
     this.moveFly();
-    const winning = this.state.score >= this.state.target;
+    const magicianReturned = this.resolveMiniBossHand(hand);
+    let winning = this.state.score >= this.state.target;
+    if (!winning) this.advanceClockmakerDice();
+    if (magicianReturned && winning) {
+      this.drain();
+      winning = this.state.score >= this.state.target;
+    }
     let jackpotPayout = 0;
     if (winning) {
       jackpotPayout = this.resolveJackpot(scoringIds);
@@ -681,14 +756,25 @@ export class Resolver {
       if (!freeBean) this.evaluate();
       return { winning, beanRecordIndex };
     }
-    if (freeBean) return { winning, beanRecordIndex };
-    const rerolls = new Set<number>();
+    if (freeBean) {
+      const rerolls = new Set<number>();
+      this.addJugglerReroll(rerolls, ids);
+      this.rollBatch([...rerolls], 'The Juggler reroll', 'gameplay');
+      return { winning, beanRecordIndex };
+    }
+    const normalRerolls: number[] = [];
     for (const { id, face } of shapeParticipants) {
       const sticky = stacks(face, 'sticky');
       if (sticky && this.checkProbability('sticky', sticky, [id])) this.trigger('sticky', id, face, `×${this.format(sticky)} stayed after scoring`);
-      else rerolls.add(id);
+      else normalRerolls.push(id);
     }
+    const crawlerRerolls = !this.state.bossSilenced && this.state.boss?.type === 'crawler' && normalRerolls.length > 1
+      ? [normalRerolls[randomIndex(this.rng, normalRerolls.length)]] : normalRerolls;
+    const rerolls = new Set(crawlerRerolls);
+    if (crawlerRerolls.length !== normalRerolls.length) this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'crawler', dieIds: crawlerRerolls,
+      message: `The Crawler limited the scoring reroll to D${crawlerRerolls[0] + 1}` });
     for (const die of activeEncounterDice(this.state)) if (stacks(activeFace(die), 'slippy')) { this.trigger('slippy', die.id, activeFace(die), 'joined post-hand reroll'); rerolls.add(die.id); }
+    this.addJugglerReroll(rerolls, ids);
     this.rollBatch([...rerolls], 'Post-hand reroll', 'gameplay');
     this.drain();
     this.evaluate();
@@ -742,6 +828,12 @@ export class Resolver {
     base.specialOffer = null;
     base.roundSummary = null;
     base.bust = null;
+    if (base.boss?.type === 'magician' && !base.boss.returned) {
+      const missingDieId = base.boss.missingDieId;
+      const missingDie = base.dice.find(die => die.id === missingDieId);
+      if (missingDie) missingDie.flame = base.boss.hiddenFlame;
+      recalculateMaxCharge(base);
+    }
     base.boss = null;
     base.dice = base.dice.filter(die => die.owner === 'player');
     // History snapshots and the action audit are retained across Bust separately;
@@ -842,12 +934,6 @@ export class Resolver {
     this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound; this.state.target = targetForRound(this.state.round);
     this.state.consumed = []; this.state.targetPracticeHand = null; this.state.lastRoundPayout = null; this.state.roundSummary = null;
     this.state.chargeXMult = 1; this.state.chargeArmed = false; this.state.hotStreakCharges = 0;
-    const sixPackInvestment = this.state.bonfires.includes('sixPack') ? 100
-      : activeFlameInvestment(this.state.dice.find(die => activeFlameId(die.flame) === 'sixPack')?.flame ?? null);
-    this.state.sixPackXMult = sixPackStartingMultiplier(sixPackInvestment);
-    this.state.sixPackUpperHandsPlayed = 0;
-    this.state.hotStreakGoal = ownedFlameIds(this.state).has('hotStreak') ? 'pair' : null;
-    this.state.handFamilyFlameStages = initialHandFamilyFlameStages(this.state);
     this.state.flameSelection = null; this.state.specialOffer = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
     for (const die of this.state.dice) for (const face of die.faces) delete face.magneticSourceUsed;
@@ -855,18 +941,38 @@ export class Resolver {
       ?? (this.state.round > 60 ? bossTypeForRound(this.state.seed, this.state.round) : null);
     if (bossType) this.state.bossSchedule[this.state.round] = bossType;
     if (bossType) this.state.target = targetForBoss(bossType, this.state.target);
-    this.state.boss = bossType ? createBossRuntime(this.state.seed, this.state.round, bossType) : null;
+    this.state.boss = bossType ? createBossRuntime(this.state.seed, this.state.round, bossType, {
+      handPlayCounts: this.state.handPlayCounts,
+      playerDieIds: this.state.dice.filter(die => die.owner === 'player').map(die => die.id),
+    }) : null;
     this.state.bossSilenced = !!this.state.boss && this.state.specialOfferEffects.silence;
     if (this.state.bossSilenced) this.state.specialOfferEffects.silence = false;
+    if (!this.state.bossSilenced && this.state.boss?.type === 'neglected')
+      this.state.consumed.push(...this.state.boss.neglectedHands);
+    if (!this.state.bossSilenced && this.state.boss?.type === 'tightrope') this.state.manualRerollsRemaining = 0;
+    if (!this.state.bossSilenced && this.state.boss?.type === 'magician') {
+      const missingDieId = this.state.boss.missingDieId;
+      const missingDie = this.state.dice.find(die => die.id === missingDieId);
+      if (!missingDie) throw new Error('The Magician requires a player die to disappear.');
+      this.state.boss.hiddenFlame = missingDie.flame;
+      missingDie.flame = null;
+      recalculateMaxCharge(this.state);
+    }
     if (!this.state.bossSilenced && this.state.boss?.type === 'warden') {
       this.state.boss.unlockCosts = wardenUnlockCosts(this.state.handLevels, [], this.state.target);
     }
+    const sixPackInvestment = this.state.bonfires.includes('sixPack') ? 100
+      : activeFlameInvestment(this.state.dice.find(die => activeFlameId(die.flame) === 'sixPack')?.flame ?? null);
+    this.state.sixPackXMult = sixPackStartingMultiplier(sixPackInvestment);
+    this.state.sixPackUpperHandsPlayed = 0;
+    this.state.hotStreakGoal = ownedFlameIds(this.state).has('hotStreak') ? 'pair' : null;
+    this.state.handFamilyFlameStages = initialHandFamilyFlameStages(this.state);
     this.captureRoundCheckpoint();
     this.state.shop = null;
     this.mapTransition(encounterNode(this.state.round, bossType));
     this.state.stats.rounds.push({ round: this.state.round, attempt: this.state.roundAttemptNumber, target: this.state.target, firstCrossedScore: null,
       finalScore: 0, clearMargin: null, cleared: false, lastHand: null, lastAction: null,
-      manualRerollsGranted: CONFIG.manualRerollsPerRound, manualRerollChargesSpent: 0,
+      manualRerollsGranted: this.state.manualRerollsRemaining, manualRerollChargesSpent: 0,
       manualRerollsRemainingAtClear: null, manualRerollActions: 0, deadBoardRescues: 0, scoreByHand: {}, effectScore: 0,
       goldBefore: this.state.gold, goldBySourceBefore: structuredClone(this.state.stats.goldBySource), payout: null });
     if (this.state.boss) {
@@ -882,6 +988,10 @@ export class Resolver {
         message: `Silence disabled ${boss.type.toUpperCase()} for this encounter` });
       if (!this.state.bossSilenced && boss.type === 'caller') this.emit({ type: 'CALLER_CALLED', boss: 'caller', hand: boss.calledHand, amount: 3,
         message: `The Caller demands ${HANDS[boss.calledHand].name} within 3 plays` });
+      if (!this.state.bossSilenced && boss.type === 'magician') this.emit({ type: 'BOSS_HAND_CHANGED', boss: boss.type,
+        message: `The Magician calls ${boss.calledHands.map(hand => HANDS[hand].name).join(', ')}; D${boss.missingDieId + 1} disappeared` });
+      if (!this.state.bossSilenced && boss.type === 'neglected') this.emit({ type: 'BOSS_HAND_CHANGED', boss: boss.type,
+        message: `The Neglected disabled ${boss.neglectedHands.map(hand => HANDS[hand].name).join(' and ')}` });
     }
     if (!this.state.boss) this.emit({ type: retry ? 'ROUND_RETRY_STARTED' : 'ROUND_STARTED',
       message: `Round ${this.format(this.state.round)} — Attempt ${this.format(this.state.roundAttemptNumber)} — goal ${this.format(this.state.target)}; Charge reset to ×1` });
@@ -942,6 +1052,7 @@ export class Resolver {
       message: `Target Practice: ${HANDS[this.state.targetPracticeHand].name}` });
   }
   openShop(rollDice = true, direction: 'forward' | 'backward' = 'forward'): void {
+    this.restoreMagicianDie();
     cleanupTemporaryBossFaces(this.state.dice);
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
     this.state.boss = null; this.state.bossSilenced = false;
@@ -962,6 +1073,7 @@ export class Resolver {
     this.emit({ type: 'SHOP_OPENED', message: `Shop opened${rollDice ? '' : '; Flame Selection faces preserved'}` });
   }
   openFlameSelection(): void {
+    this.restoreMagicianDie();
     cleanupTemporaryBossFaces(this.state.dice);
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
     this.state.boss = null; this.state.bossSilenced = false;
@@ -973,6 +1085,7 @@ export class Resolver {
     this.emit({ type: 'FLAME_SELECTION_OPENED', message: 'Flame Selection — choose and assign one new Flame, or skip' });
   }
   openSpecialOffer(): void {
+    this.restoreMagicianDie();
     cleanupTemporaryBossFaces(this.state.dice);
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
     this.state.boss = null; this.state.bossSilenced = false;
@@ -1088,6 +1201,7 @@ export class Resolver {
       current.cleared = true; current.clearMargin = this.state.score - this.state.target;
       current.manualRerollsRemainingAtClear = this.state.manualRerollsRemaining;
       if (this.state.boss) {
+        this.restoreMagicianDie();
         cleanupTemporaryBossFaces(this.state.dice);
         const encounter = this.state.stats.bossEncounters.at(-1);
         if (encounter?.round === this.state.round && encounter.attempt === this.state.roundAttemptNumber) {
@@ -1104,6 +1218,7 @@ export class Resolver {
       }
       this.emit({ type: 'ROUND_CLEARED', message: `Round ${this.format(this.state.round)} cleared with ${this.format(this.state.score)} / ${this.format(this.state.target)}` });
       const bossType = this.state.boss?.type ?? null;
+      const bossRewardLabel = bossType && isMiniBossType(bossType) ? 'Mini-Boss Reward' : 'Boss Reward';
       const heldGoldSnapshot = this.state.gold;
       const payout = { baseGold: roundReward(), unusedRerollGold: this.state.manualRerollsRemaining,
         interestGold: interestForGold(heldGoldSnapshot) * (this.state.specialOfferEffects.taxEvasionRounds > 0 ? 2 : 1),
@@ -1113,7 +1228,7 @@ export class Resolver {
       this.addGold(payout.baseGold, `Round clear base: +${this.format(payout.baseGold)} gold`, 'roundBase');
       if (payout.unusedRerollGold) this.addGold(payout.unusedRerollGold, `Unused rerolls: +${this.format(payout.unusedRerollGold)} gold`, 'unusedRerolls');
       if (payout.interestGold) this.addGold(payout.interestGold, `Interest on ${this.format(heldGoldSnapshot)} held Gold: +${this.format(payout.interestGold)}`, 'interest');
-      if (payout.bossRewardGold) this.addGold(payout.bossRewardGold, `Boss Reward: +${this.format(payout.bossRewardGold)} gold`, 'bossReward');
+      if (payout.bossRewardGold) this.addGold(payout.bossRewardGold, `${bossRewardLabel}: +${this.format(payout.bossRewardGold)} gold`, 'bossReward');
       const goldenGold = this.state.stats.goldBySource.golden - current.goldBySourceBefore.golden;
       const jackpotGold = this.state.stats.goldBySource.jackpot - current.goldBySourceBefore.jackpot;
       const knownGold = payout.baseGold + payout.unusedRerollGold + payout.interestGold + payout.bossRewardGold + goldenGold + jackpotGold;
@@ -1135,7 +1250,7 @@ export class Resolver {
         encounterType: summary.encounterType, goldBefore: summary.goldBefore, goldAfter: summary.goldAfter,
         goldEarnedTotal: totalGoldEarned, baseRewardGold: payout.baseGold, unusedRerollGold: payout.unusedRerollGold,
         interestGold: payout.interestGold, bossRewardGold: payout.bossRewardGold, goldenGold, jackpotGold,
-        message: `${bossType ? 'Boss defeated' : `Round ${this.format(this.state.round)} cleared`} · Gold ${this.format(summary.goldBefore)} → ${this.format(summary.goldAfter)} (+${this.format(totalGoldEarned)})` });
+        message: `${bossType ? `${isMiniBossType(bossType) ? 'Mini-Boss' : 'Boss'} defeated` : `Round ${this.format(this.state.round)} cleared`} · Gold ${this.format(summary.goldBefore)} → ${this.format(summary.goldAfter)} (+${this.format(totalGoldEarned)})` });
     } else if (this.state.bossSilenced || this.state.boss?.type !== 'warden' || (this.state.boss.startingDieId !== null && this.state.boss.pendingReinforcements === 0)) {
       if (hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state), requiredEncounterDieIds(this.state))) return;
       const rerolls = this.state.manualRerollsRemaining + this.state.specialOfferEffects.carePackageRerolls;

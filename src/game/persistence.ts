@@ -24,7 +24,8 @@ function hasTemplateShape(value: unknown, template: unknown): boolean {
     // Derived/runtime fields are filled during normalization, including in checkpoints.
     return isRecord(value) && Object.entries(template).every(([key, child]) =>
       (['maxCharge', 'decisionId', 'sixPackXMult', 'sixPackUpperHandsPlayed', 'handFamilyFlameStages', 'bossSilenced',
-        'specialOfferEffects', 'suppressedPostBossRewardRounds', 'specialOffer', 'badDreamCheckpoint'].includes(key) && !Object.hasOwn(value, key))
+        'specialOfferEffects', 'suppressedPostBossRewardRounds', 'specialOffer', 'badDreamCheckpoint',
+        'freeEnhancementOfferIds', 'freeTrainingOfferKeys'].includes(key) && !Object.hasOwn(value, key))
       || (Object.hasOwn(value, key) && hasTemplateShape(value[key], child)));
   }
   return typeof value === typeof template;

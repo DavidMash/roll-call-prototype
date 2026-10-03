@@ -10,6 +10,7 @@ import type { Action, Enhancement, GameState } from '../src/game/types';
 import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
 import { openGameMenu, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
+import { specialOfferName } from '../src/game/specialOffers';
 
 async function expectCenteredPips(die: Locator) {
   const dieBox = await die.boundingBox();
@@ -70,6 +71,10 @@ async function matchBoard(page: Page, game: GameState) {
     await expect(page.getByTestId('round-summary')).toBeVisible();
     return;
   }
+  if (game.phase === 'specialOffer') {
+    await expect(page.getByRole('main').getByText('SPECIAL OFFER', { exact: true })).toBeVisible();
+    return;
+  }
   if (game.phase === 'shop' || game.phase === 'flameSelection') {
     if (game.phase === 'shop' && game.bust) await expect(page.getByTestId('bust-shop-banner')).toBeVisible();
     else if (game.phase === 'shop') await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
@@ -81,6 +86,19 @@ async function matchBoard(page: Page, game: GameState) {
   }
   const visibleDice = game.phase === 'round' ? activeEncounterDice(game) : game.dice;
   for (const die of visibleDice) await expect(page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`}, face ${activeFace(die).rank},`) })).toBeVisible();
+}
+async function progressSpecialOffer(page: Page, game: GameState): Promise<GameState> {
+  if (game.specialOffer!.acquired) {
+    await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
+    const next = dispatch(game, { type: 'CONTINUE_SPECIAL_OFFER' }).state;
+    await matchBoard(page, next);
+    return next;
+  }
+  const offer = game.specialOffer!.offers.find(item => item.type !== 'timeTravel') ?? game.specialOffer!.offers[0];
+  await page.getByRole('heading', { name: specialOfferName(offer), exact: true }).locator('..').getByRole('button', { name: 'CHOOSE' }).click();
+  const next = dispatch(game, { type: 'CHOOSE_SPECIAL_OFFER', offerId: offer.id }).state;
+  await matchBoard(page, next);
+  return next;
 }
 async function playBest(page: Page, game: GameState): Promise<GameState> {
   if (game.boss?.type === 'warden' && game.boss.pendingReinforcements > 0) {
@@ -222,6 +240,11 @@ function findHighInterestSeed() {
         game = game.flameSelection!.acquired
           ? dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state
           : dispatch(game, { type: 'CHOOSE_FLAME', offerId: game.flameSelection!.offers[0].id, dieId: 0 }).state;
+      } else if (game.phase === 'specialOffer') {
+        const offer = game.specialOffer!.offers.find(item => item.type !== 'timeTravel') ?? game.specialOffer!.offers[0];
+        game = dispatch(game, game.specialOffer!.acquired
+          ? { type: 'CONTINUE_SPECIAL_OFFER' }
+          : { type: 'CHOOSE_SPECIAL_OFFER', offerId: offer.id }).state;
       }
     }
   }
@@ -537,6 +560,8 @@ test('round payout UI displays interest above five', async ({ page }) => {
         game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId: 0 }).state;
       }
       await matchBoard(page, game);
+    } else if (game.phase === 'specialOffer') {
+      game = await progressSpecialOffer(page, game);
     }
   }
   expect(game.lastRoundPayout?.interestGold).toBeGreaterThanOrEqual(6);
@@ -700,6 +725,8 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
         game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId }).state;
       }
       await matchBoard(page, game);
+    } else if (game.phase === 'specialOffer') {
+      game = await progressSpecialOffer(page, game);
     } else throw new Error(`Unexpected phase: ${game.phase}`);
   }
   expect(game.phase).toBe('lost');

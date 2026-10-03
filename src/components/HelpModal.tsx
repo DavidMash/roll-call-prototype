@@ -3,7 +3,7 @@ import { CONFIG } from '../game/config';
 import { ENHANCEMENTS, ENHANCEMENT_IDS } from '../game/enhancements';
 import { FLAMES, FLAME_IDS, isChargeFlame } from '../game/flames';
 import { HANDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from '../game/hands';
-import { BOSSES, BOSS_TYPES } from '../game/bosses';
+import { BOSSES, BOSS_TYPES, MINI_BOSS_TYPES } from '../game/bosses';
 import type { HandId } from '../game/types';
 import { SPECIAL_OFFERS, SPECIAL_OFFER_IDS } from '../game/specialOffers';
 
@@ -58,9 +58,14 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
           {isChargeFlame(id) && <Text size="xs" c="orange">Bonfire: {FLAMES[id].bonfireDescription}</Text>}
         </div>)}</SimpleGrid>
       </Stack></Tabs.Panel>
-      <Tabs.Panel value="bosses" pt="md"><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{BOSS_TYPES.map(id => <div key={id} className="help-item">
-        <Text size="sm" fw={700}>{BOSSES[id].name}</Text><Text size="xs" c="dimmed">{BOSSES[id].shortRule}</Text>
-      </div>)}</SimpleGrid></Tabs.Panel>
+      <Tabs.Panel value="bosses" pt="md"><Stack gap="md">
+        <div><Title order={4}>MINI-BOSSES</Title><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" mt="xs">{MINI_BOSS_TYPES.map(id => <div key={id} className="help-item">
+          <Text size="sm" fw={700}>{BOSSES[id].name}</Text><Text size="xs" c="dimmed">{BOSSES[id].shortRule}</Text>
+        </div>)}</SimpleGrid></div>
+        <div><Title order={4}>BOSSES</Title><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" mt="xs">{BOSS_TYPES.map(id => <div key={id} className="help-item">
+          <Text size="sm" fw={700}>{BOSSES[id].name}</Text><Text size="xs" c="dimmed">{BOSSES[id].shortRule}</Text>
+        </div>)}</SimpleGrid></div>
+      </Stack></Tabs.Panel>
       <Tabs.Panel value="shop" pt="md"><Text size="sm">Spend Gold between Rounds to train hands, buy Enhancements, Stoke Flames, reroll offers, and restore Lives.</Text></Tabs.Panel>
     </Tabs>
   </Modal>;

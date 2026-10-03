@@ -14,7 +14,7 @@ const constant = (value = 0): RandomSource => ({ next: () => value });
 function offerState(type: SpecialOfferType, hand?: HandId): GameState {
   const state = newRun(`offer-${type}`, constant(.2)).state;
   state.phase = 'specialOffer';
-  state.round = 6;
+  state.round = 3;
   state.shop = null;
   state.flameSelection = null;
   state.specialOffer = { offers: [{ id: 100, type, hand }], acquired: false };
@@ -25,18 +25,18 @@ const choose = (type: SpecialOfferType, hand?: HandId, random: RandomSource = co
   dispatch(offerState(type, hand), { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }, random).state;
 
 function summary(round: number): RoundSummary {
-  return { round, encounterType: 'boss', bossType: 'caller', score: 1, target: 1, goldBefore: 0, goldAfter: 0,
+  return { round, encounterType: 'boss', bossType: 'juggler', score: 1, target: 1, goldBefore: 0, goldAfter: 0,
     totalGoldEarned: 0, sources: { baseRewardGold: 0, unusedRerollGold: 0, interestGold: 0,
       bossRewardGold: 0, goldenGold: 0, jackpotGold: 0, otherGold: 0 } };
 }
 
 describe('alternating Special Offer progression', () => {
-  it('alternates Flame Selection and Special Offer after successive Bosses', () => {
+  it('routes Mini-Bosses to Special Offers and Big Bosses to Flame Selection', () => {
     expect([3, 6, 9, 12, 15, 18].map(postBossRewardForRound))
-      .toEqual(['flame', 'specialOffer', 'flame', 'specialOffer', 'flame', 'specialOffer']);
+      .toEqual(['specialOffer', 'flame', 'specialOffer', 'flame', 'specialOffer', 'flame']);
     const route = routeThrough('offers-route', 12);
-    expect(route.filter(node => node.type === 'flame_selection').map(node => node.round)).toEqual([3, 9]);
-    expect(route.filter(node => node.type === 'special_offer').map(node => node.round)).toEqual([6, 12]);
+    expect(route.filter(node => node.type === 'flame_selection').map(node => node.round)).toEqual([6, 12]);
+    expect(route.filter(node => node.type === 'special_offer').map(node => node.round)).toEqual([3, 9]);
     expect(SCREEN_THEMES.specialOffer.accent).toBe(SPECIAL_OFFER_COLOR);
   });
 
@@ -281,16 +281,16 @@ describe('temporary Special Offers', () => {
 });
 
 describe('replay and checkpoint Special Offers', () => {
-  it('Time Travel replays the completed block and suppresses the repeated Boss post-reward', () => {
+  it('Time Travel replays the completed block and suppresses the repeated Mini-Boss post-reward', () => {
     let state = choose('timeTravel');
-    expect(state.round).toBe(3);
-    expect(state.suppressedPostBossRewardRounds).toEqual([6]);
+    expect(state.round).toBe(0);
+    expect(state.suppressedPostBossRewardRounds).toEqual([3]);
     state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
-    expect(state.currentNodeId).toBe('shop:before-round:4');
-    state.round = 6;
+    expect(state.currentNodeId).toBe('shop:before-round:1');
+    state.round = 3;
     state.phase = 'roundSummary';
     state.shop = null;
-    state.roundSummary = summary(6);
+    state.roundSummary = summary(3);
     state = dispatch(state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
     expect(state.phase).toBe('shop');
     expect(state.suppressedPostBossRewardRounds).toEqual([]);

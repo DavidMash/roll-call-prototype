@@ -1,10 +1,11 @@
 import { Button, Group, Paper, Stack, Text, Title } from '@mantine/core';
-import { BOSSES } from '../game/bosses';
+import { BOSSES, isMiniBossType } from '../game/bosses';
 import type { Action, Board } from '../game/types';
 import { formatPlayerNumber, formatScoreProgress } from '../game/copy';
 
 export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy: boolean; submit: (action: Action) => void }) {
   const summary = board.roundSummary!;
+  const miniBoss = summary.bossType ? isMiniBossType(summary.bossType) : false;
   const rows = [
     ['Base Reward', summary.sources.baseRewardGold],
     ['Unused Rerolls', summary.sources.unusedRerollGold],
@@ -12,13 +13,13 @@ export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy
     ['Golden', summary.sources.goldenGold],
     ['Jackpot', summary.sources.jackpotGold],
     ['Other Gold', summary.sources.otherGold],
-    ['Boss Reward', summary.sources.bossRewardGold],
+    [miniBoss ? 'Mini-Boss Reward' : 'Boss Reward', summary.sources.bossRewardGold],
   ] as const;
   return <Paper className="round-summary-screen" p={{ base: 'md', sm: 'xl' }} data-testid="round-summary">
     <Stack gap="md">
       <div className="round-summary-heading">
         <Text className="summary-kicker" fw={900}>{summary.encounterType === 'boss' ? BOSSES[summary.bossType!].name : `ROUND ${formatPlayerNumber(summary.round)}`}</Text>
-        <Title order={2}>{summary.encounterType === 'boss' ? 'BOSS DEFEATED' : `ROUND ${formatPlayerNumber(summary.round)} CLEARED`}</Title>
+        <Title order={2}>{summary.encounterType === 'boss' ? `${miniBoss ? 'MINI-BOSS' : 'BOSS'} DEFEATED` : `ROUND ${formatPlayerNumber(summary.round)} CLEARED`}</Title>
         <Text fw={800} size="lg" data-testid="summary-score">{formatScoreProgress(summary.score, summary.target)}</Text>
       </div>
       <Paper className="summary-gold-card" p="md">

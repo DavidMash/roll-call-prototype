@@ -1,7 +1,7 @@
 import { CONFIG } from './config';
 import { hashSeed, SeededRng } from './rng';
 import { handOptions, handStats, HANDS, HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
-import type { Board, BossRuntimeState, BossType, Die, HandId, HandLevels, Rank } from './types';
+import type { BigBossType, Board, BossRuntimeState, BossType, Die, HandId, HandLevels, MiniBossType, Rank } from './types';
 
 export interface BossDefinition {
   name: string;
@@ -11,6 +11,54 @@ export interface BossDefinition {
 }
 
 export const BOSSES: Record<BossType, BossDefinition> = {
+  juggler: {
+    name: 'THE JUGGLER',
+    shortRule: 'After every hand, one random extra die rerolls.',
+    primary: '#2ED68F',
+    secondary: '#86EFAC',
+  },
+  capitalReturn: {
+    name: 'CAPITAL RETURN',
+    shortRule: 'Lose 1 Gold whenever you play a Lower hand.',
+    primary: '#D97706',
+    secondary: '#FBBF24',
+  },
+  neglected: {
+    name: 'THE NEGLECTED',
+    shortRule: 'Your 2 least-played hands are unavailable.',
+    primary: '#64748B',
+    secondary: '#CBD5E1',
+  },
+  clockmaker: {
+    name: 'THE CLOCKMAKER',
+    shortRule: 'After every hand, all dice advance one face.',
+    primary: '#0EA5E9',
+    secondary: '#7DD3FC',
+  },
+  tightrope: {
+    name: 'THE TIGHTROPE',
+    shortRule: 'Start with 0 Rerolls. Goal is halved.',
+    primary: '#EAB308',
+    secondary: '#FEF08A',
+  },
+  crawler: {
+    name: 'THE CRAWLER',
+    shortRule: 'After every hand, only one scoring die rerolls.',
+    primary: '#65A30D',
+    secondary: '#BEF264',
+  },
+  magician: {
+    name: 'THE MAGICIAN',
+    shortRule: 'One die disappears until you play 3 called Upper hands.',
+    primary: '#7C3AED',
+    secondary: '#C4B5FD',
+  },
+  mugger: {
+    name: 'THE MUGGER',
+    shortRule: 'One hidden Lower hand will steal 5 Gold if played.',
+    primary: '#BE123C',
+    secondary: '#FDA4AF',
+  },
   caller: {
     name: 'THE CALLER',
     shortRule: 'Play the called hand before it comes due or lose half your total score.',
@@ -61,24 +109,32 @@ export const BOSSES: Record<BossType, BossDefinition> = {
   },
 };
 
-export const BOSS_TYPES: BossType[] = ['caller', 'warden', 'hexer', 'marathon', 'quickdraw', 'fly', 'snakeEyes', 'infected'];
+export const BOSS_TYPES: BigBossType[] = ['caller', 'warden', 'hexer', 'marathon', 'quickdraw', 'fly', 'snakeEyes', 'infected'];
+export const MINI_BOSS_TYPES: MiniBossType[] = [
+  'juggler', 'capitalReturn', 'neglected', 'clockmaker', 'tightrope', 'crawler', 'magician', 'mugger',
+];
+export const ALL_BOSS_TYPES: BossType[] = [...MINI_BOSS_TYPES, ...BOSS_TYPES];
 export const CALLER_HAND_POOL: HandId[] = [
   'ones', 'twos', 'threes', 'fours', 'fives', 'sixes',
   'pair', 'twoPair', 'threeKind', 'smallStraight', 'fullHouse',
 ];
 export const CURSED_DIE_ID = CONFIG.diceCount;
 
-export const isBossRound = (round: number) => round > 0 && round % 3 === 0;
+export const isMiniBossRound = (round: number) => round > 0 && round % 6 === 3;
+export const isBigBossRound = (round: number) => round > 0 && round % 6 === 0;
+export const isBossRound = (round: number) => isMiniBossRound(round) || isBigBossRound(round);
+export const isMiniBossType = (type: BossType): type is MiniBossType => MINI_BOSS_TYPES.includes(type as MiniBossType);
+export const isBigBossType = (type: BossType): type is BigBossType => BOSS_TYPES.includes(type as BigBossType);
 
-function shuffledBag(seed: string, bagIndex: number): BossType[] {
-  const bag = [...BOSS_TYPES];
-  const rng = new SeededRng(hashSeed(`${seed}:boss-bag:${bagIndex}`));
+function shuffledBag<T extends BossType>(seed: string, tier: 'mini' | 'big', types: readonly T[], bagIndex: number): T[] {
+  const bag = [...types];
+  const rng = new SeededRng(hashSeed(`${seed}:${tier}-boss-bag:${bagIndex}`));
   for (let index = bag.length - 1; index > 0; index--) {
     const swap = Math.floor(rng.next() * (index + 1));
     [bag[index], bag[swap]] = [bag[swap], bag[index]];
   }
   if (bagIndex > 0) {
-    const previousLast = shuffledBag(seed, bagIndex - 1).at(-1)!;
+    const previousLast = shuffledBag(seed, tier, types, bagIndex - 1).at(-1)!;
     if (bag[0] === previousLast) {
       const swap = bag.findIndex((boss, index) => index > 0 && boss !== previousLast);
       [bag[0], bag[swap]] = [bag[swap], bag[0]];
@@ -89,8 +145,12 @@ function shuffledBag(seed: string, bagIndex: number): BossType[] {
 
 export function bossTypeForRound(seed: string, round: number): BossType | null {
   if (!isBossRound(round)) return null;
-  const encounterIndex = round / 3 - 1;
-  return shuffledBag(seed, Math.floor(encounterIndex / BOSS_TYPES.length))[encounterIndex % BOSS_TYPES.length];
+  if (isMiniBossRound(round)) {
+    const encounterIndex = (round - 3) / 6;
+    return shuffledBag(seed, 'mini', MINI_BOSS_TYPES, Math.floor(encounterIndex / MINI_BOSS_TYPES.length))[encounterIndex % MINI_BOSS_TYPES.length];
+  }
+  const encounterIndex = (round - 6) / 6;
+  return shuffledBag(seed, 'big', BOSS_TYPES, Math.floor(encounterIndex / BOSS_TYPES.length))[encounterIndex % BOSS_TYPES.length];
 }
 
 export function bossSchedule(seed: string, throughRound = 60): Partial<Record<number, BossType>> {
@@ -113,6 +173,7 @@ export function targetForBoss(type: BossType, normalTarget: number): number {
   if (type === 'marathon') return normalTarget * 3;
   if (type === 'quickdraw') return Math.max(CONFIG.targetRounding,
     Math.round(normalTarget / 3 / CONFIG.targetRounding) * CONFIG.targetRounding);
+  if (type === 'tightrope') return normalTarget * .5;
   return normalTarget;
 }
 
@@ -193,8 +254,40 @@ export function wardenUnlockTarget(currentScore: number, handLevels: HandLevels,
   return Math.max(currentScore, Math.round((currentScore + cost) / CONFIG.targetRounding) * CONFIG.targetRounding);
 }
 
-export function createBossRuntime(seed: string, round: number, type: BossType): BossRuntimeState {
+export interface BossRuntimeContext {
+  handPlayCounts?: Record<HandId, number>;
+  playerDieIds?: number[];
+}
+
+function miniBossRng(seed: string, round: number, type: MiniBossType): SeededRng {
+  return new SeededRng(hashSeed(`${seed}:mini-boss:${round}:${type}`));
+}
+
+export function createBossRuntime(seed: string, round: number, type: BossType, context: BossRuntimeContext = {}): BossRuntimeState {
   switch (type) {
+    case 'juggler': return { type };
+    case 'capitalReturn': return { type };
+    case 'neglected': {
+      const counts = context.handPlayCounts ?? Object.fromEntries(HAND_IDS.map(hand => [hand, 0])) as Record<HandId, number>;
+      const order = new Map(HAND_IDS.map((hand, index) => [hand, index]));
+      return { type, neglectedHands: [...HAND_IDS].sort((a, b) => counts[a] - counts[b] || order.get(a)! - order.get(b)!).slice(0, 2) };
+    }
+    case 'clockmaker': return { type };
+    case 'tightrope': return { type };
+    case 'crawler': return { type };
+    case 'magician': {
+      const rng = miniBossRng(seed, round, type);
+      const dieIds = context.playerDieIds?.length ? [...context.playerDieIds].sort((a, b) => a - b)
+        : Array.from({ length: CONFIG.diceCount }, (_, index) => index);
+      const missingDieId = dieIds.splice(Math.floor(rng.next() * dieIds.length), 1)[0];
+      const upper = [...UPPER_HAND_IDS];
+      const calledHands = Array.from({ length: 3 }, () => upper.splice(Math.floor(rng.next() * upper.length), 1)[0]);
+      return { type, missingDieId, hiddenFlame: null, calledHands, completedHands: [], returned: false };
+    }
+    case 'mugger': {
+      const rng = miniBossRng(seed, round, type);
+      return { type, hiddenHand: LOWER_HAND_IDS[Math.floor(rng.next() * LOWER_HAND_IDS.length)], revealedHand: null, spent: false };
+    }
     case 'caller': return {
       type,
       calledHand: callerHandForRound(seed, round),
@@ -246,9 +339,16 @@ export function createCursedDie(): Die {
 }
 
 export function activeEncounterDice(state: { dice: Die[]; boss: BossRuntimeState | null; bossSilenced?: boolean }): Die[] {
-  if (state.bossSilenced || state.boss?.type !== 'warden') return state.dice;
-  const active = new Set(state.boss.activeDieIds);
-  return state.dice.filter(die => active.has(die.id));
+  if (state.bossSilenced || !state.boss) return state.dice;
+  if (state.boss.type === 'warden') {
+    const active = new Set(state.boss.activeDieIds);
+    return state.dice.filter(die => active.has(die.id));
+  }
+  if (state.boss.type === 'magician' && !state.boss.returned) {
+    const missingDieId = state.boss.missingDieId;
+    return state.dice.filter(die => die.id !== missingDieId);
+  }
+  return state.dice;
 }
 
 export function requiredEncounterDieIds(state: { boss: BossRuntimeState | null; bossSilenced?: boolean }): number[] {
@@ -264,6 +364,7 @@ export function unavailableEncounterHands(state: Pick<Board, 'boss' | 'consumed'
   if (state.boss?.type === 'quickdraw' && state.boss.lowerShotUsed) {
     for (const hand of LOWER_HAND_IDS) unavailable.add(hand);
   }
+  if (state.boss?.type === 'neglected') for (const hand of state.boss.neglectedHands) unavailable.add(hand);
   return [...unavailable];
 }
 

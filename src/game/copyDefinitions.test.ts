@@ -55,6 +55,14 @@ describe('canonical player-facing definitions', () => {
 
   it('keeps boss descriptions centralized and exact', () => {
     expect(Object.fromEntries(Object.entries(BOSSES).map(([id, item]) => [id, item.shortRule]))).toEqual({
+      juggler: 'After every hand, one random extra die rerolls.',
+      capitalReturn: 'Lose 1 Gold whenever you play a Lower hand.',
+      neglected: 'Your 2 least-played hands are unavailable.',
+      clockmaker: 'After every hand, all dice advance one face.',
+      tightrope: 'Start with 0 Rerolls. Goal is halved.',
+      crawler: 'After every hand, only one scoring die rerolls.',
+      magician: 'One die disappears until you play 3 called Upper hands.',
+      mugger: 'One hidden Lower hand will steal 5 Gold if played.',
       caller: 'Play the called hand before it comes due or lose half your total score.',
       warden: 'Choose one die to start. Score enough to unlock the rest.',
       hexer: 'A Cursed Die joins you and must be used in every hand.',

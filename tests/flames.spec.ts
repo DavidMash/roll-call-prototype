@@ -8,6 +8,7 @@ import type { Action, GameState } from '../src/game/types';
 import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
 import { CONFIG } from '../src/game/config';
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
+import { specialOfferName } from '../src/game/specialOffers';
 import { openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 
 function bestHand(game: GameState, requiredDie?: number, requireHistory = false) {
@@ -52,6 +53,11 @@ function flameSeed() {
           if (bestHand(next, 0, true)) return seed;
         }
         break;
+      } else if (game.phase === 'specialOffer') {
+        const offer = game.specialOffer!.offers.find(item => item.type !== 'timeTravel') ?? game.specialOffer!.offers[0];
+        game = dispatch(game, game.specialOffer!.acquired
+          ? { type: 'CONTINUE_SPECIAL_OFFER' }
+          : { type: 'CHOOSE_SPECIAL_OFFER', offerId: offer.id }).state;
       } else break;
     }
   }
@@ -74,7 +80,7 @@ async function ready(page: Page) {
   await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
 }
 
-async function perform(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'UNLOCK_WARDEN_DIE' | 'NEXT_ROUND' | 'RETRY_ROUND' | 'CONTINUE_ROUND_SUMMARY' }>) {
+async function perform(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'UNLOCK_WARDEN_DIE' | 'NEXT_ROUND' | 'RETRY_ROUND' | 'CONTINUE_ROUND_SUMMARY' | 'CHOOSE_SPECIAL_OFFER' | 'CONTINUE_SPECIAL_OFFER' }>) {
   if (action.type === 'PLAY') {
     const handRow = page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) });
     await handRow.click();
@@ -93,6 +99,10 @@ async function perform(page: Page, game: GameState, action: Extract<Action, { ty
     await page.getByRole('button', { name: new RegExp(`^Die ${action.dieId + 1},.*selectable to unlock$`) }).click();
     await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();
   } else if (action.type === 'CONTINUE_ROUND_SUMMARY') await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
+  else if (action.type === 'CHOOSE_SPECIAL_OFFER') {
+    const offer = game.specialOffer!.offers.find(item => item.id === action.offerId)!;
+    await page.getByRole('heading', { name: specialOfferName(offer), exact: true }).locator('..').getByRole('button', { name: 'CHOOSE' }).click();
+  } else if (action.type === 'CONTINUE_SPECIAL_OFFER') await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
   else await page.getByRole('button', { name: action.type === 'RETRY_ROUND' ? `RETRY ROUND ${game.round}` : 'NEXT ROUND', exact: true }).click();
   const next = dispatch(game, action).state;
   await ready(page);
@@ -115,6 +125,12 @@ async function reachReward(page: Page, seed: string) {
       game = await perform(page, game, automaticAction(game));
     } else if (game.phase === 'roundSummary') game = await perform(page, game, { type: 'CONTINUE_ROUND_SUMMARY' });
     else if (game.phase === 'shop') game = await perform(page, game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' });
+    else if (game.phase === 'specialOffer') {
+      const offer = game.specialOffer!.offers.find(item => item.type !== 'timeTravel') ?? game.specialOffer!.offers[0];
+      game = await perform(page, game, game.specialOffer!.acquired
+        ? { type: 'CONTINUE_SPECIAL_OFFER' }
+        : { type: 'CHOOSE_SPECIAL_OFFER', offerId: offer.id });
+    }
     else throw new Error(`Unexpected phase before Flame Selection: ${game.phase}`);
   }
   return game;

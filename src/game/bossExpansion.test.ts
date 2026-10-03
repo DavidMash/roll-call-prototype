@@ -5,7 +5,7 @@ import { dispatch, newRun, validateAction } from './engine';
 import { handOptions, HAND_IDS, LOWER_HAND_IDS } from './hands';
 import { handScore } from './scoring';
 import { selectHand, toggleDie } from './selection';
-import { activeEncounterDice, BOSS_TYPES, bossSchedule, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands } from './bosses';
+import { activeEncounterDice, BOSS_TYPES, bossSchedule, MINI_BOSS_TYPES, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands } from './bosses';
 import { targetForRound } from './config';
 import type { BossType, GameState, RandomSource, Rank } from './types';
 
@@ -27,14 +27,17 @@ function expose(state: GameState, values: Rank[]): void {
 
 describe('expanded deterministic boss bag', () => {
   it('contains every boss once per shuffled bag, is seeded, and avoids boundary repeats', () => {
-    const rounds = BOSS_TYPES.length * 3 * 3;
+    const rounds = BOSS_TYPES.length * 6 * 2;
     const sequence = Object.values(bossSchedule('eight-boss-bag', rounds));
-    expect(sequence).toHaveLength(BOSS_TYPES.length * 3);
-    for (let index = 0; index < sequence.length; index += BOSS_TYPES.length) {
-      expect(new Set(sequence.slice(index, index + BOSS_TYPES.length))).toEqual(new Set(BOSS_TYPES));
+    expect(sequence).toHaveLength(BOSS_TYPES.length * 4);
+    const mini = Object.entries(bossSchedule('eight-boss-bag', rounds)).filter(([round]) => Number(round) % 6 === 3).map(([, boss]) => boss!);
+    const big = Object.entries(bossSchedule('eight-boss-bag', rounds)).filter(([round]) => Number(round) % 6 === 0).map(([, boss]) => boss!);
+    for (const [bag, types] of [[mini, MINI_BOSS_TYPES], [big, BOSS_TYPES]] as const) {
+      for (let index = 0; index < bag.length; index += types.length)
+        expect(new Set(bag.slice(index, index + types.length))).toEqual(new Set(types));
+      bag.slice(1).forEach((boss, index) => expect(boss).not.toBe(bag[index]));
     }
     expect(Object.values(bossSchedule('eight-boss-bag', rounds))).toEqual(sequence);
-    sequence.slice(1).forEach((boss, index) => expect(boss).not.toBe(sequence[index]));
     expect(sequence.slice(3).some((boss, index) => boss !== sequence[index])).toBe(true);
   });
 });
