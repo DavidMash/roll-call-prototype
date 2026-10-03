@@ -67,15 +67,39 @@ export const trainingOfferKey = (offer: TrainingOffer): string => offer.kind ===
 export const enhancementOfferIsFree = (shop: Shop, offerId: number): boolean => (shop.freeEnhancementOfferIds ?? []).includes(offerId);
 export const trainingOfferIsFree = (shop: Shop, offer: TrainingOffer): boolean => (shop.freeTrainingOfferKeys ?? []).includes(trainingOfferKey(offer));
 
-export function activeSpecialOfferStatuses(effects: SpecialOfferEffects): string[] {
-  const statuses: string[] = [];
-  if (effects.onTheHouse) statuses.push('On The House · next Shop');
-  if (effects.carePackageRerolls) statuses.push(`Care Package · ${effects.carePackageRerolls} reserve Rerolls`);
-  if (effects.silence) statuses.push('Silence · next Boss');
-  if (effects.taxEvasionRounds) statuses.push(`Tax Evasion · ${effects.taxEvasionRounds} Rounds`);
-  if (effects.cashBonusRounds) statuses.push(`Cash Bonus · ${effects.cashBonusRounds} Rounds`);
-  if (effects.powerballAvailable && effects.powerballRounds) statuses.push(`Powerball · ${effects.powerballRounds} Rounds`);
-  if (effects.bottledFairyRounds) statuses.push(`Bottled Fairy · ${effects.bottledFairyRounds} Rounds`);
-  if (effects.badDreamRounds) statuses.push(`Bad Dream · ${effects.badDreamRounds} Rounds`);
+export interface ActiveSpecialOfferStatus {
+  type: SpecialOfferType;
+  label: string;
+  description: string;
+}
+
+const countedStatus = (type: SpecialOfferType, count: number, unit: 'Round' | 'Reroll'): ActiveSpecialOfferStatus => ({
+  type,
+  label: `${SPECIAL_OFFERS[type].name} · ${count} ${unit}${count === 1 ? '' : 's'}`,
+  description: SPECIAL_OFFERS[type].description,
+});
+
+export function activeSpecialOfferStatusItems(effects: SpecialOfferEffects): ActiveSpecialOfferStatus[] {
+  const statuses: ActiveSpecialOfferStatus[] = [];
+  if (effects.onTheHouse) statuses.push({
+    type: 'onTheHouse', label: 'On The House · Next Shop', description: SPECIAL_OFFERS.onTheHouse.description,
+  });
+  if (effects.carePackageRerolls > 0) statuses.push(countedStatus('carePackage', effects.carePackageRerolls, 'Reroll'));
+  if (effects.silence) statuses.push({
+    type: 'silence', label: 'Silence · Next Boss', description: SPECIAL_OFFERS.silence.description,
+  });
+  if (effects.taxEvasionRounds > 0) statuses.push(countedStatus('taxEvasion', effects.taxEvasionRounds, 'Round'));
+  if (effects.cashBonusRounds > 0) statuses.push(countedStatus('cashBonus', effects.cashBonusRounds, 'Round'));
+  if (effects.powerballAvailable && effects.powerballRounds > 0) statuses.push({
+    type: 'powerball',
+    label: `Powerball · Ready · ${effects.powerballRounds} Round${effects.powerballRounds === 1 ? '' : 's'}`,
+    description: SPECIAL_OFFERS.powerball.description,
+  });
+  if (effects.bottledFairyRounds > 0) statuses.push(countedStatus('bottledFairy', effects.bottledFairyRounds, 'Round'));
+  if (effects.badDreamRounds > 0) statuses.push(countedStatus('badDream', effects.badDreamRounds, 'Round'));
   return statuses;
+}
+
+export function activeSpecialOfferStatuses(effects: SpecialOfferEffects): string[] {
+  return activeSpecialOfferStatusItems(effects).map(status => status.label);
 }

@@ -6,6 +6,7 @@ import { FLAMES } from '../game/flames';
 import type { PlaybackSpeed } from '../useGame';
 import type { DiceDisplay } from '../uiSettings';
 import { formatPlayerNumber } from '../game/copy';
+import { activeSpecialOfferStatusItems } from '../game/specialOffers';
 
 function HudStat({ testId, icon, label, value }: { testId: string; icon: string; label: string; value: number }) {
   const formatted = formatPlayerNumber(value);
@@ -29,6 +30,7 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const hearts = Array.from({ length: CONFIG.maxLives }, (_, index) => index < board.lives ? '♥' : '♡').join(' ');
+  const specialOfferStatuses = activeSpecialOfferStatusItems(board.specialOfferEffects);
   function launch(action: () => void) {
     setDrawerOpen(false);
     onMenuOpenChange?.(false);
@@ -65,6 +67,16 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
       aria-label="Round Goal progress" aria-valuetext={`${formatPlayerNumber(board.score)} of ${formatPlayerNumber(board.target)} points toward the Goal`} />}
     {board.bonfires.length > 0 && <Group gap={4} px="xs" py={3} className="bonfire-strip" aria-label="Active Bonfires">
       <Text size="xs" fw={700} c="orange">BONFIRES</Text>{board.bonfires.map(id => <Tooltip key={id} label={FLAMES[id].bonfireDescription} withArrow><Badge size="xs" color="red" variant="light">🔥 {FLAMES[id].shortName}</Badge></Tooltip>)}
+    </Group>}
+    {specialOfferStatuses.length > 0 && <Group gap={4} px="xs" py={3} wrap="nowrap" className="special-effects-strip"
+      aria-label="Active Special Offers" data-testid="special-effects-status">
+      <Text className="special-effects-heading" size="xs" fw={700}>SPECIAL EFFECTS</Text>
+      <div className="special-effects-badges">{specialOfferStatuses.map(status => <Tooltip key={status.type}
+        label={status.description} multiline maw={320} withArrow events={{ hover: true, focus: true, touch: true }}>
+        <Badge component="button" type="button" tabIndex={0} size="xs" color="teal" variant="light"
+          className="special-effect-badge" data-testid={`special-effect-${status.type}`}
+          aria-label={`${status.label}. ${status.description}`}>{status.label}</Badge>
+      </Tooltip>)}</div>
     </Group>}
   </Box>
   <Drawer opened={drawerOpen} onClose={() => setMenu(false)} position="right" size={320} title="Menu"

@@ -5,7 +5,7 @@ import { Resolver } from './effects';
 import { HAND_IDS } from './hands';
 import { postBossRewardForRound, routeThrough } from './progression';
 import { loadPersistedRun, savePersistedRun } from './persistence';
-import { SPECIAL_OFFER_COLOR, SPECIAL_OFFERS, specialOfferEligible } from './specialOffers';
+import { activeSpecialOfferStatusItems, initialSpecialOfferEffects, SPECIAL_OFFER_COLOR, SPECIAL_OFFERS, specialOfferEligible } from './specialOffers';
 import { SCREEN_THEMES } from './screenThemes';
 import type { GameState, HandId, RandomSource, RoundSummary, SpecialOfferType } from './types';
 
@@ -72,7 +72,9 @@ describe('alternating Special Offer progression', () => {
 describe('immediate and Shop Special Offers', () => {
   it('On The House makes only initial displayed purchases free once', () => {
     let state = choose('onTheHouse');
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('On The House · Next Shop');
     state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)).toEqual([]);
     expect(state.shop?.freeEnhancementOfferIds).toHaveLength(3);
     expect(state.shop?.freeTrainingOfferKeys).toHaveLength(3);
     const enhancement = state.shop!.offers[0];
@@ -130,6 +132,33 @@ describe('immediate and Shop Special Offers', () => {
 });
 
 describe('temporary Special Offers', () => {
+  it('derives compact status badges only for unresolved persistent effects', () => {
+    const effects = initialSpecialOfferEffects();
+    Object.assign(effects, {
+      onTheHouse: true,
+      carePackageRerolls: 2,
+      silence: true,
+      taxEvasionRounds: 1,
+      cashBonusRounds: 3,
+      powerballRounds: 2,
+      powerballAvailable: true,
+      bottledFairyRounds: 2,
+      badDreamRounds: 3,
+    });
+    expect(activeSpecialOfferStatusItems(effects).map(status => [status.type, status.label])).toEqual([
+      ['onTheHouse', 'On The House · Next Shop'],
+      ['carePackage', 'Care Package · 2 Rerolls'],
+      ['silence', 'Silence · Next Boss'],
+      ['taxEvasion', 'Tax Evasion · 1 Round'],
+      ['cashBonus', 'Cash Bonus · 3 Rounds'],
+      ['powerball', 'Powerball · Ready · 2 Rounds'],
+      ['bottledFairy', 'Bottled Fairy · 2 Rounds'],
+      ['badDream', 'Bad Dream · 3 Rounds'],
+    ]);
+    expect(activeSpecialOfferStatusItems(effects).every(status => status.description === SPECIAL_OFFERS[status.type].description)).toBe(true);
+    expect(activeSpecialOfferStatusItems(initialSpecialOfferEffects())).toEqual([]);
+  });
+
   it('Care Package spends normal Rerolls first and keeps reserve charges persistent', () => {
     let state = choose('carePackage');
     state.phase = 'round';
@@ -137,8 +166,13 @@ describe('temporary Special Offers', () => {
     state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0, 1] }, constant(.4)).state;
     expect(state.manualRerollsRemaining).toBe(0);
     expect(state.specialOfferEffects.carePackageRerolls).toBe(2);
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Care Package · 2 Rerolls');
     state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [2] }, constant(.4)).state;
     expect(state.specialOfferEffects.carePackageRerolls).toBe(1);
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Care Package · 1 Reroll');
+    state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [3] }, constant(.4)).state;
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)).toEqual([]);
   });
 
   it('Cash Bonus pays one Gold per Bonus stack for each scoring face', () => {
@@ -165,16 +199,19 @@ describe('temporary Special Offers', () => {
     expect(state.lastRoundPayout?.interestGold).toBe(4);
     expect(state.lastRoundPayout?.baseGold).toBe(5);
     expect(state.specialOfferEffects.taxEvasionRounds).toBe(2);
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Tax Evasion · 2 Rounds');
   });
 
   it('Powerball replaces only the first Jackpot activation with 50 Gold and otherwise expires', () => {
     const state = choose('powerball');
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Powerball · Ready · 3 Rounds');
     state.phase = 'round';
     activeFace(state.dice[0]).enhancements.jackpot = 3;
     activeFace(state.dice[1]).enhancements.jackpot = 1;
     const resolver = new Resolver(state, constant());
     expect(resolver.resolveJackpot([0, 1])).toBe(53);
     expect(state.specialOfferEffects.powerballAvailable).toBe(false);
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)).toEqual([]);
 
     const expiring = choose('powerball');
     expiring.phase = 'round';
@@ -202,6 +239,7 @@ describe('temporary Special Offers', () => {
     resolver.evaluate();
     expect(state.manualRerollsRemaining).toBe(3);
     expect(state.specialOfferEffects.bottledFairyTriggeredThisRound).toBe(true);
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Bottled Fairy · 3 Rounds');
     state.manualRerollsRemaining = 0;
     resolver.evaluate();
     expect(state.phase).toBe('shop');
@@ -209,6 +247,7 @@ describe('temporary Special Offers', () => {
 
   it('Silence is consumed at Boss start and disables the mechanic while preserving its Goal', () => {
     let state = choose('silence');
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Silence · Next Boss');
     state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
     state.round = 8;
     state.bossSchedule[9] = 'hexer';
@@ -216,6 +255,7 @@ describe('temporary Special Offers', () => {
     expect(state.boss?.type).toBe('hexer');
     expect(state.bossSilenced).toBe(true);
     expect(state.specialOfferEffects.silence).toBe(false);
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)).toEqual([]);
     expect(state.dice.every(die => die.owner === 'player')).toBe(true);
     expect(state.target).toBeGreaterThan(0);
   });
@@ -258,6 +298,7 @@ describe('replay and checkpoint Special Offers', () => {
 
   it('Bad Dream restores its exact seeded checkpoint once with 1 Life', () => {
     let state = choose('badDream');
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Bad Dream · 3 Rounds');
     const checkpoint = structuredClone(state.badDreamCheckpoint!);
     expect(checkpoint.phase).toBe('specialOffer');
     state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
@@ -275,6 +316,7 @@ describe('replay and checkpoint Special Offers', () => {
     expect(state.gold).toBe(checkpoint.gold);
     expect(state.badDreamCheckpoint).toBeNull();
     expect(state.specialOfferEffects.badDreamRounds).toBe(0);
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)).toEqual([]);
     expect(state.specialOffer?.chosen?.type).toBe('badDream');
   });
 
