@@ -16,7 +16,7 @@ import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTempora
 import { encounterNode, flameNodeAfter, postBossRewardForRound, shopNodeBefore, specialOfferNodeAfter, timeTravelDestinationRound } from './progression';
 import { formatPercentage, formatPlayerNumber } from './copy';
 import { chapterNumberForRound, ensureChapterPlan } from './chapters';
-import { eligibleSpecialOfferTypes, specialOfferDescription, specialOfferName, trainingOfferKey } from './specialOffers';
+import { eligibleSpecialOfferTypes, specialOfferDescription, specialOfferName, trainingOfferKey, usableManualRerolls } from './specialOffers';
 import type { ChargeFlame } from './flames';
 import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameStateBase, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, RunNode, ScoreSource, SpecialOffer } from './types';
 
@@ -812,7 +812,7 @@ export class Resolver {
     this.state.stats.manualRerollActions++; this.state.stats.manualDiceRerolled += ids.length;
     const record = { round: this.state.round, dieIds: ids, charges: ids.length, remaining: this.state.manualRerollsRemaining, startedDeadBoard, rescuedDeadBoard: false };
     this.state.stats.manualRerolls.push(record);
-    const totalRemaining = this.state.manualRerollsRemaining + this.state.specialOfferEffects.carePackageRerolls;
+    const totalRemaining = usableManualRerolls(this.state);
     this.emit({ type: 'MANUAL_REROLL_STARTED', dieIds: ids, amount: ids.length, message: `Manual reroll; ${this.format(totalRemaining)} remaining` });
     if (this.state.chargeArmed && !hasChargeBonfire(this.state)) {
       this.state.chargeArmed = false;
@@ -1276,7 +1276,7 @@ export class Resolver {
         message: `${bossType ? `${isMiniBossType(bossType) ? 'Mini-Boss' : 'Boss'} defeated` : `Round ${this.format(this.state.round)} cleared`} · Gold ${this.format(summary.goldBefore)} → ${this.format(summary.goldAfter)} (+${this.format(totalGoldEarned)})` });
     } else if (this.state.bossSilenced || this.state.boss?.type !== 'warden' || (this.state.boss.startingDieId !== null && this.state.boss.pendingReinforcements === 0)) {
       if (hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state), requiredEncounterDieIds(this.state))) return;
-      const rerolls = this.state.manualRerollsRemaining + this.state.specialOfferEffects.carePackageRerolls;
+      const rerolls = usableManualRerolls(this.state);
       if (rerolls > 0) { this.emit({ type: 'DEAD_BOARD', message: `No playable hands — ${this.format(rerolls)} rerolls remain` }); return; }
       if (this.state.specialOfferEffects.bottledFairyRounds > 0 && !this.state.specialOfferEffects.bottledFairyTriggeredThisRound) {
         this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound;

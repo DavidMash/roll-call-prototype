@@ -19,6 +19,7 @@ import { CONFIG } from '../game/config';
 import type { DiceDisplay } from '../uiSettings';
 import { formatPlayerNumber, formatScoreEquation, formatScoreProgress, playActionLabel } from '../game/copy';
 import { DecisionTimer } from '../game/decisionTimer';
+import { usableManualRerolls } from '../game/specialOffers';
 
 export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, selection, setSelection, submit, skip }: {
   board: Board; event: GameEvent | null; busy: boolean; inputBlocked: boolean;
@@ -83,6 +84,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, sel
   const canReroll = validateAction(board, manualAction) === null;
   const selectedRerollDice = effectiveSelection.dieIds.length;
   const carePackageRerolls = board.specialOfferEffects.carePackageRerolls;
+  const manualRerolls = usableManualRerolls(board);
   const rerollMainText = selectedRerollDice === 0 ? 'REROLL'
     : `REROLL ${selectedRerollDice} ${selectedRerollDice === 1 ? 'DIE' : 'DICE'}`;
   const rerollResourceText = `${board.manualRerollsRemaining} REROLL${board.manualRerollsRemaining === 1 ? '' : 'S'} REMAINING${carePackageRerolls ? ` + ${carePackageRerolls}` : ''}`;
@@ -136,7 +138,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, sel
         scoreText={formatScoreProgress(board.score, board.target)} showXMult={showXMult} />
     </div>
     <BossPanel board={board} />
-    {!busy && !awaitingWardenChoice && deadBoard && board.manualRerollsRemaining + board.specialOfferEffects.carePackageRerolls > 0 && <Alert className="round-status" color="orange" py={5} title="NO PLAYABLE HANDS" role="status">
+    {!busy && !awaitingWardenChoice && deadBoard && manualRerolls > 0 && <Alert className="round-status" color="orange" py={5} title="NO PLAYABLE HANDS" role="status">
       Use a Reroll.
     </Alert>}
     {(board.hotStreakGoal || board.targetPracticeHand) && <Paper p="xs" className="flame-goals"><Group gap="lg">

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { dispatch, newRun } from '../src/game/engine';
-import { hasPlayableHand, handOptions, HANDS } from '../src/game/hands';
+import { hasPlayableHand, handOptions, HANDS, HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
 import { setPlaybackSpeed } from './uiHelpers';
@@ -218,6 +218,30 @@ test('Reroll control separates selected dice from normal and Care Package resour
   expect(game.specialOfferEffects.carePackageRerolls).toBe(0);
   await expect(page.getByTestId('special-effect-carePackage')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('dead-board UI and engine stay usable while only Care Package Rerolls remain', async ({ page }) => {
+  let game = newRun('care-package-dead-board-ui').state;
+  game.target = 999;
+  game.consumed = [...HAND_IDS];
+  game.manualRerollsRemaining = 0;
+  game.specialOfferEffects.carePackageRerolls = 3;
+  await page.goto(`/?seed=${game.seed}&speed=instant`);
+  await installRun(page, game);
+
+  const button = page.getByTestId('manual-reroll');
+  await expect(page.getByRole('status', { name: 'NO PLAYABLE HANDS' })).toContainText('Use a Reroll.');
+  await expect(button).toHaveAccessibleName('REROLL · 0 REROLLS REMAINING + 3');
+  await page.getByRole('button', { name: /^Die 1,/ }).click();
+  await expect(button).toBeEnabled();
+  await button.click();
+  game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+  await matchRound(page, game);
+  expect(game.phase).toBe('round');
+  expect(game.specialOfferEffects.carePackageRerolls).toBe(2);
+  await expect(button).toHaveAccessibleName('REROLL · 0 REROLLS REMAINING + 2');
+  await expect(page.getByTestId('special-effect-carePackage')).toHaveText('Care Package · 2 Rerolls Left');
+  await expect(page.getByRole('heading', { name: 'Run Over' })).toHaveCount(0);
 });
 
 test('normal Reroll fill exposes deterministic 100/67/33/0 percent states', async ({ page }) => {

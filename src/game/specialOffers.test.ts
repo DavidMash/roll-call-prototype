@@ -5,7 +5,7 @@ import { Resolver } from './effects';
 import { HAND_IDS } from './hands';
 import { postBossRewardForRound, routeThrough } from './progression';
 import { loadPersistedRun, savePersistedRun } from './persistence';
-import { activeSpecialOfferStatusItems, initialSpecialOfferEffects, SPECIAL_OFFER_COLOR, SPECIAL_OFFERS, specialOfferEligible } from './specialOffers';
+import { activeSpecialOfferStatusItems, initialSpecialOfferEffects, SPECIAL_OFFER_COLOR, SPECIAL_OFFERS, specialOfferEligible, usableManualRerolls } from './specialOffers';
 import { SCREEN_THEMES } from './screenThemes';
 import type { GameState, HandId, RandomSource, RoundSummary, SpecialOfferType } from './types';
 
@@ -176,6 +176,51 @@ describe('temporary Special Offers', () => {
     expect(activeSpecialOfferStatusItems(state.specialOfferEffects)).toEqual([]);
   });
 
+  it('keeps a dead board playable until the final Care Package Reroll is spent', () => {
+    let state = choose('carePackage');
+    state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
+    state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.2)).state;
+    state.target = 1_000_000;
+    state.consumed = [...HAND_IDS];
+    state.manualRerollsRemaining = 0;
+
+    const unresolved = new Resolver(state, constant());
+    unresolved.evaluate();
+    expect(usableManualRerolls(state)).toBe(3);
+    expect(unresolved.events.at(-1)?.type).toBe('DEAD_BOARD');
+    expect(unresolved.events.some(event => event.type === 'ROUND_BUST')).toBe(false);
+
+    for (const remaining of [2, 1]) {
+      const result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant());
+      state = result.state;
+      expect(state.specialOfferEffects.carePackageRerolls).toBe(remaining);
+      expect(usableManualRerolls(state)).toBe(remaining);
+      expect(state.phase).toBe('round');
+      expect(result.events.at(-1)?.type).toBe('DEAD_BOARD');
+      expect(result.events.some(event => event.type === 'ROUND_BUST')).toBe(false);
+    }
+
+    const exhausted = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant());
+    expect(exhausted.events.some(event => event.type === 'ROUND_BUST')).toBe(true);
+    expect(exhausted.state.phase).toBe('shop');
+  });
+
+  it.each(['crawler', 'juggler'] as const)('uses Care Package Bust eligibility during the %s encounter', boss => {
+    const state = choose('carePackage');
+    state.phase = 'round';
+    state.target = 1_000_000;
+    state.consumed = [...HAND_IDS];
+    state.manualRerollsRemaining = 0;
+    state.boss = boss === 'crawler'
+      ? { type: 'crawler' }
+      : { type: 'juggler' };
+    const resolver = new Resolver(state, constant());
+    resolver.evaluate();
+    expect(resolver.events.at(-1)?.type).toBe('DEAD_BOARD');
+    expect(state.phase).toBe('round');
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(3);
+  });
+
   it('Care Package charges carry into later Rounds without recharging', () => {
     let state = choose('carePackage');
     state.phase = 'round';
@@ -314,8 +359,11 @@ describe('replay and checkpoint Special Offers', () => {
   });
 
   it('Bad Dream restores its exact seeded checkpoint once with 1 Life', () => {
-    let state = choose('badDream');
-    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Bad Dream · 3 Rounds');
+    let state = offerState('badDream');
+    state.specialOfferEffects.carePackageRerolls = 2;
+    state = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }, constant()).state;
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects).find(status => status.type === 'badDream')?.label)
+      .toBe('Bad Dream · 3 Rounds');
     const checkpoint = structuredClone(state.badDreamCheckpoint!);
     expect(checkpoint.phase).toBe('specialOffer');
     state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
@@ -333,7 +381,8 @@ describe('replay and checkpoint Special Offers', () => {
     expect(state.gold).toBe(checkpoint.gold);
     expect(state.badDreamCheckpoint).toBeNull();
     expect(state.specialOfferEffects.badDreamRounds).toBe(0);
-    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)).toEqual([]);
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(2);
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects).map(status => status.type)).toEqual(['carePackage']);
     expect(state.specialOffer?.chosen?.type).toBe('badDream');
   });
 

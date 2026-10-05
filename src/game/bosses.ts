@@ -1,6 +1,7 @@
 import { CONFIG } from './config';
 import { hashSeed, SeededRng } from './rng';
 import { handOptions, handStats, HANDS, HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
+import { usableManualRerolls } from './specialOffers';
 import type { BigBossType, Board, BossRuntimeState, BossType, Die, HandId, HandLevels, MiniBossType, Rank } from './types';
 
 export interface BossDefinition {
@@ -374,8 +375,8 @@ export function bossHandAvailable(state: Pick<Board, 'boss' | 'consumed'> & { bo
 
 export type LastPlayDanger = 'none' | 'possible' | 'definite';
 
-export function lastPlayDanger(state: Pick<Board, 'boss' | 'consumed' | 'dice' | 'manualRerollsRemaining'> & { bossSilenced?: boolean }, hand: HandId): LastPlayDanger {
-  if (state.manualRerollsRemaining !== 0) return 'none';
+export function lastPlayDanger(state: Pick<Board, 'boss' | 'consumed' | 'dice' | 'manualRerollsRemaining' | 'specialOfferEffects'> & { bossSilenced?: boolean }, hand: HandId): LastPlayDanger {
+  if (usableManualRerolls(state) !== 0) return 'none';
   const required = requiredEncounterDieIds(state);
   const playable = handOptions(activeEncounterDice(state), unavailableEncounterHands(state), required)
     .filter(option => !option.consumed);
@@ -397,7 +398,7 @@ export function lastPlayDanger(state: Pick<Board, 'boss' | 'consumed' | 'dice' |
   return HAND_IDS.every(id => unavailableAfter.has(id)) ? 'definite' : 'possible';
 }
 
-export const isLastPlay = (state: Pick<Board, 'boss' | 'consumed' | 'dice' | 'manualRerollsRemaining'> & { bossSilenced?: boolean }, hand: HandId) =>
+export const isLastPlay = (state: Pick<Board, 'boss' | 'consumed' | 'dice' | 'manualRerollsRemaining' | 'specialOfferEffects'> & { bossSilenced?: boolean }, hand: HandId) =>
   lastPlayDanger(state, hand) !== 'none';
 
 export function cleanupTemporaryBossFaces(dice: Die[]): void {

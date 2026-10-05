@@ -13,7 +13,7 @@ import { boardSnapshot, createStats } from './telemetry';
 import { activeEncounterDice, bossSchedule, unavailableEncounterHands } from './bosses';
 import { chapterNumberForRound, ensureChapterPlan } from './chapters';
 import { formatPlayerNumber } from './copy';
-import { enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey } from './specialOffers';
+import { enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey, usableManualRerolls } from './specialOffers';
 import type { Action, Board, GameState, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
 
 const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`${seed}:round:${round}:attempt:${attempt}`);
@@ -230,7 +230,7 @@ export function validateAction(state: Board, action: Action): string | null {
     if (!action.dieIds.length) return 'Select at least one die to reroll.';
     if (new Set(action.dieIds).size !== action.dieIds.length
       || action.dieIds.some(id => !Number.isInteger(id) || !activeEncounterDice(state).some(die => die.id === id))) return 'Select distinct unlocked dice that are on the board.';
-    if (action.dieIds.length > state.manualRerollsRemaining + state.specialOfferEffects.carePackageRerolls) return 'Not enough manual rerolls for these dice.';
+    if (action.dieIds.length > usableManualRerolls(state)) return 'Not enough manual rerolls for these dice.';
     return null;
   }
   if (action.type === 'PLAY') {

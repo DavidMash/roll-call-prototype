@@ -102,6 +102,10 @@ describe('focused balance update', () => {
     expect(lastPlayDanger(state, 'ones')).toBe('definite');
     expect(playActionLabel(lastPlayDanger(state, 'ones'), false)).toBe('LAST PLAY.');
 
+    state.specialOfferEffects.carePackageRerolls = 1;
+    expect(lastPlayDanger(state, 'ones')).toBe('none');
+    state.specialOfferEffects.carePackageRerolls = 0;
+
     state.bonfires = ['fullOfGrace'];
     state.score = state.target - 1;
     const snapshot = captureHandStart(state, 'ones', [0]);

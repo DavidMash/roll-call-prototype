@@ -39,6 +39,10 @@ export const initialSpecialOfferEffects = (): SpecialOfferEffects => ({
   badDreamRounds: 0,
 });
 
+export function usableManualRerolls(state: Pick<GameState, 'manualRerollsRemaining' | 'specialOfferEffects'>): number {
+  return state.manualRerollsRemaining + state.specialOfferEffects.carePackageRerolls;
+}
+
 export function specialOfferEligible(state: Pick<GameState, 'dice'>, type: SpecialOfferType): boolean {
   if (type === 'fireKeeper') return state.dice.some(die => die.owner === 'player' && die.flame !== null && die.flame.investedGold < 100);
   if (type === 'orangeTheory') return state.dice.some(die => die.owner === 'player' && die.faces.some(face => stacks(face, 'workout') > 0));

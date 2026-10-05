@@ -150,6 +150,9 @@ describe('Care Package resources and Time Travel boundaries', () => {
     new Resolver(state, constant(.2)).evaluate();
     expect(state.phase).toBe('shop');
     expect(state.specialOfferEffects.carePackageRerolls).toBe(3);
+    state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.2)).state;
+    expect(state.phase).toBe('round');
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(3);
 
     const payout = newRun('care-package-payout', constant(.2)).state;
     expose(payout, [2, 2, 3, 4, 5]);
@@ -167,6 +170,7 @@ describe('Care Package resources and Time Travel boundaries', () => {
     let state = offerState('timeTravel', round);
     state.gold = 47;
     state.roundAttemptNumber = 4;
+    state.specialOfferEffects.carePackageRerolls = 2;
     state.handLevels.fullHouse = 9;
     state.dice[0].flame = { id: 'ultimate', investedGold: 40 };
     state = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 1 }, constant()).state;
@@ -178,6 +182,7 @@ describe('Care Package resources and Time Travel boundaries', () => {
     expect(state.shop).toBeNull();
     expect(state.handLevels.fullHouse).toBe(9);
     expect(state.dice[0].flame).toEqual({ id: 'ultimate', investedGold: 40 });
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(2);
     expect(state.stats.mapTransitions.at(-1)).toMatchObject({ toNode: `round:${destination}`, direction: 'backward' });
     expect(state.suppressedPostBossRewardRounds).toContain(round);
     if (round === 3) {
