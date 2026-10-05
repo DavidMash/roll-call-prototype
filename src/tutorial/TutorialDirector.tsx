@@ -41,14 +41,24 @@ function useSpotlightRects(highlightTargets: string[], interactiveTargets: strin
       setSnapshot({ key: '', rects: [] });
       return;
     }
-    let frames: number[] = [];
-    const highlights = queryElements(highlightTargets);
-    const interactive = queryElements(interactiveTargets);
+    let frame = 0;
+    let observed = new Set<HTMLElement>();
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => update());
     const update = () => {
       const width = window.innerWidth;
       const height = window.innerHeight;
-      setViewport({ width, height });
-      setSnapshot({ key: highlightKey, rects: highlights.filter(element => element.isConnected).map((element, index) => {
+      const highlights = queryElements(highlightTargets);
+      const interactive = queryElements(interactiveTargets);
+      const current = new Set(highlights);
+      observed.forEach(element => {
+        if (!current.has(element)) resizeObserver?.unobserve(element);
+      });
+      highlights.forEach(element => {
+        if (!observed.has(element)) resizeObserver?.observe(element);
+      });
+      observed = current;
+      setViewport(previous => previous.width === width && previous.height === height ? previous : { width, height });
+      const rects = highlights.map((element, index) => {
         const bounds = element.getBoundingClientRect();
         const padding = 5;
         const x = Math.max(3, bounds.left - padding);
@@ -61,25 +71,25 @@ function useSpotlightRects(highlightTargets: string[], interactiveTargets: strin
           height: Math.max(1, Math.min(height - y - 3, bounds.height + padding * 2)),
           interactive: interactive.some(target => target === element || element.contains(target) || target.contains(element)),
         };
-      }) });
+      });
+      setSnapshot(previous => {
+        const nextKey = `${highlightKey}:${rects.map(rect => `${rect.key}:${rect.x}:${rect.y}:${rect.width}:${rect.height}:${rect.interactive}`).join('|')}`;
+        return previous.key === nextKey ? previous : { key: nextKey, rects };
+      });
+      frame = requestAnimationFrame(update);
     };
-    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
-    highlights.forEach(element => resizeObserver?.observe(element));
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, true);
     update();
-    frames = [requestAnimationFrame(update), requestAnimationFrame(() => {
-      frames.push(requestAnimationFrame(update));
-    })];
     return () => {
-      frames.forEach(cancelAnimationFrame);
+      cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
     };
   }, [enabled, highlightKey, interactiveKey]);
 
-  return { rects: snapshot.key === highlightKey ? snapshot.rects : [], viewport };
+  return { rects: snapshot.key.startsWith(`${highlightKey}:`) ? snapshot.rects : [], viewport };
 }
 
 function TutorialSpotlightLayer({ beat, rects, viewport }: {
@@ -118,7 +128,7 @@ export function TutorialDirector({ session, uiState, paused, onAcknowledge, onRe
   const highlightTargets = beat?.highlightTargets ?? (beat?.target ? [beat.target] : []);
   const interactiveTargets = beat?.interactiveTargets ?? [];
   const usesMultiSpotlight = highlightTargets.length > 1;
-  const { rects, viewport } = useSpotlightRects(highlightTargets, interactiveTargets, usesMultiSpotlight);
+  const { rects, viewport } = useSpotlightRects(highlightTargets, interactiveTargets, !!beat && highlightTargets.length > 0);
   const instance = useRef<Driver | null>(null);
   const acknowledged = useRef(onAcknowledge);
   const recover = useRef(onRecover);
@@ -126,6 +136,11 @@ export function TutorialDirector({ session, uiState, paused, onAcknowledge, onRe
   acknowledged.current = onAcknowledge;
   recover.current = onRecover;
   finish.current = onFinish;
+
+  const spotlightGeometry = rects.map(rect => `${rect.key}:${rect.x}:${rect.y}:${rect.width}:${rect.height}`).join('|');
+  useEffect(() => {
+    instance.current?.refresh();
+  }, [spotlightGeometry]);
 
   useEffect(() => {
     instance.current?.destroy();
@@ -138,18 +153,29 @@ export function TutorialDirector({ session, uiState, paused, onAcknowledge, onRe
     };
 
     let cancelled = false;
-    let timeout = 0;
+    let frame = 0;
+    let popoverTimer = 0;
     let gateGeneration: number | null = null;
+    let previousGeometry = '';
+    let stableFrames = 0;
     const show = (attempt = 0) => {
       if (cancelled) return;
       const primarySelector = beat.target ?? highlightTargets[0];
       const target = primarySelector ? document.querySelector<HTMLElement>(primarySelector) : null;
       const interactiveReady = beat.blocking || interactiveTargets.length === 0 || tutorialTargetsExist(interactiveTargets);
-      if (((primarySelector && !target) || !interactiveReady) && attempt < 12) {
-        timeout = window.setTimeout(() => show(attempt + 1), 60);
+      const geometry = target ? (() => {
+        const bounds = target.getBoundingClientRect();
+        return `${Math.round(bounds.x)}:${Math.round(bounds.y)}:${Math.round(bounds.width)}:${Math.round(bounds.height)}`;
+      })() : '';
+      if (geometry && geometry === previousGeometry) stableFrames += 1;
+      else stableFrames = 0;
+      previousGeometry = geometry;
+      const waiting = (primarySelector && !target) || !interactiveReady || (!!target && stableFrames < 2);
+      if (waiting && attempt < 90) {
+        frame = requestAnimationFrame(() => show(attempt + 1));
         return;
       }
-      if (!beat.blocking && !interactiveReady) {
+      if ((primarySelector && !target) || (!beat.blocking && !interactiveReady)) {
         releaseTutorialInteractionGate();
         recover.current(beat.recoveryBeatId ?? beat.id);
         return;
@@ -184,7 +210,7 @@ export function TutorialDirector({ session, uiState, paused, onAcknowledge, onRe
       });
       if (!beat.blocking) gateGeneration = configureTutorialInteractionGate(interactiveTargets,
         () => recover.current(beat.recoveryBeatId ?? beat.id));
-      window.setTimeout(() => {
+      popoverTimer = window.setTimeout(() => {
         if (cancelled) return;
         const popover = document.querySelector<HTMLElement>('.driver-popover');
         if (!beat.blocking) {
@@ -200,7 +226,8 @@ export function TutorialDirector({ session, uiState, paused, onAcknowledge, onRe
     show();
     return () => {
       cancelled = true;
-      window.clearTimeout(timeout);
+      cancelAnimationFrame(frame);
+      window.clearTimeout(popoverTimer);
       if (gateGeneration !== null) releaseTutorialInteractionGate(gateGeneration);
       instance.current?.destroy();
       instance.current = null;

@@ -1,4 +1,4 @@
-import { HANDS } from '../game/hands';
+import { combinationsForHand, HANDS } from '../game/hands';
 import { activeSpecialOfferStatusItems } from '../game/specialOffers';
 import type { HandId } from '../game/types';
 import type { TutorialBeat, TutorialSession, TutorialUiState } from './types';
@@ -26,6 +26,13 @@ const selected = (ui: TutorialUiState, selectedHand: HandId, dieIds?: number[]) 
   && (!dieIds || (ui.selection.dieIds.length === dieIds.length && dieIds.every(id => ui.selection.dieIds.includes(id))));
 const selectedEnhancement = (session: TutorialSession, ui: TutorialUiState, enhancement: 'bonus' | 'workout') =>
   session.game.shop?.offers.some(offer => offer.id === ui.selectedOffer && offer.enhancement === enhancement) ?? false;
+const planIsPlayable = (session: TutorialSession, plan: TutorialSession['scenario']['round2Plan']) => !!plan
+  && combinationsForHand(session.game.dice.filter(candidate => candidate.owner === 'player'), plan.upperHand)
+    .some(ids => ids.includes(plan.singletonDieId));
+const fullHouseIsPlayable = (session: TutorialSession) =>
+  combinationsForHand(session.game.dice.filter(candidate => candidate.owner === 'player'), 'fullHouse').length > 0;
+const planSelected = (ui: TutorialUiState, plan: NonNullable<TutorialSession['scenario']['round2Plan']>) =>
+  selected(ui, plan.upperHand, [plan.singletonDieId]);
 const flameDemoHand = (session: TutorialSession, payoff: boolean): HandId => {
   if (session.scenario.firstFlame === 'doubleDown') return payoff ? 'twoPair' : 'pair';
   if (session.scenario.firstFlame === 'straightShooter') return payoff ? 'largeStraight' : 'smallStraight';
@@ -105,33 +112,38 @@ const candidates: Candidate[] = [
     (s, ui) => s.game.phase === 'shop' && s.game.round === 1 && has(s, 'shop1-bonus-info') && !has(s, R.bonus) && !selectedEnhancement(s, ui, 'bonus'),
     { highlightTargets: ['[data-tutorial="enhancement-bonus"]'], interactiveTargets: ['[data-tutorial="enhancement-bonus"] .offer-action'],
       completion: { kind: 'selection', description: 'Bonus selected' }, recoveryBeatId: R.bonus }),
-  required(R.bonus, 'PUT IT HERE', ['Put Bonus on this 4.'], die(2), 'Choose D2 showing 4.',
-    (s, ui) => s.game.phase === 'shop' && s.game.round === 1 && has(s, 'shop1-bonus-info') && !has(s, R.bonus) && selectedEnhancement(s, ui, 'bonus'),
+  required(R.bonus, 'PUT IT HERE', ['Put Bonus on the highlighted face.'], die(2), 'Choose the highlighted die.',
+    (s, ui) => s.game.phase === 'shop' && s.game.round === 1 && has(s, 'shop1-bonus-info') && !has(s, R.bonus)
+      && !!s.scenario.bonusBinding && selectedEnhancement(s, ui, 'bonus'),
     { highlightTargets: ['[data-tutorial="enhancement-bonus"]', die(2)], interactiveTargets: [die(2)] }),
   info('shop1-face-persistence', undefined, ['Enhancements stay on that physical face, even after the die rolls away from it.'], '[data-tutorial="die-2"]',
     s => s.game.phase === 'shop' && s.game.round === 1 && has(s, R.bonus), { side: 'top' }),
 
   info('c1-r2-two-pair', 'WE ALREADY HAVE TWO PAIR', ["That's good, but we just trained Full House."], '[data-tutorial="hand-twoPair"]',
-    s => s.game.round === 2 && s.game.phase === 'round',
+    s => s.game.round === 2 && s.game.phase === 'round' && planIsPlayable(s, s.scenario.round2Plan),
     { highlightTargets: [hand('twoPair'), hand('fullHouse'), die(1)] }),
-  info('c1-r2-choice', undefined, ['You could spend a Reroll on this 2, or play Twos and let it reroll after scoring.'], '[data-tutorial="die-1"]',
+  info('c1-r2-choice', undefined, ['You could spend a Reroll on the singleton, or play its Upper hand and let it reroll after scoring.'], '[data-tutorial="die-1"]',
     s => s.game.round === 2 && s.game.phase === 'round' && has(s, 'c1-r2-two-pair'),
     { side: 'top', highlightTargets: [die(1), hand('twos'), REROLL] }),
-  required('c1-r2-select-twos', "LET'S SAVE THE REROLL", ['Play Twos.'], hand('twos'), 'Select Twos.',
-    (s, ui) => s.game.round === 2 && s.game.phase === 'round' && has(s, 'c1-r2-choice') && !has(s, R.r2Twos) && !selected(ui, 'twos', [0]),
+  required('c1-r2-select-twos', "LET'S SAVE THE REROLL", ['Play the matching Upper hand.'], hand('twos'), 'Select the matching Upper hand.',
+    (s, ui) => s.game.round === 2 && s.game.phase === 'round' && has(s, 'c1-r2-choice') && !has(s, R.r2Twos)
+      && !!s.scenario.round2Plan && !planSelected(ui, s.scenario.round2Plan),
     { highlightTargets: [hand('twos'), die(1)], interactiveTargets: [hand('twos')], completion: { kind: 'selection', description: 'Twos selected' }, recoveryBeatId: R.r2Twos }),
-  required(R.r2Twos, 'PLAY TWOS', ['Let this 2 reroll after scoring.'], PLAY, 'Play Twos with D1.',
-    (s, ui) => s.game.round === 2 && s.game.phase === 'round' && has(s, 'c1-r2-choice') && !has(s, R.r2Twos) && selected(ui, 'twos', [0]),
+  required(R.r2Twos, 'PLAY THE UPPER HAND', ['Let the singleton reroll after scoring.'], PLAY, 'Play the matching Upper hand.',
+    (s, ui) => s.game.round === 2 && s.game.phase === 'round' && has(s, 'c1-r2-choice') && !has(s, R.r2Twos)
+      && !!s.scenario.round2Plan && planSelected(ui, s.scenario.round2Plan),
     { highlightTargets: [hand('twos'), die(1), PLAY], interactiveTargets: [PLAY] }),
-  info('c1-r2-nice', 'NICE', ['Playing Twos rerolled that die for free, and now we have Full House.'], '[data-tutorial="hand-fullHouse"]',
+  info('c1-r2-nice', 'NICE', ['Playing the Upper hand rerolled that die for free, and now we have Full House.'], '[data-tutorial="hand-fullHouse"]',
     s => s.game.round === 2 && s.game.phase === 'round' && has(s, R.r2Twos)),
   required('c1-r2-select-full-house', 'FULL HOUSE · LV. 2', ['This is the hand we trained. Its Base Pips and Mult are stronger now.'], hand('fullHouse'),
-    'Select Full House.', (s, ui) => s.game.round === 2 && s.game.phase === 'round' && has(s, 'c1-r2-nice') && !has(s, R.r2FullHouse) && !selected(ui, 'fullHouse'),
+    'Select Full House.', (s, ui) => s.game.round === 2 && s.game.phase === 'round' && has(s, 'c1-r2-nice') && !has(s, R.r2FullHouse)
+      && fullHouseIsPlayable(s) && !selected(ui, 'fullHouse'),
     { highlightTargets: [hand('fullHouse'), die(1), die(2), die(3), die(4), die(5)], interactiveTargets: [hand('fullHouse')], completion: { kind: 'selection', description: 'Full House selected' }, recoveryBeatId: R.r2FullHouse }),
   required(R.r2FullHouse, 'PLAY FULL HOUSE', ['The trained hand is ready.'], PLAY, 'Play Full House.',
-    (s, ui) => s.game.round === 2 && s.game.phase === 'round' && has(s, 'c1-r2-nice') && !has(s, R.r2FullHouse) && selected(ui, 'fullHouse'),
+    (s, ui) => s.game.round === 2 && s.game.phase === 'round' && has(s, 'c1-r2-nice') && !has(s, R.r2FullHouse)
+      && fullHouseIsPlayable(s) && selected(ui, 'fullHouse'),
     { highlightTargets: [hand('fullHouse'), PLAY], interactiveTargets: [PLAY] }),
-  info('c1-r2-bonus-trigger', 'BONUS', ['That 4 scored, so Bonus added +10 Pips.'], '[data-tutorial="die-2"]',
+  info('c1-r2-bonus-trigger', 'BONUS', ['That enhanced face scored, so Bonus added +10 Pips.'], '[data-tutorial="die-2"]',
     s => s.game.round === 2 && (s.game.stats.triggers.bonus ?? 0) > 0, { contextual: true, side: 'top' }),
 
   info('c1-mini-boss', 'MINI-BOSS', ['Round 3 has a Mini-Boss. Each one changes the rules for this Round.'], '[data-tutorial="boss"]',
@@ -148,24 +160,29 @@ const candidates: Candidate[] = [
     (s, ui) => s.game.phase === 'shop' && s.game.round === 3 && has(s, 'shop-r4-workout-info') && !has(s, R.workout) && !selectedEnhancement(s, ui, 'workout'),
     { highlightTargets: ['[data-tutorial="enhancement-workout"]'], interactiveTargets: ['[data-tutorial="enhancement-workout"] .offer-action'],
       completion: { kind: 'selection', description: 'Workout selected' }, recoveryBeatId: R.workout }),
-  required(R.workout, 'PLACE WORKOUT', ['Put it on this 2.'], die(1), 'Choose D1 showing 2.',
-    (s, ui) => s.game.phase === 'shop' && s.game.round === 3 && has(s, 'shop-r4-workout-info') && !has(s, R.workout) && selectedEnhancement(s, ui, 'workout'),
+  required(R.workout, 'PLACE WORKOUT', ['Put it on the highlighted face.'], die(1), 'Choose the highlighted die.',
+    (s, ui) => s.game.phase === 'shop' && s.game.round === 3 && has(s, 'shop-r4-workout-info') && !has(s, R.workout)
+      && !!s.scenario.workoutBinding && selectedEnhancement(s, ui, 'workout'),
     { highlightTargets: ['[data-tutorial="enhancement-workout"]', die(1)], interactiveTargets: [die(1)] }),
-  info('c1-r4-familiar', 'LOOK FAMILIAR?', ['We already have Two Pair again.', 'Play Twos and let the Workout face reroll.'], '[data-tutorial="die-1"]',
-    s => s.game.round === 4 && s.game.phase === 'round', { side: 'top', highlightTargets: [hand('twos'), die(1)] }),
-  required('c1-r4-select-twos', undefined, ['Play Twos and let the Workout face reroll.'], hand('twos'), 'Select Twos.',
-    (s, ui) => s.game.round === 4 && s.game.phase === 'round' && has(s, 'c1-r4-familiar') && !has(s, R.r4Twos) && !selected(ui, 'twos'),
+  info('c1-r4-familiar', 'LOOK FAMILIAR?', ['We already have Two Pair again.', 'Play the matching Upper hand and let the Workout face reroll.'], '[data-tutorial="die-1"]',
+    s => s.game.round === 4 && s.game.phase === 'round' && planIsPlayable(s, s.scenario.round4Plan), { side: 'top', highlightTargets: [hand('twos'), die(1)] }),
+  required('c1-r4-select-twos', undefined, ['Play the matching Upper hand and let the Workout face reroll.'], hand('twos'), 'Select the matching Upper hand.',
+    (s, ui) => s.game.round === 4 && s.game.phase === 'round' && has(s, 'c1-r4-familiar') && !has(s, R.r4Twos)
+      && !!s.scenario.round4Plan && !planSelected(ui, s.scenario.round4Plan),
     { highlightTargets: [hand('twos'), die(1)], interactiveTargets: [hand('twos')], completion: { kind: 'selection', description: 'Workout Twos selected' }, recoveryBeatId: R.r4Twos }),
-  required(R.r4Twos, 'PLAY TWOS', ['Let the Workout face reroll.'], PLAY, 'Play Twos with the Workout die.',
-    (s, ui) => s.game.round === 4 && s.game.phase === 'round' && has(s, 'c1-r4-familiar') && !has(s, R.r4Twos) && selected(ui, 'twos'),
+  required(R.r4Twos, 'PLAY THE UPPER HAND', ['Let the Workout face reroll.'], PLAY, 'Play the matching Upper hand with the Workout die.',
+    (s, ui) => s.game.round === 4 && s.game.phase === 'round' && has(s, 'c1-r4-familiar') && !has(s, R.r4Twos)
+      && !!s.scenario.round4Plan && planSelected(ui, s.scenario.round4Plan),
     { highlightTargets: [hand('twos'), die(1), PLAY], interactiveTargets: [PLAY] }),
-  info('c1-r4-workout-result', 'WORKOUT', ['That face scored, so its Pips increased permanently.', 'This physical 2 will now be worth 3 Pips whenever it shows again.'], '[data-tutorial="die-1"]',
-    s => s.game.round === 4 && s.game.phase === 'round' && has(s, R.r4Twos), { side: 'top' }),
+  info('c1-r4-workout-result', 'WORKOUT', ['That face scored, so its Pips increased permanently.', 'That physical face will now be worth more Pips whenever it shows again.'], '[data-tutorial="die-1"]',
+    s => s.game.round === 4 && s.game.phase === 'round' && has(s, R.r4Twos) && !!s.scenario.workoutBinding, { side: 'top' }),
   required('c1-r4-select-full-house', 'FULL HOUSE AGAIN', ['The reroll completed it. Select the hand we trained earlier.'], hand('fullHouse'), 'Select Full House.',
-    (s, ui) => s.game.round === 4 && s.game.phase === 'round' && has(s, 'c1-r4-workout-result') && !has(s, R.r4FullHouse) && !selected(ui, 'fullHouse'),
+    (s, ui) => s.game.round === 4 && s.game.phase === 'round' && has(s, 'c1-r4-workout-result') && !has(s, R.r4FullHouse)
+      && fullHouseIsPlayable(s) && !selected(ui, 'fullHouse'),
     { highlightTargets: [hand('fullHouse'), die(1), die(2), die(3), die(4), die(5)], interactiveTargets: [hand('fullHouse')], completion: { kind: 'selection', description: 'Full House selected' }, recoveryBeatId: R.r4FullHouse }),
   required(R.r4FullHouse, 'PLAY FULL HOUSE', ['The trained hand is ready.'], PLAY, 'Play Full House.',
-    (s, ui) => s.game.round === 4 && s.game.phase === 'round' && has(s, 'c1-r4-workout-result') && !has(s, R.r4FullHouse) && selected(ui, 'fullHouse'),
+    (s, ui) => s.game.round === 4 && s.game.phase === 'round' && has(s, 'c1-r4-workout-result') && !has(s, R.r4FullHouse)
+      && fullHouseIsPlayable(s) && selected(ui, 'fullHouse'),
     { highlightTargets: [hand('fullHouse'), PLAY], interactiveTargets: [PLAY] }),
 
   info('c1-boss-intro', 'BOSS', ['Round 6 ends the Chapter with a Boss. Bosses can change the rules in bigger ways.'], '[data-tutorial="boss"]',
@@ -255,6 +272,111 @@ const candidates: Candidate[] = [
 ];
 
 function contextualCopy(beat: TutorialBeat, session: TutorialSession): TutorialBeat {
+  if (beat.id === R.bonus && session.scenario.bonusBinding) {
+    const binding = session.scenario.bonusBinding;
+    const target = die(binding.dieId + 1);
+    return {
+      ...beat,
+      body: [`Put Bonus on this ${binding.faceRank}.`],
+      target,
+      requiredAction: `Choose D${binding.dieId + 1} showing ${binding.faceRank}.`,
+      highlightTargets: ['[data-tutorial="enhancement-bonus"]', target],
+      interactiveTargets: [target],
+    };
+  }
+  if (['c1-r2-two-pair', 'c1-r2-choice', 'c1-r2-select-twos', R.r2Twos, 'c1-r2-nice'].includes(beat.id)
+    && session.scenario.round2Plan) {
+    const plan = session.scenario.round2Plan;
+    const upperName = HANDS[plan.upperHand].name;
+    const upperTarget = hand(plan.upperHand);
+    const singletonTarget = die(plan.singletonDieId + 1);
+    if (beat.id === 'c1-r2-two-pair') return {
+      ...beat, highlightTargets: [hand('twoPair'), hand('fullHouse'), singletonTarget],
+    };
+    if (beat.id === 'c1-r2-choice') return {
+      ...beat,
+      body: [`You could spend a Reroll on this ${plan.singletonRank}, or play ${upperName} and let it reroll after scoring.`],
+      target: singletonTarget,
+      highlightTargets: [singletonTarget, upperTarget, REROLL],
+    };
+    if (beat.id === 'c1-r2-select-twos') return {
+      ...beat,
+      body: [`Play ${upperName}.`],
+      target: upperTarget,
+      requiredAction: `Select ${upperName}.`,
+      highlightTargets: [upperTarget, singletonTarget],
+      interactiveTargets: [upperTarget],
+    };
+    if (beat.id === R.r2Twos) return {
+      ...beat,
+      title: `PLAY ${upperName.toUpperCase()}`,
+      body: [`Let this ${plan.singletonRank} reroll after scoring.`],
+      requiredAction: `Play ${upperName} with D${plan.singletonDieId + 1}.`,
+      highlightTargets: [upperTarget, singletonTarget, PLAY],
+      interactiveTargets: [PLAY],
+    };
+    return { ...beat, body: [`Playing ${upperName} rerolled that die for free, and now we have Full House.`] };
+  }
+  if (beat.id === 'c1-r2-bonus-trigger' && session.scenario.bonusBinding) {
+    const binding = session.scenario.bonusBinding;
+    return {
+      ...beat,
+      body: [`That ${binding.faceRank} scored, so Bonus added +10 Pips.`],
+      target: die(binding.dieId + 1),
+      highlightTargets: [die(binding.dieId + 1)],
+    };
+  }
+  if (beat.id === R.workout && session.scenario.workoutBinding) {
+    const binding = session.scenario.workoutBinding;
+    const target = die(binding.dieId + 1);
+    return {
+      ...beat,
+      body: [`Put it on this ${binding.faceRank}.`],
+      target,
+      requiredAction: `Choose D${binding.dieId + 1} showing ${binding.faceRank}.`,
+      highlightTargets: ['[data-tutorial="enhancement-workout"]', target],
+      interactiveTargets: [target],
+    };
+  }
+  if (['c1-r4-familiar', 'c1-r4-select-twos', R.r4Twos, 'c1-r4-workout-result'].includes(beat.id)
+    && session.scenario.round4Plan && session.scenario.workoutBinding) {
+    const plan = session.scenario.round4Plan;
+    const binding = session.scenario.workoutBinding;
+    const upperName = HANDS[plan.upperHand].name;
+    const upperTarget = hand(plan.upperHand);
+    const workoutTarget = die(plan.singletonDieId + 1);
+    if (beat.id === 'c1-r4-familiar') return {
+      ...beat,
+      body: ['We already have Two Pair again.', `Play ${upperName} and let the Workout face reroll.`],
+      target: workoutTarget,
+      highlightTargets: [upperTarget, workoutTarget],
+    };
+    if (beat.id === 'c1-r4-select-twos') return {
+      ...beat,
+      body: [`Play ${upperName} and let the Workout face reroll.`],
+      target: upperTarget,
+      requiredAction: `Select ${upperName}.`,
+      highlightTargets: [upperTarget, workoutTarget],
+      interactiveTargets: [upperTarget],
+    };
+    if (beat.id === R.r4Twos) return {
+      ...beat,
+      title: `PLAY ${upperName.toUpperCase()}`,
+      requiredAction: `Play ${upperName} with the Workout die.`,
+      highlightTargets: [upperTarget, workoutTarget, PLAY],
+      interactiveTargets: [PLAY],
+    };
+    const face = session.game.dice.find(candidate => candidate.id === binding.dieId)?.faces
+      .find(candidate => candidate.rank === binding.faceRank);
+    const pips = binding.faceRank + (face?.workoutPips ?? 0);
+    return {
+      ...beat,
+      body: ['That face scored, so its Pips increased permanently.',
+        `This physical ${binding.faceRank} will now be worth ${pips} Pips whenever it shows again.`],
+      target: workoutTarget,
+      highlightTargets: [workoutTarget],
+    };
+  }
   if (beat.id === 'c1-special-confirm') {
     const offer = session.game.specialOffer?.chosen;
     const body = offer?.type === 'carePackage' ? ['Those extra Rerolls carry over until you use them.']

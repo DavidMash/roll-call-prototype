@@ -1,5 +1,5 @@
 import type { Selection } from '../game/selection';
-import type { Action, Flame, GameState } from '../game/types';
+import type { Action, Flame, GameState, HandId, Rank } from '../game/types';
 
 export const TUTORIAL_VERSION = 1 as const;
 export const TUTORIAL_SEED = 'roll-call-tutorial-v1';
@@ -8,6 +8,20 @@ export type TutorialLessonId =
   | 'interest' | 'bust' | 'selling' | 'care-package' | 'persistent-effect'
   | 'bonfire' | 'later-boss' | 'bonus-trigger' | 'workout-trigger' | 'safeguard';
 
+export interface TutorialFaceBinding {
+  dieId: number;
+  faceRank: Rank;
+}
+
+export interface TutorialRankPlan {
+  singletonDieId: number;
+  singletonRank: Rank;
+  upperHand: HandId;
+  pairRanks: [Rank, Rank];
+  rerollRank: Rank;
+  opening: { dieId: number; rank: Rank }[];
+}
+
 export interface TutorialScenarioState {
   tutorialVersion: typeof TUTORIAL_VERSION;
   completedBeatIds: string[];
@@ -15,6 +29,10 @@ export interface TutorialScenarioState {
   firstFlame: Flame | null;
   firstFlameDieId: number | null;
   workoutDieId: number | null;
+  bonusBinding: TutorialFaceBinding | null;
+  workoutBinding: TutorialFaceBinding | null;
+  round2Plan: TutorialRankPlan | null;
+  round4Plan: TutorialRankPlan | null;
   vintageShopsSeeded: number;
   vintagePurchased: boolean;
   safeguardActivations: number;

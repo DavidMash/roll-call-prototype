@@ -17,7 +17,8 @@ export function TrainingCard({ offer, handLevels, gold, busy, free = false, onTr
         <Badge size="xs" color="yellow" variant="filled">Special</Badge>
       </Group>
       <Text size="xs" mt={5}>All hands +1 Lv.</Text>
-      {offer.purchases > 0 && <Text size="xs" c="dimmed">Trained ×{formatPlayerNumber(offer.purchases)}</Text>}
+      <Text className={`training-purchase-status${offer.purchases > 0 ? '' : ' is-empty'}`} size="xs" c="dimmed"
+        aria-hidden={offer.purchases === 0}>Trained ×{formatPlayerNumber(offer.purchases)}</Text>
       <Button className="training-action" mt={6} size="compact-xs" fullWidth color="yellow" variant="light" disabled={busy || gold < cost}
         onClick={onTrain} data-testid="train-team">
         TRAIN ALL · {free ? 'FREE' : `${formatPlayerNumber(cost)} GOLD`}
@@ -35,7 +36,8 @@ export function TrainingCard({ offer, handLevels, gold, busy, free = false, onTr
       <div className="training-heading"><Group className="training-title-row" gap={3} wrap="nowrap"><Text className="training-name" fw={700} size="sm" tt="uppercase">{HANDS[offer.hand].name}</Text>
         <InfoPopover label={`${HANDS[offer.hand].name} training`} description="Gain +1 Lv. and improve this hand’s Pips and Mult." /></Group>
         <Text className="training-level" size="xs" c="dimmed">Lv. {formatPlayerNumber(currentLevel)} → {formatPlayerNumber(nextLevel)}</Text></div>
-      {offer.purchases > 0 && <Badge size="xs" color="teal" variant="light">Trained ×{formatPlayerNumber(offer.purchases)}</Badge>}
+      <Badge className={`training-purchase-badge${offer.purchases > 0 ? '' : ' is-empty'}`} size="xs" color="teal" variant="light"
+        aria-hidden={offer.purchases === 0}>Trained ×{formatPlayerNumber(offer.purchases)}</Badge>
     </Group>
     <Group className="training-stats" gap="md" mt={5} wrap="nowrap">
       <Text size="xs" data-testid={`training-pips-${offer.hand}`}>{formatPlayerNumber(current.basePips)} → {formatPlayerNumber(next.basePips)} Pips</Text>

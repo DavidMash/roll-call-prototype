@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { activeFace } from '../game/dice';
 import { dispatch, newRun } from '../game/engine';
+import { combinationsForHand } from '../game/hands';
 import type { Action, GameState } from '../game/types';
-import { dispatchTutorial, newTutorialSession } from './scenario';
+import { dispatchTutorial, newTutorialSession, tutorialActionError } from './scenario';
 import { curateTutorialOffers } from './curatedOffers';
+import { buildRound2Plan, reconcileTutorialBindings } from './tutorialBindings';
 
 function act(session: ReturnType<typeof newTutorialSession>['session'], action: Action) {
   const next = dispatchTutorial(session, action);
@@ -58,14 +60,87 @@ describe('tutorial scenario', () => {
     expect(session.game.gold).toBe(2);
 
     session = act(session, { type: 'NEXT_ROUND' });
-    expect(session.game.dice.map(die => activeFace(die).rank)).toEqual([2, 4, 4, 6, 6]);
-    session = act(session, { type: 'PLAY', hand: 'twos', dieIds: [0] });
-    expect(session.game.dice.map(die => activeFace(die).rank)).toEqual([4, 4, 4, 6, 6]);
+    const round2Plan = session.scenario.round2Plan!;
+    expect(round2Plan.pairRanks).toContain(session.scenario.bonusBinding!.faceRank);
+    expect(combinationsForHand(session.game.dice, 'twoPair')).not.toHaveLength(0);
+    session = act(session, { type: 'PLAY', hand: round2Plan.upperHand, dieIds: [round2Plan.singletonDieId] });
+    expect(combinationsForHand(session.game.dice, 'fullHouse')).not.toHaveLength(0);
     expect(session.game.manualRerollsRemaining).toBe(3);
     session = act(session, { type: 'PLAY', hand: 'fullHouse', dieIds: [0, 1, 2, 3, 4] });
     expect(session.game.phase).toBe('roundSummary');
     expect(session.game.stats.triggers.bonus).toBe(1);
     expect(session.game.stats.handScores.at(-1)?.handLevel).toBe(2);
+  });
+
+  it.each([1, 2, 3, 4, 5, 6] as const)('binds Bonus to D2\'s actual exposed face %i', rank => {
+    const { session } = newTutorialSession();
+    session.game.round = 1;
+    session.game.phase = 'shop';
+    session.game.gold = 100;
+    session.game.dice[1].value = rank;
+    session.game.shop = {
+      offers: [{ id: 91, enhancement: 'bonus', purchased: false }],
+      trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
+    };
+    session.scenario.completedBeatIds.push('shop1-train-full-house');
+    reconcileTutorialBindings(session);
+    expect(session.scenario.bonusBinding).toEqual({ dieId: 1, faceRank: rank });
+
+    const result = dispatchTutorial(session, { type: 'BUY', offerId: 91, dieId: 1 });
+    expect(result.error).toBeUndefined();
+    expect(result.session.scenario.bonusBinding).toEqual({ dieId: 1, faceRank: rank });
+    expect(result.session.game.dice[1].faces.find(face => face.rank === rank)?.enhancements.bonus).toBe(1);
+  });
+
+  it('reconciles a stale expected face before validation instead of trapping placement', () => {
+    const { session } = newTutorialSession();
+    session.game.round = 1;
+    session.game.phase = 'shop';
+    session.game.gold = 100;
+    session.game.dice[1].value = 2;
+    session.game.shop = {
+      offers: [{ id: 92, enhancement: 'bonus', purchased: false }],
+      trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
+    };
+    session.scenario.completedBeatIds.push('shop1-train-full-house');
+    session.scenario.bonusBinding = { dieId: 1, faceRank: 4 };
+
+    const result = dispatchTutorial(session, { type: 'BUY', offerId: 92, dieId: 1 });
+    expect(result.error).toBeUndefined();
+    expect(result.session.scenario.bonusBinding).toEqual({ dieId: 1, faceRank: 2 });
+  });
+
+  it('releases rank-relative validation when the required authored hand no longer exists', () => {
+    const { session } = newTutorialSession();
+    session.game.round = 2;
+    session.game.phase = 'round';
+    session.scenario.bonusBinding = { dieId: 1, faceRank: 4 };
+    session.scenario.round2Plan = buildRound2Plan(session.game.dice, session.scenario.bonusBinding);
+    session.game.dice.forEach(die => { die.value = 6; });
+
+    expect(tutorialActionError(session, { type: 'PLAY', hand: 'sixes', dieIds: session.game.dice.map(die => die.id) })).toBeNull();
+  });
+
+  it.each([2, 4, 6] as const)('builds C1 R2 relative to Bonus face %i', bonusRank => {
+    let { session } = newTutorialSession();
+    const binding = { dieId: 1, faceRank: bonusRank } as const;
+    session.game.dice[1].faces.find(face => face.rank === bonusRank)!.enhancements.bonus = 1;
+    const plan = buildRound2Plan(session.game.dice, binding)!;
+    session.scenario.bonusBinding = binding;
+    session.scenario.round2Plan = plan;
+    session.game.round = 2;
+    session.game.phase = 'round';
+    session.game.target = 999_999;
+    session.game.score = 0;
+    session.game.consumed = [];
+    plan.opening.forEach(({ dieId, rank }) => { session.game.dice[dieId].value = rank; });
+
+    expect(new Set(plan.opening.map(item => item.rank)).size).toBe(3);
+    expect(combinationsForHand(session.game.dice, 'twoPair')).not.toHaveLength(0);
+    session = act(session, { type: 'PLAY', hand: plan.upperHand, dieIds: [plan.singletonDieId] });
+    expect(combinationsForHand(session.game.dice, 'fullHouse')).not.toHaveLength(0);
+    session = act(session, { type: 'PLAY', hand: 'fullHouse', dieIds: session.game.dice.map(die => die.id) });
+    expect(session.game.stats.triggers.bonus).toBe(1);
   });
 
   it('intercepts only tutorial final-life busts in Chapters 1 and 2', () => {
@@ -202,19 +277,23 @@ describe('tutorial scenario', () => {
     session.game.handLevels.fullHouse = 2;
     session.game.specialOffer = { offers: [{ id: 80, type: 'carePackage' }], acquired: true, chosen: { id: 80, type: 'carePackage' } };
     session.game.dice[1].faces[3].enhancements.bonus = 1;
+    session.game.dice[0].value = 5;
     session = act(session, { type: 'CONTINUE_SPECIAL_OFFER' });
 
-    const workoutDieId = session.scenario.workoutDieId!;
-    expect(activeFace(session.game.dice[workoutDieId]).rank).toBe(2);
+    const workoutBinding = session.scenario.workoutBinding!;
+    const workoutDieId = workoutBinding.dieId;
+    expect(workoutBinding.faceRank).toBe(5);
+    expect(activeFace(session.game.dice[workoutDieId]).rank).toBe(workoutBinding.faceRank);
     const workout = session.game.shop?.offers.find(offer => offer.enhancement === 'workout');
     expect(workout).toBeDefined();
     session = act(session, { type: 'BUY', offerId: workout!.id, dieId: workoutDieId });
     expect(activeFace(session.game.dice[workoutDieId]).enhancements.workout).toBe(1);
     session = act(session, { type: 'NEXT_ROUND' });
-    expect(session.game.dice.map(die => activeFace(die).rank).sort()).toEqual([2, 4, 4, 6, 6]);
-    session = act(session, { type: 'PLAY', hand: 'twos', dieIds: [workoutDieId] });
-    expect(session.game.dice[workoutDieId].faces[1].workoutPips).toBe(1);
-    expect(session.game.dice.map(die => activeFace(die).rank).sort()).toEqual([4, 4, 4, 6, 6]);
+    const round4Plan = session.scenario.round4Plan!;
+    expect(round4Plan.singletonRank).toBe(workoutBinding.faceRank);
+    session = act(session, { type: 'PLAY', hand: round4Plan.upperHand, dieIds: [workoutDieId] });
+    expect(session.game.dice[workoutDieId].faces.find(face => face.rank === workoutBinding.faceRank)?.workoutPips).toBe(1);
+    expect(combinationsForHand(session.game.dice, 'fullHouse')).not.toHaveLength(0);
     const fullHouseIds = session.game.dice.map(die => die.id);
     session = act(session, { type: 'PLAY', hand: 'fullHouse', dieIds: fullHouseIds });
     expect(session.game.stats.handScores.at(-1)?.handLevel).toBe(2);

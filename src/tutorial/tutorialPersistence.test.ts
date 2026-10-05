@@ -39,4 +39,21 @@ describe('tutorial persistence isolation', () => {
     expect(loadTutorialSession(storage)).toBeNull();
     expect(loadOnboardingMetadata(storage)).toEqual(defaultOnboardingMetadata());
   });
+
+  it('preserves physical-face bindings and rank-relative plans across refresh', () => {
+    const storage = new MemoryStorage();
+    const tutorial = newTutorialSession().session;
+    tutorial.scenario.bonusBinding = { dieId: 1, faceRank: 2 };
+    tutorial.scenario.workoutBinding = { dieId: 0, faceRank: 5 };
+    tutorial.scenario.round2Plan = {
+      singletonDieId: 0, singletonRank: 1, upperHand: 'ones', pairRanks: [2, 3], rerollRank: 2,
+      opening: [{ dieId: 0, rank: 1 }, { dieId: 1, rank: 2 }, { dieId: 2, rank: 2 }, { dieId: 3, rank: 3 }, { dieId: 4, rank: 3 }],
+    };
+
+    expect(saveTutorialSession(storage, tutorial)).toBe(true);
+    const restored = loadTutorialSession(storage);
+    expect(restored?.scenario.bonusBinding).toEqual({ dieId: 1, faceRank: 2 });
+    expect(restored?.scenario.workoutBinding).toEqual({ dieId: 0, faceRank: 5 });
+    expect(restored?.scenario.round2Plan).toEqual(tutorial.scenario.round2Plan);
+  });
 });

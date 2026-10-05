@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { acknowledgeBeat, dispatchTutorial, newTutorialSession, tutorialRequiredBeatIds as R } from './scenario';
 import { activeTutorialBeat, normalizeTutorialBeatTargets } from './tutorialSteps';
 import type { TutorialSession, TutorialUiState } from './types';
+import { buildRound2Plan, buildRound4Plan } from './tutorialBindings';
 
 const ui = (overrides: Partial<TutorialUiState> = {}): TutorialUiState => ({
   selection: { hand: null, dieIds: [] }, selectedOffer: null, selectedFlameOffer: null, flameDetailsOpen: false, ...overrides,
@@ -110,11 +111,13 @@ describe('tutorial guided interaction beats', () => {
     expect(activeTutorialBeat(session, ui())).toMatchObject({ id: 'shop1-select-bonus', completion: { kind: 'selection' } });
     expect(activeTutorialBeat(session, ui({ selectedOffer: bonus.id }))).toMatchObject({
       id: R.bonus,
+      body: [`Put Bonus on this ${session.scenario.bonusBinding!.faceRank}.`],
       interactiveTargets: ['[data-tutorial="die-2"] .die'],
     });
 
     session.game.round = 3;
     session.scenario.completedBeatIds.push(R.bonus, 'shop-r4-workout-info');
+    session.scenario.workoutBinding = { dieId: 0, faceRank: session.game.dice[0].value };
     session.game.shop!.offers[0] = { ...session.game.shop!.offers[0], enhancement: 'workout', purchased: false };
     const workoutId = session.game.shop!.offers[0].id;
     expect(activeTutorialBeat(session, ui())).toMatchObject({ id: 'shop-r4-select-workout' });
@@ -142,24 +145,30 @@ describe('tutorial guided interaction beats', () => {
     expect(dispatchTutorial(session, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }).error).toBeUndefined();
   });
 
-  it('keeps the Round 2 and Workout Twos lessons multi-target and moves PLAY into its own beat', () => {
+  it('keeps the rank-relative Round 2 and Workout lessons multi-target and moves PLAY into its own beat', () => {
     const { session } = newTutorialSession();
+    session.scenario.bonusBinding = { dieId: 1, faceRank: 4 };
+    session.scenario.round2Plan = buildRound2Plan(session.game.dice, session.scenario.bonusBinding)!;
+    session.scenario.round2Plan.opening.forEach(({ dieId, rank }) => { session.game.dice[dieId].value = rank; });
     session.game.round = 2;
     session.game.phase = 'round';
+    const round2 = session.scenario.round2Plan;
+    const round2Hand = `[data-testid="scorecard-row-${round2.upperHand}"]`;
+    const round2Die = `[data-tutorial="die-${round2.singletonDieId + 1}"] .die`;
     expect(activeTutorialBeat(session, ui())).toMatchObject({
       id: 'c1-r2-two-pair',
       highlightTargets: expect.arrayContaining([
         '[data-testid="scorecard-row-twoPair"]',
         '[data-testid="scorecard-row-fullHouse"]',
-        '[data-tutorial="die-1"] .die',
+        round2Die,
       ]),
     });
     session.scenario.completedBeatIds.push('c1-r2-two-pair');
     expect(activeTutorialBeat(session, ui())).toMatchObject({
       id: 'c1-r2-choice',
       highlightTargets: expect.arrayContaining([
-        '[data-tutorial="die-1"] .die',
-        '[data-testid="scorecard-row-twos"]',
+        round2Die,
+        round2Hand,
         '[data-tutorial="reroll-button"]',
       ]),
       interactiveTargets: [],
@@ -168,22 +177,28 @@ describe('tutorial guided interaction beats', () => {
     session.scenario.completedBeatIds.push('c1-r2-choice');
     expect(activeTutorialBeat(session, ui())).toMatchObject({
       id: 'c1-r2-select-twos',
-      interactiveTargets: ['[data-testid="scorecard-row-twos"]'],
+      interactiveTargets: [round2Hand],
     });
-    expect(activeTutorialBeat(session, ui({ selection: { hand: 'twos', dieIds: [0] } }))).toMatchObject({
+    expect(activeTutorialBeat(session, ui({ selection: { hand: round2.upperHand, dieIds: [round2.singletonDieId] } }))).toMatchObject({
       id: R.r2Twos,
       interactiveTargets: ['[data-tutorial="play-action"]'],
     });
 
+    session.scenario.workoutBinding = { dieId: 0, faceRank: 5 };
+    session.scenario.round4Plan = buildRound4Plan(session.game.dice, session.scenario.bonusBinding, session.scenario.workoutBinding)!;
+    session.scenario.round4Plan.opening.forEach(({ dieId, rank }) => { session.game.dice[dieId].value = rank; });
     session.game.round = 4;
+    const round4 = session.scenario.round4Plan;
+    const round4Hand = `[data-testid="scorecard-row-${round4.upperHand}"]`;
+    const round4Die = `[data-tutorial="die-${round4.singletonDieId + 1}"] .die`;
     session.scenario.completedBeatIds.push('c1-r4-familiar');
     expect(activeTutorialBeat(session, ui())).toMatchObject({
       id: 'c1-r4-select-twos',
       highlightTargets: expect.arrayContaining([
-        '[data-testid="scorecard-row-twos"]',
-        '[data-tutorial="die-1"] .die',
+        round4Hand,
+        round4Die,
       ]),
-      interactiveTargets: ['[data-testid="scorecard-row-twos"]'],
+      interactiveTargets: [round4Hand],
     });
   });
 

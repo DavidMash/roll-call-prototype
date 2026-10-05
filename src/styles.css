@@ -178,10 +178,10 @@ button { font: inherit; }
 .special-effects-badges::-webkit-scrollbar { display: none; }
 .special-effect-badge { flex: none; border: 0; text-transform: none; white-space: nowrap; cursor: help; }
 .flame-goals { border-color: rgba(255, 140, 70, .28); }
-.training-card, .offer { min-width: 0; display: flex; flex-direction: column; background: var(--mantine-color-dark-8); border: 1px solid rgba(255,255,255,.045); }
-.training-card { min-height: 100px; }
+.training-card, .offer { min-width: 0; display: flex; flex-direction: column; box-sizing: border-box; background: var(--mantine-color-dark-8); border: 1px solid rgba(255,255,255,.045); }
+.training-card { height: 112px; min-height: 112px; }
 .team-training-card { border-color: rgba(250, 176, 5, .52); background: linear-gradient(145deg, rgba(250,176,5,.16), rgba(134,80,0,.08)); box-shadow: inset 0 0 22px rgba(250,176,5,.06); }
-.offer { min-height: 102px; }
+.offer { height: 102px; min-height: 102px; }
 .offer[draggable="true"] { cursor: grab; user-select: none; }
 .offer.selected { border-color: var(--mantine-color-teal-5); background: rgba(18,184,134,.1); }
 .offer.purchased { opacity: .5; }
@@ -189,6 +189,9 @@ button { font: inherit; }
 .offer-card-header, .offer-identity, .offer-name, .training-card-header, .training-heading, .training-title-row, .training-name { min-width: 0; }
 .offer-name, .training-name { line-height: 1.15; }
 .offer-action, .training-action { margin-top: auto !important; }
+.offer-action, .training-action, .flame-offer-action { min-height: 27px; }
+.training-purchase-badge.is-empty, .training-purchase-status.is-empty { visibility: hidden; }
+.training-purchase-status { min-height: 1.25em; }
 .info-circle-icon { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .info-circle-dot { fill: currentColor; stroke: none; }
 .offer-description { min-height: 29px; line-height: 1.2; }
@@ -261,8 +264,8 @@ button { font: inherit; }
   .shop-grid { grid-template-columns: 1fr; }
   .training-grid, .enhancement-grid, .flame-offers { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
   .training-grid .training-card, .enhancement-grid .offer, .flame-offers .flame-offer { padding: 7px; }
-  .training-grid .training-card { min-height: 145px; }
-  .enhancement-grid .offer { min-height: 112px; }
+  .training-grid .training-card { height: 145px; min-height: 145px; }
+  .enhancement-grid .offer { height: 112px; min-height: 112px; }
   .training-grid .mantine-Group-root, .enhancement-grid > * > .mantine-Group-root, .flame-offers > * > .mantine-Group-root { gap: 3px !important; }
   .training-grid .training-card-header { display: block; }
   .training-grid .training-heading { width: 100%; }
@@ -827,7 +830,7 @@ body, #root { overflow: hidden; }
 .tutorial-spotlight-layer { position: fixed; inset: 0; z-index: 999999999; pointer-events: none; }
 .tutorial-spotlight-layer svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .tutorial-spotlight-region { position: fixed; border: 2px solid rgba(94,234,212,.88); border-radius: 9px;
-  box-shadow: 0 0 0 1px rgba(8,47,73,.92), 0 0 18px rgba(45,212,191,.25); }
+  box-sizing: border-box; box-shadow: 0 0 0 1px rgba(8,47,73,.92), 0 0 18px rgba(45,212,191,.25); }
 .tutorial-spotlight-region.is-interactive { border: 3px double #5eead4;
   box-shadow: 0 0 0 2px rgba(8,47,73,.94), 0 0 22px rgba(45,212,191,.48); }
 .driver-active-element { outline: 3px solid rgba(94,234,212,.78) !important; outline-offset: 2px; }

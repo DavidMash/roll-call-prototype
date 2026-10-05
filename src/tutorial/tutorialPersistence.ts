@@ -1,6 +1,7 @@
 import { normalizeGameState } from '../game/engine';
 import type { GameState } from '../game/types';
 import { TUTORIAL_VERSION, type OnboardingMetadata, type TutorialScenarioState, type TutorialSession } from './types';
+import { reconcileTutorialBindings } from './tutorialBindings';
 
 export const TUTORIAL_RUN_STORAGE_KEY = 'roll-call:tutorial-run';
 export const ONBOARDING_STORAGE_KEY = 'roll-call:onboarding';
@@ -22,6 +23,10 @@ export const initialTutorialScenario = (): TutorialScenarioState => ({
   firstFlame: null,
   firstFlameDieId: null,
   workoutDieId: null,
+  bonusBinding: null,
+  workoutBinding: null,
+  round2Plan: null,
+  round4Plan: null,
   vintageShopsSeeded: 0,
   vintagePurchased: false,
   safeguardActivations: 0,
@@ -72,7 +77,10 @@ export function loadTutorialSession(storage: TutorialStorage | null): TutorialSe
     // normalizeGameState is the engine's compatibility gate. A malformed object
     // may still throw while normalizing, which is intentionally treated as no save.
     const game = normalizeGameState(saved.session.game as unknown as GameState);
-    return { tutorialVersion: TUTORIAL_VERSION, game, scenario: { ...initialTutorialScenario(), ...saved.session.scenario } };
+    const session = { tutorialVersion: TUTORIAL_VERSION, game,
+      scenario: { ...initialTutorialScenario(), ...saved.session.scenario } } as TutorialSession;
+    reconcileTutorialBindings(session);
+    return session;
   } catch { return null; }
 }
 

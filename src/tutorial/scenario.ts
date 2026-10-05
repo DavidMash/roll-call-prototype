@@ -1,14 +1,16 @@
-import { activeFace } from '../game/dice';
 import { dispatch, newRun } from '../game/engine';
 import { SeededRng } from '../game/rng';
 import { boardSnapshot } from '../game/telemetry';
 import type { Action, GameState, HandId, Rank, Resolution } from '../game/types';
 import { chapterNumberForRound } from '../game/chapters';
-import { combinationsForHand, UPPER_HAND_IDS } from '../game/hands';
+import { combinationsForHand, HANDS, UPPER_HAND_IDS } from '../game/hands';
 import { curateTutorialOffers } from './curatedOffers';
 import { scriptedRollSource, targetMap, type EventAddressedRollSource } from './scriptedRolls';
 import { initialTutorialScenario } from './tutorialPersistence';
 import { TUTORIAL_SEED, TUTORIAL_VERSION, type TutorialScenarioState, type TutorialSession } from './types';
+import {
+  bindingIsCurrent, buildRound2Plan, buildRound4Plan, planTargets, reconcileTutorialBindings,
+} from './tutorialBindings';
 
 const REQUIRED_BEATS = {
   reroll: 'c1-r1-reroll', threeKind: 'c1-r1-three-kind', pair: 'c1-r1-pair', sixes: 'c1-r1-sixes',
@@ -49,8 +51,16 @@ function sourceForAction(session: TutorialSession, action: Action): EventAddress
     if (action.type === 'PLAY' && action.hand === 'fives' && !done(scenario, REQUIRED_BEATS.fives)) targets = targetMap([4], [3]);
     if (action.type === 'PLAY' && action.hand === 'smallStraight' && !done(scenario, REQUIRED_BEATS.straight)) targets = targetMap([2, 4, 5, 1], [0, 1, 2, 3]);
   }
-  if (state.round === 2 && action.type === 'PLAY' && action.hand === 'twos' && !done(scenario, REQUIRED_BEATS.r2Twos)) targets = targetMap([4], [0]);
-  if (state.round === 4 && action.type === 'PLAY' && action.hand === 'twos' && !done(scenario, REQUIRED_BEATS.r4Twos)) targets = targetMap([4], [scenario.workoutDieId ?? 0]);
+  const r2 = scenario.round2Plan;
+  if (state.round === 2 && r2 && action.type === 'PLAY' && action.hand === r2.upperHand
+    && action.dieIds.includes(r2.singletonDieId) && !done(scenario, REQUIRED_BEATS.r2Twos)) {
+    targets = targetMap([r2.rerollRank], [r2.singletonDieId]);
+  }
+  const r4 = scenario.round4Plan;
+  if (state.round === 4 && r4 && action.type === 'PLAY' && action.hand === r4.upperHand
+    && action.dieIds.includes(r4.singletonDieId) && !done(scenario, REQUIRED_BEATS.r4Twos)) {
+    targets = targetMap([r4.rerollRank], [r4.singletonDieId]);
+  }
 
   if (state.round === 7 && action.type === 'PLAY' && !done(scenario, REQUIRED_BEATS.flameDemoSetup)) {
     const flameDie = scenario.firstFlameDieId ?? 0;
@@ -65,16 +75,18 @@ function sourceForAction(session: TutorialSession, action: Action): EventAddress
   return targets ? scriptedRollSource(state.dice, targets, state.rngState, exclude) : undefined;
 }
 
+function rankPlanForRound(session: TutorialSession, nextRound: number) {
+  if (nextRound === 2) return session.scenario.round2Plan
+    ?? (session.scenario.bonusBinding ? buildRound2Plan(session.game.dice, session.scenario.bonusBinding) : null);
+  if (nextRound === 4) return session.scenario.round4Plan
+    ?? (session.scenario.workoutBinding
+      ? buildRound4Plan(session.game.dice, session.scenario.bonusBinding, session.scenario.workoutBinding) : null);
+  return null;
+}
+
 function openingTargetsForRound(session: TutorialSession, nextRound: number): Map<number, Rank> | null {
-  if (nextRound === 2) return targetMap([2, 4, 4, 6, 6]);
-  if (nextRound === 4) {
-    const workout = session.scenario.workoutDieId ?? 0;
-    const bonus = 1;
-    const otherFour = [0, 2, 3, 4].find(id => id !== workout)!;
-    const result = new Map<number, Rank>([[workout, 2], [bonus, 4], [otherFour, 4]]);
-    for (const id of [0, 1, 2, 3, 4]) if (!result.has(id)) result.set(id, 6);
-    return result;
-  }
+  const plan = rankPlanForRound(session, nextRound);
+  if (plan) return planTargets(plan);
   if (nextRound !== 7) return null;
   const { scenario } = session;
   const flameDie = scenario.firstFlameDieId ?? 0;
@@ -97,9 +109,17 @@ function recoverImpossibleLesson(session: TutorialSession): void {
   const { game: state, scenario } = session;
   const playerDice = state.dice.filter(die => die.owner === 'player');
   const includes = (hand: HandId, dieId: number) => combinationsForHand(playerDice, hand).some(ids => ids.includes(dieId));
+  if (state.round === 2 && state.phase === 'round') {
+    const plan = scenario.round2Plan;
+    if (!plan || (!done(scenario, REQUIRED_BEATS.r2Twos) && !includes(plan.upperHand, plan.singletonDieId))) {
+      complete(scenario, REQUIRED_BEATS.r2Twos);
+      complete(scenario, REQUIRED_BEATS.r2FullHouse);
+    } else if (done(scenario, REQUIRED_BEATS.r2Twos) && !done(scenario, REQUIRED_BEATS.r2FullHouse)
+      && combinationsForHand(playerDice, 'fullHouse').length === 0) complete(scenario, REQUIRED_BEATS.r2FullHouse);
+  }
   if (state.round === 4 && state.phase === 'round') {
-    const workout = scenario.workoutDieId ?? 0;
-    if (!done(scenario, REQUIRED_BEATS.r4Twos) && !includes('twos', workout)) {
+    const plan = scenario.round4Plan;
+    if (!plan || (!done(scenario, REQUIRED_BEATS.r4Twos) && !includes(plan.upperHand, plan.singletonDieId))) {
       complete(scenario, REQUIRED_BEATS.r4Twos);
       complete(scenario, 'c1-r4-familiar');
       complete(scenario, 'c1-r4-workout-result');
@@ -134,16 +154,25 @@ function synchronizeScenario(previous: TutorialSession, action: Action, next: Tu
     if (action.type === 'TRAIN_HAND' && action.hand === 'fullHouse') complete(scenario, REQUIRED_BEATS.training);
     if (action.type === 'BUY') {
       const purchased = state.stats.purchases.at(-1);
-      if (purchased?.enhancement === 'bonus' && purchased.dieId === 1 && purchased.face === 4) complete(scenario, REQUIRED_BEATS.bonus);
+      if (purchased?.enhancement === 'bonus') {
+        scenario.bonusBinding = { dieId: purchased.dieId, faceRank: purchased.face };
+        complete(scenario, REQUIRED_BEATS.bonus);
+      }
     }
   }
-  if (previous.game.round === 2 && action.type === 'PLAY' && action.hand === 'twos') complete(scenario, REQUIRED_BEATS.r2Twos);
+  if (previous.game.round === 2 && action.type === 'PLAY' && action.hand === previous.scenario.round2Plan?.upperHand
+    && action.dieIds.includes(previous.scenario.round2Plan.singletonDieId)) complete(scenario, REQUIRED_BEATS.r2Twos);
   if (previous.game.round === 2 && action.type === 'PLAY' && action.hand === 'fullHouse') complete(scenario, REQUIRED_BEATS.r2FullHouse);
   if (previous.game.round === 3 && action.type === 'BUY') {
     const purchased = state.stats.purchases.at(-1);
-    if (purchased?.enhancement === 'workout' && purchased.dieId === scenario.workoutDieId && purchased.face === 2) complete(scenario, REQUIRED_BEATS.workout);
+    if (purchased?.enhancement === 'workout') {
+      scenario.workoutBinding = { dieId: purchased.dieId, faceRank: purchased.face };
+      scenario.workoutDieId = purchased.dieId;
+      complete(scenario, REQUIRED_BEATS.workout);
+    }
   }
-  if (previous.game.round === 4 && action.type === 'PLAY' && action.hand === 'twos') complete(scenario, REQUIRED_BEATS.r4Twos);
+  if (previous.game.round === 4 && action.type === 'PLAY' && action.hand === previous.scenario.round4Plan?.upperHand
+    && action.dieIds.includes(previous.scenario.round4Plan.singletonDieId)) complete(scenario, REQUIRED_BEATS.r4Twos);
   if (previous.game.round === 4 && action.type === 'PLAY' && action.hand === 'fullHouse') complete(scenario, REQUIRED_BEATS.r4FullHouse);
   if (action.type === 'CHOOSE_FLAME' && !scenario.firstFlame) {
     const acquisition = state.stats.flameAcquisitions.at(-1);
@@ -195,6 +224,9 @@ export function newTutorialSession(): { session: TutorialSession; resolution: Re
 export function tutorialActionError(session: TutorialSession, action: Action): string | null {
   const { game: state, scenario } = session;
   const requires = (id: string) => !done(scenario, id);
+  const planPlayable = (plan: TutorialScenarioState['round2Plan']) => !!plan
+    && combinationsForHand(state.dice.filter(die => die.owner === 'player'), plan.upperHand)
+      .some(ids => ids.includes(plan.singletonDieId));
   if (state.round === 1 && state.phase === 'round') {
     if (requires(REQUIRED_BEATS.reroll) && (action.type !== 'MANUAL_REROLL' || action.dieIds.length !== 1 || action.dieIds[0] !== 1)) return 'Select D2 and use one Reroll.';
     if (!requires(REQUIRED_BEATS.reroll) && requires(REQUIRED_BEATS.threeKind) && (action.type !== 'PLAY' || action.hand !== 'threeKind' || action.dieIds.some(id => ![0, 1, 2].includes(id)))) return 'Play Three of a Kind with the three 1s.';
@@ -202,22 +234,37 @@ export function tutorialActionError(session: TutorialSession, action: Action): s
   if (state.phase === 'shop' && state.round === 1) {
     if (requires(REQUIRED_BEATS.training) && (action.type !== 'TRAIN_HAND' || action.hand !== 'fullHouse')) return 'Train Full House once.';
     if (!requires(REQUIRED_BEATS.training) && requires(REQUIRED_BEATS.bonus)) {
+      const binding = scenario.bonusBinding;
+      if (!binding || !bindingIsCurrent(session, binding)) return null;
       const offer = state.shop?.offers.find(item => item.id === (action.type === 'BUY' ? action.offerId : -1));
-      if (action.type !== 'BUY' || offer?.enhancement !== 'bonus' || action.dieId !== 1 || activeFace(state.dice[1]).rank !== 4) return 'Buy Bonus and put it on D2 showing 4.';
+      if (action.type !== 'BUY' || offer?.enhancement !== 'bonus' || action.dieId !== binding.dieId)
+        return `Buy Bonus and put it on D${binding.dieId + 1} showing ${binding.faceRank}.`;
     }
   }
   if (state.round === 2 && state.phase === 'round') {
-    if (requires(REQUIRED_BEATS.r2Twos) && (action.type !== 'PLAY' || action.hand !== 'twos')) return 'Play Twos to reroll the lone die for free.';
-    if (!requires(REQUIRED_BEATS.r2Twos) && requires(REQUIRED_BEATS.r2FullHouse) && (action.type !== 'PLAY' || action.hand !== 'fullHouse')) return 'Play the trained Full House.';
+    const plan = scenario.round2Plan;
+    if (planPlayable(plan) && plan && requires(REQUIRED_BEATS.r2Twos)
+      && (action.type !== 'PLAY' || action.hand !== plan.upperHand || !action.dieIds.includes(plan.singletonDieId)))
+      return `Play ${HANDS[plan.upperHand].name} to reroll the lone die for free.`;
+    if (plan && !requires(REQUIRED_BEATS.r2Twos) && requires(REQUIRED_BEATS.r2FullHouse)
+      && combinationsForHand(state.dice.filter(die => die.owner === 'player'), 'fullHouse').length > 0
+      && (action.type !== 'PLAY' || action.hand !== 'fullHouse')) return 'Play the trained Full House.';
   }
   if (state.phase === 'shop' && state.round === 3 && requires(REQUIRED_BEATS.workout)) {
+    const binding = scenario.workoutBinding;
+    if (!binding || !bindingIsCurrent(session, binding)) return null;
     const offer = state.shop?.offers.find(item => item.id === (action.type === 'BUY' ? action.offerId : -1));
-    const workoutDieId = scenario.workoutDieId ?? 0;
-    if (action.type !== 'BUY' || offer?.enhancement !== 'workout' || action.dieId !== workoutDieId || activeFace(state.dice[workoutDieId]).rank !== 2) return `Buy Workout and put it on D${workoutDieId + 1} showing 2.`;
+    if (action.type !== 'BUY' || offer?.enhancement !== 'workout' || action.dieId !== binding.dieId)
+      return `Buy Workout and put it on D${binding.dieId + 1} showing ${binding.faceRank}.`;
   }
   if (state.round === 4 && state.phase === 'round') {
-    if (requires(REQUIRED_BEATS.r4Twos) && (action.type !== 'PLAY' || action.hand !== 'twos' || !action.dieIds.includes(scenario.workoutDieId ?? 0))) return 'Play Twos with the Workout die.';
-    if (!requires(REQUIRED_BEATS.r4Twos) && requires(REQUIRED_BEATS.r4FullHouse) && (action.type !== 'PLAY' || action.hand !== 'fullHouse')) return 'Play Full House again.';
+    const plan = scenario.round4Plan;
+    if (planPlayable(plan) && plan && requires(REQUIRED_BEATS.r4Twos)
+      && (action.type !== 'PLAY' || action.hand !== plan.upperHand || !action.dieIds.includes(plan.singletonDieId)))
+      return `Play ${HANDS[plan.upperHand].name} with the Workout die.`;
+    if (plan && !requires(REQUIRED_BEATS.r4Twos) && requires(REQUIRED_BEATS.r4FullHouse)
+      && combinationsForHand(state.dice.filter(die => die.owner === 'player'), 'fullHouse').length > 0
+      && (action.type !== 'PLAY' || action.hand !== 'fullHouse')) return 'Play Full House again.';
   }
   if (state.round === 7 && state.phase === 'round') {
     const flameDie = scenario.firstFlameDieId;
@@ -238,38 +285,31 @@ export function tutorialActionError(session: TutorialSession, action: Action): s
 }
 
 export function dispatchTutorial(session: TutorialSession, action: Action): { session: TutorialSession; resolution: Resolution; error?: string } {
-  const restriction = tutorialActionError(session, action);
-  if (restriction) return { session, resolution: { state: session.game, events: [], error: restriction }, error: restriction };
-  let source = sourceForAction(session, action);
+  const prepared = structuredClone(session);
+  reconcileTutorialBindings(prepared);
+  const restriction = tutorialActionError(prepared, action);
+  if (restriction) return { session: prepared, resolution: { state: prepared.game, events: [], error: restriction }, error: restriction };
+  let source = sourceForAction(prepared, action);
+  const nextRound = action.type === 'NEXT_ROUND' ? prepared.game.round + 1
+    : action.type === 'RETRY_ROUND' ? prepared.game.round : null;
+  const pendingPlan = nextRound === null ? null : rankPlanForRound(prepared, nextRound);
   if (action.type === 'NEXT_ROUND' || action.type === 'RETRY_ROUND') {
-    const targets = openingTargetsForRound(session, action.type === 'NEXT_ROUND' ? session.game.round + 1 : session.game.round);
-    if (targets) source = scriptedRollSource(session.game.dice, targets, session.game.rngState);
+    const targets = openingTargetsForRound(prepared, nextRound!);
+    if (targets) source = scriptedRollSource(prepared.game.dice, targets, prepared.game.rngState);
   }
-  const chapter = chapterNumberForRound(session.game.round);
-  const resolution = dispatch(session.game, action, source, {
+  const chapter = chapterNumberForRound(prepared.game.round);
+  const resolution = dispatch(prepared.game, action, source, {
     tutorialFinalLifeSafeguard: chapter <= 2,
-    nonPayingManualRerolls: session.scenario.safeguardRerollsGranted,
+    nonPayingManualRerolls: prepared.scenario.safeguardRerollsGranted,
   });
-  if (resolution.error) return { session, resolution, error: resolution.error };
+  if (resolution.error) return { session: prepared, resolution, error: resolution.error };
   if (source) resolution.state.rngState = source.fallback.state;
-  const next: TutorialSession = { tutorialVersion: TUTORIAL_VERSION, game: resolution.state, scenario: structuredClone(session.scenario) };
+  const next: TutorialSession = { tutorialVersion: TUTORIAL_VERSION, game: resolution.state, scenario: structuredClone(prepared.scenario) };
+  if (nextRound === 2 && pendingPlan) next.scenario.round2Plan = pendingPlan;
+  if (nextRound === 4 && pendingPlan) next.scenario.round4Plan = pendingPlan;
   withBossPlan(next.game);
-  synchronizeScenario(session, action, next, resolution);
-
-  // The Workout placement Shop needs an exposed physical 2. Shop dice are
-  // persistent, so this is the final-settle scenario override described by the curriculum.
-  if (next.game.phase === 'shop' && next.game.round === 3 && !done(next.scenario, REQUIRED_BEATS.workout)) {
-    const candidate = next.game.dice.filter(die => die.owner === 'player' && die.id !== 1)
-      .find(die => Object.values(die.faces[1].enhancements).filter(count => (count ?? 0) > 0).length < 3);
-    if (candidate) {
-      candidate.value = 2;
-      next.scenario.workoutDieId = candidate.id;
-    } else {
-      complete(next.scenario, REQUIRED_BEATS.workout);
-      complete(next.scenario, REQUIRED_BEATS.r4Twos);
-      complete(next.scenario, REQUIRED_BEATS.r4FullHouse);
-    }
-  }
+  synchronizeScenario(prepared, action, next, resolution);
+  reconcileTutorialBindings(next);
   curateTutorialOffers(next.game, next.scenario);
   recoverImpossibleLesson(next);
   patchFinalEvent(resolution);

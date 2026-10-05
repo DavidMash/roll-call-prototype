@@ -256,10 +256,15 @@ test('Three of a Kind uses separate highlights and gates PLAY until selection is
 });
 
 test('Shop Training and Bonus placement expose only the current atomic action', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const session = shopOneSession();
+  session.game.dice[1].value = 2;
   session.scenario.completedBeatIds.push('shop1-training');
   await resumeSession(page, session);
 
+  const trainingCard = page.locator('[data-tutorial="training-fullHouse"]');
+  const neighboringCard = page.locator('[data-tutorial^="training-"]:not([data-tutorial="training-fullHouse"])').first();
+  const [trainingBefore, neighborBefore] = await Promise.all([trainingCard.boundingBox(), neighboringCard.boundingBox()]);
   const unrelatedTraining = page.locator('[data-tutorial^="training-"]:not([data-tutorial="training-fullHouse"]) .training-action').first();
   await expect(page.locator('[data-tutorial="training-fullHouse"] .training-action')).not.toHaveAttribute('aria-disabled', 'true');
   await expect(page.locator('[data-tutorial="training-fullHouse"] .training-action')).toHaveClass(/tutorial-interactive/);
@@ -269,6 +274,10 @@ test('Shop Training and Bonus placement expose only the current atomic action', 
   await unrelatedTraining.evaluate((element: HTMLButtonElement) => element.click());
   await expect(page.getByTestId('stat-gold')).toHaveText(goldBefore!);
   await page.locator('[data-tutorial="training-fullHouse"] .training-action').click();
+  const [trainingAfter, neighborAfter] = await Promise.all([trainingCard.boundingBox(), neighboringCard.boundingBox()]);
+  expect(trainingAfter?.height).toBe(trainingBefore?.height);
+  expect(neighborAfter?.height).toBe(neighborBefore?.height);
+  expect(neighborAfter?.y).toBe(neighborBefore?.y);
 
   for (const title of ['FULL HOUSE · LV. 2', 'ENHANCEMENTS', 'BONUS']) {
     await expect(page.locator('.driver-popover')).toContainText(title);
@@ -280,6 +289,7 @@ test('Shop Training and Bonus placement expose only the current atomic action', 
   await expect(page.locator('[data-tutorial^="enhancement-"]:not([data-tutorial="enhancement-bonus"]) .offer-action').first()).toHaveAttribute('aria-disabled', 'true');
   await page.locator('[data-tutorial="enhancement-bonus"] .offer-action').click();
   await expect(page.locator('.driver-popover-title')).toHaveText('PUT IT HERE');
+  await expect(page.locator('.driver-popover')).toContainText('Put Bonus on this 2.');
   await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(2);
   await expect(page.locator('[data-tutorial="enhancement-bonus"] .offer-action')).toHaveAttribute('aria-disabled', 'true');
   await expect(page.locator('[data-tutorial="die-2"] .die')).not.toHaveAttribute('aria-disabled', 'true');
@@ -288,6 +298,9 @@ test('Shop Training and Bonus placement expose only the current atomic action', 
   await expect(page.locator('.driver-popover-title')).toHaveText('PUT IT HERE');
   await page.locator('[data-tutorial="die-2"] .die').click();
   await expect(page.locator('.driver-popover')).toContainText('physical face');
+  const savedBinding = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).session.scenario.bonusBinding,
+    TUTORIAL_RUN_STORAGE_KEY);
+  expect(savedBinding).toEqual({ dieId: 1, faceRank: 2 });
 });
 
 test('Workout purchase and placement use separate guided targets', async ({ page }) => {
@@ -295,7 +308,7 @@ test('Workout purchase and placement use separate guided targets', async ({ page
   session.game.round = 3;
   session.game.gold = 20;
   session.game.shop!.offers[0] = { ...session.game.shop!.offers[0], enhancement: 'workout', purchased: false };
-  session.game.dice[0].value = 2;
+  session.game.dice[0].value = 5;
   session.scenario.workoutDieId = 0;
   session.scenario.completedBeatIds.push('shop-r4-workout-info');
   await resumeSession(page, session);
@@ -303,6 +316,7 @@ test('Workout purchase and placement use separate guided targets', async ({ page
   await expect(page.locator('.driver-popover-title')).toHaveText('BUY WORKOUT');
   await page.locator('[data-tutorial="enhancement-workout"] .offer-action').click();
   await expect(page.locator('.driver-popover-title')).toHaveText('PLACE WORKOUT');
+  await expect(page.locator('.driver-popover')).toContainText('Put it on this 5.');
   await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(2);
   await expect(page.locator('[data-tutorial="die-1"] .die')).not.toHaveAttribute('aria-disabled', 'true');
   await expect(page.locator('[data-tutorial="die-1"] .die')).toHaveClass(/tutorial-interactive/);
@@ -310,6 +324,32 @@ test('Workout purchase and placement use separate guided targets', async ({ page
   await page.locator('[data-tutorial="die-1"] .die').click();
   await expect(page.locator('.driver-popover')).toHaveCount(0);
   await expect(page.locator('[data-tutorial="die-1"] .die')).not.toHaveAttribute('data-tutorial-gated');
+  const savedBinding = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).session.scenario.workoutBinding,
+    TUTORIAL_RUN_STORAGE_KEY);
+  expect(savedBinding).toEqual({ dieId: 0, faceRank: 5 });
+});
+
+test('multi-target spotlights and the Driver popover follow moved tutorial targets', async ({ page }) => {
+  await enterTutorial(page);
+  for (let index = 0; index < 3; index++) await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
+  await page.locator('[data-tutorial="die-2"] .die').click();
+  await expect(page.locator('.driver-popover-title')).toHaveText('NOW REROLL IT');
+
+  const reroll = page.locator('[data-tutorial="reroll-button"]');
+  const before = await reroll.boundingBox();
+  await reroll.evaluate((element: HTMLElement) => { element.style.transform = 'translateX(-18px)'; });
+  await expect.poll(async () => {
+    const target = await reroll.boundingBox();
+    const regions = await page.getByTestId('tutorial-highlight-region').evaluateAll(elements => elements.map(element => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    }));
+    return regions.some(region => target
+      && Math.abs((region.x + region.width / 2) - (target.x + target.width / 2)) < 8
+      && Math.abs((region.y + region.height / 2) - (target.y + target.height / 2)) < 8);
+  }).toBe(true);
+  expect((await reroll.boundingBox())!.x).toBeLessThan(before!.x);
+  await expectPopoverAndTargetSeparated(page, '[data-tutorial="reroll-button"]');
 });
 
 test('first Flame assignment highlights and exposes every legal destination die only', async ({ page }) => {
