@@ -97,14 +97,15 @@ describe('Chapter encounter planning', () => {
 });
 
 describe('current Chapter route', () => {
-  it('contains only the six-round Chapter and preserves all reward and Shop placements', () => {
+  it('contains only travel stops while preserving the six encounters and five Shops', () => {
     const route = chapterRoute('chapter-map', 2);
     expect(route.map(node => node.type)).toEqual([
-      'normal_round', 'shop', 'normal_round', 'shop', 'mini_boss_round', 'special_offer', 'shop',
-      'normal_round', 'shop', 'normal_round', 'shop', 'boss_round', 'flame_selection',
+      'normal_round', 'shop', 'normal_round', 'shop', 'mini_boss_round', 'shop',
+      'normal_round', 'shop', 'normal_round', 'shop', 'boss_round',
     ]);
     expect(route.filter(node => node.type === 'shop')).toHaveLength(5);
     expect(route.filter(node => node.type.includes('round')).map(node => node.round)).toEqual([7, 8, 9, 10, 11, 12]);
+    expect(route.some(node => node.type === 'special_offer' || node.type === 'flame_selection')).toBe(false);
     expect(route.some(node => node.round <= 6 || node.round >= 13)).toBe(false);
   });
 });

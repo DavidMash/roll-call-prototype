@@ -28,10 +28,12 @@ describe('linear route and deterministic boss schedule', () => {
 
   it('limits the map to the complete current Chapter', () => {
     const chapterOne = routeWindow('route', 'boss:6');
-    expect(chapterOne).toHaveLength(13);
+    expect(chapterOne).toHaveLength(11);
+    expect(chapterOne.some(node => node.type === 'special_offer' || node.type === 'flame_selection')).toBe(false);
     expect(chapterOne.map(node => node.round).every(round => round >= 1 && round <= 6)).toBe(true);
     const chapterTwo = routeWindow('route', 'round:7');
-    expect(chapterTwo).toHaveLength(13);
+    expect(chapterTwo).toHaveLength(11);
+    expect(chapterTwo.some(node => node.type === 'special_offer' || node.type === 'flame_selection')).toBe(false);
     expect(chapterTwo.map(node => node.round).every(round => round >= 7 && round <= 12)).toBe(true);
   });
 

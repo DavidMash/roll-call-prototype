@@ -4,7 +4,7 @@ import { CONFIG } from './game/config';
 import { dispatch, newRun } from './game/engine';
 import { browserRunStorage, loadPersistedRun, savePersistedRun } from './game/persistence';
 import type { Action, Resolution } from './game/types';
-import { isPlaybackBarrier, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump, type ScoreSummaryJump } from './game/playback';
+import { isChapterMapTransition, isPlaybackBarrier, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump, type ScoreSummaryJump } from './game/playback';
 
 export type PlaybackSpeed = keyof typeof CONFIG.tickMs;
 
@@ -32,6 +32,10 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
       return () => window.clearTimeout(timeout);
     }
     if (speed === 'instant' && currentEvent?.type === 'CHAPTER_STARTED') {
+      setIndex(current => current + 1);
+      return;
+    }
+    if (currentEvent?.type === 'MAP_TRANSITION' && !isChapterMapTransition(currentEvent)) {
       setIndex(current => current + 1);
       return;
     }

@@ -464,7 +464,11 @@ test('successful normal encounter shows a reconciled Round Summary before the Sh
 
   await setPlaybackSpeed(page, 'NORMAL');
   await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
-  await expect(page.getByTestId('run-map-transition')).toHaveAttribute('data-destination', `shop:before-round:${game.round + 1}`);
+  const shopMap = page.getByTestId('run-map-transition');
+  await expect(shopMap).toHaveAttribute('data-destination', `shop:before-round:${game.round + 1}`);
+  await expect(shopMap.locator('[aria-current="step"] .node-label')).toHaveText('SHOP');
+  await expect(shopMap.locator('[aria-current="step"]')).not.toContainText('Prepare for');
+  await expect(shopMap.locator('[aria-current="step"]')).not.toContainText('Goal');
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await ready(page);
   await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();

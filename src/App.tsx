@@ -31,6 +31,7 @@ import { useTutorialGame } from './tutorial/useTutorialGame';
 import { TutorialDirector } from './tutorial/TutorialDirector';
 import { defaultOnboardingMetadata, isResumableTutorial, loadOnboardingMetadata, saveOnboardingMetadata } from './tutorial/tutorialPersistence';
 import type { OnboardingMetadata } from './tutorial/types';
+import { isChapterMapTransition } from './game/playback';
 
 const freshSeed = () => `roll-${Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join('-')}`;
 const query = new URLSearchParams(window.location.search);
@@ -65,7 +66,7 @@ export default function App() {
   const resumableTutorial = tutorialGame.hasStoredRun && isResumableTutorial(tutorialGame.session) ? tutorialGame.session : null;
   const theme = screenTheme(board);
   const showingChapterSplash = event?.type === 'CHAPTER_STARTED';
-  const showingMap = event?.type === 'MAP_TRANSITION';
+  const showingMap = isChapterMapTransition(event);
   const dockActionsEnabled = !busy && !showingChapterSplash && !showingMap && !gameMenuOpen && !runInfoOpen && !helpOpen
     && !restoreLivesOpen && faceDetails === null && flameDetails === null;
   useLayoutEffect(() => setSeedInput(state.seed), [state.seed]);
@@ -145,10 +146,10 @@ export default function App() {
       returnToTitle={returnToTitle} />}
     {game.error && <Alert color="orange" withCloseButton onClose={game.clearError} my="xs" py={5} title="Action unavailable">{game.error}</Alert>}
     <main className="main-content">
-      {busy && event?.type !== 'MAP_TRANSITION' && event?.type !== 'ROUND_BUST' && event?.type !== 'CHAPTER_STARTED'
+      {busy && !showingMap && event?.type !== 'ROUND_BUST' && event?.type !== 'CHAPTER_STARTED'
         && <span className="visually-hidden">EVENT {progress.current} / {progress.total}</span>}
       {event?.type === 'CHAPTER_STARTED' ? <ChapterSplash key={event.id} event={event} onComplete={game.continuePlayback} />
-        : event?.type === 'MAP_TRANSITION' ? <RunMapTransition key={event.id} seed={state.seed} event={event} onContinue={game.continuePlayback} />
+        : showingMap ? <RunMapTransition key={event!.id} seed={state.seed} event={event!} onContinue={game.continuePlayback} />
         : board.phase === 'roundSummary' && board.roundSummary ? <RoundSummaryScreen board={board} busy={busy} submit={submit} />
         : board.phase === 'flameSelection' && board.flameSelection ? <FlameSelectionScreen board={board} event={event} busy={busy}
         selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} openFlameDetails={openFlameDetails} />

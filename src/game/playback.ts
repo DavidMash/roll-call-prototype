@@ -2,8 +2,11 @@ import type { GameEvent } from './types';
 
 export const SCORE_SUMMARY_HOLD_MS = 420;
 
+export const isChapterMapTransition = (event: GameEvent | null | undefined) => event?.type === 'MAP_TRANSITION'
+  && event.nodeType !== 'special_offer' && event.nodeType !== 'flame_selection';
+
 export const isPlaybackBarrier = (event: GameEvent | undefined) => event?.type === 'CHAPTER_STARTED'
-  || event?.type === 'MAP_TRANSITION'
+  || isChapterMapTransition(event)
   || (event?.type === 'ROUND_BUST' && (event.board.bust?.livesAfter ?? 0) > 0);
 
 export interface ScoreSummaryJump {

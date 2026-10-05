@@ -6,7 +6,7 @@ import type { PlaybackSpeed } from '../useGame';
 import { acknowledgeBeat, dispatchTutorial, newTutorialSession } from './scenario';
 import { clearTutorialSession, loadTutorialSession, saveTutorialSession, type TutorialStorage } from './tutorialPersistence';
 import type { TutorialSession } from './types';
-import { isPlaybackBarrier, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump, type ScoreSummaryJump } from '../game/playback';
+import { isChapterMapTransition, isPlaybackBarrier, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump, type ScoreSummaryJump } from '../game/playback';
 
 const browserStorage = (): TutorialStorage | null => {
   if (typeof window === 'undefined') return null;
@@ -42,6 +42,10 @@ export function useTutorialGame(speed: PlaybackSpeed, active = true) {
       return () => window.clearTimeout(timeout);
     }
     if (speed === 'instant' && currentEvent?.type === 'CHAPTER_STARTED') { setIndex(current => current + 1); return; }
+    if (currentEvent?.type === 'MAP_TRANSITION' && !isChapterMapTransition(currentEvent)) {
+      setIndex(current => current + 1);
+      return;
+    }
     if (isPlaybackBarrier(currentEvent)) return;
     if (speed === 'instant') {
       const jump = scoreSummaryJump(result.events, index);

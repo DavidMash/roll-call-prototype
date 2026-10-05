@@ -87,10 +87,13 @@ test('local route transition auto-continues after its visible themed three-secon
   const destination = map.locator('[aria-current="step"]');
   await expect(destination).toContainText('R1');
   await expect(map.getByText('R1', { exact: true })).toHaveCount(1);
-  await expect(map.locator('.run-map-node')).toHaveCount(13);
+  await expect(map.locator('.run-map-node')).toHaveCount(11);
   await expect(map.locator('.map-node-placeholder')).toHaveCount(0);
   const continueButton = map.getByRole('button', { name: 'Continue', exact: true });
   await expect(continueButton.locator('.map-continue-countdown')).toHaveText('3');
+  const initialButtonWidth = await continueButton.evaluate(element => (element as HTMLElement).offsetWidth);
+  const initialBadgeWidth = await continueButton.locator('.map-continue-countdown').evaluate(element => (element as HTMLElement).offsetWidth);
+  await expect(continueButton.getByText('CONTINUE', { exact: true })).toBeVisible();
   const fillStyle = await map.locator('.map-continue-fill').evaluate(element => {
     const style = getComputedStyle(element);
     return { animationDuration: style.animationDuration, animationName: style.animationName, backgroundColor: style.backgroundColor };
@@ -106,7 +109,13 @@ test('local route transition auto-continues after its visible themed three-secon
   expect(nodeBox!.x + nodeBox!.width).toBeLessThanOrEqual(trackBox!.x + trackBox!.width);
   await expect(map).toBeVisible();
   await expect(continueButton.locator('.map-continue-countdown')).toHaveText('2');
-  await expect(map).toHaveCount(0, { timeout: 3000 });
+  const updatedButtonWidth = await continueButton.evaluate(element => (element as HTMLElement).offsetWidth);
+  const updatedBadgeWidth = await continueButton.locator('.map-continue-countdown').evaluate(element => (element as HTMLElement).offsetWidth);
+  expect(updatedButtonWidth).toBe(initialButtonWidth);
+  expect(updatedBadgeWidth).toBe(initialBadgeWidth);
+  await expect(continueButton.locator('.map-continue-countdown')).toHaveText('1', { timeout: 1500 });
+  await expect(continueButton).not.toContainText('0');
+  await expect(map).toHaveCount(0, { timeout: 2000 });
   await expect(page.getByTestId('stat-round')).toContainText('1');
 
   await page.goto('/?seed=map-manual&speed=normal');
@@ -126,6 +135,7 @@ test('local route transition auto-continues after its visible themed three-secon
   const reducedMap = page.getByTestId('run-map-transition');
   await expect(reducedMap).toBeVisible();
   expect(await reducedMap.evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+  expect(await reducedMap.locator('[data-pulse="true"] .run-map-node').evaluate(element => getComputedStyle(element).animationName)).toBe('none');
   await expect(reducedMap.locator('.map-continue-countdown')).toHaveText('3');
   const reducedAnimation = await reducedMap.locator('.map-continue-fill')
     .evaluate(element => getComputedStyle(element).animationName);
@@ -142,6 +152,9 @@ test('Caller preview hides the call, then encounter reveals it and its counter',
   await expect(preview).toContainText('Play the called hand before it comes due or lose half your total score.');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
+  const bossMap = page.getByTestId('run-map-transition');
+  await expect(bossMap.locator('[aria-current="step"] .node-label')).toHaveText('THE CALLER');
+  await expect(bossMap.locator('[aria-current="step"]')).not.toContainText('BOSS');
   await ready(page);
   if (game.boss?.type !== 'caller') throw new Error('Caller fixture failed');
   await expect(page.getByTestId('boss-panel')).toContainText(HANDS[game.boss.calledHand].name.toUpperCase());
@@ -422,7 +435,7 @@ test('Hexer face 7 renders seven pips with Bonus and Mirror and remains freely s
   await expect(button).toHaveAttribute('aria-pressed', 'false');
 });
 
-test('Boss clear shows its Boss Reward summary before the Flame Selection map', async ({ page }) => {
+test('Boss clear shows its Boss Reward summary and transitions directly to Flame Selection', async ({ page }) => {
   let game = await reachBossShop(page, 'hexer');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
@@ -444,19 +457,6 @@ test('Boss clear shows its Boss Reward summary before the Flame Selection map', 
 
   await setPlaybackSpeed(page, 'NORMAL');
   await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
-  const flameMap = page.getByTestId('run-map-transition');
-  await expect(flameMap).toHaveAttribute('data-destination', `flame:after-round:${game.round}`);
-  await expect(flameMap.locator('.run-map-node')).toHaveCount(13);
-  await expect(flameMap.locator('[data-node-kind="flame_selection"]')).toHaveAttribute('data-state', 'current');
-  await expect(flameMap.locator('[data-node-kind="flame_selection"] .node-label')).toHaveText('FLAME');
-  await expect(flameMap.locator('[data-node-kind="flame_selection"]')).toHaveAttribute('data-attached-to', 'boss');
-  await expect(flameMap.locator('[data-node-kind="boss_round"]')).toHaveAttribute('data-state', 'completed');
-  await expect(flameMap.locator('[data-node-kind="boss_round"] .node-label')).toHaveCount(0);
-  const activeConnector = flameMap.getByTestId('active-map-connector');
-  await expect(activeConnector).toHaveCount(1);
-  await expect(activeConnector).toHaveClass(/route-forward/);
-  expect(await activeConnector.evaluate(element => getComputedStyle(element).animationName)).toBe('map-route-fill-forward');
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  await ready(page);
+  await expect(page.getByTestId('run-map-transition')).toHaveCount(0);
   await expect(page.getByRole('main').getByText('FLAME SELECTION', { exact: true })).toBeVisible();
 });

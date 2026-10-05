@@ -4,6 +4,7 @@ import { dispatch, newRun } from './engine';
 import { Resolver } from './effects';
 import { HAND_IDS } from './hands';
 import type { GameState, RandomSource } from './types';
+import { isChapterMapTransition, isPlaybackBarrier } from './playback';
 
 const constant = (value = .99): RandomSource => ({ next: () => value });
 
@@ -51,6 +52,8 @@ describe('authoritative Round Summary', () => {
     expect(result.events.some(event => event.type === 'MAP_TRANSITION')).toBe(false);
     const continued = dispatch(result.state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant());
     expect(continued.events[0]).toMatchObject({ type: 'MAP_TRANSITION', nodeType: 'flame_selection' });
+    expect(isChapterMapTransition(continued.events[0])).toBe(false);
+    expect(isPlaybackBarrier(continued.events[0])).toBe(false);
     expect(continued.state.phase).toBe('flameSelection');
   });
 
@@ -58,6 +61,8 @@ describe('authoritative Round Summary', () => {
     const clear = dispatch(clearState(0), { type: 'PLAY', hand: 'sixes', dieIds: [0] }, constant()).state;
     const continued = dispatch(clear, { type: 'CONTINUE_ROUND_SUMMARY' }, constant());
     expect(continued.events[0]).toMatchObject({ type: 'MAP_TRANSITION', nodeType: 'shop' });
+    expect(isChapterMapTransition(continued.events[0])).toBe(true);
+    expect(isPlaybackBarrier(continued.events[0])).toBe(true);
     expect(continued.state.phase).toBe('shop');
 
     const bust = newRun('summary-bust', constant()).state;

@@ -1,29 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { CHAPTER_MAP_POINTS, chapterMapNodeState } from '../components/RunMapTransition';
+import { CHAPTER_MAP_POINTS, CHAPTER_MAP_SLOTS, chapterMapNodeState } from '../components/RunMapTransition';
 
 describe('chapter map route geometry', () => {
-  it('keeps the authoritative 13 stops on a stable bottom, middle, top, reward route', () => {
-    expect(CHAPTER_MAP_POINTS).toHaveLength(13);
-    expect(CHAPTER_MAP_POINTS.slice(0, 5).map(point => point.row)).toEqual(Array(5).fill('bottom'));
-    expect(CHAPTER_MAP_POINTS.slice(5, 9).map(point => point.row)).toEqual(Array(4).fill('middle'));
-    expect(CHAPTER_MAP_POINTS.slice(9, 12).map(point => point.row)).toEqual(Array(3).fill('top'));
-    expect(CHAPTER_MAP_POINTS[12].row).toBe('reward');
+  it('uses a stable three-by-four board with one intentional non-node gap', () => {
+    expect(CHAPTER_MAP_SLOTS).toHaveLength(12);
+    expect(CHAPTER_MAP_SLOTS.slice(0, 4).map(point => point.row)).toEqual(Array(4).fill('bottom'));
+    expect(CHAPTER_MAP_SLOTS.slice(4, 8).map(point => point.row)).toEqual(Array(4).fill('middle'));
+    expect(CHAPTER_MAP_SLOTS.slice(8, 12).map(point => point.row)).toEqual(Array(4).fill('top'));
+    expect(CHAPTER_MAP_SLOTS.slice(0, 4).map(point => point.x)).toEqual([10, 37, 63, 90]);
+    expect(CHAPTER_MAP_SLOTS.slice(4, 8).map(point => point.x)).toEqual([90, 63, 37, 10]);
+    expect(CHAPTER_MAP_SLOTS.slice(8, 12).map(point => point.x)).toEqual([10, 37, 63, 90]);
 
-    expect(CHAPTER_MAP_POINTS.slice(0, 5).map(point => point.x)).toEqual([9, 27, 45, 63, 85]);
-    expect(CHAPTER_MAP_POINTS.slice(5, 9).map(point => point.x)).toEqual([85, 60, 35, 10]);
-    expect(CHAPTER_MAP_POINTS.slice(9, 12).map(point => point.x)).toEqual([10, 48, 85]);
-    expect(CHAPTER_MAP_POINTS[0].y).toBeGreaterThan(CHAPTER_MAP_POINTS[5].y);
-    expect(CHAPTER_MAP_POINTS[5].y).toBeGreaterThan(CHAPTER_MAP_POINTS[11].y);
+    expect(CHAPTER_MAP_POINTS).toHaveLength(11);
+    expect(CHAPTER_MAP_POINTS.map(point => point.slot)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11]);
+    expect(CHAPTER_MAP_POINTS.filter(point => point.row === 'bottom')).toHaveLength(4);
+    expect(CHAPTER_MAP_POINTS.filter(point => point.row === 'middle')).toHaveLength(4);
+    expect(CHAPTER_MAP_POINTS.filter(point => point.row === 'top')).toHaveLength(3);
   });
 
-  it('ends the main journey at the upper-right Boss and attaches the Flame reward nearby', () => {
-    const boss = CHAPTER_MAP_POINTS[11];
-    const flame = CHAPTER_MAP_POINTS[12];
-
-    expect(boss).toMatchObject({ x: 85, y: 14, row: 'top', align: 'end' });
-    expect(flame.x).toBeGreaterThan(boss.x);
-    expect(Math.abs(flame.x - boss.x)).toBeLessThanOrEqual(10);
-    expect(Math.abs(flame.y - boss.y)).toBeLessThanOrEqual(20);
+  it('starts at the lower-left and ends with the Boss at the upper-right', () => {
+    expect(CHAPTER_MAP_POINTS[0]).toMatchObject({ x: 10, y: 84, row: 'bottom', align: 'start', slot: 0 });
+    expect(CHAPTER_MAP_POINTS.at(-1)).toMatchObject({ x: 90, y: 16, row: 'top', align: 'end', slot: 11 });
+    expect(CHAPTER_MAP_POINTS[0].y).toBeGreaterThan(CHAPTER_MAP_POINTS[4].y);
+    expect(CHAPTER_MAP_POINTS[4].y).toBeGreaterThan(CHAPTER_MAP_POINTS.at(-1)!.y);
   });
 });
 

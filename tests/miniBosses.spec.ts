@@ -41,7 +41,22 @@ test('Mini-Boss map, preview, encounter label, and Neglected badges reuse the bo
   const map = page.getByTestId('run-map-transition');
   await expect(map).toHaveAttribute('data-destination', 'boss:3');
   await expect(map.locator('[aria-current="step"]')).toHaveClass(/node-mini_boss_round/);
-  await expect(map.locator('[aria-current="step"]')).toContainText('MINI-BOSS');
+  await expect(map.locator('[aria-current="step"] .node-label')).toHaveText('THE NEGLECTED');
+  await expect(map.locator('[aria-current="step"]')).not.toContainText('MINI-BOSS');
+  await expect(map.locator('[data-pulse="true"]')).toHaveCount(1);
+  expect(await map.locator('[data-pulse="true"] .run-map-node').evaluate(element => getComputedStyle(element).animationName))
+    .toContain('map-current-pulse');
+  await expect(map.locator('.map-route-segment.completed')).toHaveCount(4);
+  await expect(map.locator('.map-route-segment.upcoming')).toHaveCount(6);
+  expect(await map.locator('.map-route-segment.completed').first().evaluate(element => getComputedStyle(element).strokeDasharray)).toBe('none');
+  expect(await map.locator('.map-route-segment.upcoming').first().evaluate(element => getComputedStyle(element).strokeDasharray)).not.toBe('none');
+  expect(await page.evaluate(() => {
+    const mapRect = document.querySelector<HTMLElement>('[data-testid="run-map-transition"]')!.getBoundingClientRect();
+    const dockRect = document.querySelector<HTMLElement>('[data-testid="dice-dock"]')!.getBoundingClientRect();
+    return document.documentElement.scrollWidth <= innerWidth
+      && document.documentElement.scrollHeight <= innerHeight
+      && mapRect.bottom <= dockRect.top + 1;
+  })).toBe(true);
   await map.getByRole('button', { name: 'Continue', exact: true }).evaluate(element => (element as HTMLElement).click());
   await expect(map).toHaveCount(0);
 
@@ -78,9 +93,7 @@ test('Mini-Boss summary labels its reward and continues to Special Offer', async
   await expect(page.getByTestId('summary-gold-breakdown')).toContainText('Mini-Boss Reward');
   await expect(page.getByTestId('summary-gold-breakdown')).toContainText('+10');
   await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
-  const map = page.getByTestId('run-map-transition');
-  await expect(map).toHaveAttribute('data-destination', 'special:after-round:3');
-  await map.getByRole('button', { name: 'Continue', exact: true }).evaluate(element => (element as HTMLElement).click());
+  await expect(page.getByTestId('run-map-transition')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'SPECIAL OFFER' })).toBeVisible();
   await expect(page.getByText('Mini-Boss Reward', { exact: true })).toBeVisible();
 });

@@ -4,6 +4,7 @@ import { activeFace } from './dice';
 import { Resolver } from './effects';
 import { dispatch, newRun, validateAction } from './engine';
 import { HANDS, HAND_IDS, LOWER_HAND_IDS } from './hands';
+import { isChapterMapTransition, isPlaybackBarrier } from './playback';
 import { postBossRewardForRound, routeThrough } from './progression';
 import type { GameState, HandId, MiniBossType, RandomSource, Rank } from './types';
 
@@ -71,7 +72,11 @@ describe('six-Round encounter cadence', () => {
     expect(clear.state.lastRoundPayout?.bossRewardGold).toBe(10);
     expect(clear.events.find(event => event.type === 'GOLD_ADDED' && event.goldSource === 'bossReward')?.message)
       .toContain('Mini-Boss Reward');
-    state = dispatch(clear.state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant(.2)).state;
+    const continued = dispatch(clear.state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant(.2));
+    expect(continued.events[0]).toMatchObject({ type: 'MAP_TRANSITION', nodeType: 'special_offer' });
+    expect(isChapterMapTransition(continued.events[0])).toBe(false);
+    expect(isPlaybackBarrier(continued.events[0])).toBe(false);
+    state = continued.state;
     expect(state.phase).toBe('specialOffer');
   });
 });

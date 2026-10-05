@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { BOSSES } from '../game/bosses';
 import { chapterNumberForRound, chapterRoundForRound } from '../game/chapters';
 import { formatPlayerNumber } from '../game/copy';
-import { encounterTarget, nodeLabel, routeWindow } from '../game/progression';
+import { nodeLabel, routeWindow } from '../game/progression';
 import { SCREEN_THEMES } from '../game/screenThemes';
 import type { GameEvent, RunNode } from '../game/types';
 
@@ -12,7 +12,7 @@ const MAP_AUTO_CONTINUE_SECONDS = 3;
 const MAP_AUTO_CONTINUE_MS = MAP_AUTO_CONTINUE_SECONDS * 1000;
 const MAP_EXIT_MS = 280;
 
-type MapRow = 'bottom' | 'middle' | 'top' | 'reward';
+type MapRow = 'bottom' | 'middle' | 'top';
 type MapAlignment = 'start' | 'center' | 'end';
 type MapNodeState = 'completed' | 'current' | 'upcoming';
 
@@ -27,88 +27,65 @@ export interface ChapterMapPoint {
   y: number;
   row: MapRow;
   align: MapAlignment;
+  slot: number;
 }
 
-/** Fixed normalized anchors keep the route stable while the current card expands around its stop. */
-export const CHAPTER_MAP_POINTS: readonly ChapterMapPoint[] = [
-  { x: 9, y: 87, row: 'bottom', align: 'start' },
-  { x: 27, y: 87, row: 'bottom', align: 'center' },
-  { x: 45, y: 87, row: 'bottom', align: 'center' },
-  { x: 63, y: 87, row: 'bottom', align: 'center' },
-  { x: 85, y: 87, row: 'bottom', align: 'end' },
-  { x: 85, y: 52, row: 'middle', align: 'end' },
-  { x: 60, y: 52, row: 'middle', align: 'center' },
-  { x: 35, y: 52, row: 'middle', align: 'center' },
-  { x: 10, y: 52, row: 'middle', align: 'start' },
-  { x: 10, y: 14, row: 'top', align: 'start' },
-  { x: 48, y: 14, row: 'top', align: 'center' },
-  { x: 85, y: 14, row: 'top', align: 'end' },
-  { x: 94, y: 34, row: 'reward', align: 'end' },
+/** Twelve normalized board slots form three four-position bands. Slot 9 is an intentional gap. */
+export const CHAPTER_MAP_SLOTS: readonly ChapterMapPoint[] = [
+  { x: 10, y: 84, row: 'bottom', align: 'start', slot: 0 },
+  { x: 37, y: 84, row: 'bottom', align: 'center', slot: 1 },
+  { x: 63, y: 84, row: 'bottom', align: 'center', slot: 2 },
+  { x: 90, y: 84, row: 'bottom', align: 'end', slot: 3 },
+  { x: 90, y: 50, row: 'middle', align: 'end', slot: 4 },
+  { x: 63, y: 50, row: 'middle', align: 'center', slot: 5 },
+  { x: 37, y: 50, row: 'middle', align: 'center', slot: 6 },
+  { x: 10, y: 50, row: 'middle', align: 'start', slot: 7 },
+  { x: 10, y: 16, row: 'top', align: 'start', slot: 8 },
+  { x: 37, y: 16, row: 'top', align: 'center', slot: 9 },
+  { x: 63, y: 16, row: 'top', align: 'center', slot: 10 },
+  { x: 90, y: 16, row: 'top', align: 'end', slot: 11 },
 ] as const;
 
+const NODE_SLOT_INDEXES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11] as const;
+export const CHAPTER_MAP_POINTS: readonly ChapterMapPoint[] = NODE_SLOT_INDEXES.map(index => CHAPTER_MAP_SLOTS[index]);
+
 const ROUTE_SEGMENTS = [
-  'M 9 87 L 27 87',
-  'M 27 87 L 45 87',
-  'M 45 87 L 63 87',
-  'M 63 87 L 85 87',
-  'M 85 87 C 96 87, 97 52, 85 52',
-  'M 85 52 L 60 52',
-  'M 60 52 L 35 52',
-  'M 35 52 L 10 52',
-  'M 10 52 C 2 52, 2 14, 10 14',
-  'M 10 14 L 48 14',
-  'M 48 14 L 85 14',
-  'M 85 14 C 96 14, 98 27, 94 34',
+  'M 10 84 L 37 84',
+  'M 37 84 L 63 84',
+  'M 63 84 L 90 84',
+  'M 90 84 C 98 84, 98 50, 90 50',
+  'M 90 50 L 63 50',
+  'M 63 50 L 37 50',
+  'M 37 50 L 10 50',
+  'M 10 50 C 2 50, 2 16, 10 16',
+  'M 10 16 L 63 16',
+  'M 63 16 L 90 16',
 ] as const;
 
 function compactGlyph(node: RunNode) {
   if (node.type === 'normal_round') return formatPlayerNumber(chapterRoundForRound(node.round));
-  if (node.type === 'shop') return '¤';
-  if (node.type === 'mini_boss_round') return '◇';
-  if (node.type === 'special_offer') return '◆';
+  if (node.type === 'shop') return '$';
+  if (node.type === 'mini_boss_round') return '◆';
   if (node.type === 'boss_round') return '!';
-  return '🔥';
+  return '•';
 }
 
-function visibleNodeCopy(node: RunNode) {
-  const target = encounterTarget(node);
-  if (node.type === 'normal_round') return {
-    label: `R${formatPlayerNumber(chapterRoundForRound(node.round))}`,
-    detail: target === null ? null : `Goal ${formatPlayerNumber(target)}`,
-  };
-  if (node.type === 'shop') return {
-    label: 'SHOP',
-    detail: `Prepare for R${formatPlayerNumber(chapterRoundForRound(node.round))}`,
-  };
-  if (node.type === 'mini_boss_round') return {
-    label: 'MINI-BOSS',
-    detail: node.boss ? BOSSES[node.boss].name : null,
-  };
-  if (node.type === 'special_offer') return { label: 'SPECIAL OFFER', detail: 'Midpoint reward' };
-  if (node.type === 'boss_round') return {
-    label: 'BOSS',
-    detail: node.boss ? BOSSES[node.boss].name : null,
-  };
-  return { label: 'FLAME', detail: 'Boss reward' };
+function visibleNodeLabel(node: RunNode) {
+  if (node.type === 'normal_round') return `R${formatPlayerNumber(chapterRoundForRound(node.round))}`;
+  if (node.type === 'shop') return 'SHOP';
+  if (node.type === 'mini_boss_round' || node.type === 'boss_round') return node.boss ? BOSSES[node.boss].name : nodeLabel(node);
+  return nodeLabel(node);
 }
 
 function accessibleNodeLabel(node: RunNode, chapterNumber: number, state: MapNodeState) {
-  const target = encounterTarget(node);
-  const stateLabel = state === 'current' ? 'current' : state;
-  if (node.type === 'normal_round') {
-    return `Chapter ${chapterNumber} Round ${chapterRoundForRound(node.round)}, ${stateLabel}${target === null ? '' : `, Goal ${formatPlayerNumber(target)}`}`;
-  }
+  const stateLabel = state === 'current' ? 'current destination' : state;
+  if (node.type === 'normal_round') return `Chapter ${chapterNumber} Round ${chapterRoundForRound(node.round)}, ${stateLabel}`;
   if (node.type === 'shop') {
     return `Shop after Chapter ${chapterNumber} Round ${Math.max(1, chapterRoundForRound(node.round) - 1)}, ${stateLabel}`;
   }
-  if (node.type === 'mini_boss_round') {
-    return `Chapter ${chapterNumber} Mini-Boss${node.boss ? `, ${BOSSES[node.boss].name}` : ''}, ${stateLabel}${target === null ? '' : `, Goal ${formatPlayerNumber(target)}`}`;
-  }
-  if (node.type === 'special_offer') return `Special Offer midpoint reward, ${stateLabel}`;
-  if (node.type === 'boss_round') {
-    return `Chapter ${chapterNumber} Boss${node.boss ? `, ${BOSSES[node.boss].name}` : ''}, ${stateLabel}${target === null ? '' : `, Goal ${formatPlayerNumber(target)}`}`;
-  }
-  return `Flame Selection reward after Chapter ${chapterNumber} Boss, ${stateLabel}`;
+  if (node.type === 'mini_boss_round') return `${node.boss ? BOSSES[node.boss].name : `Chapter ${chapterNumber}`} Mini-Boss, ${stateLabel}`;
+  if (node.type === 'boss_round') return `${node.boss ? BOSSES[node.boss].name : `Chapter ${chapterNumber}`} Boss, ${stateLabel}`;
+  return `${nodeLabel(node)}, ${stateLabel}`;
 }
 
 export function RunMapTransition({ seed, event, onContinue }: { seed: string; event: GameEvent; onContinue: () => void }) {
@@ -155,7 +132,6 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
   const nodes = routeWindow(seed, destination, 2, plan);
   const destinationIndex = nodes.findIndex(node => node.id === destination);
   // The inter-Chapter Shop precedes the next route's R1 and is intentionally not a Chapter node.
-  // Anchor that preview at the route start so every board still has one clear focal point.
   const currentIndex = destinationIndex >= 0 ? destinationIndex : 0;
   const fromIndex = nodes.findIndex(node => node.id === event.fromNode);
   const activeSegmentIndex = fromIndex >= 0 && Math.abs(fromIndex - currentIndex) === 1
@@ -173,54 +149,47 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
         <span className="map-continue-fill" aria-hidden="true" />
         <Button size="sm" variant="transparent" className="map-continue-button" onClick={beginContinue} aria-label="Continue"
           title={`Automatically continues in ${countdown} second${countdown === 1 ? '' : 's'}`}>
-          <span>Continue</span><span className="map-continue-countdown" aria-hidden="true">{countdown}</span>
+          <span>CONTINUE</span><span className="map-continue-countdown" data-testid="map-countdown" aria-hidden="true">{countdown}</span>
         </Button>
       </div>
     </div>
 
     <div className="run-map-track" aria-label={`Chapter ${chapterNumber} route`} data-testid="run-map-track" data-chapter={chapterNumber}
-      data-tutorial="chapter-map" data-current-node={nodes[currentIndex]?.id}>
+      data-tutorial="chapter-map" data-current-node={nodes[currentIndex]?.id} data-slot-count={CHAPTER_MAP_SLOTS.length}>
       <svg className="chapter-map-route" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
         {ROUTE_SEGMENTS.map((path, index) => {
-          const rewardConnector = index === ROUTE_SEGMENTS.length - 1;
           const complete = index < currentIndex;
           const active = index === activeSegmentIndex;
-          const progress = index / (ROUTE_SEGMENTS.length - 2);
+          const progress = index / Math.max(1, ROUTE_SEGMENTS.length - 1);
           const miniWeight = Math.round((1 - Math.min(1, progress)) * 100);
-          const arcColor = rewardConnector ? '#EF4444' : `color-mix(in srgb, ${miniBossColor} ${miniWeight}%, ${bossColor})`;
+          const arcColor = `color-mix(in srgb, ${miniBossColor} ${miniWeight}%, ${bossColor})`;
           return <path key={path} d={path} pathLength="1"
-            className={`map-route-segment ${rewardConnector ? 'reward-connector' : ''} ${complete ? 'completed' : 'upcoming'} ${active ? `route-active route-${event.direction ?? 'forward'}` : ''}`}
+            className={`map-route-segment ${complete ? 'completed' : 'upcoming'} ${active ? `route-active route-${event.direction ?? 'forward'}` : ''}`}
             data-segment-index={index} data-testid={active ? 'active-map-connector' : undefined}
             style={{ '--segment-color': arcColor } as React.CSSProperties} />;
         })}
       </svg>
 
-      <span className="map-start-label" aria-hidden="true">START</span>
-      <span className="map-boss-label" aria-hidden="true">CHAPTER BOSS</span>
       <div className="chapter-map-nodes" role="list">
         {nodes.map((node, index) => {
           const point = CHAPTER_MAP_POINTS[index];
           if (!point) return null;
           const state = chapterMapNodeState(index, currentIndex);
-          const progress = index / Math.max(1, nodes.length - 2);
+          const displayNode = state === 'current' && event.boss ? { ...node, boss: event.boss } : node;
+          const progress = index / Math.max(1, nodes.length - 1);
           const miniWeight = Math.round((1 - Math.min(1, progress)) * 100);
-          const arcColor = node.type === 'special_offer' ? '#2ED68F'
-            : node.type === 'flame_selection' ? '#EF4444'
-              : `color-mix(in srgb, ${miniBossColor} ${miniWeight}%, ${bossColor})`;
-          const copy = visibleNodeCopy(node);
+          const arcColor = `color-mix(in srgb, ${miniBossColor} ${miniWeight}%, ${bossColor})`;
           return <div key={node.id} className={`run-map-stop row-${point.row} align-${point.align} is-${state}`}
             role="listitem" data-testid={`chapter-map-node-${index}`} data-node-id={node.id} data-node-kind={node.type}
-            data-node-label={nodeLabel(node)} data-node-index={index} data-row={point.row} data-state={state}
-            data-map-x={point.x} data-map-y={point.y} data-attached-to={node.type === 'flame_selection' ? 'boss' : undefined}
+            data-node-label={nodeLabel(node)} data-node-index={index} data-slot-index={point.slot} data-row={point.row} data-state={state}
+            data-map-x={point.x} data-map-y={point.y} data-pulse={state === 'current' ? 'true' : undefined}
             style={{ left: `${point.x}%`, top: `${point.y}%`, '--node-arc-color': arcColor } as React.CSSProperties}>
             <div className={`run-map-node node-${node.type}`} aria-current={state === 'current' ? 'step' : undefined}
-              aria-label={accessibleNodeLabel(node, chapterNumber, state)} title={accessibleNodeLabel(node, chapterNumber, state)}
+              aria-label={accessibleNodeLabel(displayNode, chapterNumber, state)} title={accessibleNodeLabel(displayNode, chapterNumber, state)}
               data-tutorial={state === 'current' ? 'chapter-map-current' : undefined}>
-              {(state !== 'current' || node.type !== 'normal_round') &&
-                <span className="node-glyph" aria-hidden="true">{compactGlyph(node)}</span>}
+              {state !== 'current' && <span className="node-glyph" aria-hidden="true">{compactGlyph(node)}</span>}
               {state === 'current' && <span className="current-node-copy">
-                <span className="node-label">{copy.label}</span>
-                {copy.detail && <span className="node-target">{copy.detail}</span>}
+                <span className="node-label">{visibleNodeLabel(displayNode)}</span>
               </span>}
             </div>
           </div>;

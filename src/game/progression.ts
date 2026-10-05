@@ -38,14 +38,12 @@ export function chapterRoute(seed: string, chapterNumber: number, plan?: Chapter
     encounterNode(firstRound + 1),
     shopNodeBefore(miniBossRound),
     encounterNode(miniBossRound, miniBoss),
-    specialOfferNodeAfter(miniBossRound),
     shopNodeBefore(firstRound + 3),
     encounterNode(firstRound + 3),
     shopNodeBefore(firstRound + 4),
     encounterNode(firstRound + 4),
     shopNodeBefore(bossRound),
     encounterNode(bossRound, boss),
-    flameNodeAfter(bossRound),
   ];
 }
 
