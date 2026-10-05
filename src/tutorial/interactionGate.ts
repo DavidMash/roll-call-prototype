@@ -41,7 +41,15 @@ function queryTargets(selectors: string[]) {
   const matches = selectors.flatMap(selector =>
     Array.from(document.querySelectorAll<HTMLElement>(selector)),
   );
-  return Array.from(new Set(matches)).filter(element => element.isConnected);
+  return Array.from(new Set(matches)).filter(element => element.isConnected && tutorialTargetIsVisible(element));
+}
+
+function tutorialTargetIsVisible(element: HTMLElement) {
+  const style = window.getComputedStyle(element);
+  const bounds = element.getBoundingClientRect();
+  return style.display !== 'none' && style.visibility !== 'hidden'
+    && element.getAttribute('aria-hidden') !== 'true'
+    && bounds.width > 0 && bounds.height > 0 && element.getClientRects().length > 0;
 }
 
 function restoreAttributes(gate: ActiveGate) {
@@ -105,7 +113,12 @@ function refreshGate(gate: ActiveGate) {
     element.setAttribute('aria-disabled', 'true');
     element.setAttribute('data-tutorial-gated', 'true');
   });
-  gate.observer?.observe(document.body, { childList: true, subtree: true });
+  gate.observer?.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class', 'style', 'hidden', 'disabled', 'aria-hidden'],
+  });
 }
 
 function queueRefresh() {
@@ -151,6 +164,15 @@ function gateKeydown(event: KeyboardEvent) {
   }
 }
 
+function gateKeyup(event: KeyboardEvent) {
+  if (!activeGate) return;
+  if (event.key === 'Tab' || event.key === 'Escape' || !isWithinAllowed(event.target)) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+  }
+}
+
 function gateFocus(event: FocusEvent) {
   if (!activeGate || isWithinAllowed(event.target)) return;
   event.stopPropagation();
@@ -158,10 +180,12 @@ function gateFocus(event: FocusEvent) {
 }
 
 if (typeof window !== 'undefined') {
-  ['pointerdown', 'mousedown', 'touchstart', 'click', 'dblclick', 'contextmenu'].forEach(
+  ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'click', 'auxclick', 'dblclick', 'contextmenu'].forEach(
     eventName => document.addEventListener(eventName, blockEvent, true),
   );
   window.addEventListener('keydown', gateKeydown, true);
+  window.addEventListener('keyup', gateKeyup, true);
+  window.addEventListener('resize', queueRefresh, true);
   document.addEventListener('focusin', gateFocus, true);
 }
 
@@ -191,5 +215,6 @@ export function releaseTutorialInteractionGate(expectedGeneration?: number) {
 }
 
 export function tutorialTargetsExist(selectors: string[]) {
-  return selectors.length === 0 || selectors.every(selector => document.querySelector(selector) !== null);
+  return selectors.length === 0 || selectors.every(selector =>
+    Array.from(document.querySelectorAll<HTMLElement>(selector)).some(tutorialTargetIsVisible));
 }

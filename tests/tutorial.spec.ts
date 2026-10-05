@@ -188,16 +188,30 @@ test('required reroll step advances only through the real game action', async ({
 
   await page.getByRole('button', { name: /^Die 1, face 1,/ }).evaluate((element: HTMLButtonElement) => element.click());
   await expect(page.getByRole('button', { name: /^Die 1, face 1,/ })).toHaveAttribute('aria-pressed', 'false');
+  await page.getByTestId('scorecard-row-pair').evaluate((element: HTMLButtonElement) => element.click());
+  await expect(page.getByTestId('scorecard-row-pair')).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('button', { name: 'Open menu', exact: true }).evaluate(element => {
+    element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' }));
+    element.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch' }));
+    element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    element.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
+  });
+  await expect(page.getByRole('dialog', { name: 'Menu' })).toHaveCount(0);
   await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
   await expect(page.locator('.driver-popover')).toContainText('SELECT THIS DIE');
   await expect(page.getByText('Action unavailable')).toHaveCount(0);
 
   await page.getByRole('button', { name: /^Die 2, face 2,/ }).click();
   await expect(page.locator('.driver-popover')).toContainText('NOW REROLL IT');
+  await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(2);
+  expect(await page.getByTestId('tutorial-highlight-region').evaluateAll(regions =>
+    regions.map(region => region.getAttribute('data-interactive')))).toEqual(['false', 'true']);
   await expect(page.getByTestId('manual-reroll')).toBeFocused();
   await expect(page.getByRole('button', { name: /^Die 2, face 2,/ })).toHaveAttribute('aria-disabled', 'true');
   await page.getByTestId('manual-reroll').click();
-  await expect(page.locator('.driver-popover')).toContainText('NICE');
+  await expect(page.locator('.driver-popover-title')).toHaveText('THREE OF A KIND');
+  await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(4);
   await expect(page.getByRole('button', { name: /^Die 2, face 1,/ })).toBeVisible();
 });
 
@@ -209,7 +223,7 @@ test('Three of a Kind uses separate highlights and gates PLAY until selection is
   await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
   await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
 
-  await expect(page.locator('.driver-popover-title')).toHaveText('THREE OF A KIND');
+  await expect(page.locator('.driver-popover-title')).toHaveText('SELECT THE HAND');
   const regions = page.getByTestId('tutorial-highlight-region');
   await expect(regions).toHaveCount(4);
   await expect(page.getByTestId('scorecard-row-threeKind')).not.toHaveAttribute('aria-disabled', 'true');
@@ -222,6 +236,23 @@ test('Three of a Kind uses separate highlights and gates PLAY until selection is
   await expect(page.getByTestId('play-action')).toBeFocused();
   await expect(page.getByTestId('play-action')).not.toHaveAttribute('aria-disabled', 'true');
   await expect(page.getByTestId('scorecard-row-threeKind')).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(5);
+  expect(await page.getByTestId('tutorial-highlight-region').evaluateAll(regions =>
+    regions.filter(region => region.getAttribute('data-interactive') === 'true').length)).toBe(1);
+
+  await page.getByTestId('play-action').click();
+  await expect(page.locator('.driver-popover-title')).toHaveText('AFTER YOU PLAY');
+  await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
+  await expect(page.locator('.driver-popover-title')).toHaveText('YOUR TURN');
+  await expect(page.locator('.driver-popover')).toContainText("You've got it. Keep playing hands until you reach the Goal.");
+  await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
+  await expect(page.locator('.driver-popover')).toHaveCount(0);
+  await expect(page.locator('[data-tutorial-gated]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Open menu', exact: true })).not.toHaveAttribute('aria-disabled', 'true');
+  await page.getByTestId('scorecard-row-pair').click();
+  await expect(page.getByTestId('scorecard-row-pair')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Open menu', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Menu' })).toBeVisible();
 });
 
 test('Shop Training and Bonus placement expose only the current atomic action', async ({ page }) => {
@@ -231,6 +262,8 @@ test('Shop Training and Bonus placement expose only the current atomic action', 
 
   const unrelatedTraining = page.locator('[data-tutorial^="training-"]:not([data-tutorial="training-fullHouse"]) .training-action').first();
   await expect(page.locator('[data-tutorial="training-fullHouse"] .training-action')).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('[data-tutorial="training-fullHouse"] .training-action')).toHaveClass(/tutorial-interactive/);
+  await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(1);
   await expect(unrelatedTraining).toHaveAttribute('aria-disabled', 'true');
   const goldBefore = await page.getByTestId('stat-gold').textContent();
   await unrelatedTraining.evaluate((element: HTMLButtonElement) => element.click());
@@ -243,11 +276,16 @@ test('Shop Training and Bonus placement expose only the current atomic action', 
   }
   await expect(page.locator('.driver-popover-title')).toHaveText('BUY BONUS');
   await expect(page.locator('[data-tutorial="enhancement-bonus"] .offer-action')).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('[data-tutorial="enhancement-bonus"] .offer-action')).toHaveClass(/tutorial-interactive/);
   await expect(page.locator('[data-tutorial^="enhancement-"]:not([data-tutorial="enhancement-bonus"]) .offer-action').first()).toHaveAttribute('aria-disabled', 'true');
   await page.locator('[data-tutorial="enhancement-bonus"] .offer-action').click();
-  await expect(page.locator('.driver-popover-title')).toHaveText('PLACE BONUS');
+  await expect(page.locator('.driver-popover-title')).toHaveText('PUT IT HERE');
+  await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(2);
   await expect(page.locator('[data-tutorial="enhancement-bonus"] .offer-action')).toHaveAttribute('aria-disabled', 'true');
   await expect(page.locator('[data-tutorial="die-2"] .die')).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('[data-tutorial="die-2"] .die')).toHaveClass(/tutorial-interactive/);
+  await page.locator('[data-tutorial="die-1"] .die').evaluate((element: HTMLButtonElement) => element.click());
+  await expect(page.locator('.driver-popover-title')).toHaveText('PUT IT HERE');
   await page.locator('[data-tutorial="die-2"] .die').click();
   await expect(page.locator('.driver-popover')).toContainText('physical face');
 });
@@ -265,11 +303,46 @@ test('Workout purchase and placement use separate guided targets', async ({ page
   await expect(page.locator('.driver-popover-title')).toHaveText('BUY WORKOUT');
   await page.locator('[data-tutorial="enhancement-workout"] .offer-action').click();
   await expect(page.locator('.driver-popover-title')).toHaveText('PLACE WORKOUT');
+  await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(2);
   await expect(page.locator('[data-tutorial="die-1"] .die')).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('[data-tutorial="die-1"] .die')).toHaveClass(/tutorial-interactive/);
   await expect(page.locator('[data-tutorial="die-2"] .die')).toHaveAttribute('aria-disabled', 'true');
   await page.locator('[data-tutorial="die-1"] .die').click();
   await expect(page.locator('.driver-popover')).toHaveCount(0);
   await expect(page.locator('[data-tutorial="die-1"] .die')).not.toHaveAttribute('data-tutorial-gated');
+});
+
+test('first Flame assignment highlights and exposes every legal destination die only', async ({ page }) => {
+  const { session } = newTutorialSession();
+  session.game.round = 6;
+  session.game.phase = 'flameSelection';
+  session.game.boss = null;
+  session.game.shop = null;
+  session.game.roundSummary = null;
+  session.game.flameSelection = {
+    offers: [
+      { id: 71, flame: 'minigun' },
+      { id: 72, flame: 'doubleDown' },
+      { id: 73, flame: 'straightShooter' },
+    ],
+    acquired: false,
+  };
+  session.scenario.completedBeatIds.push('flame-selection-1');
+  await resumeSession(page, session);
+
+  await expect(page.locator('.driver-popover-title')).toHaveText('CHOOSE A FLAME');
+  await page.getByTestId('flame-offer-minigun').locator('.flame-offer-action').click();
+  await expect(page.locator('.driver-popover-title')).toHaveText('ASSIGN YOUR FLAME');
+  await expect(page.locator('.driver-popover')).toContainText('Put the Flame on any die you like.');
+  await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(6);
+  await expect(page.locator('[data-tutorial="dice-dock"] .die')).toHaveCount(5);
+  expect(await page.locator('[data-tutorial="dice-dock"] .die').evaluateAll(dice => dice.every(die =>
+    !die.hasAttribute('data-tutorial-gated') && die.classList.contains('tutorial-interactive')))).toBe(true);
+  await expect(page.getByRole('button', { name: /CONTINUE TO SHOP/ })).toHaveAttribute('aria-disabled', 'true');
+  await page.getByRole('button', { name: /CONTINUE TO SHOP/ }).evaluate((element: HTMLButtonElement) => element.click());
+  await expect(page.locator('.driver-popover-title')).toHaveText('ASSIGN YOUR FLAME');
+  await page.locator('[data-tutorial="die-3"] .die').click();
+  await expect(page.locator('.driver-popover-title')).toHaveText('FLAMES');
 });
 
 test('first Stoke moves focus from the Flame cap into the modal controls', async ({ page }) => {
@@ -314,7 +387,11 @@ for (const branch of [
     await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(2);
     await firstRow.click();
     await expect(page.getByTestId('play-action')).toBeFocused();
+    await expect(page.getByTestId('play-action')).toHaveClass(/tutorial-interactive/);
     await expect(firstRow).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(3);
+    expect(await page.getByTestId('tutorial-highlight-region').evaluateAll(regions =>
+      regions.filter(region => region.getAttribute('data-interactive') === 'true').length)).toBe(1);
 
     if (branch.setup) {
       await page.getByTestId('play-action').click();
@@ -357,11 +434,11 @@ test('a split required step safely resumes from authoritative state after refres
   await expect(page.getByRole('button', { name: /^Die 2, face 2,/ })).toBeFocused();
 });
 
-test('a disappearing required target releases the gate and skips the impossible requirement', async ({ page }) => {
+test('a hidden required target releases the gate and skips the impossible requirement', async ({ page }) => {
   await enterTutorial(page);
   for (let index = 0; index < 3; index++) await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
-  await page.locator('[data-tutorial="die-2"] .die').evaluate(element => element.remove());
-  await expect(page.locator('.driver-popover-title')).toHaveText('NICE');
+  await page.locator('[data-tutorial="die-2"] .die').evaluate((element: HTMLElement) => { element.style.display = 'none'; });
+  await expect(page.locator('.driver-popover-title')).toHaveText('THREE OF A KIND');
   await expect(page.getByRole('button', { name: 'Open menu', exact: true })).not.toHaveAttribute('data-tutorial-gated');
 });
 

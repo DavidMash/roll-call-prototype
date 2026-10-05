@@ -24,9 +24,10 @@ function descriptionHtml(beat: TutorialBeat): string {
 }
 
 function queryElements(selectors: string[]) {
-  return Array.from(new Set(selectors.flatMap(selector =>
+  const matches = Array.from(new Set(selectors.flatMap(selector =>
     Array.from(document.querySelectorAll<HTMLElement>(selector)),
-  ))).filter(element => element.isConnected);
+  ))).filter(element => element.isConnected && element.getClientRects().length > 0);
+  return matches.filter(element => !matches.some(other => other !== element && other.contains(element)));
 }
 
 function useSpotlightRects(highlightTargets: string[], interactiveTargets: string[], enabled: boolean) {

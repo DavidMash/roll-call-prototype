@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { dispatchTutorial, newTutorialSession, tutorialRequiredBeatIds as R } from './scenario';
-import { activeTutorialBeat } from './tutorialSteps';
+import { acknowledgeBeat, dispatchTutorial, newTutorialSession, tutorialRequiredBeatIds as R } from './scenario';
+import { activeTutorialBeat, normalizeTutorialBeatTargets } from './tutorialSteps';
 import type { TutorialSession, TutorialUiState } from './types';
 
 const ui = (overrides: Partial<TutorialUiState> = {}): TutorialUiState => ({
@@ -55,6 +55,15 @@ describe('tutorial contextual lessons', () => {
 });
 
 describe('tutorial guided interaction beats', () => {
+  it('normalizes every interactive selector into the visible highlight set', () => {
+    const normalized = normalizeTutorialBeatTargets({
+      id: 'invariant', body: [], target: '.card', highlightTargets: ['.card'],
+      interactiveTargets: ['.card button'], blocking: false,
+    });
+    expect(normalized.highlightTargets).toEqual(['.card', '.card button']);
+    expect(normalized.interactiveTargets?.every(target => normalized.highlightTargets?.includes(target))).toBe(true);
+  });
+
   it('splits the first reroll and first scored hand using live selection state', () => {
     const { session } = newTutorialSession();
     session.scenario.completedBeatIds.push('welcome', 'goal', 'scorecard');
@@ -112,6 +121,69 @@ describe('tutorial guided interaction beats', () => {
     expect(activeTutorialBeat(session, ui({ selectedOffer: workoutId }))).toMatchObject({
       id: R.workout,
       interactiveTargets: ['[data-tutorial="die-1"] .die'],
+    });
+  });
+
+  it('returns control after the first scored hand instead of prescribing later Round 1 hands', () => {
+    let { session } = newTutorialSession();
+    session = action(session, { type: 'MANUAL_REROLL', dieIds: [1] });
+    session = action(session, { type: 'PLAY', hand: 'threeKind', dieIds: [0, 1, 2] });
+    session.scenario.completedBeatIds.push('welcome', 'goal', 'scorecard', 'c1-r1-nice', 'c1-r1-pips-mult', 'c1-r1-after-play');
+
+    const yourTurn = activeTutorialBeat(session, ui());
+    expect(yourTurn).toMatchObject({
+      id: 'c1-r1-your-turn',
+      body: ["You've got it. Keep playing hands until you reach the Goal."],
+      interactiveTargets: [],
+    });
+
+    session = acknowledgeBeat(session, 'c1-r1-your-turn');
+    expect(activeTutorialBeat(session, ui())).toBeNull();
+    expect(dispatchTutorial(session, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }).error).toBeUndefined();
+  });
+
+  it('keeps the Round 2 and Workout Twos lessons multi-target and moves PLAY into its own beat', () => {
+    const { session } = newTutorialSession();
+    session.game.round = 2;
+    session.game.phase = 'round';
+    expect(activeTutorialBeat(session, ui())).toMatchObject({
+      id: 'c1-r2-two-pair',
+      highlightTargets: expect.arrayContaining([
+        '[data-testid="scorecard-row-twoPair"]',
+        '[data-testid="scorecard-row-fullHouse"]',
+        '[data-tutorial="die-1"] .die',
+      ]),
+    });
+    session.scenario.completedBeatIds.push('c1-r2-two-pair');
+    expect(activeTutorialBeat(session, ui())).toMatchObject({
+      id: 'c1-r2-choice',
+      highlightTargets: expect.arrayContaining([
+        '[data-tutorial="die-1"] .die',
+        '[data-testid="scorecard-row-twos"]',
+        '[data-tutorial="reroll-button"]',
+      ]),
+      interactiveTargets: [],
+    });
+
+    session.scenario.completedBeatIds.push('c1-r2-choice');
+    expect(activeTutorialBeat(session, ui())).toMatchObject({
+      id: 'c1-r2-select-twos',
+      interactiveTargets: ['[data-testid="scorecard-row-twos"]'],
+    });
+    expect(activeTutorialBeat(session, ui({ selection: { hand: 'twos', dieIds: [0] } }))).toMatchObject({
+      id: R.r2Twos,
+      interactiveTargets: ['[data-tutorial="play-action"]'],
+    });
+
+    session.game.round = 4;
+    session.scenario.completedBeatIds.push('c1-r4-familiar');
+    expect(activeTutorialBeat(session, ui())).toMatchObject({
+      id: 'c1-r4-select-twos',
+      highlightTargets: expect.arrayContaining([
+        '[data-testid="scorecard-row-twos"]',
+        '[data-tutorial="die-1"] .die',
+      ]),
+      interactiveTargets: ['[data-testid="scorecard-row-twos"]'],
     });
   });
 

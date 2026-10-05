@@ -198,10 +198,6 @@ export function tutorialActionError(session: TutorialSession, action: Action): s
   if (state.round === 1 && state.phase === 'round') {
     if (requires(REQUIRED_BEATS.reroll) && (action.type !== 'MANUAL_REROLL' || action.dieIds.length !== 1 || action.dieIds[0] !== 1)) return 'Select D2 and use one Reroll.';
     if (!requires(REQUIRED_BEATS.reroll) && requires(REQUIRED_BEATS.threeKind) && (action.type !== 'PLAY' || action.hand !== 'threeKind' || action.dieIds.some(id => ![0, 1, 2].includes(id)))) return 'Play Three of a Kind with the three 1s.';
-    if (!requires(REQUIRED_BEATS.threeKind) && requires(REQUIRED_BEATS.pair) && (action.type !== 'PLAY' || action.hand !== 'pair')) return 'Play the Pair of 4s.';
-    if (!requires(REQUIRED_BEATS.pair) && requires(REQUIRED_BEATS.sixes) && (action.type !== 'PLAY' || action.hand !== 'sixes')) return 'Try Sixes next.';
-    if (!requires(REQUIRED_BEATS.sixes) && requires(REQUIRED_BEATS.fives) && (action.type !== 'PLAY' || action.hand !== 'fives')) return 'Try Fives next.';
-    if (!requires(REQUIRED_BEATS.fives) && requires(REQUIRED_BEATS.straight) && (action.type !== 'PLAY' || action.hand !== 'smallStraight')) return 'Play the Small Straight.';
   }
   if (state.phase === 'shop' && state.round === 1) {
     if (requires(REQUIRED_BEATS.training) && (action.type !== 'TRAIN_HAND' || action.hand !== 'fullHouse')) return 'Train Full House once.';
