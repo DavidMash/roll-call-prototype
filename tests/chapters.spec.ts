@@ -14,6 +14,7 @@ async function installRun(page: import('@playwright/test').Page, state: GameStat
 }
 
 test('Chapter splash leads into one complete current-Chapter map without revealing encounters', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const seed = 'chapter-presentation';
   const expected = newRun(seed).state.chapterPlans[1]!;
   await page.goto(`/?seed=${seed}&speed=normal`);
@@ -32,6 +33,11 @@ test('Chapter splash leads into one complete current-Chapter map without reveali
   await expect(splash).toHaveAttribute('data-end-color', BOSSES[expected.boss].primary);
   await expect(splash).not.toContainText(BOSSES[expected.miniBoss].name);
   await expect(splash).not.toContainText(BOSSES[expected.boss].name);
+  expect(await page.evaluate(() => {
+    const main = document.querySelector<HTMLElement>('main')!.getBoundingClientRect();
+    const dock = document.querySelector<HTMLElement>('[data-testid="dice-dock"]')!.getBoundingClientRect();
+    return document.documentElement.scrollHeight <= innerHeight && main.bottom <= dock.top + 1 && dock.bottom <= innerHeight;
+  })).toBe(true);
 
   const map = page.getByTestId('run-map-transition');
   await expect(map).toBeVisible({ timeout: 4_000 });
@@ -46,6 +52,12 @@ test('Chapter splash leads into one complete current-Chapter map without reveali
   await expect(map.locator('.node-shop')).toHaveCount(5);
   await expect(map.locator('.node-special_offer .node-glyph')).toHaveCSS('color', 'rgb(46, 214, 143)');
   await expect(map.locator('.node-flame_selection')).toHaveCount(1);
+  expect(await page.evaluate(() => {
+    const hud = document.querySelector<HTMLElement>('.top-hud')!.getBoundingClientRect();
+    const main = document.querySelector<HTMLElement>('main')!.getBoundingClientRect();
+    const dock = document.querySelector<HTMLElement>('[data-testid="dice-dock"]')!.getBoundingClientRect();
+    return document.documentElement.scrollHeight <= innerHeight && main.top >= hud.bottom && main.bottom <= dock.top + 1 && dock.bottom <= innerHeight;
+  })).toBe(true);
 });
 
 test('finishing the Boss reward enters a fresh Chapter once before its map and preserves the inter-Chapter Shop', async ({ page }) => {

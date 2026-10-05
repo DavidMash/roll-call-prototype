@@ -7,7 +7,7 @@ import type { PlaybackSpeed } from '../useGame';
 import type { DiceDisplay } from '../uiSettings';
 import { formatPlayerNumber } from '../game/copy';
 import { activeSpecialOfferStatusItems } from '../game/specialOffers';
-import { chapterLabel } from '../game/chapters';
+import { chapterPosition } from '../game/chapters';
 import type { FlameDetailsTarget } from './FlameDetailsModal';
 
 function HudStat({ testId, icon, label, value }: { testId: string; icon: string; label: string; value: number }) {
@@ -35,6 +35,7 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
   const [drawerOpen, setDrawerOpen] = useState(false);
   const hearts = Array.from({ length: CONFIG.maxLives }, (_, index) => index < board.lives ? '♥' : '♡').join(' ');
   const specialOfferStatuses = activeSpecialOfferStatusItems(board.specialOfferEffects);
+  const chapter = chapterPosition(board.round);
   function launch(action: () => void) {
     setDrawerOpen(false);
     onMenuOpenChange?.(false);
@@ -49,10 +50,12 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
     <Group className="top-hud-row" justify="space-between" wrap="nowrap">
       <Text className="game-title">ROLL CALL</Text>
       <Group className="hud-stats" gap="xs" wrap="nowrap">
-        <div className="hud-stat" data-testid="stat-round" aria-label={chapterLabel(board.round).replace('C', 'Chapter ').replace(' R', ', Round ')}>
-          <span aria-hidden="true" className="hud-stat-icon">R</span>
-          <span className="hud-stat-label">Stage</span>
-          <strong>{chapterLabel(board.round)}</strong>
+        <div className="hud-stat hud-stage" data-testid="stat-round"
+          aria-label={`Chapter ${formatPlayerNumber(chapter.chapterNumber)}, Round ${formatPlayerNumber(chapter.chapterRound)}`}>
+          <strong className="hud-stage-value">
+            <span className="hud-stage-segment"><span className="hud-stage-letter">C</span>{formatPlayerNumber(chapter.chapterNumber)}</span>{' '}
+            <span className="hud-stage-segment"><span className="hud-stage-letter">R</span>{formatPlayerNumber(chapter.chapterRound)}</span>
+          </strong>
         </div>
         <HudStat testId="stat-gold" icon="●" label="Gold" value={board.gold} />
         {board.phase === 'shop'

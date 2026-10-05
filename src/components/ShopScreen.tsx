@@ -51,19 +51,17 @@ export function ShopScreen({ board, event, busy, selectedOffer, setSelectedOffer
       <div className="shop-grid enhancement-grid">{shop.offers.map(item => <EnhancementCard key={item.id} offer={item} selected={selectedOffer === item.id}
         gold={board.gold} busy={busy} free={enhancementOfferIsFree(shop, item.id)} onSelect={() => setSelectedOffer(selectedOffer === item.id ? null : item.id)} />)}</div>
     </Paper>
-    <Paper p="xs" className="shop-section shop-dice-controls">
-      <Group justify="space-between" gap="xs" wrap="wrap">
-        <div><Group gap="xs"><Text fw={700} size="sm" tt="uppercase" lts=".08em">Dice Dock</Text>{offer && <Badge size="xs" color="teal">{ENHANCEMENTS[offer.enhancement].name} selected</Badge>}</Group>
+    <div className="shop-dice-controls" data-testid="shop-dice-controls" aria-label="Dice Dock controls">
+      <div className="shop-dice-controls-copy"><Group gap="xs"><Text fw={700} size="xs" tt="uppercase" lts=".08em">Dice Controls</Text>{offer && <Badge size="xs" color="teal">{ENHANCEMENTS[offer.enhancement].name} selected</Badge>}</Group>
           <Text size="xs" c="dimmed">{offer ? 'Choose a die below. Face details handle sales.' : 'Tap a die, Flame, or Enhancement strip for details.'}</Text></div>
-        <Group gap="xs">
+        <Group className="shop-dice-controls-actions" gap="xs">
           {offer && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setSelectedOffer(null)}>Cancel placement</Button>}
           {tutorialDieId !== null && <Button size="compact-xs" variant="subtle" color="orange" onClick={() => submit({ type: 'DISMISS_FLAME_TUTORIAL' })}>Dismiss Flame tip</Button>}
           <Button size="compact-xs" variant="default" disabled={busy || board.gold < diceRerollCost(shop.diceRerolls)}
             aria-label={`REROLL DICE · ${formatPlayerNumber(diceRerollCost(shop.diceRerolls))} GOLD`}
             onClick={() => submit({ type: 'REROLL_DICE' })}>REROLL DICE · {formatPlayerNumber(diceRerollCost(shop.diceRerolls))} GOLD</Button>
         </Group>
-      </Group>
-    </Paper>
+    </div>
     <div className="shop-action-dock">
       <Button size="sm" disabled={busy} aria-label={returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : 'NEXT ROUND'}
         color={returnedFromBust ? 'red' : undefined} onClick={() => submit(returnedFromBust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' })}>

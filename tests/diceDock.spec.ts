@@ -132,6 +132,7 @@ test('one mounted dock carries unchanged faces through Summary, Map, and Shop', 
 });
 
 test('Special Offer and Flame Selection retain the same compact dock grammar', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const state = detailedState('dice-dock-progression');
   const faces = state.dice.map(die => String(die.value));
   state.phase = 'specialOffer';
@@ -139,6 +140,12 @@ test('Special Offer and Flame Selection retain the same compact dock grammar', a
   await installRun(page, state);
   await expect(page.getByTestId('dice-dock').locator('.die-number')).toHaveText(faces);
   await expect(page.getByTestId('dice-dock').locator('.die-enhancement-strip')).toHaveCount(5);
+  expect(await page.evaluate(() => {
+    const hud = document.querySelector<HTMLElement>('.top-hud')!.getBoundingClientRect();
+    const main = document.querySelector<HTMLElement>('main')!.getBoundingClientRect();
+    const dock = document.querySelector<HTMLElement>('[data-testid="dice-dock"]')!.getBoundingClientRect();
+    return document.documentElement.scrollHeight <= innerHeight && main.top >= hud.bottom && main.bottom <= dock.top + 1 && dock.bottom <= innerHeight;
+  })).toBe(true);
 
   state.phase = 'flameSelection';
   state.specialOffer = null;
@@ -146,4 +153,12 @@ test('Special Offer and Flame Selection retain the same compact dock grammar', a
   await installRun(page, state);
   await expect(page.getByTestId('dice-dock').locator('.die-number')).toHaveText(faces);
   await expect(page.locator('[data-testid="dice-dock"]')).toHaveCount(1);
+  expect(await page.evaluate(() => {
+    const hud = document.querySelector<HTMLElement>('.top-hud')!.getBoundingClientRect();
+    const main = document.querySelector<HTMLElement>('main')!.getBoundingClientRect();
+    const dock = document.querySelector<HTMLElement>('[data-testid="dice-dock"]')!.getBoundingClientRect();
+    const header = document.querySelector<HTMLElement>('.phase-sticky-header')!.getBoundingClientRect();
+    return document.documentElement.scrollHeight <= innerHeight && main.top >= hud.bottom && header.top >= main.top
+      && main.bottom <= dock.top + 1 && dock.bottom <= innerHeight;
+  })).toBe(true);
 });

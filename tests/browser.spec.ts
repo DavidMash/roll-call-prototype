@@ -8,7 +8,7 @@ import { enhancementCost, ENHANCEMENTS } from '../src/game/enhancements';
 import { CONFIG } from '../src/game/config';
 import type { Action, Enhancement, GameState } from '../src/game/types';
 import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
-import { RUN_STORAGE_KEY } from '../src/game/persistence';
+import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import { enterRun, openGameMenu, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 import { specialOfferName } from '../src/game/specialOffers';
 import { chapterLabel } from '../src/game/chapters';
@@ -677,6 +677,94 @@ test('Team Training occupies one existing slot and presents itself as a special 
   expect(await page.locator('.phase-sticky-header').evaluate(element => getComputedStyle(element).position)).toBe('sticky');
   expect(await page.locator('.shop-action-dock').evaluate(element => getComputedStyle(element).position)).toBe('sticky');
   await page.screenshot({ path: test.info().outputPath('shop-mobile.png'), fullPage: true });
+});
+
+test('mobile Shop shell keeps its HUD, incoming encounter, controls, action, and persistent dice in one viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const game = await reachShop(page, findShopSeed());
+  game.round = 2;
+  await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state })),
+    [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, game] as const);
+  await page.reload();
+  await enterRun(page);
+  await expect(page.locator('.shop-screen')).toBeVisible();
+
+  const stage = page.getByTestId('stat-round');
+  await expect(stage).toHaveText('C1 R2');
+  await expect(stage.locator('.hud-stage-letter')).toHaveText(['C', 'R']);
+  await expect(stage.locator('.hud-stat-icon')).toHaveCount(0);
+  await expect(stage.locator('.hud-stat-label')).toHaveCount(0);
+  const stageColors = await stage.evaluate(element => ({
+    letters: [...element.querySelectorAll<HTMLElement>('.hud-stage-letter')].map(letter => getComputedStyle(letter).color),
+    value: getComputedStyle(element.querySelector<HTMLElement>('.hud-stage-segment')!).color,
+  }));
+  expect(new Set(stageColors.letters).size).toBe(1);
+  expect(stageColors.letters[0]).not.toBe(stageColors.value);
+
+  const header = page.locator('.phase-sticky-header');
+  const boss = page.getByTestId('boss-preview');
+  const training = page.locator('[data-tutorial="hand-training"]');
+  await expect(header).toContainText('SHOP');
+  await expect(header).toContainText('Prepare for');
+  await expect(boss).toBeVisible();
+  await expect(training).toBeVisible();
+  await expect(page.getByRole('button', { name: 'NEXT ROUND', exact: true })).toBeInViewport();
+  await expect(page.getByRole('button', { name: /^REROLL DICE · \d+ GOLD$/ })).toBeVisible();
+  await expect(page.getByTestId('dice-dock')).toBeInViewport();
+  await expect(page.locator('.dice-row')).toHaveCount(1);
+  await expect(page.getByTestId('shop-dice-controls').locator('.dice-row')).toHaveCount(0);
+  await expect(page.getByTestId('dice-dock').locator('.die')).toHaveCount(5);
+
+  const layout = await page.evaluate(() => {
+    const box = (selector: string) => {
+      const rect = document.querySelector<HTMLElement>(selector)!.getBoundingClientRect();
+      return { top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left, height: rect.height };
+    };
+    const main = document.querySelector<HTMLElement>('main')!;
+    const app = document.querySelector<HTMLElement>('.app-container')!;
+    const dock = document.querySelector<HTMLElement>('[data-testid="dice-dock"]')!;
+    const headerStyle = getComputedStyle(document.querySelector<HTMLElement>('.phase-sticky-header')!);
+    return {
+      innerHeight: window.innerHeight,
+      documentHeight: document.documentElement.scrollHeight,
+      bodyHeight: document.body.scrollHeight,
+      mainClientHeight: main.clientHeight,
+      mainScrollHeight: main.scrollHeight,
+      mainScrollTop: main.scrollTop,
+      app: box('.app-container'),
+      hud: box('.top-hud'),
+      main: box('main'),
+      header: box('.phase-sticky-header'),
+      boss: box('[data-testid="boss-preview"]'),
+      training: box('[data-tutorial="hand-training"]'),
+      controls: box('[data-testid="shop-dice-controls"]'),
+      action: box('.shop-action-dock'),
+      dock: box('[data-testid="dice-dock"]'),
+      headerPosition: headerStyle.position,
+      headerTop: headerStyle.top,
+      appPaddingBottom: Number.parseFloat(getComputedStyle(app).paddingBottom),
+      dockPaddingBottom: Number.parseFloat(getComputedStyle(dock).paddingBottom),
+    };
+  });
+  expect(layout.documentHeight).toBeLessThanOrEqual(layout.innerHeight);
+  expect(layout.bodyHeight).toBeLessThanOrEqual(layout.innerHeight);
+  expect(layout.app.bottom).toBeLessThanOrEqual(layout.innerHeight);
+  expect(layout.mainScrollHeight).toBeLessThanOrEqual(layout.mainClientHeight + 1);
+  expect(layout.mainScrollTop).toBe(0);
+  expect(layout.header.top).toBeGreaterThanOrEqual(layout.hud.bottom);
+  expect(layout.header.bottom).toBeLessThanOrEqual(layout.boss.top);
+  expect(layout.boss.bottom).toBeLessThanOrEqual(layout.training.top);
+  expect(layout.action.bottom).toBeLessThanOrEqual(layout.dock.top);
+  expect(layout.dock.bottom).toBeLessThanOrEqual(layout.innerHeight);
+  expect(layout.controls.height).toBeLessThan(60);
+  expect(layout.headerPosition).toBe('sticky');
+  expect(layout.headerTop).toBe('0px');
+  expect(layout.appPaddingBottom).toBeLessThanOrEqual(4);
+  expect(layout.dockPaddingBottom).toBeGreaterThanOrEqual(5);
+  await page.screenshot({ path: test.info().outputPath('shop-shell-mobile.png'), fullPage: true });
+
+  await page.getByRole('button', { name: /^Die 1,/ }).click();
+  await expect(page.getByRole('dialog', { name: /D1 .* MANAGE DIE/ })).toBeVisible();
 });
 
 test('full seeded run: select/play, clear, buy onto a face, reroll dice, next round, lose and export', async ({ page, context }) => {

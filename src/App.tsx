@@ -1,5 +1,5 @@
 import { Alert, Button, Container, Group, Paper, Stack, Text, Title } from '@mantine/core';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { RunInfoModal } from './components/DebugPanel';
 import { DiceDock } from './components/DiceDock';
 import { BustScreen } from './components/BustScreen';
@@ -53,8 +53,6 @@ export default function App() {
   const [gameMenuOpen, setGameMenuOpen] = useState(false);
   const [faceDetails, setFaceDetails] = useState<FaceDetailsTarget | null>(null);
   const [flameDetails, setFlameDetails] = useState<FlameDetailsTarget | null>(null);
-  const [hudHeight, setHudHeight] = useState(60);
-  const appRef = useRef<HTMLDivElement>(null);
   const normalGame = useGame(requestedSeed, initialSeed, speed, runMode === 'normal');
   const tutorialGame = useTutorialGame(speed, runMode === 'tutorial');
   const game = runMode === 'tutorial' ? tutorialGame : normalGame;
@@ -80,16 +78,6 @@ export default function App() {
       setOnboarding(next);
     }
   }, [normalGame.hasStoredRun, normalGame.state.phase, onboarding]);
-  useLayoutEffect(() => {
-    if (atLanding) return;
-    const hud = appRef.current?.querySelector<HTMLElement>('.top-hud');
-    if (!hud) return;
-    const measure = () => setHudHeight(Math.ceil(hud.getBoundingClientRect().height));
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(hud);
-    return () => observer.disconnect();
-  }, [atLanding]);
   function submit(action: Action) {
     if (busy) return;
     if (!game.submit(action)) return;
@@ -148,10 +136,9 @@ export default function App() {
     <LandingScreen resumableRun={resumableRun} resumableTutorial={resumableTutorial} onboarding={onboarding}
       onContinue={() => setRunMode('normal')} onTutorial={startTutorialFromLanding} onNewRun={startNewRunFromLanding} />
   </Container>;
-  return <Container ref={appRef} size={1180} px={{ base: 6, sm: 'sm' }} py={8}
+  return <Container size={1180} px={{ base: 6, sm: 'sm' }} py={8}
     className={`app-container screen-theme ${board.phase === 'round' ? 'active-gameplay' : ''}`}
-    data-screen-theme={theme.id} style={{ '--screen-primary': theme.accent, '--screen-secondary': theme.accentStrong,
-      '--hud-sticky-offset': `${hudHeight + 8}px` } as React.CSSProperties}>
+    data-screen-theme={theme.id} style={{ '--screen-primary': theme.accent, '--screen-secondary': theme.accentStrong } as React.CSSProperties}>
     {!showingChapterSplash && <TopHud board={board} speed={speed} setSpeed={setSpeed} diceDisplay={diceDisplay} setDiceDisplay={setDiceDisplay}
       openRunInfo={() => setRunInfoOpen(true)} openHelp={() => setHelpOpen(true)}
       openRestoreLives={() => setRestoreLivesOpen(true)} openFlameDetails={openFlameDetails} onMenuOpenChange={setGameMenuOpen}
