@@ -73,14 +73,17 @@ test('stable die anatomy keeps value clear and shared Round details read-only', 
 
   await flame.click();
   const flameModal = page.getByRole('dialog', { name: 'Straight Shooter' });
-  await expect(flameModal).toContainText('Ember · 35 / 100 Gold');
+  await expect(flameModal).toContainText('Investment: 35 / 100 Gold');
+  await expect(flameModal).toContainText('Current XMult: up to ×3.8');
   await expect(flameModal).toContainText('Play Small Straight before Large Straight');
   await expect(flameModal.getByLabel('Stoke amount for Straight Shooter')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'View Ultimate Flame details' }).click();
   const bonfireModal = page.getByRole('dialog', { name: 'Ultimate' });
-  await expect(bonfireModal).toContainText('Bonfire');
-  await expect(bonfireModal.locator('[role="progressbar"]')).toHaveCount(0);
+  await expect(bonfireModal).toContainText('BONFIRE');
+  await expect(bonfireModal).toContainText('Investment: 100 / 100 Gold');
+  await expect(bonfireModal).toContainText('Current XMult: up to ×5');
+  await expect(bonfireModal.locator('[role="progressbar"]')).toHaveCount(1);
 });
 
 test('Shop uses the same face and Flame modals for authoritative Sell and Stoke actions', async ({ page }) => {
@@ -103,8 +106,40 @@ test('Shop uses the same face and Flame modals for authoritative Sell and Stoke 
   const flameModal = page.getByRole('dialog', { name: 'Straight Shooter' });
   await flameModal.getByLabel('Stoke amount for Straight Shooter').fill('2');
   await flameModal.getByRole('button', { name: 'STOKE 2 GOLD' }).click();
-  await expect(flameModal).toContainText('Ember · 37 / 100 Gold');
+  await expect(flameModal).toContainText('Investment: 37 / 100 Gold');
   await expect(slot.getByRole('button', { name: 'View Straight Shooter Flame details, Ember at 37 of 100 Gold' })).toBeVisible();
+});
+
+test('shared Flame details show Charge capacity and keep Round, Shop, and Bonfire actions phase-correct', async ({ page }) => {
+  const state = newRun('charge-flame-details').state;
+  state.dice[0].flame = { id: 'momentum', investedGold: 25 };
+  await installRun(page, state);
+
+  await page.getByRole('button', { name: 'View Momentum Flame details, Ember at 25 of 100 Gold' }).click();
+  let modal = page.getByRole('dialog', { name: 'Momentum' });
+  await expect(modal).toContainText('Investment: 25 / 100 Gold');
+  await expect(modal).toContainText('Max Flame Contribution: +2 Max Charge');
+  await expect(modal).toContainText('Current Effect: +0.125 Charge per hand');
+  await expect(modal.getByLabel('Stoke amount for Momentum')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
+  state.phase = 'shop';
+  state.gold = 20;
+  state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  await installRun(page, state);
+  await page.getByRole('button', { name: 'View Momentum Flame details, Ember at 25 of 100 Gold' }).click();
+  modal = page.getByRole('dialog', { name: 'Momentum' });
+  await expect(modal.getByLabel('Stoke amount for Momentum')).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  state.dice[0].flame = null;
+  state.bonfires = ['momentum'];
+  await installRun(page, state);
+  await page.getByRole('button', { name: 'View Momentum Flame details' }).click();
+  modal = page.getByRole('dialog', { name: 'Momentum' });
+  await expect(modal).toContainText('Investment: 100 / 100 Gold');
+  await expect(modal).toContainText('Max Flame Contribution: +5 Max Charge');
+  await expect(modal.getByLabel('Stoke amount for Momentum')).toHaveCount(0);
 });
 
 test('one mounted dock carries unchanged faces through Summary, Map, and Shop', async ({ page }) => {

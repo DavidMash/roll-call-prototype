@@ -80,8 +80,13 @@ for (const hand of ['pair', 'twoPair'] as const) {
     const removed = initial.find(id => !action.dieIds.includes(id))!;
     const added = action.dieIds.find(id => !initial.includes(id))!;
     await die(page, removed).click();
-    await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
+    if (hand === 'pair') {
+      const upperName = ['Ones', 'Twos', 'Threes', 'Fours', 'Fives', 'Sixes'][game.dice[initial.find(id => id !== removed)!].value - 1];
+      await expect(page.getByRole('button', { name: new RegExp(`^${upperName} `) })).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeEnabled();
+    } else await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
     await die(page, added).click();
+    if (hand === 'pair') await handButton.click();
     await expect(handButton).toHaveAttribute('aria-pressed', 'true');
     await expect(die(page, removed)).toHaveAttribute('aria-pressed', 'false');
     for (const id of action.dieIds) await expect(die(page, id)).toHaveAttribute('aria-pressed', 'true');

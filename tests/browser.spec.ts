@@ -304,7 +304,9 @@ test('scorecard keeps all fourteen categories visible with simplified actionable
   await playableRow.click();
   await expect(playableRow).toHaveAttribute('aria-pressed', 'true');
   expect(await page.locator('.die[aria-pressed="true"]').count()).toBeGreaterThan(0);
-  await playableRow.click();
+  for (let click = 0; click < 32 && await playableRow.getAttribute('aria-pressed') === 'true'; click++) {
+    await playableRow.click();
+  }
   await expect(playableRow).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.die[aria-pressed="true"]')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
@@ -1016,6 +1018,8 @@ test('ambiguous physical dice can be changed and filtering never ends the run', 
   await page.getByRole('button', { name: new RegExp(`^Die ${removed + 1},`) }).click();
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: new RegExp(`^Die ${replacement + 1},`) }).click();
+  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: /^Three of a Kind / }).click();
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeEnabled();
   const dieIds = option.combinations[0].filter(id => id !== removed).concat(replacement);
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();

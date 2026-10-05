@@ -88,6 +88,8 @@ test('reduced motion keeps the refresh announcement while removing sweep animati
     };
   });
   const snapshot = await refreshSnapshot.jsonValue();
+  expect(snapshot).not.toBeNull();
+  if (!snapshot) throw new Error('Scorecard refresh snapshot was not captured.');
   expect(snapshot.accessibleName).toBe('Scorecard filled. All hands refreshed.');
   expect(['', 'none']).toContain(snapshot.celebrationAnimation);
   expect(['', 'none']).toContain(snapshot.rowAnimation);

@@ -1,10 +1,10 @@
 import { Badge, Button, Text, Tooltip } from '@mantine/core';
-import { combinationsForHand, handStats, HANDS, LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from '../game/hands';
+import { handStats, HANDS, HAND_IDS, LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from '../game/hands';
 import { activeFlameId, handFamilyFlameTargets } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
-import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands } from '../game/bosses';
 import { EMPTY_TEXT, formatPlayerNumber, formatScoreEquation } from '../game/copy';
+import { boardHandAvailable, legalHandCombinations } from '../game/selection';
 
 const MOBILE_HAND_NAMES: Partial<Record<HandId, string>> = {
   twoPair: 'Two Pair',
@@ -34,9 +34,6 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
   title: string; hands: HandId[]; board: Board; selection: Selection; busy: boolean; canSubmit: boolean; submitPreview: HandSubmitPreview | null;
   onSelect: (hand: HandId) => void; onSubmit: () => void;
 }) {
-  const encounterDice = activeEncounterDice(board);
-  const unavailableHands = unavailableEncounterHands(board);
-  const requiredDieIds = requiredEncounterDieIds(board);
   const ultimate = new Set(ultimateHands(board.handLevels));
   const ownsUltimate = board.bonfires.includes('ultimate')
     || board.dice.some(die => activeFlameId(die.flame) === 'ultimate');
@@ -47,19 +44,17 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
       {hands.map(hand => {
         const definition = HANDS[hand];
         const stats = handStats(hand, board.handLevels[hand]);
-        const consumed = unavailableHands.includes(hand);
-        const cooldown = board.boss?.type === 'marathon' ? board.boss.cooldowns[hand] ?? 0 : 0;
-        const neglected = board.boss?.type === 'neglected' && board.boss.neglectedHands.includes(hand);
-        const quickdrawLocked = board.boss?.type === 'quickdraw' && board.boss.lowerShotUsed && LOWER_HAND_IDS.includes(hand);
-        const compatible = combinationsForHand(encounterDice, hand)
-          .some(set => selection.dieIds.every(dieId => set.includes(dieId)) && requiredDieIds.every(dieId => set.includes(dieId)));
-        const playable = !consumed && compatible;
+        const used = board.consumed.includes(hand);
+        const cooldown = !board.bossSilenced && board.boss?.type === 'marathon' ? board.boss.cooldowns[hand] ?? 0 : 0;
+        const neglected = !board.bossSilenced && board.boss?.type === 'neglected' && board.boss.neglectedHands.includes(hand);
+        const quickdrawLocked = !board.bossSilenced && board.boss?.type === 'quickdraw' && board.boss.lowerShotUsed && LOWER_HAND_IDS.includes(hand);
+        const playable = boardHandAvailable(board, hand);
         const selected = selection.hand === hand;
         const targeted = board.targetPracticeHand === hand || flameTargets.has(hand);
         const hotTarget = board.hotStreakGoal === hand;
         const isUltimate = ownsUltimate && ultimate.has(hand);
         const score = board.scoreByHand[hand];
-        const state = consumed ? 'consumed' : selected ? 'selected' : playable ? 'playable' : 'unavailable';
+        const state = used ? 'consumed' : selected ? 'selected' : playable ? 'playable' : 'unavailable';
         const scoreLabel = score === undefined ? EMPTY_TEXT.score : `${formatPlayerNumber(score)} points`;
         const showQuickPlay = selected && canSubmit;
         return <div key={hand} className={`scorecard-row-shell ${showQuickPlay ? 'has-quick-play' : ''}`} data-tutorial={`hand-${hand}`}>
@@ -67,7 +62,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
           className={`scorecard-row ${state} ${targeted ? 'targeted' : ''} ${board.boss?.type === 'caller' && board.boss.calledHand === hand ? 'caller-called' : ''} ${board.boss?.type === 'fly' && board.boss.flyHand === hand ? 'fly-row' : ''}`} data-testid={`scorecard-row-${hand}`} data-state={state}
           disabled={busy || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}
           aria-keyshortcuts={selected && canSubmit ? 'Enter' : undefined}
-          aria-label={`${definition.name} · Lv. ${formatPlayerNumber(stats.level)} · ${formatPlayerNumber(stats.basePips)} Pips · ×${formatPlayerNumber(stats.baseMultiplier)} Mult${isUltimate ? ' · Ultimate Hand' : ''} · ${scoreLabel}${consumed ? ' · Used' : ''}${neglected ? ' · Neglected' : ''}`}>
+          aria-label={`${definition.name} · Lv. ${formatPlayerNumber(stats.level)} · ${formatPlayerNumber(stats.basePips)} Pips · ×${formatPlayerNumber(stats.baseMultiplier)} Mult${isUltimate ? ' · Ultimate Hand' : ''} · ${scoreLabel}${used ? ' · Used' : ''}${neglected ? ' · Neglected' : ''}`}>
           <span className="scorecard-row-copy">
             <span className="scorecard-hand-name" title={definition.name}>
               <span className="scorecard-name-line">
@@ -87,7 +82,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
             {cooldown > 0 ? <Badge className="scorecard-state-badge" size="xs" color="orange" variant="light" title={`Cooldown ${cooldown}`}><span className="wide-label">COOLDOWN </span><span className="compact-label">CD </span>{cooldown}</Badge>
               : quickdrawLocked ? <Badge size="xs" color="yellow" variant="light">LOCKED</Badge>
               : neglected ? <Badge size="xs" color="gray" variant="light">NEGLECTED</Badge>
-              : consumed && <Badge size="xs" color="gray" variant="light">USED</Badge>}
+              : used && <Badge size="xs" color="gray" variant="light">USED</Badge>}
           </span>
         </Button>
         {showQuickPlay && submitPreview && <Button className="scorecard-quick-play" size="compact-xs"
@@ -107,19 +102,16 @@ export function HandScorecard({ board, selection, busy, canSubmit, submitPreview
   board: Board; selection: Selection; busy: boolean; canSubmit: boolean; submitPreview: HandSubmitPreview | null;
   onSelect: (hand: HandId) => void; onSubmit: () => void;
 }) {
-  const encounterDice = activeEncounterDice(board);
-  const unavailableHands = unavailableEncounterHands(board);
-  const requiredDieIds = requiredEncounterDieIds(board);
-  const hasCompatibleHand = [...UPPER_HAND_IDS, ...LOWER_HAND_IDS].some(hand => !unavailableHands.includes(hand)
-    && combinationsForHand(encounterDice, hand).some(set => selection.dieIds.every(id => set.includes(id))
-      && requiredDieIds.every(id => set.includes(id))));
+  const hasExactHand = HAND_IDS.some(hand => legalHandCombinations(board, hand)
+    .some(combination => combination.length === selection.dieIds.length
+      && combination.every(id => selection.dieIds.includes(id))));
   return <div className="scorecard" data-tutorial="scorecard">
     <div className="scorecard-grid">
       <ScorecardSection title="Upper" hands={UPPER_HAND_IDS} {...{ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit }} />
       <ScorecardSection title="Lower" hands={LOWER_HAND_IDS} {...{ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit }} />
     </div>
-    {selection.dieIds.length > 0 && !hasCompatibleHand && <Text size="xs" c="orange" className="scorecard-hint">
-      {board.boss?.type === 'hexer' ? 'No available hand includes the Cursed Die.' : 'No available hand contains all selected dice.'}
+    {selection.intent === 'manual' && selection.dieIds.length > 0 && !hasExactHand && <Text size="xs" c="orange" className="scorecard-hint">
+      {board.boss?.type === 'hexer' ? 'This selection does not form a hand with the Cursed Die.' : 'Selected dice do not form one complete available hand.'}
     </Text>}
   </div>;
 }

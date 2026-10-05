@@ -104,6 +104,55 @@ export function flameEffectText(id: Flame, investedGold: number, board: FlameDis
     default: return `The condition grants ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult.`;
   }
 }
+
+export interface FlameDetailsPresentation {
+  currentLabel: 'Current XMult' | 'Current Effect';
+  currentValue: string;
+  maxChargeContribution: number | null;
+}
+
+/** Player-facing numeric Flame state, derived exclusively from the authoritative Flame formulas above. */
+export function flameDetailsPresentation(id: Flame, investedGold: number, board: Board): FlameDetailsPresentation {
+  const investment = Math.max(0, Math.min(100, investedGold));
+  if (isChargeFlame(id)) {
+    const currentValue = id === 'momentum' ? `+${formatPlayerNumber(momentumChargeGain(investment))} Charge per hand`
+      : id === 'thirdRail' ? `+${formatPlayerNumber(thirdRailChargeGain(investment))} Charge per rolled 3`
+        : id === 'jumpStart' ? `+${formatPlayerNumber(jumpStartChargeGain(investment))} Charge per manual Reroll`
+          : id === 'powerSurge' ? '×3 current Charge on highest level hand'
+            : `×${formatPlayerNumber(fluxCapacitorChargeMultiplier(investment, 1))} Charge per pulled Magnetic face`;
+    return { currentLabel: 'Current Effect', currentValue,
+      maxChargeContribution: maxChargeContribution(investment) };
+  }
+  if (id === 'wellTrained') {
+    return { currentLabel: 'Current Effect',
+      currentValue: `+${formatPlayerNumber(wellTrainedMultiplier(investment, 1) - 1)} XMult per prior play, up to ×5`,
+      maxChargeContribution: null };
+  }
+  if (id === 'dragonsHoard') {
+    return { currentLabel: 'Current XMult',
+      currentValue: `×${formatPlayerNumber(dragonsHoardMultiplier(investment, board.gold))} at current Gold`,
+      maxChargeContribution: null };
+  }
+  if (id === 'moneyToBurn') {
+    return { currentLabel: 'Current XMult',
+      currentValue: `×${formatPlayerNumber(moneyToBurnMultiplier(investment, board.lifetimeNormalShopGoldSpent))} at current Shop spend`,
+      maxChargeContribution: null };
+  }
+  if (id === 'hotStreak') {
+    return { currentLabel: 'Current XMult',
+      currentValue: `×${formatPlayerNumber(hotStreakMultiplier(investment, board.hotStreakCharges))} at current chain`,
+      maxChargeContribution: null };
+  }
+  const multiplier = id === 'targetPractice' ? targetPracticeMultiplier(investment)
+    : id === 'speedDemon' ? speedDemonMultiplier(investment, 0)
+    : id === 'sixPack' ? sixPackStartingMultiplier(investment)
+      : isHandFamilyFlame(id) ? handFamilyFlameMultiplier(investment)
+        : id === 'lowball' ? lowballMultiplier(investment, 2)
+          : standardFlameMultiplier(investment);
+  return { currentLabel: 'Current XMult', currentValue: `up to ×${formatPlayerNumber(multiplier)}`,
+    maxChargeContribution: null };
+}
+
 export function flameFullEffectText(id: Flame): string {
   return FLAMES[id].bonfireDescription;
 }

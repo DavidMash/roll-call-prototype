@@ -3,10 +3,9 @@ import { useState } from 'react';
 import { activeFace } from '../game/dice';
 import { enhancementCost, ENHANCEMENTS, placementError } from '../game/enhancements';
 import { activeFlameId, FLAMES, hasChargeBonfire, isChargeFlame } from '../game/flames';
-import { handOptions } from '../game/hands';
-import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands } from '../game/bosses';
+import { activeEncounterDice } from '../game/bosses';
 import { enhancementOfferIsFree } from '../game/specialOffers';
-import { toggleDie } from '../game/selection';
+import { normalizeBoardSelection, toggleBoardDie } from '../game/selection';
 import type { Selection } from '../game/selection';
 import type { Action, Board, Flame, GameEvent } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
@@ -40,13 +39,8 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
   const awaitingWardenChoice = !!wardenBoss && wardenBoss.pendingReinforcements > 0;
   const selectedWardenDieId = awaitingWardenChoice && selection.dieIds.length === 1 && wardenLockedIds.includes(selection.dieIds[0])
     ? selection.dieIds[0] : null;
-  const requiredDieIds = board.phase === 'round' ? requiredEncounterDieIds(board) : [];
-  const unavailableHands = board.phase === 'round' ? unavailableEncounterHands(board) : [];
-  const selectedDieIds = awaitingWardenChoice ? [] : [...selection.dieIds].sort((a, b) => a - b);
-  const selectedHand = board.phase === 'round' && selection.hand && handOptions(dice, unavailableHands, selectedDieIds)
-    .some(option => option.id === selection.hand && !option.consumed
-      && option.combinations.some(set => requiredDieIds.every(id => set.includes(id)))) ? selection.hand : null;
-  const effectiveSelection: Selection = { dieIds: selectedDieIds, hand: selectedHand };
+  const effectiveSelection = board.phase === 'round' && !awaitingWardenChoice
+    ? normalizeBoardSelection(board, selection) : { dieIds: [], hand: null } satisfies Selection;
   const shop = board.phase === 'shop' ? board.shop : null;
   const offer = shop?.offers.find(item => item.id === selectedOffer && !item.purchased);
   const placementErrors = Object.fromEntries(dice.map(die => {
@@ -91,7 +85,7 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
     if (!die || !actionsEnabled) return;
     if (board.phase === 'round') {
       if (awaitingWardenChoice) setSelection({ dieIds: selectedWardenDieId === dieId ? [] : [dieId], hand: null });
-      else changeRoundSelection(toggleDie(dice, unavailableHands, effectiveSelection, dieId, requiredDieIds));
+      else changeRoundSelection(toggleBoardDie(board, effectiveSelection, dieId));
       return;
     }
     if (board.phase === 'shop') {

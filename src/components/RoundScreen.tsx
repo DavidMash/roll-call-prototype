@@ -5,9 +5,9 @@ import {
   activeFlameId, captureHandStart, composeXMult, handXMultContributions, hasChargeBonfire,
   hasOwnedChargeFlame, hasOwnedFlame, isChargeFlame, isGuaranteedWinningPlay, speedDemonMultiplier,
 } from '../game/flames';
-import { handOptions, hasPlayableHand, HANDS } from '../game/hands';
+import { hasPlayableHand, HANDS } from '../game/hands';
 import { finalizeScore, handScore } from '../game/scoring';
-import { canPlay, selectHand } from '../game/selection';
+import { canPlay, normalizeBoardSelection, selectBoardHand } from '../game/selection';
 import type { Selection } from '../game/selection';
 import type { Action, Board, GameEvent } from '../game/types';
 import { HandScorecard } from './HandList';
@@ -55,11 +55,8 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const unavailableHands = unavailableEncounterHands(board);
   const selectedWardenDieId = awaitingWardenChoice && selection.dieIds.length === 1 && wardenLockedIds.includes(selection.dieIds[0])
     ? selection.dieIds[0] : null;
-  const selectedDieIds = awaitingWardenChoice ? [] : [...selection.dieIds].sort((a, b) => a - b);
-  const selectedHand = selection.hand && handOptions(encounterDice, unavailableHands, selectedDieIds)
-    .some(option => option.id === selection.hand && !option.consumed
-      && option.combinations.some(set => requiredDieIds.every(id => set.includes(id)))) ? selection.hand : null;
-  const effectiveSelection: Selection = { dieIds: selectedDieIds, hand: selectedHand };
+  const effectiveSelection = awaitingWardenChoice ? { dieIds: [], hand: null } satisfies Selection
+    : normalizeBoardSelection(board, selection);
   const valid = canPlay(encounterDice, unavailableHands, effectiveSelection, requiredDieIds)
     && validateAction(board, { type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds }) === null;
   const preview = valid ? (() => {
@@ -147,7 +144,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     <Paper className={`scorecard-panel${scorecardRefreshing ? ' is-refreshing' : ''}`} p="xs">
       <HandScorecard board={board} selection={effectiveSelection} busy={busy || awaitingWardenChoice} canSubmit={valid && !busy && !awaitingWardenChoice}
         submitPreview={preview}
-        onSelect={hand => changeSelection(selectHand(encounterDice, unavailableHands, effectiveSelection, hand, requiredDieIds))}
+        onSelect={hand => changeSelection(selectBoardHand(board, effectiveSelection, hand, decisionMs))}
         onSubmit={submitPlay} />
     </Paper>
     <Paper className="gameplay-actions-panel" p="xs">
