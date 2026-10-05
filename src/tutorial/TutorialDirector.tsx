@@ -44,6 +44,7 @@ export function TutorialDirector({ session, paused, onAcknowledge, onFinish }: {
         overlayOpacity: beat.blocking ? 0.72 : 0.42,
         stagePadding: 7,
         stageRadius: 9,
+        popoverOffset: 12,
         popoverClass: 'roll-call-tutorial-popover',
         disableActiveInteraction: beat.blocking,
         showProgress: false,

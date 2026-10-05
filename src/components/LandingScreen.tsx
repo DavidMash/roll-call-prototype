@@ -37,7 +37,7 @@ export function LandingScreen({ resumableRun, resumableTutorial, onboarding, onC
     <main className="landing-screen" aria-labelledby="landing-title">
       <Stack className="landing-content" gap="lg" align="stretch">
         <div className="landing-title-block">
-          <Text className="landing-kicker" aria-hidden="true">A DICE-BUILDING RUN</Text>
+          <Text className="landing-kicker" aria-hidden="true">HOW FAR WILL YOU GO?</Text>
           <Title id="landing-title" order={1}>ROLL CALL</Title>
         </div>
         {tutorialProminent && <Paper component="button" type="button" withBorder className="tutorial-card"

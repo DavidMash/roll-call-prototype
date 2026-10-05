@@ -16,6 +16,41 @@ async function enterTutorial(page: import('@playwright/test').Page) {
   await expect(page.locator('.driver-popover')).toBeVisible();
 }
 
+function relativeLuminance(color: string): number {
+  const channels = color.match(/[\d.]+/g)?.slice(0, 3).map(Number) ?? [];
+  if (channels.length !== 3) throw new Error(`Unsupported color: ${color}`);
+  const [red, green, blue] = channels.map(channel => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return red * 0.2126 + green * 0.7152 + blue * 0.0722;
+}
+
+function contrastRatio(first: string, second: string): number {
+  const light = Math.max(relativeLuminance(first), relativeLuminance(second));
+  const dark = Math.min(relativeLuminance(first), relativeLuminance(second));
+  return (light + 0.05) / (dark + 0.05);
+}
+
+async function expectPopoverAndTargetSeparated(page: import('@playwright/test').Page, targetSelector: string) {
+  await page.waitForTimeout(450);
+  const target = page.locator(targetSelector);
+  const popover = page.locator('.driver-popover');
+  const [targetBox, popoverBox] = await Promise.all([target.boundingBox(), popover.boundingBox()]);
+  expect(targetBox).not.toBeNull();
+  expect(popoverBox).not.toBeNull();
+  const horizontalOverlap = Math.max(0, Math.min(targetBox!.x + targetBox!.width, popoverBox!.x + popoverBox!.width)
+    - Math.max(targetBox!.x, popoverBox!.x));
+  const verticalOverlap = Math.max(0, Math.min(targetBox!.y + targetBox!.height, popoverBox!.y + popoverBox!.height)
+    - Math.max(targetBox!.y, popoverBox!.y));
+  expect(horizontalOverlap * verticalOverlap).toBe(0);
+  const viewport = page.viewportSize()!;
+  expect(popoverBox!.x).toBeGreaterThanOrEqual(0);
+  expect(popoverBox!.y).toBeGreaterThanOrEqual(0);
+  expect(popoverBox!.x + popoverBox!.width).toBeLessThanOrEqual(viewport.width);
+  expect(popoverBox!.y + popoverBox!.height).toBeLessThanOrEqual(viewport.height);
+}
+
 test('onboarding prioritizes an isolated tutorial and resumes it after refresh', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'PLAY TUTORIAL', exact: true })).toBeVisible();
   await expect(page.getByText('Learn the basics in a guided run.')).toBeVisible();
@@ -33,6 +68,60 @@ test('onboarding prioritizes an isolated tutorial and resumes it after refresh',
   await expect(page.getByRole('button', { name: 'CONTINUE TUTORIAL', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'CONTINUE TUTORIAL', exact: true }).click();
   await expect(page.locator('.driver-popover')).toContainText('THE GOAL');
+});
+
+test('tutorial acknowledgement action uses the high-contrast mint treatment and remains keyboard usable', async ({ page }) => {
+  await enterTutorial(page);
+  const action = page.getByRole('button', { name: 'GOT IT', exact: true });
+  await expect(action).toBeFocused();
+  const normal = await action.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, color: style.color, outlineWidth: style.outlineWidth };
+  });
+  expect(normal.background).toBe('rgb(99, 230, 190)');
+  expect(normal.color).toBe('rgb(20, 20, 20)');
+  expect(contrastRatio(normal.background, normal.color)).toBeGreaterThanOrEqual(7);
+  expect(Number.parseFloat(normal.outlineWidth)).toBeGreaterThanOrEqual(3);
+
+  await action.hover();
+  await expect.poll(() => action.evaluate(element => getComputedStyle(element).backgroundColor))
+    .toBe('rgb(150, 242, 215)');
+  await action.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.driver-popover-title')).toHaveText('THE GOAL');
+});
+
+for (const viewport of [
+  { name: 'desktop', width: 1280, height: 800 },
+  { name: 'mobile', width: 375, height: 667 },
+]) {
+  test(`Goal tutorial precisely targets the visible score without overlap on ${viewport.name}`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await enterTutorial(page);
+    await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
+    await expect(page.locator('.driver-popover-title')).toHaveText('THE GOAL');
+    const goal = page.locator('[data-tutorial="goal"]');
+    await expect(goal).toHaveAttribute('data-testid', 'round-score-progress');
+    await expect(goal).toHaveClass(/driver-active-element/);
+    await expect(page.getByTestId('round-goal-progress')).not.toHaveAttribute('data-tutorial');
+    await expect(page.locator('.driver-popover-arrow')).toBeVisible();
+    if (viewport.name === 'desktop') {
+      await expect(page.locator('.driver-popover-arrow')).toHaveClass(/driver-popover-arrow-side-right/);
+    }
+    await expectPopoverAndTargetSeparated(page, '[data-tutorial="goal"]');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+}
+
+test('scorecard tutorial keeps its accented, unobscured spotlight', async ({ page }) => {
+  await enterTutorial(page);
+  await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
+  await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
+  await expect(page.locator('.driver-popover-title')).toHaveText('YOUR SCORECARD');
+  const scorecard = page.locator('[data-tutorial="scorecard"]');
+  await expect(scorecard).toHaveClass(/driver-active-element/);
+  expect(await scorecard.evaluate(element => getComputedStyle(element).outlineStyle)).toBe('solid');
+  await expectPopoverAndTargetSeparated(page, '[data-tutorial="scorecard"]');
 });
 
 test('required reroll step advances only through the real game action', async ({ page }) => {

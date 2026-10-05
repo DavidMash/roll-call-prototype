@@ -71,7 +71,7 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
         <span aria-hidden="true" className="hamburger-icon"><i /><i /><i /></span>
       </ActionIcon>
     </Group>
-    {board.phase === 'round' && <Progress data-testid="round-goal-progress" data-tutorial="goal"
+    {board.phase === 'round' && <Progress data-testid="round-goal-progress"
       value={Math.min(100, board.score / board.target * 100)} size={4} radius={0}
       aria-label="Round Goal progress" aria-valuetext={`${formatPlayerNumber(board.score)} of ${formatPlayerNumber(board.target)} points toward the Goal`} />}
     {board.bonfires.length > 0 && <Group gap={4} px="xs" py={3} className="bonfire-strip" data-tutorial="bonfires" aria-label="Active Bonfires">

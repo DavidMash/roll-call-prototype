@@ -127,7 +127,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     return () => window.removeEventListener('keydown', playOnEnter, true);
   }, [awaitingWardenChoice, busy, effectiveSelection.dieIds, effectiveSelection.hand, submit, valid, speedDemonOwned]);
   return <Stack gap="xs" className="round-screen">
-    <div className="live-score-panel" data-testid="live-score-panel" data-tutorial="score-formula">
+    <div className="live-score-panel" data-testid="live-score-panel">
       <ScoreResolution event={event} busy={busy} onSkip={skip} idleText={idleText}
         scoreText={formatScoreProgress(board.score, board.target)} showXMult={showXMult} />
     </div>

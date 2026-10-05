@@ -605,6 +605,11 @@ body, #root { overflow: hidden; }
 .landing-future-actions { min-height: 34px; display: flex; justify-content: center; }
 .skip-tutorial-action, .secondary-tutorial-action { font-weight: 800; letter-spacing: .08em; }
 
+.sr-only {
+  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
 .roll-call-tutorial-popover.driver-popover {
   width: min(350px, calc(100vw - 24px)); max-width: calc(100vw - 24px); padding: 16px 17px;
   border: 1px solid rgba(94,234,212,.42); border-radius: 12px; color: var(--mantine-color-gray-1);
@@ -615,9 +620,24 @@ body, #root { overflow: hidden; }
 .roll-call-tutorial-popover .driver-popover-description { color: var(--mantine-color-gray-2); font-size: .88rem; line-height: 1.45; }
 .roll-call-tutorial-popover .driver-popover-description p { margin: 6px 0 0; }
 .roll-call-tutorial-popover .tutorial-required-copy { color: var(--mantine-color-teal-3); font-size: .76rem; text-transform: uppercase; letter-spacing: .05em; }
-.roll-call-tutorial-popover .driver-popover-next-btn {
-  min-height: 34px; padding: 6px 14px; border: 0; border-radius: 6px; color: white;
-  background: var(--mantine-color-teal-7); font-family: inherit; font-size: .76rem; font-weight: 900; letter-spacing: .06em; text-shadow: none;
+.roll-call-tutorial-popover .driver-popover-footer .driver-popover-next-btn,
+.roll-call-tutorial-popover .driver-popover-footer .driver-popover-next-btn:focus {
+  min-height: 36px; padding: 7px 15px; border: 1px solid var(--mantine-color-teal-1); border-radius: 7px;
+  color: var(--mantine-color-dark-9); background: var(--mantine-color-teal-3); cursor: pointer;
+  font-family: inherit; font-size: .76rem; font-weight: 950; letter-spacing: .06em; line-height: 1.2; text-shadow: none;
+  box-shadow: 0 3px 12px rgba(0,0,0,.28); transition: background-color 100ms ease, border-color 100ms ease, box-shadow 100ms ease, transform 100ms ease;
+}
+.roll-call-tutorial-popover .driver-popover-footer .driver-popover-next-btn:hover {
+  color: var(--mantine-color-dark-9); background: var(--mantine-color-teal-2); border-color: var(--mantine-color-teal-0); transform: translateY(-1px);
+}
+.roll-call-tutorial-popover .driver-popover-footer .driver-popover-next-btn:active {
+  color: var(--mantine-color-dark-9); background: var(--mantine-color-teal-4); border-color: var(--mantine-color-teal-2); transform: translateY(0);
+  box-shadow: 0 1px 5px rgba(0,0,0,.34);
+}
+.roll-call-tutorial-popover .driver-popover-footer .driver-popover-next-btn:focus,
+.roll-call-tutorial-popover .driver-popover-footer .driver-popover-next-btn:focus-visible {
+  outline: 3px solid var(--mantine-color-teal-0); outline-offset: 3px;
+  box-shadow: 0 0 0 2px var(--mantine-color-dark-9), 0 4px 14px rgba(0,0,0,.34);
 }
 .roll-call-tutorial-popover .driver-popover-arrow-side-top { border-top-color: rgba(17,24,29,.985); }
 .roll-call-tutorial-popover .driver-popover-arrow-side-bottom { border-bottom-color: rgba(17,24,29,.985); }

@@ -31,7 +31,7 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText, show
   else if (event) heading = '';
   return <Paper className={`resolution ${busy ? 'active' : ''}`} p="xs" aria-live="polite" aria-atomic="true">
     <Group justify={scoreText ? 'space-between' : 'flex-end'} className="resolution-meta is-round-score">
-      {scoreText && <Text className="round-score-readout" data-testid="round-score-progress">{scoreText}</Text>}
+      {scoreText && <Text className="round-score-readout" data-testid="round-score-progress" data-tutorial="goal">{scoreText}</Text>}
       {busy && <Button size="compact-xs" variant="subtle" color="gray" onClick={onSkip}>Skip playback</Button>}
     </Group>
     {event?.handScore && <Group justify="center" gap="xl" className="score-accumulator" data-testid="hand-accumulator">
