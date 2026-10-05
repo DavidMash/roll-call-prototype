@@ -14,6 +14,7 @@ interface Props {
   selected: boolean;
   highlighted: boolean;
   rolling: boolean;
+  resolving?: boolean;
   ability?: Enhancement;
   flameAbility?: Flame;
   disabled: boolean;
@@ -31,7 +32,7 @@ interface Props {
   onDropOffer?: (offerId: number) => void;
 }
 
-export function Die({ die, display, selected, highlighted, rolling, ability, flameAbility, disabled, detailsDisabled = false, eligible,
+export function Die({ die, display, selected, highlighted, rolling, resolving = false, ability, flameAbility, disabled, detailsDisabled = false, eligible,
   wardenLocked = false, wardenSelectable = false, unlockAt, ineligibleReason, lockedReason, allowIneligibleClick = false,
   onClick, onEnhancements, onFlame, onDropOffer }: Props) {
   const face = activeFace(die);
@@ -69,10 +70,10 @@ export function Die({ die, display, selected, highlighted, rolling, ability, fla
       </button>}
     </div>
     <Paper component="button" type="button" withBorder
-      className={`die ${die.owner === 'boss' ? 'cursed-die' : ''} ${face.snakeEyed ? 'snake-eyed-face' : ''} ${face.infected ? 'infected-face' : ''} ${face.magneticSourceUsed ? 'magnetic-used' : ''} ${selected ? 'selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${triggered ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''} ${wardenLocked ? 'warden-locked' : ''}`}
+      className={`die ${die.owner === 'boss' ? 'cursed-die' : ''} ${face.snakeEyed ? 'snake-eyed-face' : ''} ${face.infected ? 'infected-face' : ''} ${face.magneticSourceUsed ? 'magnetic-used' : ''} ${selected ? 'selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${resolving ? 'resolving' : ''} ${triggered ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''} ${wardenLocked ? 'warden-locked' : ''}`}
       disabled={interactionDisabled} aria-disabled={interactionDisabled} aria-pressed={selected}
       title={wardenLocked ? `${dieLabel} locked${unlockAt === undefined ? '' : ` until ${formatPlayerNumber(unlockAt)} points`}${wardenSelectable ? ' · choose to unlock' : ''}` : lockedReason ?? ineligibleReason}
-      aria-label={accessibilityLabel} data-locked-until={unlockAt}
+      aria-label={accessibilityLabel} data-locked-until={unlockAt} data-resolving={resolving || undefined}
       onClick={() => { if (!interactionDisabled) onClick(); }}
       onDragOver={event => { if (!interactionDisabled && onDropOffer) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }}
       onDrop={event => {

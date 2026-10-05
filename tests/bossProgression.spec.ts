@@ -19,6 +19,7 @@ async function ready(page: Page) {
   await page.locator('main').waitFor();
   await enterRun(page);
   for (let barrier = 0; barrier < 2; barrier++) {
+    await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
     const bustContinue = page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true });
     if (await bustContinue.count()) { await bustContinue.click(); continue; }
     const map = page.getByTestId('run-map-transition');
@@ -29,7 +30,6 @@ async function ready(page: Page) {
     }
     break;
   }
-  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
 }
 function best(game: GameState) {
   const dice = activeEncounterDice(game);

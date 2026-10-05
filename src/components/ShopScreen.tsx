@@ -1,7 +1,6 @@
 import { Badge, Button, Group, Paper, Stack, Text } from '@mantine/core';
 import { CONFIG, diceRerollCost, offerRerollCost } from '../game/config';
 import { ENHANCEMENTS } from '../game/enhancements';
-import { hasXMultFlame } from '../game/flames';
 import type { Action, Board, GameEvent } from '../game/types';
 import { EnhancementCard } from './EnhancementCard';
 import { ScoreResolution } from './ScoreResolution';
@@ -33,7 +32,7 @@ export function ShopScreen({ board, event, busy, selectedOffer, setSelectedOffer
       </Group>
     </Paper> : <Group justify="space-between"><Text fw={800}>SHOP</Text><Text size="xs" c="dimmed">{upcomingBoss
       ? `Prepare for ${BOSSES[upcomingBoss].name}` : `Prepare for ${chapterLabel(board.round + 1)}`}</Text></Group>}</div>
-    {busy && <ScoreResolution event={event} busy={busy} onSkip={skip} showXMult={hasXMultFlame(board.dice, board.bonfires)} />}
+    {busy && <ScoreResolution event={event} busy={busy} onSkip={skip} />}
     <BossPreview board={board} />
     <Paper p="xs" className="shop-section" data-tutorial="hand-training">
       <Group justify="space-between" className="section-heading"><Text fw={700} size="sm" tt="uppercase" lts=".08em">Hand Training</Text></Group>

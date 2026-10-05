@@ -1,5 +1,5 @@
 import { Badge, Button, Card, Group, Paper, Stack, Text } from '@mantine/core';
-import { hasXMultFlame, FLAMES } from '../game/flames';
+import { FLAMES } from '../game/flames';
 import type { Action, Board, GameEvent } from '../game/types';
 import { ScoreResolution } from './ScoreResolution';
 import { formatPlayerNumber } from '../game/copy';
@@ -16,7 +16,7 @@ export function FlameSelectionScreen({ board, event, busy, selectedOffer, setSel
     <Group justify="space-between" className="shop-summary flame-selection-header phase-sticky-header">
       <Text fw={800}>FLAME SELECTION</Text><Badge color="yellow" variant="light">{formatPlayerNumber(board.gold)} Gold</Badge>
     </Group>
-    {busy && <ScoreResolution event={event} busy={busy} onSkip={skip} showXMult={hasXMultFlame(board.dice, board.bonfires)} />}
+    {busy && <ScoreResolution event={event} busy={busy} onSkip={skip} />}
     {board.bonfires.length > 0 && <Paper p="xs" className="shop-section bonfire-strip" data-testid="bonfires">
       <Group gap="xs"><Text fw={700} size="sm" tt="uppercase">Bonfires</Text>{board.bonfires.map(id => <Badge component="button" type="button" key={id}
         color="red" variant="light" className="flame-detail-trigger" aria-label={`View ${FLAMES[id].name} Flame details`}

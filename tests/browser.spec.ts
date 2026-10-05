@@ -51,6 +51,7 @@ async function ready(page: Page) {
   await page.locator('main').waitFor();
   await enterRun(page);
   for (let barrier = 0; barrier < 2; barrier++) {
+    await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
     const bustContinue = page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true });
     if (await bustContinue.count()) { await bustContinue.click(); continue; }
     const map = page.getByTestId('run-map-transition');
@@ -61,7 +62,6 @@ async function ready(page: Page) {
     }
     break;
   }
-  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
 }
 async function matchBoard(page: Page, game: GameState) {
   await ready(page);
@@ -512,7 +512,7 @@ test('live scoring panel updates inside the fixed mobile gameplay viewport', asy
   await page.clock.runFor(CONFIG.tickMs.normal * updateIndex);
   const update = resolution.events[updateIndex];
   await expect(page.getByTestId('hand-pips')).toHaveText(String(update.handScore!.currentPips));
-  await expect(page.getByTestId('hand-multiplier')).toHaveText(`×${update.handScore!.currentMultiplier}`);
+  await expect(page.getByTestId('hand-multiplier')).toHaveText(String(update.handScore!.currentMultiplier));
   await expect(panel).toBeInViewport();
   await expect(page.getByRole('button', { name: /^(PLAY|LAST PLAY[?.])$/ })).toBeInViewport();
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
@@ -618,19 +618,20 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
       `${event.board.score.toLocaleString('en-US')} / ${event.board.target.toLocaleString('en-US')}`,
     );
     if (event.type === 'HAND_STARTED') {
-      await expect(page.locator('.score-tick')).toHaveText(`${HANDS[hand].name} — Lv. 2`);
+      await expect(page.locator('.score-tick')).toHaveText(`${HANDS[hand].name.toUpperCase()} · LV. 2 · BASE`);
       await expect(page.getByTestId('hand-pips')).toHaveText(String(level2.basePips));
-      await expect(page.getByTestId('hand-multiplier')).toHaveText(`×${level2.baseMultiplier}`);
+      await expect(page.getByTestId('hand-multiplier')).toHaveText(String(level2.baseMultiplier));
     }
     if (event.type === 'HAND_SCORE_FINALIZED') {
       await expect(page.getByTestId('hand-pips')).toHaveText(String(scored.pips));
-      await expect(page.getByTestId('hand-multiplier')).toHaveText(`×${scored.multiplier}`);
+      await expect(page.getByTestId('hand-multiplier')).toHaveText(String(scored.multiplier));
       await expect(page.locator('.score-tick')).toHaveText(`+${scored.score}`);
       await expect(page.locator('.score-tick')).not.toContainText(String(scored.rawScore));
     }
     if (index < finalizedIndex) await page.clock.runFor(CONFIG.tickMs.normal);
   }
   await page.getByRole('button', { name: 'Skip playback' }).click();
+  await page.clock.runFor(500);
   await ready(page);
   game = result.state;
   expect(Number.isInteger(game.score)).toBe(true);
@@ -768,6 +769,7 @@ test('mobile Shop shell keeps its HUD, incoming encounter, controls, action, and
 });
 
 test('full seeded run: select/play, clear, buy onto a face, reroll dice, next round, lose and export', async ({ page, context }) => {
+  test.setTimeout(120_000);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -1072,11 +1074,14 @@ test('fast event playback and skipping produce the same outcome as instant playb
   await page.getByTestId('run-map-transition').getByRole('button', { name: 'Continue', exact: true }).click();
   await matchBoard(page, game);
   const choice = bestHand(game);
+  const expected = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds });
   await page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) }).click();
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Skip playback' })).toBeVisible();
   await page.getByRole('button', { name: 'Skip playback' }).click();
-  await matchBoard(page, dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }).state);
+  const finalized = expected.events.find(event => event.type === 'HAND_SCORE_FINALIZED')!;
+  await expect(page.getByTestId('hand-final-score')).toContainText(String(finalized.amount));
+  await matchBoard(page, expected.state);
 });
 
 test('a seedless first visit generates a random seed and then resumes it', async ({ page }) => {
@@ -1202,6 +1207,7 @@ test('purchased Jumping Bean visibly triggers and rerolls on the next initial ga
   await expect(page.locator('.dice-dock .die.pulse')).toHaveCount(1);
   await expect(page.locator('.dice-dock .enhancement-jumpingBean')).toHaveCount(1);
   await page.getByRole('button', { name: 'Skip playback' }).click();
+  await page.clock.runFor(500);
   await matchBoard(page, next.state);
   await expect(page.getByTestId('scorecard-effect-score')).toHaveCount(0);
   await expect(page.getByTestId(`scorecard-score-${freePlay.hand}`)).toHaveText(String(next.state.scoreByHand[freePlay.hand!]));

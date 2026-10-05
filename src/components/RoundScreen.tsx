@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { validateAction } from '../game/engine';
 import {
   activeFlameId, captureHandStart, composeXMult, handXMultContributions, hasChargeBonfire,
-  hasOwnedChargeFlame, hasOwnedFlame, hasXMultFlame, isChargeFlame, isGuaranteedWinningPlay, speedDemonMultiplier,
+  hasOwnedChargeFlame, hasOwnedFlame, isChargeFlame, isGuaranteedWinningPlay, speedDemonMultiplier,
 } from '../game/flames';
 import { handOptions, hasPlayableHand, HANDS } from '../game/hands';
 import { finalizeScore, handScore } from '../game/scoring';
@@ -62,7 +62,6 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const effectiveSelection: Selection = { dieIds: selectedDieIds, hand: selectedHand };
   const valid = canPlay(encounterDice, unavailableHands, effectiveSelection, requiredDieIds)
     && validateAction(board, { type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds }) === null;
-  const showXMult = hasXMultFlame(encounterDice, board.bonfires);
   const preview = valid ? (() => {
     const hand = effectiveSelection.hand!;
     const base = handScore(encounterDice, hand, effectiveSelection.dieIds, board.handLevels[hand]);
@@ -129,7 +128,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   return <Stack gap="xs" className="round-screen">
     <div className="live-score-panel" data-testid="live-score-panel">
       <ScoreResolution event={event} busy={busy} onSkip={skip} idleText={idleText}
-        scoreText={formatScoreProgress(board.score, board.target)} showXMult={showXMult} />
+        scoreText={formatScoreProgress(board.score, board.target)} />
     </div>
     <BossPanel board={board} />
     {!busy && !awaitingWardenChoice && deadBoard && manualRerolls > 0 && <Alert className="round-status" color="orange" py={5} title="NO PLAYABLE HANDS" role="status">

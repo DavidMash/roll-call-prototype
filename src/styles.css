@@ -1,4 +1,7 @@
 :root {
+  --score-pips: #4dabf7;
+  --score-mult: #ff6b6b;
+  --score-xmult: #b197fc;
   color: var(--mantine-color-gray-1);
   background: #0b0f12;
   font-synthesis: none;
@@ -45,8 +48,6 @@ button { font: inherit; }
 .resolution-meta.is-round-score { justify-content: center; }
 .round-score-readout { color: var(--mantine-color-gray-0); font-size: 1.18rem; font-weight: 900; line-height: 1; letter-spacing: .025em; font-variant-numeric: tabular-nums; }
 .event-progress { color: var(--mantine-color-dimmed); font-size: var(--mantine-font-size-xs); }
-.score-accumulator { margin-top: -2px; }
-.score-accumulator .mantine-Text-root { line-height: 1.05; }
 .score-tick { margin: 1px 0; font-size: clamp(1rem, 2.8vw, 1.65rem); line-height: 1.15; animation: score-in 180ms ease-out; }
 .resolution-message { max-width: 850px; margin: 2px auto 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -153,6 +154,7 @@ button { font: inherit; }
 }
 .die-lock-symbol { font-size: 1.25rem; line-height: 1.1; }
 .die.pulse { animation: pulse 300ms ease-in-out; }
+.die.resolving { z-index: 2; animation: score-die-resolve 240ms ease-out; }
 .die.rolling { animation: shake 180ms ease-in-out 2; }
 .die:focus-visible, .offer:focus-visible, .scorecard-row:focus-visible { outline: 2px solid var(--mantine-color-teal-4); outline-offset: -2px; }
 
@@ -235,6 +237,9 @@ button { font: inherit; }
 .exposed-face-row { background: rgba(18,184,134,.1); }
 
 @keyframes pulse { 50% { transform: translateY(-2px); } }
+@keyframes score-die-resolve {
+  45% { transform: translateY(-3px) scale(1.045); border-color: var(--mantine-color-yellow-3); box-shadow: 0 0 0 3px rgba(250,176,5,.22), 0 0 18px rgba(250,176,5,.3); }
+}
 @keyframes shake { 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
 @keyframes score-in { from { opacity: .4; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -529,9 +534,6 @@ button { font: inherit; }
   .active-gameplay .resolution { min-height: 42px; padding: 3px 6px; }
   .active-gameplay .resolution.active { min-height: 70px; }
   .active-gameplay .resolution-meta { min-height: 14px; }
-  .active-gameplay .score-accumulator { gap: 12px !important; }
-  .active-gameplay .score-accumulator .mantine-Text-root { font-size: .68rem; }
-  .active-gameplay .score-accumulator .mantine-Text-root:last-child { font-size: .9rem; }
   .active-gameplay .score-tick { margin: 0; font-size: .86rem; line-height: 1.05; }
   .active-gameplay .resolution-message { margin-top: 0; }
 
@@ -653,6 +655,84 @@ button { font: inherit; }
 /* One persistent run-level Dice Dock. Its three rows never change geometry. */
 html, body, #root { height: 100%; }
 body, #root { overflow: hidden; }
+.visually-hidden {
+  position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important;
+  overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important;
+}
+
+/* Authoritative hand-resolution math: large enough to read, compact enough to remain above the Dice Dock. */
+.live-score-panel:has(.is-score-resolution) { min-height: 66px; overflow: visible; }
+.live-score-panel .resolution.is-score-resolution {
+  position: absolute; inset: 0 0 auto; z-index: 12; min-height: 204px;
+  border: 1px solid rgba(255,255,255,.08); background: rgba(13, 18, 22, .96);
+  box-shadow: 0 18px 42px rgba(0,0,0,.55), inset 3px 0 var(--mantine-color-teal-6);
+  backdrop-filter: blur(8px);
+}
+.resolution.is-score-resolution { min-height: 204px; padding: 8px 12px 12px !important; overflow: hidden; }
+.is-score-resolution .resolution-meta { position: relative; z-index: 2; min-height: 24px; }
+.score-resolution-stage { width: min(100%, 680px); margin: 2px auto 0; }
+.score-formula {
+  width: min(100%, 560px); margin: 0 auto; display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: clamp(6px, 1.6vw, 14px);
+  font-variant-numeric: tabular-nums;
+}
+.score-formula.has-xmult { width: min(100%, 680px); grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); }
+.score-box {
+  min-width: 0; padding: clamp(7px, 1.5vw, 11px); overflow: hidden; border: 1px solid currentColor; border-radius: 10px;
+  background: color-mix(in srgb, currentColor 10%, #11171b); box-shadow: inset 0 0 22px color-mix(in srgb, currentColor 8%, transparent);
+}
+.score-box-pips { color: var(--score-pips); }
+.score-box-mult { color: var(--score-mult); }
+.score-box-xmult { color: var(--score-xmult); animation: score-xmult-enter 220ms ease-out; }
+.score-box-label { display: block; color: currentColor; font-size: clamp(.58rem, 1.6vw, .76rem); font-weight: 900; letter-spacing: .16em; line-height: 1; }
+.score-box-value {
+  display: block; max-width: 100%; margin-top: 3px; overflow: hidden; color: var(--mantine-color-gray-0);
+  font-size: clamp(1.45rem, 6vw, 3rem); font-weight: 950; line-height: .95; letter-spacing: -.035em; text-overflow: ellipsis; white-space: nowrap;
+}
+.score-formula.has-xmult .score-box-value { font-size: clamp(1.25rem, 5.1vw, 2.65rem); }
+.score-box-value.is-long { font-size: clamp(1rem, 3.7vw, 2rem); letter-spacing: -.055em; }
+.score-box-value.is-very-long { font-size: clamp(.72rem, 2.7vw, 1.35rem); letter-spacing: -.065em; }
+.score-operator { color: var(--mantine-color-gray-4); font-size: clamp(1.15rem, 4vw, 2rem); font-weight: 500; }
+.score-xmult-entry { animation: score-xmult-enter 220ms ease-out; }
+.score-box.is-changing { animation: score-box-bump 210ms ease-out; }
+.score-box-xmult.is-changing { animation: score-box-xmult-bump 240ms ease-out; }
+.score-effect-callout { min-height: 19px; margin: 5px 0 0; color: var(--mantine-color-gray-2); font-size: clamp(.72rem, 2vw, .92rem); letter-spacing: .055em; }
+.score-final { min-height: 39px; margin-top: 2px; display: flex; align-items: baseline; justify-content: center; gap: 10px; color: var(--mantine-color-gray-4); }
+.score-final span { font-size: .62rem; font-weight: 850; letter-spacing: .14em; }
+.score-final strong { color: var(--mantine-color-gray-0); font-size: clamp(1.45rem, 4vw, 2.25rem); font-variant-numeric: tabular-nums; line-height: 1; }
+.score-final strong.is-long { font-size: clamp(1.1rem, 3.2vw, 1.7rem); }
+.score-final strong.is-very-long { font-size: clamp(.82rem, 2.5vw, 1.25rem); }
+.score-final.is-awarded strong { animation: score-final-award 260ms ease-out; text-shadow: 0 0 18px rgba(46,214,143,.32); }
+.score-boss-stage { min-width: 46px; margin-top: 3px; display: flex; align-items: baseline; justify-content: center; gap: 5px; color: var(--mantine-color-orange-3); }
+.score-boss-stage > span { font-size: 1rem; }
+.score-boss-stage small { font-size: .5rem; font-weight: 900; letter-spacing: .1em; }
+.score-boss-stage strong { font-size: .9rem; }
+@keyframes score-box-bump { 48% { transform: translateX(2px) scale(1.035); filter: brightness(1.25); } }
+@keyframes score-box-xmult-bump { 48% { transform: translateY(-2px) scale(1.055); filter: brightness(1.35); } }
+@keyframes score-xmult-enter { from { opacity: 0; transform: translateX(10px) scale(.94); } }
+@keyframes score-final-award { 45% { transform: scale(1.1); color: var(--mantine-color-teal-2); } }
+
+@media (max-width: 800px) {
+  .active-gameplay .live-score-panel:has(.is-score-resolution) { min-height: 42px; }
+  .active-gameplay .live-score-panel .resolution.is-score-resolution { min-height: 178px; padding: 5px 6px 7px !important; }
+  .active-gameplay .is-score-resolution .resolution-meta { min-height: 20px; }
+  .active-gameplay .score-resolution-stage { margin-top: 0; }
+  .active-gameplay .score-formula { gap: 4px; }
+  .active-gameplay .score-box { padding: 6px 3px; border-radius: 7px; }
+  .active-gameplay .score-box-label { font-size: clamp(.5rem, 2.4vw, .65rem); letter-spacing: .1em; }
+  .active-gameplay .score-box-value { font-size: clamp(1.28rem, 7vw, 2.1rem); }
+  .active-gameplay .score-formula.has-xmult .score-box-value { font-size: clamp(1.08rem, 6vw, 1.8rem); }
+  .active-gameplay .score-effect-callout { min-height: 16px; margin-top: 3px; font-size: .68rem; }
+  .active-gameplay .score-final { min-height: 31px; margin-top: 0; }
+  .active-gameplay .score-final strong { font-size: 1.35rem; }
+}
+
+@media (max-width: 360px) {
+  .score-formula, .score-formula.has-xmult { gap: 3px; }
+  .score-box { padding-inline: 2px; }
+  .score-operator { font-size: .92rem; }
+  .score-formula.has-xmult .score-box-value { font-size: clamp(.98rem, 5.5vw, 1.25rem); letter-spacing: -.05em; }
+}
 .landing-container {
   width: 100%; height: 100dvh; min-height: 0; max-height: 100dvh; display: grid; place-items: center;
   box-sizing: border-box; overflow: auto;

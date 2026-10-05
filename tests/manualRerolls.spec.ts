@@ -11,6 +11,7 @@ async function ready(page: Page) {
   await page.locator('main').waitFor();
   await enterRun(page);
   for (let barrier = 0; barrier < 2; barrier++) {
+    await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
     const bust = page.locator('.bust-state');
     const bustContinue = bust.getByRole('button', { name: 'Continue', exact: true });
     if (await bustContinue.count()) { await bustContinue.click(); continue; }
@@ -22,7 +23,6 @@ async function ready(page: Page) {
     }
     break;
   }
-  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
 }
 async function matchRound(page: Page, game: GameState) {
   await ready(page);

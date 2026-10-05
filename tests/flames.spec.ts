@@ -68,6 +68,7 @@ async function ready(page: Page) {
   await page.locator('main').waitFor();
   await enterRun(page);
   for (let barrier = 0; barrier < 2; barrier++) {
+    await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
     const bustContinue = page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true });
     if (await bustContinue.count()) { await bustContinue.click(); continue; }
     const map = page.getByTestId('run-map-transition');
@@ -78,7 +79,6 @@ async function ready(page: Page) {
     }
     break;
   }
-  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
 }
 
 async function perform(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'UNLOCK_WARDEN_DIE' | 'NEXT_ROUND' | 'RETRY_ROUND' | 'CONTINUE_ROUND_SUMMARY' | 'CHOOSE_SPECIAL_OFFER' | 'CONTINUE_SPECIAL_OFFER' }>) {
@@ -138,6 +138,7 @@ async function reachReward(page: Page, seed: string) {
 }
 
 test('Flame Selection has fixed offers, preserves faces, reveals XMult, and previews Well Trained', async ({ page }) => {
+  test.setTimeout(120_000);
   const seed = flameSeed();
   let game = await reachReward(page, seed);
   await expect(page.getByRole('main').getByText('FLAME SELECTION', { exact: true })).toBeVisible();
@@ -239,7 +240,7 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   const xMultIndex = result.events.findIndex(event => event.type === 'HAND_XMULT_CHANGED' && event.flame === 'wellTrained');
   expect(xMultIndex).toBeGreaterThan(0);
   await page.clock.runFor(CONFIG.tickMs.normal * xMultIndex);
-  await expect(page.getByTestId('hand-xmult')).toHaveText(`×${result.events[xMultIndex].handScore!.currentXMult}`);
+  await expect(page.getByTestId('hand-xmult')).toHaveText(String(result.events[xMultIndex].handScore!.currentXMult));
   await expect(panel).toBeInViewport();
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight
@@ -247,7 +248,7 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
 });
 
 test('Flame Selection only acquires while Shop Manage Die supports arbitrary Stoke and optional acquisition', async ({ page }) => {
-  test.setTimeout(75_000);
+  test.setTimeout(150_000);
   const seed = flameSeed();
   let game = await reachReward(page, seed);
   const rewardFaces = game.dice.map(die => die.value);

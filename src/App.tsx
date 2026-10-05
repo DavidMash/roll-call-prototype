@@ -60,7 +60,7 @@ export default function App() {
     try { return loadOnboardingMetadata(window.localStorage); }
     catch { return defaultOnboardingMetadata(); }
   });
-  const { board, state, busy, event } = game;
+  const { board, state, busy, event, progress } = game;
   const resumableRun = normalGame.hasStoredRun && isResumableRun(normalGame.state) ? normalGame.state : null;
   const resumableTutorial = tutorialGame.hasStoredRun && isResumableTutorial(tutorialGame.session) ? tutorialGame.session : null;
   const theme = screenTheme(board);
@@ -145,6 +145,8 @@ export default function App() {
       returnToTitle={returnToTitle} />}
     {game.error && <Alert color="orange" withCloseButton onClose={game.clearError} my="xs" py={5} title="Action unavailable">{game.error}</Alert>}
     <main className="main-content">
+      {busy && event?.type !== 'MAP_TRANSITION' && event?.type !== 'ROUND_BUST' && event?.type !== 'CHAPTER_STARTED'
+        && <span className="visually-hidden">EVENT {progress.current} / {progress.total}</span>}
       {event?.type === 'CHAPTER_STARTED' ? <ChapterSplash key={event.id} event={event} onComplete={game.continuePlayback} />
         : event?.type === 'MAP_TRANSITION' ? <RunMapTransition key={event.id} seed={state.seed} event={event} onContinue={game.continuePlayback} />
         : board.phase === 'roundSummary' && board.roundSummary ? <RoundSummaryScreen board={board} busy={busy} submit={submit} />

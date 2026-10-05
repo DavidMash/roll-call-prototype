@@ -158,6 +158,7 @@ export class Resolver {
       const before = scoringPips(live);
       live.workoutPips += workout * CONFIG.workoutIncrement;
       this.emit({ type: 'WORKOUT_INCREMENTED', enhancement: 'workout', dieIds: [dieId], face: snapshot.rank,
+        amount: workout * CONFIG.workoutIncrement,
         message: `D${dieId + 1} face ${snapshot.rank} Workout ×${this.format(workout)}: ${this.format(before)} → ${this.format(scoringPips(live))} future pips` });
     }
     if (workout && !this.state.bossSilenced && this.state.boss?.type === 'hexer' && dieId === this.state.boss.cursedDieId) this.state.stats.hexerEvents.push({

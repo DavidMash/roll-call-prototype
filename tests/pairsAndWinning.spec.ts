@@ -13,6 +13,7 @@ async function ready(page: Page) {
   await page.locator('main').waitFor();
   await enterRun(page);
   for (let barrier = 0; barrier < 2; barrier++) {
+    await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
     const bustContinue = page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true });
     if (await bustContinue.count()) { await bustContinue.click(); continue; }
     const map = page.getByTestId('run-map-transition');
@@ -23,7 +24,6 @@ async function ready(page: Page) {
     }
     break;
   }
-  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
 }
 const die = (page: Page, id: number) => page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) });
 async function select(page: Page, ids: number[]) { for (const id of ids) await die(page, id).click(); }
@@ -143,6 +143,7 @@ test('winning hand shows its final award, physical settle, and ROUND CLEARED in 
   }
   expect(observed).toEqual(['HAND_SCORE_FINALIZED', 'SCORE_ADDED', 'ROUND_CLEARED']);
   await page.getByRole('button', { name: 'Skip playback' }).click();
+  await page.clock.runFor(500);
   await ready(page);
   await expect(page.getByTestId('round-summary')).toBeVisible();
   await expect(page.getByTestId('summary-score')).toContainText(`${fixture.result.state.score}`);

@@ -12,6 +12,7 @@ async function ready(page: Page) {
   await page.locator('main').waitFor();
   await enterRun(page);
   for (let barrier = 0; barrier < 2; barrier++) {
+    await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
     const bustContinue = page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true });
     if (await bustContinue.count()) { await bustContinue.click(); continue; }
     const map = page.getByTestId('run-map-transition');
@@ -22,7 +23,6 @@ async function ready(page: Page) {
     }
     break;
   }
-  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
 }
 async function selectPlay(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' }>) {
   await page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) }).click();
@@ -84,6 +84,7 @@ test('scoring Jackpot pays on a played-hand clear before the final physical sett
   await expect(page.getByTestId(`flame-die-${fixture.heldDieId}`).locator('.enhancement-jackpot')).toHaveCount(1);
   await expect(die(page, fixture.heldDieId)).toHaveAccessibleName(new RegExp(`face ${heldValue},`));
   await page.getByRole('button', { name: 'Skip playback' }).click();
+  await page.clock.runFor(500);
   await ready(page);
   await expect(page.getByTestId('round-summary')).toBeVisible();
   expect(fixture.result.state.gold).toBe(goldBefore + CONFIG.jackpotGold + fixture.result.state.lastRoundPayout!.totalRoundRewardGold);

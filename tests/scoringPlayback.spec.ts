@@ -16,6 +16,7 @@ async function ready(page: Page) {
   await page.locator('main').waitFor();
   await enterRun(page);
   for (let barrier = 0; barrier < 2; barrier++) {
+    await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
     const bustContinue = page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true });
     if (await bustContinue.count()) { await bustContinue.click(); continue; }
     const map = page.getByTestId('run-map-transition');
@@ -26,7 +27,6 @@ async function ready(page: Page) {
     }
     break;
   }
-  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
 }
 async function selectDice(page: Page, dieIds: number[]) {
   for (const id of dieIds) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
@@ -118,21 +118,26 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
     );
     if (event.handScore) {
       await expect(page.getByTestId('hand-pips')).toHaveText(String(event.handScore.currentPips));
-      await expect(page.getByTestId('hand-multiplier')).toHaveText(`×${event.handScore.currentMultiplier}`);
+      await expect(page.getByTestId('hand-multiplier')).toHaveText(String(event.handScore.currentMultiplier));
       if (event.type !== 'SCORE_ADDED') expect(event.board.score).toBe(game.score);
       if (event.type === 'HAND_STARTED') {
         expect(event.handScore.basePips).toBe(started.handScore!.basePips);
         await expect(page.getByTestId('hand-pips')).toHaveText(String(started.handScore!.basePips));
       }
       if (event.type === 'HAND_PIPS_CHANGED' && event.enhancement === 'bonus') {
-        await expect(page.locator('.score-tick')).toHaveText('BONUS');
+        await expect(page.locator('.score-tick')).toHaveText(`BONUS +${event.amount}`);
+        await expect(page.locator(`[data-die-id="${event.dieIds![0]}"] .die`)).toHaveAttribute('data-resolving', 'true');
         observed.push(['Bonus', event.handScore.currentPips, event.handScore.currentMultiplier]);
       }
       if (event.type === 'HITCHHIKER_ADDED_PIPS') {
-        await expect(page.locator('.score-tick')).toHaveText('HITCHHIKER');
+        await expect(page.locator('.score-tick')).toHaveText(`HITCHHIKER +${event.amount}`);
+        await expect(page.locator(`[data-die-id="${event.dieIds![0]}"] .die`)).toHaveAttribute('data-resolving', 'true');
         observed.push(['Hitchhiker', event.handScore.currentPips, event.handScore.currentMultiplier]);
       }
-      if (event.type === 'HAND_SCORE_FINALIZED') await expect(page.locator('.score-tick')).toHaveText(`+${final.amount}`);
+      if (event.type === 'HAND_SCORE_FINALIZED') {
+        await expect(page.locator('.score-tick')).toHaveText(`+${final.amount}`);
+        await expect(page.getByTestId('hand-final-score')).toContainText(String(final.amount));
+      }
     }
     if (event.type === 'SCORE_ADDED' && event.source === 'hand') {
       await expect(page.locator('.score-tick')).toHaveText(`+${final.amount}`);
@@ -148,7 +153,12 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
     event.enhancement === 'bonus' ? 'Bonus' : 'Hitchhiker',
     event.handScore!.currentPips, event.handScore!.currentMultiplier,
   ]));
+  await expect(page.getByTestId('score-box-pips')).toBeVisible();
+  await expect(page.getByTestId('score-box-mult')).toBeVisible();
+  await expect(page.getByTestId('score-box-xmult')).toHaveCount(0);
   await page.getByRole('button', { name: 'Skip playback' }).click();
+  await expect(page.getByTestId('hand-final-score')).toContainText(String(final.amount));
+  await page.clock.runFor(500);
   await ready(page);
   if (fixture.result.state.phase === 'roundSummary') {
     await expect(page.getByRole('heading', { name: /DEFEATED|CLEARED/ })).toBeVisible();
@@ -156,4 +166,37 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
   } else {
     await expect(page.getByTestId('round-score-progress')).toHaveText(`${fixture.result.state.score} / ${fixture.result.state.target}`);
   }
+});
+
+test('score formula stays inside a narrow viewport above the persistent Dice Dock', async ({ page }) => {
+  const fixture = scoringPlaybackRun();
+  let game = newRun(fixture.seed).state;
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.goto(`/?seed=${fixture.seed}&speed=instant`);
+  await ready(page);
+  for (const action of fixture.actions) game = await perform(page, game, action);
+  const row = page.getByRole('button', { name: new RegExp(`^${HANDS[fixture.action.hand].name} `) });
+  await row.click();
+  for (const physical of activeEncounterDice(game)) {
+    const die = page.getByRole('button', { name: new RegExp(`^${physical.owner === 'boss' ? 'Cursed Die' : `Die ${physical.id + 1}`},`) });
+    if ((await die.getAttribute('aria-pressed') === 'true') !== fixture.action.dieIds.includes(physical.id)) await die.click();
+  }
+  if (await row.getAttribute('aria-pressed') !== 'true') await row.click();
+  await page.getByRole('button', { name: /^(PLAY|LAST PLAY[?.])$/ }).click();
+  const formula = page.getByTestId('hand-accumulator');
+  await expect(formula).toBeVisible();
+  const layout = await page.evaluate(() => {
+    const formulaRect = document.querySelector('[data-testid="hand-accumulator"]')!.getBoundingClientRect();
+    const dockRect = document.querySelector('[data-testid="dice-dock"]')!.getBoundingClientRect();
+    return { left: formulaRect.left, right: formulaRect.right, width: innerWidth, bottom: formulaRect.bottom, dockTop: dockRect.top,
+      scrollWidth: document.documentElement.scrollWidth };
+  });
+  expect(layout.left).toBeGreaterThanOrEqual(0);
+  expect(layout.right).toBeLessThanOrEqual(layout.width);
+  expect(layout.scrollWidth).toBe(layout.width);
+  expect(layout.bottom).toBeLessThanOrEqual(layout.dockTop);
+  await expect(page.getByTestId('hand-final-score')).toBeVisible();
+  await expect(page.getByTestId('score-box-pips')).toHaveCSS('animation-name', 'none');
+  await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0, { timeout: 2_000 });
 });
