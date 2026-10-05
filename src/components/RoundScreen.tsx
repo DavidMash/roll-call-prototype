@@ -127,7 +127,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     return () => window.removeEventListener('keydown', playOnEnter, true);
   }, [awaitingWardenChoice, busy, effectiveSelection.dieIds, effectiveSelection.hand, submit, valid, speedDemonOwned]);
   return <Stack gap="xs" className="round-screen">
-    <div className="live-score-panel" data-testid="live-score-panel">
+    <div className="live-score-panel" data-testid="live-score-panel" data-tutorial="score-formula">
       <ScoreResolution event={event} busy={busy} onSkip={skip} idleText={idleText}
         scoreText={formatScoreProgress(board.score, board.target)} showXMult={showXMult} />
     </div>
@@ -167,7 +167,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
           <Group gap="xs" wrap="nowrap">
             {awaitingWardenChoice ? <Button className="unlock-action" size="sm" color="cyan" disabled={busy || selectedWardenDieId === null}
               onClick={() => submit({ type: 'UNLOCK_WARDEN_DIE', dieId: selectedWardenDieId! })}>UNLOCK DIE</Button> : <>
-              <Button className="reroll-action" size="sm" variant="default" disabled={busy || !canReroll}
+              <Button className="reroll-action" size="sm" variant="default" disabled={busy || !canReroll} data-tutorial="reroll-button"
                 aria-label={`${rerollMainText} · ${rerollResourceText}`} data-testid="manual-reroll"
                 data-normal-fill-percent={Math.round(normalRerollFill * 100)} onClick={() => submit(manualAction)}>
                 <span className="reroll-resource-fill" style={{ transform: `scaleX(${normalRerollFill})` }} aria-hidden="true" />

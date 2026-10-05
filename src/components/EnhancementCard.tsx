@@ -14,7 +14,7 @@ export function EnhancementCard({ offer, selected, gold, busy, free = false, onS
   const affordable = free || gold >= enhancementCost(offer.enhancement);
   const enabled = !busy && !offer.purchased && affordable;
   return <Card p="sm" className={`offer ${selected ? 'selected' : ''} ${offer.purchased ? 'purchased' : ''}`}
-    data-testid={`offer-${offer.enhancement}`} draggable={enabled}
+    data-testid={`offer-${offer.enhancement}`} data-tutorial={`enhancement-${offer.enhancement}`} draggable={enabled}
     onDragStart={event => { if (!enabled) { event.preventDefault(); return; } event.dataTransfer.setData('application/x-roll-call-offer', String(offer.id)); event.dataTransfer.effectAllowed = 'copy'; onSelect(); }}>
     <Group className="offer-card-header" justify="space-between" align="center" wrap="nowrap">
       <Group className="offer-identity" gap={4} wrap="nowrap"><span className="offer-icon" aria-hidden="true">{ICON[offer.enhancement]}</span><Text className="offer-name" fw={700} size="sm">{definition.name}</Text>

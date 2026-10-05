@@ -22,6 +22,10 @@ import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameS
 
 type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number };
 type RollContext = 'gameplay' | 'settle' | 'wardenSetup' | 'shop' | 'flameSelection';
+export interface ResolverOptions {
+  tutorialFinalLifeSafeguard?: boolean;
+  nonPayingManualRerolls?: number;
+}
 const NORMAL_SHOP_SPEND = new Set<GoldSpendSource>(['enhancement', 'shopDiceReroll', 'enhancementReroll', 'handTraining', 'lifeRestore']);
 const UPPER_HAND_BY_FACE: Partial<Record<import('./types').Rank, HandId>> = {
   1: 'ones', 2: 'twos', 3: 'threes', 4: 'fours', 5: 'fives', 6: 'sixes',
@@ -33,7 +37,7 @@ export class Resolver {
   rngStateAfterResolution: number | null = null;
   private queue: RollTrigger[] = [];
   private handAccumulator: HandScoreAccumulator | null = null;
-  constructor(readonly state: GameState, readonly rng: RandomSource) { recalculateMaxCharge(state); }
+  constructor(readonly state: GameState, readonly rng: RandomSource, readonly options: ResolverOptions = {}) { recalculateMaxCharge(state); }
 
   format(value: number): string { return formatPlayerNumber(value); }
   emit(event: Omit<EventRecord, 'id' | 'round'>): void {
@@ -888,6 +892,25 @@ export class Resolver {
       this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', message: 'Bad Dream returned the run to its checkpoint with 1 Life' });
       return;
     }
+    if (failure.livesAfter === 0 && this.options.tutorialFinalLifeSafeguard) {
+      this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound;
+      this.state.consumed = [];
+      if (this.state.boss) {
+        this.state.bossSilenced = true;
+        if (this.state.boss.type === 'warden') {
+          this.state.boss.activeDieIds = this.state.dice.filter(die => die.owner === 'player').map(die => die.id);
+          this.state.boss.startingDieId ??= this.state.boss.activeDieIds[0] ?? null;
+          this.state.boss.pendingReinforcements = 0;
+          this.state.boss.nextUnlockTarget = null;
+        }
+      }
+      current.manualRerollsGranted += CONFIG.manualRerollsPerRound;
+      this.emit({ type: 'TUTORIAL_SAFEGUARD', amount: CONFIG.manualRerollsPerRound,
+        boss: this.state.boss?.type,
+        message: `Tutorial safety refill: ${this.format(CONFIG.manualRerollsPerRound)} Rerolls; Used hands refreshed${this.state.boss ? `; ${this.state.boss.type.toUpperCase()} suppressed` : ''}` });
+      this.state.decisionId++;
+      return;
+    }
     const progressionTelemetry = {
       mapTransitions: structuredClone(this.state.stats.mapTransitions),
       bossEncounters: structuredClone(this.state.stats.bossEncounters),
@@ -1243,7 +1266,7 @@ export class Resolver {
       const bossType = this.state.boss?.type ?? null;
       const bossRewardLabel = bossType && isMiniBossType(bossType) ? 'Mini-Boss Reward' : 'Boss Reward';
       const heldGoldSnapshot = this.state.gold;
-      const payout = { baseGold: roundReward(), unusedRerollGold: this.state.manualRerollsRemaining,
+      const payout = { baseGold: roundReward(), unusedRerollGold: Math.max(0, this.state.manualRerollsRemaining - Math.max(0, this.options.nonPayingManualRerolls ?? 0)),
         interestGold: interestForGold(heldGoldSnapshot) * (this.state.specialOfferEffects.taxEvasionRounds > 0 ? 2 : 1),
         bossRewardGold: bossType ? bossRewardForRound(this.state.round) : 0, heldGoldSnapshot, totalRoundRewardGold: 0 };
       payout.totalRoundRewardGold = payout.baseGold + payout.unusedRerollGold + payout.interestGold + payout.bossRewardGold;

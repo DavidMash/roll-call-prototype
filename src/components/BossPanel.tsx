@@ -10,7 +10,7 @@ export function BossPanel({ board }: { board: Board }) {
   if (!boss) return null;
   const definition = BOSSES[boss.type];
   const tier = isMiniBossType(boss.type) ? 'MINI-BOSS' : 'BOSS';
-  if (board.bossSilenced) return <Paper p="xs" className={`boss-panel boss-${boss.type}`} data-testid="boss-panel">
+  if (board.bossSilenced) return <Paper p="xs" className={`boss-panel boss-${boss.type}`} data-testid="boss-panel" data-tutorial="boss">
     <Group justify="space-between"><Text fw={900}>{tier} · {definition.name}</Text><Badge color="teal">SILENCED</Badge></Group>
   </Paper>;
   const compactStatus = (() => {
@@ -33,7 +33,7 @@ export function BossPanel({ board }: { board: Board }) {
       case 'mugger': return boss.spent && boss.revealedHand ? `${HANDS[boss.revealedHand].name.toUpperCase()} · SPENT` : 'HIDDEN LOWER HAND';
     }
   })();
-  return <Paper p="xs" className={`boss-panel boss-${boss.type}`} data-testid="boss-panel">
+  return <Paper p="xs" className={`boss-panel boss-${boss.type}`} data-testid="boss-panel" data-tutorial="boss">
     <Group justify="space-between" gap="xs" wrap="nowrap" className="boss-compact-row"
       aria-label={`${definition.name}. ${compactStatus}`}>
       <Text fw={900}><span className="boss-tier-label">{tier} · </span>{definition.name}</Text>

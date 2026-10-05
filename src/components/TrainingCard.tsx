@@ -30,7 +30,7 @@ export function TrainingCard({ offer, handLevels, gold, busy, free = false, onTr
   const current = handStats(offer.hand, currentLevel);
   const next = handStats(offer.hand, nextLevel);
   const cost = free ? 0 : handTrainingCost(offer.purchases);
-  return <Card p="sm" className="training-card" data-testid={`training-offer-${offer.hand}`}>
+  return <Card p="sm" className="training-card" data-testid={`training-offer-${offer.hand}`} data-tutorial={`training-${offer.hand}`}>
     <Group className="training-card-header" justify="space-between" align="start" wrap="nowrap">
       <div className="training-heading"><Group className="training-title-row" gap={3} wrap="nowrap"><Text className="training-name" fw={700} size="sm" tt="uppercase">{HANDS[offer.hand].name}</Text>
         <InfoPopover label={`${HANDS[offer.hand].name} training`} description="Gain +1 Lv. and improve this hand’s Pips and Mult." /></Group>

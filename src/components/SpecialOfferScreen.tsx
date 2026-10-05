@@ -16,7 +16,7 @@ export function SpecialOfferScreen({ board, busy, submit }: {
         <Badge color="teal" variant="light">CHOOSE 1</Badge>
       </Group>
     </Paper>
-    <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
+    <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md" data-tutorial="special-offers">
       {selection.offers.map(offer => {
         const chosen = selection.chosen?.id === offer.id;
         return <Paper key={offer.id} withBorder p="lg" className={`special-offer-card ${chosen ? 'selected' : ''}`}>

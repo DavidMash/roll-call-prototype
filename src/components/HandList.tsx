@@ -62,7 +62,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
         const state = consumed ? 'consumed' : selected ? 'selected' : playable ? 'playable' : 'unavailable';
         const scoreLabel = score === undefined ? EMPTY_TEXT.score : `${formatPlayerNumber(score)} points`;
         const showQuickPlay = selected && canSubmit;
-        return <div key={hand} className={`scorecard-row-shell ${showQuickPlay ? 'has-quick-play' : ''}`}>
+        return <div key={hand} className={`scorecard-row-shell ${showQuickPlay ? 'has-quick-play' : ''}`} data-tutorial={`hand-${hand}`}>
         <Button variant={selected ? 'light' : 'subtle'} color={selected ? 'teal' : 'gray'}
           className={`scorecard-row ${state} ${targeted ? 'targeted' : ''} ${board.boss?.type === 'caller' && board.boss.calledHand === hand ? 'caller-called' : ''} ${board.boss?.type === 'fly' && board.boss.flyHand === hand ? 'fly-row' : ''}`} data-testid={`scorecard-row-${hand}`} data-state={state}
           disabled={busy || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}
@@ -113,7 +113,7 @@ export function HandScorecard({ board, selection, busy, canSubmit, submitPreview
   const hasCompatibleHand = [...UPPER_HAND_IDS, ...LOWER_HAND_IDS].some(hand => !unavailableHands.includes(hand)
     && combinationsForHand(encounterDice, hand).some(set => selection.dieIds.every(id => set.includes(id))
       && requiredDieIds.every(id => set.includes(id))));
-  return <div className="scorecard">
+  return <div className="scorecard" data-tutorial="scorecard">
     <div className="scorecard-grid">
       <ScorecardSection title="Upper" hands={UPPER_HAND_IDS} {...{ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit }} />
       <ScorecardSection title="Lower" hands={LOWER_HAND_IDS} {...{ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit }} />

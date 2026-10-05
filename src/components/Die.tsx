@@ -58,9 +58,10 @@ export function Die({ die, display, selected, highlighted, rolling, ability, fla
   const triggered = ability || flameAbility;
 
   return <div className={`die-wrap die-slot${detailsDisabled ? ' details-disabled' : ''}`} data-die-id={die.id}
+    data-tutorial={die.owner === 'player' ? `die-${die.id + 1}` : undefined}
     data-testid={die.owner === 'player' ? `flame-die-${die.id}` : 'cursed-die-slot'}>
     <div className="die-flame-zone">
-      {flameId && <button type="button" className="die-flame-cap" disabled={detailsDisabled}
+      {flameId && <button type="button" className="die-flame-cap" disabled={detailsDisabled} data-tutorial="flame-cap"
         data-testid={`active-flame-${flameId}`}
         aria-label={`View ${FLAMES[flameId].name} Flame details, Ember at ${formatPlayerNumber(flameInvestment)} of 100 Gold`}
         onClick={() => onFlame(flameId)}>

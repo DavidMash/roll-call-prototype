@@ -19,7 +19,7 @@ function HudStat({ testId, icon, label, value }: { testId: string; icon: string;
   </div>;
 }
 
-export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, openRunInfo, openHelp, openRestoreLives, openFlameDetails, onMenuOpenChange }: {
+export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, openRunInfo, openHelp, openRestoreLives, openFlameDetails, returnToTitle, onMenuOpenChange }: {
   board: Board;
   speed: PlaybackSpeed;
   setSpeed: (speed: PlaybackSpeed) => void;
@@ -29,6 +29,7 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
   openHelp: () => void;
   openRestoreLives: () => void;
   openFlameDetails: (target: FlameDetailsTarget) => void;
+  returnToTitle: () => void;
   onMenuOpenChange?: (opened: boolean) => void;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -56,8 +57,9 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
         <HudStat testId="stat-gold" icon="●" label="Gold" value={board.gold} />
         {board.phase === 'shop'
           ? <Tooltip label="Restore lost lives" withArrow><UnstyledButton className="hud-lives interactive" data-testid="stat-lives"
+            data-tutorial="lives"
             aria-label={`${board.lives} of ${CONFIG.maxLives} lives; restore lives`} onClick={openRestoreLives}>{hearts}</UnstyledButton></Tooltip>
-          : <div className="hud-lives" data-testid="stat-lives" aria-label={`${board.lives} of ${CONFIG.maxLives} lives`}>{hearts}</div>}
+          : <div className="hud-lives" data-testid="stat-lives" data-tutorial="lives" aria-label={`${board.lives} of ${CONFIG.maxLives} lives`}>{hearts}</div>}
         {board.phase === 'shop' || board.phase === 'flameSelection' || board.phase === 'specialOffer' || board.phase === 'roundSummary'
           ? <div className="hud-phase" aria-label={board.phase === 'shop' ? 'Shop phase' : board.phase === 'flameSelection' ? 'Flame Selection phase' : board.phase === 'specialOffer' ? 'Special Offer phase' : 'Round Summary phase'}>
             {board.phase === 'shop' ? 'SHOP' : board.phase === 'flameSelection' ? 'FLAME SELECTION' : board.phase === 'specialOffer' ? 'SPECIAL OFFER' : 'SUMMARY'}
@@ -69,15 +71,15 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
         <span aria-hidden="true" className="hamburger-icon"><i /><i /><i /></span>
       </ActionIcon>
     </Group>
-    {board.phase === 'round' && <Progress data-testid="round-goal-progress"
+    {board.phase === 'round' && <Progress data-testid="round-goal-progress" data-tutorial="goal"
       value={Math.min(100, board.score / board.target * 100)} size={4} radius={0}
       aria-label="Round Goal progress" aria-valuetext={`${formatPlayerNumber(board.score)} of ${formatPlayerNumber(board.target)} points toward the Goal`} />}
-    {board.bonfires.length > 0 && <Group gap={4} px="xs" py={3} className="bonfire-strip" aria-label="Active Bonfires">
+    {board.bonfires.length > 0 && <Group gap={4} px="xs" py={3} className="bonfire-strip" data-tutorial="bonfires" aria-label="Active Bonfires">
       <Text size="xs" fw={700} c="orange">BONFIRES</Text>{board.bonfires.map(id => <Badge component="button" type="button" key={id}
         size="xs" color="red" variant="light" className="flame-detail-trigger" aria-label={`View ${FLAMES[id].name} Flame details`}
         onClick={() => openFlameDetails({ flame: id, kind: 'bonfire' })}>🔥 {FLAMES[id].shortName}</Badge>)}
     </Group>}
-    {specialOfferStatuses.length > 0 && <Group gap={4} px="xs" py={3} wrap="nowrap" className="special-effects-strip"
+    {specialOfferStatuses.length > 0 && <Group gap={4} px="xs" py={3} wrap="nowrap" className="special-effects-strip" data-tutorial="special-offer-status"
       aria-label="Active Special Offers" data-testid="special-effects-status">
       <Text className="special-effects-heading" size="xs" fw={700}>SPECIAL EFFECTS</Text>
       <div className="special-effects-badges">{specialOfferStatuses.map(status => <Tooltip key={status.type}
@@ -104,6 +106,7 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
       <Divider />
       <Button variant="default" fullWidth onClick={() => launch(openRunInfo)}>Run Info</Button>
       <Button variant="default" fullWidth onClick={() => launch(openHelp)}>How to Play</Button>
+      <Button variant="subtle" color="gray" fullWidth onClick={() => launch(returnToTitle)}>Return to Title</Button>
     </Stack>
   </Drawer>
   </>;

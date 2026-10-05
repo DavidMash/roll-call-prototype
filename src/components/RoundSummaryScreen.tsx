@@ -26,13 +26,14 @@ export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy
         {summary.encounterType === 'boss' && <Text fw={850}>{BOSSES[summary.bossType!].name}</Text>}
         <Text fw={800} size="lg" data-testid="summary-score">{formatScoreProgress(summary.score, summary.target)}</Text>
       </div>
-      <Paper className="summary-gold-card" p="md">
+      <Paper className="summary-gold-card" p="md" data-tutorial="payout">
         <Group justify="space-between" align="baseline">
           <Text fw={900}>GOLD EARNED</Text>
           <Text className="summary-total" fw={950} size="xl" data-testid="summary-gold-earned">+{formatPlayerNumber(summary.totalGoldEarned)}</Text>
         </Group>
         <div className="summary-gold-rows" data-testid="summary-gold-breakdown">
-          {rows.filter(([, amount], index) => amount > 0 || index < 3).map(([label, amount]) => <div className="summary-gold-row" key={label}>
+          {rows.filter(([, amount], index) => amount > 0 || index < 3).map(([label, amount]) => <div className="summary-gold-row" key={label}
+            data-tutorial={label === 'Unused Rerolls' ? 'payout-rerolls' : label === 'Interest' ? 'payout-interest' : undefined}>
             <Text size="sm">{label}</Text><Text size="sm" fw={850}>+{formatPlayerNumber(amount)}</Text>
           </div>)}
         </div>

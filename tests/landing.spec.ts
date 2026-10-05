@@ -3,6 +3,8 @@ import type { Page } from '@playwright/test';
 import { activeFace } from '../src/game/dice';
 import { newRun } from '../src/game/engine';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
+import { ONBOARDING_STORAGE_KEY, ONBOARDING_STORAGE_VERSION } from '../src/tutorial/tutorialPersistence';
+import { TUTORIAL_VERSION } from '../src/tutorial/types';
 import type { GameState } from '../src/game/types';
 
 async function installRun(page: Page, state: GameState, speed: 'normal' | 'instant' = 'instant') {
@@ -23,7 +25,8 @@ test('startup always shows the landing gate and only offers Continue for a valid
   await clearRun(page, 'landing-empty');
   await expect(page.getByRole('heading', { name: 'ROLL CALL', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /^Continue Chapter / })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'NEW RUN', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'PLAY TUTORIAL', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'SKIP TUTORIAL', exact: true })).toBeVisible();
   await expect(page.getByTestId('dice-dock')).toHaveCount(0);
   expect(await page.evaluate(key => localStorage.getItem(key), RUN_STORAGE_KEY)).toBeNull();
 
@@ -31,6 +34,7 @@ test('startup always shows the landing gate and only offers Continue for a valid
   terminal.phase = 'lost';
   await installRun(page, terminal);
   await expect(page.getByRole('button', { name: /^Continue Chapter / })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'PLAY TUTORIAL', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'NEW RUN', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Start a new run?' })).toHaveCount(0);
 
@@ -38,6 +42,21 @@ test('startup always shows the landing gate and only offers Continue for a valid
   await installRun(page, active);
   await expect(page.getByRole('button', { name: /^Continue Chapter 1 Round 1/ })).toBeVisible();
   await expect(page.getByTestId('dice-dock')).toHaveCount(0);
+});
+
+test('completed tutorial metadata survives refresh and restores the normal landing hierarchy', async ({ page }) => {
+  await page.goto('/?speed=instant');
+  await page.evaluate(([key, version, tutorialVersion]) => localStorage.setItem(key, JSON.stringify({
+    version,
+    metadata: { tutorialVersion, tutorialCompleted: true, normalRunFinishedOnce: false },
+  })), [ONBOARDING_STORAGE_KEY, ONBOARDING_STORAGE_VERSION, TUTORIAL_VERSION] as const);
+  await page.reload();
+
+  await expect(page.getByRole('button', { name: 'NEW RUN', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'REPLAY TUTORIAL', exact: true })).toBeVisible();
+  await expect(page.getByText('Learn the basics in a guided run.')).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'REPLAY TUTORIAL', exact: true })).toBeVisible();
 });
 
 test('Continue presents compact progress and restores the exact Round state without rewriting it', async ({ page }) => {
@@ -90,7 +109,7 @@ test('Continue resumes Shop, Special Offer, and Flame Selection without forcing 
 
 test('New Run starts immediately without a save and preserves the Chapter 1 splash and map flow', async ({ page }) => {
   await clearRun(page, 'landing-new-flow', 'normal');
-  await page.getByRole('button', { name: 'NEW RUN', exact: true }).click();
+  await page.getByRole('button', { name: 'SKIP TUTORIAL', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Start a new run?' })).toHaveCount(0);
   await expect(page.getByTestId('chapter-splash')).toHaveAttribute('data-chapter', '1');
   await expect(page.getByTestId('dice-dock')).toBeVisible();
@@ -110,7 +129,7 @@ test('New Run confirmation preserves the save on open and Cancel, then replaces 
   state.roundCheckpoint.gold = 19;
   await installRun(page, state);
   const rawBefore = await page.evaluate(key => localStorage.getItem(key), RUN_STORAGE_KEY);
-  const newRunButton = page.getByRole('button', { name: 'NEW RUN', exact: true });
+  const newRunButton = page.getByRole('button', { name: 'SKIP TUTORIAL', exact: true });
 
   await newRunButton.click();
   const dialog = page.getByRole('dialog', { name: 'Start a new run?' });

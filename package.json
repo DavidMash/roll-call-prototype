@@ -15,6 +15,7 @@
   "dependencies": {
     "@mantine/core": "^9.6.1",
     "@mantine/hooks": "^9.6.1",
+    "driver.js": "^1.9.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

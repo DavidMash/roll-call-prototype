@@ -1,6 +1,7 @@
 import { CONFIG, diceRerollCost, handTrainingCost, lifeRestoreCost, offerRerollCost, teamTrainingCost } from './config';
 import { activeFace, createDice } from './dice';
 import { Resolver } from './effects';
+import type { ResolverOptions } from './effects';
 import { enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, placementError, stacks } from './enhancements';
 import {
   activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasChargeBonfire, hasOwnedChargeFlame,
@@ -327,11 +328,12 @@ export function validateAction(state: Board, action: Action): string | null {
   return null;
 }
 
-function execute(state: GameState, run: (resolver: Resolver) => void, random?: RandomSource, rngStateOverride?: number): Resolution {
+function execute(state: GameState, run: (resolver: Resolver) => void, random?: RandomSource, rngStateOverride?: number,
+  options?: ResolverOptions): Resolution {
   const next = structuredClone(state);
   if (rngStateOverride !== undefined) next.rngState = rngStateOverride;
   const seeded = new SeededRng(next.rngState);
-  const resolver = new Resolver(next, random ?? seeded);
+  const resolver = new Resolver(next, random ?? seeded, options);
   try { run(resolver); }
   catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -361,7 +363,7 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
   return execute(state, resolver => resolver.startRound(), random, random ? undefined : attemptSeed(seed, 1, 1));
 }
 
-export function dispatch(state: GameState, action: Action, random?: RandomSource): Resolution {
+export function dispatch(state: GameState, action: Action, random?: RandomSource, options?: ResolverOptions): Resolution {
   const normalized = normalizeGameState(state);
   const normalizationChangedState = JSON.stringify(normalized) !== JSON.stringify(state);
   const error = validateAction(normalized, action);
@@ -536,5 +538,5 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       case 'RETRY_ROUND': resolver.startRound(true); break;
       case 'NEXT_ROUND': next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
     }
-  }, random, rngStateOverride);
+  }, random, rngStateOverride, options);
 }

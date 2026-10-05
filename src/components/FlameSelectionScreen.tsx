@@ -22,10 +22,11 @@ export function FlameSelectionScreen({ board, event, busy, selectedOffer, setSel
         color="red" variant="light" className="flame-detail-trigger" aria-label={`View ${FLAMES[id].name} Flame details`}
         onClick={() => openFlameDetails({ flame: id, kind: 'bonfire' })}>🔥 {FLAMES[id].name}</Badge>)}</Group>
     </Paper>}
-    <Paper p="xs" className="shop-section flame-offers-section">
+    <Paper p="xs" className="shop-section flame-offers-section" data-tutorial="flame-offers">
       <Group justify="space-between" className="section-heading"><Text fw={700} size="sm" tt="uppercase">Flame Offers</Text></Group>
       {reward.offers.length === 0 && <Text ta="center" fw={900} py="md" data-testid="all-flames-collected">ALL FLAMES COLLECTED</Text>}
       <div className="shop-grid flame-offers">{reward.offers.map(item => <Card key={item.id} p="sm"
+        data-tutorial={board.round === 12 && reward.offers[0]?.id === item.id ? 'recommended-flame' : undefined}
         className={`flame-offer ${selectedOffer === item.id && !reward.acquired ? 'selected' : ''}`} data-testid={`flame-offer-${item.flame}`}>
         <Group className="flame-offer-header" justify="space-between" wrap="nowrap"><Group className="flame-offer-identity" gap={3} wrap="nowrap">
           <span className="flame-offer-icon" aria-hidden="true">🔥</span><Text className="flame-offer-name" fw={750}>{FLAMES[item.flame].name}</Text>

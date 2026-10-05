@@ -35,13 +35,13 @@ export function ShopScreen({ board, event, busy, selectedOffer, setSelectedOffer
       ? `Prepare for ${BOSSES[upcomingBoss].name}` : `Prepare for ${chapterLabel(board.round + 1)}`}</Text></Group>}</div>
     {busy && <ScoreResolution event={event} busy={busy} onSkip={skip} showXMult={hasXMultFlame(board.dice, board.bonfires)} />}
     <BossPreview board={board} />
-    <Paper p="xs" className="shop-section">
+    <Paper p="xs" className="shop-section" data-tutorial="hand-training">
       <Group justify="space-between" className="section-heading"><Text fw={700} size="sm" tt="uppercase" lts=".08em">Hand Training</Text></Group>
       <div className="shop-grid training-grid">{shop.trainingOffers.map(item => <TrainingCard
         key={item.kind === 'team' ? 'team' : item.hand} offer={item} handLevels={board.handLevels} gold={board.gold} busy={busy} free={trainingOfferIsFree(shop, item)}
         onTrain={() => submit(item.kind === 'team' ? { type: 'TRAIN_ALL_HANDS' } : { type: 'TRAIN_HAND', hand: item.hand })} />)}</div>
     </Paper>
-    <Paper p="xs" className="shop-section">
+    <Paper p="xs" className="shop-section" data-tutorial="enhancements">
       <Group justify="space-between" className="section-heading">
         <Text fw={700} size="sm" tt="uppercase" lts=".08em">Enhancements</Text>
         <Button size="compact-xs" variant="default" disabled={busy || board.gold < offerRerollCost(shop.offerRerolls)}

@@ -57,7 +57,7 @@ export function FlameDetailsModal({ board, target, busy, actionsEnabled, onClose
       {target?.kind === 'bonfire' && <Text size="sm" fw={800}>Bonfire</Text>}
       <Text size="sm">{target?.kind === 'bonfire' ? definition.bonfireDescription : definition.description}</Text>
       {isEmber && <Text size="xs" c="dimmed">Current: {flameEffectText(flameId, invested, board)}</Text>}
-      {canStoke && <Stack gap="sm" data-testid="stoke-flame-controls">
+      {canStoke && <Stack gap="sm" data-testid="stoke-flame-controls" data-tutorial="stoke">
         {amount > 0 && <div className="modal-stat stoke-preview"><Text size="xs" c="teal" tt="uppercase">AFTER STOKE · {formatPlayerNumber(afterInvestment)}/100</Text>
           <Text size="sm" fw={700}>{afterInvestment === 100 ? definition.bonfireDescription : flameEffectText(flameId, afterInvestment, afterBoard)}</Text></div>}
         <Group gap="xs" wrap="wrap" className="stoke-controls">

@@ -27,6 +27,10 @@ import { FlameDetailsModal } from './components/FlameDetailsModal';
 import type { FlameDetailsTarget } from './components/FlameDetailsModal';
 import { LandingScreen } from './components/LandingScreen';
 import { isResumableRun } from './game/persistence';
+import { useTutorialGame } from './tutorial/useTutorialGame';
+import { TutorialDirector } from './tutorial/TutorialDirector';
+import { defaultOnboardingMetadata, isResumableTutorial, loadOnboardingMetadata, saveOnboardingMetadata } from './tutorial/tutorialPersistence';
+import type { OnboardingMetadata } from './tutorial/types';
 
 const freshSeed = () => `roll-${Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join('-')}`;
 const query = new URLSearchParams(window.location.search);
@@ -35,7 +39,8 @@ const initialSeed = requestedSeed ?? freshSeed();
 const initialSpeed = ['normal', 'fast', 'instant'].includes(query.get('speed') ?? '') ? query.get('speed') as PlaybackSpeed : 'normal';
 
 export default function App() {
-  const [atLanding, setAtLanding] = useState(true);
+  const [runMode, setRunMode] = useState<'normal' | 'tutorial' | null>(null);
+  const atLanding = runMode === null;
   const [seedInput, setSeedInput] = useState(initialSeed);
   const [speed, setSpeed] = useState<PlaybackSpeed>(initialSpeed);
   const [diceDisplay, setDiceDisplay] = useState(loadDiceDisplay);
@@ -50,9 +55,16 @@ export default function App() {
   const [flameDetails, setFlameDetails] = useState<FlameDetailsTarget | null>(null);
   const [hudHeight, setHudHeight] = useState(60);
   const appRef = useRef<HTMLDivElement>(null);
-  const game = useGame(requestedSeed, initialSeed, speed, !atLanding);
+  const normalGame = useGame(requestedSeed, initialSeed, speed, runMode === 'normal');
+  const tutorialGame = useTutorialGame(speed, runMode === 'tutorial');
+  const game = runMode === 'tutorial' ? tutorialGame : normalGame;
+  const [onboarding, setOnboarding] = useState<OnboardingMetadata>(() => {
+    try { return loadOnboardingMetadata(window.localStorage); }
+    catch { return defaultOnboardingMetadata(); }
+  });
   const { board, state, busy, event } = game;
-  const resumableRun = game.hasStoredRun && isResumableRun(state) ? state : null;
+  const resumableRun = normalGame.hasStoredRun && isResumableRun(normalGame.state) ? normalGame.state : null;
+  const resumableTutorial = tutorialGame.hasStoredRun && isResumableTutorial(tutorialGame.session) ? tutorialGame.session : null;
   const theme = screenTheme(board);
   const showingChapterSplash = event?.type === 'CHAPTER_STARTED';
   const showingMap = event?.type === 'MAP_TRANSITION';
@@ -60,6 +72,14 @@ export default function App() {
     && !restoreLivesOpen && faceDetails === null && flameDetails === null;
   useLayoutEffect(() => setSeedInput(state.seed), [state.seed]);
   useEffect(() => saveDiceDisplay(diceDisplay), [diceDisplay]);
+  useEffect(() => { saveOnboardingMetadata(window.localStorage, onboarding); }, [onboarding]);
+  useEffect(() => {
+    if (normalGame.hasStoredRun && normalGame.state.phase === 'lost' && !onboarding.normalRunFinishedOnce) {
+      const next = { ...onboarding, normalRunFinishedOnce: true };
+      saveOnboardingMetadata(window.localStorage, next);
+      setOnboarding(next);
+    }
+  }, [normalGame.hasStoredRun, normalGame.state.phase, onboarding]);
   useLayoutEffect(() => {
     if (atLanding) return;
     const hud = appRef.current?.querySelector<HTMLElement>('.top-hud');
@@ -78,6 +98,13 @@ export default function App() {
     if (action.type !== 'TOGGLE_CHARGE') setSelection(emptySelection());
   }
   function restart(seed: string) {
+    if (runMode === 'tutorial') {
+      tutorialGame.restart();
+      setSelection(emptySelection());
+      setSelectedOffer(null);
+      setSelectedFlameOffer(null);
+      return;
+    }
     const url = new URL(window.location.href);
     url.searchParams.set('seed', seed);
     window.history.replaceState(window.history.state, '', url);
@@ -89,14 +116,37 @@ export default function App() {
     setRestoreLivesOpen(false);
     setFaceDetails(null);
     setFlameDetails(null);
-    game.restart(seed);
+    normalGame.restart(seed);
   }
   function startNewRunFromLanding() {
     restart(requestedSeed ?? (game.hasStoredRun ? freshSeed() : initialSeed));
-    setAtLanding(false);
+    setRunMode('normal');
+  }
+  function startTutorialFromLanding() {
+    if (!resumableTutorial || onboarding.tutorialCompleted) tutorialGame.restart();
+    setSelection(emptySelection());
+    setSelectedOffer(null);
+    setSelectedFlameOffer(null);
+    setRunMode('tutorial');
+  }
+  function returnToTitle() {
+    setGameMenuOpen(false);
+    setRunMode(null);
+  }
+  function finishTutorial() {
+    const next = { ...onboarding, tutorialCompleted: true };
+    saveOnboardingMetadata(window.localStorage, next);
+    setOnboarding(next);
+    tutorialGame.clearStored();
+    setRunMode(null);
+  }
+  function openFlameDetails(target: FlameDetailsTarget) {
+    if (runMode === 'tutorial' && target.kind === 'ember') tutorialGame.completeBeat('flame-details');
+    setFlameDetails(target);
   }
   if (atLanding) return <Container size={1180} px={{ base: 6, sm: 'sm' }} py={8} className="landing-container">
-    <LandingScreen resumableRun={resumableRun} onContinue={() => setAtLanding(false)} onNewRun={startNewRunFromLanding} />
+    <LandingScreen resumableRun={resumableRun} resumableTutorial={resumableTutorial} onboarding={onboarding}
+      onContinue={() => setRunMode('normal')} onTutorial={startTutorialFromLanding} onNewRun={startNewRunFromLanding} />
   </Container>;
   return <Container ref={appRef} size={1180} px={{ base: 6, sm: 'sm' }} py={8}
     className={`app-container screen-theme ${board.phase === 'round' ? 'active-gameplay' : ''}`}
@@ -104,14 +154,15 @@ export default function App() {
       '--hud-sticky-offset': `${hudHeight + 8}px` } as React.CSSProperties}>
     {!showingChapterSplash && <TopHud board={board} speed={speed} setSpeed={setSpeed} diceDisplay={diceDisplay} setDiceDisplay={setDiceDisplay}
       openRunInfo={() => setRunInfoOpen(true)} openHelp={() => setHelpOpen(true)}
-      openRestoreLives={() => setRestoreLivesOpen(true)} openFlameDetails={setFlameDetails} onMenuOpenChange={setGameMenuOpen} />}
+      openRestoreLives={() => setRestoreLivesOpen(true)} openFlameDetails={openFlameDetails} onMenuOpenChange={setGameMenuOpen}
+      returnToTitle={returnToTitle} />}
     {game.error && <Alert color="orange" withCloseButton onClose={game.clearError} my="xs" py={5} title="Action unavailable">{game.error}</Alert>}
     <main className="main-content">
       {event?.type === 'CHAPTER_STARTED' ? <ChapterSplash key={event.id} event={event} onComplete={game.continuePlayback} />
         : event?.type === 'MAP_TRANSITION' ? <RunMapTransition key={event.id} seed={state.seed} event={event} onContinue={game.continuePlayback} />
         : board.phase === 'roundSummary' && board.roundSummary ? <RoundSummaryScreen board={board} busy={busy} submit={submit} />
         : board.phase === 'flameSelection' && board.flameSelection ? <FlameSelectionScreen board={board} event={event} busy={busy}
-        selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} openFlameDetails={setFlameDetails} />
+        selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} openFlameDetails={openFlameDetails} />
         : board.phase === 'specialOffer' && board.specialOffer ? <SpecialOfferScreen board={board} busy={busy} submit={submit} />
         : board.phase === 'shop' && board.shop ? <ShopScreen board={board} event={event} busy={busy}
         selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} submit={submit} skip={game.skip} />
@@ -132,7 +183,7 @@ export default function App() {
     <DiceDock board={board} event={event} busy={busy} actionsEnabled={dockActionsEnabled} cinematic={showingChapterSplash}
       display={diceDisplay} selection={selection} setSelection={setSelection}
       selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} selectedFlameOffer={selectedFlameOffer}
-      submit={submit} openFaceDetails={setFaceDetails} openFlameDetails={setFlameDetails} />
+      submit={submit} openFaceDetails={setFaceDetails} openFlameDetails={openFlameDetails} />
     <RunInfoModal state={state} visibleEventId={event?.id} busy={busy} opened={runInfoOpen} onClose={() => setRunInfoOpen(false)}
       seedInput={seedInput} setSeedInput={setSeedInput} startSeed={() => restart(seedInput.trim())}
       restartSeed={() => restart(state.seed)} newSeed={() => restart(freshSeed())} />
@@ -144,5 +195,8 @@ export default function App() {
       onClose={() => setFaceDetails(null)} submit={submit} />
     <FlameDetailsModal board={board} target={flameDetails} busy={busy} actionsEnabled={!busy && !showingChapterSplash && !showingMap}
       onClose={() => setFlameDetails(null)} submit={submit} />
+    {runMode === 'tutorial' && <TutorialDirector session={tutorialGame.session}
+      paused={busy || showingChapterSplash || showingMap || gameMenuOpen || runInfoOpen || helpOpen || restoreLivesOpen || faceDetails !== null || flameDetails !== null}
+      onAcknowledge={tutorialGame.acknowledge} onFinish={finishTutorial} />}
   </Container>;
 }

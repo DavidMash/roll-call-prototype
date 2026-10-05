@@ -5,7 +5,11 @@ export async function enterRun(page: Page) {
   if (!await title.count()) return;
   const continueButton = page.getByRole('button', { name: /^Continue Chapter / });
   if (await continueButton.count()) await continueButton.click();
-  else await page.getByRole('button', { name: 'NEW RUN', exact: true }).click();
+  else {
+    const newRun = page.getByRole('button', { name: 'NEW RUN', exact: true });
+    if (await newRun.count()) await newRun.click();
+    else await page.getByRole('button', { name: 'SKIP TUTORIAL', exact: true }).click();
+  }
   await title.waitFor({ state: 'detached' });
 }
 

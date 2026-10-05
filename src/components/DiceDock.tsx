@@ -119,7 +119,7 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
   const replacingFlame = activeFlameId(replacing?.flame);
 
   return <>
-    <Paper component="section" p="xs" className={`dice-dock gameplay-dock${cinematic ? ' cinematic' : ''}`}
+    <Paper component="section" p="xs" className={`dice-dock gameplay-dock${cinematic ? ' cinematic' : ''}`} data-tutorial="dice-dock"
       data-testid="dice-dock" data-phase={board.phase} data-cinematic={cinematic || undefined}
       aria-label="Persistent Dice Dock">
       <DiceRow dice={dice} display={display} event={event} disabled={busy || !actionsEnabled}
