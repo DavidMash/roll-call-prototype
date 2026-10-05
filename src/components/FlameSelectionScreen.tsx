@@ -1,89 +1,46 @@
-import { Badge, Button, Card, Group, Modal, Paper, Progress, Stack, Text, Tooltip } from '@mantine/core';
-import { useState } from 'react';
-import { activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasXMultFlame } from '../game/flames';
+import { Badge, Button, Card, Group, Paper, Stack, Text } from '@mantine/core';
+import { hasXMultFlame, FLAMES } from '../game/flames';
 import type { Action, Board, GameEvent } from '../game/types';
-import { Die } from './Die';
 import { ScoreResolution } from './ScoreResolution';
-import type { DiceDisplay } from '../uiSettings';
-import { InfoPopover } from './InfoPopover';
-import { EMPTY_TEXT, formatPlayerNumber } from '../game/copy';
+import { formatPlayerNumber } from '../game/copy';
+import type { FlameDetailsTarget } from './FlameDetailsModal';
 
-export function FlameSelectionScreen({ board, event, busy, diceDisplay, selectedOffer, setSelectedOffer, submit, skip }: {
+export function FlameSelectionScreen({ board, event, busy, selectedOffer, setSelectedOffer, submit, skip, openFlameDetails }: {
   board: Board; event: GameEvent | null; busy: boolean;
-  diceDisplay: DiceDisplay;
   selectedOffer: number | null; setSelectedOffer: (id: number | null) => void; submit: (action: Action) => void; skip: () => void;
+  openFlameDetails: (target: FlameDetailsTarget) => void;
 }) {
   const reward = board.flameSelection!;
-  const offer = reward.acquired ? undefined : reward.offers.find(item => item.id === selectedOffer);
-  const [replacementDie, setReplacementDie] = useState<number | null>(null);
-
-  function chooseOrManage(dieId: number) {
-    if (offer) {
-      if (activeFlameId(board.dice[dieId].flame)) setReplacementDie(dieId);
-      else submit({ type: 'CHOOSE_FLAME', offerId: offer.id, dieId });
-      return;
-    }
-  }
-  function confirmReplacement() {
-    if (!offer || replacementDie === null) return;
-    submit({ type: 'CHOOSE_FLAME', offerId: offer.id, dieId: replacementDie });
-    setReplacementDie(null);
-  }
-
-  const replacing = replacementDie === null ? null : board.dice[replacementDie];
-  const replacingId = activeFlameId(replacing?.flame);
-  return <>
-    <Stack gap="xs" className="flame-selection-screen">
-      <Group justify="space-between" className="shop-summary flame-selection-header phase-sticky-header">
-        <Text fw={800}>FLAME SELECTION</Text>
-        <Badge color="yellow" variant="light">{formatPlayerNumber(board.gold)} Gold</Badge>
-      </Group>
-      {busy && <ScoreResolution event={event} busy={busy} onSkip={skip} showXMult={hasXMultFlame(board.dice, board.bonfires)} />}
-      {board.bonfires.length > 0 && <Paper p="xs" className="shop-section bonfire-strip" data-testid="bonfires">
-        <Group gap="xs"><Text fw={700} size="sm" tt="uppercase">Bonfires</Text>{board.bonfires.map(id => <Tooltip key={id} label={FLAMES[id].bonfireDescription} withArrow>
-          <Badge color="red" variant="light">🔥 {FLAMES[id].name}</Badge>
-        </Tooltip>)}</Group>
-      </Paper>}
-      <Paper p="xs" className="shop-section flame-offers-section">
-        <Group justify="space-between" className="section-heading">
-          <Text fw={700} size="sm" tt="uppercase">Flame Offers</Text>
-        </Group>
-        {reward.offers.length === 0 && <Text ta="center" fw={900} py="md" data-testid="all-flames-collected">ALL FLAMES COLLECTED</Text>}
-        <div className="shop-grid flame-offers">{reward.offers.map(item => <Card key={item.id} p="sm" className={`flame-offer ${selectedOffer === item.id && !reward.acquired ? 'selected' : ''}`} data-testid={`flame-offer-${item.flame}`}>
-          <Group className="flame-offer-header" justify="space-between" wrap="nowrap"><Group className="flame-offer-identity" gap={3} wrap="nowrap">
-            <span className="flame-offer-icon" aria-hidden="true">🔥</span><Text className="flame-offer-name" fw={750}>{FLAMES[item.flame].name}</Text>
-            <InfoPopover label={FLAMES[item.flame].name} description={FLAMES[item.flame].description} /></Group><Badge className="flame-offer-price" size="xs" color="teal">FREE</Badge></Group>
-          <Button className="flame-offer-action" size="compact-xs" fullWidth mt="xs" color="orange" variant={selectedOffer === item.id && !reward.acquired ? 'filled' : 'light'} disabled={busy || reward.acquired}
-            onClick={() => setSelectedOffer(selectedOffer === item.id ? null : item.id)}>{selectedOffer === item.id ? 'Choose a die below' : 'Select Flame'}</Button>
-        </Card>)}</div>
-      </Paper>
-      <Paper p="md" className="shop-section flame-dice-section">
-        <Group className="flame-dice-heading" justify="space-between" mb="xs"><div><Text fw={700} size="sm" tt="uppercase">Dice & Embers</Text><Text size="xs" c="dimmed">Each Ember stays with its Die until it becomes a Bonfire.</Text></div>
-          {offer && <Text className="flame-dice-instruction" size="xs" c="orange">{FLAMES[offer.flame].name} selected — choose a Die</Text>}</Group>
-        <div className="flame-dice-grid">{board.dice.map(die => {
-          const flameId = activeFlameId(die.flame);
-          const invested = activeFlameInvestment(die.flame);
-          const involved = event?.dieIds?.includes(die.id) ?? false;
-          return <Card key={die.id} p="xs" className={`flame-die-card ${offer ? 'offer-target' : ''}`} data-testid={`flame-die-${die.id}`}>
-            <Die die={die} display={diceDisplay} selected={false} highlighted={involved && event?.type !== 'DIE_ROLLED'}
-              rolling={involved && (event?.type === 'DICE_REROLL_STARTED' || event?.type === 'DIE_ROLLED')}
-              ability={involved ? event?.enhancement : undefined} flameAbility={involved ? event?.flame : undefined}
-              disabled={busy} eligible={!!offer} onClick={() => chooseOrManage(die.id)} />
-            {flameId ? <div className="ember-details" data-testid={`active-flame-${flameId}`}>
-              <Group className="ember-heading" justify="space-between" gap={4} wrap="nowrap"><Text className="ember-name" size="xs" fw={800} c="orange">🔥 <span className="ember-name-full">{FLAMES[flameId].name}</span><span className="ember-name-compact">{FLAMES[flameId].shortName}</span></Text><Badge size="xs" color="orange" variant="light">EMBER</Badge></Group>
-              <Text className="ember-investment" size="xs" fw={700}>{formatPlayerNumber(invested)} / 100 <span className="ember-bonfire-label">→ BONFIRE</span></Text>
-              <Progress value={invested} color="orange" size="sm" my={4} />
-              <Text className="ember-effect" size="xs" c="dimmed">{flameEffectText(flameId, invested, board)}</Text>
-            </div> : <div className="ember-details empty"><Text size="xs" c="dimmed"><span className="ember-empty-full">{EMPTY_TEXT.flameSlot}</span><span className="ember-empty-compact">EMPTY</span></Text></div>}
-          </Card>;
-        })}</div>
-      </Paper>
-      <div className="shop-action-dock"><Button disabled={busy} onClick={() => submit({ type: 'CONTINUE_FLAME_SELECTION' })}>CONTINUE TO SHOP →</Button></div>
-    </Stack>
-
-    <Modal opened={replacementDie !== null} onClose={() => setReplacementDie(null)} title="Replace Flame?" centered transitionProps={{ duration: 0 }}>
-      {replacingId && offer && <><Text>Replace <strong>{FLAMES[replacingId].name}</strong> ({formatPlayerNumber(activeFlameInvestment(replacing?.flame))} Gold invested) with <strong>{FLAMES[offer.flame].name}</strong>?</Text>
-        <Group justify="flex-end" mt="lg"><Button variant="default" onClick={() => setReplacementDie(null)}>Cancel</Button><Button color="orange" onClick={confirmReplacement}>Replace Flame</Button></Group></>}
-    </Modal>
-  </>;
+  const selected = reward.acquired ? undefined : reward.offers.find(item => item.id === selectedOffer);
+  return <Stack gap="xs" className="flame-selection-screen">
+    <Group justify="space-between" className="shop-summary flame-selection-header phase-sticky-header">
+      <Text fw={800}>FLAME SELECTION</Text><Badge color="yellow" variant="light">{formatPlayerNumber(board.gold)} Gold</Badge>
+    </Group>
+    {busy && <ScoreResolution event={event} busy={busy} onSkip={skip} showXMult={hasXMultFlame(board.dice, board.bonfires)} />}
+    {board.bonfires.length > 0 && <Paper p="xs" className="shop-section bonfire-strip" data-testid="bonfires">
+      <Group gap="xs"><Text fw={700} size="sm" tt="uppercase">Bonfires</Text>{board.bonfires.map(id => <Badge component="button" type="button" key={id}
+        color="red" variant="light" className="flame-detail-trigger" aria-label={`View ${FLAMES[id].name} Flame details`}
+        onClick={() => openFlameDetails({ flame: id, kind: 'bonfire' })}>🔥 {FLAMES[id].name}</Badge>)}</Group>
+    </Paper>}
+    <Paper p="xs" className="shop-section flame-offers-section">
+      <Group justify="space-between" className="section-heading"><Text fw={700} size="sm" tt="uppercase">Flame Offers</Text></Group>
+      {reward.offers.length === 0 && <Text ta="center" fw={900} py="md" data-testid="all-flames-collected">ALL FLAMES COLLECTED</Text>}
+      <div className="shop-grid flame-offers">{reward.offers.map(item => <Card key={item.id} p="sm"
+        className={`flame-offer ${selectedOffer === item.id && !reward.acquired ? 'selected' : ''}`} data-testid={`flame-offer-${item.flame}`}>
+        <Group className="flame-offer-header" justify="space-between" wrap="nowrap"><Group className="flame-offer-identity" gap={3} wrap="nowrap">
+          <span className="flame-offer-icon" aria-hidden="true">🔥</span><Text className="flame-offer-name" fw={750}>{FLAMES[item.flame].name}</Text>
+          <Button className="flame-offer-info" size="compact-xs" variant="subtle" color="gray"
+            aria-label={`About ${FLAMES[item.flame].name}`} onClick={() => openFlameDetails({ flame: item.flame, kind: 'offer' })}>ⓘ</Button>
+        </Group><Badge className="flame-offer-price" size="xs" color="teal">FREE</Badge></Group>
+        <Button className="flame-offer-action" size="compact-xs" fullWidth mt="xs" color="orange"
+          variant={selectedOffer === item.id && !reward.acquired ? 'filled' : 'light'} disabled={busy || reward.acquired}
+          onClick={() => setSelectedOffer(selectedOffer === item.id ? null : item.id)}>{selectedOffer === item.id ? 'Choose a die below' : 'Select Flame'}</Button>
+      </Card>)}</div>
+    </Paper>
+    <Paper p="xs" className="shop-section flame-dock-instruction">
+      <Text fw={700} size="sm" tt="uppercase">Dice Dock</Text>
+      <Text size="xs" c={selected ? 'orange' : 'dimmed'}>{selected ? `${FLAMES[selected.flame].name} selected — choose a die below` : 'Select a Flame, then assign it in the Dice Dock.'}</Text>
+    </Paper>
+    <div className="shop-action-dock"><Button disabled={busy} onClick={() => submit({ type: 'CONTINUE_FLAME_SELECTION' })}>CONTINUE TO SHOP →</Button></div>
+  </Stack>;
 }

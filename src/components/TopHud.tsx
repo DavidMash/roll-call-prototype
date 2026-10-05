@@ -8,6 +8,7 @@ import type { DiceDisplay } from '../uiSettings';
 import { formatPlayerNumber } from '../game/copy';
 import { activeSpecialOfferStatusItems } from '../game/specialOffers';
 import { chapterLabel } from '../game/chapters';
+import type { FlameDetailsTarget } from './FlameDetailsModal';
 
 function HudStat({ testId, icon, label, value }: { testId: string; icon: string; label: string; value: number }) {
   const formatted = formatPlayerNumber(value);
@@ -18,7 +19,7 @@ function HudStat({ testId, icon, label, value }: { testId: string; icon: string;
   </div>;
 }
 
-export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, openRunInfo, openHelp, openRestoreLives, onMenuOpenChange }: {
+export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, openRunInfo, openHelp, openRestoreLives, openFlameDetails, onMenuOpenChange }: {
   board: Board;
   speed: PlaybackSpeed;
   setSpeed: (speed: PlaybackSpeed) => void;
@@ -27,6 +28,7 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
   openRunInfo: () => void;
   openHelp: () => void;
   openRestoreLives: () => void;
+  openFlameDetails: (target: FlameDetailsTarget) => void;
   onMenuOpenChange?: (opened: boolean) => void;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -71,7 +73,9 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
       value={Math.min(100, board.score / board.target * 100)} size={4} radius={0}
       aria-label="Round Goal progress" aria-valuetext={`${formatPlayerNumber(board.score)} of ${formatPlayerNumber(board.target)} points toward the Goal`} />}
     {board.bonfires.length > 0 && <Group gap={4} px="xs" py={3} className="bonfire-strip" aria-label="Active Bonfires">
-      <Text size="xs" fw={700} c="orange">BONFIRES</Text>{board.bonfires.map(id => <Tooltip key={id} label={FLAMES[id].bonfireDescription} withArrow><Badge size="xs" color="red" variant="light">🔥 {FLAMES[id].shortName}</Badge></Tooltip>)}
+      <Text size="xs" fw={700} c="orange">BONFIRES</Text>{board.bonfires.map(id => <Badge component="button" type="button" key={id}
+        size="xs" color="red" variant="light" className="flame-detail-trigger" aria-label={`View ${FLAMES[id].name} Flame details`}
+        onClick={() => openFlameDetails({ flame: id, kind: 'bonfire' })}>🔥 {FLAMES[id].shortName}</Badge>)}
     </Group>}
     {specialOfferStatuses.length > 0 && <Group gap={4} px="xs" py={3} wrap="nowrap" className="special-effects-strip"
       aria-label="Active Special Offers" data-testid="special-effects-status">

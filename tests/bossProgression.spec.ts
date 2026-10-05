@@ -274,6 +274,14 @@ test('Warden rolls all dice locked and lets the player choose the first die with
     await expect(die).toBeEnabled();
     await expect(die).toHaveAttribute('aria-pressed', 'false');
     await expect(die.locator('.die-lock-overlay')).toContainText('SELECT');
+    await expect(die.locator('.die-number')).toBeVisible();
+    expect(await die.evaluate(element => {
+      const lock = element.querySelector('.die-lock-overlay')!.getBoundingClientRect();
+      const value = element.querySelector('.die-number')!.getBoundingClientRect();
+      return lock.right <= value.left || lock.left >= value.right || lock.bottom <= value.top || lock.top >= value.bottom;
+    })).toBe(true);
+    await expect(die.locator('..').locator('.die-flame-zone')).toHaveCount(1);
+    await expect(die.locator('..').locator('.die-enhancement-strip')).toHaveCount(1);
   }
   const face = game.dice[4].value;
   await page.getByRole('button', { name: /^Die 5, face .* locked, selectable to unlock$/ }).click();
@@ -342,6 +350,7 @@ test('Warden target pauses play and updates the shared lock target after the cho
 });
 
 test('Hexer preview keeps its faces secret and encounter fits all six dice on one row', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
   let game = await reachBossShop(page, 'hexer');
   const preview = page.getByTestId('boss-preview');
   await expect(preview).toContainText('THE HEXER');
@@ -374,6 +383,7 @@ test('Hexer preview keeps its faces secret and encounter fits all six dice on on
   await expect(dice).toHaveCount(6);
   const boxes = await dice.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().top));
   expect(Math.max(...boxes) - Math.min(...boxes)).toBeLessThan(2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(game.dice).toHaveLength(6);
 });
 
@@ -392,12 +402,14 @@ test('Hexer face 7 renders seven pips with Bonus and Mirror and remains freely s
   cursed = game.dice.find(die => die.owner === 'boss')!;
   expect(cursed.value).toBe(7);
   const button = page.getByRole('button', { name: /^Cursed Die, face 7,/ });
+  const slot = page.getByTestId('cursed-die-slot');
   await expect(button.locator('.pip-face')).toHaveAttribute('aria-label', 'Cursed Die showing 7');
   await expect(button.locator('.pip')).toHaveCount(7);
-  await expect(button).toContainText('Mirror');
-  await expect(button).toContainText('B+5');
-  await expect(button).not.toContainText('Jackpot');
-  await expect(button).not.toContainText('Sticky');
+  await expect(slot.getByRole('button', { name: /View Enhancements on Cursed Die face 7/ })).toHaveAccessibleName(/Bonus ×5, Mirror ×1/);
+  await expect(slot.locator('.enhancement-mirror')).toHaveCount(1);
+  await expect(slot.locator('.enhancement-bonus')).toHaveAttribute('title', 'Bonus ×5');
+  await expect(slot.locator('.enhancement-jackpot')).toHaveCount(0);
+  await expect(slot.locator('.enhancement-sticky')).toHaveCount(0);
   await expect(button).toHaveAttribute('aria-pressed', 'false');
   await expect(button).toHaveAttribute('aria-disabled', 'false');
   await button.click();

@@ -1,7 +1,7 @@
 import { Alert, Button, Container, Group, Paper, Stack, Text, Title } from '@mantine/core';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { RunInfoModal } from './components/DebugPanel';
-import { DiceRow } from './components/DiceRow';
+import { DiceDock } from './components/DiceDock';
 import { BustScreen } from './components/BustScreen';
 import { FlameSelectionScreen } from './components/FlameSelectionScreen';
 import { HelpModal } from './components/HelpModal';
@@ -21,6 +21,10 @@ import type { PlaybackSpeed } from './useGame';
 import { loadDiceDisplay, saveDiceDisplay } from './uiSettings';
 import { formatScoreProgress } from './game/copy';
 import { chapterLabel } from './game/chapters';
+import { FaceDetailsModal } from './components/FaceDetailsModal';
+import type { FaceDetailsTarget } from './components/FaceDetailsModal';
+import { FlameDetailsModal } from './components/FlameDetailsModal';
+import type { FlameDetailsTarget } from './components/FlameDetailsModal';
 
 const freshSeed = () => `roll-${Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join('-')}`;
 const query = new URLSearchParams(window.location.search);
@@ -39,12 +43,17 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [restoreLivesOpen, setRestoreLivesOpen] = useState(false);
   const [gameMenuOpen, setGameMenuOpen] = useState(false);
+  const [faceDetails, setFaceDetails] = useState<FaceDetailsTarget | null>(null);
+  const [flameDetails, setFlameDetails] = useState<FlameDetailsTarget | null>(null);
   const [hudHeight, setHudHeight] = useState(60);
   const appRef = useRef<HTMLDivElement>(null);
   const game = useGame(requestedSeed, initialSeed, speed);
   const { board, state, busy, event } = game;
   const theme = screenTheme(board);
   const showingChapterSplash = event?.type === 'CHAPTER_STARTED';
+  const showingMap = event?.type === 'MAP_TRANSITION';
+  const dockActionsEnabled = !busy && !showingChapterSplash && !showingMap && !gameMenuOpen && !runInfoOpen && !helpOpen
+    && !restoreLivesOpen && faceDetails === null && flameDetails === null;
   useLayoutEffect(() => setSeedInput(state.seed), [state.seed]);
   useEffect(() => saveDiceDisplay(diceDisplay), [diceDisplay]);
   useLayoutEffect(() => {
@@ -73,6 +82,8 @@ export default function App() {
     setSelectedFlameOffer(null);
     setRunInfoOpen(false);
     setRestoreLivesOpen(false);
+    setFaceDetails(null);
+    setFlameDetails(null);
     game.restart(seed);
   }
   return <Container ref={appRef} size={1180} px={{ base: 6, sm: 'sm' }} py={8}
@@ -81,19 +92,18 @@ export default function App() {
       '--hud-sticky-offset': `${hudHeight + 8}px` } as React.CSSProperties}>
     {!showingChapterSplash && <TopHud board={board} speed={speed} setSpeed={setSpeed} diceDisplay={diceDisplay} setDiceDisplay={setDiceDisplay}
       openRunInfo={() => setRunInfoOpen(true)} openHelp={() => setHelpOpen(true)}
-      openRestoreLives={() => setRestoreLivesOpen(true)} onMenuOpenChange={setGameMenuOpen} />}
+      openRestoreLives={() => setRestoreLivesOpen(true)} openFlameDetails={setFlameDetails} onMenuOpenChange={setGameMenuOpen} />}
     {game.error && <Alert color="orange" withCloseButton onClose={game.clearError} my="xs" py={5} title="Action unavailable">{game.error}</Alert>}
     <main className="main-content">
       {event?.type === 'CHAPTER_STARTED' ? <ChapterSplash key={event.id} event={event} onComplete={game.continuePlayback} />
         : event?.type === 'MAP_TRANSITION' ? <RunMapTransition key={event.id} seed={state.seed} event={event} onContinue={game.continuePlayback} />
         : board.phase === 'roundSummary' && board.roundSummary ? <RoundSummaryScreen board={board} busy={busy} submit={submit} />
-        : board.phase === 'flameSelection' && board.flameSelection ? <FlameSelectionScreen board={board} event={event} busy={busy} diceDisplay={diceDisplay}
-        selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} />
+        : board.phase === 'flameSelection' && board.flameSelection ? <FlameSelectionScreen board={board} event={event} busy={busy}
+        selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} openFlameDetails={setFlameDetails} />
         : board.phase === 'specialOffer' && board.specialOffer ? <SpecialOfferScreen board={board} busy={busy} submit={submit} />
-        : board.phase === 'shop' && board.shop ? <ShopScreen board={board} event={event} busy={busy} diceDisplay={diceDisplay}
+        : board.phase === 'shop' && board.shop ? <ShopScreen board={board} event={event} busy={busy}
         selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} submit={submit} skip={game.skip} />
       : (board.phase === 'bust' || (board.phase === 'lost' && board.bust)) ? <BustScreen board={board}
-          diceDisplay={diceDisplay}
           onContinue={event?.type === 'ROUND_BUST' && (board.bust?.livesAfter ?? 0) > 0 ? game.continuePlayback : undefined}
           restartSame={() => restart(state.seed)} newRun={() => restart(freshSeed())} />
         : board.phase === 'lost' || board.phase === 'error' ? <Stack gap="sm">
@@ -103,16 +113,24 @@ export default function App() {
             <Text size="sm" c="dimmed" mt="sm">Run details and event history are available in Run Info.</Text>
             <Group justify="center" mt="lg"><Button onClick={() => restart(state.seed)}>Restart same seed</Button><Button variant="default" onClick={() => restart(freshSeed())}>New seed</Button></Group>
           </Paper>
-          <Paper p="xs"><DiceRow dice={board.dice} display={diceDisplay} event={null} disabled selected={[]} onClick={() => {}} /></Paper>
         </Stack>
-        : <RoundScreen board={board} event={event} busy={busy} inputBlocked={busy || gameMenuOpen || runInfoOpen || helpOpen || restoreLivesOpen} diceDisplay={diceDisplay}
+        : <RoundScreen board={board} event={event} busy={busy} inputBlocked={busy || gameMenuOpen || runInfoOpen || helpOpen || restoreLivesOpen || faceDetails !== null || flameDetails !== null}
           selection={selection} setSelection={setSelection} submit={submit} skip={game.skip} />}
     </main>
+    <DiceDock board={board} event={event} busy={busy} actionsEnabled={dockActionsEnabled} cinematic={showingChapterSplash}
+      display={diceDisplay} selection={selection} setSelection={setSelection}
+      selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} selectedFlameOffer={selectedFlameOffer}
+      submit={submit} openFaceDetails={setFaceDetails} openFlameDetails={setFlameDetails} />
     <RunInfoModal state={state} visibleEventId={event?.id} busy={busy} opened={runInfoOpen} onClose={() => setRunInfoOpen(false)}
       seedInput={seedInput} setSeedInput={setSeedInput} startSeed={() => restart(seedInput.trim())}
       restartSeed={() => restart(state.seed)} newSeed={() => restart(freshSeed())} />
     <HelpModal opened={helpOpen} onClose={() => setHelpOpen(false)} />
     <RestoreLivesModal board={board} opened={restoreLivesOpen && board.phase === 'shop'} busy={busy}
       onClose={() => setRestoreLivesOpen(false)} submit={submit} />
+    <FaceDetailsModal board={board} target={faceDetails} diceDisplay={diceDisplay} selectedOffer={selectedOffer}
+      setSelectedOffer={setSelectedOffer} busy={busy} actionsEnabled={!busy && !showingChapterSplash && !showingMap}
+      onClose={() => setFaceDetails(null)} submit={submit} />
+    <FlameDetailsModal board={board} target={flameDetails} busy={busy} actionsEnabled={!busy && !showingChapterSplash && !showingMap}
+      onClose={() => setFlameDetails(null)} submit={submit} />
   </Container>;
 }

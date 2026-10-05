@@ -435,7 +435,7 @@ test('physical dice default to numerals and persist the Pips preference across g
   await expect(page.locator('.die-number')).toHaveCount(0);
   await expect(page.locator('.pip-face')).toHaveCount(5);
   const shop = await reachShop(page, findShopSeed());
-  await expect(page.locator('.exposed-section .pip-face')).toHaveCount(5);
+  await expect(page.locator('.dice-dock .pip-face')).toHaveCount(5);
   await page.getByRole('button', { name: /^Die 1,/ }).click();
   const manager = page.getByRole('dialog', { name: /D1 .* MANAGE DIE/ });
   for (let face = 1; face <= 6; face++) await expect(manager.getByTestId(`manage-face-${face}`).locator('.pip')).toHaveCount(face);
@@ -656,12 +656,12 @@ test('Team Training occupies one existing slot and presents itself as a special 
     trainingHeights: [...document.querySelectorAll<HTMLElement>('.training-grid .training-card')].map(card => card.getBoundingClientRect().height),
     enhancementHeights: [...document.querySelectorAll<HTMLElement>('.enhancement-grid .offer')].map(card => card.getBoundingClientRect().height),
     enhancementNameHeights: [...document.querySelectorAll<HTMLElement>('.enhancement-grid .offer-name')].map(name => name.getBoundingClientRect().height),
-    dieHeights: [...document.querySelectorAll<HTMLElement>('.exposed-section .die')].map(die => die.getBoundingClientRect().height),
+    dieHeights: [...document.querySelectorAll<HTMLElement>('.dice-dock .die')].map(die => die.getBoundingClientRect().height),
   }));
   expect(Math.max(...shopLayout.trainingHeights) - Math.min(...shopLayout.trainingHeights)).toBeLessThan(2);
   expect(Math.max(...shopLayout.enhancementHeights) - Math.min(...shopLayout.enhancementHeights)).toBeLessThan(2);
   expect(Math.max(...shopLayout.enhancementNameHeights)).toBeLessThan(40);
-  expect(Math.max(...shopLayout.dieHeights)).toBeLessThanOrEqual(76);
+  expect(Math.max(...shopLayout.dieHeights)).toBeLessThanOrEqual(62);
   const enhancement = page.locator('.enhancement-grid .offer').first();
   const enhancementName = await enhancement.locator('.mantine-Text-root').first().textContent();
   const info = enhancement.getByRole('button', { name: `About ${enhancementName}` });
@@ -824,7 +824,9 @@ test('stackable enhancement purchases show a single readable count badge', async
   game = dispatch(game, { type: 'BUY', offerId: second.id, dieId: 0 }).state;
   await matchBoard(page, game);
 
-  await expect(physical).toContainText('Sticky ×2');
+  const physicalSlot = page.getByTestId('flame-die-0');
+  await expect(physicalSlot.locator('.enhancement-sticky')).toHaveAttribute('title', 'Sticky ×2');
+  await expect(physicalSlot.locator('.enhancement-sticky')).toContainText('×2');
   await expectCenteredPips(physical);
   expect(game.dice[0].faces[game.dice[0].value - 1].enhancements.sticky).toBe(2);
   expect(game.gold).toBe(startingGold - 7); // two 2-Gold Sticky stacks and one 3-Gold offer reroll
@@ -842,7 +844,7 @@ test('stackable enhancement purchases show a single readable count badge', async
   game = dispatch(game, { type: 'SELL_ENHANCEMENT', dieId: 0, face, enhancement: 'sticky' }).state;
   await manager.getByRole('button', { name: 'Close', exact: true }).click();
   await matchBoard(page, game);
-  await expect(physical).not.toContainText('Sticky');
+  await expect(physicalSlot.locator('.enhancement-sticky')).toHaveCount(0);
   expect(game.gold).toBe(startingGold - 5);
 });
 
@@ -867,7 +869,8 @@ test('a fourth enhancement type opens Manage Die and preserves the offer through
     await matchBoard(page, game);
   }
   const face = game.dice[0].value;
-  await expect(page.getByRole('button', { name: /^Die 1,/ })).toContainText('3 / 3');
+  await expect(page.getByTestId('flame-die-0').locator('.die-enhancement-strip .enhancement-icon')).toHaveCount(3);
+  await expect(page.getByTestId('dice-dock')).not.toContainText('3 / 3');
   await page.getByRole('button', { name: 'REROLL OFFERS · 3 GOLD', exact: true }).click();
   game = dispatch(game, { type: 'REROLL_OFFERS' }).state;
   await matchBoard(page, game);
@@ -1105,7 +1108,8 @@ test('purchased Jumping Bean visibly triggers and rerolls on the next initial ga
   }
   const freePlay = next.events[beanIndex];
   await expect(page.locator('.resolution .score-tick')).toHaveText(`JUMPING BEAN · FREE ${HANDS[freePlay.hand!].name.toUpperCase()}`);
-  await expect(page.locator('.ability-label').first()).toHaveText('JUMPING BEAN');
+  await expect(page.locator('.dice-dock .die.pulse')).toHaveCount(1);
+  await expect(page.locator('.dice-dock .enhancement-jumpingBean')).toHaveCount(1);
   await page.getByRole('button', { name: 'Skip playback' }).click();
   await matchBoard(page, next.state);
   await expect(page.getByTestId('scorecard-effect-score')).toHaveCount(0);

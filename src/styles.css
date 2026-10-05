@@ -115,11 +115,9 @@ button { font: inherit; }
 .mobile-score-total { display: none; }
 .dice-row { display: grid; grid-template-columns: repeat(var(--dice-columns, 5), minmax(74px, 104px)); justify-content: center; gap: 8px; min-width: 0; }
 .die-wrap { min-width: 0; }
-.ability-label { height: 20px; display: flex; align-items: center; justify-content: center; text-align: center; font-size: .58rem; font-weight: 800; color: var(--mantine-color-teal-3); letter-spacing: .04em; }
 .die { width: 100%; aspect-ratio: 1; min-height: 88px; max-height: 104px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 5px 4px; color: var(--mantine-color-gray-1); background: var(--mantine-color-dark-8); cursor: pointer; border: 1px solid var(--mantine-color-dark-4); transition: border-color 100ms, background 100ms, transform 100ms; }
 .die:disabled { cursor: default; }
 .die-id { position: absolute; top: 4px; left: 6px; font-size: .57rem; font-weight: 700; letter-spacing: .05em; }
-.flame-badge { position: absolute; top: 3px; right: 3px; max-width: 64px; height: 15px; padding-inline: 3px; font-size: .48rem; text-transform: none; }
 .pip-face { width: min(64%, 64px); aspect-ratio: 1; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); flex: none; }
 .die > .pip-face { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
 .die > .die-number { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: clamp(1.65rem, 5vw, 2.4rem); font-weight: 850; line-height: 1; }
@@ -133,13 +131,6 @@ button { font: inherit; }
 .pip-bottom-left { grid-column: 1; grid-row: 3; }
 .pip-bottom-right { grid-column: 3; grid-row: 3; }
 .warden-die-choice { display: inline-flex; align-items: center; gap: 5px; }
-.die-face-status { position: absolute; left: 4px; right: 4px; bottom: 4px; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.die-face-status.with-capacity { bottom: 15px; }
-.die-pips { line-height: 1; opacity: .8; }
-.die-capacity { position: absolute; right: 5px; bottom: 3px; font-size: .52rem; font-weight: 750; }
-.die-badges { max-height: 34px; display: flex; justify-content: center; flex-wrap: wrap; gap: 2px; overflow: hidden; }
-.die-badges .mantine-Badge-root { height: 15px; padding-inline: 4px; font-size: .5rem; text-transform: none; }
-.die .flame-badge, .die .boss-face-badge, .die-badges .mantine-Badge-root { opacity: .8; }
 .die.selected { background: rgba(18, 184, 134, .16); border-color: var(--mantine-color-teal-5); box-shadow: inset 0 0 0 1px var(--mantine-color-teal-7); }
 .die.scoring { background: rgba(250, 176, 5, .12); border-color: var(--mantine-color-yellow-6); }
 .die.eligible { border-color: var(--mantine-color-teal-4); box-shadow: 0 0 0 1px var(--mantine-color-teal-6); }
@@ -197,13 +188,10 @@ button { font: inherit; }
 .info-circle-icon { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .info-circle-dot { fill: currentColor; stroke: none; }
 .offer-description { min-height: 29px; line-height: 1.2; }
-.exposed-section .dice-row { grid-template-columns: repeat(var(--dice-columns, 5), minmax(86px, 122px)); margin: 0 auto; }
-.exposed-section .die { min-height: 96px; max-height: 122px; }
 .manage-face-tile { min-height: 132px; cursor: pointer; background: var(--mantine-color-dark-7); transition: border-color 100ms, background 100ms; }
 .manage-face-tile.focused { border-color: var(--mantine-color-teal-5); background: rgba(18,184,134,.08); }
 .manage-face-tile.exposed-face { box-shadow: inset 3px 0 var(--mantine-color-teal-6); }
 .manage-face-number { width: 28px; height: 28px; display: inline-grid; place-items: center; border-radius: 6px; background: var(--mantine-color-dark-6); font-size: 1rem; font-weight: 850; }
-.shop-flame-context { background: rgba(230,119,0,.07); border-color: rgba(255,146,43,.24); }
 .hud-lives { color: var(--mantine-color-red-5); font-weight: 900; letter-spacing: .08em; white-space: nowrap; padding: 4px 6px; border-radius: 6px; }
 .hud-lives.interactive { border: 1px solid rgba(250,82,82,.45); cursor: pointer; }
 .hud-lives.interactive:hover, .hud-lives.interactive:focus-visible { background: rgba(250,82,82,.12); outline: 2px solid var(--mantine-color-red-5); }
@@ -220,10 +208,6 @@ button { font: inherit; }
 .flame-offer-icon { flex: none; }
 .flame-card-icon { width: 25px; height: 25px; display: inline-grid; place-items: center; border-radius: 7px; background: rgba(230,119,0,.16); }
 .flame-description { min-height: 45px; line-height: 1.25; }
-.flame-dice-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
-.flame-die-card { min-width: 0; background: var(--mantine-color-dark-8); border: 1px solid rgba(255,146,43,.12); }
-.flame-die-card.offer-target { border-color: rgba(18,184,134,.25); }
-.flame-die-card .die-wrap { max-width: 112px; margin: 0 auto; }
 .ember-details { min-height: 76px; margin-top: 6px; padding: 6px; border-radius: 6px; background: rgba(230,119,0,.07); }
 .ember-details.empty { display: grid; place-items: center; }
 .ember-name-compact, .ember-empty-compact { display: none; }
@@ -296,30 +280,8 @@ button { font: inherit; }
   .training-grid .mantine-Button-root, .enhancement-grid .mantine-Button-root, .flame-offers .mantine-Button-root { height: auto; min-height: 27px; padding: 3px 4px; font-size: .64rem; white-space: normal; line-height: 1.05; }
   .training-grid .mantine-Badge-root, .enhancement-grid .mantine-Badge-root, .flame-offers .mantine-Badge-root { height: auto; min-height: 18px; padding: 2px 4px; font-size: .58rem; white-space: normal; }
   .training-grid .mantine-ActionIcon-root, .enhancement-grid .mantine-ActionIcon-root, .flame-offers .mantine-ActionIcon-root { flex: none; width: 22px; height: 22px; min-width: 22px; }
-  .shop-screen .exposed-section .section-heading { gap: 7px; }
-  .shop-screen .exposed-section .die { min-height: 70px; max-height: 76px; }
-  .shop-screen .exposed-section .die > .die-number { font-size: 1.65rem; }
   .flame-selection-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 7px; }
   .flame-selection-header > * { min-width: 0; }
-  .flame-dice-section .flame-dice-heading { display: block; margin-bottom: 7px !important; }
-  .flame-dice-instruction { margin-top: 4px; }
-  .flame-dice-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
-  .flame-die-card { padding: 4px !important; }
-  .flame-die-card .die-wrap { width: 100%; max-width: none; }
-  .flame-die-card .die { min-height: 62px; max-height: 68px; padding: 2px; }
-  .flame-die-card .die > .die-number { font-size: 1.55rem; }
-  .flame-die-card .pip-face { width: min(58%, 38px); }
-  .flame-die-card .die-id { top: 3px; left: 4px; font-size: .5rem; }
-  .flame-die-card .flame-badge, .flame-die-card .die-badges, .flame-die-card .die-capacity { display: none; }
-  .flame-die-card .ember-details { min-height: 40px; margin-top: 4px; padding: 3px; border-radius: 4px; }
-  .flame-die-card .ember-heading { display: block; }
-  .flame-die-card .ember-heading .mantine-Badge-root, .flame-die-card .ember-effect, .flame-die-card .ember-bonfire-label { display: none; }
-  .flame-die-card .ember-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .5rem; line-height: 1.15; }
-  .flame-die-card .ember-investment { margin-top: 2px; font-size: .52rem; line-height: 1; text-align: center; white-space: nowrap; }
-  .flame-die-card .ember-details .mantine-Progress-root { height: 4px; margin-block: 4px !important; }
-  .flame-die-card .ember-name-full, .flame-die-card .ember-empty-full { display: none; }
-  .flame-die-card .ember-name-compact, .flame-die-card .ember-empty-compact { display: inline; }
-  .flame-die-card .ember-details.empty .mantine-Text-root { font-size: .5rem; font-weight: 750; letter-spacing: .04em; }
   .flame-selection-screen .shop-action-dock > .mantine-Text-root { display: none; }
   .flame-selection-screen .shop-action-dock .mantine-Button-root { width: 100%; }
   .stoke-effects { grid-template-columns: 1fr; }
@@ -328,12 +290,9 @@ button { font: inherit; }
   .scorecard-base { margin-left: auto; }
   .well-trained-preview { display: block; max-width: 105px; overflow: hidden; text-overflow: ellipsis; }
   .dice-row { width: 100%; grid-template-columns: repeat(var(--dice-columns, 5), minmax(0, 1fr)); gap: 4px; }
-  .exposed-section .dice-row { grid-template-columns: repeat(var(--dice-columns, 5), minmax(0, 1fr)); }
   .die { min-height: 68px; max-height: 86px; padding: 3px 2px; }
   .pip-face { width: min(62%, 48px); }
   .pip-face.compact { width: 24px; }
-  .ability-label { height: 17px; font-size: .46rem; }
-  .die-badges .mantine-Badge-root { font-size: .44rem; padding-inline: 2px; }
   .offer-description { min-height: auto; }
   .shop-action-dock { bottom: max(2px, env(safe-area-inset-bottom)); margin-top: auto; }
 }
@@ -375,8 +334,6 @@ button { font: inherit; }
 .die.snake-eyed-face { border-color: #22c55e; background: radial-gradient(circle, rgba(34,197,94,.2), var(--mantine-color-dark-8) 66%); }
 .die.infected-face { border-color: #ef4444; background: radial-gradient(circle, rgba(220,38,38,.2), var(--mantine-color-dark-8) 66%); }
 .boss-face-badge { position: absolute; top: 3px; right: 3px; height: 14px; padding-inline: 4px; font-size: .48rem; z-index: 2; }
-.die.infected-face .die-badges { opacity: .48; filter: grayscale(.75); }
-.disabled-enhancements { font-size: .48rem; line-height: 1; margin-top: 2px; }
 
 .chapter-splash { min-height: min(76vh, 620px); position: relative; overflow: hidden; display: grid; place-items: center; isolation: isolate;
   color: white; border: 1px solid color-mix(in srgb, var(--chapter-start) 34%, transparent); background: #090d10;
@@ -541,12 +498,13 @@ button { font: inherit; }
   .active-gameplay .wide-label { display: none; }
   .active-gameplay .compact-label { display: inline; }
 
-  .active-gameplay .gameplay-dock { position: relative; bottom: auto; padding: 3px !important; }
-  .active-gameplay .gameplay-dock-content { min-width: 0; align-items: stretch; gap: 3px; }
+  .active-gameplay .gameplay-dock {
+    position: relative; bottom: auto;
+    padding: 3px 3px max(5px, env(safe-area-inset-bottom)) !important;
+  }
   .active-gameplay .gameplay-dock .dice-row { flex-basis: auto; }
   .active-gameplay .dice-row { min-width: 0; gap: 3px; }
   .active-gameplay .die { min-height: 54px; max-height: 66px; padding: 2px; }
-  .active-gameplay .ability-label { height: 14px; font-size: .42rem; }
   .active-gameplay .pip-face { width: min(58%, 39px); }
   .active-gameplay .gameplay-actions {
     min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); align-items: center;
@@ -601,4 +559,121 @@ button { font: inherit; }
   .active-gameplay .scorecard-section-title { height: 15px; }
   .active-gameplay .die { min-height: 48px; max-height: 54px; }
   .active-gameplay .gameplay-actions > .mantine-Group-root:last-child .mantine-Button-root { min-height: 36px; }
+}
+
+/* One persistent run-level Dice Dock. Its three rows never change geometry. */
+html, body, #root { height: 100%; }
+body, #root { overflow: hidden; }
+.app-container {
+  width: 100%; height: 100dvh; min-height: 0; max-height: 100dvh; overflow: hidden;
+  display: flex; flex-direction: column; box-sizing: border-box;
+  padding-top: max(6px, env(safe-area-inset-top)) !important;
+  padding-right: max(6px, env(safe-area-inset-right)) !important;
+  padding-bottom: max(4px, env(safe-area-inset-bottom)) !important;
+  padding-left: max(6px, env(safe-area-inset-left)) !important;
+}
+.app-container > .top-hud { flex: none; }
+.main-content { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.main-content .live-score-panel { top: 0; }
+.dice-dock {
+  position: relative; bottom: auto; z-index: 18; flex: none; min-width: 0; margin-top: 5px;
+  padding: 4px 6px max(5px, env(safe-area-inset-bottom)) !important;
+  border: 1px solid color-mix(in srgb, var(--screen-primary) 34%, var(--mantine-color-dark-4));
+  background: rgba(15, 20, 24, .985); box-shadow: 0 -10px 30px rgba(0,0,0,.32);
+}
+.dice-dock.cinematic { opacity: .42; filter: saturate(.6); pointer-events: none; }
+.dice-dock .dice-row { width: min(100%, 620px); margin: 0 auto; grid-template-columns: repeat(var(--dice-columns, 5), minmax(0, 1fr)); gap: 6px; }
+.die-slot { min-width: 0; display: grid; grid-template-rows: 20px auto 24px; align-items: center; }
+.die-flame-zone { min-width: 0; height: 20px; display: flex; align-items: flex-end; justify-content: center; }
+.die-flame-cap {
+  max-width: 100%; height: 19px; display: flex; align-items: center; justify-content: center; gap: 3px;
+  overflow: hidden; padding: 1px 5px; border: 1px solid rgba(255,146,43,.42); border-radius: 7px 7px 3px 3px;
+  color: var(--mantine-color-orange-2); background: rgba(120,55,8,.3); cursor: pointer;
+  font-size: .56rem; font-weight: 800; line-height: 1; white-space: nowrap;
+}
+.die-flame-cap:disabled { cursor: default; }
+.die-flame-cap:focus-visible, .die-enhancement-strip:focus-visible, .flame-detail-trigger:focus-visible {
+  outline: 2px solid var(--mantine-color-orange-4); outline-offset: 1px;
+}
+.die-slot .die {
+  width: min(100%, 90px); min-height: 64px; max-height: 90px; justify-self: center; padding: 4px;
+  aspect-ratio: 1; overflow: visible;
+}
+.die-slot .die > .die-number { z-index: 1; font-size: clamp(1.7rem, 5vw, 2.55rem); }
+.die-slot .die > .pip-face { z-index: 1; width: min(66%, 58px); }
+.die-slot .die-id { z-index: 3; top: 4px; left: 5px; }
+.die-enhancement-strip {
+  width: 100%; height: 24px; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 3px;
+  padding: 2px 3px; overflow: hidden; border: 1px solid rgba(255,255,255,.08); border-radius: 3px 3px 7px 7px;
+  color: var(--mantine-color-gray-2); background: rgba(255,255,255,.025); cursor: pointer;
+}
+.die-enhancement-strip.empty { border-color: transparent; background: transparent; }
+.die-enhancement-strip:disabled { cursor: default; }
+.enhancement-strip-empty { color: var(--mantine-color-dark-3); font-size: .62rem; letter-spacing: .12em; }
+.enhancement-icon {
+  min-width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; gap: 1px;
+  padding: 0 3px; border: 1px solid rgba(94,234,212,.27); border-radius: 5px;
+  color: var(--mantine-color-teal-2); background: rgba(15,118,110,.16); font-size: .57rem; font-weight: 900; line-height: 1;
+}
+.enhancement-icon strong { font-size: .48rem; font-weight: 900; }
+.enhancement-icon.enhancement-golden, .enhancement-icon.enhancement-jackpot { color: var(--mantine-color-yellow-3); border-color: rgba(250,176,5,.35); background: rgba(134,80,0,.16); }
+.enhancement-icon.enhancement-vintage { color: var(--mantine-color-grape-2); border-color: rgba(190,75,219,.35); background: rgba(134,46,156,.14); }
+.enhancement-icon.disabled { opacity: .45; filter: grayscale(1); }
+.die-lock-overlay {
+  inset: -7px -4px auto auto; z-index: 5; width: auto; height: 18px; display: inline-flex; flex-direction: row;
+  padding: 1px 4px; gap: 2px; border: 1px solid rgba(34,211,238,.55); border-radius: 6px;
+  color: var(--mantine-color-cyan-1); background: #102027; font-size: .48rem; white-space: nowrap;
+}
+.die.warden-locked > :not(.die-lock-overlay):not(.die-id) { opacity: .72; filter: saturate(.72); }
+.boss-face-badge {
+  top: auto; right: -4px; bottom: -5px; width: 18px; height: 18px; display: grid; place-items: center;
+  padding: 0; border: 1px solid #22c55e; border-radius: 50%; color: #dcfce7; background: #14532d;
+  font-size: .56rem; font-weight: 950;
+}
+.boss-face-badge.infected { border-color: #f87171; color: #fee2e2; background: #7f1d1d; }
+.die-state-dot { position: absolute; left: -3px; bottom: -4px; z-index: 3; color: var(--mantine-color-violet-3); font-size: .62rem; }
+.dice-dock-context { margin-top: 2px; color: var(--mantine-color-teal-3); font-size: .58rem; font-weight: 800; text-align: center; text-transform: uppercase; }
+.dice-dock-context.flame { color: var(--mantine-color-orange-3); }
+.gameplay-actions-panel { flex: none; background: var(--mantine-color-dark-7); box-shadow: inset 0 0 0 1px rgba(255,255,255,.035); }
+.gameplay-actions-panel .gameplay-actions { max-width: 560px; margin-left: auto; padding: 0; }
+.flame-detail-trigger { border: 0; cursor: pointer; text-transform: none; }
+.face-detail-list { max-height: min(42vh, 360px); overflow: auto; }
+.face-detail-item { background: var(--mantine-color-dark-7); }
+.manage-face-grid .manage-face-tile {
+  min-height: 94px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px !important;
+  color: inherit; font: inherit; text-align: center;
+}
+.manage-face-tile .pip-face { width: 25px; }
+.manage-face-tile strong { font-size: .58rem; }
+.manage-face-tile small { display: block; font-size: .46rem; line-height: 1.15; }
+.manage-face-exposed { color: var(--mantine-color-teal-3); font-size: .45rem; font-weight: 850; }
+.flame-offer-info { min-width: 22px; padding-inline: 3px; }
+
+@media (max-width: 800px) {
+  .app-container.active-gameplay { padding-bottom: max(3px, env(safe-area-inset-bottom)) !important; }
+  .active-gameplay .main-content { margin-top: 4px; }
+  .active-gameplay .gameplay-actions-panel { padding: 3px !important; }
+  .active-gameplay .gameplay-actions-panel .gameplay-actions { max-width: none; }
+  .dice-dock { margin-top: 3px; padding-inline: 3px !important; }
+  .dice-dock .dice-row { gap: 3px; }
+  .die-slot { grid-template-rows: 18px auto 22px; }
+  .die-flame-zone { height: 18px; }
+  .die-flame-cap { height: 17px; padding-inline: 3px; font-size: .46rem; }
+  .die-slot .die { width: 100%; min-height: 50px; max-height: 62px; padding: 2px; }
+  .die-slot .die > .die-number { font-size: clamp(1.55rem, 8vw, 2rem); }
+  .die-slot .die > .pip-face { width: min(62%, 38px); }
+  .die-slot .die-id { top: 3px; left: 4px; font-size: .46rem; }
+  .die-enhancement-strip { height: 22px; gap: 1px; padding-inline: 1px; }
+  .enhancement-icon { min-width: 14px; height: 16px; padding-inline: 2px; font-size: .48rem; }
+  .enhancement-icon strong { font-size: .4rem; }
+  .die-lock-overlay { top: -6px; right: -2px; height: 16px; padding-inline: 2px; font-size: .4rem; }
+  .chapter-splash { min-height: 100%; }
+}
+
+@media (max-width: 360px) {
+  .dice-dock .dice-row { gap: 2px; }
+  .die-flame-cap { gap: 1px; padding-inline: 2px; font-size: .41rem; }
+  .die-slot .die { min-height: 46px; max-height: 55px; }
+  .die-slot .die > .die-number { font-size: 1.45rem; }
+  .enhancement-icon { min-width: 12px; padding-inline: 1px; }
 }

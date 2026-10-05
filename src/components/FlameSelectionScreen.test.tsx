@@ -15,8 +15,8 @@ describe('FlameSelectionScreen', () => {
     board.bonfires = [...FLAME_IDS];
     board.flameSelection = { offers: [], acquired: false };
     const html = renderToStaticMarkup(<MantineProvider><FlameSelectionScreen
-      board={board} event={null} busy={false} diceDisplay="numerals" selectedOffer={null}
-      setSelectedOffer={() => {}} submit={() => {}} skip={() => {}}
+      board={board} event={null} busy={false} selectedOffer={null}
+      setSelectedOffer={() => {}} submit={() => {}} skip={() => {}} openFlameDetails={() => {}}
     /></MantineProvider>);
     expect(html).toContain('ALL FLAMES COLLECTED');
     expect(html).toContain('CONTINUE TO SHOP');

@@ -145,23 +145,23 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(await page.locator('.flame-offers').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(3);
-  expect(await page.locator('.flame-dice-grid').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(5);
+  expect(await page.locator('.dice-dock .dice-row').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(5);
   const mobileLayout = await page.evaluate(() => ({
     offerHeights: [...document.querySelectorAll<HTMLElement>('.flame-offer')].map(card => card.getBoundingClientRect().height),
     offerNameHeights: [...document.querySelectorAll<HTMLElement>('.flame-offer-name')].map(name => name.getBoundingClientRect().height),
-    dieCardTops: [...document.querySelectorAll<HTMLElement>('.flame-die-card')].map(card => Math.round(card.getBoundingClientRect().top)),
-    dieHeights: [...document.querySelectorAll<HTMLElement>('.flame-die-card .die')].map(die => die.getBoundingClientRect().height),
+    dieCardTops: [...document.querySelectorAll<HTMLElement>('.dice-dock .die-slot')].map(card => Math.round(card.getBoundingClientRect().top)),
+    dieHeights: [...document.querySelectorAll<HTMLElement>('.dice-dock .die')].map(die => die.getBoundingClientRect().height),
   }));
   expect(Math.max(...mobileLayout.offerHeights) - Math.min(...mobileLayout.offerHeights)).toBeLessThan(2);
   expect(Math.max(...mobileLayout.offerNameHeights)).toBeLessThan(40);
   expect(new Set(mobileLayout.dieCardTops).size).toBe(1);
-  expect(Math.max(...mobileLayout.dieHeights)).toBeLessThanOrEqual(68);
-  await expect(page.locator('.flame-offer .info-circle-icon').first()).toBeVisible();
+  expect(Math.max(...mobileLayout.dieHeights)).toBeLessThanOrEqual(62);
+  await expect(page.locator('.flame-offer .flame-offer-info').first()).toBeVisible();
   await expect(page.getByTestId('flame-die-4')).toBeVisible();
-  await expect(page.locator('.flame-die-card .die-number')).toHaveCount(5);
+  await expect(page.locator('.dice-dock .die-number')).toHaveCount(5);
   await page.screenshot({ path: test.info().outputPath('flame-selection-mobile.png'), fullPage: true });
   await setDiceDisplay(page, 'PIPS');
-  await expect(page.locator('.flame-die-card .pip-face')).toHaveCount(5);
+  await expect(page.locator('.dice-dock .pip-face')).toHaveCount(5);
   const rewardFaces = game.dice.map(die => die.value);
 
   await expect(page.getByRole('button', { name: /Reroll.*Gold/ })).toHaveCount(0);
@@ -172,7 +172,7 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   const card = page.getByTestId('flame-offer-wellTrained');
   await expect(card).not.toContainText(FLAMES.wellTrained.description);
   await card.getByRole('button', { name: `About ${FLAMES.wellTrained.name}` }).click();
-  await expect(page.getByRole('tooltip')).toContainText(FLAMES.wellTrained.description);
+  await expect(page.getByRole('dialog', { name: FLAMES.wellTrained.name })).toContainText(FLAMES.wellTrained.description);
   await page.keyboard.press('Escape');
   await card.getByRole('button', { name: 'Select Flame', exact: true }).click();
   await page.getByRole('button', { name: /^Die 1,/ }).click();
@@ -180,7 +180,7 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   await ready(page);
 
   expect(game.phase).toBe('flameSelection');
-  await expect(page.getByTestId('active-flame-wellTrained')).toContainText('0 / 100 → BONFIRE');
+  await expect(page.getByTestId('active-flame-wellTrained')).toHaveAccessibleName('View Well Trained Flame details, Ember at 0 of 100 Gold');
   await page.screenshot({ path: test.info().outputPath('flame-selection-acquired-mobile.png'), fullPage: true });
   await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
   game = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
@@ -191,17 +191,15 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   await expect(page.getByRole('tooltip')).toContainText('NEW EMBER');
   await expect(page.getByRole('tooltip')).toContainText('Stoke Flames in the Shop. At 100 Gold, they become Bonfires.');
   await expect(page.locator('.flame-tutorial-anchor')).toHaveCount(1);
-  await expect(page.getByText(`🔥 ${FLAMES.wellTrained.shortName} 0`, { exact: true })).toBeVisible();
+  await expect(page.getByTestId('active-flame-wellTrained')).toBeVisible();
   await expect(page.locator('[data-testid^="flame-offer-"]')).toHaveCount(0);
 
   const goldBeforeStoke = game.gold;
-  await page.getByRole('button', { name: /^Die 1,/ }).click();
+  await page.getByRole('button', { name: 'Dismiss Flame tip', exact: true }).click();
   game = dispatch(game, { type: 'DISMISS_FLAME_TUTORIAL' }).state;
   await ready(page);
   await expect(page.getByRole('tooltip')).toHaveCount(0);
-  const manager = page.getByRole('dialog', { name: 'D1 — MANAGE DIE' });
-  await expect(manager.getByTestId('shop-flame-context')).toContainText('0 / 100 → BONFIRE');
-  await manager.getByRole('button', { name: 'STOKE', exact: true }).click();
+  await page.getByRole('button', { name: `View ${FLAMES.wellTrained.name} Flame details, Ember at 0 of 100 Gold` }).click();
   const shopStoke = page.getByRole('dialog', { name: FLAMES.wellTrained.name });
   await shopStoke.getByLabel(`Stoke amount for ${FLAMES.wellTrained.name}`).fill('2');
   await expect(shopStoke.getByText(/AFTER STOKE · 2\/100/)).toBeVisible();
@@ -257,7 +255,7 @@ test('Flame Selection only acquires while Shop Manage Die supports arbitrary Sto
   game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId: 0 }).state;
   await ready(page);
   const active = page.getByTestId(`active-flame-${offer.flame}`);
-  await expect(active).toContainText('0 / 100 → BONFIRE');
+  await expect(active).toHaveAccessibleName(`View ${FLAMES[offer.flame].name} Flame details, Ember at 0 of 100 Gold`);
   await expect(page.getByText(/Donate/i)).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Stoke/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
@@ -270,9 +268,7 @@ test('Flame Selection only acquires while Shop Manage Die supports arbitrary Sto
   game = dispatch(game, { type: 'DISMISS_FLAME_TUTORIAL' }).state;
   await ready(page);
   await expect(page.getByRole('tooltip')).toHaveCount(0);
-  await page.getByRole('button', { name: /^Die 1,/ }).click();
-  const manager = page.getByRole('dialog', { name: 'D1 — MANAGE DIE' });
-  await manager.getByRole('button', { name: 'STOKE', exact: true }).click();
+  await page.getByRole('button', { name: `View ${FLAMES[offer.flame].name} Flame details, Ember at 0 of 100 Gold` }).click();
   const stoke = page.getByRole('dialog', { name: FLAMES[offer.flame].name });
   await expect(stoke).toContainText('BONFIRE AT 100');
   await expect(stoke).not.toContainText('Full strength');

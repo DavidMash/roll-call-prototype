@@ -58,7 +58,9 @@ test('scoring Jackpot pays on a played-hand clear before the final physical sett
   await ready(page);
   for (const action of fixture.actions) game = await perform(page, game, action);
   expect(game).toEqual(fixture.game);
-  await expect(die(page, fixture.heldDieId)).toContainText('Jackpot');
+  const jackpotStrip = page.getByTestId(`flame-die-${fixture.heldDieId}`).locator('.die-enhancement-strip');
+  await expect(jackpotStrip).toHaveAccessibleName(/Jackpot ×1/);
+  await expect(jackpotStrip.locator('.enhancement-jackpot')).toHaveCount(1);
   const heldValue = game.dice[fixture.heldDieId].value;
   const goldBefore = game.gold;
 
@@ -77,7 +79,8 @@ test('scoring Jackpot pays on a played-hand clear before the final physical sett
     if (index < jackpotIndex) await page.clock.runFor(CONFIG.tickMs.normal);
   }
   await expect(page.locator('.score-tick')).toHaveText('JACKPOT');
-  await expect(page.locator('.ability-label').nth(fixture.heldDieId)).toHaveText('JACKPOT');
+  await expect(page.getByTestId(`flame-die-${fixture.heldDieId}`).locator('.die.pulse')).toHaveCount(1);
+  await expect(page.getByTestId(`flame-die-${fixture.heldDieId}`).locator('.enhancement-jackpot')).toHaveCount(1);
   await expect(die(page, fixture.heldDieId)).toHaveAccessibleName(new RegExp(`face ${heldValue},`));
   await page.getByRole('button', { name: 'Skip playback' }).click();
   await ready(page);

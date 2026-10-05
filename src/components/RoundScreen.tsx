@@ -7,23 +7,20 @@ import {
 } from '../game/flames';
 import { handOptions, hasPlayableHand, HANDS } from '../game/hands';
 import { finalizeScore, handScore } from '../game/scoring';
-import { canPlay, selectHand, toggleDie } from '../game/selection';
+import { canPlay, selectHand } from '../game/selection';
 import type { Selection } from '../game/selection';
 import type { Action, Board, GameEvent } from '../game/types';
-import { DiceRow } from './DiceRow';
 import { HandScorecard } from './HandList';
 import { ScoreResolution } from './ScoreResolution';
 import { activeEncounterDice, lastPlayDanger, requiredEncounterDieIds, unavailableEncounterHands } from '../game/bosses';
 import { BossPanel } from './BossPanel';
 import { CONFIG } from '../game/config';
-import type { DiceDisplay } from '../uiSettings';
 import { formatPlayerNumber, formatScoreEquation, formatScoreProgress, playActionLabel } from '../game/copy';
 import { DecisionTimer } from '../game/decisionTimer';
 import { usableManualRerolls } from '../game/specialOffers';
 
-export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, selection, setSelection, submit, skip }: {
+export function RoundScreen({ board, event, busy, inputBlocked, selection, setSelection, submit, skip }: {
   board: Board; event: GameEvent | null; busy: boolean; inputBlocked: boolean;
-  diceDisplay: DiceDisplay;
   selection: Selection; setSelection: (selection: Selection) => void; submit: (action: Action) => void; skip: () => void;
 }) {
   const encounterDice = activeEncounterDice(board);
@@ -54,9 +51,6 @@ export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, sel
     const interval = window.setInterval(() => setDecisionMs(decisionTimer.current.elapsed(performance.now())), 50);
     return () => window.clearInterval(interval);
   }, [blocked, speedDemonOwned]);
-  const nextWardenThreshold = wardenBoss?.nextUnlockTarget ?? undefined;
-  const lockedUntilByDieId: Record<number, number> = {};
-  if (nextWardenThreshold !== undefined) wardenLockedIds.forEach(id => { lockedUntilByDieId[id] = nextWardenThreshold; });
   const requiredDieIds = requiredEncounterDieIds(board);
   const unavailableHands = unavailableEncounterHands(board);
   const selectedWardenDieId = awaitingWardenChoice && selection.dieIds.length === 1 && wardenLockedIds.includes(selection.dieIds[0])
@@ -151,16 +145,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, sel
         onSelect={hand => changeSelection(selectHand(encounterDice, unavailableHands, effectiveSelection, hand, requiredDieIds))}
         onSubmit={submitPlay} />
     </Paper>
-    <Paper className="gameplay-dock" p="xs">
-      <div className="gameplay-dock-content">
-        <DiceRow dice={wardenDice ?? encounterDice} display={diceDisplay} event={event} disabled={busy}
-          selected={selectedWardenDieId === null ? effectiveSelection.dieIds : [selectedWardenDieId]}
-          wardenLockedIds={wardenLockedIds} wardenSelectableIds={awaitingWardenChoice ? wardenLockedIds : []}
-          wardenChoiceMode={awaitingWardenChoice}
-          lockedUntilByDieId={wardenBoss ? lockedUntilByDieId : undefined}
-          onClick={id => awaitingWardenChoice
-            ? setSelection({ dieIds: selectedWardenDieId === id ? [] : [id], hand: null })
-            : changeSelection(toggleDie(encounterDice, unavailableHands, effectiveSelection, id, requiredDieIds))} />
+    <Paper className="gameplay-actions-panel" p="xs">
         <div className="gameplay-actions">
           {hasOwnedChargeFlame(board) && <Group className={`charge-controls${chargeAtMax ? ' is-max' : ''}${board.chargeArmed ? ' is-armed' : ''}`} gap="xs" justify="flex-end" mb={4}>
             <Stack gap={0} className="charge-status">
@@ -203,7 +188,6 @@ export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, sel
             </>}
           </Group>
         </div>
-      </div>
     </Paper>
   </Stack>;
 }

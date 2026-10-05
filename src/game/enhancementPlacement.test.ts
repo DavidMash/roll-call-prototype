@@ -2,7 +2,7 @@ import { MantineProvider } from '@mantine/core';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { ShopScreen } from '../components/ShopScreen';
+import { DiceDock } from '../components/DiceDock';
 import { activeFace } from './dice';
 import { dispatch, newRun } from './engine';
 import { attachmentError, canPlace, enhancementCost, placementError } from './enhancements';
@@ -51,9 +51,10 @@ describe.each(['jumpingBean', 'magnetic'] as const)('%s per-die placement limit'
     board.dice.forEach(die => { die.value = 2; });
     board.dice[0].faces[0].enhancements[enhancement] = 1;
     board.shop!.offers = [{ id: 200, enhancement, purchased: false }];
-    const html = renderToStaticMarkup(createElement(MantineProvider, null, createElement(ShopScreen, {
-      board, event: null, busy: false, diceDisplay: 'numerals', selectedOffer: 200,
-      setSelectedOffer: () => {}, submit: () => {}, skip: () => {},
+    const html = renderToStaticMarkup(createElement(MantineProvider, null, createElement(DiceDock, {
+      board, event: null, busy: false, actionsEnabled: true, cinematic: false, display: 'numerals', selectedOffer: 200,
+      setSelectedOffer: () => {}, selectedFlameOffer: null, selection: { hand: null, dieIds: [] }, setSelection: () => {},
+      submit: () => {}, openFaceDetails: () => {}, openFlameDetails: () => {},
     })));
     const name = enhancement === 'jumpingBean' ? 'Jumping Bean' : 'Magnetic';
     expect(html).toContain(`aria-label="Die 1, face 2, 2 Pips, unavailable: ${name} is limited to one Face per Die."`);

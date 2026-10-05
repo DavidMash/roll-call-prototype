@@ -1,15 +1,13 @@
 import { Button, Group, Paper, Stack, Text, Title } from '@mantine/core';
 import { CONFIG } from '../game/config';
 import type { Board } from '../game/types';
-import { DiceRow } from './DiceRow';
-import type { DiceDisplay } from '../uiSettings';
 import { formatPlayerNumber, formatScoreProgress } from '../game/copy';
 import { fullChapterLabels } from '../game/chapters';
 
 const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
 
-export function BustScreen({ board, diceDisplay, onContinue, restartSame, newRun }: {
-  board: Board; diceDisplay: DiceDisplay; onContinue?: () => void; restartSame?: () => void; newRun?: () => void;
+export function BustScreen({ board, onContinue, restartSame, newRun }: {
+  board: Board; onContinue?: () => void; restartSame?: () => void; newRun?: () => void;
 }) {
   const bust = board.bust!;
   const labels = fullChapterLabels(board.round);
@@ -27,6 +25,5 @@ export function BustScreen({ board, diceDisplay, onContinue, restartSame, newRun
         {restartSame && newRun && <Group justify="center" mt="lg"><Button onClick={restartSame}>Restart same seed</Button><Button variant="default" onClick={newRun}>New seed</Button></Group>}
       </>}
     </Paper>
-    <Paper p="xs"><DiceRow dice={board.dice} display={diceDisplay} event={null} disabled selected={[]} onClick={() => {}} /></Paper>
   </Stack>;
 }

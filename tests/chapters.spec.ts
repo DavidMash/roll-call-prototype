@@ -18,6 +18,12 @@ test('Chapter splash leads into one complete current-Chapter map without reveali
 
   const splash = page.getByTestId('chapter-splash');
   await expect(splash).toBeVisible();
+  const dock = page.getByTestId('dice-dock');
+  const dockHandle = await dock.elementHandle();
+  await expect(dock).toBeVisible();
+  await expect(dock).toHaveAttribute('data-cinematic', 'true');
+  await expect(dock.locator('.die')).toHaveCount(5);
+  expect(await dock.locator('button').evaluateAll(buttons => buttons.every(button => (button as HTMLButtonElement).disabled))).toBe(true);
   await expect(splash).toHaveText(/CHAPTER 1/);
   await expect(splash).toHaveAttribute('data-start-color', BOSSES[expected.miniBoss].primary);
   await expect(splash).toHaveAttribute('data-end-color', BOSSES[expected.boss].primary);
@@ -26,6 +32,9 @@ test('Chapter splash leads into one complete current-Chapter map without reveali
 
   const map = page.getByTestId('run-map-transition');
   await expect(map).toBeVisible({ timeout: 4_000 });
+  expect(await dockHandle!.evaluate(element => element === document.querySelector('[data-testid="dice-dock"]'))).toBe(true);
+  await expect(dock).not.toHaveAttribute('data-cinematic', 'true');
+  await expect(page.locator('[data-testid="dice-dock"]')).toHaveCount(1);
   await expect(map.locator('.map-kicker')).toHaveText('CHAPTER 1');
   await expect(map.locator('.node-label')).toHaveText([
     'R1', 'SHOP', 'R2', 'SHOP', 'MINI-BOSS', 'SPECIAL OFFER', 'SHOP',
