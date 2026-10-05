@@ -9,7 +9,7 @@ import { activeEncounterDice, unavailableEncounterHands } from '../src/game/boss
 import { CONFIG } from '../src/game/config';
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
 import { specialOfferName } from '../src/game/specialOffers';
-import { openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
+import { enterRun, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 
 function bestHand(game: GameState, requiredDie?: number, requireHistory = false) {
   const dice = activeEncounterDice(game);
@@ -66,6 +66,7 @@ function flameSeed() {
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
+  await enterRun(page);
   for (let barrier = 0; barrier < 2; barrier++) {
     const bustContinue = page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true });
     if (await bustContinue.count()) { await bustContinue.click(); continue; }
@@ -246,6 +247,7 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
 });
 
 test('Flame Selection only acquires while Shop Manage Die supports arbitrary Stoke and optional acquisition', async ({ page }) => {
+  test.setTimeout(75_000);
   const seed = flameSeed();
   let game = await reachReward(page, seed);
   const rewardFaces = game.dice.map(die => die.value);

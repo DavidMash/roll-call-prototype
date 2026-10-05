@@ -9,7 +9,7 @@ import { CONFIG } from '../src/game/config';
 import type { Action, Enhancement, GameState } from '../src/game/types';
 import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
-import { openGameMenu, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
+import { enterRun, openGameMenu, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 import { specialOfferName } from '../src/game/specialOffers';
 import { chapterLabel } from '../src/game/chapters';
 
@@ -49,6 +49,7 @@ function automaticAction(game: GameState): Action {
 }
 async function ready(page: Page) {
   await page.locator('main').waitFor();
+  await enterRun(page);
   for (let barrier = 0; barrier < 2; barrier++) {
     const bustContinue = page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true });
     if (await bustContinue.count()) { await bustContinue.click(); continue; }
@@ -979,6 +980,7 @@ for (const direction of ['hand-first', 'dice-first'] as const) {
 test('fast event playback and skipping produce the same outcome as instant playback', async ({ page }) => {
   const game = newRun('playback').state;
   await page.goto('/?seed=playback&speed=fast');
+  await enterRun(page);
   await page.getByTestId('run-map-transition').getByRole('button', { name: 'Continue', exact: true }).click();
   await matchBoard(page, game);
   const choice = bestHand(game);
@@ -1029,6 +1031,7 @@ test('settled progress resumes across reloads and return visits with seed-aware 
 
   const different = newRun('different-browser-run').state;
   await page.goto('/?seed=different-browser-run&speed=instant');
+  await enterRun(page);
   await expect(page.getByTestId('stat-round')).toContainText('C1 R1');
   await page.reload();
   await page.locator('main').waitFor();

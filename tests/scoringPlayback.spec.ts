@@ -7,13 +7,14 @@ import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
 import { scoringPlaybackRun } from './scoringFixture';
 import { activeEncounterDice } from '../src/game/bosses';
-import { setPlaybackSpeed } from './uiHelpers';
+import { enterRun, setPlaybackSpeed } from './uiHelpers';
 import { captureHandStart, composeXMult, handXMultContributions } from '../src/game/flames';
 import { finalizeScore } from '../src/game/scoring';
 import { specialOfferName } from '../src/game/specialOffers';
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
+  await enterRun(page);
   for (let barrier = 0; barrier < 2; barrier++) {
     const bustContinue = page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true });
     if (await bustContinue.count()) { await bustContinue.click(); continue; }

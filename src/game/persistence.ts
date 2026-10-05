@@ -70,6 +70,10 @@ export function loadPersistedRun(storage: RunStorage | null, requestedSeed: stri
   }
 }
 
+export function isResumableRun(state: GameState | null): state is GameState {
+  return state !== null && state.phase !== 'lost' && state.phase !== 'error';
+}
+
 export function savePersistedRun(storage: RunStorage | null, state: GameState): boolean {
   if (!storage) return false;
   const saved: PersistedRun = { version: RUN_STORAGE_VERSION, state };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dispatch, newRun } from './engine';
-import { loadPersistedRun, RUN_STORAGE_KEY, RUN_STORAGE_VERSION, savePersistedRun } from './persistence';
+import { isResumableRun, loadPersistedRun, RUN_STORAGE_KEY, RUN_STORAGE_VERSION, savePersistedRun } from './persistence';
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -9,6 +9,15 @@ class MemoryStorage {
 }
 
 describe('run persistence', () => {
+  it('only treats valid non-terminal game phases as resumable', () => {
+    const active = newRun('resumable').state;
+    expect(isResumableRun(active)).toBe(true);
+    expect(isResumableRun({ ...active, phase: 'shop' })).toBe(true);
+    expect(isResumableRun({ ...active, phase: 'lost' })).toBe(false);
+    expect(isResumableRun({ ...active, phase: 'error' })).toBe(false);
+    expect(isResumableRun(null)).toBe(false);
+  });
+
   it('round-trips the complete settled game state', () => {
     const storage = new MemoryStorage();
     const started = newRun('saved-run').state;

@@ -5,11 +5,12 @@ import { dispatch, newRun } from '../src/game/engine';
 import { HANDS } from '../src/game/hands';
 import type { Action, GameState } from '../src/game/types';
 import { jackpotRun } from './jackpotFixture';
-import { setPlaybackSpeed } from './uiHelpers';
+import { enterRun, setPlaybackSpeed } from './uiHelpers';
 
 const die = (page: Page, id: number) => page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) });
 async function ready(page: Page) {
   await page.locator('main').waitFor();
+  await enterRun(page);
   for (let barrier = 0; barrier < 2; barrier++) {
     const bustContinue = page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true });
     if (await bustContinue.count()) { await bustContinue.click(); continue; }

@@ -11,19 +11,20 @@ const isPlaybackBarrier = (event: Resolution['events'][number] | undefined) => e
   || event?.type === 'MAP_TRANSITION'
   || (event?.type === 'ROUND_BUST' && (event.board.bust?.livesAfter ?? 0) > 0);
 
-export function useGame(requestedSeed: string | null, fallbackSeed: string, speed: PlaybackSpeed) {
+export function useGame(requestedSeed: string | null, fallbackSeed: string, speed: PlaybackSpeed, active = true) {
   const reducedMotion = useReducedMotion();
   const [storage] = useState(browserRunStorage);
-  const [result, setResult] = useState<Resolution>(() => {
+  const [initial] = useState(() => {
     const saved = loadPersistedRun(storage, requestedSeed);
-    return saved ? { state: saved, events: [] } : newRun(requestedSeed ?? fallbackSeed);
+    return { result: saved ? { state: saved, events: [] } : newRun(requestedSeed ?? fallbackSeed), restored: saved !== null };
   });
+  const [result, setResult] = useState<Resolution>(initial.result);
+  const [hasStoredRun, setHasStoredRun] = useState(initial.restored);
   const [index, setIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const busy = index < result.events.length;
-  useEffect(() => { savePersistedRun(storage, result.state); }, [storage, result.state]);
   useEffect(() => {
-    if (!busy) return;
+    if (!active || !busy) return;
     const currentEvent = result.events[index];
     if (speed === 'instant' && currentEvent?.type === 'CHAPTER_STARTED') {
       setIndex(current => current + 1);
@@ -39,10 +40,11 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
       ? Math.max(CONFIG.tickMs[speed], 1200) : CONFIG.tickMs[speed];
     const timeout = window.setTimeout(() => setIndex(current => current + 1), delay);
     return () => window.clearTimeout(timeout);
-  }, [result, index, speed, busy, reducedMotion]);
+  }, [result, index, speed, busy, reducedMotion, active]);
   function load(next: Resolution) {
     if (next.error) { setError(next.error); return; }
     savePersistedRun(storage, next.state);
+    setHasStoredRun(true);
     setError(null);
     setResult(next);
     setIndex(0);
@@ -52,6 +54,7 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
     board: busy ? result.events[index].board : result.state,
     event: busy ? result.events[index] : null,
     busy, error,
+    hasStoredRun,
     progress: { current: Math.min(index + 1, result.events.length), total: result.events.length },
     submit: (action: Action) => {
       if (busy) return false;

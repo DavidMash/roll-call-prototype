@@ -3,6 +3,7 @@ import { newRun } from '../src/game/engine';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import { initialSpecialOfferEffects, SPECIAL_OFFERS } from '../src/game/specialOffers';
 import type { GameState } from '../src/game/types';
+import { enterRun } from './uiHelpers';
 
 async function installRun(page: import('@playwright/test').Page, state: GameState) {
   await page.evaluate(([key, version, saved]) => {
@@ -10,6 +11,7 @@ async function installRun(page: import('@playwright/test').Page, state: GameStat
   }, [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
   await page.reload();
   await expect(page.locator('main')).toBeVisible();
+  await enterRun(page);
 }
 
 test('active Special Offers render compact responsive status badges with canonical details', async ({ page }) => {

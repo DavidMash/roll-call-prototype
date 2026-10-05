@@ -25,6 +25,8 @@ import { FaceDetailsModal } from './components/FaceDetailsModal';
 import type { FaceDetailsTarget } from './components/FaceDetailsModal';
 import { FlameDetailsModal } from './components/FlameDetailsModal';
 import type { FlameDetailsTarget } from './components/FlameDetailsModal';
+import { LandingScreen } from './components/LandingScreen';
+import { isResumableRun } from './game/persistence';
 
 const freshSeed = () => `roll-${Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join('-')}`;
 const query = new URLSearchParams(window.location.search);
@@ -33,6 +35,7 @@ const initialSeed = requestedSeed ?? freshSeed();
 const initialSpeed = ['normal', 'fast', 'instant'].includes(query.get('speed') ?? '') ? query.get('speed') as PlaybackSpeed : 'normal';
 
 export default function App() {
+  const [atLanding, setAtLanding] = useState(true);
   const [seedInput, setSeedInput] = useState(initialSeed);
   const [speed, setSpeed] = useState<PlaybackSpeed>(initialSpeed);
   const [diceDisplay, setDiceDisplay] = useState(loadDiceDisplay);
@@ -47,8 +50,9 @@ export default function App() {
   const [flameDetails, setFlameDetails] = useState<FlameDetailsTarget | null>(null);
   const [hudHeight, setHudHeight] = useState(60);
   const appRef = useRef<HTMLDivElement>(null);
-  const game = useGame(requestedSeed, initialSeed, speed);
+  const game = useGame(requestedSeed, initialSeed, speed, !atLanding);
   const { board, state, busy, event } = game;
+  const resumableRun = game.hasStoredRun && isResumableRun(state) ? state : null;
   const theme = screenTheme(board);
   const showingChapterSplash = event?.type === 'CHAPTER_STARTED';
   const showingMap = event?.type === 'MAP_TRANSITION';
@@ -57,6 +61,7 @@ export default function App() {
   useLayoutEffect(() => setSeedInput(state.seed), [state.seed]);
   useEffect(() => saveDiceDisplay(diceDisplay), [diceDisplay]);
   useLayoutEffect(() => {
+    if (atLanding) return;
     const hud = appRef.current?.querySelector<HTMLElement>('.top-hud');
     if (!hud) return;
     const measure = () => setHudHeight(Math.ceil(hud.getBoundingClientRect().height));
@@ -64,7 +69,7 @@ export default function App() {
     const observer = new ResizeObserver(measure);
     observer.observe(hud);
     return () => observer.disconnect();
-  }, []);
+  }, [atLanding]);
   function submit(action: Action) {
     if (busy) return;
     if (!game.submit(action)) return;
@@ -86,6 +91,13 @@ export default function App() {
     setFlameDetails(null);
     game.restart(seed);
   }
+  function startNewRunFromLanding() {
+    restart(requestedSeed ?? (game.hasStoredRun ? freshSeed() : initialSeed));
+    setAtLanding(false);
+  }
+  if (atLanding) return <Container size={1180} px={{ base: 6, sm: 'sm' }} py={8} className="landing-container">
+    <LandingScreen resumableRun={resumableRun} onContinue={() => setAtLanding(false)} onNewRun={startNewRunFromLanding} />
+  </Container>;
   return <Container ref={appRef} size={1180} px={{ base: 6, sm: 'sm' }} py={8}
     className={`app-container screen-theme ${board.phase === 'round' ? 'active-gameplay' : ''}`}
     data-screen-theme={theme.id} style={{ '--screen-primary': theme.accent, '--screen-secondary': theme.accentStrong,

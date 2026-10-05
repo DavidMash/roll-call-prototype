@@ -3,18 +3,21 @@ import { BOSSES } from '../src/game/bosses';
 import { newRun } from '../src/game/engine';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import type { GameState } from '../src/game/types';
+import { enterRun } from './uiHelpers';
 
 async function installRun(page: import('@playwright/test').Page, state: GameState) {
   await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved })),
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
   await page.reload();
   await page.locator('main').waitFor();
+  await enterRun(page);
 }
 
 test('Chapter splash leads into one complete current-Chapter map without revealing encounters', async ({ page }) => {
   const seed = 'chapter-presentation';
   const expected = newRun(seed).state.chapterPlans[1]!;
   await page.goto(`/?seed=${seed}&speed=normal`);
+  await enterRun(page);
 
   const splash = page.getByTestId('chapter-splash');
   await expect(splash).toBeVisible();

@@ -3,6 +3,7 @@ import { newRun } from '../src/game/engine';
 import { activeFace } from '../src/game/dice';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import type { GameState, RoundSummary } from '../src/game/types';
+import { enterRun } from './uiHelpers';
 
 async function installRun(page: import('@playwright/test').Page, state: GameState) {
   await page.goto(`/?seed=${state.seed}&speed=instant`);
@@ -10,6 +11,7 @@ async function installRun(page: import('@playwright/test').Page, state: GameStat
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
   await page.reload();
   await page.locator('main').waitFor();
+  await enterRun(page);
   await expect(page.locator('[data-testid="dice-dock"]')).toHaveCount(1);
 }
 

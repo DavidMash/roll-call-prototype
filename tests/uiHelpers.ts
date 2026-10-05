@@ -1,5 +1,14 @@
 import type { Page } from '@playwright/test';
 
+export async function enterRun(page: Page) {
+  const title = page.getByRole('heading', { name: 'ROLL CALL', exact: true });
+  if (!await title.count()) return;
+  const continueButton = page.getByRole('button', { name: /^Continue Chapter / });
+  if (await continueButton.count()) await continueButton.click();
+  else await page.getByRole('button', { name: 'NEW RUN', exact: true }).click();
+  await title.waitFor({ state: 'detached' });
+}
+
 export async function openGameMenu(page: Page) {
   await page.getByRole('button', { name: 'Open menu', exact: true }).click();
   return page.getByRole('dialog', { name: 'Menu' });

@@ -6,7 +6,7 @@ import { handOptions, HANDS, HAND_IDS, ultimateHands } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { BigBossType, GameState } from '../src/game/types';
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
-import { setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
+import { enterRun, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 
 const seedFor = (boss: BigBossType) => {
   for (let index = 0; index < 100; index++) {
@@ -17,6 +17,7 @@ const seedFor = (boss: BigBossType) => {
 };
 async function ready(page: Page) {
   await page.locator('main').waitFor();
+  await enterRun(page);
   for (let barrier = 0; barrier < 2; barrier++) {
     const bustContinue = page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true });
     if (await bustContinue.count()) { await bustContinue.click(); continue; }
@@ -78,6 +79,7 @@ async function reachBossShop(page: Page, boss: BigBossType, seed = seedFor(boss)
 
 test('local route transition auto-continues after its visible themed three-second countdown and honors reduced motion', async ({ page }) => {
   await page.goto('/?seed=map-browser&speed=normal');
+  await enterRun(page);
   const map = page.getByTestId('run-map-transition');
   await expect(map).toBeVisible();
   expect(await map.evaluate(element => getComputedStyle(element).animationName)).toContain('map-screen-in');
@@ -108,6 +110,7 @@ test('local route transition auto-continues after its visible themed three-secon
   await expect(page.getByTestId('stat-round')).toContainText('1');
 
   await page.goto('/?seed=map-manual&speed=normal');
+  await enterRun(page);
   const manualMap = page.getByTestId('run-map-transition');
   await manualMap.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(manualMap).toHaveClass(/map-exiting/);
@@ -119,6 +122,7 @@ test('local route transition auto-continues after its visible themed three-secon
 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/?seed=map-reduced&speed=normal');
+  await enterRun(page);
   const reducedMap = page.getByTestId('run-map-transition');
   await expect(reducedMap).toBeVisible();
   expect(await reducedMap.evaluate(element => getComputedStyle(element).animationName)).toBe('none');

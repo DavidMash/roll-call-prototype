@@ -6,11 +6,12 @@ import { HANDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
 import { pairSelectionRun, winningSlippyRun } from './handFixtures';
-import { setPlaybackSpeed } from './uiHelpers';
+import { enterRun, setPlaybackSpeed } from './uiHelpers';
 import { specialOfferName } from '../src/game/specialOffers';
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
+  await enterRun(page);
   for (let barrier = 0; barrier < 2; barrier++) {
     const bustContinue = page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true });
     if (await bustContinue.count()) { await bustContinue.click(); continue; }

@@ -4,6 +4,7 @@ import { dispatch, newRun } from '../src/game/engine';
 import { HAND_IDS } from '../src/game/hands';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import type { GameState, MiniBossType, RandomSource } from '../src/game/types';
+import { enterRun } from './uiHelpers';
 
 const constant = (value = .2): RandomSource => ({ next: () => value });
 
@@ -22,6 +23,7 @@ async function install(page: Page, state: GameState) {
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
   await page.reload();
   await expect(page.locator('main')).toBeVisible();
+  await enterRun(page);
 }
 
 test('Mini-Boss map, preview, encounter label, and Neglected badges reuse the boss presentation', async ({ page }) => {

@@ -4,11 +4,12 @@ import { dispatch, newRun } from '../src/game/engine';
 import { hasPlayableHand, handOptions, HANDS, HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
-import { setPlaybackSpeed } from './uiHelpers';
+import { enterRun, setPlaybackSpeed } from './uiHelpers';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
+  await enterRun(page);
   for (let barrier = 0; barrier < 2; barrier++) {
     const bust = page.locator('.bust-state');
     const bustContinue = bust.getByRole('button', { name: 'Continue', exact: true });
