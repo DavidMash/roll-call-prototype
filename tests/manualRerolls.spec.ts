@@ -140,17 +140,17 @@ test('strategic single-die and multi-die rerolls cost charges, clear selection a
   let game = newRun('manual-browser').state;
   await page.goto('/?seed=manual-browser&speed=instant');
   await matchRound(page, game);
-  await expect(page.getByTestId('manual-reroll')).toHaveAccessibleName('REROLL · 3 REMAINING');
+  await expect(page.getByTestId('manual-reroll')).toHaveAccessibleName('REROLL · 3 REROLLS REMAINING');
   await expect(page.getByTestId('manual-reroll')).toHaveAttribute('data-normal-fill-percent', '100');
   await expect(page.getByTestId('manual-reroll')).toBeDisabled();
   const single = await reroll(page, game, [1]);
   game = single.state;
   expect(game.manualRerollsRemaining).toBe(2);
-  await expect(page.getByTestId('manual-reroll')).toHaveAccessibleName('REROLL · 2 REMAINING');
+  await expect(page.getByTestId('manual-reroll')).toHaveAccessibleName('REROLL · 2 REROLLS REMAINING');
   await expect(page.getByTestId('manual-reroll')).toHaveAttribute('data-normal-fill-percent', '67');
   expect(single.events.filter(event => event.type === 'DIE_ROLLED').map(event => event.dieIds)).toEqual([[1]]);
   for (const id of [0, 2, 4]) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
-  await expect(page.getByTestId('manual-reroll')).toHaveAccessibleName('REROLL 3 DICE · 2 REMAINING');
+  await expect(page.getByTestId('manual-reroll')).toHaveAccessibleName('REROLL 3 DICE · 2 REROLLS REMAINING');
   await expect(page.getByTestId('manual-reroll')).toBeDisabled();
   await page.getByRole('button', { name: /^Die 5,/ }).click();
   const button = page.getByTestId('manual-reroll');
@@ -184,17 +184,17 @@ test('Reroll control separates selected dice from normal and Care Package resour
   await installRun(page, game);
 
   const button = page.getByTestId('manual-reroll');
-  await expect(button).toHaveAccessibleName('REROLL · 3 REMAINING · +3 CARE PACKAGE');
+  await expect(button).toHaveAccessibleName('REROLL · 3 REROLLS REMAINING + 3');
   await expect(button).toHaveAttribute('data-normal-fill-percent', '100');
   await expect(page.getByTestId('special-effect-carePackage')).toHaveText('Care Package · 3 Rerolls Left');
 
   for (const id of [0, 1]) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
-  await expect(button).toHaveAccessibleName('REROLL 2 DICE · 3 REMAINING · +3 CARE PACKAGE');
+  await expect(button).toHaveAccessibleName('REROLL 2 DICE · 3 REROLLS REMAINING + 3');
   await button.click();
   game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0, 1] }).state;
   await matchRound(page, game);
   expect(game).toMatchObject({ manualRerollsRemaining: 1, specialOfferEffects: { carePackageRerolls: 3 } });
-  await expect(button).toHaveAccessibleName('REROLL · 1 REMAINING · +3 CARE PACKAGE');
+  await expect(button).toHaveAccessibleName('REROLL · 1 REROLL REMAINING + 3');
   await expect(button).toHaveAttribute('data-normal-fill-percent', '33');
 
   for (const id of [0, 1]) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
@@ -202,9 +202,14 @@ test('Reroll control separates selected dice from normal and Care Package resour
   game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0, 1] }).state;
   await matchRound(page, game);
   expect(game).toMatchObject({ manualRerollsRemaining: 0, specialOfferEffects: { carePackageRerolls: 2 } });
-  await expect(button).toHaveAccessibleName('REROLL · 2 CARE PACKAGE REMAINING');
+  await expect(button).toHaveAccessibleName('REROLL · 0 REROLLS REMAINING + 2');
   await expect(button).toHaveAttribute('data-normal-fill-percent', '0');
   await expect(page.getByTestId('special-effect-carePackage')).toHaveText('Care Package · 2 Rerolls Left');
+  await expect(button.locator('.reroll-action-resource')).not.toContainText('CARE PACKAGE');
+  expect(await button.locator('.reroll-action-resource').evaluate(element => ({
+    singleLine: element.getBoundingClientRect().height < parseFloat(getComputedStyle(element).lineHeight) * 1.5,
+    fits: element.scrollWidth <= element.clientWidth,
+  }))).toEqual({ singleLine: true, fits: true });
 
   for (const id of [0, 1]) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
   await button.click();
@@ -262,7 +267,7 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   expect(Number.parseFloat(fallbackConnectorStyle.transformOrigin)).toBeGreaterThan(0);
   await fallbackMap.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.getByTestId('bust-shop-banner')).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText(/ROUND \d+ BUST/)).toBeVisible();
+  await expect(page.getByText(/C\d+ R\d+ BUST/)).toBeVisible();
   await expect(page.getByText('1 Life Lost', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: `RETRY ROUND ${game.round}`, exact: true })).toBeVisible();
   expect(game.phase).toBe('shop');

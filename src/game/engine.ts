@@ -11,6 +11,7 @@ import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, isValidSelec
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
 import { activeEncounterDice, bossSchedule, unavailableEncounterHands } from './bosses';
+import { chapterNumberForRound, ensureChapterPlan } from './chapters';
 import { formatPlayerNumber } from './copy';
 import { enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey } from './specialOffers';
 import type { Action, Board, GameState, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
@@ -100,6 +101,11 @@ export function normalizeGameState(state: GameState): GameState {
     normalizeShop(next.shop);
   }
   if (next.roundCheckpoint) {
+    next.roundCheckpoint.chapterPlans ??= structuredClone(next.chapterPlans ?? {});
+    next.roundCheckpoint.presentedChapters ??= Array.from(
+      { length: chapterNumberForRound(next.roundCheckpoint.round) }, (_, index) => index + 1,
+    );
+    ensureChapterPlan(next.roundCheckpoint, chapterNumberForRound(next.roundCheckpoint.round));
     normalizeSpecialRuntime(next.roundCheckpoint);
     if (next.roundCheckpoint.shop) normalizeShop(next.roundCheckpoint.shop);
     for (const die of next.roundCheckpoint.dice) {
@@ -129,6 +135,16 @@ export function normalizeGameState(state: GameState): GameState {
   next.roundSummary ??= null;
   next.stats.jumpingBeanFreePlays ??= [];
   next.bossSchedule ??= bossSchedule(next.seed);
+  next.chapterPlans ??= {};
+  next.presentedChapters ??= Array.from({ length: chapterNumberForRound(next.round) }, (_, index) => index + 1);
+  ensureChapterPlan(next, chapterNumberForRound(next.round));
+  if (next.badDreamCheckpoint) {
+    next.badDreamCheckpoint.chapterPlans ??= structuredClone(next.chapterPlans);
+    next.badDreamCheckpoint.presentedChapters ??= Array.from(
+      { length: chapterNumberForRound(next.badDreamCheckpoint.round) }, (_, index) => index + 1,
+    );
+    ensureChapterPlan(next.badDreamCheckpoint, chapterNumberForRound(next.badDreamCheckpoint.round));
+  }
   next.boss ??= null;
   if (next.boss?.type === 'warden') next.boss.unlockCosts ??= [];
   if (next.boss?.type === 'caller') {
@@ -334,7 +350,7 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
   const state: GameState = {
     phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: CONFIG.baseTarget,
     score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, roundAttemptNumber: 1,
-    bossSchedule: bossSchedule(seed), boss: null, bossSilenced: false, currentNodeId: '',
+    bossSchedule: {}, chapterPlans: {}, presentedChapters: [], boss: null, bossSilenced: false, currentNodeId: '',
     bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], chargeXMult: 1, maxCharge: 1,
     chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], shop: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,

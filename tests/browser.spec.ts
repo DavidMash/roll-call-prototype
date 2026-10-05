@@ -11,6 +11,7 @@ import { activeEncounterDice, unavailableEncounterHands } from '../src/game/boss
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
 import { openGameMenu, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 import { specialOfferName } from '../src/game/specialOffers';
+import { chapterLabel } from '../src/game/chapters';
 
 async function expectCenteredPips(die: Locator) {
   const dieBox = await die.boundingBox();
@@ -63,9 +64,8 @@ async function ready(page: Page) {
 }
 async function matchBoard(page: Page, game: GameState) {
   await ready(page);
-  for (const [stat, value] of [['round', game.round], ['gold', game.gold]] as const) {
-    await expect(page.getByTestId(`stat-${stat}`).getByText(String(value), { exact: true })).toBeVisible();
-  }
+  await expect(page.getByTestId('stat-round')).toContainText(chapterLabel(game.round));
+  await expect(page.getByTestId('stat-gold').getByText(String(game.gold), { exact: true })).toBeVisible();
   for (const stat of ['goal', 'score', 'rerolls']) await expect(page.getByTestId(`stat-${stat}`)).toHaveCount(0);
   if (game.phase === 'roundSummary') {
     await expect(page.getByTestId('round-summary')).toBeVisible();
@@ -295,7 +295,7 @@ test('scorecard keeps all fourteen categories visible with simplified actionable
   await expect(page.getByTestId('round-score-progress')).toHaveText('0 / 100');
   await expect(page.getByTestId('round-score-progress')).toHaveClass(/round-score-readout/);
   await expect(page.getByTestId('round-goal-progress')).toHaveAttribute('aria-valuetext', '0 of 100 points toward the Goal');
-  await expect(page.locator('.hud-phase')).toHaveText('ROUND 1');
+  await expect(page.locator('.hud-phase')).toHaveText('ROUND');
 
   const playable = page.locator('[data-state="playable"]').first();
   const playableTestId = await playable.getAttribute('data-testid');
@@ -1026,7 +1026,7 @@ test('settled progress resumes across reloads and return visits with seed-aware 
 
   const different = newRun('different-browser-run').state;
   await page.goto('/?seed=different-browser-run&speed=instant');
-  await expect(page.getByTestId('run-map-transition')).toBeVisible();
+  await expect(page.getByTestId('stat-round')).toContainText('C1 R1');
   await page.reload();
   await page.locator('main').waitFor();
   await expect(page.getByTestId('run-map-transition')).toHaveCount(0);
@@ -1038,7 +1038,7 @@ test('settled progress resumes across reloads and return visits with seed-aware 
   await runInfo.getByRole('button', { name: 'New seed', exact: true }).click();
   const generatedSeed = new URL(page.url()).searchParams.get('seed');
   expect(generatedSeed).toMatch(/^roll-/);
-  await expect(page.getByTestId('run-map-transition')).toBeVisible();
+  await expect(page.getByTestId('stat-round')).toContainText('C1 R1');
   await page.reload();
   await matchBoard(page, newRun(generatedSeed!).state);
 

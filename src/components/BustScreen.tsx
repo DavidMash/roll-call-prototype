@@ -4,6 +4,7 @@ import type { Board } from '../game/types';
 import { DiceRow } from './DiceRow';
 import type { DiceDisplay } from '../uiSettings';
 import { formatPlayerNumber, formatScoreProgress } from '../game/copy';
+import { fullChapterLabels } from '../game/chapters';
 
 const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
 
@@ -11,9 +12,11 @@ export function BustScreen({ board, diceDisplay, onContinue, restartSame, newRun
   board: Board; diceDisplay: DiceDisplay; onContinue?: () => void; restartSame?: () => void; newRun?: () => void;
 }) {
   const bust = board.bust!;
+  const labels = fullChapterLabels(board.round);
   return <Stack gap="sm">
     <Paper p="xl" ta="center" className="end-state bust-state">
-      <Title order={2}>ROUND {formatPlayerNumber(board.round)} BUST</Title>
+      <Text fw={900} className="summary-chapter">{labels.chapter}</Text>
+      <Title order={2}>{labels.round} BUST</Title>
       <Text fw={800} mt="sm">{formatScoreProgress(bust.score, bust.target)}</Text>
       <Text c="red" fw={800}>{formatPlayerNumber(bust.shortfall)} SHORT</Text>
       <Group justify="center" gap="xs" mt="md"><Text size="xl" c="red">{hearts(bust.livesBefore)}</Text><Text>→</Text><Text size="xl" c="red">{hearts(bust.livesAfter)}</Text></Group>

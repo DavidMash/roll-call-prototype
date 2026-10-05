@@ -16,6 +16,7 @@ import type { DiceDisplay } from '../uiSettings';
 import { BOSSES } from '../game/bosses';
 import { EMPTY_TEXT, formatPlayerNumber } from '../game/copy';
 import { enhancementOfferIsFree, trainingOfferIsFree } from '../game/specialOffers';
+import { chapterLabel, chapterRoundForRound } from '../game/chapters';
 
 interface SaleTarget { face: Rank; enhancement: Enhancement; stacks: number; proceeds: number }
 const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
@@ -82,17 +83,18 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
   const tutorialLabel = <Stack gap={3}><Text size="sm" fw={800}>NEW EMBER</Text>
     <Text size="xs">Stoke Flames in the Shop. At 100 Gold, they become Bonfires.</Text></Stack>;
   const upcomingBoss = board.bossSchedule[board.round + 1];
+  const retryRound = chapterRoundForRound(board.round);
 
   return <>
     <Stack gap="xs" className="shop-screen">
       <div className="shop-summary phase-sticky-header">{returnedFromBust ? <Paper px="sm" py={6} className="bust-shop-banner" data-testid="bust-shop-banner">
         <Group justify="space-between" gap="xs" wrap="wrap">
-          <div><Text size="sm" fw={850} c="red">ROUND {formatPlayerNumber(returnedFromBust.round)} BUST</Text>
+          <div><Text size="sm" fw={850} c="red">{chapterLabel(returnedFromBust.round)} BUST</Text>
             <Text size="xs" c="dimmed">1 Life Lost</Text></div>
           <Text fw={800} c="red" aria-label={`${board.lives} of ${CONFIG.maxLives} lives`}>{hearts(board.lives)}</Text>
         </Group>
       </Paper> : <Group justify="space-between"><Text fw={800}>SHOP</Text><Text size="xs" c="dimmed">{upcomingBoss
-        ? `Prepare for ${BOSSES[upcomingBoss].name}` : `Prepare for Round ${formatPlayerNumber(board.round + 1)}`}</Text></Group>}</div>
+        ? `Prepare for ${BOSSES[upcomingBoss].name}` : `Prepare for ${chapterLabel(board.round + 1)}`}</Text></Group>}</div>
       {busy && <ScoreResolution event={event} busy={busy} onSkip={skip} showXMult={hasXMultFlame(board.dice, board.bonfires)} />}
       <BossPreview board={board} />
       <Paper p="xs" className="shop-section">
@@ -130,10 +132,10 @@ export function ShopScreen({ board, event, busy, diceDisplay, selectedOffer, set
           onClick={clickDie} onDropOffer={attemptPurchase} tutorialDieId={tutorialDieId} tutorialLabel={tutorialLabel} />
       </Paper>
       <div className="shop-action-dock">
-        <Button size="sm" disabled={busy} aria-label={returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(board.round)}` : 'NEXT ROUND'}
+        <Button size="sm" disabled={busy} aria-label={returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : 'NEXT ROUND'}
           color={returnedFromBust ? 'red' : undefined}
           onClick={() => submit(returnedFromBust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' })}>
-          {returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(board.round)}` : 'NEXT ROUND'} →
+          {returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : 'NEXT ROUND'} →
         </Button>
       </div>
     </Stack>

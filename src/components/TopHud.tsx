@@ -7,6 +7,7 @@ import type { PlaybackSpeed } from '../useGame';
 import type { DiceDisplay } from '../uiSettings';
 import { formatPlayerNumber } from '../game/copy';
 import { activeSpecialOfferStatusItems } from '../game/specialOffers';
+import { chapterLabel } from '../game/chapters';
 
 function HudStat({ testId, icon, label, value }: { testId: string; icon: string; label: string; value: number }) {
   const formatted = formatPlayerNumber(value);
@@ -45,7 +46,11 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
     <Group className="top-hud-row" justify="space-between" wrap="nowrap">
       <Text className="game-title">ROLL CALL</Text>
       <Group className="hud-stats" gap="xs" wrap="nowrap">
-        <HudStat testId="stat-round" icon="R" label="Round" value={board.round} />
+        <div className="hud-stat" data-testid="stat-round" aria-label={chapterLabel(board.round).replace('C', 'Chapter ').replace(' R', ', Round ')}>
+          <span aria-hidden="true" className="hud-stat-icon">R</span>
+          <span className="hud-stat-label">Stage</span>
+          <strong>{chapterLabel(board.round)}</strong>
+        </div>
         <HudStat testId="stat-gold" icon="●" label="Gold" value={board.gold} />
         {board.phase === 'shop'
           ? <Tooltip label="Restore lost lives" withArrow><UnstyledButton className="hud-lives interactive" data-testid="stat-lives"
@@ -55,7 +60,7 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
           ? <div className="hud-phase" aria-label={board.phase === 'shop' ? 'Shop phase' : board.phase === 'flameSelection' ? 'Flame Selection phase' : board.phase === 'specialOffer' ? 'Special Offer phase' : 'Round Summary phase'}>
             {board.phase === 'shop' ? 'SHOP' : board.phase === 'flameSelection' ? 'FLAME SELECTION' : board.phase === 'specialOffer' ? 'SPECIAL OFFER' : 'SUMMARY'}
           </div>
-          : board.phase === 'round' ? <div className="hud-phase" aria-label="Round phase">ROUND {formatPlayerNumber(board.round)}</div>
+          : board.phase === 'round' ? <div className="hud-phase" aria-label="Round phase">ROUND</div>
             : <div className="hud-phase" aria-label={board.phase === 'bust' ? 'Bust phase' : 'Run ended'}>{board.phase === 'bust' ? 'BUST' : 'OVER'}</div>}
       </Group>
       <ActionIcon className="menu-trigger" variant="subtle" color="gray" size="lg" aria-label="Open menu" onClick={() => setMenu(true)}>

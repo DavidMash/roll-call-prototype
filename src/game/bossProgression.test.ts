@@ -26,11 +26,13 @@ describe('linear route and deterministic boss schedule', () => {
     ]);
   });
 
-  it('limits the local map window to five nodes centered on the destination when possible', () => {
-    const window = routeWindow('route', 'boss:6');
-    expect(window).toHaveLength(5);
-    expect(window[2].id).toBe('boss:6');
-    expect(routeWindow('route', 'round:1')).toHaveLength(3);
+  it('limits the map to the complete current Chapter', () => {
+    const chapterOne = routeWindow('route', 'boss:6');
+    expect(chapterOne).toHaveLength(13);
+    expect(chapterOne.map(node => node.round).every(round => round >= 1 && round <= 6)).toBe(true);
+    const chapterTwo = routeWindow('route', 'round:7');
+    expect(chapterTwo).toHaveLength(13);
+    expect(chapterTwo.map(node => node.round).every(round => round >= 7 && round <= 12)).toBe(true);
   });
 
   it('reports the gameplay target for every encounter node, including target-changing bosses', () => {

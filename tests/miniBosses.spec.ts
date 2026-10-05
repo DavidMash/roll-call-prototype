@@ -39,7 +39,7 @@ test('Mini-Boss map, preview, encounter label, and Neglected badges reuse the bo
   const map = page.getByTestId('run-map-transition');
   await expect(map).toHaveAttribute('data-destination', 'boss:3');
   await expect(map.locator('[aria-current="step"]')).toHaveClass(/node-mini_boss_round/);
-  await expect(map.locator('[aria-current="step"]')).toContainText('MINI-BOSS 3');
+  await expect(map.locator('[aria-current="step"]')).toContainText('MINI-BOSS');
   await map.getByRole('button', { name: 'Continue', exact: true }).evaluate(element => (element as HTMLElement).click());
   await expect(map).toHaveCount(0);
 

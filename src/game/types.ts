@@ -3,6 +3,11 @@ export type BigBossType = 'caller' | 'warden' | 'hexer' | 'marathon' | 'quickdra
 export type MiniBossType = 'juggler' | 'capitalReturn' | 'neglected' | 'clockmaker'
   | 'tightrope' | 'crawler' | 'magician' | 'mugger';
 export type BossType = BigBossType | MiniBossType;
+export interface ChapterPlan {
+  chapterNumber: number;
+  miniBoss: MiniBossType;
+  boss: BigBossType;
+}
 export type RunNodeType = 'normal_round' | 'mini_boss_round' | 'boss_round' | 'shop' | 'flame_selection' | 'special_offer';
 export type Enhancement =
   | 'bonus' | 'jumpingBean' | 'golden' | 'workout'
@@ -213,6 +218,8 @@ export interface Board {
   lives: number;
   roundAttemptNumber: number;
   bossSchedule: Partial<Record<number, BossType>>;
+  chapterPlans: Partial<Record<number, ChapterPlan>>;
+  presentedChapters: number[];
   boss: BossRuntimeState | null;
   bossSilenced: boolean;
   currentNodeId: string;
@@ -438,7 +445,7 @@ export interface RunStats {
   resolutionError: string | null;
 }
 export type EventType =
-  | 'MAP_TRANSITION' | 'ROUND_STARTED' | 'BOSS_STARTED' | 'BOSS_CLEARED' | 'HAND_STARTED' | 'ABILITY_TRIGGERED' | 'ABILITY_CHECKED' | 'ABILITY_EVALUATED'
+  | 'CHAPTER_STARTED' | 'MAP_TRANSITION' | 'ROUND_STARTED' | 'BOSS_STARTED' | 'BOSS_CLEARED' | 'HAND_STARTED' | 'ABILITY_TRIGGERED' | 'ABILITY_CHECKED' | 'ABILITY_EVALUATED'
   | 'HAND_PIPS_CHANGED' | 'HAND_MULTIPLIER_CHANGED' | 'HITCHHIKER_ADDED_PIPS'
   | 'HAND_SCORE_FINALIZED' | 'STANDALONE_SCORE_CALCULATED' | 'SCORE_ROUNDING_AUDIT'
   | 'SCORE_ADDED' | 'GOLD_ADDED' | 'WORKOUT_INCREMENTED'
@@ -469,6 +476,9 @@ export interface EventRecord {
   toNode?: string;
   nodeType?: RunNodeType;
   direction?: 'forward' | 'backward';
+  chapterNumber?: number;
+  chapterMiniBoss?: MiniBossType;
+  chapterBoss?: BigBossType;
   hand?: HandId;
   playSource?: HandPlaySource;
   handConsumed?: boolean;

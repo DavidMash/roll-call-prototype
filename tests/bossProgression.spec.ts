@@ -83,10 +83,10 @@ test('local route transition auto-continues after its visible themed three-secon
   expect(await map.evaluate(element => getComputedStyle(element).animationName)).toContain('map-screen-in');
   await expect(map).toHaveAttribute('data-destination', 'round:1');
   const destination = map.locator('[aria-current="step"]');
-  await expect(destination).toContainText('Round 1');
-  await expect(map.getByText('Round 1', { exact: true })).toHaveCount(2);
-  await expect(map.locator('.run-map-node')).toHaveCount(3);
-  await expect(map.locator('.map-node-placeholder')).toHaveCount(2);
+  await expect(destination).toContainText('R1');
+  await expect(map.getByText('R1', { exact: true })).toHaveCount(2);
+  await expect(map.locator('.run-map-node')).toHaveCount(13);
+  await expect(map.locator('.map-node-placeholder')).toHaveCount(0);
   const continueButton = map.getByRole('button', { name: 'Continue', exact: true });
   await expect(continueButton.locator('.map-continue-countdown')).toHaveText('3');
   const fillStyle = await map.locator('.map-continue-fill').evaluate(element => {
@@ -100,7 +100,8 @@ test('local route transition auto-continues after its visible themed three-secon
   const nodeBox = await destination.boundingBox();
   expect(nodeBox!.y).toBeGreaterThanOrEqual(trackBox!.y);
   expect(nodeBox!.y + nodeBox!.height).toBeLessThanOrEqual(trackBox!.y + trackBox!.height);
-  expect(Math.abs((nodeBox!.x + nodeBox!.width / 2) - (trackBox!.x + trackBox!.width / 2))).toBeLessThan(2);
+  expect(nodeBox!.x).toBeGreaterThanOrEqual(trackBox!.x);
+  expect(nodeBox!.x + nodeBox!.width).toBeLessThanOrEqual(trackBox!.x + trackBox!.width);
   await expect(map).toBeVisible();
   await expect(continueButton.locator('.map-continue-countdown')).toHaveText('2');
   await expect(map).toHaveCount(0, { timeout: 3000 });
@@ -429,7 +430,7 @@ test('Boss clear shows its Boss Reward summary before the Flame Selection map', 
   await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
   const flameMap = page.getByTestId('run-map-transition');
   await expect(flameMap).toHaveAttribute('data-destination', `flame:after-round:${game.round}`);
-  await expect(flameMap.locator('.run-map-node')).toHaveCount(5);
+  await expect(flameMap.locator('.run-map-node')).toHaveCount(13);
   const activeConnector = flameMap.getByTestId('active-map-connector');
   await expect(activeConnector).toHaveCount(1);
   await expect(activeConnector).toHaveClass(/route-forward/);

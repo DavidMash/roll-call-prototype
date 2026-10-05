@@ -7,7 +7,8 @@ import type { Action, Resolution } from './game/types';
 
 export type PlaybackSpeed = keyof typeof CONFIG.tickMs;
 
-const isPlaybackBarrier = (event: Resolution['events'][number] | undefined) => event?.type === 'MAP_TRANSITION'
+const isPlaybackBarrier = (event: Resolution['events'][number] | undefined) => event?.type === 'CHAPTER_STARTED'
+  || event?.type === 'MAP_TRANSITION'
   || (event?.type === 'ROUND_BUST' && (event.board.bust?.livesAfter ?? 0) > 0);
 
 export function useGame(requestedSeed: string | null, fallbackSeed: string, speed: PlaybackSpeed) {
@@ -24,6 +25,10 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
   useEffect(() => {
     if (!busy) return;
     const currentEvent = result.events[index];
+    if (speed === 'instant' && currentEvent?.type === 'CHAPTER_STARTED') {
+      setIndex(current => current + 1);
+      return;
+    }
     if (isPlaybackBarrier(currentEvent)) return;
     if (speed === 'instant') {
       const nextBarrier = result.events.findIndex((candidate, candidateIndex) => candidateIndex > index && isPlaybackBarrier(candidate));

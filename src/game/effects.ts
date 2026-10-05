@@ -15,6 +15,7 @@ import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTempora
   isCursedDie, isMiniBossType, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
 import { encounterNode, flameNodeAfter, postBossRewardForRound, shopNodeBefore, specialOfferNodeAfter, timeTravelDestinationRound } from './progression';
 import { formatPercentage, formatPlayerNumber } from './copy';
+import { chapterNumberForRound, ensureChapterPlan } from './chapters';
 import { eligibleSpecialOfferTypes, specialOfferDescription, specialOfferName, trainingOfferKey } from './specialOffers';
 import type { ChargeFlame } from './flames';
 import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameStateBase, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, RunNode, ScoreSource, SpecialOffer } from './types';
@@ -48,6 +49,16 @@ export class Resolver {
       round: node.round, boss: node.boss, direction });
     this.emit({ type: 'MAP_TRANSITION', fromNode, toNode: node.id, nodeType: node.type,
       boss: node.boss, direction, message: `${fromNode ?? 'Run start'} → ${node.id}` });
+  }
+  enterChapterIfNeeded(round: number): void {
+    const chapterNumber = chapterNumberForRound(round);
+    const plan = ensureChapterPlan(this.state, chapterNumber);
+    if (this.state.presentedChapters.includes(chapterNumber)) return;
+    this.state.presentedChapters.push(chapterNumber);
+    this.emit({
+      type: 'CHAPTER_STARTED', chapterNumber, chapterMiniBoss: plan.miniBoss, chapterBoss: plan.boss,
+      message: `Chapter ${chapterNumber} entered`,
+    });
   }
   log(event: Omit<EventRecord, 'id' | 'round'>): void {
     this.state.history.push({ ...event, id: this.state.history.length, round: this.state.round });
@@ -935,6 +946,7 @@ export class Resolver {
       const priorBust = this.state.stats.busts.at(-1);
       if (priorBust?.round === this.state.round && !priorBust.retryStarted) priorBust.retryStarted = true;
     }
+    this.enterChapterIfNeeded(this.state.round);
     if (this.state.chargeXMult !== 1 || this.state.chargeArmed) this.state.stats.chargeResets++;
     this.state.phase = 'round'; this.state.score = 0; this.state.scoreByHand = {}; this.state.effectScore = 0;
     if (!retry) this.state.specialOfferEffects.bottledFairyTriggeredThisRound = false;
@@ -1066,8 +1078,10 @@ export class Resolver {
     this.state.phase = 'shop'; this.state.flameSelection = null; this.state.specialOffer = null; this.state.roundSummary = null;
     this.state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
       freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
-    const upcomingBoss = this.state.round + 1 > 60 ? bossTypeForRound(this.state.seed, this.state.round + 1) : null;
-    if (upcomingBoss) this.state.bossSchedule[this.state.round + 1] = upcomingBoss;
+    const upcomingRound = this.state.round + 1;
+    this.enterChapterIfNeeded(upcomingRound);
+    const upcomingBoss = this.state.bossSchedule[upcomingRound];
+    if (upcomingBoss) this.state.bossSchedule[upcomingRound] = upcomingBoss;
     this.mapTransition(shopNodeBefore(this.state.round + 1), direction);
     this.freshOffers(); this.freshTrainingOffers();
     if (this.state.specialOfferEffects.onTheHouse) {

@@ -1,7 +1,8 @@
 import { BOSSES, bossTypeForRound, isBossRound, isMiniBossRound, targetForBoss } from './bosses';
 import { targetForRound } from './config';
 import { formatPlayerNumber } from './copy';
-import type { BossType, RunNode } from './types';
+import { chapterEncounterRounds, chapterNumberForRound, chapterRoundForRound, firstRoundOfChapter } from './chapters';
+import type { BossType, ChapterPlan, RunNode } from './types';
 
 export const encounterNode = (round: number, boss?: BossType | null): RunNode => boss || isBossRound(round)
   ? { id: `boss:${round}`, type: isMiniBossRound(round) ? 'mini_boss_round' : 'boss_round', round, boss: boss ?? undefined }
@@ -26,18 +27,39 @@ export function routeThrough(seed: string, throughRound: number): RunNode[] {
   return route;
 }
 
-export function routeWindow(seed: string, destinationId: string, radius = 2): RunNode[] {
+export function chapterRoute(seed: string, chapterNumber: number, plan?: ChapterPlan): RunNode[] {
+  const firstRound = firstRoundOfChapter(chapterNumber);
+  const { miniBossRound, bossRound } = chapterEncounterRounds(chapterNumber);
+  const miniBoss = plan?.miniBoss ?? bossTypeForRound(seed, miniBossRound);
+  const boss = plan?.boss ?? bossTypeForRound(seed, bossRound);
+  return [
+    encounterNode(firstRound),
+    shopNodeBefore(firstRound + 1),
+    encounterNode(firstRound + 1),
+    shopNodeBefore(miniBossRound),
+    encounterNode(miniBossRound, miniBoss),
+    specialOfferNodeAfter(miniBossRound),
+    shopNodeBefore(firstRound + 3),
+    encounterNode(firstRound + 3),
+    shopNodeBefore(firstRound + 4),
+    encounterNode(firstRound + 4),
+    shopNodeBefore(bossRound),
+    encounterNode(bossRound, boss),
+    flameNodeAfter(bossRound),
+  ];
+}
+
+/** Retained name for callers; the map now receives the whole current Chapter. */
+export function routeWindow(seed: string, destinationId: string, _radius = 2, plan?: ChapterPlan): RunNode[] {
   const roundMatch = Number(destinationId.match(/\d+/)?.[0] ?? 1);
-  const route = routeThrough(seed, Math.max(6, roundMatch + 4));
-  const index = Math.max(0, route.findIndex(node => node.id === destinationId));
-  return route.slice(Math.max(0, index - radius), index + radius + 1);
+  return chapterRoute(seed, chapterNumberForRound(roundMatch), plan);
 }
 
 export function nodeLabel(node: RunNode): string {
-  if (node.type === 'normal_round') return `Round ${formatPlayerNumber(node.round)}`;
-  if (node.type === 'mini_boss_round') return `MINI-BOSS ${formatPlayerNumber(node.round)}`;
-  if (node.type === 'boss_round') return `Boss Round ${formatPlayerNumber(node.round)}`;
-  if (node.type === 'flame_selection') return 'FLAME SELECTION';
+  if (node.type === 'normal_round') return `R${formatPlayerNumber(chapterRoundForRound(node.round))}`;
+  if (node.type === 'mini_boss_round') return 'MINI-BOSS';
+  if (node.type === 'boss_round') return 'BOSS';
+  if (node.type === 'flame_selection') return 'FLAME';
   if (node.type === 'special_offer') return 'SPECIAL OFFER';
   return 'SHOP';
 }

@@ -10,6 +10,7 @@ import { RestoreLivesModal } from './components/RestoreLivesModal';
 import { ShopScreen } from './components/ShopScreen';
 import { TopHud } from './components/TopHud';
 import { RunMapTransition } from './components/RunMapTransition';
+import { ChapterSplash } from './components/ChapterSplash';
 import { RoundSummaryScreen } from './components/RoundSummaryScreen';
 import { SpecialOfferScreen } from './components/SpecialOfferScreen';
 import { screenTheme } from './game/screenThemes';
@@ -18,7 +19,8 @@ import type { Action } from './game/types';
 import { useGame } from './useGame';
 import type { PlaybackSpeed } from './useGame';
 import { loadDiceDisplay, saveDiceDisplay } from './uiSettings';
-import { formatPlayerNumber, formatScoreProgress } from './game/copy';
+import { formatScoreProgress } from './game/copy';
+import { chapterLabel } from './game/chapters';
 
 const freshSeed = () => `roll-${Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join('-')}`;
 const query = new URLSearchParams(window.location.search);
@@ -42,6 +44,7 @@ export default function App() {
   const game = useGame(requestedSeed, initialSeed, speed);
   const { board, state, busy, event } = game;
   const theme = screenTheme(board);
+  const showingChapterSplash = event?.type === 'CHAPTER_STARTED';
   useLayoutEffect(() => setSeedInput(state.seed), [state.seed]);
   useEffect(() => saveDiceDisplay(diceDisplay), [diceDisplay]);
   useLayoutEffect(() => {
@@ -76,12 +79,13 @@ export default function App() {
     className={`app-container screen-theme ${board.phase === 'round' ? 'active-gameplay' : ''}`}
     data-screen-theme={theme.id} style={{ '--screen-primary': theme.accent, '--screen-secondary': theme.accentStrong,
       '--hud-sticky-offset': `${hudHeight + 8}px` } as React.CSSProperties}>
-    <TopHud board={board} speed={speed} setSpeed={setSpeed} diceDisplay={diceDisplay} setDiceDisplay={setDiceDisplay}
+    {!showingChapterSplash && <TopHud board={board} speed={speed} setSpeed={setSpeed} diceDisplay={diceDisplay} setDiceDisplay={setDiceDisplay}
       openRunInfo={() => setRunInfoOpen(true)} openHelp={() => setHelpOpen(true)}
-      openRestoreLives={() => setRestoreLivesOpen(true)} onMenuOpenChange={setGameMenuOpen} />
+      openRestoreLives={() => setRestoreLivesOpen(true)} onMenuOpenChange={setGameMenuOpen} />}
     {game.error && <Alert color="orange" withCloseButton onClose={game.clearError} my="xs" py={5} title="Action unavailable">{game.error}</Alert>}
     <main className="main-content">
-      {event?.type === 'MAP_TRANSITION' ? <RunMapTransition key={event.id} seed={state.seed} event={event} onContinue={game.continuePlayback} />
+      {event?.type === 'CHAPTER_STARTED' ? <ChapterSplash key={event.id} event={event} onComplete={game.continuePlayback} />
+        : event?.type === 'MAP_TRANSITION' ? <RunMapTransition key={event.id} seed={state.seed} event={event} onContinue={game.continuePlayback} />
         : board.phase === 'roundSummary' && board.roundSummary ? <RoundSummaryScreen board={board} busy={busy} submit={submit} />
         : board.phase === 'flameSelection' && board.flameSelection ? <FlameSelectionScreen board={board} event={event} busy={busy} diceDisplay={diceDisplay}
         selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} />
@@ -95,7 +99,7 @@ export default function App() {
         : board.phase === 'lost' || board.phase === 'error' ? <Stack gap="sm">
           <Paper p="xl" ta="center" className="end-state">
             <Title order={2}>{board.phase === 'lost' ? 'Run Over' : 'Resolution stopped'}</Title>
-            <Text mt="sm">{board.phase === 'lost' && board.bust ? `Bust on round ${formatPlayerNumber(board.bust.round)}: ${formatScoreProgress(board.bust.score, board.bust.target)}. No lives remain.` : state.stats.resolutionError}</Text>
+            <Text mt="sm">{board.phase === 'lost' && board.bust ? `Bust on ${chapterLabel(board.bust.round)}: ${formatScoreProgress(board.bust.score, board.bust.target)}. No lives remain.` : state.stats.resolutionError}</Text>
             <Text size="sm" c="dimmed" mt="sm">Run details and event history are available in Run Info.</Text>
             <Group justify="center" mt="lg"><Button onClick={() => restart(state.seed)}>Restart same seed</Button><Button variant="default" onClick={() => restart(freshSeed())}>New seed</Button></Group>
           </Paper>

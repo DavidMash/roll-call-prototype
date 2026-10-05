@@ -3,6 +3,7 @@ import { BOSSES, isMiniBossType } from '../game/bosses';
 import { HANDS } from '../game/hands';
 import type { Board } from '../game/types';
 import { formatPlayerNumber } from '../game/copy';
+import { chapterLabel } from '../game/chapters';
 
 export function BossPanel({ board }: { board: Board }) {
   const boss = board.boss;
@@ -51,7 +52,7 @@ export function BossPreview({ board }: { board: Board }) {
   if (!bossType) return null;
   const boss = BOSSES[bossType];
   return <Paper p="sm" className={`boss-preview boss-${bossType}`} data-testid="boss-preview">
-    <Group justify="space-between"><div><Text size="xs" fw={900} tt="uppercase" lts=".14em">Incoming · Round {formatPlayerNumber(nextRound)}</Text>
+    <Group justify="space-between"><div><Text size="xs" fw={900} tt="uppercase" lts=".14em">Incoming · {chapterLabel(nextRound)}</Text>
       <Text fw={950}>{boss.name}</Text></div><Badge variant="light">{isMiniBossType(bossType) ? 'MINI-BOSS' : 'BOSS'}</Badge></Group>
     <Text size="sm" mt={5}>{boss.shortRule}</Text>
   </Paper>;
