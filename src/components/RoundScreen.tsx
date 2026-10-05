@@ -182,7 +182,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
                 {speedReveal && <span data-testid="speed-demon-reveal">SPEED DEMON ×{formatPlayerNumber(speedReveal.xMult ?? 1)}</span>}
               </div>}
               <Button className="play-action" size="sm" aria-label={preview ? playActionLabel(preview.danger, preview.guaranteedWin) : 'PLAY'} disabled={busy || !valid}
-                data-testid="play-action" onClick={submitPlay}>
+                data-testid="play-action" data-tutorial="play-action" onClick={submitPlay}>
                 {speedEquation ?? (preview ? `${formatScoreEquation(preview.pips, preview.multiplier, preview.effectiveXMult, preview.score)} • ${playActionLabel(preview.danger, preview.guaranteedWin)}` : 'PLAY')}
               </Button>
             </>}

@@ -1,47 +1,163 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { driver, type Driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
-import type { TutorialBeat, TutorialSession } from './types';
+import type { TutorialBeat, TutorialSession, TutorialUiState } from './types';
 import { activeTutorialBeat } from './tutorialSteps';
+import {
+  configureTutorialInteractionGate,
+  releaseTutorialInteractionGate,
+  tutorialTargetsExist,
+} from './interactionGate';
+
+interface SpotlightRect {
+  key: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  interactive: boolean;
+}
 
 function descriptionHtml(beat: TutorialBeat): string {
   const paragraphs = beat.body.map(line => `<p>${line.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</p>`).join('');
   return `${paragraphs}${beat.requiredAction ? `<p class="tutorial-required-copy"><strong>${beat.requiredAction}</strong></p>` : ''}`;
 }
 
-export function TutorialDirector({ session, paused, onAcknowledge, onFinish }: {
+function queryElements(selectors: string[]) {
+  return Array.from(new Set(selectors.flatMap(selector =>
+    Array.from(document.querySelectorAll<HTMLElement>(selector)),
+  ))).filter(element => element.isConnected);
+}
+
+function useSpotlightRects(highlightTargets: string[], interactiveTargets: string[], enabled: boolean) {
+  const [snapshot, setSnapshot] = useState<{ key: string; rects: SpotlightRect[] }>({ key: '', rects: [] });
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const highlightKey = highlightTargets.join('|');
+  const interactiveKey = interactiveTargets.join('|');
+
+  useEffect(() => {
+    if (!enabled) {
+      setSnapshot({ key: '', rects: [] });
+      return;
+    }
+    let frames: number[] = [];
+    const highlights = queryElements(highlightTargets);
+    const interactive = queryElements(interactiveTargets);
+    const update = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      setViewport({ width, height });
+      setSnapshot({ key: highlightKey, rects: highlights.filter(element => element.isConnected).map((element, index) => {
+        const bounds = element.getBoundingClientRect();
+        const padding = 5;
+        const x = Math.max(3, bounds.left - padding);
+        const y = Math.max(3, bounds.top - padding);
+        return {
+          key: `${index}-${element.dataset.tutorial ?? element.dataset.testid ?? element.className}`,
+          x,
+          y,
+          width: Math.max(1, Math.min(width - x - 3, bounds.width + padding * 2)),
+          height: Math.max(1, Math.min(height - y - 3, bounds.height + padding * 2)),
+          interactive: interactive.some(target => target === element || element.contains(target) || target.contains(element)),
+        };
+      }) });
+    };
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    highlights.forEach(element => resizeObserver?.observe(element));
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    update();
+    frames = [requestAnimationFrame(update), requestAnimationFrame(() => {
+      frames.push(requestAnimationFrame(update));
+    })];
+    return () => {
+      frames.forEach(cancelAnimationFrame);
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [enabled, highlightKey, interactiveKey]);
+
+  return { rects: snapshot.key === highlightKey ? snapshot.rects : [], viewport };
+}
+
+function TutorialSpotlightLayer({ beat, rects, viewport }: {
+  beat: TutorialBeat;
+  rects: SpotlightRect[];
+  viewport: { width: number; height: number };
+}) {
+  if (rects.length === 0 || viewport.width === 0 || viewport.height === 0) return null;
+  return <div className="tutorial-spotlight-layer" data-testid="tutorial-spotlight-layer" aria-hidden="true">
+    <svg viewBox={`0 0 ${viewport.width} ${viewport.height}`} preserveAspectRatio="none">
+      <defs>
+        <mask id="tutorial-multi-spotlight-mask">
+          <rect width={viewport.width} height={viewport.height} fill="white" />
+          {rects.map(rect => <rect key={rect.key} x={rect.x} y={rect.y} width={rect.width} height={rect.height} rx="9" fill="black" />)}
+        </mask>
+      </defs>
+      <rect width={viewport.width} height={viewport.height} fill={`rgba(0, 0, 0, ${beat.blocking ? 0.72 : 0.42})`}
+        mask="url(#tutorial-multi-spotlight-mask)" />
+    </svg>
+    {rects.map(rect => <div key={rect.key} className={`tutorial-spotlight-region${rect.interactive ? ' is-interactive' : ''}`}
+      data-testid="tutorial-highlight-region" data-interactive={rect.interactive ? 'true' : 'false'}
+      style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }} />)}
+  </div>;
+}
+
+export function TutorialDirector({ session, uiState, paused, onAcknowledge, onRecover, onFinish }: {
   session: TutorialSession;
+  uiState: TutorialUiState;
   paused: boolean;
   onAcknowledge: (beatId: string) => void;
+  onRecover: (beatId: string) => void;
   onFinish: () => void;
 }) {
-  const beat = useMemo(() => paused ? null : activeTutorialBeat(session), [paused, session]);
+  const beat = useMemo(() => paused ? null : activeTutorialBeat(session, uiState), [paused, session, uiState.selection,
+    uiState.selectedOffer, uiState.selectedFlameOffer, uiState.flameDetailsOpen]);
+  const highlightTargets = beat?.highlightTargets ?? (beat?.target ? [beat.target] : []);
+  const interactiveTargets = beat?.interactiveTargets ?? [];
+  const usesMultiSpotlight = highlightTargets.length > 1;
+  const { rects, viewport } = useSpotlightRects(highlightTargets, interactiveTargets, usesMultiSpotlight);
   const instance = useRef<Driver | null>(null);
   const acknowledged = useRef(onAcknowledge);
+  const recover = useRef(onRecover);
   const finish = useRef(onFinish);
   acknowledged.current = onAcknowledge;
+  recover.current = onRecover;
   finish.current = onFinish;
 
   useEffect(() => {
     instance.current?.destroy();
     instance.current = null;
+    releaseTutorialInteractionGate();
     document.body.classList.toggle('tutorial-required-action', !!beat && !beat.blocking);
-    if (!beat) return () => document.body.classList.remove('tutorial-required-action');
+    document.body.classList.toggle('tutorial-multi-spotlight-active', !!beat && usesMultiSpotlight);
+    if (!beat) return () => {
+      document.body.classList.remove('tutorial-required-action', 'tutorial-multi-spotlight-active');
+    };
 
     let cancelled = false;
     let timeout = 0;
+    let gateGeneration: number | null = null;
     const show = (attempt = 0) => {
       if (cancelled) return;
-      const target = beat.target ? document.querySelector<HTMLElement>(beat.target) : null;
-      if (beat.target && !target && attempt < 8) {
+      const primarySelector = beat.target ?? highlightTargets[0];
+      const target = primarySelector ? document.querySelector<HTMLElement>(primarySelector) : null;
+      const interactiveReady = beat.blocking || interactiveTargets.length === 0 || tutorialTargetsExist(interactiveTargets);
+      if (((primarySelector && !target) || !interactiveReady) && attempt < 12) {
         timeout = window.setTimeout(() => show(attempt + 1), 60);
+        return;
+      }
+      if (!beat.blocking && !interactiveReady) {
+        releaseTutorialInteractionGate();
+        recover.current(beat.recoveryBeatId ?? beat.id);
         return;
       }
       const finishBeat = () => beat.id === 'tutorial-run-over' ? finish.current() : acknowledged.current(beat.id);
       const control = driver({
         animate: true,
         allowClose: false,
-        overlayOpacity: beat.blocking ? 0.72 : 0.42,
+        overlayOpacity: usesMultiSpotlight ? 0 : beat.blocking ? 0.72 : 0.42,
         stagePadding: 7,
         stageRadius: 9,
         popoverOffset: 12,
@@ -65,7 +181,10 @@ export function TutorialDirector({ session, paused, onAcknowledge, onFinish }: {
           onNextClick: finishBeat,
         },
       });
+      if (!beat.blocking) gateGeneration = configureTutorialInteractionGate(interactiveTargets,
+        () => recover.current(beat.recoveryBeatId ?? beat.id));
       window.setTimeout(() => {
+        if (cancelled) return;
         const popover = document.querySelector<HTMLElement>('.driver-popover');
         if (!beat.blocking) {
           document.querySelector<SVGElement>('.driver-overlay')?.style.setProperty('pointer-events', 'none', 'important');
@@ -74,20 +193,24 @@ export function TutorialDirector({ session, paused, onAcknowledge, onFinish }: {
         popover?.setAttribute('role', 'dialog');
         popover?.setAttribute('aria-modal', beat.blocking ? 'true' : 'false');
         popover?.setAttribute('aria-label', beat.title ?? 'Tutorial');
-        popover?.querySelector<HTMLElement>('button')?.focus();
+        if (beat.blocking) popover?.querySelector<HTMLElement>('button')?.focus();
       }, 0);
     };
     show();
     return () => {
       cancelled = true;
       window.clearTimeout(timeout);
+      if (gateGeneration !== null) releaseTutorialInteractionGate(gateGeneration);
       instance.current?.destroy();
       instance.current = null;
-      document.body.classList.remove('tutorial-required-action');
+      document.body.classList.remove('tutorial-required-action', 'tutorial-multi-spotlight-active');
     };
-  }, [beat?.id, beat?.body.join('|'), beat?.target, beat?.blocking]);
+  }, [beat?.id, beat?.body.join('|'), beat?.target, beat?.blocking, highlightTargets.join('|'), interactiveTargets.join('|'), usesMultiSpotlight]);
 
-  return <div className="sr-only" role="status" aria-live="assertive" data-testid="tutorial-announcer">
-    {beat ? `${beat.title ?? 'Tutorial'}. ${beat.body.join(' ')} ${beat.requiredAction ?? ''}` : ''}
-  </div>;
+  return <>
+    {beat && usesMultiSpotlight && <TutorialSpotlightLayer beat={beat} rects={rects} viewport={viewport} />}
+    <div className="sr-only" role="status" aria-live="assertive" data-testid="tutorial-announcer">
+      {beat ? `${beat.title ?? 'Tutorial'}. ${beat.body.join(' ')} ${beat.requiredAction ?? ''}` : ''}
+    </div>
+  </>;
 }

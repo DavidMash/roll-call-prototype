@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { newTutorialSession } from './scenario';
+import { dispatchTutorial, newTutorialSession, tutorialRequiredBeatIds as R } from './scenario';
 import { activeTutorialBeat } from './tutorialSteps';
+import type { TutorialSession, TutorialUiState } from './types';
+
+const ui = (overrides: Partial<TutorialUiState> = {}): TutorialUiState => ({
+  selection: { hand: null, dieIds: [] }, selectedOffer: null, selectedFlameOffer: null, flameDetailsOpen: false, ...overrides,
+});
+
+function action(session: TutorialSession, next: Parameters<typeof dispatchTutorial>[1]) {
+  const result = dispatchTutorial(session, next);
+  expect(result.error).toBeUndefined();
+  return result.session;
+}
 
 describe('tutorial contextual lessons', () => {
   it('triggers positive Interest once from payout state in any later Chapter', () => {
@@ -40,5 +51,117 @@ describe('tutorial contextual lessons', () => {
     expect(activeTutorialBeat(session)?.id).toBe('context-later-boss');
     session.game.boss = { type: 'quickdraw', lowerShotUsed: false, playedLowerHand: null };
     expect(activeTutorialBeat(session)?.id).not.toBe('context-later-boss');
+  });
+});
+
+describe('tutorial guided interaction beats', () => {
+  it('splits the first reroll and first scored hand using live selection state', () => {
+    const { session } = newTutorialSession();
+    session.scenario.completedBeatIds.push('welcome', 'goal', 'scorecard');
+    expect(activeTutorialBeat(session, ui())).toMatchObject({
+      id: 'c1-r1-select-reroll-die',
+      highlightTargets: ['[data-tutorial="die-2"] .die'],
+      interactiveTargets: ['[data-tutorial="die-2"] .die'],
+      completion: { kind: 'selection' },
+    });
+    expect(activeTutorialBeat(session, ui({ selection: { hand: 'twos', dieIds: [1] } }))).toMatchObject({
+      id: R.reroll,
+      highlightTargets: ['[data-tutorial="die-2"] .die', '[data-tutorial="reroll-button"]'],
+      interactiveTargets: ['[data-tutorial="reroll-button"]'],
+      completion: { kind: 'action' },
+    });
+
+    session.scenario.completedBeatIds.push(R.reroll, 'c1-r1-nice', 'c1-r1-pips-mult');
+    const selectHand = activeTutorialBeat(session, ui());
+    expect(selectHand).toMatchObject({ id: 'c1-r1-select-three-kind', interactiveTargets: ['[data-testid="scorecard-row-threeKind"]'] });
+    expect(selectHand?.highlightTargets).toHaveLength(4);
+    expect(activeTutorialBeat(session, ui({ selection: { hand: 'threeKind', dieIds: [0, 1, 2] } }))).toMatchObject({
+      id: R.threeKind,
+      interactiveTargets: ['[data-tutorial="play-action"]'],
+    });
+  });
+
+  it('separates Training, Bonus, and Workout purchase targets from placement targets', () => {
+    let { session } = newTutorialSession();
+    session = action(session, { type: 'MANUAL_REROLL', dieIds: [1] });
+    session = action(session, { type: 'PLAY', hand: 'threeKind', dieIds: [0, 1, 2] });
+    session = action(session, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] });
+    session = action(session, { type: 'PLAY', hand: 'sixes', dieIds: [4] });
+    session = action(session, { type: 'PLAY', hand: 'fives', dieIds: [3] });
+    session = action(session, { type: 'PLAY', hand: 'smallStraight', dieIds: [0, 1, 2, 3] });
+    session = action(session, { type: 'CONTINUE_ROUND_SUMMARY' });
+    session.scenario.completedBeatIds.push('welcome', 'goal', 'scorecard', 'c1-r1-nice', 'c1-r1-pips-mult',
+      'c1-r1-after-play', 'c1-r1-payout', 'c1-r1-payout-rerolls', 'shop1-training');
+    expect(activeTutorialBeat(session, ui())).toMatchObject({ id: R.training,
+      interactiveTargets: ['[data-tutorial="training-fullHouse"] .training-action'] });
+
+    session = action(session, { type: 'TRAIN_HAND', hand: 'fullHouse' });
+    session.scenario.completedBeatIds.push('shop1-training-result', 'shop1-enhancements', 'shop1-bonus-info');
+    const bonus = session.game.shop!.offers.find(offer => offer.enhancement === 'bonus')!;
+    expect(activeTutorialBeat(session, ui())).toMatchObject({ id: 'shop1-select-bonus', completion: { kind: 'selection' } });
+    expect(activeTutorialBeat(session, ui({ selectedOffer: bonus.id }))).toMatchObject({
+      id: R.bonus,
+      interactiveTargets: ['[data-tutorial="die-2"] .die'],
+    });
+
+    session.game.round = 3;
+    session.scenario.completedBeatIds.push(R.bonus, 'shop-r4-workout-info');
+    session.game.shop!.offers[0] = { ...session.game.shop!.offers[0], enhancement: 'workout', purchased: false };
+    const workoutId = session.game.shop!.offers[0].id;
+    expect(activeTutorialBeat(session, ui())).toMatchObject({ id: 'shop-r4-select-workout' });
+    expect(activeTutorialBeat(session, ui({ selectedOffer: workoutId }))).toMatchObject({
+      id: R.workout,
+      interactiveTargets: ['[data-tutorial="die-1"] .die'],
+    });
+  });
+
+  it('gates first Flame assignment and Stoke as distinct guided actions', () => {
+    const { session } = newTutorialSession();
+    session.game.round = 6;
+    session.game.phase = 'flameSelection';
+    session.scenario.completedBeatIds.push('flame-selection-1');
+    expect(activeTutorialBeat(session, ui())).toMatchObject({
+      id: 'flame-select-first', interactiveTargets: ['.flame-offer-action'], completion: { kind: 'selection' },
+    });
+    expect(activeTutorialBeat(session, ui({ selectedFlameOffer: 7 }))).toMatchObject({
+      id: 'flame-assign-first', interactiveTargets: ['[data-tutorial="dice-dock"] .die'], completion: { kind: 'action' },
+    });
+
+    session.game.phase = 'shop';
+    session.scenario.firstFlame = 'doubleDown';
+    session.scenario.completedBeatIds.push('flame-details');
+    expect(activeTutorialBeat(session, ui({ flameDetailsOpen: true }))).toMatchObject({
+      id: 'flame-stoke',
+      interactiveTargets: ['[data-tutorial="stoke"] button', '[data-tutorial="stoke"] input'],
+    });
+  });
+
+  it.each([
+    ['doubleDown', 'pair', 'twoPair'],
+    ['straightShooter', 'smallStraight', 'largeStraight'],
+    ['minigun', null, 'sixes'],
+  ] as const)('keeps the %s Chapter 2 branch atomic and highlights its Flame die', (flame, setup, payoff) => {
+    const { session } = newTutorialSession();
+    session.game.round = 7;
+    session.game.phase = 'round';
+    session.scenario.firstFlame = flame;
+    session.scenario.firstFlameDieId = 2;
+    session.scenario.completedBeatIds.push('chapter-2');
+    if (setup === null) session.scenario.completedBeatIds.push(R.flameDemoSetup);
+
+    const selectBeat = activeTutorialBeat(session, ui());
+    expect(selectBeat?.id).toBe(setup === null ? 'c2-r1-payoff-select' : 'c2-r1-setup-select');
+    expect(selectBeat?.highlightTargets).toEqual(expect.arrayContaining([
+      `[data-testid="scorecard-row-${setup ?? payoff}"]`,
+      '[data-tutorial="die-3"] .die',
+    ]));
+    expect(selectBeat?.interactiveTargets).toEqual(expect.arrayContaining([
+      `[data-testid="scorecard-row-${setup ?? payoff}"]`,
+      '[data-tutorial="die-3"] .die',
+    ]));
+
+    const actionBeat = activeTutorialBeat(session, ui({ selection: { hand: (setup ?? payoff), dieIds: [2] } }));
+    expect(actionBeat?.id).toBe(setup === null ? R.flameDemoPayoff : R.flameDemoSetup);
+    expect(actionBeat?.interactiveTargets).toEqual(['[data-tutorial="play-action"]']);
   });
 });

@@ -183,7 +183,10 @@ export default function App() {
     <FlameDetailsModal board={board} target={flameDetails} busy={busy} actionsEnabled={!busy && !showingChapterSplash && !showingMap}
       onClose={() => setFlameDetails(null)} submit={submit} />
     {runMode === 'tutorial' && <TutorialDirector session={tutorialGame.session}
-      paused={busy || showingChapterSplash || showingMap || gameMenuOpen || runInfoOpen || helpOpen || restoreLivesOpen || faceDetails !== null || flameDetails !== null}
-      onAcknowledge={tutorialGame.acknowledge} onFinish={finishTutorial} />}
+      uiState={{ selection, selectedOffer, selectedFlameOffer, flameDetailsOpen: flameDetails !== null }}
+      paused={busy || showingChapterSplash || showingMap || gameMenuOpen || runInfoOpen || helpOpen || restoreLivesOpen || faceDetails !== null
+        || (flameDetails !== null && !(tutorialGame.session.scenario.completedBeatIds.includes('flame-details')
+          && tutorialGame.session.game.stats.flameStokes.length === 0))}
+      onAcknowledge={tutorialGame.acknowledge} onRecover={tutorialGame.completeBeat} onFinish={finishTutorial} />}
   </Container>;
 }
