@@ -136,7 +136,7 @@ describe('Clockmaker roll pipeline', () => {
 });
 
 describe('Care Package resources and Time Travel boundaries', () => {
-  it('keeps Care Package charges persistent, out of unused-Reroll Gold, and inside Bust rollback', () => {
+  it('keeps Care Package charges persistent, out of unused-Reroll Gold, and outside Bust rollback', () => {
     let state = offerState('carePackage', 3);
     state = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 1 }, constant()).state;
     expect(state.specialOfferEffects.carePackageRerolls).toBe(3);
@@ -149,10 +149,11 @@ describe('Care Package resources and Time Travel boundaries', () => {
     state.consumed = [...HAND_IDS];
     new Resolver(state, constant(.2)).evaluate();
     expect(state.phase).toBe('shop');
-    expect(state.specialOfferEffects.carePackageRerolls).toBe(3);
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
     state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.2)).state;
     expect(state.phase).toBe('round');
-    expect(state.specialOfferEffects.carePackageRerolls).toBe(3);
+    expect(state.manualRerollsRemaining).toBe(3);
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
 
     const payout = newRun('care-package-payout', constant(.2)).state;
     expose(payout, [2, 2, 3, 4, 5]);

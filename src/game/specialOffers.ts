@@ -43,6 +43,35 @@ export function usableManualRerolls(state: Pick<GameState, 'manualRerollsRemaini
   return state.manualRerollsRemaining + state.specialOfferEffects.carePackageRerolls;
 }
 
+/**
+ * Special Offer state whose current value survives an ordinary Bust rollback.
+ * The round checkpoint owns attempt-local state; these values represent
+ * run-level consumables that have already been spent during the attempt.
+ */
+export type BustPersistentSpecialOfferState = Pick<SpecialOfferEffects,
+  'carePackageRerolls' | 'bottledFairyTriggeredThisRound'>;
+
+export function captureBustPersistentSpecialOfferState(
+  effects: SpecialOfferEffects,
+): BustPersistentSpecialOfferState {
+  return {
+    carePackageRerolls: effects.carePackageRerolls,
+    bottledFairyTriggeredThisRound: effects.bottledFairyTriggeredThisRound,
+  };
+}
+
+export function restoreSpecialOfferEffectsAfterBust(
+  checkpoint: SpecialOfferEffects,
+  persistent: BustPersistentSpecialOfferState,
+): SpecialOfferEffects {
+  return {
+    ...checkpoint,
+    carePackageRerolls: persistent.carePackageRerolls,
+    bottledFairyTriggeredThisRound:
+      checkpoint.bottledFairyTriggeredThisRound || persistent.bottledFairyTriggeredThisRound,
+  };
+}
+
 export function specialOfferEligible(state: Pick<GameState, 'dice'>, type: SpecialOfferType): boolean {
   if (type === 'fireKeeper') return state.dice.some(die => die.owner === 'player' && die.flame !== null && die.flame.investedGold < 100);
   if (type === 'orangeTheory') return state.dice.some(die => die.owner === 'player' && die.faces.some(face => stacks(face, 'workout') > 0));

@@ -16,7 +16,10 @@ import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTempora
 import { encounterNode, flameNodeAfter, postBossRewardForRound, shopNodeBefore, specialOfferNodeAfter, timeTravelDestinationRound } from './progression';
 import { formatPercentage, formatPlayerNumber } from './copy';
 import { chapterNumberForRound, ensureChapterPlan } from './chapters';
-import { eligibleSpecialOfferTypes, specialOfferDescription, specialOfferName, trainingOfferKey, usableManualRerolls } from './specialOffers';
+import {
+  captureBustPersistentSpecialOfferState, eligibleSpecialOfferTypes, restoreSpecialOfferEffectsAfterBust,
+  specialOfferDescription, specialOfferName, trainingOfferKey, usableManualRerolls,
+} from './specialOffers';
 import type { ChargeFlame } from './flames';
 import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameStateBase, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, RunNode, ScoreSource, SpecialOffer } from './types';
 
@@ -825,15 +828,22 @@ export class Resolver {
     const requiredDieIds = requiredEncounterDieIds(this.state);
     const startedDeadBoard = !hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state), requiredDieIds);
     const normalSpent = Math.min(this.state.manualRerollsRemaining, ids.length);
+    const carePackageSpent = ids.length - normalSpent;
     this.state.manualRerollsRemaining -= normalSpent;
-    this.state.specialOfferEffects.carePackageRerolls -= ids.length - normalSpent;
+    this.state.specialOfferEffects.carePackageRerolls -= carePackageSpent;
     const round = this.state.stats.rounds.at(-1)!;
     round.lastAction = 'MANUAL_REROLL'; round.manualRerollChargesSpent += ids.length; round.manualRerollActions++;
     this.state.stats.manualRerollActions++; this.state.stats.manualDiceRerolled += ids.length;
     const record = { round: this.state.round, dieIds: ids, charges: ids.length, remaining: this.state.manualRerollsRemaining, startedDeadBoard, rescuedDeadBoard: false };
     this.state.stats.manualRerolls.push(record);
-    const totalRemaining = usableManualRerolls(this.state);
-    this.emit({ type: 'MANUAL_REROLL_STARTED', dieIds: ids, amount: ids.length, message: `Manual reroll; ${this.format(totalRemaining)} remaining` });
+    const normalRemaining = this.state.manualRerollsRemaining;
+    const carePackageRemaining = this.state.specialOfferEffects.carePackageRerolls;
+    const message = carePackageSpent > 0
+      ? carePackageRemaining > 0
+        ? `Care Package reroll${carePackageSpent === 1 ? '' : 's'} used · ${this.format(carePackageRemaining)} remaining · Normal ${this.format(normalRemaining)}`
+        : `Care Package depleted · Normal ${this.format(normalRemaining)}`
+      : `Manual reroll · Normal ${this.format(normalRemaining)} · Care Package ${this.format(carePackageRemaining)}`;
+    this.emit({ type: 'MANUAL_REROLL_STARTED', dieIds: ids, amount: ids.length, message });
     if (this.state.chargeArmed && !hasChargeBonfire(this.state)) {
       this.state.chargeArmed = false;
       this.emit({ type: 'CHARGE_ARMED', xMult: this.state.chargeXMult,
@@ -895,7 +905,7 @@ export class Resolver {
     const failureLastAction = current.lastAction;
     const failedBoss = structuredClone(this.state.boss);
     const failedNodeId = this.state.currentNodeId;
-    const bottledFairyAlreadyTriggered = this.state.specialOfferEffects.bottledFairyTriggeredThisRound;
+    const persistentSpecialOfferState = captureBustPersistentSpecialOfferState(this.state.specialOfferEffects);
     const badDreamCheckpoint = this.state.badDreamCheckpoint;
     if (failure.livesAfter === 0 && this.state.specialOfferEffects.badDreamRounds > 0 && badDreamCheckpoint) {
       Object.assign(this.state, structuredClone(badDreamCheckpoint));
@@ -938,8 +948,15 @@ export class Resolver {
     const history = this.state.history;
     const actions = this.state.stats.actions;
     Object.assign(this.state, structuredClone(checkpoint));
-    this.state.specialOfferEffects.bottledFairyTriggeredThisRound ||= bottledFairyAlreadyTriggered;
+    this.state.specialOfferEffects = restoreSpecialOfferEffectsAfterBust(
+      this.state.specialOfferEffects,
+      persistentSpecialOfferState,
+    );
     this.state.roundCheckpoint = structuredClone(checkpoint);
+    this.state.roundCheckpoint.specialOfferEffects = restoreSpecialOfferEffectsAfterBust(
+      this.state.roundCheckpoint.specialOfferEffects,
+      persistentSpecialOfferState,
+    );
     this.state.shop ??= { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
       freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
     this.state.shop.lifeRestores ??= 0;
@@ -960,7 +977,7 @@ export class Resolver {
       this.state.currentNodeId = failedNodeId;
       this.mapTransition(shopNodeBefore(failure.round), 'backward');
       this.emit({ type: 'SHOP_REOPENED_AFTER_BUST',
-        message: `Round ${this.format(failure.round)} attempt ${this.format(failure.attempt)} checkpoint restored · returned to the same Shop · prepare for attempt ${this.format(failure.attempt + 1)}` });
+        message: `Round ${this.format(failure.round)} attempt ${this.format(failure.attempt)} checkpoint restored · Normal ${this.format(this.state.manualRerollsRemaining)} · Care Package ${this.format(this.state.specialOfferEffects.carePackageRerolls)} · returned to the same Shop · prepare for attempt ${this.format(failure.attempt + 1)}` });
     } else {
       this.state.stats.loss = { round: failure.round, afterHand: failureLastHand, score: failure.score, afterAction: failureLastAction,
         manualRerollsRemaining: 0, values: failureValues, consumed: failureConsumed };

@@ -245,6 +245,29 @@ test('dead-board UI and engine stay usable while only Care Package Rerolls remai
   await expect(page.getByRole('heading', { name: 'Run Over' })).toHaveCount(0);
 });
 
+test('Bust UI and retry keep a depleted Care Package reserve depleted', async ({ page }) => {
+  let game = newRun('care-package-bust-checkpoint-ui').state;
+  game.specialOfferEffects.carePackageRerolls = 3;
+  game.roundCheckpoint!.specialOfferEffects.carePackageRerolls = 3;
+  game.target = 1_000_000;
+  game.consumed = [...HAND_IDS];
+  game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0, 1, 2] }).state;
+  game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0, 1, 2] }).state;
+  expect(game.phase).toBe('shop');
+  expect(game.specialOfferEffects.carePackageRerolls).toBe(0);
+
+  await page.goto(`/?seed=${game.seed}&speed=instant`);
+  await installRun(page, game);
+  await expect(page.getByTestId('bust-shop-banner')).toBeVisible();
+  await expect(page.getByTestId('special-effect-carePackage')).toHaveCount(0);
+
+  await page.getByRole('button', { name: `RETRY ROUND ${game.round}`, exact: true }).click();
+  game = dispatch(game, { type: 'RETRY_ROUND' }).state;
+  await matchRound(page, game);
+  await expect(page.getByTestId('manual-reroll')).toHaveAccessibleName('REROLL · 3 REROLLS REMAINING');
+  await expect(page.getByTestId('special-effect-carePackage')).toHaveCount(0);
+});
+
 test('normal Reroll fill exposes deterministic 100/67/33/0 percent states', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 700 });
   for (const [remaining, fill] of [[3, 100], [2, 67], [1, 33], [0, 0]] as const) {

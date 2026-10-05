@@ -5,7 +5,11 @@ import { Resolver } from './effects';
 import { HAND_IDS } from './hands';
 import { postBossRewardForRound, routeThrough } from './progression';
 import { loadPersistedRun, savePersistedRun } from './persistence';
-import { activeSpecialOfferStatusItems, initialSpecialOfferEffects, SPECIAL_OFFER_COLOR, SPECIAL_OFFERS, specialOfferEligible, usableManualRerolls } from './specialOffers';
+import {
+  activeSpecialOfferStatusItems, captureBustPersistentSpecialOfferState, initialSpecialOfferEffects,
+  restoreSpecialOfferEffectsAfterBust, SPECIAL_OFFER_COLOR, SPECIAL_OFFERS, specialOfferEligible,
+  usableManualRerolls,
+} from './specialOffers';
 import { SCREEN_THEMES } from './screenThemes';
 import type { GameState, HandId, RandomSource, RoundSummary, SpecialOfferType } from './types';
 
@@ -23,6 +27,12 @@ function offerState(type: SpecialOfferType, hand?: HandId): GameState {
 
 const choose = (type: SpecialOfferType, hand?: HandId, random: RandomSource = constant()) =>
   dispatch(offerState(type, hand), { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }, random).state;
+
+function carePackageRound(random: RandomSource = constant(.4)): GameState {
+  let state = choose('carePackage');
+  state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, random).state;
+  return dispatch(state, { type: 'NEXT_ROUND' }, random).state;
+}
 
 function summary(round: number): RoundSummary {
   return { round, encounterType: 'boss', bossType: 'juggler', score: 1, target: 1, goldBefore: 0, goldAfter: 0,
@@ -176,6 +186,18 @@ describe('temporary Special Offers', () => {
     expect(activeSpecialOfferStatusItems(state.specialOfferEffects)).toEqual([]);
   });
 
+  it.each([3, 2, 0])('ordinary Bust restoration preserves the current Care Package reserve of %s', remaining => {
+    const checkpoint = initialSpecialOfferEffects();
+    checkpoint.carePackageRerolls = 3;
+    const current = structuredClone(checkpoint);
+    current.carePackageRerolls = remaining;
+    const restored = restoreSpecialOfferEffectsAfterBust(
+      checkpoint,
+      captureBustPersistentSpecialOfferState(current),
+    );
+    expect(restored.carePackageRerolls).toBe(remaining);
+  });
+
   it('keeps a dead board playable until the final Care Package Reroll is spent', () => {
     let state = choose('carePackage');
     state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
@@ -203,6 +225,79 @@ describe('temporary Special Offers', () => {
     const exhausted = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant());
     expect(exhausted.events.some(event => event.type === 'ROUND_BUST')).toBe(true);
     expect(exhausted.state.phase).toBe('shop');
+    expect(exhausted.state.specialOfferEffects.carePackageRerolls).toBe(0);
+    expect(activeSpecialOfferStatusItems(exhausted.state.specialOfferEffects)).toEqual([]);
+  });
+
+  it('does not refund six spent Rerolls through the Bust checkpoint', () => {
+    let state = carePackageRound();
+    state.target = 1_000_000;
+    state.consumed = [...HAND_IDS];
+
+    let result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0, 1, 2] }, constant(.4));
+    state = result.state;
+    expect(state).toMatchObject({
+      phase: 'round',
+      manualRerollsRemaining: 0,
+      specialOfferEffects: { carePackageRerolls: 3 },
+    });
+    expect(result.events.find(event => event.type === 'MANUAL_REROLL_STARTED')?.message)
+      .toBe('Manual reroll · Normal 0 · Care Package 3');
+
+    result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0, 1, 2] }, constant(.4));
+    state = result.state;
+    expect(state.phase).toBe('shop');
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
+    expect(state.roundCheckpoint?.specialOfferEffects.carePackageRerolls).toBe(0);
+    expect(result.events.find(event => event.type === 'MANUAL_REROLL_STARTED')?.message)
+      .toBe('Care Package depleted · Normal 0');
+    expect(result.events.find(event => event.type === 'SHOP_REOPENED_AFTER_BUST')?.message)
+      .toContain('Normal 3 · Care Package 0');
+
+    state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.4)).state;
+    expect(state).toMatchObject({
+      phase: 'round',
+      manualRerollsRemaining: 3,
+      specialOfferEffects: { carePackageRerolls: 0 },
+    });
+    state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(.4)).state;
+    expect(usableManualRerolls(state)).toBe(2);
+    expect(state).toMatchObject({
+      manualRerollsRemaining: 2,
+      specialOfferEffects: { carePackageRerolls: 0 },
+    });
+  });
+
+  it('keeps Care Package spending permanent through a Tightrope Bust and retry', () => {
+    let state = choose('carePackage');
+    state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant(.4)).state;
+    state.bossSchedule[state.round + 1] = 'tightrope';
+    state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.4)).state;
+    expect(state.boss?.type).toBe('tightrope');
+    expect(state.manualRerollsRemaining).toBe(0);
+    state.target = 1_000_000;
+    state.consumed = [...HAND_IDS];
+
+    state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(.4)).state;
+    expect(state.phase).toBe('round');
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(2);
+    state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [1, 2] }, constant(.4)).state;
+    expect(state.phase).toBe('shop');
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
+
+    state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.4)).state;
+    expect(state.boss?.type).toBe('tightrope');
+    expect(state.manualRerollsRemaining).toBe(0);
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
+  });
+
+  it('pays only unused normal Rerolls while leaving the Care Package reserve intact', () => {
+    const state = carePackageRound();
+    state.manualRerollsRemaining = 2;
+    state.score = state.target;
+    new Resolver(state, constant()).evaluate();
+    expect(state.lastRoundPayout?.unusedRerollGold).toBe(2);
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(3);
   });
 
   it.each(['crawler', 'juggler'] as const)('uses Care Package Bust eligibility during the %s encounter', boss => {
@@ -341,6 +436,26 @@ describe('temporary Special Offers', () => {
 });
 
 describe('replay and checkpoint Special Offers', () => {
+  it('persists the depleted Care Package reserve after Bust and reload', () => {
+    let state = carePackageRound();
+    state.target = 1_000_000;
+    state.consumed = [...HAND_IDS];
+    state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0, 1, 2] }, constant(.4)).state;
+    state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0, 1, 2] }, constant(.4)).state;
+    expect(state.phase).toBe('shop');
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
+
+    const values = new Map<string, string>();
+    const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } };
+    expect(savePersistedRun(storage, state)).toBe(true);
+    const loaded = loadPersistedRun(storage, state.seed)!;
+    expect(loaded.specialOfferEffects.carePackageRerolls).toBe(0);
+    expect(loaded.roundCheckpoint?.specialOfferEffects.carePackageRerolls).toBe(0);
+    const retry = dispatch(loaded, { type: 'RETRY_ROUND' }, constant(.4)).state;
+    expect(retry.manualRerollsRemaining).toBe(3);
+    expect(retry.specialOfferEffects.carePackageRerolls).toBe(0);
+  });
+
   it('Time Travel replays the completed block and suppresses the repeated Mini-Boss post-reward', () => {
     let state = choose('timeTravel');
     expect(state.round).toBe(1);
