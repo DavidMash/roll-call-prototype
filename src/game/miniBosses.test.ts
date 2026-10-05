@@ -129,15 +129,17 @@ describe('Mini-Boss mechanics', () => {
     expect(state.consumed).toContain('ones');
   });
 
-  it('The Clockmaker advances physical faces without firing roll Enhancements', () => {
+  it('The Clockmaker supplies one Bump only to dice that genuinely roll', () => {
     const state = miniBossRound('clockmaker');
     state.target = 1_000_000;
     expose(state, [1, 2, 3, 4, 5]);
-    state.dice[1].faces[2].enhancements.jumpingBean = 1;
+    state.dice[0].faces[0].enhancements.bump = 1;
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.2));
-    expect(result.events.filter(event => event.type === 'DIE_FLIPPED' && event.boss === 'clockmaker')).toHaveLength(5);
-    expect(result.state.dice[1].value).toBe(3);
-    expect(result.events.some(event => event.type === 'JUMPING_BEAN_FREE_PLAY' && event.dieIds?.includes(1))).toBe(false);
+    expect(result.state.dice.map(die => die.value)).toEqual([2, 2, 3, 4, 5]);
+    expect(result.events.filter(event => event.type === 'BUMP_ROLL' && event.boss === 'clockmaker')).toHaveLength(1);
+    expect(result.events.filter(event => event.type === 'BUMP_ROLL' && event.dieIds?.[0] === 0)).toHaveLength(1);
+    expect(result.events.some(event => event.type === 'DIE_FLIPPED' && event.boss === 'clockmaker')).toBe(false);
+    expect(result.events.some(event => event.type === 'JUMPING_BEAN_FREE_PLAY')).toBe(false);
   });
 
   it('The Tightrope halves the Goal, preserves reserve Rerolls, enables Hail Mary, and permits Bottled Fairy rescue', () => {
@@ -262,7 +264,7 @@ describe('Mini-Boss mechanics', () => {
       juggler: 'After every hand, one random extra die rerolls.',
       capitalReturn: 'Lose 1 Gold whenever you play a Lower hand.',
       neglected: 'Your 2 least-played hands are unavailable.',
-      clockmaker: 'After every hand, all dice advance one face.',
+      clockmaker: 'Every roll gets Bumped up one face.',
       tightrope: 'Start with 0 Rerolls. Goal is halved.',
       crawler: 'After every hand, only one scoring die rerolls.',
       magician: 'One die disappears until you play 3 called Upper hands.',

@@ -44,7 +44,7 @@ async function playOne(page: Page, game: GameState) {
   if (!choice) {
     const die = activeEncounterDice(game)[0];
     await page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) }).click();
-    await page.getByRole('button', { name: /^REROLL \d+ \/ 3$/ }).click();
+    await page.getByTestId('manual-reroll').click();
     const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [die.id] }).state;
     await ready(page);
     return next;

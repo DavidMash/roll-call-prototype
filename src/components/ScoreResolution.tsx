@@ -26,7 +26,7 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText, show
   else if (event?.type === 'MANUAL_REROLL_STARTED') heading = 'Reroll';
   else if (event?.type === 'DEAD_BOARD') heading = 'Use a Reroll';
   else if (event?.type === 'DEAD_BOARD_RESCUED') heading = 'Dead board rescued';
-  else if (event?.type === 'POST_HAND_REROLLS_SKIPPED' || event?.type === 'ROUND_CLEARED') heading = 'ROUND CLEARED';
+  else if (event?.type === 'ROUND_CLEARED') heading = 'ROUND CLEARED';
   else if (event?.type === 'DICE_REROLL_STARTED' || event?.type === 'DIE_ROLLED') heading = 'Rolling dice';
   else if (event) heading = '';
   return <Paper className={`resolution ${busy ? 'active' : ''}`} p="xs" aria-live="polite" aria-atomic="true">

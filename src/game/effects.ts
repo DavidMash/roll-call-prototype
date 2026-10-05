@@ -13,14 +13,14 @@ import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandS
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie,
   isCursedDie, isMiniBossType, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
-import { encounterNode, flameNodeAfter, postBossRewardForRound, shopNodeBefore, specialOfferNodeAfter } from './progression';
+import { encounterNode, flameNodeAfter, postBossRewardForRound, shopNodeBefore, specialOfferNodeAfter, timeTravelDestinationRound } from './progression';
 import { formatPercentage, formatPlayerNumber } from './copy';
 import { eligibleSpecialOfferTypes, specialOfferDescription, specialOfferName, trainingOfferKey } from './specialOffers';
 import type { ChargeFlame } from './flames';
 import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameStateBase, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, RunNode, ScoreSource, SpecialOffer } from './types';
 
 type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number };
-type RollContext = 'gameplay' | 'wardenSetup' | 'shop' | 'flameSelection';
+type RollContext = 'gameplay' | 'settle' | 'wardenSetup' | 'shop' | 'flameSelection';
 const NORMAL_SHOP_SPEND = new Set<GoldSpendSource>(['enhancement', 'shopDiceReroll', 'enhancementReroll', 'handTraining', 'lifeRestore']);
 const UPPER_HAND_BY_FACE: Partial<Record<import('./types').Rank, HandId>> = {
   1: 'ones', 2: 'twos', 3: 'threes', 4: 'fours', 5: 'fives', 6: 'sixes',
@@ -251,7 +251,8 @@ export class Resolver {
     if (!ids.length) return;
     this.emit({ type: 'DICE_REROLL_STARTED', dieIds: ids, message: `${reason}: ${ids.map(id => `D${id + 1}`).join(', ')}` });
     const rolling = new Set(ids);
-    const anchors = context === 'gameplay' ? activeEncounterDice(this.state)
+    const physicalGameplayRoll = context === 'gameplay' || context === 'settle';
+    const anchors = physicalGameplayRoll ? activeEncounterDice(this.state)
       .filter(die => !rolling.has(die.id) && stacks(activeFace(die), 'magnetic') && !activeFace(die).magneticSourceUsed)
       .map(die => die.id) : [];
     if (anchors.length) {
@@ -262,10 +263,13 @@ export class Resolver {
       const die = this.state.dice.find(item => item.id === dieId)!;
       const beforePhysical = die.value;
       const before = activeFace(die).rank;
-      const bumped = (context === 'gameplay' || context === 'wardenSetup') && stacks(activeFace(die), 'bump') > 0;
+      const actualBump = (physicalGameplayRoll || context === 'wardenSetup') && stacks(activeFace(die), 'bump') > 0;
+      const clockmakerBump = physicalGameplayRoll && !this.state.bossSilenced && this.state.boss?.type === 'clockmaker';
+      const bumped = actualBump || clockmakerBump;
       if (bumped) {
         const physicalFace = (isCursedDie(die) ? Math.min(7, beforePhysical + 1) : beforePhysical === 6 ? 1 : beforePhysical + 1) as import('./types').Rank;
-        return { dieId, before, beforePhysical, physicalFace, value: die.faces[physicalFace - 1].rank, weighted: false, bumped, attracted: false };
+        return { dieId, before, beforePhysical, physicalFace, value: die.faces[physicalFace - 1].rank, weighted: false,
+          bumped, actualBump, clockmakerBump, attracted: false };
       }
       const destinations = anchors.length
         ? die.faces.map((face, index) => ({ face, physicalFace: (index + 1) as import('./types').Rank }))
@@ -273,9 +277,11 @@ export class Resolver {
         : [];
       if (destinations.length) {
         const destination = destinations[randomIndex(this.rng, destinations.length)];
-        return { dieId, before, beforePhysical, physicalFace: destination.physicalFace, value: destination.face.rank, weighted: false, bumped: false, attracted: true };
+        return { dieId, before, beforePhysical, physicalFace: destination.physicalFace, value: destination.face.rank, weighted: false,
+          bumped: false, actualBump: false, clockmakerBump: false, attracted: true };
       }
-      return { dieId, before, beforePhysical, ...rollPhysicalDie(die, this.rng, excludeStartingFace ? beforePhysical : undefined), bumped: false, attracted: false };
+      return { dieId, before, beforePhysical, ...rollPhysicalDie(die, this.rng, excludeStartingFace ? beforePhysical : undefined),
+        bumped: false, actualBump: false, clockmakerBump: false, attracted: false };
     });
     const attracted = results.filter(result => result.attracted);
     if (attracted.length) {
@@ -301,9 +307,13 @@ export class Resolver {
           message: `Cursed Die rolled ${face.rank}` });
       }
       if (result.bumped) {
-        this.state.stats.bumpControlledRolls++;
-        this.state.stats.triggers.bump = (this.state.stats.triggers.bump ?? 0) + 1;
-        this.emit({ type: 'BUMP_ROLL', enhancement: 'bump', dieIds: [die.id], face: face.rank, message: `D${die.id + 1} Bump controlled the roll: ${result.before} → ${face.rank}` });
+        if (result.actualBump) {
+          this.state.stats.bumpControlledRolls++;
+          this.state.stats.triggers.bump = (this.state.stats.triggers.bump ?? 0) + 1;
+        }
+        this.emit({ type: 'BUMP_ROLL', enhancement: result.actualBump ? 'bump' : undefined,
+          boss: result.clockmakerBump ? 'clockmaker' : undefined, dieIds: [die.id], face: face.rank,
+          message: `D${die.id + 1} ${result.clockmakerBump ? 'Clockmaker Bump' : 'Bump'} controlled the roll: ${result.before} → ${face.rank}` });
       } else if (result.attracted) {
         this.state.stats.magneticAttractions++;
         this.state.stats.triggers.magnetic = (this.state.stats.triggers.magnetic ?? 0) + 1;
@@ -317,9 +327,9 @@ export class Resolver {
       }
       if (context === 'gameplay' && stacks(face, 'jumpingBean')) triggers.push({ dieId: die.id, face, enhancement: 'jumpingBean' });
     }
-    if (attracted.length) this.applyFluxCapacitor(attracted.length, attracted.map(result => result.dieId));
+    if (attracted.length && context === 'gameplay') this.applyFluxCapacitor(attracted.length, attracted.map(result => result.dieId));
     if (context === 'gameplay') this.queue.push(...triggers);
-    else for (const item of triggers) this.trigger('weighted', item.dieId, item.face, `source face ${item.weightedSourceFace} ×${this.format(item.weightedStacks ?? 0)}; destination weight ${this.format(item.rollWeight ?? 0)}`);
+    else if (context !== 'settle') for (const item of triggers) this.trigger('weighted', item.dieId, item.face, `source face ${item.weightedSourceFace} ×${this.format(item.weightedStacks ?? 0)}; destination weight ${this.format(item.rollWeight ?? 0)}`);
   }
   drain(): void {
     let cursor = 0;
@@ -547,17 +557,6 @@ export class Resolver {
     recalculateMaxCharge(this.state);
   }
 
-  private advanceClockmakerDice(): void {
-    if (this.state.bossSilenced || this.state.boss?.type !== 'clockmaker') return;
-    for (const die of [...activeEncounterDice(this.state)].sort((a, b) => a.id - b.id)) {
-      const before = activeFace(die).rank;
-      die.value = (die.value === die.faces.length ? 1 : die.value + 1) as import('./types').Rank;
-      this.emit({ type: 'DIE_FLIPPED', boss: 'clockmaker', dieIds: [die.id], face: activeFace(die).rank,
-        previousFace: before, resultFace: activeFace(die).rank,
-        message: `The Clockmaker advanced D${die.id + 1}: ${before} → ${activeFace(die).rank}` });
-    }
-  }
-
   private addJugglerReroll(rerolls: Set<number>, scoringDieIds: number[]): void {
     if (this.state.bossSilenced || this.state.boss?.type !== 'juggler') return;
     const candidates = activeEncounterDice(this.state)
@@ -568,6 +567,26 @@ export class Resolver {
     rerolls.add(die.id);
     this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'juggler', dieIds: [die.id],
       message: `The Juggler added D${die.id + 1} to the post-hand reroll` });
+  }
+
+  private postHandRerolls(shapeParticipants: { id: number; face: Face }[], scoringDieIds: number[], includeJuggler: boolean): Set<number> {
+    const normalRerolls: number[] = [];
+    for (const { id, face } of shapeParticipants) {
+      const sticky = stacks(face, 'sticky');
+      if (sticky && this.checkProbability('sticky', sticky, [id])) this.trigger('sticky', id, face, `×${this.format(sticky)} stayed after scoring`);
+      else normalRerolls.push(id);
+    }
+    const crawlerRerolls = !this.state.bossSilenced && this.state.boss?.type === 'crawler' && normalRerolls.length > 1
+      ? [normalRerolls[randomIndex(this.rng, normalRerolls.length)]] : normalRerolls;
+    const rerolls = new Set(crawlerRerolls);
+    if (crawlerRerolls.length !== normalRerolls.length) this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'crawler', dieIds: crawlerRerolls,
+      message: `The Crawler limited the scoring reroll to D${crawlerRerolls[0] + 1}` });
+    for (const die of activeEncounterDice(this.state)) if (stacks(activeFace(die), 'slippy')) {
+      this.trigger('slippy', die.id, activeFace(die), 'joined post-hand reroll');
+      rerolls.add(die.id);
+    }
+    if (includeJuggler) this.addJugglerReroll(rerolls, scoringDieIds);
+    return rerolls;
   }
 
   private resolveSnakeEyes(scoringIds: number[]): void {
@@ -735,16 +754,12 @@ export class Resolver {
     this.moveFly();
     const magicianReturned = this.resolveMiniBossHand(hand);
     let winning = this.state.score >= this.state.target;
-    if (!winning) this.advanceClockmakerDice();
     if (magicianReturned && winning) {
       this.drain();
       winning = this.state.score >= this.state.target;
     }
     let jackpotPayout = 0;
-    if (winning) {
-      jackpotPayout = this.resolveJackpot(scoringIds);
-      this.emit({ type: 'POST_HAND_REROLLS_SKIPPED', hand, playSource, message: 'Post-hand rerolls skipped because the target was reached.' });
-    }
+    if (winning) jackpotPayout = this.resolveJackpot(scoringIds);
     const beanRecordIndex = freeBean ? this.state.stats.jumpingBeanFreePlays.push({
       round: this.state.round, dieId: ids[0], face: shapeParticipants[0].face.rank, hand, handLevel,
       basePips: this.state.stats.handScores.at(-1)!.basePips, baseMultiplier: this.state.stats.handScores.at(-1)!.baseMultiplier,
@@ -753,7 +768,11 @@ export class Resolver {
       stickyPreventedReroll: false, followupRerolled: false, roundCleared: winning, jackpotPayout, personalTrainerSucceeded,
     }) - 1 : null;
     if (winning) {
-      if (!freeBean) this.evaluate();
+      if (!freeBean) {
+        const settleRerolls = this.postHandRerolls(shapeParticipants, scoringIds, false);
+        this.rollBatch([...settleRerolls], 'Winning hand settle reroll', 'settle');
+        this.evaluate();
+      }
       return { winning, beanRecordIndex };
     }
     if (freeBean) {
@@ -762,19 +781,7 @@ export class Resolver {
       this.rollBatch([...rerolls], 'The Juggler reroll', 'gameplay');
       return { winning, beanRecordIndex };
     }
-    const normalRerolls: number[] = [];
-    for (const { id, face } of shapeParticipants) {
-      const sticky = stacks(face, 'sticky');
-      if (sticky && this.checkProbability('sticky', sticky, [id])) this.trigger('sticky', id, face, `×${this.format(sticky)} stayed after scoring`);
-      else normalRerolls.push(id);
-    }
-    const crawlerRerolls = !this.state.bossSilenced && this.state.boss?.type === 'crawler' && normalRerolls.length > 1
-      ? [normalRerolls[randomIndex(this.rng, normalRerolls.length)]] : normalRerolls;
-    const rerolls = new Set(crawlerRerolls);
-    if (crawlerRerolls.length !== normalRerolls.length) this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'crawler', dieIds: crawlerRerolls,
-      message: `The Crawler limited the scoring reroll to D${crawlerRerolls[0] + 1}` });
-    for (const die of activeEncounterDice(this.state)) if (stacks(activeFace(die), 'slippy')) { this.trigger('slippy', die.id, activeFace(die), 'joined post-hand reroll'); rerolls.add(die.id); }
-    this.addJugglerReroll(rerolls, ids);
+    const rerolls = this.postHandRerolls(shapeParticipants, scoringIds, true);
     this.rollBatch([...rerolls], 'Post-hand reroll', 'gameplay');
     this.drain();
     this.evaluate();
@@ -923,7 +930,7 @@ export class Resolver {
       }
     }
   }
-  startRound(retry = false): void {
+  startRound(retry = false, direction: 'forward' | 'backward' = 'forward'): void {
     if (retry) {
       const priorBust = this.state.stats.busts.at(-1);
       if (priorBust?.round === this.state.round && !priorBust.retryStarted) priorBust.retryStarted = true;
@@ -969,7 +976,7 @@ export class Resolver {
     this.state.handFamilyFlameStages = initialHandFamilyFlameStages(this.state);
     this.captureRoundCheckpoint();
     this.state.shop = null;
-    this.mapTransition(encounterNode(this.state.round, bossType));
+    this.mapTransition(encounterNode(this.state.round, bossType), direction);
     this.state.stats.rounds.push({ round: this.state.round, attempt: this.state.roundAttemptNumber, target: this.state.target, firstCrossedScore: null,
       finalScore: 0, clearMargin: null, cleared: false, lastHand: null, lastAction: null,
       manualRerollsGranted: this.state.manualRerollsRemaining, manualRerollChargesSpent: 0,
@@ -1051,7 +1058,7 @@ export class Resolver {
     this.emit({ type: 'TARGET_PRACTICE_SELECTED', flame: 'targetPractice', hand: this.state.targetPracticeHand,
       message: `Target Practice: ${HANDS[this.state.targetPracticeHand].name}` });
   }
-  openShop(rollDice = true, direction: 'forward' | 'backward' = 'forward'): void {
+  openShop(direction: 'forward' | 'backward' = 'forward'): void {
     this.restoreMagicianDie();
     cleanupTemporaryBossFaces(this.state.dice);
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
@@ -1062,7 +1069,6 @@ export class Resolver {
     const upcomingBoss = this.state.round + 1 > 60 ? bossTypeForRound(this.state.seed, this.state.round + 1) : null;
     if (upcomingBoss) this.state.bossSchedule[this.state.round + 1] = upcomingBoss;
     this.mapTransition(shopNodeBefore(this.state.round + 1), direction);
-    if (rollDice) this.rollBatch(this.state.dice.map(die => die.id), 'Free shop roll', 'shop');
     this.freshOffers(); this.freshTrainingOffers();
     if (this.state.specialOfferEffects.onTheHouse) {
       this.state.shop.freeEnhancementOfferIds = this.state.shop.offers.map(offer => offer.id);
@@ -1070,7 +1076,7 @@ export class Resolver {
       this.state.specialOfferEffects.onTheHouse = false;
       this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', message: 'On The House made this Shop’s initial displayed purchases free' });
     }
-    this.emit({ type: 'SHOP_OPENED', message: `Shop opened${rollDice ? '' : '; Flame Selection faces preserved'}` });
+    this.emit({ type: 'SHOP_OPENED', message: 'Shop opened; gameplay faces preserved' });
   }
   openFlameSelection(): void {
     this.restoreMagicianDie();
@@ -1080,7 +1086,6 @@ export class Resolver {
     this.state.phase = 'flameSelection'; this.state.shop = null; this.state.specialOffer = null; this.state.roundSummary = null;
     this.state.flameSelection = { offers: [], acquired: false };
     this.mapTransition(flameNodeAfter(this.state.round));
-    this.rollBatch(this.state.dice.map(die => die.id), 'Flame Selection roll', 'flameSelection');
     this.freshFlameOffers();
     this.emit({ type: 'FLAME_SELECTION_OPENED', message: 'Flame Selection — choose and assign one new Flame, or skip' });
   }
@@ -1116,7 +1121,7 @@ export class Resolver {
         const repeatedBossRound = this.state.round;
         if (!this.state.suppressedPostBossRewardRounds.includes(repeatedBossRound))
           this.state.suppressedPostBossRewardRounds.push(repeatedBossRound);
-        timeTravelDestination = Math.max(0, this.state.round - 3);
+        timeTravelDestination = timeTravelDestinationRound(this.state.round);
         break;
       }
       case 'carePackage': this.state.specialOfferEffects.carePackageRerolls += 3; break;
@@ -1172,7 +1177,11 @@ export class Resolver {
   }
   continueSpecialOffer(): void {
     const timeTravel = this.state.specialOffer?.chosen?.type === 'timeTravel';
-    this.openShop(false, timeTravel ? 'backward' : 'forward');
+    if (timeTravel) {
+      this.state.roundAttemptNumber = 1;
+      this.startRound(false, 'backward');
+    }
+    else this.openShop();
   }
   continueRoundSummary(): void {
     const summary = this.state.roundSummary;

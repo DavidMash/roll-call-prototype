@@ -89,6 +89,14 @@ button { font: inherit; }
 .gameplay-dock-content { display: flex; align-items: flex-end; justify-content: center; gap: 12px; }
 .gameplay-dock .dice-row { flex: 1 1 560px; }
 .gameplay-actions { flex: 0 1 330px; display: grid; justify-items: end; gap: 7px; padding: 0 4px 5px; }
+.reroll-action { position: relative; width: 148px; max-width: 100%; min-width: 0; overflow: hidden; }
+.reroll-action .mantine-Button-label { position: relative; z-index: 1; width: 100%; min-width: 0; }
+.reroll-resource-fill { position: absolute; z-index: 0; inset: 0; transform-origin: left center; pointer-events: none;
+  background: linear-gradient(90deg, rgba(46,214,143,.16), rgba(46,214,143,.07)); transition: transform 160ms ease; }
+.reroll-action-copy { display: flex; width: 100%; min-width: 0; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; }
+.reroll-action-main { max-width: 100%; overflow: hidden; font-size: .78rem; font-weight: 900; letter-spacing: .025em; text-overflow: ellipsis; white-space: nowrap; }
+.reroll-action-resource { max-width: 100%; overflow: hidden; margin-top: 2px; color: var(--mantine-color-gray-4); font-size: .56rem;
+  font-weight: 750; letter-spacing: .01em; text-overflow: ellipsis; white-space: nowrap; }
 .speed-demon-meter { position: relative; flex: 0 0 42px; height: 8px; overflow: visible; border: 1px solid var(--mantine-color-gray-6); border-radius: 999px; background: var(--mantine-color-dark-7); }
 .speed-demon-meter-fill { width: 100%; height: 100%; transform-origin: left center; border-radius: inherit; background: linear-gradient(90deg, var(--mantine-color-orange-5), var(--mantine-color-yellow-3)); transition: transform 80ms linear; }
 .speed-demon-meter.is-revealed { border-color: var(--mantine-color-yellow-4); box-shadow: 0 0 10px color-mix(in srgb, var(--mantine-color-yellow-4) 65%, transparent); }
@@ -529,6 +537,9 @@ button { font: inherit; }
     grid-template-columns: minmax(0, 1fr) 42px minmax(0, 2fr);
   }
   .active-gameplay .gameplay-actions > .mantine-Group-root:last-child .mantine-Button-root { width: 100%; min-height: 40px; padding-inline: 9px; }
+  .active-gameplay .reroll-action { min-width: 0; }
+  .active-gameplay .reroll-action-main { font-size: clamp(.66rem, 2.8vw, .78rem); }
+  .active-gameplay .reroll-action-resource { font-size: clamp(.45rem, 2vw, .56rem); }
   .active-gameplay .gameplay-actions > .mantine-Group-root:last-child .mantine-Button-root:only-child { grid-column: 1 / -1; }
 }
 

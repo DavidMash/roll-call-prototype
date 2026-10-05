@@ -25,7 +25,7 @@ export function BossPanel({ board }: { board: Board }) {
       case 'juggler': return 'EXTRA DIE REROLL';
       case 'capitalReturn': return '−1 GOLD · LOWER';
       case 'neglected': return '2 HANDS NEGLECTED';
-      case 'clockmaker': return 'ALL DICE ADVANCE';
+      case 'clockmaker': return 'EVERY ROLL BUMPS';
       case 'tightrope': return '0 REROLLS · HALF GOAL';
       case 'crawler': return '1 SCORING REROLL';
       case 'magician': return `CALLS ${formatPlayerNumber(boss.completedHands.length)} / ${formatPlayerNumber(boss.calledHands.length)}`;

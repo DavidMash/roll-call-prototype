@@ -12,6 +12,9 @@ export const specialOfferNodeAfter = (round: number): RunNode => ({ id: `special
 export const postBossRewardForRound = (round: number): 'flame' | 'specialOffer' =>
   isMiniBossRound(round) ? 'specialOffer' : 'flame';
 
+export const timeTravelDestinationRound = (completedMiniBossRound: number): number =>
+  Math.max(1, completedMiniBossRound - 2);
+
 export function routeThrough(seed: string, throughRound: number): RunNode[] {
   const route: RunNode[] = [];
   for (let round = 1; round <= throughRound; round++) {

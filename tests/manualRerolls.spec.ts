@@ -5,7 +5,7 @@ import { hasPlayableHand, handOptions, HANDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
 import { setPlaybackSpeed } from './uiHelpers';
-import { CONFIG } from '../src/game/config';
+import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
@@ -34,7 +34,7 @@ async function matchRound(page: Page, game: GameState) {
 }
 async function reroll(page: Page, game: GameState, dieIds: number[]) {
   for (const id of dieIds) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
-  await page.getByRole('button', { name: `REROLL ${CONFIG.manualRerollsPerRound - game.manualRerollsRemaining + dieIds.length} / ${CONFIG.manualRerollsPerRound}`, exact: true }).click();
+  await page.getByTestId('manual-reroll').click();
   const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds });
   await matchRound(page, next.state);
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
@@ -100,6 +100,12 @@ function deadBoardRun(rescue: boolean) {
   }
   throw new Error('No suitable deterministic dead-board run found');
 }
+async function installRun(page: Page, state: GameState) {
+  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved })),
+    [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
+  await page.reload();
+  await ready(page);
+}
 async function reachDeadBoard(page: Page, rescue: boolean) {
   const fixture = deadBoardRun(rescue);
   await page.goto(`/?seed=${fixture.seed}&speed=instant`);
@@ -115,7 +121,7 @@ async function reachDeadBoard(page: Page, rescue: boolean) {
       await page.getByRole('button', { name: 'PLAY', exact: true }).click();
     } else if (action.type === 'MANUAL_REROLL') {
       for (const id of action.dieIds) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
-      await page.getByRole('button', { name: /^REROLL \d+ \/ 3$/ }).click();
+      await page.getByTestId('manual-reroll').click();
     } else if (action.type === 'NEXT_ROUND') {
       await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
     } else if (action.type === 'CONTINUE_ROUND_SUMMARY') {
@@ -134,34 +140,90 @@ test('strategic single-die and multi-die rerolls cost charges, clear selection a
   let game = newRun('manual-browser').state;
   await page.goto('/?seed=manual-browser&speed=instant');
   await matchRound(page, game);
-  await expect(page.getByRole('button', { name: 'REROLL 0 / 3', exact: true })).toBeDisabled();
+  await expect(page.getByTestId('manual-reroll')).toHaveAccessibleName('REROLL · 3 REMAINING');
+  await expect(page.getByTestId('manual-reroll')).toHaveAttribute('data-normal-fill-percent', '100');
+  await expect(page.getByTestId('manual-reroll')).toBeDisabled();
   const single = await reroll(page, game, [1]);
   game = single.state;
   expect(game.manualRerollsRemaining).toBe(2);
+  await expect(page.getByTestId('manual-reroll')).toHaveAccessibleName('REROLL · 2 REMAINING');
+  await expect(page.getByTestId('manual-reroll')).toHaveAttribute('data-normal-fill-percent', '67');
   expect(single.events.filter(event => event.type === 'DIE_ROLLED').map(event => event.dieIds)).toEqual([[1]]);
   for (const id of [0, 2, 4]) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
-  await expect(page.getByRole('button', { name: 'REROLL 4 / 3', exact: true })).toBeDisabled();
+  await expect(page.getByTestId('manual-reroll')).toHaveAccessibleName('REROLL 3 DICE · 2 REMAINING');
+  await expect(page.getByTestId('manual-reroll')).toBeDisabled();
   await page.getByRole('button', { name: /^Die 5,/ }).click();
-  const button = page.getByRole('button', { name: 'REROLL 3 / 3', exact: true });
+  const button = page.getByTestId('manual-reroll');
   await expect(button).toBeEnabled();
   await setPlaybackSpeed(page, 'NORMAL');
   await button.click();
-  await expect(page.getByRole('button', { name: /^REROLL \d+ \/ 3$/ })).toBeDisabled();
+  await expect(page.getByTestId('manual-reroll')).toBeDisabled();
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: /^Die 1,/ })).toBeDisabled();
   await page.getByRole('button', { name: 'Skip playback' }).click();
   game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0, 2] }).state;
   await matchRound(page, game);
   expect(game.manualRerollsRemaining).toBe(0);
+  await expect(page.getByTestId('manual-reroll')).toHaveAttribute('data-normal-fill-percent', '0');
   expect(game.phase).toBe('round');
   await setPlaybackSpeed(page, 'INSTANT');
   const option = handOptions(game.dice, game.consumed).find(hand => !hand.consumed)!;
   await page.getByRole('button', { name: new RegExp(`^${HANDS[option.id].name} `) }).click();
-  await expect(page.getByRole('button', { name: /^REROLL \d+ \/ 3$/ })).toBeDisabled();
+  await expect(page.getByTestId('manual-reroll')).toBeDisabled();
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   game = dispatch(game, { type: 'PLAY', hand: option.id, dieIds: option.combinations[0] }).state;
   await matchRound(page, game);
   expect(game.manualRerollsRemaining).toBe(0);
+});
+
+test('Reroll control separates selected dice from normal and Care Package resources responsively', async ({ page }) => {
+  let game = newRun('care-package-reroll-ui').state;
+  game.specialOfferEffects.carePackageRerolls = 3;
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto(`/?seed=${game.seed}&speed=instant`);
+  await installRun(page, game);
+
+  const button = page.getByTestId('manual-reroll');
+  await expect(button).toHaveAccessibleName('REROLL · 3 REMAINING · +3 CARE PACKAGE');
+  await expect(button).toHaveAttribute('data-normal-fill-percent', '100');
+  await expect(page.getByTestId('special-effect-carePackage')).toHaveText('Care Package · 3 Rerolls Left');
+
+  for (const id of [0, 1]) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
+  await expect(button).toHaveAccessibleName('REROLL 2 DICE · 3 REMAINING · +3 CARE PACKAGE');
+  await button.click();
+  game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0, 1] }).state;
+  await matchRound(page, game);
+  expect(game).toMatchObject({ manualRerollsRemaining: 1, specialOfferEffects: { carePackageRerolls: 3 } });
+  await expect(button).toHaveAccessibleName('REROLL · 1 REMAINING · +3 CARE PACKAGE');
+  await expect(button).toHaveAttribute('data-normal-fill-percent', '33');
+
+  for (const id of [0, 1]) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
+  await button.click();
+  game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0, 1] }).state;
+  await matchRound(page, game);
+  expect(game).toMatchObject({ manualRerollsRemaining: 0, specialOfferEffects: { carePackageRerolls: 2 } });
+  await expect(button).toHaveAccessibleName('REROLL · 2 CARE PACKAGE REMAINING');
+  await expect(button).toHaveAttribute('data-normal-fill-percent', '0');
+  await expect(page.getByTestId('special-effect-carePackage')).toHaveText('Care Package · 2 Rerolls Left');
+
+  for (const id of [0, 1]) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
+  await button.click();
+  game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0, 1] }).state;
+  await ready(page);
+  expect(game.specialOfferEffects.carePackageRerolls).toBe(0);
+  await expect(page.getByTestId('special-effect-carePackage')).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('normal Reroll fill exposes deterministic 100/67/33/0 percent states', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 700 });
+  for (const [remaining, fill] of [[3, 100], [2, 67], [1, 33], [0, 0]] as const) {
+    const state = newRun(`reroll-fill-${remaining}`).state;
+    state.manualRerollsRemaining = remaining;
+    await page.goto(`/?seed=${state.seed}&speed=instant`);
+    await installRun(page, state);
+    await expect(page.getByTestId('manual-reroll')).toHaveAttribute('data-normal-fill-percent', String(fill));
+  }
 });
 
 for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bust waits for Continue at ${playbackSpeed} playback speed`, async ({ page }) => {
@@ -175,7 +237,7 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   }
   if (playbackSpeed === 'normal') await setPlaybackSpeed(page, 'NORMAL');
   await page.getByRole('button', { name: /^Die 1,/ }).click();
-  await page.getByRole('button', { name: 'REROLL 3 / 3', exact: true }).click();
+  await page.getByTestId('manual-reroll').click();
   await expect(page.getByRole('heading', { name: 'Run Over' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: `ROUND ${game.round} BUST`, exact: true })).toBeVisible({ timeout: 15000 });
   await expect(page.getByText('1 Life Lost', { exact: true })).toBeVisible();

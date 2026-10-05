@@ -31,7 +31,7 @@ export const BOSSES: Record<BossType, BossDefinition> = {
   },
   clockmaker: {
     name: 'THE CLOCKMAKER',
-    shortRule: 'After every hand, all dice advance one face.',
+    shortRule: 'Every roll gets Bumped up one face.',
     primary: '#0EA5E9',
     secondary: '#7DD3FC',
   },

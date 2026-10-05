@@ -84,7 +84,11 @@ export function activeSpecialOfferStatusItems(effects: SpecialOfferEffects): Act
   if (effects.onTheHouse) statuses.push({
     type: 'onTheHouse', label: 'On The House · Next Shop', description: SPECIAL_OFFERS.onTheHouse.description,
   });
-  if (effects.carePackageRerolls > 0) statuses.push(countedStatus('carePackage', effects.carePackageRerolls, 'Reroll'));
+  if (effects.carePackageRerolls > 0) statuses.push({
+    type: 'carePackage',
+    label: `Care Package · ${effects.carePackageRerolls} Reroll${effects.carePackageRerolls === 1 ? '' : 's'} Left`,
+    description: SPECIAL_OFFERS.carePackage.description,
+  });
   if (effects.silence) statuses.push({
     type: 'silence', label: 'Silence · Next Boss', description: SPECIAL_OFFERS.silence.description,
   });

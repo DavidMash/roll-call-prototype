@@ -37,7 +37,7 @@ test('active Special Offers render compact responsive status badges with canonic
   await expect(status).toContainText('SPECIAL EFFECTS');
   for (const [type, label] of [
     ['onTheHouse', 'On The House · Next Shop'],
-    ['carePackage', 'Care Package · 2 Rerolls'],
+    ['carePackage', 'Care Package · 2 Rerolls Left'],
     ['silence', 'Silence · Next Boss'],
     ['taxEvasion', 'Tax Evasion · 1 Round'],
     ['cashBonus', 'Cash Bonus · 3 Rounds'],

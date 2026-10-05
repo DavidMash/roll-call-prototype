@@ -56,7 +56,7 @@ async function perform(page: Page, game: GameState, action: Action) {
   }
   else if (action.type === 'MANUAL_REROLL') {
     await select(page, action.dieIds);
-    await page.getByRole('button', { name: `REROLL ${CONFIG.manualRerollsPerRound - game.manualRerollsRemaining + action.dieIds.length} / ${CONFIG.manualRerollsPerRound}`, exact: true }).click();
+    await page.getByTestId('manual-reroll').click();
   } else if (action.type === 'UNLOCK_WARDEN_DIE') {
     await page.getByRole('button', { name: new RegExp(`^Die ${action.dieId + 1},.*selectable to unlock$`) }).click();
     await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();
@@ -103,7 +103,7 @@ for (const hand of ['pair', 'twoPair'] as const) {
   });
 }
 
-test('winning hand shows final award and ROUND CLEARED without gameplay roll or Slippy playback', async ({ page }) => {
+test('winning hand shows its final award, physical settle, and ROUND CLEARED in order', async ({ page }) => {
   const fixture = winningSlippyRun();
   let game = newRun(fixture.seed).state;
   await page.goto(`/?seed=${fixture.seed}&speed=instant`);
@@ -124,12 +124,7 @@ test('winning hand shows final award and ROUND CLEARED without gameplay roll or 
     await expect(page.getByTestId('round-score-progress')).toHaveText(
       `${event.board.score.toLocaleString('en-US')} / ${event.board.target.toLocaleString('en-US')}`,
     );
-    await expect(page.locator('.die.rolling')).toHaveCount(0);
-    await expect(page.locator('.ability-label').filter({ hasText: 'SLIPPY' })).toHaveCount(0);
-    expect(['DICE_REROLL_STARTED', 'DIE_ROLLED', 'DIE_FLIPPED']).not.toContain(event.type);
-    for (const physical of game.dice) {
-      await expect(page.getByRole('button', { name: new RegExp(`^Die ${physical.id + 1}, face ${physical.value},`) })).toBeVisible();
-    }
+    if (event.type === 'DICE_REROLL_STARTED') await expect(page.locator('.die.rolling')).not.toHaveCount(0);
     if (event.type === 'HAND_SCORE_FINALIZED') {
       await expect(page.locator('.score-tick')).toHaveText(`+${event.amount}`);
       observed.push(event.type);
@@ -150,4 +145,9 @@ test('winning hand shows final award and ROUND CLEARED without gameplay roll or 
   await ready(page);
   await expect(page.getByTestId('round-summary')).toBeVisible();
   await expect(page.getByTestId('summary-score')).toContainText(`${fixture.result.state.score}`);
+  await page.clock.resume();
+  await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
+  await ready(page);
+  for (const physical of fixture.result.state.dice)
+    await expect(page.getByRole('button', { name: new RegExp(`^Die ${physical.id + 1}, face ${physical.value},`) })).toBeVisible();
 });

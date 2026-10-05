@@ -147,7 +147,7 @@ describe('temporary Special Offers', () => {
     });
     expect(activeSpecialOfferStatusItems(effects).map(status => [status.type, status.label])).toEqual([
       ['onTheHouse', 'On The House · Next Shop'],
-      ['carePackage', 'Care Package · 2 Rerolls'],
+      ['carePackage', 'Care Package · 2 Rerolls Left'],
       ['silence', 'Silence · Next Boss'],
       ['taxEvasion', 'Tax Evasion · 1 Round'],
       ['cashBonus', 'Cash Bonus · 3 Rounds'],
@@ -161,18 +161,31 @@ describe('temporary Special Offers', () => {
 
   it('Care Package spends normal Rerolls first and keeps reserve charges persistent', () => {
     let state = choose('carePackage');
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(3);
     state.phase = 'round';
     state.manualRerollsRemaining = 1;
     state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0, 1] }, constant(.4)).state;
     expect(state.manualRerollsRemaining).toBe(0);
     expect(state.specialOfferEffects.carePackageRerolls).toBe(2);
-    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Care Package · 2 Rerolls');
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Care Package · 2 Rerolls Left');
     state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [2] }, constant(.4)).state;
     expect(state.specialOfferEffects.carePackageRerolls).toBe(1);
-    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Care Package · 1 Reroll');
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Care Package · 1 Reroll Left');
     state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [3] }, constant(.4)).state;
     expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
     expect(activeSpecialOfferStatusItems(state.specialOfferEffects)).toEqual([]);
+  });
+
+  it('Care Package charges carry into later Rounds without recharging', () => {
+    let state = choose('carePackage');
+    state.phase = 'round';
+    state.manualRerollsRemaining = 0;
+    state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(.4)).state;
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(2);
+    new Resolver(state, constant(.4)).openShop();
+    state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.4)).state;
+    expect(state.manualRerollsRemaining).toBe(3);
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(2);
   });
 
   it('Cash Bonus pays one Gold per Bonus stack for each scoring face', () => {
@@ -234,7 +247,9 @@ describe('temporary Special Offers', () => {
     state.specialOfferEffects.carePackageRerolls = 1;
     const resolver = new Resolver(state, constant());
     resolver.evaluate();
+    expect(state.phase).toBe('round');
     expect(state.manualRerollsRemaining).toBe(0);
+    expect(state.specialOfferEffects.bottledFairyTriggeredThisRound).toBe(false);
     state.specialOfferEffects.carePackageRerolls = 0;
     resolver.evaluate();
     expect(state.manualRerollsRemaining).toBe(3);
@@ -283,10 +298,12 @@ describe('temporary Special Offers', () => {
 describe('replay and checkpoint Special Offers', () => {
   it('Time Travel replays the completed block and suppresses the repeated Mini-Boss post-reward', () => {
     let state = choose('timeTravel');
-    expect(state.round).toBe(0);
+    expect(state.round).toBe(1);
     expect(state.suppressedPostBossRewardRounds).toEqual([3]);
     state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
-    expect(state.currentNodeId).toBe('shop:before-round:1');
+    expect(state.phase).toBe('round');
+    expect(state.round).toBe(1);
+    expect(state.currentNodeId).toBe('round:1');
     state.round = 3;
     state.phase = 'roundSummary';
     state.shop = null;

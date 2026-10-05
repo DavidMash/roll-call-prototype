@@ -81,12 +81,14 @@ export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, sel
   })() : null;
   const manualAction: Action = { type: 'MANUAL_REROLL', dieIds: effectiveSelection.dieIds };
   const canReroll = validateAction(board, manualAction) === null;
-  const normalRerollsAfterSelection = Math.max(0, board.manualRerollsRemaining - effectiveSelection.dieIds.length);
-  const reserveRerollsAfterSelection = Math.max(0, board.specialOfferEffects.carePackageRerolls
-    - Math.max(0, effectiveSelection.dieIds.length - board.manualRerollsRemaining));
-  const rerollSpendPreview = board.specialOfferEffects.carePackageRerolls
-    ? CONFIG.manualRerollsPerRound - normalRerollsAfterSelection
-    : CONFIG.manualRerollsPerRound - board.manualRerollsRemaining + effectiveSelection.dieIds.length;
+  const selectedRerollDice = effectiveSelection.dieIds.length;
+  const carePackageRerolls = board.specialOfferEffects.carePackageRerolls;
+  const rerollMainText = selectedRerollDice === 0 ? 'REROLL'
+    : `REROLL ${selectedRerollDice} ${selectedRerollDice === 1 ? 'DIE' : 'DICE'}`;
+  const rerollResourceText = board.manualRerollsRemaining > 0
+    ? `${board.manualRerollsRemaining} REMAINING${carePackageRerolls ? ` · +${carePackageRerolls} CARE PACKAGE` : ''}`
+    : carePackageRerolls > 0 ? `${carePackageRerolls} CARE PACKAGE REMAINING` : '0 REMAINING';
+  const normalRerollFill = Math.max(0, Math.min(1, board.manualRerollsRemaining / CONFIG.manualRerollsPerRound));
   const deadBoard = !hasPlayableHand(encounterDice, unavailableHands, requiredDieIds);
   const chargeAction: Action = { type: 'TOGGLE_CHARGE', hand: effectiveSelection.hand, dieIds: effectiveSelection.dieIds };
   const canToggleCharge = validateAction(board, chargeAction) === null;
@@ -181,7 +183,14 @@ export function RoundScreen({ board, event, busy, inputBlocked, diceDisplay, sel
             {awaitingWardenChoice ? <Button className="unlock-action" size="sm" color="cyan" disabled={busy || selectedWardenDieId === null}
               onClick={() => submit({ type: 'UNLOCK_WARDEN_DIE', dieId: selectedWardenDieId! })}>UNLOCK DIE</Button> : <>
               <Button className="reroll-action" size="sm" variant="default" disabled={busy || !canReroll}
-                onClick={() => submit(manualAction)}>REROLL {rerollSpendPreview} / {CONFIG.manualRerollsPerRound}{board.specialOfferEffects.carePackageRerolls ? ` · ${reserveRerollsAfterSelection} RESERVE` : ''}</Button>
+                aria-label={`${rerollMainText} · ${rerollResourceText}`} data-testid="manual-reroll"
+                data-normal-fill-percent={Math.round(normalRerollFill * 100)} onClick={() => submit(manualAction)}>
+                <span className="reroll-resource-fill" style={{ transform: `scaleX(${normalRerollFill})` }} aria-hidden="true" />
+                <span className="reroll-action-copy">
+                  <span className="reroll-action-main">{rerollMainText}</span>
+                  <span className="reroll-action-resource">{rerollResourceText}</span>
+                </span>
+              </Button>
               {speedDemonOwned && <div className={`speed-demon-meter${speedReveal ? ' is-revealed' : ''}`} data-testid="speed-demon-meter"
                 aria-label="Speed Demon time remaining">
                 <div className="speed-demon-meter-fill" style={{ transform: `scaleX(${speedStrength})` }} />

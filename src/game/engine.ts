@@ -352,7 +352,9 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
   if (error) return { state: normalizationChangedState ? normalized : state, events: [], error };
   const rngStateOverride = random ? undefined : action.type === 'NEXT_ROUND'
     ? attemptSeed(normalized.seed, normalized.round + 1, 1)
-    : action.type === 'RETRY_ROUND' ? attemptSeed(normalized.seed, normalized.round, normalized.roundAttemptNumber) : undefined;
+    : action.type === 'RETRY_ROUND' ? attemptSeed(normalized.seed, normalized.round, normalized.roundAttemptNumber)
+      : action.type === 'CONTINUE_SPECIAL_OFFER' && normalized.specialOffer?.chosen?.type === 'timeTravel'
+        ? attemptSeed(normalized.seed, normalized.round, 1) : undefined;
   return execute(normalized, resolver => {
     const next = resolver.state;
     next.stats.actions.push(structuredClone(action));
@@ -447,7 +449,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
           next.stats.flameSkips.push(next.round);
           resolver.emit({ type: 'FLAME_SKIPPED', message: `Skipped Flame acquisition for round ${formatPlayerNumber(next.round)}` });
         }
-        resolver.openShop(false);
+        resolver.openShop();
         break;
       case 'CHOOSE_SPECIAL_OFFER': resolver.chooseSpecialOffer(action.offerId); break;
       case 'CONTINUE_SPECIAL_OFFER': resolver.continueSpecialOffer(); break;

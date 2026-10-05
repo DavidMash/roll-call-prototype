@@ -67,7 +67,7 @@ async function perform(page: Page, game: GameState, action: Action) {
       const selected = await target.getAttribute('aria-pressed') === 'true';
       if (selected !== action.dieIds.includes(physical.id)) await target.click();
     }
-    await page.getByRole('button', { name: `REROLL ${CONFIG.manualRerollsPerRound - game.manualRerollsRemaining + action.dieIds.length} / ${CONFIG.manualRerollsPerRound}`, exact: true }).click();
+    await page.getByTestId('manual-reroll').click();
   } else if (action.type === 'UNLOCK_WARDEN_DIE') {
     await page.getByRole('button', { name: new RegExp(`^Die ${action.dieId + 1},.*selectable to unlock$`) }).click();
     await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();

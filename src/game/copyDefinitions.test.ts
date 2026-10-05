@@ -58,7 +58,7 @@ describe('canonical player-facing definitions', () => {
       juggler: 'After every hand, one random extra die rerolls.',
       capitalReturn: 'Lose 1 Gold whenever you play a Lower hand.',
       neglected: 'Your 2 least-played hands are unavailable.',
-      clockmaker: 'After every hand, all dice advance one face.',
+      clockmaker: 'Every roll gets Bumped up one face.',
       tightrope: 'Start with 0 Rerolls. Goal is halved.',
       crawler: 'After every hand, only one scoring die rerolls.',
       magician: 'One die disappears until you play 3 called Upper hands.',

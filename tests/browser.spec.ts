@@ -79,7 +79,7 @@ async function matchBoard(page: Page, game: GameState) {
     if (game.phase === 'shop' && game.bust) await expect(page.getByTestId('bust-shop-banner')).toBeVisible();
     else if (game.phase === 'shop') await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
     else await expect(page.getByRole('main').getByText('FLAME SELECTION', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^REROLL \d+ \/ 3$/ })).toHaveCount(0);
+    await expect(page.getByTestId('manual-reroll')).toHaveCount(0);
   } else if (game.phase === 'round') {
     await expect(page.getByTestId('round-score-progress')).toHaveText(`${game.score} / ${game.target}`);
     await expect(page.getByTestId('round-goal-progress')).toHaveAttribute('aria-valuetext', `${game.score} of ${game.target} points toward the Goal`);
@@ -114,7 +114,7 @@ async function playBest(page: Page, game: GameState): Promise<GameState> {
   if (game.boss?.type === 'caller' && !game.boss.satisfied && choice?.hand !== game.boss.calledHand && game.manualRerollsRemaining > 0) {
     const die = activeEncounterDice(game)[0];
     await page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},`) }).click();
-    await page.getByRole('button', { name: /^REROLL \d+ \/ 3$/ }).click();
+    await page.getByTestId('manual-reroll').click();
     const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [die.id] }).state;
     await matchBoard(page, next);
     return next;
@@ -122,7 +122,7 @@ async function playBest(page: Page, game: GameState): Promise<GameState> {
   if (!choice) {
     const die = activeEncounterDice(game)[0];
     await page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) }).click();
-    await page.getByRole('button', { name: `REROLL ${CONFIG.manualRerollsPerRound - game.manualRerollsRemaining + 1} / ${CONFIG.manualRerollsPerRound}`, exact: true }).click();
+    await page.getByTestId('manual-reroll').click();
     const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [die.id] }).state;
     await matchBoard(page, next);
     return next;

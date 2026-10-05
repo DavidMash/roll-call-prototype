@@ -94,7 +94,7 @@ async function perform(page: Page, game: GameState, action: Extract<Action, { ty
   } else if (action.type === 'MANUAL_REROLL') {
     const die = game.dice.find(item => item.id === action.dieIds[0])!;
     await page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) }).click();
-    await page.getByRole('button', { name: /^REROLL \d+ \/ 3$/ }).click();
+    await page.getByTestId('manual-reroll').click();
   } else if (action.type === 'UNLOCK_WARDEN_DIE') {
     await page.getByRole('button', { name: new RegExp(`^Die ${action.dieId + 1},.*selectable to unlock$`) }).click();
     await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();

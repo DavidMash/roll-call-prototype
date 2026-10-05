@@ -37,7 +37,7 @@ async function perform(page: Page, game: GameState, action: Action) {
     await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   } else if (action.type === 'MANUAL_REROLL') {
     for (const id of action.dieIds) await die(page, id).click();
-    await page.getByRole('button', { name: /^REROLL \d+ \/ 3$/ }).click();
+    await page.getByTestId('manual-reroll').click();
   } else if (action.type === 'BUY') {
     const offer = game.shop!.offers.find(item => item.id === action.offerId)!;
     await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button', { name: 'SELECT OR DRAG' }).click();
@@ -51,7 +51,7 @@ async function perform(page: Page, game: GameState, action: Action) {
   return dispatch(game, action).state;
 }
 
-test('scoring Jackpot pays on a played-hand clear before the no-reroll transition', async ({ page }) => {
+test('scoring Jackpot pays on a played-hand clear before the final physical settle', async ({ page }) => {
   const fixture = jackpotRun();
   let game = newRun(fixture.seed).state;
   await page.goto(`/?seed=${fixture.seed}&speed=instant`);
@@ -83,5 +83,5 @@ test('scoring Jackpot pays on a played-hand clear before the no-reroll transitio
   await ready(page);
   await expect(page.getByTestId('round-summary')).toBeVisible();
   expect(fixture.result.state.gold).toBe(goldBefore + CONFIG.jackpotGold + fixture.result.state.lastRoundPayout!.totalRoundRewardGold);
-  expect(fixture.result.events.some(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Post-hand'))).toBe(false);
+  expect(fixture.result.events.some(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Winning hand settle'))).toBe(true);
 });
