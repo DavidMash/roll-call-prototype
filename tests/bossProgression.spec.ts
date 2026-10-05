@@ -86,7 +86,7 @@ test('local route transition auto-continues after its visible themed three-secon
   await expect(map).toHaveAttribute('data-destination', 'round:1');
   const destination = map.locator('[aria-current="step"]');
   await expect(destination).toContainText('R1');
-  await expect(map.getByText('R1', { exact: true })).toHaveCount(2);
+  await expect(map.getByText('R1', { exact: true })).toHaveCount(1);
   await expect(map.locator('.run-map-node')).toHaveCount(13);
   await expect(map.locator('.map-node-placeholder')).toHaveCount(0);
   const continueButton = map.getByRole('button', { name: 'Continue', exact: true });
@@ -447,10 +447,15 @@ test('Boss clear shows its Boss Reward summary before the Flame Selection map', 
   const flameMap = page.getByTestId('run-map-transition');
   await expect(flameMap).toHaveAttribute('data-destination', `flame:after-round:${game.round}`);
   await expect(flameMap.locator('.run-map-node')).toHaveCount(13);
+  await expect(flameMap.locator('[data-node-kind="flame_selection"]')).toHaveAttribute('data-state', 'current');
+  await expect(flameMap.locator('[data-node-kind="flame_selection"] .node-label')).toHaveText('FLAME');
+  await expect(flameMap.locator('[data-node-kind="flame_selection"]')).toHaveAttribute('data-attached-to', 'boss');
+  await expect(flameMap.locator('[data-node-kind="boss_round"]')).toHaveAttribute('data-state', 'completed');
+  await expect(flameMap.locator('[data-node-kind="boss_round"] .node-label')).toHaveCount(0);
   const activeConnector = flameMap.getByTestId('active-map-connector');
   await expect(activeConnector).toHaveCount(1);
   await expect(activeConnector).toHaveClass(/route-forward/);
-  expect(await activeConnector.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('map-route-fill-forward');
+  expect(await activeConnector.evaluate(element => getComputedStyle(element).animationName)).toBe('map-route-fill-forward');
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await ready(page);
   await expect(page.getByRole('main').getByText('FLAME SELECTION', { exact: true })).toBeVisible();

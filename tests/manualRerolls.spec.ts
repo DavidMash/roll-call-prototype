@@ -284,12 +284,12 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   const fallbackConnector = fallbackMap.getByTestId('active-map-connector');
   await expect(fallbackConnector).toHaveClass(/route-backward/);
   const fallbackConnectorStyle = await fallbackConnector.evaluate(element => {
-    const style = getComputedStyle(element, '::after');
-    return { animationName: style.animationName, backgroundColor: style.backgroundColor, transformOrigin: style.transformOrigin };
+    const style = getComputedStyle(element);
+    return { animationName: style.animationName, stroke: style.stroke, pathLength: element.getAttribute('pathLength') };
   });
   expect(fallbackConnectorStyle.animationName).toBe('map-route-fill-backward');
-  expect(fallbackConnectorStyle.backgroundColor).toBe('rgb(245, 158, 11)');
-  expect(Number.parseFloat(fallbackConnectorStyle.transformOrigin)).toBeGreaterThan(0);
+  expect(fallbackConnectorStyle.stroke).toBe('rgb(245, 158, 11)');
+  expect(fallbackConnectorStyle.pathLength).toBe('1');
   await fallbackMap.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.getByTestId('bust-shop-banner')).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/C\d+ R\d+ BUST/)).toBeVisible();
