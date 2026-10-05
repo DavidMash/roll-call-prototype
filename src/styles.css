@@ -36,6 +36,7 @@ button { font: inherit; }
 .game-menu-drawer, .game-menu-header { background: var(--mantine-color-dark-8); }
 
 .round-screen, .shop-screen, .special-offer-screen { min-width: 0; }
+.round-screen { position: relative; }
 .live-score-panel {
   position: sticky; top: 0; z-index: 15;
   border-radius: var(--mantine-radius-md); background: rgba(20, 26, 30, .98);
@@ -76,6 +77,24 @@ button { font: inherit; }
 .scorecard-row.unavailable:disabled { opacity: .35; }
 .scorecard-row.consumed:disabled { opacity: .56; background: rgba(255,255,255,.018); }
 .scorecard-row.consumed .scorecard-row-result { color: var(--mantine-color-gray-4); }
+.scorecard-refresh-celebration {
+  position: absolute; z-index: 24; left: 50%; top: 50%; width: min(88%, 390px); transform: translate(-50%, -50%);
+  display: grid; place-items: center; gap: 3px; padding: 18px 22px; pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--mantine-color-teal-3) 76%, transparent); border-radius: 14px;
+  color: white; background: color-mix(in srgb, var(--mantine-color-teal-9) 88%, #090d10);
+  box-shadow: 0 18px 48px rgba(0,0,0,.58), 0 0 34px color-mix(in srgb, var(--mantine-color-teal-4) 30%, transparent);
+  text-align: center; animation: scorecard-refresh-celebration 560ms ease-out both;
+}
+.scorecard-refresh-celebration span { font-size: clamp(1.05rem, 4.5vw, 1.55rem); font-weight: 950; letter-spacing: .09em; }
+.scorecard-refresh-celebration strong { color: var(--mantine-color-teal-2); font-size: clamp(.72rem, 3vw, .95rem); letter-spacing: .16em; }
+.scorecard-panel.is-refreshing .scorecard-row { animation: scorecard-row-reactivate 420ms ease-out both; }
+.scorecard-panel.is-refreshing .scorecard-row-shell:nth-child(2) .scorecard-row { animation-delay: 30ms; }
+.scorecard-panel.is-refreshing .scorecard-row-shell:nth-child(3) .scorecard-row { animation-delay: 60ms; }
+.scorecard-panel.is-refreshing .scorecard-row-shell:nth-child(4) .scorecard-row { animation-delay: 90ms; }
+.scorecard-panel.is-refreshing .scorecard-row-shell:nth-child(5) .scorecard-row { animation-delay: 120ms; }
+.scorecard-panel.is-refreshing .scorecard-row-shell:nth-child(6) .scorecard-row { animation-delay: 150ms; }
+.scorecard-panel.is-refreshing .scorecard-row-shell:nth-child(7) .scorecard-row { animation-delay: 180ms; }
+.scorecard-panel.is-refreshing .scorecard-row-shell:nth-child(8) .scorecard-row { animation-delay: 210ms; }
 .scorecard-row.caller-called { box-shadow: inset 3px 0 #d946ef, inset 0 0 16px rgba(217,70,239,.1); }
 .scorecard-row.fly-row { box-shadow: inset 3px 0 #92400e, inset 0 0 16px rgba(146,64,14,.16); }
 .scorecard-quick-play { position: absolute; top: 50%; right: 5px; z-index: 2; min-width: 112px; transform: translateY(-50%); white-space: nowrap; }
@@ -113,6 +132,15 @@ button { font: inherit; }
   0% { transform: scale(.96); filter: brightness(1); }
   45% { transform: scale(1.035); filter: brightness(1.45); }
   100% { transform: scale(1); filter: brightness(1); }
+}
+@keyframes scorecard-refresh-celebration {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(.96); }
+  45% { opacity: 1; transform: translate(-50%, -50%) scale(1.015); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes scorecard-row-reactivate {
+  from { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mantine-color-teal-3) 70%, transparent); background: rgba(46,214,143,.2); }
+  to { box-shadow: none; background: transparent; }
 }
 .selection-preview { min-height: 17px; text-align: right; }
 .mobile-score-total { display: none; }

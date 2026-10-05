@@ -241,6 +241,8 @@ export interface Board {
   handFamilyFlameStages: Partial<Record<Flame, HandFamilyFlameStage>>;
   lifetimeNormalShopGoldSpent: number;
   consumed: HandId[];
+  /** Hands normally consumed since the current Round's last scorecard refresh. */
+  scorecardCycleConsumed: HandId[];
   scoreByHand: Partial<Record<HandId, number>>;
   effectScore: number;
   handLevels: HandLevels;
@@ -449,7 +451,7 @@ export type EventType =
   | 'HAND_PIPS_CHANGED' | 'HAND_MULTIPLIER_CHANGED' | 'HITCHHIKER_ADDED_PIPS'
   | 'HAND_SCORE_FINALIZED' | 'STANDALONE_SCORE_CALCULATED' | 'SCORE_ROUNDING_AUDIT'
   | 'SCORE_ADDED' | 'GOLD_ADDED' | 'WORKOUT_INCREMENTED'
-  | 'DICE_REROLL_STARTED' | 'DIE_ROLLED' | 'DIE_FLIPPED' | 'HAND_CONSUMED' | 'ROUND_CLEARED'
+  | 'DICE_REROLL_STARTED' | 'DIE_ROLLED' | 'DIE_FLIPPED' | 'HAND_CONSUMED' | 'SCORECARD_REFRESHED' | 'ROUND_CLEARED'
   | 'ROUND_SUMMARY_SHOWN'
   | 'SHOP_OPENED' | 'OFFER_PURCHASED' | 'TRAINING_PURCHASED' | 'OFFERS_REFRESHED' | 'GOLD_SPENT'
   | 'FLAME_SELECTION_OPENED' | 'FLAME_OFFERS_REFRESHED' | 'FLAME_ACQUIRED' | 'FLAME_REPLACED'

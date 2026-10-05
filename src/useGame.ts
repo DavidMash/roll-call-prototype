@@ -4,7 +4,8 @@ import { CONFIG } from './game/config';
 import { dispatch, newRun } from './game/engine';
 import { browserRunStorage, loadPersistedRun, savePersistedRun } from './game/persistence';
 import type { Action, Resolution } from './game/types';
-import { isChapterMapTransition, isPlaybackBarrier, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump, type ScoreSummaryJump } from './game/playback';
+import { isChapterMapTransition, isPlaybackBarrier, isPlaybackCheckpoint, nextScorecardRefreshIndex,
+  SCORECARD_REFRESH_HOLD_MS, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump, type ScoreSummaryJump } from './game/playback';
 
 export type PlaybackSpeed = keyof typeof CONFIG.tickMs;
 
@@ -39,14 +40,18 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
       setIndex(current => current + 1);
       return;
     }
+    if (currentEvent?.type === 'SCORECARD_REFRESHED') {
+      const timeout = window.setTimeout(() => setIndex(current => current + 1), SCORECARD_REFRESH_HOLD_MS[speed]);
+      return () => window.clearTimeout(timeout);
+    }
     if (isPlaybackBarrier(currentEvent)) return;
     if (speed === 'instant') {
       const jump = scoreSummaryJump(result.events, index);
-      if (jump) {
+      if (jump && jump.summaryIndex >= index) {
         setSummaryJump(jump);
         setIndex(jump.summaryIndex);
       } else {
-        const nextBarrier = result.events.findIndex((candidate, candidateIndex) => candidateIndex > index && isPlaybackBarrier(candidate));
+        const nextBarrier = result.events.findIndex((candidate, candidateIndex) => candidateIndex > index && isPlaybackCheckpoint(candidate));
         setIndex(nextBarrier === -1 ? result.events.length : nextBarrier);
       }
       return;
@@ -86,7 +91,10 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
     skip: () => {
       const jump = scoreSummaryJump(result.events, index);
       if (jump) { setSummaryJump(jump); setIndex(jump.summaryIndex); }
-      else setIndex(result.events.length);
+      else {
+        const refreshIndex = nextScorecardRefreshIndex(result.events, index);
+        setIndex(refreshIndex === -1 ? result.events.length : refreshIndex);
+      }
     },
     continuePlayback: () => setIndex(current => Math.min(current + 1, result.events.length)),
     clearError: () => setError(null),

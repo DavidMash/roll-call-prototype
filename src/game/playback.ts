@@ -1,6 +1,7 @@
 import type { GameEvent } from './types';
 
 export const SCORE_SUMMARY_HOLD_MS = 420;
+export const SCORECARD_REFRESH_HOLD_MS = { normal: 720, fast: 260, instant: 420 } as const;
 
 export const isChapterMapTransition = (event: GameEvent | null | undefined) => event?.type === 'MAP_TRANSITION'
   && event.nodeType !== 'special_offer' && event.nodeType !== 'flame_selection';
@@ -9,6 +10,12 @@ export const isPlaybackBarrier = (event: GameEvent | undefined) => event?.type =
   || isChapterMapTransition(event)
   || (event?.type === 'ROUND_BUST' && (event.board.bust?.livesAfter ?? 0) > 0);
 
+export const isPlaybackCheckpoint = (event: GameEvent | undefined) =>
+  isPlaybackBarrier(event) || event?.type === 'SCORECARD_REFRESHED';
+
+export const nextScorecardRefreshIndex = (events: GameEvent[], fromIndex: number) =>
+  events.findIndex((event, index) => index > fromIndex && event.type === 'SCORECARD_REFRESHED');
+
 export interface ScoreSummaryJump {
   summaryIndex: number;
   boundaryIndex: number;
@@ -16,7 +23,7 @@ export interface ScoreSummaryJump {
 
 /** Finds the authoritative final score snapshot for the current resolution batch. */
 export function scoreSummaryJump(events: GameEvent[], fromIndex: number): ScoreSummaryJump | null {
-  const nextBarrier = events.findIndex((event, index) => index > fromIndex && isPlaybackBarrier(event));
+  const nextBarrier = events.findIndex((event, index) => index > fromIndex && isPlaybackCheckpoint(event));
   const boundaryIndex = nextBarrier === -1 ? events.length : nextBarrier;
   let summaryIndex = -1;
   for (let index = 0; index < boundaryIndex; index++) {

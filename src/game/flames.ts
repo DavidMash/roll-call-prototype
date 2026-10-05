@@ -167,7 +167,7 @@ export interface HandStartSnapshot {
   dice: { dieId: number; flame: Flame | null; investedGold: number; faceValue: number }[];
 }
 
-export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'gold' | 'manualRerollsRemaining' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'bonfires' | 'dice' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null): HandStartSnapshot {
+export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'gold' | 'manualRerollsRemaining' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'bonfires' | 'dice' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null): HandStartSnapshot {
   const selectedScore = handScore(state.dice, hand, selectedDieIds, state.handLevels[hand]);
   return {
     score: state.score,

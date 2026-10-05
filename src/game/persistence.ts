@@ -25,7 +25,7 @@ function hasTemplateShape(value: unknown, template: unknown): boolean {
     return isRecord(value) && Object.entries(template).every(([key, child]) =>
       (['maxCharge', 'decisionId', 'sixPackXMult', 'sixPackUpperHandsPlayed', 'handFamilyFlameStages', 'bossSilenced',
         'specialOfferEffects', 'suppressedPostBossRewardRounds', 'specialOffer', 'badDreamCheckpoint',
-        'freeEnhancementOfferIds', 'freeTrainingOfferKeys', 'chapterPlans', 'presentedChapters'].includes(key) && !Object.hasOwn(value, key))
+        'freeEnhancementOfferIds', 'freeTrainingOfferKeys', 'chapterPlans', 'presentedChapters', 'scorecardCycleConsumed'].includes(key) && !Object.hasOwn(value, key))
       || (Object.hasOwn(value, key) && hasTemplateShape(value[key], child)));
   }
   return typeof value === typeof template;

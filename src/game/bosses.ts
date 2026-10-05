@@ -375,7 +375,9 @@ export function bossHandAvailable(state: Pick<Board, 'boss' | 'consumed'> & { bo
 
 export type LastPlayDanger = 'none' | 'possible' | 'definite';
 
-export function lastPlayDanger(state: Pick<Board, 'boss' | 'consumed' | 'dice' | 'manualRerollsRemaining' | 'specialOfferEffects'> & { bossSilenced?: boolean }, hand: HandId): LastPlayDanger {
+export function lastPlayDanger(state: Pick<Board, 'boss' | 'consumed' | 'scorecardCycleConsumed' | 'dice' | 'manualRerollsRemaining' | 'specialOfferEffects'> & { bossSilenced?: boolean }, hand: HandId): LastPlayDanger {
+  const cycle = new Set(state.scorecardCycleConsumed);
+  if (state.boss?.type !== 'marathon' && HAND_IDS.every(id => id === hand || cycle.has(id))) return 'none';
   if (usableManualRerolls(state) !== 0) return 'none';
   const required = requiredEncounterDieIds(state);
   const playable = handOptions(activeEncounterDice(state), unavailableEncounterHands(state), required)
@@ -398,7 +400,7 @@ export function lastPlayDanger(state: Pick<Board, 'boss' | 'consumed' | 'dice' |
   return HAND_IDS.every(id => unavailableAfter.has(id)) ? 'definite' : 'possible';
 }
 
-export const isLastPlay = (state: Pick<Board, 'boss' | 'consumed' | 'dice' | 'manualRerollsRemaining' | 'specialOfferEffects'> & { bossSilenced?: boolean }, hand: HandId) =>
+export const isLastPlay = (state: Pick<Board, 'boss' | 'consumed' | 'scorecardCycleConsumed' | 'dice' | 'manualRerollsRemaining' | 'specialOfferEffects'> & { bossSilenced?: boolean }, hand: HandId) =>
   lastPlayDanger(state, hand) !== 'none';
 
 export function cleanupTemporaryBossFaces(dice: Die[]): void {

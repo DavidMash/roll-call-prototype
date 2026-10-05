@@ -64,6 +64,8 @@ function normalizeHandFamilyFlameRuntime(state: Pick<Board, 'dice' | 'bonfires' 
 
 export function normalizeGameState(state: GameState): GameState {
   const next = structuredClone(state);
+  next.scorecardCycleConsumed ??= next.consumed.filter(hand =>
+    next.bossSilenced || next.boss?.type !== 'neglected' || !next.boss.neglectedHands.includes(hand));
   normalizeSpecialRuntime(next);
   const legacy = next as GameState & { flameReward?: GameState['flameSelection'] };
   if (!next.flameSelection && legacy.flameReward) next.flameSelection = legacy.flameReward;
@@ -102,6 +104,9 @@ export function normalizeGameState(state: GameState): GameState {
     normalizeShop(next.shop);
   }
   if (next.roundCheckpoint) {
+    next.roundCheckpoint.scorecardCycleConsumed ??= next.roundCheckpoint.consumed.filter(hand =>
+      next.roundCheckpoint!.bossSilenced || next.roundCheckpoint!.boss?.type !== 'neglected'
+      || !next.roundCheckpoint!.boss.neglectedHands.includes(hand));
     next.roundCheckpoint.chapterPlans ??= structuredClone(next.chapterPlans ?? {});
     next.roundCheckpoint.presentedChapters ??= Array.from(
       { length: chapterNumberForRound(next.roundCheckpoint.round) }, (_, index) => index + 1,
@@ -140,6 +145,9 @@ export function normalizeGameState(state: GameState): GameState {
   next.presentedChapters ??= Array.from({ length: chapterNumberForRound(next.round) }, (_, index) => index + 1);
   ensureChapterPlan(next, chapterNumberForRound(next.round));
   if (next.badDreamCheckpoint) {
+    next.badDreamCheckpoint.scorecardCycleConsumed ??= next.badDreamCheckpoint.consumed.filter(hand =>
+      next.badDreamCheckpoint!.bossSilenced || next.badDreamCheckpoint!.boss?.type !== 'neglected'
+      || !next.badDreamCheckpoint!.boss.neglectedHands.includes(hand));
     next.badDreamCheckpoint.chapterPlans ??= structuredClone(next.chapterPlans);
     next.badDreamCheckpoint.presentedChapters ??= Array.from(
       { length: chapterNumberForRound(next.badDreamCheckpoint.round) }, (_, index) => index + 1,
@@ -354,7 +362,7 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
     score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, roundAttemptNumber: 1,
     bossSchedule: {}, chapterPlans: {}, presentedChapters: [], boss: null, bossSilenced: false, currentNodeId: '',
     bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], chargeXMult: 1, maxCharge: 1,
-    chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], shop: null,
+    chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
     scoreByHand: {}, effectScore: 0, lastRoundPayout: null, roundSummary: null, flameSelection: null, specialOffer: null,
     manualRerollsRemaining: CONFIG.manualRerollsPerRound, specialOfferEffects: initialSpecialOfferEffects(), suppressedPostBossRewardRounds: [],

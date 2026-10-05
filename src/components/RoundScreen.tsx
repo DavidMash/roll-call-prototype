@@ -91,6 +91,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const chargeAtMax = board.chargeXMult >= board.maxCharge - 1e-9;
   const speedStrength = (speedDemonMultiplier(100, decisionMs) - 1) / 8;
   const speedReveal = event?.type === 'SPEED_DEMON_REVEALED' ? event : null;
+  const scorecardRefreshing = event?.type === 'SCORECARD_REFRESHED';
   const speedEquation = event?.flame === 'speedDemon' && event.handScore && event.type !== 'SPEED_DEMON_REVEALED'
     ? (() => {
       const effectiveXMult = event.handScore.currentXMult * event.handScore.bossFactor;
@@ -131,6 +132,11 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
         scoreText={formatScoreProgress(board.score, board.target)} />
     </div>
     <BossPanel board={board} />
+    {scorecardRefreshing && <div className="scorecard-refresh-celebration" data-testid="scorecard-refresh-celebration"
+      role="status" aria-live="polite" aria-atomic="true" aria-label="Scorecard filled. All hands refreshed.">
+      <span aria-hidden="true">SCORECARD FILLED</span>
+      <strong aria-hidden="true">ALL HANDS REFRESHED</strong>
+    </div>}
     {!busy && !awaitingWardenChoice && deadBoard && manualRerolls > 0 && <Alert className="round-status" color="orange" py={5} title="NO PLAYABLE HANDS" role="status">
       Use a Reroll.
     </Alert>}
@@ -138,7 +144,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
       {board.hotStreakGoal && <Text size="xs"><strong>🔥 HOT STREAK → {HANDS[board.hotStreakGoal].name}</strong></Text>}
       {board.targetPracticeHand && <Text size="xs"><strong>◎ TARGET: {HANDS[board.targetPracticeHand].name}</strong></Text>}
     </Group></Paper>}
-    <Paper className="scorecard-panel" p="xs">
+    <Paper className={`scorecard-panel${scorecardRefreshing ? ' is-refreshing' : ''}`} p="xs">
       <HandScorecard board={board} selection={effectiveSelection} busy={busy || awaitingWardenChoice} canSubmit={valid && !busy && !awaitingWardenChoice}
         submitPreview={preview}
         onSelect={hand => changeSelection(selectHand(encounterDice, unavailableHands, effectiveSelection, hand, requiredDieIds))}

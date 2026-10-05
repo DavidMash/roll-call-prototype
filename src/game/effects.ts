@@ -489,6 +489,19 @@ export class Resolver {
       message: `${HANDS[hand].name} entered a 7-play cooldown` });
   }
 
+  private refreshScorecardIfFilled(): boolean {
+    // Marathon owns hand availability through cooldowns, not ordinary Used state.
+    if (this.state.boss?.type === 'marathon') return false;
+    const cycle = new Set(this.state.scorecardCycleConsumed);
+    if (!HAND_IDS.every(hand => cycle.has(hand))) return false;
+    const encounterLocks = !this.state.bossSilenced && this.state.boss?.type === 'neglected'
+      ? this.state.boss.neglectedHands : [];
+    this.state.consumed = [...encounterLocks];
+    this.state.scorecardCycleConsumed = [];
+    this.emit({ type: 'SCORECARD_REFRESHED', message: 'Scorecard filled \u00b7 all hands refreshed' });
+    return true;
+  }
+
   private resolveQuickdraw(hand: HandId, source: HandPlaySource): void {
     if (this.state.bossSilenced) return;
     const boss = this.state.boss;
@@ -759,7 +772,8 @@ export class Resolver {
       message: `${HANDS[hand].name} hand history incremented: ${this.format(handStart.previousPlays)} → ${this.format(this.state.handPlayCounts[hand])}` });
     this.handAccumulator = null;
     if (consumesHand) {
-      this.state.consumed.push(hand);
+      if (!this.state.consumed.includes(hand)) this.state.consumed.push(hand);
+      if (!this.state.scorecardCycleConsumed.includes(hand)) this.state.scorecardCycleConsumed.push(hand);
       this.emit({ type: 'HAND_CONSUMED', hand, playSource, handConsumed: true, message: `${HANDS[hand].name} consumed for round ${this.format(this.state.round)}` });
     }
     this.advanceMarathon(hand, playSource);
@@ -800,6 +814,7 @@ export class Resolver {
     const rerolls = this.postHandRerolls(shapeParticipants, scoringIds, true);
     this.rollBatch([...rerolls], 'Post-hand reroll', 'gameplay');
     this.drain();
+    if (this.state.score < this.state.target) this.refreshScorecardIfFilled();
     this.evaluate();
     if (this.state.phase === 'round') this.state.decisionId++;
     return { winning: this.state.score >= this.state.target, beanRecordIndex: null };
@@ -896,6 +911,7 @@ export class Resolver {
     if (failure.livesAfter === 0 && this.options.tutorialFinalLifeSafeguard) {
       this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound;
       this.state.consumed = [];
+      this.state.scorecardCycleConsumed = [];
       if (this.state.boss) {
         this.state.bossSilenced = true;
         if (this.state.boss.type === 'warden') {
@@ -975,7 +991,7 @@ export class Resolver {
     this.state.phase = 'round'; this.state.score = 0; this.state.scoreByHand = {}; this.state.effectScore = 0;
     if (!retry) this.state.specialOfferEffects.bottledFairyTriggeredThisRound = false;
     this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound; this.state.target = targetForRound(this.state.round);
-    this.state.consumed = []; this.state.targetPracticeHand = null; this.state.lastRoundPayout = null; this.state.roundSummary = null;
+    this.state.consumed = []; this.state.scorecardCycleConsumed = []; this.state.targetPracticeHand = null; this.state.lastRoundPayout = null; this.state.roundSummary = null;
     this.state.chargeXMult = 1; this.state.chargeArmed = false; this.state.hotStreakCharges = 0;
     this.state.flameSelection = null; this.state.specialOffer = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
