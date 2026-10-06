@@ -52,14 +52,14 @@ async function ready(page: Page) {
   await enterRun(page);
   for (let barrier = 0; barrier < 2; barrier++) {
     await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
-    const bustContinue = page.locator('.bust-state').getByRole('button', { name: 'Continue', exact: true });
-    if (await bustContinue.count()) { await bustContinue.click(); continue; }
     const map = page.getByTestId('run-map-transition');
     if (await map.count()) {
-      await map.getByRole('button', { name: 'Continue', exact: true }).evaluate(element => (element as HTMLElement).click());
+      await page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true }).evaluate(element => (element as HTMLElement).click());
       await expect(map).toHaveCount(0);
       continue;
     }
+    const bustContinue = page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true });
+    if (await bustContinue.count()) { await bustContinue.click(); continue; }
     break;
   }
 }
@@ -682,7 +682,8 @@ test('Team Training occupies one existing slot and presents itself as a special 
   await expect(page.locator('.phase-sticky-header')).toBeInViewport();
   await expect(page.locator('.shop-action-dock')).toBeInViewport();
   expect(await page.locator('.phase-sticky-header').evaluate(element => getComputedStyle(element).position)).toBe('sticky');
-  expect(await page.locator('.shop-action-dock').evaluate(element => getComputedStyle(element).position)).toBe('sticky');
+  await expect(page.getByTestId('run-action-row').locator('.shop-action-dock')).toHaveCount(1);
+  expect(await page.locator('.shop-action-dock').evaluate(element => getComputedStyle(element).position)).toBe('static');
   await page.screenshot({ path: test.info().outputPath('shop-mobile.png'), fullPage: true });
 });
 
@@ -761,13 +762,13 @@ test('mobile Shop shell keeps its HUD, incoming encounter, controls, action, and
   expect(layout.header.top).toBeGreaterThanOrEqual(layout.hud.bottom);
   expect(layout.header.bottom).toBeLessThanOrEqual(layout.boss.top);
   expect(layout.boss.bottom).toBeLessThanOrEqual(layout.training.top);
-  expect(layout.action.bottom).toBeLessThanOrEqual(layout.dock.top);
-  expect(layout.dock.bottom).toBeLessThanOrEqual(layout.innerHeight);
+  expect(layout.dock.bottom).toBeLessThanOrEqual(layout.action.top);
+  expect(layout.action.bottom).toBeLessThanOrEqual(layout.innerHeight);
   expect(layout.controls.height).toBeLessThan(60);
   expect(layout.headerPosition).toBe('sticky');
   expect(layout.headerTop).toBe('0px');
   expect(layout.appPaddingBottom).toBeLessThanOrEqual(4);
-  expect(layout.dockPaddingBottom).toBeGreaterThanOrEqual(5);
+  expect(layout.dockPaddingBottom).toBe(5);
   await page.screenshot({ path: test.info().outputPath('shop-shell-mobile.png'), fullPage: true });
 
   await page.getByRole('button', { name: /^Die 1,/ }).click();
@@ -1079,7 +1080,7 @@ test('fast event playback and skipping produce the same outcome as instant playb
   const game = newRun('playback').state;
   await page.goto('/?seed=playback&speed=fast');
   await enterRun(page);
-  await page.getByTestId('run-map-transition').getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true }).click();
   await matchBoard(page, game);
   const choice = bestHand(game);
   const expected = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds });
@@ -1199,7 +1200,7 @@ test('purchased Jumping Bean visibly triggers and rerolls on the next initial ga
   for (let index = 0; index <= beanIndex; index++) {
     if (next.events[index].type === 'MAP_TRANSITION') {
       await expect(page.getByTestId('run-map-transition')).toBeVisible();
-      await page.getByTestId('run-map-transition').getByRole('button', { name: 'Continue', exact: true }).click();
+      await page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true }).click();
       await page.clock.runFor(281);
       await expect(page.getByTestId('run-map-transition')).toHaveCount(0);
     } else {
@@ -1236,7 +1237,8 @@ test('active mobile gameplay stays inside the viewport with a two-column scoreca
       const upper = document.querySelector<HTMLElement>('#scorecard-upper')!.closest<HTMLElement>('.scorecard-section')!.getBoundingClientRect();
       const lower = document.querySelector<HTMLElement>('#scorecard-lower')!.closest<HTMLElement>('.scorecard-section')!.getBoundingClientRect();
       const rows = [...document.querySelectorAll<HTMLElement>('[data-testid^="scorecard-row-"]')].map(row => row.getBoundingClientRect());
-      const dock = document.querySelector<HTMLElement>('.gameplay-dock')!.getBoundingClientRect();
+      const dock = document.querySelector<HTMLElement>('[data-testid="dice-dock"]')!.getBoundingClientRect();
+      const actionRow = document.querySelector<HTMLElement>('[data-testid="run-action-row"]')!.getBoundingClientRect();
       const reroll = document.querySelector<HTMLElement>('.reroll-action')!.getBoundingClientRect();
       const play = document.querySelector<HTMLElement>('.play-action')!.getBoundingClientRect();
       return {
@@ -1248,6 +1250,7 @@ test('active mobile gameplay stays inside the viewport with a two-column scoreca
         lower: { x: lower.x, width: lower.width },
         rowsInside: rows.every(row => row.left >= 0 && row.right <= window.innerWidth && row.top >= 0 && row.bottom <= window.innerHeight),
         dockBottom: dock.bottom,
+        actionRow: { top: actionRow.top, right: actionRow.right, bottom: actionRow.bottom },
         actions: { rerollX: reroll.x, rerollWidth: reroll.width, playX: play.x, playWidth: play.width },
       };
     });
@@ -1256,9 +1259,10 @@ test('active mobile gameplay stays inside the viewport with a two-column scoreca
     expect(measurements.lower.x).toBeGreaterThan(measurements.upper.x + measurements.upper.width - 1);
     expect(Math.abs(measurements.upper.width - measurements.lower.width)).toBeLessThan(1);
     expect(measurements.rowsInside).toBe(true);
-    expect(measurements.dockBottom).toBeLessThanOrEqual(measurements.innerHeight);
+    expect(measurements.dockBottom).toBeLessThanOrEqual(measurements.actionRow.top + 1);
+    expect(measurements.actionRow.bottom).toBeLessThanOrEqual(measurements.innerHeight);
     expect(measurements.actions.rerollX).toBeLessThan(measurements.actions.playX);
-    expect(measurements.actions.playWidth / measurements.actions.rerollWidth).toBeGreaterThan(1.9);
+    expect(measurements.actionRow.right - (measurements.actions.playX + measurements.actions.playWidth)).toBeLessThan(12);
     await expect(page.locator('.selection-preview')).toBeHidden();
     await expect(page.locator('[data-testid^="scorecard-row-"]')).toHaveCount(14);
     await expect(page.getByRole('button', { name: /^Die 5,/ })).toBeInViewport();

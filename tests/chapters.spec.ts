@@ -62,6 +62,8 @@ test('Chapter splash leads into one complete current-Chapter map without reveali
   await expect(map.locator('[data-node-kind="flame_selection"]')).toHaveCount(0);
   await expect(map.locator('[data-tutorial="chapter-map"]')).toHaveCount(1);
   await expect(map.locator('[data-tutorial="chapter-map-current"]')).toHaveCount(1);
+  await expect(map.getByRole('button', { name: 'Continue', exact: true })).toHaveCount(0);
+  await expect(page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true })).toBeVisible();
   await expect(map.locator('.map-route-segment')).toHaveCount(10);
   await expect(map.locator('.map-route-segment[d*="C"]')).toHaveCount(2);
   await expect(map.locator('.run-map-track')).toHaveAttribute('data-slot-count', '12');
@@ -75,6 +77,7 @@ test('Chapter splash leads into one complete current-Chapter map without reveali
     const root = element as HTMLElement;
     const track = root.querySelector<HTMLElement>('.run-map-track')!;
     const dock = document.querySelector<HTMLElement>('[data-testid="dice-dock"]')!;
+    const actionRow = document.querySelector<HTMLElement>('[data-testid="run-action-row"]')!;
     const stops = [...root.querySelectorAll<HTMLElement>('.run-map-stop')];
     const nodeRects = stops.map(stop => stop.querySelector<HTMLElement>('.run-map-node')!.getBoundingClientRect());
     const sizes = nodeRects.map(rect => Math.max(rect.width, rect.height));
@@ -86,6 +89,12 @@ test('Chapter splash leads into one complete current-Chapter map without reveali
     const rows = stops.map(stop => stop.dataset.row);
     const positions = stops.map(stop => ({ x: Number(stop.dataset.mapX), y: Number(stop.dataset.mapY) }));
     const bossRect = nodeRects[10];
+    const currentStop = root.querySelector<HTMLElement>('.run-map-stop.is-current')!;
+    const currentNode = currentStop.querySelector<HTMLElement>('.run-map-node')!;
+    const currentRect = currentNode.getBoundingClientRect();
+    const anchorX = track.getBoundingClientRect().left + Number(currentStop.dataset.mapX) / 100 * track.clientWidth;
+    const anchorY = track.getBoundingClientRect().top + Number(currentStop.dataset.mapY) / 100 * track.clientHeight;
+    const centerElement = document.elementFromPoint(anchorX, anchorY);
     return {
       rows,
       positions,
@@ -99,6 +108,11 @@ test('Chapter splash leads into one complete current-Chapter map without reveali
       noDocumentHorizontalOverflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
       noMapHorizontalOverflow: track.scrollWidth <= track.clientWidth,
       mapAboveDock: root.getBoundingClientRect().bottom <= dock.getBoundingClientRect().top + 1,
+      dockAboveActions: dock.getBoundingClientRect().bottom <= actionRow.getBoundingClientRect().top + 1,
+      actionInsideViewport: actionRow.getBoundingClientRect().bottom <= innerHeight,
+      currentAnchorAligned: Math.abs(currentRect.left + currentRect.width / 2 - anchorX) < 1
+        && Math.abs(currentRect.top + currentRect.height / 2 - anchorY) < 1,
+      routeMaskedByCurrentNode: !!centerElement?.closest('.run-map-node'),
       bossVisible: bossRect.left >= 0 && bossRect.right <= innerWidth && bossRect.top >= 0 && bossRect.bottom <= innerHeight,
     };
   });
@@ -108,9 +122,9 @@ test('Chapter splash leads into one complete current-Chapter map without reveali
     'top', 'top', 'top',
   ]);
   expect(mobileLayout.slots).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11]);
-  expect(mobileLayout.positions.slice(0, 4).map(point => point.x)).toEqual([10, 37, 63, 90]);
-  expect(mobileLayout.positions.slice(4, 8).map(point => point.x)).toEqual([90, 63, 37, 10]);
-  expect(mobileLayout.positions.slice(8).map(point => point.x)).toEqual([10, 63, 90]);
+  expect(mobileLayout.positions.slice(0, 4).map(point => point.x)).toEqual([16, 39, 61, 84]);
+  expect(mobileLayout.positions.slice(4, 8).map(point => point.x)).toEqual([84, 61, 39, 16]);
+  expect(mobileLayout.positions.slice(8).map(point => point.x)).toEqual([16, 61, 84]);
   expect(mobileLayout.positions[0].y).toBeGreaterThan(mobileLayout.positions[4].y);
   expect(mobileLayout.positions[4].y).toBeGreaterThan(mobileLayout.positions[10].y);
   expect(mobileLayout.sizes[1]).toBeLessThan(mobileLayout.sizes[2]);
@@ -121,6 +135,10 @@ test('Chapter splash leads into one complete current-Chapter map without reveali
   expect(mobileLayout.noDocumentHorizontalOverflow).toBe(true);
   expect(mobileLayout.noMapHorizontalOverflow).toBe(true);
   expect(mobileLayout.mapAboveDock).toBe(true);
+  expect(mobileLayout.dockAboveActions).toBe(true);
+  expect(mobileLayout.actionInsideViewport).toBe(true);
+  expect(mobileLayout.currentAnchorAligned).toBe(true);
+  expect(mobileLayout.routeMaskedByCurrentNode).toBe(true);
   expect(mobileLayout.bossVisible).toBe(true);
   expect(await map.locator('.run-map-node').evaluateAll(nodes => nodes.every(node => {
     const label = node.getAttribute('aria-label') ?? '';
@@ -197,7 +215,7 @@ test('finishing the Boss reward enters a fresh Chapter once before its map and p
   await expect(map.locator('.node-shop')).toHaveCount(5);
   await expect(map).not.toContainText('R6');
 
-  await map.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(map).toHaveCount(0);
   await expect(page.locator('.shop-summary').getByText('SHOP', { exact: true })).toBeVisible();
   await expect(page.getByTestId('chapter-splash')).toHaveCount(0);

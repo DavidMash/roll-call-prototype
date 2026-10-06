@@ -7,6 +7,7 @@ import { formatPlayerNumber } from '../game/copy';
 import { nodeLabel, routeWindow } from '../game/progression';
 import { SCREEN_THEMES } from '../game/screenThemes';
 import type { GameEvent, RunNode } from '../game/types';
+import { RunActionPortal } from './RunActionRow';
 
 const MAP_AUTO_CONTINUE_SECONDS = 3;
 const MAP_AUTO_CONTINUE_MS = MAP_AUTO_CONTINUE_SECONDS * 1000;
@@ -32,34 +33,34 @@ export interface ChapterMapPoint {
 
 /** Twelve normalized board slots form three four-position bands. Slot 9 is an intentional gap. */
 export const CHAPTER_MAP_SLOTS: readonly ChapterMapPoint[] = [
-  { x: 10, y: 84, row: 'bottom', align: 'start', slot: 0 },
-  { x: 37, y: 84, row: 'bottom', align: 'center', slot: 1 },
-  { x: 63, y: 84, row: 'bottom', align: 'center', slot: 2 },
-  { x: 90, y: 84, row: 'bottom', align: 'end', slot: 3 },
-  { x: 90, y: 50, row: 'middle', align: 'end', slot: 4 },
-  { x: 63, y: 50, row: 'middle', align: 'center', slot: 5 },
-  { x: 37, y: 50, row: 'middle', align: 'center', slot: 6 },
-  { x: 10, y: 50, row: 'middle', align: 'start', slot: 7 },
-  { x: 10, y: 16, row: 'top', align: 'start', slot: 8 },
-  { x: 37, y: 16, row: 'top', align: 'center', slot: 9 },
-  { x: 63, y: 16, row: 'top', align: 'center', slot: 10 },
-  { x: 90, y: 16, row: 'top', align: 'end', slot: 11 },
+  { x: 16, y: 84, row: 'bottom', align: 'start', slot: 0 },
+  { x: 39, y: 84, row: 'bottom', align: 'center', slot: 1 },
+  { x: 61, y: 84, row: 'bottom', align: 'center', slot: 2 },
+  { x: 84, y: 84, row: 'bottom', align: 'end', slot: 3 },
+  { x: 84, y: 50, row: 'middle', align: 'end', slot: 4 },
+  { x: 61, y: 50, row: 'middle', align: 'center', slot: 5 },
+  { x: 39, y: 50, row: 'middle', align: 'center', slot: 6 },
+  { x: 16, y: 50, row: 'middle', align: 'start', slot: 7 },
+  { x: 16, y: 16, row: 'top', align: 'start', slot: 8 },
+  { x: 39, y: 16, row: 'top', align: 'center', slot: 9 },
+  { x: 61, y: 16, row: 'top', align: 'center', slot: 10 },
+  { x: 84, y: 16, row: 'top', align: 'end', slot: 11 },
 ] as const;
 
 const NODE_SLOT_INDEXES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11] as const;
 export const CHAPTER_MAP_POINTS: readonly ChapterMapPoint[] = NODE_SLOT_INDEXES.map(index => CHAPTER_MAP_SLOTS[index]);
 
 const ROUTE_SEGMENTS = [
-  'M 10 84 L 37 84',
-  'M 37 84 L 63 84',
-  'M 63 84 L 90 84',
-  'M 90 84 C 98 84, 98 50, 90 50',
-  'M 90 50 L 63 50',
-  'M 63 50 L 37 50',
-  'M 37 50 L 10 50',
-  'M 10 50 C 2 50, 2 16, 10 16',
-  'M 10 16 L 63 16',
-  'M 63 16 L 90 16',
+  'M 16 84 L 39 84',
+  'M 39 84 L 61 84',
+  'M 61 84 L 84 84',
+  'M 84 84 C 94 84, 94 50, 84 50',
+  'M 84 50 L 61 50',
+  'M 61 50 L 39 50',
+  'M 39 50 L 16 50',
+  'M 16 50 C 6 50, 6 16, 16 16',
+  'M 16 16 L 61 16',
+  'M 61 16 L 84 16',
 ] as const;
 
 function compactGlyph(node: RunNode) {
@@ -145,13 +146,14 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
       '--chapter-boss': bossColor } as React.CSSProperties}>
     <div className="map-toolbar">
       <div className="map-kicker">CHAPTER {chapterNumber}</div>
-      <div className="map-continue" style={{ '--map-auto-continue-duration': `${MAP_AUTO_CONTINUE_MS}ms` } as React.CSSProperties}>
+      <RunActionPortal><div className="run-action-primary"><div className="map-continue"
+        style={{ '--map-auto-continue-duration': `${MAP_AUTO_CONTINUE_MS}ms` } as React.CSSProperties}>
         <span className="map-continue-fill" aria-hidden="true" />
         <Button size="sm" variant="transparent" className="map-continue-button" onClick={beginContinue} aria-label="Continue"
           title={`Automatically continues in ${countdown} second${countdown === 1 ? '' : 's'}`}>
           <span>CONTINUE</span><span className="map-continue-countdown" data-testid="map-countdown" aria-hidden="true">{countdown}</span>
         </Button>
-      </div>
+      </div></div></RunActionPortal>
     </div>
 
     <div className="run-map-track" aria-label={`Chapter ${chapterNumber} route`} data-testid="run-map-track" data-chapter={chapterNumber}
@@ -163,10 +165,13 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
           const progress = index / Math.max(1, ROUTE_SEGMENTS.length - 1);
           const miniWeight = Math.round((1 - Math.min(1, progress)) * 100);
           const arcColor = `color-mix(in srgb, ${miniBossColor} ${miniWeight}%, ${bossColor})`;
-          return <path key={path} d={path} pathLength="1"
-            className={`map-route-segment ${complete ? 'completed' : 'upcoming'} ${active ? `route-active route-${event.direction ?? 'forward'}` : ''}`}
-            data-segment-index={index} data-testid={active ? 'active-map-connector' : undefined}
-            style={{ '--segment-color': arcColor } as React.CSSProperties} />;
+          const style = { '--segment-color': arcColor, '--segment-dash-offset': `${-(index * .1)}` } as React.CSSProperties;
+          return <g key={path}>
+            {complete && <path d={path} pathLength="1" className="map-route-progress completed" style={style} />}
+            <path d={path} pathLength="1"
+              className={`map-route-segment ${complete ? 'completed' : 'upcoming'} ${active ? `route-active route-${event.direction ?? 'forward'}` : ''}`}
+              data-segment-index={index} data-testid={active ? 'active-map-connector' : undefined} style={style} />
+          </g>;
         })}
       </svg>
 

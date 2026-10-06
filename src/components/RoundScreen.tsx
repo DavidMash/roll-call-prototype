@@ -18,6 +18,7 @@ import { CONFIG } from '../game/config';
 import { formatPlayerNumber, formatScoreEquation, formatScoreProgress, playActionLabel } from '../game/copy';
 import { DecisionTimer } from '../game/decisionTimer';
 import { usableManualRerolls } from '../game/specialOffers';
+import { RunActionPortal } from './RunActionRow';
 
 export function RoundScreen({ board, event, busy, inputBlocked, selection, setSelection, submit, skip }: {
   board: Board; event: GameEvent | null; busy: boolean; inputBlocked: boolean;
@@ -78,6 +79,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const rerollMainText = selectedRerollDice === 0 ? 'REROLL'
     : `REROLL ${selectedRerollDice} ${selectedRerollDice === 1 ? 'DIE' : 'DICE'}`;
   const rerollResourceText = `${board.manualRerollsRemaining} REROLL${board.manualRerollsRemaining === 1 ? '' : 'S'} REMAINING${carePackageRerolls ? ` + ${carePackageRerolls}` : ''}`;
+  const rerollVisualResourceText = `NORMAL ${board.manualRerollsRemaining}${carePackageRerolls ? ` · EXTRA ${carePackageRerolls}` : ''}`;
   const normalRerollFill = Math.max(0, Math.min(1, board.manualRerollsRemaining / CONFIG.manualRerollsPerRound));
   const deadBoard = !hasPlayableHand(encounterDice, unavailableHands, requiredDieIds);
   const chargeAction: Action = { type: 'TOGGLE_CHARGE', hand: effectiveSelection.hand, dieIds: effectiveSelection.dieIds };
@@ -147,7 +149,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
         onSelect={hand => changeSelection(selectBoardHand(board, effectiveSelection, hand, decisionMs))}
         onSubmit={submitPlay} />
     </Paper>
-    <Paper className="gameplay-actions-panel" p="xs">
+    <RunActionPortal><Paper className="gameplay-actions-panel" p="xs">
         <div className="gameplay-actions">
           {hasOwnedChargeFlame(board) && <Group className={`charge-controls${chargeAtMax ? ' is-max' : ''}${board.chargeArmed ? ' is-armed' : ''}`} gap="xs" justify="flex-end" mb={4}>
             <Stack gap={0} className="charge-status">
@@ -175,7 +177,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
                 <span className="reroll-resource-fill" style={{ transform: `scaleX(${normalRerollFill})` }} aria-hidden="true" />
                 <span className="reroll-action-copy">
                   <span className="reroll-action-main">{rerollMainText}</span>
-                  <span className="reroll-action-resource">{rerollResourceText}</span>
+                  <span className="reroll-action-resource">{rerollVisualResourceText}</span>
                 </span>
               </Button>
               {speedDemonOwned && <div className={`speed-demon-meter${speedReveal ? ' is-revealed' : ''}`} data-testid="speed-demon-meter"
@@ -190,6 +192,6 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
             </>}
           </Group>
         </div>
-    </Paper>
+    </Paper></RunActionPortal>
   </Stack>;
 }

@@ -1,6 +1,7 @@
 import { Badge, Button, Group, Paper, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { specialOfferDescription, specialOfferName } from '../game/specialOffers';
 import type { Action, Board } from '../game/types';
+import { RunActionPortal } from './RunActionRow';
 
 export function SpecialOfferScreen({ board, busy, submit }: {
   board: Board;
@@ -30,7 +31,7 @@ export function SpecialOfferScreen({ board, busy, submit }: {
         </Paper>;
       })}
     </SimpleGrid>
-    {selection.acquired && <Group justify="flex-end"><Button color="teal" disabled={busy}
-      onClick={() => submit({ type: 'CONTINUE_SPECIAL_OFFER' })}>CONTINUE →</Button></Group>}
+    {selection.acquired && <RunActionPortal><div className="run-action-primary"><Button color="teal" disabled={busy}
+      onClick={() => submit({ type: 'CONTINUE_SPECIAL_OFFER' })}>CONTINUE →</Button></div></RunActionPortal>}
   </Stack>;
 }

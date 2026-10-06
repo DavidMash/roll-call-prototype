@@ -15,7 +15,7 @@ async function enterTutorial(page: import('@playwright/test').Page) {
   await page.getByRole('button', { name: 'PLAY TUTORIAL', exact: true }).click();
   const map = page.getByTestId('run-map-transition');
   await expect(map).toBeVisible();
-  await map.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.locator('.driver-popover')).toBeVisible();
 }
 

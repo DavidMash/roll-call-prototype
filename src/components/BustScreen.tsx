@@ -3,6 +3,7 @@ import { CONFIG } from '../game/config';
 import type { Board } from '../game/types';
 import { formatPlayerNumber, formatScoreProgress } from '../game/copy';
 import { fullChapterLabels } from '../game/chapters';
+import { RunActionPortal } from './RunActionRow';
 
 const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
 
@@ -20,7 +21,7 @@ export function BustScreen({ board, onContinue, restartSame, newRun }: {
       <Group justify="center" gap="xs" mt="md"><Text size="xl" c="red">{hearts(bust.livesBefore)}</Text><Text>→</Text><Text size="xl" c="red">{hearts(bust.livesAfter)}</Text></Group>
       {bust.livesAfter > 0 ? <>
         <Text fw={800} mt="xs">1 Life Lost</Text>
-        {onContinue && <Button mt="lg" onClick={onContinue}>Continue</Button>}
+        {onContinue && <RunActionPortal><div className="run-action-primary"><Button aria-label="Continue" onClick={onContinue}>CONTINUE</Button></div></RunActionPortal>}
       </> : <><Text fw={800} mt="xs">NO LIVES REMAIN</Text><Title order={3} mt="md">Run Over</Title>
         {restartSame && newRun && <Group justify="center" mt="lg"><Button onClick={restartSame}>Restart same seed</Button><Button variant="default" onClick={newRun}>New seed</Button></Group>}
       </>}

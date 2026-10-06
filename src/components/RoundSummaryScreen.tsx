@@ -3,6 +3,7 @@ import { BOSSES, isMiniBossType } from '../game/bosses';
 import type { Action, Board } from '../game/types';
 import { formatPlayerNumber, formatScoreProgress } from '../game/copy';
 import { fullChapterLabels } from '../game/chapters';
+import { RunActionPortal } from './RunActionRow';
 
 export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy: boolean; submit: (action: Action) => void }) {
   const summary = board.roundSummary!;
@@ -41,7 +42,8 @@ export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy
           <Text c="dimmed">Gold</Text><Text fw={900}>{formatPlayerNumber(summary.goldBefore)} → {formatPlayerNumber(summary.goldAfter)}</Text>
         </Group>
       </Paper>
-      <Button size="md" disabled={busy} onClick={() => submit({ type: 'CONTINUE_ROUND_SUMMARY' })}>CONTINUE →</Button>
+      <RunActionPortal><div className="run-action-primary"><Button size="md" disabled={busy}
+        onClick={() => submit({ type: 'CONTINUE_ROUND_SUMMARY' })}>CONTINUE →</Button></div></RunActionPortal>
     </Stack>
   </Paper>;
 }

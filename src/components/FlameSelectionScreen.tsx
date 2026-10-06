@@ -4,6 +4,7 @@ import type { Action, Board, GameEvent } from '../game/types';
 import { ScoreResolution } from './ScoreResolution';
 import { formatPlayerNumber } from '../game/copy';
 import type { FlameDetailsTarget } from './FlameDetailsModal';
+import { RunActionPortal } from './RunActionRow';
 
 export function FlameSelectionScreen({ board, event, busy, selectedOffer, setSelectedOffer, submit, skip, openFlameDetails }: {
   board: Board; event: GameEvent | null; busy: boolean;
@@ -42,6 +43,7 @@ export function FlameSelectionScreen({ board, event, busy, selectedOffer, setSel
       <Text fw={700} size="sm" tt="uppercase">Dice Dock</Text>
       <Text size="xs" c={selected ? 'orange' : 'dimmed'}>{selected ? `${FLAMES[selected.flame].name} selected — choose a die below` : 'Select a Flame, then assign it in the Dice Dock.'}</Text>
     </Paper>
-    <div className="shop-action-dock"><Button disabled={busy} onClick={() => submit({ type: 'CONTINUE_FLAME_SELECTION' })}>CONTINUE TO SHOP →</Button></div>
+    <RunActionPortal><div className="run-action-primary shop-action-dock"><Button disabled={busy}
+      onClick={() => submit({ type: 'CONTINUE_FLAME_SELECTION' })}>CONTINUE TO SHOP →</Button></div></RunActionPortal>
   </Stack>;
 }

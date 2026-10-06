@@ -152,18 +152,36 @@ test('one mounted dock carries unchanged faces through Summary, Map, and Shop', 
   state.roundSummary = summary;
   await installRun(page, state);
   const dock = page.getByTestId('dice-dock');
+  const actionRow = page.getByTestId('run-action-row');
   const dockHandle = await dock.elementHandle();
   const faces = await dock.locator('.die-number').allTextContents();
+  const summaryActionHeight = await actionRow.evaluate(element => element.getBoundingClientRect().height);
+  const summaryLayout = await page.evaluate(() => {
+    const dock = document.querySelector<HTMLElement>('[data-testid="dice-dock"]')!.getBoundingClientRect();
+    const actions = document.querySelector<HTMLElement>('[data-testid="run-action-row"]')!.getBoundingClientRect();
+    const primary = document.querySelector<HTMLElement>('[data-testid="run-action-row"] button')!.getBoundingClientRect();
+    return { dockBottom: dock.bottom, actionTop: actions.top, actionRight: actions.right, primaryRight: primary.right };
+  });
+  expect(summaryLayout.dockBottom).toBeLessThanOrEqual(summaryLayout.actionTop + 1);
+  expect(summaryLayout.actionRight - summaryLayout.primaryRight).toBeLessThan(12);
 
   await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
   await expect(page.getByTestId('run-map-transition')).toBeVisible();
   expect(await dockHandle!.evaluate(element => element === document.querySelector('[data-testid="dice-dock"]'))).toBe(true);
   await expect(dock.locator('.die-number')).toHaveText(faces);
-  await page.getByTestId('run-map-transition').getByRole('button', { name: 'Continue', exact: true }).click();
+  expect(await actionRow.evaluate(element => element.getBoundingClientRect().height)).toBe(summaryActionHeight);
+  await expect(page.getByTestId('run-map-transition').getByRole('button', { name: 'Continue', exact: true })).toHaveCount(0);
+  await page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.locator('.shop-screen')).toBeVisible();
   expect(await dockHandle!.evaluate(element => element === document.querySelector('[data-testid="dice-dock"]'))).toBe(true);
   await expect(dock.locator('.die-number')).toHaveText(faces);
   await expect(page.locator('[data-testid="dice-dock"]')).toHaveCount(1);
+  await expect(actionRow.getByRole('button', { name: 'NEXT ROUND', exact: true })).toBeVisible();
+  expect(await actionRow.evaluate(element => {
+    const row = element.getBoundingClientRect();
+    const button = element.querySelector('button')!.getBoundingClientRect();
+    return row.right - button.right;
+  })).toBeLessThan(12);
 });
 
 test('Special Offer and Flame Selection retain the same compact dock grammar', async ({ page }) => {
@@ -173,6 +191,8 @@ test('Special Offer and Flame Selection retain the same compact dock grammar', a
   state.phase = 'specialOffer';
   state.specialOffer = { offers: [{ id: 1, type: 'carePackage' }], acquired: false };
   await installRun(page, state);
+  await expect(page.getByTestId('run-action-row').getByRole('button')).toHaveCount(0);
+  expect(await page.getByTestId('run-action-row').evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(46);
   await expect(page.getByTestId('dice-dock').locator('.die-number')).toHaveText(faces);
   await expect(page.getByTestId('dice-dock').locator('.die-enhancement-strip')).toHaveCount(5);
   expect(await page.evaluate(() => {

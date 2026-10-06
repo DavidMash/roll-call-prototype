@@ -12,12 +12,11 @@ async function ready(page: Page) {
   await enterRun(page);
   for (let barrier = 0; barrier < 2; barrier++) {
     await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
-    const bust = page.locator('.bust-state');
-    const bustContinue = bust.getByRole('button', { name: 'Continue', exact: true });
+    const bustContinue = page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true });
     if (await bustContinue.count()) { await bustContinue.click(); continue; }
     const map = page.getByTestId('run-map-transition');
     if (await map.count()) {
-      await map.getByRole('button', { name: 'Continue', exact: true }).evaluate(element => (element as HTMLElement).click());
+      await page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true }).evaluate(element => (element as HTMLElement).click());
       await expect(map).toHaveCount(0);
       continue;
     }
@@ -194,6 +193,16 @@ test('Reroll control separates selected dice from normal and Care Package resour
   await button.click();
   game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0, 1] }).state;
   await matchRound(page, game);
+  const actionLayout = await page.evaluate(() => {
+    const dock = document.querySelector<HTMLElement>('[data-testid="dice-dock"]')!.getBoundingClientRect();
+    const row = document.querySelector<HTMLElement>('[data-testid="run-action-row"]')!.getBoundingClientRect();
+    const reroll = document.querySelector<HTMLElement>('[data-testid="manual-reroll"]')!.getBoundingClientRect();
+    const play = document.querySelector<HTMLElement>('[data-testid="play-action"]')!.getBoundingClientRect();
+    return { dockBottom: dock.bottom, rowTop: row.top, rowRight: row.right, rerollLeft: reroll.left, playLeft: play.left, playRight: play.right };
+  });
+  expect(actionLayout.dockBottom).toBeLessThanOrEqual(actionLayout.rowTop + 1);
+  expect(actionLayout.rerollLeft).toBeLessThan(actionLayout.playLeft);
+  expect(actionLayout.rowRight - actionLayout.playRight).toBeLessThan(12);
   expect(game).toMatchObject({ manualRerollsRemaining: 1, specialOfferEffects: { carePackageRerolls: 3 } });
   await expect(button).toHaveAccessibleName('REROLL · 1 REROLL REMAINING + 3');
   await expect(button).toHaveAttribute('data-normal-fill-percent', '33');
@@ -313,7 +322,7 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   expect(fallbackConnectorStyle.animationName).toBe('map-route-fill-backward');
   expect(fallbackConnectorStyle.stroke).toBe('rgb(245, 158, 11)');
   expect(fallbackConnectorStyle.pathLength).toBe('1');
-  await fallbackMap.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.getByTestId('bust-shop-banner')).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/C\d+ R\d+ BUST/)).toBeVisible();
   await expect(page.getByText('1 Life Lost', { exact: true })).toBeVisible();

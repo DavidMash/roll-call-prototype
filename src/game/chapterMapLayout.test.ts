@@ -7,9 +7,9 @@ describe('chapter map route geometry', () => {
     expect(CHAPTER_MAP_SLOTS.slice(0, 4).map(point => point.row)).toEqual(Array(4).fill('bottom'));
     expect(CHAPTER_MAP_SLOTS.slice(4, 8).map(point => point.row)).toEqual(Array(4).fill('middle'));
     expect(CHAPTER_MAP_SLOTS.slice(8, 12).map(point => point.row)).toEqual(Array(4).fill('top'));
-    expect(CHAPTER_MAP_SLOTS.slice(0, 4).map(point => point.x)).toEqual([10, 37, 63, 90]);
-    expect(CHAPTER_MAP_SLOTS.slice(4, 8).map(point => point.x)).toEqual([90, 63, 37, 10]);
-    expect(CHAPTER_MAP_SLOTS.slice(8, 12).map(point => point.x)).toEqual([10, 37, 63, 90]);
+    expect(CHAPTER_MAP_SLOTS.slice(0, 4).map(point => point.x)).toEqual([16, 39, 61, 84]);
+    expect(CHAPTER_MAP_SLOTS.slice(4, 8).map(point => point.x)).toEqual([84, 61, 39, 16]);
+    expect(CHAPTER_MAP_SLOTS.slice(8, 12).map(point => point.x)).toEqual([16, 39, 61, 84]);
 
     expect(CHAPTER_MAP_POINTS).toHaveLength(11);
     expect(CHAPTER_MAP_POINTS.map(point => point.slot)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11]);
@@ -19,8 +19,8 @@ describe('chapter map route geometry', () => {
   });
 
   it('starts at the lower-left and ends with the Boss at the upper-right', () => {
-    expect(CHAPTER_MAP_POINTS[0]).toMatchObject({ x: 10, y: 84, row: 'bottom', align: 'start', slot: 0 });
-    expect(CHAPTER_MAP_POINTS.at(-1)).toMatchObject({ x: 90, y: 16, row: 'top', align: 'end', slot: 11 });
+    expect(CHAPTER_MAP_POINTS[0]).toMatchObject({ x: 16, y: 84, row: 'bottom', align: 'start', slot: 0 });
+    expect(CHAPTER_MAP_POINTS.at(-1)).toMatchObject({ x: 84, y: 16, row: 'top', align: 'end', slot: 11 });
     expect(CHAPTER_MAP_POINTS[0].y).toBeGreaterThan(CHAPTER_MAP_POINTS[4].y);
     expect(CHAPTER_MAP_POINTS[4].y).toBeGreaterThan(CHAPTER_MAP_POINTS.at(-1)!.y);
   });

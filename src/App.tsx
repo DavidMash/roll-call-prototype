@@ -32,6 +32,7 @@ import { TutorialDirector } from './tutorial/TutorialDirector';
 import { defaultOnboardingMetadata, isResumableTutorial, loadOnboardingMetadata, saveOnboardingMetadata } from './tutorial/tutorialPersistence';
 import type { OnboardingMetadata } from './tutorial/types';
 import { isChapterMapTransition } from './game/playback';
+import { RunActionRow, RunActionRowContext } from './components/RunActionRow';
 
 const freshSeed = () => `roll-${Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join('-')}`;
 const query = new URLSearchParams(window.location.search);
@@ -54,6 +55,7 @@ export default function App() {
   const [gameMenuOpen, setGameMenuOpen] = useState(false);
   const [faceDetails, setFaceDetails] = useState<FaceDetailsTarget | null>(null);
   const [flameDetails, setFlameDetails] = useState<FlameDetailsTarget | null>(null);
+  const [actionRowTarget, setActionRowTarget] = useState<HTMLDivElement | null>(null);
   const normalGame = useGame(requestedSeed, initialSeed, speed, runMode === 'normal');
   const tutorialGame = useTutorialGame(speed, runMode === 'tutorial');
   const game = runMode === 'tutorial' ? tutorialGame : normalGame;
@@ -137,7 +139,7 @@ export default function App() {
     <LandingScreen resumableRun={resumableRun} resumableTutorial={resumableTutorial} onboarding={onboarding}
       onContinue={() => setRunMode('normal')} onTutorial={startTutorialFromLanding} onNewRun={startNewRunFromLanding} />
   </Container>;
-  return <Container size={1180} px={{ base: 6, sm: 'sm' }} py={8}
+  return <RunActionRowContext.Provider value={actionRowTarget}><Container size={1180} px={{ base: 6, sm: 'sm' }} py={8}
     className={`app-container screen-theme ${board.phase === 'round' ? 'active-gameplay' : ''}`}
     data-screen-theme={theme.id} style={{ '--screen-primary': theme.accent, '--screen-secondary': theme.accentStrong } as React.CSSProperties}>
     {!showingChapterSplash && <TopHud board={board} speed={speed} setSpeed={setSpeed} diceDisplay={diceDisplay} setDiceDisplay={setDiceDisplay}
@@ -174,6 +176,7 @@ export default function App() {
       display={diceDisplay} selection={selection} setSelection={setSelection}
       selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} selectedFlameOffer={selectedFlameOffer}
       submit={submit} openFaceDetails={setFaceDetails} openFlameDetails={openFlameDetails} />
+    <RunActionRow setTarget={setActionRowTarget} />
     <RunInfoModal state={state} visibleEventId={event?.id} busy={busy} opened={runInfoOpen} onClose={() => setRunInfoOpen(false)}
       seedInput={seedInput} setSeedInput={setSeedInput} startSeed={() => restart(seedInput.trim())}
       restartSeed={() => restart(state.seed)} newSeed={() => restart(freshSeed())} />
@@ -191,5 +194,5 @@ export default function App() {
         || (flameDetails !== null && !(tutorialGame.session.scenario.completedBeatIds.includes('flame-details')
           && tutorialGame.session.game.stats.flameStokes.length === 0))}
       onAcknowledge={tutorialGame.acknowledge} onRecover={tutorialGame.completeBeat} onFinish={finishTutorial} />}
-  </Container>;
+  </Container></RunActionRowContext.Provider>;
 }

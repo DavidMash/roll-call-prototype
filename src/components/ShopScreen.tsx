@@ -10,6 +10,7 @@ import { BOSSES } from '../game/bosses';
 import { formatPlayerNumber } from '../game/copy';
 import { enhancementOfferIsFree, trainingOfferIsFree } from '../game/specialOffers';
 import { chapterLabel, chapterRoundForRound } from '../game/chapters';
+import { RunActionPortal } from './RunActionRow';
 
 const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
 
@@ -61,11 +62,11 @@ export function ShopScreen({ board, event, busy, selectedOffer, setSelectedOffer
             onClick={() => submit({ type: 'REROLL_DICE' })}>REROLL DICE · {formatPlayerNumber(diceRerollCost(shop.diceRerolls))} GOLD</Button>
         </Group>
     </div>
-    <div className="shop-action-dock">
+    <RunActionPortal><div className="run-action-primary shop-action-dock">
       <Button size="sm" disabled={busy} aria-label={returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : 'NEXT ROUND'}
         color={returnedFromBust ? 'red' : undefined} onClick={() => submit(returnedFromBust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' })}>
         {returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : 'NEXT ROUND'} →
       </Button>
-    </div>
+    </div></RunActionPortal>
   </Stack>;
 }

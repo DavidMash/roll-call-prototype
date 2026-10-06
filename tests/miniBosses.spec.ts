@@ -48,8 +48,14 @@ test('Mini-Boss map, preview, encounter label, and Neglected badges reuse the bo
     .toContain('map-current-pulse');
   await expect(map.locator('.map-route-segment.completed')).toHaveCount(4);
   await expect(map.locator('.map-route-segment.upcoming')).toHaveCount(6);
-  expect(await map.locator('.map-route-segment.completed').first().evaluate(element => getComputedStyle(element).strokeDasharray)).toBe('none');
-  expect(await map.locator('.map-route-segment.upcoming').first().evaluate(element => getComputedStyle(element).strokeDasharray)).not.toBe('none');
+  const routeGeometry = await map.locator('.map-route-segment').evaluateAll(elements => elements.map(element => {
+    const style = getComputedStyle(element);
+    return { dash: style.strokeDasharray, width: style.strokeWidth, cap: style.strokeLinecap };
+  }));
+  expect(new Set(routeGeometry.map(segment => segment.dash)).size).toBe(1);
+  expect(new Set(routeGeometry.map(segment => segment.width)).size).toBe(1);
+  expect(new Set(routeGeometry.map(segment => segment.cap)).size).toBe(1);
+  await expect(map.locator('.map-route-progress.completed')).toHaveCount(4);
   expect(await page.evaluate(() => {
     const mapRect = document.querySelector<HTMLElement>('[data-testid="run-map-transition"]')!.getBoundingClientRect();
     const dockRect = document.querySelector<HTMLElement>('[data-testid="dice-dock"]')!.getBoundingClientRect();
@@ -57,10 +63,10 @@ test('Mini-Boss map, preview, encounter label, and Neglected badges reuse the bo
       && document.documentElement.scrollHeight <= innerHeight
       && mapRect.bottom <= dockRect.top + 1;
   })).toBe(true);
-  await map.getByRole('button', { name: 'Continue', exact: true }).evaluate(element => (element as HTMLElement).click());
+  await page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true }).evaluate(element => (element as HTMLElement).click());
   await expect(map).toHaveCount(0);
 
-  await expect(page.getByTestId('boss-panel')).toContainText('MINI-BOSS · THE NEGLECTED');
+  await expect(page.getByTestId('boss-panel')).toContainText('THE NEGLECTED');
   for (const hand of ['ones', 'threes']) {
     await expect(page.getByTestId(`scorecard-row-${hand}`)).toHaveAttribute('data-state', 'consumed');
     await expect(page.getByTestId(`scorecard-row-${hand}`)).toContainText('NEGLECTED');
@@ -74,8 +80,12 @@ test('Magician presents all calls while the missing die is absent', async ({ pag
   await page.goto(`/?seed=${state.seed}&speed=instant`);
   await install(page, state);
 
-  await expect(page.getByTestId('boss-panel')).toContainText('MINI-BOSS · THE MAGICIAN');
+  const bossPanel = page.getByTestId('boss-panel');
+  await expect(bossPanel).toContainText('THE MAGICIAN');
+  await bossPanel.getByRole('button', { name: 'Boss information' }).click();
   await expect(page.getByTestId('magician-calls').locator('.mantine-Badge-root')).toHaveCount(3);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('.gameplay-dock .die')).toHaveCount(4);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
