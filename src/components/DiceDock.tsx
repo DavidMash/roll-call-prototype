@@ -127,8 +127,16 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
         onClick={clickDie} onEnhancements={openEnhancements} onFlame={openFlame}
         onDropOffer={board.phase === 'shop' ? attemptPurchase : undefined}
         tutorialDieId={tutorialDieId} tutorialLabel={tutorialLabel} />
-      {offer && <div className="dice-dock-context" data-testid="dock-placement-context">{ENHANCEMENTS[offer.enhancement].name} selected · choose a die</div>}
+      {offer && <div className="dice-dock-context" data-testid="dock-placement-context">
+        <span><span>{ENHANCEMENTS[offer.enhancement].name} selected</span> · choose a die</span>
+        <Button size="compact-xs" variant="subtle" color="gray" disabled={!actionsEnabled}
+          onClick={() => setSelectedOffer(null)}>Cancel placement</Button>
+      </div>}
       {flameOffer && <div className="dice-dock-context flame">{FLAMES[flameOffer.flame].name} selected · choose a die</div>}
+      {tutorialDieId !== null && <div className="dice-dock-context flame">
+        <Button size="compact-xs" variant="subtle" color="orange" disabled={!actionsEnabled}
+          onClick={() => submit({ type: 'DISMISS_FLAME_TUTORIAL' })}>Dismiss Flame tip</Button>
+      </div>}
     </Paper>
     <Modal opened={replacementDieId !== null} onClose={() => setReplacementDieId(null)} title="Replace Flame?" centered transitionProps={{ duration: 0 }}>
       {replacingFlame && flameOffer && <><Text>Replace <strong>{FLAMES[replacingFlame].name}</strong> with <strong>{FLAMES[flameOffer.flame].name}</strong>?</Text>

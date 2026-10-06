@@ -119,7 +119,7 @@ button { font: inherit; }
 .gameplay-dock { position: sticky; bottom: 6px; z-index: var(--layer-run-dock); }
 .gameplay-dock-content { display: flex; align-items: flex-end; justify-content: center; gap: 12px; }
 .gameplay-dock .dice-row { flex: 1 1 560px; }
-.gameplay-actions { flex: 0 1 330px; display: grid; justify-items: end; gap: 7px; padding: 0 4px 5px; }
+.gameplay-actions { flex: 0 1 330px; display: grid; justify-items: stretch; gap: 7px; padding: 0 4px 5px; }
 .reroll-action { position: relative; width: 158px; max-width: 100%; min-width: 0; overflow: hidden; }
 .reroll-action .mantine-Button-label { position: relative; z-index: 1; width: 100%; min-width: 0; }
 .reroll-resource-fill { position: absolute; z-index: 0; inset: 0; transform-origin: left center; pointer-events: none;
@@ -192,7 +192,9 @@ button { font: inherit; }
 .die-lock-symbol { font-size: 1.25rem; line-height: 1.1; }
 .die.pulse { animation: pulse 300ms ease-in-out; }
 .die.resolving { z-index: 2; animation: score-die-resolve 240ms ease-out; }
-.die.rolling { animation: shake 180ms ease-in-out 2; }
+.die.rolling { animation: shake 170ms ease-in-out 2; }
+.app-container[data-playback-speed="fast"] .die.rolling { animation-duration: 45ms; }
+.app-container[data-playback-speed="instant"] .die.rolling { animation: none; }
 .die:focus-visible, .offer:focus-visible, .scorecard-row:focus-visible { outline: 2px solid var(--mantine-color-teal-4); outline-offset: -2px; }
 
 .shop-summary { min-height: 27px; padding: 0 5px; }
@@ -241,15 +243,7 @@ button { font: inherit; }
 .hud-lives.interactive:hover, .hud-lives.interactive:focus-visible { background: rgba(250,82,82,.12); outline: 2px solid var(--mantine-color-red-5); }
 .flame-tutorial-anchor { display: inline-flex; border-radius: 12px; animation: flame-tutorial-pulse 1.8s ease-in-out infinite; }
 @keyframes flame-tutorial-pulse { 0%, 100% { box-shadow: 0 0 0 2px rgba(255,146,43,.35); } 50% { box-shadow: 0 0 0 7px rgba(255,146,43,.08); } }
-.shop-dice-controls {
-  min-width: 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 10px;
-  padding: 6px 8px; border-radius: var(--mantine-radius-md); background: var(--mantine-color-dark-7);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.035);
-}
-.shop-dice-controls-copy { min-width: 0; flex: 1 1 190px; }
-.shop-dice-controls-copy > .mantine-Text-root { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.shop-dice-controls-actions { flex: 0 1 auto; margin-left: auto; }
-.shop-action-dock { display: flex; align-items: center; min-height: 36px; }
+.shop-action-dock { min-height: 36px; }
 .phase-sticky-header { position: sticky; top: 0; z-index: 14; padding: 5px 7px; border-radius: var(--mantine-radius-md); background: rgba(20,26,30,.97); box-shadow: 0 7px 20px rgba(0,0,0,.2); backdrop-filter: blur(10px); }
 .flame-selection-screen { min-width: 0; }
 .flame-payout { background: rgba(230,119,0,.07); border: 1px solid rgba(255,146,43,.16); }
@@ -622,18 +616,12 @@ button { font: inherit; }
   }
   .active-gameplay .charge-controls { grid-column: 1 / -1; min-width: 0; margin: 0; flex-wrap: nowrap; }
   .active-gameplay .selection-preview { display: none; }
-  .active-gameplay .gameplay-actions > .mantine-Group-root:last-child {
-    width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-    flex-wrap: nowrap; justify-content: stretch;
-  }
-  .active-gameplay .gameplay-actions > .mantine-Group-root:last-child:has(.speed-demon-meter) {
-    grid-template-columns: minmax(0, 1fr) 42px minmax(0, 2fr);
-  }
-  .active-gameplay .gameplay-actions > .mantine-Group-root:last-child .mantine-Button-root { width: 100%; min-height: 40px; padding-inline: 9px; }
+  .active-gameplay .round-action-layout { width: 100%; min-width: 0; }
+  .active-gameplay .round-action-layout .mantine-Button-root { min-height: 40px; padding-inline: 9px; }
+  .active-gameplay .round-action-layout .run-action-left .mantine-Button-root { width: min(100%, 158px); }
   .active-gameplay .reroll-action { min-width: 0; }
   .active-gameplay .reroll-action-main { font-size: clamp(.66rem, 2.8vw, .78rem); }
   .active-gameplay .reroll-action-resource { font-size: clamp(.4rem, 1.75vw, .52rem); }
-  .active-gameplay .gameplay-actions > .mantine-Group-root:last-child .mantine-Button-root:only-child { grid-column: 1 / -1; }
 }
 
 @media (min-width: 801px) {
@@ -653,8 +641,8 @@ button { font: inherit; }
   .active-gameplay .game-title { font-size: .82rem; letter-spacing: .08em; }
   .active-gameplay .hud-stat { padding-inline: 2px; font-size: .7rem; }
   .active-gameplay .hud-lives { padding-inline: 3px; font-size: .72rem; }
-  .active-gameplay .gameplay-actions > .mantine-Group-root:last-child { gap: 4px !important; }
-  .active-gameplay .gameplay-actions > .mantine-Group-root:last-child .mantine-Button-root { padding-inline: 7px; font-size: .7rem; }
+  .active-gameplay .round-action-layout { gap: 4px; }
+  .active-gameplay .round-action-layout .mantine-Button-root { padding-inline: 7px; font-size: .7rem; }
 }
 
 @media (max-width: 800px) and (max-height: 700px) {
@@ -880,10 +868,23 @@ body, #root { overflow: hidden; }
 }
 .run-action-primary { min-width: 0; margin-left: auto; display: flex; align-items: center; justify-content: flex-end; }
 .run-action-row > .run-action-primary { align-self: stretch; }
+.run-action-layout {
+  width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center; gap: 8px;
+}
+.run-action-row > .run-action-layout { align-self: stretch; }
+.run-action-left, .run-action-right { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.run-action-left { grid-column: 1; justify-self: start; justify-content: flex-start; }
+.run-action-right { grid-column: 2; justify-self: end; justify-content: flex-end; }
+.round-action-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+.round-action-layout .run-action-right, .round-action-layout .play-action { width: 100%; }
+.shop-dice-reroll { max-width: 100%; height: auto; min-height: 36px; padding-block: 4px; }
+.shop-dice-reroll .mantine-Button-label { white-space: normal; line-height: 1.05; text-align: left; }
 .run-action-row .gameplay-actions-panel { width: 100%; min-width: 0; padding: 0 !important; background: transparent; box-shadow: none; }
-.run-action-row .gameplay-actions { width: 100%; max-width: none; margin: 0; padding: 0; }
-.run-action-row .gameplay-actions > .mantine-Group-root:last-child { width: 100%; justify-content: space-between; }
-.run-action-row .play-action { margin-left: auto; }
+.run-action-row .gameplay-actions {
+  width: 100%; max-width: none; display: grid; grid-template-columns: minmax(0, 1fr);
+  align-items: center; justify-items: stretch; margin: 0; padding: 0;
+}
 .run-action-row .map-continue { align-self: center; }
 .dice-dock.cinematic { opacity: .42; filter: saturate(.6); pointer-events: none; }
 .dice-dock .dice-row { width: min(100%, 620px); margin: 0 auto; grid-template-columns: repeat(var(--dice-columns, 5), minmax(0, 1fr)); gap: 6px; }
@@ -937,6 +938,7 @@ body, #root { overflow: hidden; }
 .boss-face-badge.infected { border-color: #f87171; color: #fee2e2; background: #7f1d1d; }
 .die-state-dot { position: absolute; left: -3px; bottom: -4px; z-index: 3; color: var(--mantine-color-violet-3); font-size: .62rem; }
 .dice-dock-context { margin-top: 2px; color: var(--mantine-color-teal-3); font-size: .58rem; font-weight: 800; text-align: center; text-transform: uppercase; }
+.dice-dock-context:has(.mantine-Button-root) { display: flex; align-items: center; justify-content: center; gap: 5px; }
 .dice-dock-context.flame { color: var(--mantine-color-orange-3); }
 .gameplay-actions-panel { flex: none; background: var(--mantine-color-dark-7); box-shadow: inset 0 0 0 1px rgba(255,255,255,.035); }
 .gameplay-actions-panel .gameplay-actions { max-width: 560px; margin-left: auto; padding: 0; }
@@ -960,6 +962,9 @@ body, #root { overflow: hidden; }
   .active-gameplay .gameplay-actions-panel .gameplay-actions { max-width: none; }
   .dice-dock { margin-top: 3px; padding-inline: 3px !important; }
   .run-action-row { height: 54px; min-height: 54px; gap: 4px; padding: 3px 4px max(4px, env(safe-area-inset-bottom)); }
+  .run-action-layout, .run-action-left, .run-action-right { gap: 4px; }
+  .shop-dice-reroll { padding-inline: 7px; font-size: clamp(.61rem, 2.6vw, .75rem); }
+  .shop-action-dock .run-action-right .mantine-Button-root { padding-inline: 8px; font-size: clamp(.65rem, 2.7vw, .78rem); }
   .run-action-row .gameplay-actions { gap: 3px; }
   .run-action-row .charge-controls { padding-block: 2px; }
   .dice-dock .dice-row { gap: 3px; }

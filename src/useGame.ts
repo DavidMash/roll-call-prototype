@@ -5,7 +5,7 @@ import { dispatch, newRun } from './game/engine';
 import { browserRunStorage, loadPersistedRun, savePersistedRun } from './game/persistence';
 import type { Action, Resolution } from './game/types';
 import { isChapterMapTransition, isPlaybackBarrier, isPlaybackCheckpoint, nextScorecardRefreshIndex,
-  SCORECARD_REFRESH_HOLD_MS, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump, type ScoreSummaryJump } from './game/playback';
+  playbackBoard, SCORECARD_REFRESH_HOLD_MS, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump, type ScoreSummaryJump } from './game/playback';
 
 export type PlaybackSpeed = keyof typeof CONFIG.tickMs;
 
@@ -72,7 +72,7 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
   }
   return {
     state: result.state,
-    board: busy ? result.events[index].board : result.state,
+    board: busy ? playbackBoard(result.events, index, result.state) : result.state,
     event: busy ? result.events[index] : null,
     busy, error,
     hasStoredRun,

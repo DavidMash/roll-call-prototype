@@ -179,7 +179,7 @@ test('one mounted dock carries unchanged faces through Summary, Map, and Shop', 
   await expect(actionRow.getByRole('button', { name: 'NEXT ROUND', exact: true })).toBeVisible();
   expect(await actionRow.evaluate(element => {
     const row = element.getBoundingClientRect();
-    const button = element.querySelector('button')!.getBoundingClientRect();
+    const button = element.querySelector<HTMLElement>('.run-action-right button')!.getBoundingClientRect();
     return row.right - button.right;
   })).toBeLessThan(12);
 });

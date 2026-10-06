@@ -1,6 +1,5 @@
-import { Badge, Button, Group, Paper, Stack, Text } from '@mantine/core';
+import { Button, Group, Paper, Stack, Text } from '@mantine/core';
 import { CONFIG, diceRerollCost, offerRerollCost } from '../game/config';
-import { ENHANCEMENTS } from '../game/enhancements';
 import type { Action, Board, GameEvent } from '../game/types';
 import { EnhancementCard } from './EnhancementCard';
 import { ScoreResolution } from './ScoreResolution';
@@ -10,7 +9,7 @@ import { BOSSES } from '../game/bosses';
 import { formatPlayerNumber } from '../game/copy';
 import { enhancementOfferIsFree, trainingOfferIsFree } from '../game/specialOffers';
 import { chapterLabel, chapterRoundForRound } from '../game/chapters';
-import { RunActionPortal } from './RunActionRow';
+import { RunActionLayout, RunActionPortal } from './RunActionRow';
 
 const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
 
@@ -21,10 +20,9 @@ export function ShopScreen({ board, event, busy, selectedOffer, setSelectedOffer
   const shop = board.shop!;
   const returnedFromBust = board.bust;
   const nextChapter = !returnedFromBust && shop.kind === 'post_boss';
-  const offer = shop.offers.find(item => item.id === selectedOffer && !item.purchased);
   const upcomingBoss = board.bossSchedule[board.round + 1];
   const retryRound = chapterRoundForRound(board.round);
-  const tutorialDieId = !board.flameTutorial.completed ? board.flameTutorial.pendingDieId : null;
+  const rerollCost = diceRerollCost(shop.diceRerolls);
 
   return <Stack gap="xs" className="shop-screen">
     <div className="shop-summary phase-sticky-header">{returnedFromBust ? <Paper px="sm" py={6} className="bust-shop-banner" data-testid="bust-shop-banner">
@@ -52,22 +50,13 @@ export function ShopScreen({ board, event, busy, selectedOffer, setSelectedOffer
       <div className="shop-grid enhancement-grid">{shop.offers.map(item => <EnhancementCard key={item.id} offer={item} selected={selectedOffer === item.id}
         gold={board.gold} busy={busy} free={enhancementOfferIsFree(shop, item.id)} onSelect={() => setSelectedOffer(selectedOffer === item.id ? null : item.id)} />)}</div>
     </Paper>
-    <div className="shop-dice-controls" data-testid="shop-dice-controls" aria-label="Dice Dock controls">
-      <div className="shop-dice-controls-copy"><Group gap="xs"><Text fw={700} size="xs" tt="uppercase" lts=".08em">Dice Controls</Text>{offer && <Badge size="xs" color="teal">{ENHANCEMENTS[offer.enhancement].name} selected</Badge>}</Group>
-          <Text size="xs" c="dimmed">{offer ? 'Choose a die below. Face details handle sales.' : 'Tap a die, Flame, or Enhancement strip for details.'}</Text></div>
-        <Group className="shop-dice-controls-actions" gap="xs">
-          {offer && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setSelectedOffer(null)}>Cancel placement</Button>}
-          {tutorialDieId !== null && <Button size="compact-xs" variant="subtle" color="orange" onClick={() => submit({ type: 'DISMISS_FLAME_TUTORIAL' })}>Dismiss Flame tip</Button>}
-          <Button size="compact-xs" variant="default" disabled={busy || board.gold < diceRerollCost(shop.diceRerolls)}
-            aria-label={`REROLL DICE · ${formatPlayerNumber(diceRerollCost(shop.diceRerolls))} GOLD`}
-            onClick={() => submit({ type: 'REROLL_DICE' })}>REROLL DICE · {formatPlayerNumber(diceRerollCost(shop.diceRerolls))} GOLD</Button>
-        </Group>
-    </div>
-    <RunActionPortal><div className="run-action-primary shop-action-dock">
-      <Button size="sm" disabled={busy} aria-label={returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : nextChapter ? 'NEXT CHAPTER' : 'NEXT ROUND'}
+    <RunActionPortal><RunActionLayout className="shop-action-dock"
+      left={<Button className="shop-dice-reroll" size="sm" variant="default" disabled={busy || board.gold < rerollCost}
+        aria-label={`REROLL ALL DICE FOR ${formatPlayerNumber(rerollCost)} GOLD`} data-testid="shop-dice-reroll"
+        onClick={() => submit({ type: 'REROLL_DICE' })}>REROLL ALL DICE FOR {formatPlayerNumber(rerollCost)} GOLD</Button>}
+      right={<Button size="sm" disabled={busy} aria-label={returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : nextChapter ? 'NEXT CHAPTER' : 'NEXT ROUND'}
         color={returnedFromBust ? 'red' : undefined} onClick={() => submit(returnedFromBust ? { type: 'RETRY_ROUND' } : nextChapter ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' })}>
         {returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : nextChapter ? 'NEXT CHAPTER' : 'NEXT ROUND'} →
-      </Button>
-    </div></RunActionPortal>
+      </Button>} /></RunActionPortal>
   </Stack>;
 }

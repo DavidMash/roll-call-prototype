@@ -7,7 +7,7 @@ import { acknowledgeBeat, dispatchTutorial, newTutorialSession } from './scenari
 import { clearTutorialSession, loadTutorialSession, saveTutorialSession, type TutorialStorage } from './tutorialPersistence';
 import type { TutorialSession } from './types';
 import { isChapterMapTransition, isPlaybackBarrier, isPlaybackCheckpoint, nextScorecardRefreshIndex,
-  SCORECARD_REFRESH_HOLD_MS, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump, type ScoreSummaryJump } from '../game/playback';
+  playbackBoard, SCORECARD_REFRESH_HOLD_MS, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump, type ScoreSummaryJump } from '../game/playback';
 
 const browserStorage = (): TutorialStorage | null => {
   if (typeof window === 'undefined') return null;
@@ -85,7 +85,7 @@ export function useTutorialGame(speed: PlaybackSpeed, active = true) {
   return {
     session,
     state: session.game,
-    board: busy ? result.events[index].board : session.game,
+    board: busy ? playbackBoard(result.events, index, session.game) : session.game,
     event: busy ? result.events[index] : null,
     busy,
     error,

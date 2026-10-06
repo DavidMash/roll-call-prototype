@@ -39,7 +39,7 @@ export function DiceRow({ dice, display, selected = [], event, disabled, eligibl
       || event?.type === 'HAND_XMULT_CHANGED' || event?.type === 'WORKOUT_INCREMENTED');
     const rendered = <Die key={die.id} die={die} display={display}
       selected={selected.includes(die.id)} highlighted={involved && event?.type !== 'DIE_ROLLED'}
-      rolling={involved && (event?.type === 'DICE_REROLL_STARTED' || event?.type === 'DIE_ROLLED')}
+      rolling={involved && event?.type === 'DICE_REROLL_STARTED'}
       resolving={resolving}
       ability={involved ? event?.enhancement : undefined} flameAbility={involved ? event?.flame : undefined}
       disabled={disabled || (wardenChoiceMode && !wardenLockedIds.includes(die.id))} eligible={eligibleIds?.includes(die.id)}

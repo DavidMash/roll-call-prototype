@@ -720,10 +720,10 @@ test('mobile Shop shell keeps its HUD, incoming encounter, controls, action, and
   await expect(boss).toBeVisible();
   await expect(training).toBeVisible();
   await expect(page.getByRole('button', { name: 'NEXT ROUND', exact: true })).toBeInViewport();
-  await expect(page.getByRole('button', { name: /^REROLL DICE · \d+ GOLD$/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^REROLL ALL DICE FOR \d+ GOLD$/ })).toBeVisible();
   await expect(page.getByTestId('dice-dock')).toBeInViewport();
   await expect(page.locator('.dice-row')).toHaveCount(1);
-  await expect(page.getByTestId('shop-dice-controls').locator('.dice-row')).toHaveCount(0);
+  await expect(page.getByTestId('shop-dice-controls')).toHaveCount(0);
   await expect(page.getByTestId('dice-dock').locator('.die')).toHaveCount(5);
 
   const layout = await page.evaluate(() => {
@@ -748,7 +748,6 @@ test('mobile Shop shell keeps its HUD, incoming encounter, controls, action, and
       header: box('.phase-sticky-header'),
       boss: box('[data-testid="boss-preview"]'),
       training: box('[data-tutorial="hand-training"]'),
-      controls: box('[data-testid="shop-dice-controls"]'),
       action: box('.shop-action-dock'),
       dock: box('[data-testid="dice-dock"]'),
       headerPosition: headerStyle.position,
@@ -767,7 +766,6 @@ test('mobile Shop shell keeps its HUD, incoming encounter, controls, action, and
   expect(layout.boss.bottom).toBeLessThanOrEqual(layout.training.top);
   expect(layout.dock.bottom).toBeLessThanOrEqual(layout.action.top);
   expect(layout.action.bottom).toBeLessThanOrEqual(layout.innerHeight);
-  expect(layout.controls.height).toBeLessThan(60);
   expect(layout.headerPosition).toBe('sticky');
   expect(layout.headerTop).toBe('0px');
   expect(layout.appPaddingBottom).toBeLessThanOrEqual(4);
@@ -795,10 +793,10 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
   await matchBoard(page, game);
   await expect(page.getByTestId('offer-sticky').getByRole('button', { name: 'Purchased' })).toBeDisabled();
   expect(game.dice[0].faces[physicalFace - 1].enhancements.sticky).toBe(1);
-  await page.getByRole('button', { name: 'REROLL DICE · 2 GOLD', exact: true }).click();
+  await page.getByRole('button', { name: 'REROLL ALL DICE FOR 2 GOLD', exact: true }).click();
   game = dispatch(game, { type: 'REROLL_DICE' }).state;
   await matchBoard(page, game);
-  await expect(page.getByRole('button', { name: 'REROLL DICE · 4 GOLD', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'REROLL ALL DICE FOR 4 GOLD', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await matchBoard(page, game);

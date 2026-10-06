@@ -12,6 +12,17 @@ export function RunActionPortal({ children }: { children: ReactNode }) {
   return target ? createPortal(children, target) : null;
 }
 
+export function RunActionLayout({ left, right, className = '' }: {
+  left?: ReactNode;
+  right?: ReactNode;
+  className?: string;
+}) {
+  return <div className={`run-action-layout${className ? ` ${className}` : ''}`}>
+    {left !== undefined && <div className="run-action-left">{left}</div>}
+    {right !== undefined && <div className="run-action-right">{right}</div>}
+  </div>;
+}
+
 export function RunActionRow({ setTarget }: { setTarget: (target: HTMLDivElement | null) => void }) {
   return <div ref={setTarget} className="run-action-row" data-testid="run-action-row"
     aria-label="Run actions" />;

@@ -18,7 +18,7 @@ import { CONFIG } from '../game/config';
 import { formatPlayerNumber, formatScoreEquation, formatScoreProgress, playActionLabel } from '../game/copy';
 import { DecisionTimer } from '../game/decisionTimer';
 import { usableManualRerolls } from '../game/specialOffers';
-import { RunActionPortal } from './RunActionRow';
+import { RunActionLayout, RunActionPortal } from './RunActionRow';
 
 export function RoundScreen({ board, event, busy, inputBlocked, selection, setSelection, submit, skip }: {
   board: Board; event: GameEvent | null; busy: boolean; inputBlocked: boolean;
@@ -168,9 +168,8 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
           {awaitingWardenChoice && <Text size="xs" c="dimmed" className="selection-preview">
             {selectedWardenDieId === null ? 'Choose a Locked Die to Unlock' : `D${selectedWardenDieId + 1} will keep its current Face`}
           </Text>}
-          <Group gap="xs" wrap="nowrap">
-            {awaitingWardenChoice ? <Button className="unlock-action" size="sm" color="cyan" disabled={busy || selectedWardenDieId === null}
-              onClick={() => submit({ type: 'UNLOCK_WARDEN_DIE', dieId: selectedWardenDieId! })}>UNLOCK DIE</Button> : <>
+          <RunActionLayout className="round-action-layout"
+            left={!awaitingWardenChoice ? <>
               <Button className="reroll-action" size="sm" variant="default" disabled={busy || !canReroll} data-tutorial="reroll-button"
                 aria-label={`${rerollMainText} · ${rerollResourceText}`} data-testid="manual-reroll"
                 data-normal-fill-percent={Math.round(normalRerollFill * 100)} onClick={() => submit(manualAction)}>
@@ -185,12 +184,14 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
                 <div className="speed-demon-meter-fill" style={{ transform: `scaleX(${speedStrength})` }} />
                 {speedReveal && <span data-testid="speed-demon-reveal">SPEED DEMON ×{formatPlayerNumber(speedReveal.xMult ?? 1)}</span>}
               </div>}
-              <Button className="play-action" size="sm" aria-label={preview ? playActionLabel(preview.danger, preview.guaranteedWin) : 'PLAY'} disabled={busy || !valid}
+            </> : undefined}
+            right={awaitingWardenChoice
+              ? <Button className="unlock-action" size="sm" color="cyan" disabled={busy || selectedWardenDieId === null}
+                onClick={() => submit({ type: 'UNLOCK_WARDEN_DIE', dieId: selectedWardenDieId! })}>UNLOCK DIE</Button>
+              : <Button className="play-action" size="sm" aria-label={preview ? playActionLabel(preview.danger, preview.guaranteedWin) : 'PLAY'} disabled={busy || !valid}
                 data-testid="play-action" data-tutorial="play-action" onClick={submitPlay}>
                 {speedEquation ?? (preview ? `${formatScoreEquation(preview.pips, preview.multiplier, preview.effectiveXMult, preview.score)} • ${playActionLabel(preview.danger, preview.guaranteedWin)}` : 'PLAY')}
-              </Button>
-            </>}
-          </Group>
+              </Button>} />
         </div>
     </Paper></RunActionPortal>
   </Stack>;
