@@ -290,10 +290,10 @@ export function dispatchTutorial(session: TutorialSession, action: Action): { se
   const restriction = tutorialActionError(prepared, action);
   if (restriction) return { session: prepared, resolution: { state: prepared.game, events: [], error: restriction }, error: restriction };
   let source = sourceForAction(prepared, action);
-  const nextRound = action.type === 'NEXT_ROUND' ? prepared.game.round + 1
+  const nextRound = action.type === 'NEXT_ROUND' || action.type === 'NEXT_CHAPTER' ? prepared.game.round + 1
     : action.type === 'RETRY_ROUND' ? prepared.game.round : null;
   const pendingPlan = nextRound === null ? null : rankPlanForRound(prepared, nextRound);
-  if (action.type === 'NEXT_ROUND' || action.type === 'RETRY_ROUND') {
+  if (action.type === 'NEXT_ROUND' || action.type === 'NEXT_CHAPTER' || action.type === 'RETRY_ROUND') {
     const targets = openingTargetsForRound(prepared, nextRound!);
     if (targets) source = scriptedRollSource(prepared.game.dice, targets, prepared.game.rngState);
   }

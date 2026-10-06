@@ -47,7 +47,7 @@ test('Mini-Boss map, preview, encounter label, and Neglected badges reuse the bo
   expect(await map.locator('[data-pulse="true"] .run-map-node').evaluate(element => getComputedStyle(element).animationName))
     .toContain('map-current-pulse');
   await expect(map.locator('.map-route-segment.completed')).toHaveCount(4);
-  await expect(map.locator('.map-route-segment.upcoming')).toHaveCount(6);
+  await expect(map.locator('.map-route-segment.upcoming')).toHaveCount(7);
   const routeGeometry = await map.locator('.map-route-segment').evaluateAll(elements => elements.map(element => {
     const style = getComputedStyle(element);
     return { dash: style.strokeDasharray, width: style.strokeWidth, cap: style.strokeLinecap };

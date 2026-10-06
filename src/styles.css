@@ -461,6 +461,9 @@ button { font: inherit; }
 .node-shop .node-glyph { font-size: .92rem; }
 .node-mini_boss_round .node-glyph { font-size: 1.05rem; }
 .node-boss_round .node-glyph { font-size: 1.35rem; }
+.boss-reward-badge { position: absolute; right: -8px; bottom: -8px; display: grid; place-items: center; width: 20px; height: 20px;
+  border: 1px solid rgba(239,68,68,.72); border-radius: 50%; background: #211315; font-size: .7rem; line-height: 1;
+  box-shadow: 0 2px 8px rgba(0,0,0,.48); }
 .run-map-stop.is-current { z-index: 8; }
 .run-map-stop.is-current .run-map-node {
   --current-width: 94px; width: var(--current-width); min-height: 46px; height: auto; display: grid;
@@ -469,12 +472,16 @@ button { font: inherit; }
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-arc-color) 17%, transparent), 0 10px 30px rgba(0,0,0,.5), 0 0 26px color-mix(in srgb, var(--node-arc-color) 28%, transparent);
   animation: map-arrive 420ms cubic-bezier(.2,.8,.2,1) both, map-current-pulse 1800ms 420ms ease-in-out infinite;
 }
+.run-map-stop.is-current .node-normal_round { --current-width: 118px; }
 .run-map-stop.is-current .node-shop { --current-width: 82px; }
 .run-map-stop.is-current .node-mini_boss_round { --current-width: 146px; }
 .run-map-stop.is-current .node-boss_round { --current-width: 154px; }
 .current-node-copy { min-width: 0; display: grid; place-items: center; text-align: center; }
 .node-label { max-width: 100%; overflow: hidden; font-size: .7rem; font-weight: 950; line-height: 1.05; letter-spacing: .055em;
   text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.node-target { max-width: 100%; min-width: 0; margin-top: 3px; display: flex; align-items: baseline; justify-content: center; gap: 3px;
+  color: rgba(255,255,255,.78); font-size: .56rem; font-weight: 850; line-height: 1.05; letter-spacing: .025em; }
+.node-target-value { min-width: 0; font-size: clamp(.48rem, 1.9vw, .56rem); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .special-offer-heading, .special-offer-card { border-color: color-mix(in srgb, #2ED68F 32%, transparent); }
 .special-offer-card.selected { border-color: #2ED68F; box-shadow: 0 0 24px color-mix(in srgb, #2ED68F 18%, transparent); }
 .map-continue { position: relative; overflow: hidden; isolation: isolate; border-radius: var(--mantine-radius-sm);
@@ -511,10 +518,13 @@ button { font: inherit; }
   .run-map-node.node-mini_boss_round { --compact-size: 40px; }
   .run-map-node.node-boss_round { --compact-size: 46px; }
   .run-map-stop.is-current .run-map-node { --current-width: 82px; min-height: 42px; padding: 6px 7px; }
+  .run-map-stop.is-current .node-normal_round { --current-width: 116px; }
   .run-map-stop.is-current .node-shop { --current-width: 74px; }
   .run-map-stop.is-current .node-mini_boss_round { --current-width: 98px; }
   .run-map-stop.is-current .node-boss_round { --current-width: 102px; }
   .node-label { font-size: .6rem; letter-spacing: .035em; }
+  .node-target { font-size: .5rem; }
+  .node-target-value { font-size: clamp(.44rem, 2vw, .52rem); }
 }
 @media (prefers-reduced-motion: reduce) {
   .map-route-segment.route-active { stroke-dashoffset: 0; }

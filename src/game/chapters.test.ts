@@ -82,30 +82,40 @@ describe('Chapter encounter planning', () => {
     expect(retry.events.some(event => event.type === 'CHAPTER_STARTED')).toBe(false);
   });
 
-  it('enters the next Chapter after the prior Boss reward flow and plans both encounters before its map', () => {
+  it('keeps the prior Chapter active through its post-Boss Shop, then enters the next Chapter once', () => {
     const state = newRun('next-chapter', constant()).state;
     state.round = 6;
     state.phase = 'flameSelection';
     state.flameSelection = { offers: [], acquired: true };
     const resolver = new Resolver(state, constant());
     resolver.openShop();
-    expect(resolver.events.slice(0, 2).map(event => event.type)).toEqual(['CHAPTER_STARTED', 'MAP_TRANSITION']);
-    expect(resolver.events[0].chapterNumber).toBe(2);
-    expect(state.chapterPlans[2]).toBeDefined();
-    expect(state.currentNodeId).toBe('shop:before-round:7');
+    expect(resolver.events.slice(0, 2).map(event => event.type)).toEqual(['MAP_TRANSITION', 'SHOP_OPENED']);
+    expect(resolver.events.some(event => event.type === 'CHAPTER_STARTED')).toBe(false);
+    expect(state.presentedChapters).toEqual([1]);
+    expect(state.chapterPlans[2]).toBeUndefined();
+    expect(state.currentNodeId).toBe('shop:after-round:6');
+    expect(state.shop?.kind).toBe('post_boss');
+
+    const next = dispatch(state, { type: 'NEXT_CHAPTER' }, constant());
+    expect(next.state.round).toBe(7);
+    expect(next.events.slice(0, 2).map(event => event.type)).toEqual(['CHAPTER_STARTED', 'MAP_TRANSITION']);
+    expect(next.events[0].chapterNumber).toBe(2);
+    expect(next.state.chapterPlans[2]).toBeDefined();
+    expect(next.state.presentedChapters).toEqual([1, 2]);
   });
 });
 
 describe('current Chapter route', () => {
-  it('contains only travel stops while preserving the six encounters and five Shops', () => {
+  it('contains the six encounters and all six Shops, ending at the post-Boss Shop', () => {
     const route = chapterRoute('chapter-map', 2);
     expect(route.map(node => node.type)).toEqual([
       'normal_round', 'shop', 'normal_round', 'shop', 'mini_boss_round', 'shop',
-      'normal_round', 'shop', 'normal_round', 'shop', 'boss_round',
+      'normal_round', 'shop', 'normal_round', 'shop', 'boss_round', 'shop',
     ]);
-    expect(route.filter(node => node.type === 'shop')).toHaveLength(5);
+    expect(route.filter(node => node.type === 'shop')).toHaveLength(6);
     expect(route.filter(node => node.type.includes('round')).map(node => node.round)).toEqual([7, 8, 9, 10, 11, 12]);
     expect(route.some(node => node.type === 'special_offer' || node.type === 'flame_selection')).toBe(false);
     expect(route.some(node => node.round <= 6 || node.round >= 13)).toBe(false);
+    expect(route.at(-1)?.id).toBe('shop:after-round:12');
   });
 });

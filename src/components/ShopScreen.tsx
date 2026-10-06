@@ -20,6 +20,7 @@ export function ShopScreen({ board, event, busy, selectedOffer, setSelectedOffer
 }) {
   const shop = board.shop!;
   const returnedFromBust = board.bust;
+  const nextChapter = !returnedFromBust && shop.kind === 'post_boss';
   const offer = shop.offers.find(item => item.id === selectedOffer && !item.purchased);
   const upcomingBoss = board.bossSchedule[board.round + 1];
   const retryRound = chapterRoundForRound(board.round);
@@ -63,9 +64,9 @@ export function ShopScreen({ board, event, busy, selectedOffer, setSelectedOffer
         </Group>
     </div>
     <RunActionPortal><div className="run-action-primary shop-action-dock">
-      <Button size="sm" disabled={busy} aria-label={returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : 'NEXT ROUND'}
-        color={returnedFromBust ? 'red' : undefined} onClick={() => submit(returnedFromBust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' })}>
-        {returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : 'NEXT ROUND'} →
+      <Button size="sm" disabled={busy} aria-label={returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : nextChapter ? 'NEXT CHAPTER' : 'NEXT ROUND'}
+        color={returnedFromBust ? 'red' : undefined} onClick={() => submit(returnedFromBust ? { type: 'RETRY_ROUND' } : nextChapter ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' })}>
+        {returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : nextChapter ? 'NEXT CHAPTER' : 'NEXT ROUND'} →
       </Button>
     </div></RunActionPortal>
   </Stack>;

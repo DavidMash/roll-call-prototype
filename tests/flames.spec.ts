@@ -45,11 +45,12 @@ function flameSeed() {
       if (game.phase === 'round') {
         game = dispatch(game, automaticAction(game)).state;
       } else if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
-      else if (game.phase === 'shop') game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' }).state;
+      else if (game.phase === 'shop') game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' }
+        : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
       else if (game.phase === 'flameSelection') {
         if (game.flameSelection!.offers.some(offer => offer.flame === 'wellTrained')) {
           const shop = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
-          const next = dispatch(shop, { type: 'NEXT_ROUND' }).state;
+          const next = dispatch(shop, { type: 'NEXT_CHAPTER' }).state;
           if (bestHand(next, 0, true)) return seed;
         }
         break;
@@ -81,7 +82,7 @@ async function ready(page: Page) {
   }
 }
 
-async function perform(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'UNLOCK_WARDEN_DIE' | 'NEXT_ROUND' | 'RETRY_ROUND' | 'CONTINUE_ROUND_SUMMARY' | 'CHOOSE_SPECIAL_OFFER' | 'CONTINUE_SPECIAL_OFFER' }>) {
+async function perform(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'UNLOCK_WARDEN_DIE' | 'NEXT_ROUND' | 'NEXT_CHAPTER' | 'RETRY_ROUND' | 'CONTINUE_ROUND_SUMMARY' | 'CHOOSE_SPECIAL_OFFER' | 'CONTINUE_SPECIAL_OFFER' }>) {
   if (action.type === 'PLAY') {
     const handRow = page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) });
     await handRow.click();
@@ -104,7 +105,8 @@ async function perform(page: Page, game: GameState, action: Extract<Action, { ty
     const offer = game.specialOffer!.offers.find(item => item.id === action.offerId)!;
     await page.getByRole('heading', { name: specialOfferName(offer), exact: true }).locator('..').getByRole('button', { name: 'CHOOSE' }).click();
   } else if (action.type === 'CONTINUE_SPECIAL_OFFER') await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
-  else await page.getByRole('button', { name: action.type === 'RETRY_ROUND' ? `RETRY ROUND ${game.round}` : 'NEXT ROUND', exact: true }).click();
+  else await page.getByRole('button', { name: action.type === 'RETRY_ROUND' ? `RETRY ROUND ${game.round}`
+    : action.type === 'NEXT_CHAPTER' || game.shop?.kind === 'post_boss' ? 'NEXT CHAPTER' : 'NEXT ROUND', exact: true }).click();
   const next = dispatch(game, action).state;
   await ready(page);
   return next;
@@ -125,7 +127,8 @@ async function reachReward(page: Page, seed: string) {
     if (game.phase === 'round') {
       game = await perform(page, game, automaticAction(game));
     } else if (game.phase === 'roundSummary') game = await perform(page, game, { type: 'CONTINUE_ROUND_SUMMARY' });
-    else if (game.phase === 'shop') game = await perform(page, game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' });
+    else if (game.phase === 'shop') game = await perform(page, game, game.bust ? { type: 'RETRY_ROUND' }
+      : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' });
     else if (game.phase === 'specialOffer') {
       const offer = game.specialOffer!.offers.find(item => item.type !== 'timeTravel') ?? game.specialOffer!.offers[0];
       game = await perform(page, game, game.specialOffer!.acquired
@@ -216,8 +219,8 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
 
-  await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
-  game = dispatch(game, { type: 'NEXT_ROUND' }).state;
+  await page.getByRole('button', { name: 'NEXT CHAPTER', exact: true }).click();
+  game = dispatch(game, { type: 'NEXT_CHAPTER' }).state;
   await ready(page);
   const choice = bestHand(game, 0, true)!;
   await page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) }).click();

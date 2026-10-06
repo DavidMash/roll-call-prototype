@@ -573,7 +573,8 @@ describe('reproducibility and end-to-end domain flow', () => {
             : { type: 'CHOOSE_FLAME' as const, offerId: a.flameSelection!.offers[0].id, dieId: 0 };
           a = dispatch(a, action).state; b = dispatch(b, action).state;
         } else if (a.phase === 'shop') {
-        const action = a.bust ? { type: 'RETRY_ROUND' as const } : { type: 'NEXT_ROUND' as const };
+        const action = a.bust ? { type: 'RETRY_ROUND' as const }
+          : a.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' as const } : { type: 'NEXT_ROUND' as const };
         a = dispatch(a, action).state; b = dispatch(b, action).state;
       } else break;
     }
@@ -609,7 +610,7 @@ describe('reproducibility and end-to-end domain flow', () => {
             const bought = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 0 });
             if (!bought.error) { game = bought.state; purchases++; }
           }
-          game = dispatch(game, { type: 'NEXT_ROUND' }).state;
+          game = dispatch(game, game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
         } else throw new Error(`Unexpected ${game.phase}`);
       }
       if (game.phase === 'lost') losses++;

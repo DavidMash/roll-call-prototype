@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { BOSSES } from '../game/bosses';
 import { chapterNumberForRound, chapterRoundForRound } from '../game/chapters';
 import { formatPlayerNumber } from '../game/copy';
-import { nodeLabel, routeWindow } from '../game/progression';
+import { encounterTarget, nodeLabel, routeWindow } from '../game/progression';
 import { SCREEN_THEMES } from '../game/screenThemes';
 import type { GameEvent, RunNode } from '../game/types';
 import { RunActionPortal } from './RunActionRow';
@@ -23,6 +23,8 @@ export function chapterMapNodeState(index: number, currentIndex: number): MapNod
   return 'upcoming';
 }
 
+export const formatMapTarget = (target: number): string => `TARGET ${formatPlayerNumber(target)}`;
+
 export interface ChapterMapPoint {
   x: number;
   y: number;
@@ -31,7 +33,7 @@ export interface ChapterMapPoint {
   slot: number;
 }
 
-/** Twelve normalized board slots form three four-position bands. Slot 9 is an intentional gap. */
+/** Twelve normalized board slots form three four-position bands. */
 export const CHAPTER_MAP_SLOTS: readonly ChapterMapPoint[] = [
   { x: 16, y: 84, row: 'bottom', align: 'start', slot: 0 },
   { x: 39, y: 84, row: 'bottom', align: 'center', slot: 1 },
@@ -47,7 +49,7 @@ export const CHAPTER_MAP_SLOTS: readonly ChapterMapPoint[] = [
   { x: 84, y: 16, row: 'top', align: 'end', slot: 11 },
 ] as const;
 
-const NODE_SLOT_INDEXES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11] as const;
+const NODE_SLOT_INDEXES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const;
 export const CHAPTER_MAP_POINTS: readonly ChapterMapPoint[] = NODE_SLOT_INDEXES.map(index => CHAPTER_MAP_SLOTS[index]);
 
 const ROUTE_SEGMENTS = [
@@ -59,12 +61,13 @@ const ROUTE_SEGMENTS = [
   'M 61 50 L 39 50',
   'M 39 50 L 16 50',
   'M 16 50 C 6 50, 6 16, 16 16',
-  'M 16 16 L 61 16',
+  'M 16 16 L 39 16',
+  'M 39 16 L 61 16',
   'M 61 16 L 84 16',
 ] as const;
 
 function compactGlyph(node: RunNode) {
-  if (node.type === 'normal_round') return formatPlayerNumber(chapterRoundForRound(node.round));
+  if (node.type === 'normal_round') return '◎';
   if (node.type === 'shop') return '$';
   if (node.type === 'mini_boss_round') return '◆';
   if (node.type === 'boss_round') return '!';
@@ -82,7 +85,9 @@ function accessibleNodeLabel(node: RunNode, chapterNumber: number, state: MapNod
   const stateLabel = state === 'current' ? 'current destination' : state;
   if (node.type === 'normal_round') return `Chapter ${chapterNumber} Round ${chapterRoundForRound(node.round)}, ${stateLabel}`;
   if (node.type === 'shop') {
-    return `Shop after Chapter ${chapterNumber} Round ${Math.max(1, chapterRoundForRound(node.round) - 1)}, ${stateLabel}`;
+    return node.id.startsWith('shop:after-round:')
+      ? `Final Shop after Chapter ${chapterNumber} Boss, ${stateLabel}`
+      : `Shop after Chapter ${chapterNumber} Round ${Math.max(1, chapterRoundForRound(node.round) - 1)}, ${stateLabel}`;
   }
   if (node.type === 'mini_boss_round') return `${node.boss ? BOSSES[node.boss].name : `Chapter ${chapterNumber}`} Mini-Boss, ${stateLabel}`;
   if (node.type === 'boss_round') return `${node.boss ? BOSSES[node.boss].name : `Chapter ${chapterNumber}`} Boss, ${stateLabel}`;
@@ -132,9 +137,10 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
   const plan = event.board.chapterPlans[chapterNumber];
   const nodes = routeWindow(seed, destination, 2, plan);
   const destinationIndex = nodes.findIndex(node => node.id === destination);
-  // The inter-Chapter Shop precedes the next route's R1 and is intentionally not a Chapter node.
   const currentIndex = destinationIndex >= 0 ? destinationIndex : 0;
-  const fromIndex = nodes.findIndex(node => node.id === event.fromNode);
+  const rewardAnchorId = event.fromNode?.startsWith('flame:after-round:') || event.fromNode?.startsWith('special:after-round:')
+    ? `boss:${Number(event.fromNode.match(/\d+/)?.[0] ?? 0)}` : event.fromNode;
+  const fromIndex = nodes.findIndex(node => node.id === rewardAnchorId);
   const activeSegmentIndex = fromIndex >= 0 && Math.abs(fromIndex - currentIndex) === 1
     ? Math.min(fromIndex, currentIndex) : -1;
   const miniBossColor = SCREEN_THEMES[plan?.miniBoss ?? 'round'].accent;
@@ -181,6 +187,8 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
           if (!point) return null;
           const state = chapterMapNodeState(index, currentIndex);
           const displayNode = state === 'current' && event.boss ? { ...node, boss: event.boss } : node;
+          const target = displayNode.type === 'normal_round' ? encounterTarget(displayNode) : null;
+          const formattedTarget = target === null ? null : formatPlayerNumber(target);
           const progress = index / Math.max(1, nodes.length - 1);
           const miniWeight = Math.round((1 - Math.min(1, progress)) * 100);
           const arcColor = `color-mix(in srgb, ${miniBossColor} ${miniWeight}%, ${bossColor})`;
@@ -195,7 +203,11 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
               {state !== 'current' && <span className="node-glyph" aria-hidden="true">{compactGlyph(node)}</span>}
               {state === 'current' && <span className="current-node-copy">
                 <span className="node-label">{visibleNodeLabel(displayNode)}</span>
+                {formattedTarget !== null && <span className="node-target" data-testid="current-round-target">
+                  <span>TARGET</span><span className="node-target-value">{formattedTarget}</span>
+                </span>}
               </span>}
+              {node.type === 'boss_round' && <span className="boss-reward-badge" aria-label="Flame reward" title="Flame reward">🔥</span>}
             </div>
           </div>;
         })}

@@ -154,6 +154,8 @@ export interface HandTrainingOffer { kind: 'hand'; hand: HandId; purchases: numb
 export interface TeamTrainingOffer { kind: 'team'; purchases: number }
 export type TrainingOffer = HandTrainingOffer | TeamTrainingOffer;
 export interface Shop {
+  /** Lifecycle ownership; post-Boss Shops remain in the completed Chapter until NEXT_CHAPTER. */
+  kind?: 'between_rounds' | 'post_boss';
   offers: Offer[];
   trainingOffers: TrainingOffer[];
   diceRerolls: number;
@@ -555,6 +557,7 @@ export type Action =
   | { type: 'RETRY_ROUND' }
   | { type: 'REROLL_DICE' }
   | { type: 'REROLL_OFFERS' }
+  | { type: 'NEXT_CHAPTER' }
   | { type: 'NEXT_ROUND' };
 export interface Resolution { state: GameState; events: GameEvent[]; error?: string }
 export interface RandomSource { next(): number }

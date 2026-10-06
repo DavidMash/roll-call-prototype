@@ -12,8 +12,8 @@ import { probabilityCheck, randomIndex } from './rng';
 import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, handContributions } from './scoring';
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie,
-  isCursedDie, isMiniBossType, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
-import { encounterNode, flameNodeAfter, postBossRewardForRound, shopNodeBefore, specialOfferNodeAfter, timeTravelDestinationRound } from './progression';
+  isBigBossRound, isCursedDie, isMiniBossType, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
+import { encounterNode, flameNodeAfter, postBossRewardForRound, postBossShopNodeAfter, shopNodeBefore, specialOfferNodeAfter, timeTravelDestinationRound } from './progression';
 import { formatPercentage, formatPlayerNumber } from './copy';
 import { chapterNumberForRound, ensureChapterPlan } from './chapters';
 import {
@@ -870,6 +870,9 @@ export class Resolver {
     base.phase = 'shop';
     base.shop ??= { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
       freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
+    // Once the next Chapter has started, a Bust restores this as that Round's
+    // retry Shop even when its contents originated in the prior post-Boss Shop.
+    if (base.shop.kind) base.shop.kind = 'between_rounds';
     if (base.bossSilenced) base.specialOfferEffects.silence = true;
     base.bossSilenced = false;
     base.flameSelection = null;
@@ -1133,13 +1136,13 @@ export class Resolver {
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
     this.state.boss = null; this.state.bossSilenced = false;
     this.state.phase = 'shop'; this.state.flameSelection = null; this.state.specialOffer = null; this.state.roundSummary = null;
-    this.state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
+    const postBoss = isBigBossRound(this.state.round);
+    this.state.shop = { kind: postBoss ? 'post_boss' : 'between_rounds', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
       freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
     const upcomingRound = this.state.round + 1;
-    this.enterChapterIfNeeded(upcomingRound);
     const upcomingBoss = this.state.bossSchedule[upcomingRound];
     if (upcomingBoss) this.state.bossSchedule[upcomingRound] = upcomingBoss;
-    this.mapTransition(shopNodeBefore(this.state.round + 1), direction);
+    this.mapTransition(postBoss ? postBossShopNodeAfter(this.state.round) : shopNodeBefore(upcomingRound), direction);
     this.freshOffers(); this.freshTrainingOffers();
     if (this.state.specialOfferEffects.onTheHouse) {
       this.state.shop.freeEnhancementOfferIds = this.state.shop.offers.map(offer => offer.id);

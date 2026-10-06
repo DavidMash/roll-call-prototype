@@ -1,4 +1,4 @@
-import { BOSSES, bossTypeForRound, isBossRound, isMiniBossRound, targetForBoss } from './bosses';
+import { BOSSES, bossTypeForRound, isBigBossRound, isBossRound, isMiniBossRound, targetForBoss } from './bosses';
 import { targetForRound } from './config';
 import { formatPlayerNumber } from './copy';
 import { chapterEncounterRounds, chapterNumberForRound, chapterRoundForRound, firstRoundOfChapter } from './chapters';
@@ -8,6 +8,7 @@ export const encounterNode = (round: number, boss?: BossType | null): RunNode =>
   ? { id: `boss:${round}`, type: isMiniBossRound(round) ? 'mini_boss_round' : 'boss_round', round, boss: boss ?? undefined }
   : { id: `round:${round}`, type: 'normal_round', round };
 export const shopNodeBefore = (round: number): RunNode => ({ id: `shop:before-round:${round}`, type: 'shop', round });
+export const postBossShopNodeAfter = (round: number): RunNode => ({ id: `shop:after-round:${round}`, type: 'shop', round });
 export const flameNodeAfter = (round: number): RunNode => ({ id: `flame:after-round:${round}`, type: 'flame_selection', round });
 export const specialOfferNodeAfter = (round: number): RunNode => ({ id: `special:after-round:${round}`, type: 'special_offer', round });
 export const postBossRewardForRound = (round: number): 'flame' | 'specialOffer' =>
@@ -22,7 +23,7 @@ export function routeThrough(seed: string, throughRound: number): RunNode[] {
     const boss = bossTypeForRound(seed, round);
     route.push(encounterNode(round, boss));
     if (boss) route.push(postBossRewardForRound(round) === 'flame' ? flameNodeAfter(round) : specialOfferNodeAfter(round));
-    route.push(shopNodeBefore(round + 1));
+    route.push(isBigBossRound(round) ? postBossShopNodeAfter(round) : shopNodeBefore(round + 1));
   }
   return route;
 }
@@ -44,6 +45,7 @@ export function chapterRoute(seed: string, chapterNumber: number, plan?: Chapter
     encounterNode(firstRound + 4),
     shopNodeBefore(bossRound),
     encounterNode(bossRound, boss),
+    postBossShopNodeAfter(bossRound),
   ];
 }
 

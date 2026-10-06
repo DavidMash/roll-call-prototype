@@ -87,7 +87,7 @@ test('local route transition auto-continues after its visible themed three-secon
   const destination = map.locator('[aria-current="step"]');
   await expect(destination).toContainText('R1');
   await expect(map.getByText('R1', { exact: true })).toHaveCount(1);
-  await expect(map.locator('.run-map-node')).toHaveCount(11);
+  await expect(map.locator('.run-map-node')).toHaveCount(12);
   await expect(map.locator('.map-node-placeholder')).toHaveCount(0);
   const continueButton = page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true });
   await expect(continueButton.locator('.map-continue-countdown')).toHaveText('3');

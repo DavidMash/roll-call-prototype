@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { BOSSES } from '../src/game/bosses';
 import { newRun } from '../src/game/engine';
+import { targetForRound } from '../src/game/config';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import type { GameState } from '../src/game/types';
 import { enterRun } from './uiHelpers';
@@ -47,24 +48,27 @@ test('Chapter splash leads into one complete current-Chapter map without reveali
   await expect(map.locator('.map-kicker')).toHaveText('CHAPTER 1');
   expect(await map.locator('.run-map-node').evaluateAll(nodes => nodes.map(node => (node.parentElement as HTMLElement).dataset.nodeLabel))).toEqual([
     'R1', 'SHOP', 'R2', 'SHOP', 'MINI-BOSS', 'SHOP',
-    'R4', 'SHOP', 'R5', 'SHOP', 'BOSS',
+    'R4', 'SHOP', 'R5', 'SHOP', 'BOSS', 'SHOP',
   ]);
   await expect(map.locator('[aria-current="step"] .node-label')).toHaveText('R1');
+  await expect(map.getByTestId('current-round-target')).toHaveText('TARGET100');
   await expect(map.locator('[aria-current="step"]')).not.toContainText('Goal');
   await expect(map.locator('[aria-current="step"]')).not.toContainText('Prepare for');
   await expect(map.locator('[aria-current="step"] .node-glyph')).toHaveCount(0);
   await expect(map.locator('.run-map-stop.is-current')).toHaveCount(1);
   await expect(map.locator('.run-map-stop:not(.is-current) .node-label')).toHaveCount(0);
-  await expect(map.locator('.run-map-stop:not(.is-current) .node-glyph')).toHaveCount(10);
-  await expect(map.locator('.node-shop')).toHaveCount(5);
-  await expect(map.locator('.node-shop .node-glyph')).toHaveText(['$', '$', '$', '$', '$']);
+  await expect(map.locator('.run-map-stop:not(.is-current) .node-glyph')).toHaveCount(11);
+  await expect(map.locator('.node-shop')).toHaveCount(6);
+  await expect(map.locator('.node-shop .node-glyph')).toHaveText(['$', '$', '$', '$', '$', '$']);
+  await expect(map.locator('.node-normal_round .node-glyph')).toHaveText(['◎', '◎', '◎']);
+  await expect(map.locator('.node-boss_round .boss-reward-badge')).toHaveAttribute('aria-label', 'Flame reward');
   await expect(map.locator('[data-node-kind="special_offer"]')).toHaveCount(0);
   await expect(map.locator('[data-node-kind="flame_selection"]')).toHaveCount(0);
   await expect(map.locator('[data-tutorial="chapter-map"]')).toHaveCount(1);
   await expect(map.locator('[data-tutorial="chapter-map-current"]')).toHaveCount(1);
   await expect(map.getByRole('button', { name: 'Continue', exact: true })).toHaveCount(0);
   await expect(page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true })).toBeVisible();
-  await expect(map.locator('.map-route-segment')).toHaveCount(10);
+  await expect(map.locator('.map-route-segment')).toHaveCount(11);
   await expect(map.locator('.map-route-segment[d*="C"]')).toHaveCount(2);
   await expect(map.locator('.run-map-track')).toHaveAttribute('data-slot-count', '12');
   expect(await map.locator('.run-map-node').evaluateAll(nodes => nodes.every(node => {
@@ -72,7 +76,8 @@ test('Chapter splash leads into one complete current-Chapter map without reveali
     const after = getComputedStyle(node, '::after').content;
     return (before === 'none' || before === '') && (after === 'none' || after === '');
   }))).toBe(true);
-  expect(await map.locator('.run-map-node').evaluateAll(nodes => nodes.every(node => node.children.length === 1))).toBe(true);
+  expect(await map.locator('.run-map-node').evaluateAll(nodes => nodes.every(node =>
+    node.children.length === (node.classList.contains('node-boss_round') ? 2 : 1)))).toBe(true);
   const mobileLayout = await map.evaluate(element => {
     const root = element as HTMLElement;
     const track = root.querySelector<HTMLElement>('.run-map-track')!;
@@ -119,12 +124,12 @@ test('Chapter splash leads into one complete current-Chapter map without reveali
   expect(mobileLayout.rows).toEqual([
     'bottom', 'bottom', 'bottom', 'bottom',
     'middle', 'middle', 'middle', 'middle',
-    'top', 'top', 'top',
+    'top', 'top', 'top', 'top',
   ]);
-  expect(mobileLayout.slots).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11]);
+  expect(mobileLayout.slots).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
   expect(mobileLayout.positions.slice(0, 4).map(point => point.x)).toEqual([16, 39, 61, 84]);
   expect(mobileLayout.positions.slice(4, 8).map(point => point.x)).toEqual([84, 61, 39, 16]);
-  expect(mobileLayout.positions.slice(8).map(point => point.x)).toEqual([16, 61, 84]);
+  expect(mobileLayout.positions.slice(8).map(point => point.x)).toEqual([16, 39, 61, 84]);
   expect(mobileLayout.positions[0].y).toBeGreaterThan(mobileLayout.positions[4].y);
   expect(mobileLayout.positions[4].y).toBeGreaterThan(mobileLayout.positions[10].y);
   expect(mobileLayout.sizes[1]).toBeLessThan(mobileLayout.sizes[2]);
@@ -183,7 +188,38 @@ test('desktop Chapter map stays centered and compact instead of stretching into 
   expect(layout.anchorSizes.every(size => size.width === 0 && size.height === 0)).toBe(true);
 });
 
-test('finishing the Boss reward enters a fresh Chapter once before its map and preserves the inter-Chapter Shop', async ({ page }) => {
+test('expanded current Round preserves a substantially large formatted target without clipping', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const targetRound = 241;
+  const state = newRun('large-map-target').state;
+  state.round = targetRound - 1;
+  state.phase = 'shop';
+  state.currentNodeId = `shop:before-round:${targetRound}`;
+  state.shop = { kind: 'between_rounds', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  state.bust = null;
+
+  await page.goto(`/?seed=${state.seed}&speed=normal`);
+  await installRun(page, state);
+  await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+  const map = page.getByTestId('run-map-transition');
+  await expect(map).toBeVisible({ timeout: 4_000 });
+  const expected = targetForRound(targetRound).toLocaleString('en-US', { maximumFractionDigits: 3 });
+  const target = map.getByTestId('current-round-target');
+  await expect(target).toContainText(`TARGET${expected}`);
+  expect(await target.evaluate(element => {
+    const value = element.querySelector<HTMLElement>('.node-target-value')!;
+    const node = element.closest<HTMLElement>('.run-map-node')!;
+    const track = element.closest<HTMLElement>('.run-map-track')!;
+    const valueStyle = getComputedStyle(value);
+    const nodeRect = node.getBoundingClientRect();
+    const trackRect = track.getBoundingClientRect();
+    return value.scrollWidth <= value.clientWidth + 1
+      && valueStyle.textOverflow !== 'ellipsis'
+      && nodeRect.left >= trackRect.left - 1 && nodeRect.right <= trackRect.right + 1;
+  })).toBe(true);
+});
+
+test('the post-Boss Shop stays in the completed Chapter until NEXT CHAPTER starts the next one', async ({ page }) => {
   const state = newRun('chapter-boundary').state;
   state.round = 6;
   state.phase = 'flameSelection';
@@ -200,23 +236,35 @@ test('finishing the Boss reward enters a fresh Chapter once before its map and p
   await installRun(page, state);
   await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
 
-  const splash = page.getByTestId('chapter-splash');
-  await expect(splash).toHaveAttribute('data-chapter', '2');
-  await expect(splash).toHaveText(/CHAPTER 2/);
   const map = page.getByTestId('run-map-transition');
-  await expect(map).toBeVisible({ timeout: 4_000 });
-  await expect(map.locator('.map-kicker')).toHaveText('CHAPTER 2');
-  await expect(map.locator('.run-map-track')).toHaveAttribute('data-chapter', '2');
+  await expect(map).toBeVisible();
+  await expect(page.getByTestId('chapter-splash')).toHaveCount(0);
+  await expect(map).toHaveAttribute('data-destination', 'shop:after-round:6');
+  await expect(map.locator('.map-kicker')).toHaveText('CHAPTER 1');
+  await expect(map.locator('.run-map-track')).toHaveAttribute('data-chapter', '1');
   expect(await map.locator('.run-map-node').evaluateAll(nodes => nodes.map(node => (node.parentElement as HTMLElement).dataset.nodeLabel))).toEqual([
     'R1', 'SHOP', 'R2', 'SHOP', 'MINI-BOSS', 'SHOP',
-    'R4', 'SHOP', 'R5', 'SHOP', 'BOSS',
+    'R4', 'SHOP', 'R5', 'SHOP', 'BOSS', 'SHOP',
   ]);
   await expect(map.locator('[aria-current="step"]')).toHaveCount(1);
-  await expect(map.locator('.node-shop')).toHaveCount(5);
-  await expect(map).not.toContainText('R6');
+  await expect(map.locator('[aria-current="step"] .node-label')).toHaveText('SHOP');
+  await expect(map.locator('[data-node-id="boss:6"]')).toHaveAttribute('data-state', 'completed');
+  await expect(map.locator('.node-shop')).toHaveCount(6);
 
   await page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(map).toHaveCount(0);
   await expect(page.locator('.shop-summary').getByText('SHOP', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('stat-round')).toContainText('C1 R6');
+  await expect(page.getByRole('button', { name: 'NEXT CHAPTER', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'NEXT ROUND', exact: true })).toHaveCount(0);
   await expect(page.getByTestId('chapter-splash')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'NEXT CHAPTER', exact: true }).click();
+  const splash = page.getByTestId('chapter-splash');
+  await expect(splash).toHaveAttribute('data-chapter', '2');
+  await expect(splash).toHaveText(/CHAPTER 2/);
+  await expect(map).toBeVisible({ timeout: 4_000 });
+  await expect(map.locator('.map-kicker')).toHaveText('CHAPTER 2');
+  await expect(map.locator('.run-map-track')).toHaveAttribute('data-chapter', '2');
+  await expect(map).toHaveAttribute('data-destination', 'round:7');
 });

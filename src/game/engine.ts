@@ -11,8 +11,9 @@ import {
 import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, isValidSelection } from './hands';
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
-import { activeEncounterDice, bossSchedule, unavailableEncounterHands } from './bosses';
+import { activeEncounterDice, bossSchedule, isBigBossRound, unavailableEncounterHands } from './bosses';
 import { chapterNumberForRound, ensureChapterPlan } from './chapters';
+import { postBossShopNodeAfter } from './progression';
 import { formatPlayerNumber } from './copy';
 import { enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey, usableManualRerolls } from './specialOffers';
 import type { Action, Board, GameState, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
@@ -102,6 +103,7 @@ export function normalizeGameState(state: GameState): GameState {
   if (next.shop) {
     next.shop.offers = next.shop.offers.filter(offer => isEnhancement(offer.enhancement));
     normalizeShop(next.shop);
+    if (!next.shop.kind && next.phase === 'shop' && !next.bust && isBigBossRound(next.round)) next.shop.kind = 'post_boss';
   }
   if (next.roundCheckpoint) {
     next.roundCheckpoint.scorecardCycleConsumed ??= next.roundCheckpoint.consumed.filter(hand =>
@@ -172,6 +174,27 @@ export function normalizeGameState(state: GameState): GameState {
   next.stats.mapTransitions ??= [];
   next.stats.mapTransitions = next.stats.mapTransitions.map(record => ({ ...record,
     nodeType: (record.nodeType as string) === 'flame_reward' ? 'flame_selection' : record.nodeType }));
+  // Version-1 saves could already have announced the next Chapter while the
+  // post-Boss Shop was active. Move that persisted boundary back without
+  // touching the materialized Chapter plan or the Shop's RNG-backed contents.
+  if (next.phase === 'shop' && !next.bust && isBigBossRound(next.round) && next.shop?.kind === 'post_boss') {
+    const nextChapter = chapterNumberForRound(next.round) + 1;
+    const legacyShopId = `shop:before-round:${next.round + 1}`;
+    if (next.currentNodeId === legacyShopId) next.currentNodeId = postBossShopNodeAfter(next.round).id;
+    next.presentedChapters = next.presentedChapters.filter(chapter => chapter !== nextChapter);
+    const filteredHistory = next.history.filter(record => !(record.type === 'CHAPTER_STARTED'
+      && record.chapterNumber === nextChapter && record.round === next.round));
+    if (filteredHistory.length !== next.history.length)
+      next.history = filteredHistory.map((record, id) => ({ ...record, id }));
+    for (const transition of next.stats.mapTransitions) {
+      if (transition.toNode === legacyShopId && transition.round === next.round + 1)
+        Object.assign(transition, { toNode: postBossShopNodeAfter(next.round).id, round: next.round });
+    }
+    for (const record of next.history) {
+      if (record.type === 'MAP_TRANSITION' && record.toNode === legacyShopId)
+        Object.assign(record, { toNode: postBossShopNodeAfter(next.round).id, round: next.round });
+    }
+  }
   next.stats.bossEncounters ??= [];
   next.stats.callerEvents ??= [];
   next.stats.wardenEvents ??= [];
@@ -304,6 +327,12 @@ export function validateAction(state: Board, action: Action): string | null {
     return null;
   }
   if (state.phase !== 'shop' || !state.shop) return 'This action requires an open shop.';
+  if (action.type === 'NEXT_CHAPTER') {
+    if (state.bust || state.shop.kind !== 'post_boss' || !isBigBossRound(state.round))
+      return 'Next Chapter is only available from the final post-Boss Shop.';
+  }
+  if (action.type === 'NEXT_ROUND' && state.shop.kind === 'post_boss' && !state.bust)
+    return 'Use Next Chapter after the final post-Boss Shop.';
   if (action.type === 'NEXT_ROUND' && state.bust) return 'Use Retry Round after preparing for the failed round.';
   if (action.type === 'BUY') {
     const offer = state.shop.offers.find(item => item.id === action.offerId);
@@ -376,7 +405,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
   const normalizationChangedState = JSON.stringify(normalized) !== JSON.stringify(state);
   const error = validateAction(normalized, action);
   if (error) return { state: normalizationChangedState ? normalized : state, events: [], error };
-  const rngStateOverride = random ? undefined : action.type === 'NEXT_ROUND'
+  const rngStateOverride = random ? undefined : action.type === 'NEXT_ROUND' || action.type === 'NEXT_CHAPTER'
     ? attemptSeed(normalized.seed, normalized.round + 1, 1)
     : action.type === 'RETRY_ROUND' ? attemptSeed(normalized.seed, normalized.round, normalized.roundAttemptNumber)
       : action.type === 'CONTINUE_SPECIAL_OFFER' && normalized.specialOffer?.chosen?.type === 'timeTravel'
@@ -544,6 +573,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         resolver.emit({ type: 'FLAME_TUTORIAL_COMPLETED', message: 'First-Flame shop tutorial completed' });
         break;
       case 'RETRY_ROUND': resolver.startRound(true); break;
+      case 'NEXT_CHAPTER': next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
       case 'NEXT_ROUND': next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
     }
   }, random, rngStateOverride, options);

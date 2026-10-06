@@ -236,7 +236,8 @@ function findHighInterestSeed() {
       } else if (game.phase === 'roundSummary') {
         game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
       } else if (game.phase === 'shop') {
-        game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' }).state;
+        game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' }
+          : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
       } else if (game.phase === 'flameSelection') {
         game = game.flameSelection!.acquired
           ? dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state
@@ -552,8 +553,10 @@ test('round payout UI displays interest above five', async ({ page }) => {
       await matchBoard(page, game);
     }
     else if (game.phase === 'shop') {
-      const action = game.bust ? { type: 'RETRY_ROUND' as const } : { type: 'NEXT_ROUND' as const };
-      await page.getByRole('button', { name: game.bust ? `RETRY ROUND ${game.round}` : 'NEXT ROUND', exact: true }).click();
+      const action = game.bust ? { type: 'RETRY_ROUND' as const }
+        : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' as const } : { type: 'NEXT_ROUND' as const };
+      await page.getByRole('button', { name: game.bust ? `RETRY ROUND ${game.round}`
+        : game.shop?.kind === 'post_boss' ? 'NEXT CHAPTER' : 'NEXT ROUND', exact: true }).click();
       game = dispatch(game, action).state;
       await matchBoard(page, game);
     } else if (game.phase === 'flameSelection') {
@@ -807,8 +810,10 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
       await matchBoard(page, game);
     }
     else if (game.phase === 'shop') {
-      const action = game.bust ? { type: 'RETRY_ROUND' as const } : { type: 'NEXT_ROUND' as const };
-      await page.getByRole('button', { name: game.bust ? `RETRY ROUND ${game.round}` : 'NEXT ROUND' }).click();
+      const action = game.bust ? { type: 'RETRY_ROUND' as const }
+        : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' as const } : { type: 'NEXT_ROUND' as const };
+      await page.getByRole('button', { name: game.bust ? `RETRY ROUND ${game.round}`
+        : game.shop?.kind === 'post_boss' ? 'NEXT CHAPTER' : 'NEXT ROUND' }).click();
       game = dispatch(game, action).state;
       await matchBoard(page, game);
     } else if (game.phase === 'flameSelection') {

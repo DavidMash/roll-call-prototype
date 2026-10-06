@@ -205,11 +205,11 @@ describe('tutorial scenario', () => {
     let { session } = newTutorialSession();
     session.game.round = 6;
     session.game.phase = 'shop';
-    session.game.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    session.game.shop = { kind: 'post_boss', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     session.scenario.firstFlame = flame;
     session.scenario.firstFlameDieId = 4;
     session.game.dice[4].flame = { id: flame, investedGold: 1 };
-    session = act(session, { type: 'NEXT_ROUND' });
+    session = act(session, { type: 'NEXT_CHAPTER' });
 
     const values = session.game.dice.map(die => activeFace(die).rank);
     if (flame === 'doubleDown') expect(values.sort()).toEqual([2, 4, 5, 6, 6]);
