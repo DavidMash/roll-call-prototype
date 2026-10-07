@@ -76,6 +76,8 @@ test('Mini-Boss map, preview, encounter label, and Neglected badges reuse the bo
 
 test('Magician presents all calls while the missing die is absent', async ({ page }) => {
   const state = dispatch(shopBeforeMini('magician'), { type: 'NEXT_ROUND' }, constant()).state;
+  if (state.boss?.type !== 'magician') throw new Error('Magician fixture failed.');
+  const magician = state.boss;
   await page.setViewportSize({ width: 390, height: 740 });
   await page.goto(`/?seed=${state.seed}&speed=instant`);
   await install(page, state);
@@ -86,7 +88,46 @@ test('Magician presents all calls while the missing die is absent', async ({ pag
   await expect(page.getByTestId('magician-calls').locator('.mantine-Badge-root')).toHaveCount(3);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('[data-testid^="magician-call-"]')).toHaveCount(3);
+  for (const hand of magician.calledHands) {
+    const marker = page.getByTestId(`magician-call-${hand}`);
+    await expect(marker).toHaveAttribute('data-state', 'called');
+    await expect(marker).toHaveAttribute('title', 'Magician called hand');
+    await expect(page.getByTestId(`scorecard-row-${hand}`)).toHaveAccessibleName(/Magician call pending/);
+  }
+  for (const hand of HAND_IDS.filter(hand => !magician.calledHands.includes(hand))) {
+    await expect(page.getByTestId(`magician-call-${hand}`)).toHaveCount(0);
+  }
   await expect(page.locator('.gameplay-dock .die')).toHaveCount(4);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+
+  const completed = magician.calledHands[0];
+  magician.completedHands = [completed];
+  state.consumed.push(completed);
+  for (const hand of HAND_IDS) state.handLevels[hand] = 1;
+  state.handLevels[completed] = 5;
+  state.bonfires = ['ultimate'];
+  await install(page, state);
+  const completedRow = page.getByTestId(`scorecard-row-${completed}`);
+  await expect(page.getByTestId(`magician-call-${completed}`)).toHaveAttribute('data-state', 'completed');
+  await expect(page.getByTestId(`magician-call-${completed}`)).toHaveAttribute('title', 'Magician call completed');
+  await expect(completedRow).toContainText('USED');
+  await expect(page.getByTestId(`ultimate-badge-${completed}`)).toBeVisible();
+
+  await page.reload();
+  await enterRun(page);
+  await expect(page.getByTestId(`magician-call-${completed}`)).toHaveAttribute('data-state', 'completed');
+  for (const hand of magician.calledHands.slice(1)) {
+    await expect(page.getByTestId(`magician-call-${hand}`)).toHaveAttribute('data-state', 'called');
+  }
+
+  magician.completedHands = [...magician.calledHands];
+  magician.returned = true;
+  await install(page, state);
+  for (const hand of magician.calledHands) {
+    await expect(page.getByTestId(`magician-call-${hand}`)).toHaveAttribute('data-state', 'completed');
+  }
+  await expect(page.locator('.gameplay-dock .die')).toHaveCount(5);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 

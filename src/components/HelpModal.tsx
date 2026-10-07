@@ -6,6 +6,7 @@ import { HANDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from '../game/hands';
 import { BOSSES, BOSS_TYPES, MINI_BOSS_TYPES } from '../game/bosses';
 import type { HandId } from '../game/types';
 import { SPECIAL_OFFERS, SPECIAL_OFFER_IDS } from '../game/specialOffers';
+import { EnhancementIdentity } from './EnhancementIdentity';
 
 const LOWER_HAND_RULES: Partial<Record<HandId, string>> = {
   pair: 'Two matching Faces.',
@@ -48,8 +49,8 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
           <Text size="sm" fw={700}>{HANDS[hand].name}</Text><Text size="xs" c="dimmed">{LOWER_HAND_RULES[hand]}</Text>
         </div>)}</SimpleGrid></div>
       </Stack></Tabs.Panel>
-      <Tabs.Panel value="enhancements" pt="md"><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{ENHANCEMENT_IDS.map(id => <div key={id} className="help-item">
-        <Text size="sm" fw={700}>{ENHANCEMENTS[id].name}</Text><Text size="xs" c="dimmed">{ENHANCEMENTS[id].description}</Text>
+      <Tabs.Panel value="enhancements" pt="md"><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{ENHANCEMENT_IDS.map(id => <div key={id} className="help-item" data-testid={`help-enhancement-${id}`}>
+        <Text size="sm" fw={700}><EnhancementIdentity enhancement={id} /></Text><Text size="xs" c="dimmed">{ENHANCEMENTS[id].description}</Text>
       </div>)}</SimpleGrid></Tabs.Panel>
       <Tabs.Panel value="flames" pt="md"><Stack gap="sm">
         <Text size="sm">Flames begin as Embers. Stoke them in the Shop; at 100 Gold, an Ember becomes a Bonfire and works globally.</Text>

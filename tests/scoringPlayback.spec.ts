@@ -125,12 +125,14 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
         await expect(page.getByTestId('hand-pips')).toHaveText(String(started.handScore!.basePips));
       }
       if (event.type === 'HAND_PIPS_CHANGED' && event.enhancement === 'bonus') {
-        await expect(page.locator('.score-tick')).toHaveText(`BONUS +${event.amount}`);
+        await expect(page.locator('.score-tick')).toHaveText(`+ BONUS +${event.amount}`);
+        await expect(page.locator('.score-effect-callout .enhancement-bonus')).toContainText('+');
         await expect(page.locator(`[data-die-id="${event.dieIds![0]}"] .die`)).toHaveAttribute('data-resolving', 'true');
         observed.push(['Bonus', event.handScore.currentPips, event.handScore.currentMultiplier]);
       }
       if (event.type === 'HITCHHIKER_ADDED_PIPS') {
-        await expect(page.locator('.score-tick')).toHaveText(`HITCHHIKER +${event.amount}`);
+        await expect(page.locator('.score-tick')).toHaveText(`↗ HITCHHIKER +${event.amount}`);
+        await expect(page.locator('.score-effect-callout .enhancement-hitchhiker')).toContainText('↗');
         await expect(page.locator(`[data-die-id="${event.dieIds![0]}"] .die`)).toHaveAttribute('data-resolving', 'true');
         observed.push(['Hitchhiker', event.handScore.currentPips, event.handScore.currentMultiplier]);
       }

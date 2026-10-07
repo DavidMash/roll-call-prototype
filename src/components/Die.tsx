@@ -6,7 +6,7 @@ import type { Die as PhysicalDie, Enhancement, Flame } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
 import { PipFace } from './PipFace';
 import { formatPlayerNumber } from '../game/copy';
-import { ENHANCEMENT_ICONS } from './enhancementIcons';
+import { EnhancementSymbol } from './EnhancementIdentity';
 
 interface Props {
   die: PhysicalDie;
@@ -94,10 +94,9 @@ export function Die({ die, display, selected, highlighted, rolling, resolving = 
     <button type="button" className={`die-enhancement-strip${enhancements.length ? '' : ' empty'}`} disabled={detailsDisabled}
       aria-label={`View Enhancements on ${die.owner === 'boss' ? 'Cursed Die' : `D${die.id + 1}`} face ${face.rank}${enhancementSummary ? `: ${enhancementSummary}` : ': none'}`}
       onClick={onEnhancements}>
-      {enhancements.length ? enhancements.slice(0, 3).map(id => <span key={id} className={`enhancement-icon enhancement-${id}${face.infected ? ' disabled' : ''}`}
-        title={`${ENHANCEMENTS[id].name}${face.enhancements[id]! > 1 ? ` ×${face.enhancements[id]}` : ''}`}>
-        <span aria-hidden="true">{ENHANCEMENT_ICONS[id]}</span>{face.enhancements[id]! > 1 && <strong>×{formatPlayerNumber(face.enhancements[id]!)}</strong>}
-      </span>) : <span className="enhancement-strip-empty" aria-hidden="true">· · ·</span>}
+      {enhancements.length ? enhancements.slice(0, 3).map(id => <EnhancementSymbol key={id} enhancement={id}
+        stacks={face.enhancements[id]!} decorative className={face.infected ? 'disabled' : ''} />)
+        : <span className="enhancement-strip-empty" aria-hidden="true">· · ·</span>}
     </button>
   </div>;
 }

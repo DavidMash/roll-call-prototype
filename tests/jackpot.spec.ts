@@ -79,7 +79,8 @@ test('scoring Jackpot pays on a played-hand clear before the final physical sett
     );
     if (index < jackpotIndex) await page.clock.runFor(CONFIG.tickMs.normal);
   }
-  await expect(page.locator('.score-tick')).toHaveText('JACKPOT');
+  await expect(page.locator('.score-tick')).toHaveText('★JACKPOT');
+  await expect(page.locator('.score-tick .enhancement-jackpot')).toContainText('★');
   await expect(page.getByTestId(`flame-die-${fixture.heldDieId}`).locator('.die.pulse')).toHaveCount(1);
   await expect(page.getByTestId(`flame-die-${fixture.heldDieId}`).locator('.enhancement-jackpot')).toHaveCount(1);
   await expect(die(page, fixture.heldDieId)).toHaveAccessibleName(new RegExp(`face ${heldValue},`));

@@ -72,7 +72,7 @@ button { font: inherit; }
 .scorecard-row .mantine-Button-inner, .scorecard-row .mantine-Button-label { width: 100%; }
 .scorecard-row .mantine-Button-label { display: flex; justify-content: space-between; gap: 8px; }
 .scorecard-row-copy { min-width: 0; display: flex; align-items: center; justify-content: flex-start; gap: 6px; overflow: hidden; line-height: 1; text-align: left; }
-.scorecard-hand-name { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; overflow: hidden; white-space: nowrap; text-align: left; }
+.scorecard-hand-name { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; overflow: hidden; white-space: nowrap; text-align: left; }
 .scorecard-name-line { max-width: 100%; overflow: hidden; color: var(--mantine-color-gray-1); font-size: .9rem; font-weight: 800; line-height: 1; text-overflow: ellipsis; }
 .scorecard-hand-name > .hand-level { color: var(--mantine-color-gray-5); font-size: .64rem; font-weight: 650; line-height: 1; }
 .scorecard-base { color: var(--mantine-color-gray-5); font-size: .65rem; font-weight: 550; white-space: nowrap; }
@@ -81,7 +81,8 @@ button { font: inherit; }
 .scorecard-row.targeted { box-shadow: inset 3px 0 var(--mantine-color-orange-6); }
 .scorecard-row.targeted.selected { box-shadow: inset 3px 0 var(--mantine-color-orange-5), inset 0 0 0 1px var(--mantine-color-teal-7); }
 .target-marker { color: var(--mantine-color-orange-4) !important; font-size: .56rem !important; font-weight: 850 !important; letter-spacing: .04em; }
-.ultimate-badge { height: 14px; padding-inline: 4px; font-size: .46rem; letter-spacing: .025em; }
+.scorecard-marker-badges { min-width: 0; flex: none; display: inline-flex; align-items: center; gap: 3px; }
+.ultimate-badge, .magician-call-badge { height: 14px; padding-inline: 4px; font-size: .46rem; letter-spacing: .025em; }
 .well-trained-preview { color: var(--mantine-color-violet-3); font-size: .52rem; font-weight: 750; white-space: nowrap; }
 .scorecard-row.unavailable:disabled { opacity: .35; }
 .scorecard-row.consumed:disabled { opacity: .56; background: rgba(255,255,255,.018); }
@@ -224,7 +225,11 @@ button { font: inherit; }
 .offer[draggable="true"] { cursor: grab; user-select: none; }
 .offer.selected { border-color: var(--mantine-color-teal-5); background: rgba(18,184,134,.1); }
 .offer.purchased { opacity: .5; }
-.offer-icon { width: 21px; height: 21px; display: inline-grid; place-items: center; border-radius: 6px; color: var(--mantine-color-teal-3); background: var(--mantine-color-teal-9); font-weight: 850; }
+.enhancement-identity { min-width: 0; display: inline-flex; align-items: center; gap: 5px; vertical-align: middle; }
+.enhancement-identity-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.enhancement-identity-stacks { flex: none; font-variant-numeric: tabular-nums; }
+.offer-enhancement-identity { max-width: 100%; }
+.offer-enhancement-identity .enhancement-identity-name { overflow: visible; text-overflow: clip; white-space: normal; }
 .offer-card-header, .offer-identity, .offer-name, .training-card-header, .training-heading, .training-title-row, .training-name { min-width: 0; }
 .offer-name, .training-name { line-height: 1.15; }
 .offer-action, .training-action { margin-top: auto !important; }
@@ -238,6 +243,7 @@ button { font: inherit; }
 .manage-face-tile.focused { border-color: var(--mantine-color-teal-5); background: rgba(18,184,134,.08); }
 .manage-face-tile.exposed-face { box-shadow: inset 3px 0 var(--mantine-color-teal-6); }
 .manage-face-number { width: 28px; height: 28px; display: inline-grid; place-items: center; border-radius: 6px; background: var(--mantine-color-dark-6); font-size: 1rem; font-weight: 850; }
+.manage-face-enhancements { width: 100%; min-height: 20px; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 3px; overflow: hidden; }
 .hud-lives { color: var(--mantine-color-red-5); font-weight: 900; letter-spacing: .08em; white-space: nowrap; padding: 4px 6px; border-radius: 6px; }
 .hud-lives.interactive { border: 1px solid rgba(250,82,82,.45); cursor: pointer; }
 .hud-lives.interactive:hover, .hud-lives.interactive:focus-visible { background: rgba(250,82,82,.12); outline: 2px solid var(--mantine-color-red-5); }
@@ -311,7 +317,6 @@ button { font: inherit; }
   .training-grid .training-stats { display: grid; gap: 1px !important; margin-top: 5px !important; }
   .training-grid .training-stats .mantine-Text-root { font-size: .64rem; line-height: 1.25; overflow-wrap: normal; word-break: normal; }
   .enhancement-grid .offer-card-header { display: block; }
-  .enhancement-grid .offer-icon { display: none; }
   .enhancement-grid .offer-name {
     min-height: 2.3em; display: flex; align-items: center; font-size: .73rem; line-height: 1.15; overflow-wrap: normal; word-break: normal;
   }
@@ -595,7 +600,7 @@ button { font: inherit; }
   .active-gameplay .scorecard-hand-name { min-width: 0; justify-content: center; gap: 4px; }
   .active-gameplay .scorecard-name-line { font-size: clamp(.9rem, 4.6vw, 1.25rem); }
   .active-gameplay .scorecard-hand-name > .hand-level { font-size: clamp(.66rem, 3vw, .85rem); }
-  .active-gameplay .ultimate-badge,
+  .active-gameplay .ultimate-badge, .active-gameplay .magician-call-badge,
   .active-gameplay .scorecard-row-result .mantine-Badge-root { flex: none; height: 12px; padding-inline: 2px; font-size: .4rem; }
   .active-gameplay .ultimate-badge { width: 12px; }
   .active-gameplay .scorecard-row-result { flex-direction: column; gap: 2px; font-size: .78rem; line-height: 1; }
@@ -924,6 +929,7 @@ body, #root { overflow: hidden; }
 .enhancement-icon.enhancement-golden, .enhancement-icon.enhancement-jackpot { color: var(--mantine-color-yellow-3); border-color: rgba(250,176,5,.35); background: rgba(134,80,0,.16); }
 .enhancement-icon.enhancement-vintage { color: var(--mantine-color-grape-2); border-color: rgba(190,75,219,.35); background: rgba(134,46,156,.14); }
 .enhancement-icon.disabled { opacity: .45; filter: grayscale(1); }
+.score-effect-callout .enhancement-icon { margin-right: 3px; vertical-align: middle; }
 .die-lock-overlay {
   inset: -7px -4px auto auto; z-index: 5; width: auto; height: 18px; display: inline-flex; flex-direction: row;
   padding: 1px 4px; gap: 2px; border: 1px solid rgba(34,211,238,.55); border-radius: 6px;

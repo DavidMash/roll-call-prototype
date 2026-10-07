@@ -111,7 +111,7 @@ describe('tutorial guided interaction beats', () => {
     expect(activeTutorialBeat(session, ui())).toMatchObject({ id: 'shop1-select-bonus', completion: { kind: 'selection' } });
     expect(activeTutorialBeat(session, ui({ selectedOffer: bonus.id }))).toMatchObject({
       id: R.bonus,
-      body: [`Put Bonus on this ${session.scenario.bonusBinding!.faceRank}.`],
+      body: [`Put + Bonus on this ${session.scenario.bonusBinding!.faceRank}.`],
       interactiveTargets: ['[data-tutorial="die-2"] .die'],
     });
 

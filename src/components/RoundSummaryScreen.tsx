@@ -4,20 +4,22 @@ import type { Action, Board } from '../game/types';
 import { formatPlayerNumber, formatScoreProgress } from '../game/copy';
 import { fullChapterLabels } from '../game/chapters';
 import { RunActionPortal } from './RunActionRow';
+import { EnhancementIdentity } from './EnhancementIdentity';
+import type { Enhancement } from '../game/types';
 
 export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy: boolean; submit: (action: Action) => void }) {
   const summary = board.roundSummary!;
   const miniBoss = summary.bossType ? isMiniBossType(summary.bossType) : false;
   const labels = fullChapterLabels(summary.round);
-  const rows = [
-    ['Base Reward', summary.sources.baseRewardGold],
-    ['Unused Rerolls', summary.sources.unusedRerollGold],
-    ['Interest', summary.sources.interestGold],
-    ['Golden', summary.sources.goldenGold],
-    ['Jackpot', summary.sources.jackpotGold],
-    ['Other Gold', summary.sources.otherGold],
-    [miniBoss ? 'Mini-Boss Reward' : 'Boss Reward', summary.sources.bossRewardGold],
-  ] as const;
+  const rows: { label: string; amount: number; enhancement?: Enhancement }[] = [
+    { label: 'Base Reward', amount: summary.sources.baseRewardGold },
+    { label: 'Unused Rerolls', amount: summary.sources.unusedRerollGold },
+    { label: 'Interest', amount: summary.sources.interestGold },
+    { label: 'Golden', amount: summary.sources.goldenGold, enhancement: 'golden' },
+    { label: 'Jackpot', amount: summary.sources.jackpotGold, enhancement: 'jackpot' },
+    { label: 'Other Gold', amount: summary.sources.otherGold },
+    { label: miniBoss ? 'Mini-Boss Reward' : 'Boss Reward', amount: summary.sources.bossRewardGold },
+  ];
   return <Paper className="round-summary-screen" p={{ base: 'md', sm: 'xl' }} data-testid="round-summary">
     <Stack gap="md">
       <div className="round-summary-heading">
@@ -33,9 +35,9 @@ export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy
           <Text className="summary-total" fw={950} size="xl" data-testid="summary-gold-earned">+{formatPlayerNumber(summary.totalGoldEarned)}</Text>
         </Group>
         <div className="summary-gold-rows" data-testid="summary-gold-breakdown">
-          {rows.filter(([, amount], index) => amount > 0 || index < 3).map(([label, amount]) => <div className="summary-gold-row" key={label}
+          {rows.filter((row, index) => row.amount > 0 || index < 3).map(({ label, amount, enhancement }) => <div className="summary-gold-row" key={label}
             data-tutorial={label === 'Unused Rerolls' ? 'payout-rerolls' : label === 'Interest' ? 'payout-interest' : undefined}>
-            <Text size="sm">{label}</Text><Text size="sm" fw={850}>+{formatPlayerNumber(amount)}</Text>
+            <Text size="sm">{enhancement ? <EnhancementIdentity enhancement={enhancement} /> : label}</Text><Text size="sm" fw={850}>+{formatPlayerNumber(amount)}</Text>
           </div>)}
         </div>
         <Group justify="space-between" mt="md" className="summary-gold-before-after" data-testid="summary-gold-before-after">

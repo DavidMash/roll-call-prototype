@@ -1,12 +1,12 @@
 import { Alert, Button, Group, Modal, Paper, SimpleGrid, Stack, Text } from '@mantine/core';
 import { useEffect, useState } from 'react';
-import { enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, FACE_TYPE_LIMIT, faceEnhancementTypes, placementError } from '../game/enhancements';
+import { diminishingHalfChance, enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, FACE_TYPE_LIMIT, faceEnhancementTypes, placementError } from '../game/enhancements';
 import { enhancementOfferIsFree } from '../game/specialOffers';
 import type { Action, Board, Enhancement, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
-import { formatPlayerNumber } from '../game/copy';
+import { formatPercentage, formatPlayerNumber } from '../game/copy';
 import { PipFace } from './PipFace';
-import { ENHANCEMENT_ICONS } from './enhancementIcons';
+import { enhancementAccessibleName, EnhancementIdentity, EnhancementSymbol } from './EnhancementIdentity';
 
 export interface FaceDetailsTarget { dieId: number; face: Rank }
 interface SaleTarget { enhancement: Enhancement; stacks: number; proceeds: number }
@@ -65,15 +65,19 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
             const physicalFace = index + 1 as Rank;
             const faceIds = ENHANCEMENT_IDS.filter(id => (candidate.enhancements[id] ?? 0) > 0);
             const typeCount = faceEnhancementTypes(candidate).length;
+            const enhancementLabel = faceIds.map(id => enhancementAccessibleName(id, candidate.enhancements[id]!)).join(', ');
             return <Paper component="button" type="button" key={physicalFace} withBorder p="xs" data-testid={`manage-face-${physicalFace}`}
               className={`manage-face-tile ${focusedFace === physicalFace ? 'focused' : ''} ${die.value === physicalFace ? 'exposed-face' : ''}`}
+              aria-label={`D${die.id + 1} face ${physicalFace}${enhancementLabel ? `. Enhancements: ${enhancementLabel}` : '. No Enhancements'}`}
               aria-pressed={focusedFace === physicalFace} onClick={() => setFocusedFace(physicalFace)}>
               {diceDisplay === 'pips' ? <PipFace value={candidate.rank} compact label={`D${die.id + 1} face ${physicalFace}`} />
                 : <span className="manage-face-number" aria-label={`D${die.id + 1} face ${physicalFace}`}>{candidate.rank}</span>}
               <strong>FACE {physicalFace}</strong>
               {die.value === physicalFace && <span className="manage-face-exposed">EXPOSED</span>}
               <small>{typeCount} / {FACE_TYPE_LIMIT} ENHANCEMENTS</small>
-              {faceIds.map(id => <small key={id}>{ENHANCEMENTS[id].name} · Sell {formatPlayerNumber(enhancementSellValue(candidate, id))} Gold</small>)}
+              <span className="manage-face-enhancements" data-testid={`manage-face-enhancements-${physicalFace}`}>
+                {faceIds.map(id => <EnhancementSymbol key={id} enhancement={id} stacks={candidate.enhancements[id]!} decorative />)}
+              </span>
             </Paper>;
           })}
         </SimpleGrid>}
@@ -88,11 +92,11 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
             const stacks = face.enhancements[id]!;
             const dynamic = id === 'vintage' ? `Current sell value: ${formatPlayerNumber(enhancementSellValue(face, id))} Gold`
               : id === 'workout' && face.workoutPips > 0 ? `Current added Pips: ${formatPlayerNumber(face.workoutPips)}`
-                : id === 'magnetic' && face.magneticSourceUsed ? 'Pull used this Round' : null;
+                : id === 'magnetic' && face.magneticSourceUsed ? 'Pull used this Round'
+                  : id === 'personalTrainer' ? `Base training chance: ${formatPercentage(diminishingHalfChance(stacks))} before hand-level adjustment` : null;
             return <Paper key={id} withBorder p="sm" className="face-detail-item">
               <Group justify="space-between" align="flex-start" wrap="nowrap">
-                <Group align="flex-start" wrap="nowrap"><span className={`enhancement-icon enhancement-${id}`} aria-hidden="true">{ENHANCEMENT_ICONS[id]}</span>
-                  <div><Text fw={800}>{ENHANCEMENTS[id].name}{stacks > 1 ? ` ×${formatPlayerNumber(stacks)}` : ''}</Text>
+                <Group align="flex-start" wrap="nowrap"><div><Text fw={800}><EnhancementIdentity enhancement={id} stacks={stacks} /></Text>
                     <Text size="sm" c="dimmed">{ENHANCEMENTS[id].description}</Text>{dynamic && <Text size="xs" c="teal" mt={3}>{dynamic}</Text>}</div></Group>
                 {shopActions && <Button size="compact-sm" variant="light" color="red" disabled={busy}
                   aria-label={`Sell ${ENHANCEMENTS[id].name} from D${die.id + 1} face ${focusedFace} for ${enhancementSellValue(face, id)} Gold`}
@@ -103,12 +107,12 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
         </Stack>
         <Group justify="space-between">
           <Button variant="default" onClick={onClose}>Close</Button>
-          {offer && isExposed && <Button color="teal" disabled={busy || !canApply} onClick={applyOffer}>Apply {ENHANCEMENTS[offer.enhancement].name}</Button>}
+          {offer && isExposed && <Button color="teal" disabled={busy || !canApply} onClick={applyOffer}>Apply <EnhancementIdentity enhancement={offer.enhancement} /></Button>}
         </Group>
       </Stack>
     </Modal>
     <Modal opened={saleTarget !== null} onClose={() => setSaleTarget(null)}
-      title={saleTarget ? `SELL ${ENHANCEMENTS[saleTarget.enhancement].name.toUpperCase()}?` : 'SELL ENHANCEMENT?'} centered transitionProps={{ duration: 0 }}>
+      title={saleTarget ? <span>SELL <EnhancementIdentity enhancement={saleTarget.enhancement} uppercase />?</span> : 'SELL ENHANCEMENT?'} centered transitionProps={{ duration: 0 }}>
       {saleTarget && <><Text fw={900} size="xl">+{formatPlayerNumber(saleTarget.proceeds)} GOLD</Text>
         <Text size="sm" c="dimmed">All {formatPlayerNumber(saleTarget.stacks)} stack{saleTarget.stacks === 1 ? '' : 's'} will be removed from Face {focusedFace}.</Text>
         <Group justify="flex-end" mt="lg"><Button variant="default" onClick={() => setSaleTarget(null)}>CANCEL</Button><Button color="red" onClick={confirmSale}>SELL</Button></Group></>}

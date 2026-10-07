@@ -19,7 +19,7 @@ function detailedState(seed: string) {
   const state = newRun(seed).state;
   const face = activeFace(state.dice[0]);
   face.enhancements.bonus = 2;
-  face.enhancements.mirror = 1;
+  face.enhancements.personalTrainer = 3;
   face.enhancements.vintage = 1;
   face.vintageSellValue = 9;
   state.dice[0].flame = { id: 'straightShooter', investedGold: 35 };
@@ -44,6 +44,11 @@ test('stable die anatomy keeps value clear and shared Round details read-only', 
   await expect(flame).toContainText('STR8');
   await expect(strip.locator('.enhancement-icon')).toHaveCount(3);
   await expect(strip.locator('.enhancement-bonus')).toContainText('×2');
+  await expect(strip.locator('.enhancement-bonus')).toContainText('+');
+  await expect(strip.locator('.enhancement-personalTrainer')).toContainText('PT');
+  await expect(strip.locator('.enhancement-vintage')).toContainText('V');
+  await expect(strip).toHaveAccessibleName(/Personal Trainer ×3.*Bonus ×2.*Vintage ×1/);
+  await expect(strip.locator('.enhancement-identity-name')).toHaveCount(0);
   await expect(body).not.toContainText('Bonus');
   await expect(body).not.toContainText('Straight Shooter');
   await expect(body).toHaveClass(/snake-eyed-face/);
@@ -65,9 +70,13 @@ test('stable die anatomy keeps value clear and shared Round details read-only', 
 
   await strip.click();
   const faceModal = page.getByRole('dialog', { name: `D1 · FACE ${state.dice[0].value}` });
-  await expect(faceModal).toContainText('Bonus ×2');
-  await expect(faceModal).toContainText('Mirror');
+  await expect(faceModal.getByText('Bonus', { exact: true })).toBeVisible();
+  await expect(faceModal.locator('.face-detail-item').filter({ hasText: 'Bonus' }).locator('.enhancement-identity-stacks')).toHaveText('×2');
+  await expect(faceModal).toContainText('Personal Trainer');
+  await expect(faceModal).toContainText('Base training chance: 87.5% before hand-level adjustment');
   await expect(faceModal).toContainText('Current sell value: 9 Gold');
+  await expect(faceModal.locator('.face-detail-item').filter({ hasText: 'Bonus' }).locator('.enhancement-bonus')).toContainText('+');
+  await expect(faceModal.locator('.face-detail-item').filter({ hasText: 'Personal Trainer' }).locator('.enhancement-personalTrainer')).toContainText('PT');
   await expect(faceModal.getByRole('button', { name: /^Sell / })).toHaveCount(0);
   await faceModal.getByRole('button', { name: 'Close' }).click();
 
@@ -96,8 +105,13 @@ test('Shop uses the same face and Flame modals for authoritative Sell and Stoke 
 
   await slot.getByRole('button', { name: /View Enhancements on D1 face/ }).click();
   const faceModal = page.getByRole('dialog', { name: 'D1 — MANAGE DIE' });
+  const focusedFace = activeFace(state.dice[0]).rank;
+  const compactFace = faceModal.getByTestId(`manage-face-${focusedFace}`);
+  await expect(compactFace.getByTestId(`manage-face-enhancements-${focusedFace}`).locator('.enhancement-icon')).toHaveCount(3);
+  await expect(compactFace).toHaveAccessibleName(/Bonus, 2 stacks.*Personal Trainer, 3 stacks.*Vintage, 1 stack/);
+  await expect(compactFace.locator('.enhancement-identity-name')).toHaveCount(0);
   await faceModal.getByRole('button', { name: /Sell Vintage from D1 face .* for 9 Gold/ }).click();
-  await page.getByRole('dialog', { name: 'SELL VINTAGE?' }).getByRole('button', { name: 'SELL', exact: true }).click();
+  await page.getByRole('dialog', { name: /SELL VINTAGE\s*\?/ }).getByRole('button', { name: 'SELL', exact: true }).click();
   await expect(faceModal).not.toContainText('Current sell value: 9 Gold');
   await faceModal.getByRole('button', { name: 'Close' }).click();
   await expect(slot.locator('.enhancement-vintage')).toHaveCount(0);

@@ -415,10 +415,16 @@ test('compact HUD, Run Info and Help keep secondary information off the gameplay
   await expect(help.getByText('Gain +3 Gold if this face scores in the hand that clears the Round.')).toBeVisible();
   await expect(help.getByText('Multiplier', { exact: true })).toHaveCount(0);
   await expect(help.getByText('Loose Cannon', { exact: true })).toHaveCount(0);
-  await expect(help.getByText('Bump', { exact: true }).locator('..')).toContainText('next roll moves up one face');
+  const bumpHelp = help.getByTestId('help-enhancement-bump');
+  await expect(bumpHelp.locator('.enhancement-bump')).toContainText(ENHANCEMENTS.bump.symbol);
+  await expect(bumpHelp).toContainText('next roll moves up one face');
   await expect(help.getByText('Vintage', { exact: true })).toBeVisible();
-  await expect(help.getByText('Golden', { exact: true }).locator('..')).toContainText('Gain +1 Gold');
-  await expect(help.getByText('Jackpot', { exact: true }).locator('..')).toContainText('Gain +3 Gold');
+  const goldenHelp = help.getByTestId('help-enhancement-golden');
+  const jackpotHelp = help.getByTestId('help-enhancement-jackpot');
+  await expect(goldenHelp.locator('.enhancement-golden')).toContainText(ENHANCEMENTS.golden.symbol);
+  await expect(goldenHelp).toContainText('Gain +1 Gold');
+  await expect(jackpotHelp.locator('.enhancement-jackpot')).toContainText(ENHANCEMENTS.jackpot.symbol);
+  await expect(jackpotHelp).toContainText('Gain +3 Gold');
 });
 
 test('physical dice default to numerals and persist the Pips preference across gameplay, Shop, and Manage Die', async ({ page }) => {
@@ -674,7 +680,7 @@ test('Team Training occupies one existing slot and presents itself as a special 
   expect(Math.max(...shopLayout.enhancementNameHeights)).toBeLessThan(40);
   expect(Math.max(...shopLayout.dieHeights)).toBeLessThanOrEqual(62);
   const enhancement = page.locator('.enhancement-grid .offer').first();
-  const enhancementName = await enhancement.locator('.mantine-Text-root').first().textContent();
+  const enhancementName = await enhancement.locator('.enhancement-identity-name').textContent();
   const info = enhancement.getByRole('button', { name: `About ${enhancementName}` });
   await expect(info.locator('.info-circle-icon')).toBeVisible();
   await info.click();
@@ -882,7 +888,11 @@ test('native drag-and-drop purchase and enhancement refresh', async ({ page }) =
   await matchBoard(page, game);
   await expect(page.locator('.offer')).toHaveCount(3);
   await expect(page.getByRole('button', { name: 'REROLL OFFERS · 6 GOLD', exact: true })).toBeVisible();
-  for (const item of game.shop!.offers) await expect(page.getByTestId(`offer-${item.enhancement}`).getByText(ENHANCEMENTS[item.enhancement].name, { exact: true })).toBeVisible();
+  for (const item of game.shop!.offers) {
+    const card = page.getByTestId(`offer-${item.enhancement}`);
+    await expect(card.getByText(ENHANCEMENTS[item.enhancement].name, { exact: true })).toBeVisible();
+    await expect(card.locator(`.enhancement-${item.enhancement}`).first()).toContainText(ENHANCEMENTS[item.enhancement].symbol);
+  }
 });
 
 test('Vintage offer and Manage Die expose its authoritative dynamic sell value', async ({ page }) => {
@@ -900,9 +910,24 @@ test('Vintage offer and Manage Die expose its authoritative dynamic sell value',
   await page.getByRole('button', { name: /^Die 1,/ }).click();
   const manager = page.getByRole('dialog', { name: 'D1 — MANAGE DIE' });
   const face = activeFace(game.dice[0]).rank;
-  await expect(manager.getByTestId(`manage-face-${face}`)).toContainText('Vintage');
-  await expect(manager.getByTestId(`manage-face-${face}`)).toContainText('Sell 0 Gold');
+  await expect(manager.getByTestId(`manage-face-${face}`)).toHaveAccessibleName(/Vintage, 1 stack/);
+  await expect(manager.getByTestId(`manage-face-${face}`).locator('.enhancement-vintage')).toContainText(ENHANCEMENTS.vintage.symbol);
+  await expect(manager).toContainText('Current sell value: 0 Gold');
   await expect(manager.getByRole('button', { name: `Sell Vintage from D1 face ${face} for 0 Gold`, exact: true })).toBeVisible();
+});
+
+test('mobile Enhancement offers keep the longest canonical symbol and name inside the card', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await reachShop(page, findShopSeed('personalTrainer'));
+  const card = page.getByTestId('offer-personalTrainer');
+  await expect(card.getByText('Personal Trainer', { exact: true })).toBeVisible();
+  await expect(card.locator('.enhancement-personalTrainer').first()).toContainText(ENHANCEMENTS.personalTrainer.symbol);
+  expect(await card.evaluate(element => {
+    const cardRect = element.getBoundingClientRect();
+    const identity = element.querySelector('.offer-enhancement-identity')!.getBoundingClientRect();
+    return document.documentElement.scrollWidth <= innerWidth
+      && identity.left >= cardRect.left - 1 && identity.right <= cardRect.right + 1;
+  })).toBe(true);
 });
 
 test('stackable enhancement purchases show a single readable count badge', async ({ page }) => {
@@ -936,10 +961,10 @@ test('stackable enhancement purchases show a single readable count badge', async
   await physical.click();
   const manager = page.getByRole('dialog', { name: 'D1 — MANAGE DIE' });
   await expect(manager).toBeVisible();
-  await expect(manager.locator('[data-testid^="manage-face-"]')).toHaveCount(6);
+  await expect(manager.locator('.manage-face-tile')).toHaveCount(6);
   await expect(manager.getByTestId(`manage-face-${face}`)).toContainText('1 / 3 ENHANCEMENTS');
   await manager.getByRole('button', { name: `Sell Sticky from D1 face ${face} for 2 Gold`, exact: true }).click();
-  const confirmation = page.getByRole('dialog', { name: 'SELL STICKY?' });
+  const confirmation = page.getByRole('dialog', { name: /SELL STICKY\s*\?/ });
   await expect(confirmation).toContainText('+2 GOLD');
   await confirmation.getByRole('button', { name: 'SELL', exact: true }).click();
   game = dispatch(game, { type: 'SELL_ENHANCEMENT', dieId: 0, face, enhancement: 'sticky' }).state;
@@ -989,12 +1014,15 @@ test('a fourth enhancement type opens Manage Die and preserves the offer through
   const removed = initial[0].enhancement;
   const proceeds = ENHANCEMENTS[removed].baseSellPrice;
   await manager.getByRole('button', { name: `Sell ${ENHANCEMENTS[removed].name} from D1 face ${face} for ${proceeds} Gold`, exact: true }).click();
-  await page.getByRole('dialog', { name: `SELL ${ENHANCEMENTS[removed].name.toUpperCase()}?` })
+  await page.getByRole('dialog', { name: new RegExp(`SELL ${ENHANCEMENTS[removed].name.toUpperCase()}\\s*\\?`) })
     .getByRole('button', { name: 'SELL', exact: true }).click();
   game = dispatch(game, { type: 'SELL_ENHANCEMENT', dieId: 0, face, enhancement: removed }).state;
   const apply = manager.getByRole('button', { name: `Apply ${ENHANCEMENTS[pending.enhancement].name}`, exact: true });
   await expect(apply).toBeEnabled();
-  await expect(page.getByText(`${ENHANCEMENTS[pending.enhancement].name} selected`, { exact: true })).toBeVisible();
+  const placementContext = page.getByTestId('dock-placement-context');
+  await expect(placementContext.getByText(ENHANCEMENTS[pending.enhancement].name, { exact: true })).toBeVisible();
+  await expect(placementContext.locator(`.enhancement-${pending.enhancement}`)).toContainText(ENHANCEMENTS[pending.enhancement].symbol);
+  await expect(placementContext).toContainText('selected');
   await apply.click();
   game = dispatch(game, { type: 'BUY', offerId: pending.id, dieId: 0 }).state;
   await matchBoard(page, game);
@@ -1215,7 +1243,7 @@ test('purchased Jumping Bean visibly triggers and rerolls on the next initial ga
     }
   }
   const freePlay = next.events[beanIndex];
-  await expect(page.locator('.resolution .score-tick')).toHaveText(`JUMPING BEAN · FREE ${HANDS[freePlay.hand!].name.toUpperCase()}`);
+  await expect(page.locator('.resolution .score-tick')).toHaveText(`●JUMPING BEAN · FREE ${HANDS[freePlay.hand!].name.toUpperCase()}`);
   await expect(page.locator('.dice-dock .die.pulse')).toHaveCount(1);
   await expect(page.locator('.dice-dock .enhancement-jumpingBean')).toHaveCount(1);
   await page.getByRole('button', { name: 'Skip playback' }).click();

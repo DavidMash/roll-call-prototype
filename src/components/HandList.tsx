@@ -53,6 +53,8 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
         const targeted = board.targetPracticeHand === hand || flameTargets.has(hand);
         const hotTarget = board.hotStreakGoal === hand;
         const isUltimate = ownsUltimate && ultimate.has(hand);
+        const magicianCalled = !board.bossSilenced && board.boss?.type === 'magician' && board.boss.calledHands.includes(hand);
+        const magicianCompleted = magicianCalled && board.boss?.type === 'magician' && board.boss.completedHands.includes(hand);
         const score = board.scoreByHand[hand];
         const state = used ? 'consumed' : selected ? 'selected' : playable ? 'playable' : 'unavailable';
         const scoreLabel = score === undefined ? EMPTY_TEXT.score : `${formatPlayerNumber(score)} points`;
@@ -62,7 +64,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
           className={`scorecard-row ${state} ${targeted ? 'targeted' : ''} ${board.boss?.type === 'caller' && board.boss.calledHand === hand ? 'caller-called' : ''} ${board.boss?.type === 'fly' && board.boss.flyHand === hand ? 'fly-row' : ''}`} data-testid={`scorecard-row-${hand}`} data-state={state}
           disabled={busy || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}
           aria-keyshortcuts={selected && canSubmit ? 'Enter' : undefined}
-          aria-label={`${definition.name} · Lv. ${formatPlayerNumber(stats.level)} · ${formatPlayerNumber(stats.basePips)} Pips · ×${formatPlayerNumber(stats.baseMultiplier)} Mult${isUltimate ? ' · Ultimate Hand' : ''} · ${scoreLabel}${used ? ' · Used' : ''}${neglected ? ' · Neglected' : ''}`}>
+          aria-label={`${definition.name} · Lv. ${formatPlayerNumber(stats.level)} · ${formatPlayerNumber(stats.basePips)} Pips · ×${formatPlayerNumber(stats.baseMultiplier)} Mult${isUltimate ? ' · Ultimate Hand' : ''}${magicianCalled ? ` · Magician call ${magicianCompleted ? 'completed' : 'pending'}` : ''} · ${scoreLabel}${used ? ' · Used' : ''}${neglected ? ' · Neglected' : ''}`}>
           <span className="scorecard-row-copy">
             <span className="scorecard-hand-name" title={definition.name}>
               <span className="scorecard-name-line">
@@ -73,9 +75,17 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
               </span>
               <span className="hand-level">Lv. {formatPlayerNumber(stats.level)}</span>
             </span>
-            {isUltimate && <Tooltip label="Your highest level hand." multiline maw={300} withArrow>
-              <Badge className="ultimate-badge" size="xs" color="grape" variant="light" data-testid={`ultimate-badge-${hand}`}><span className="wide-label">ULTIMATE</span><span className="compact-label">U</span></Badge>
-            </Tooltip>}
+            {(isUltimate || magicianCalled) && <span className="scorecard-marker-badges">
+              {isUltimate && <Tooltip label="Your highest level hand." multiline maw={300} withArrow>
+                <Badge className="ultimate-badge" size="xs" color="grape" variant="light" data-testid={`ultimate-badge-${hand}`}><span className="wide-label">ULTIMATE</span><span className="compact-label">U</span></Badge>
+              </Tooltip>}
+              {magicianCalled && <Badge className="magician-call-badge" size="xs" color={magicianCompleted ? 'teal' : 'grape'} variant="light"
+                data-testid={`magician-call-${hand}`} data-state={magicianCompleted ? 'completed' : 'called'}
+                title={magicianCompleted ? 'Magician call completed' : 'Magician called hand'}>
+                <span className="wide-label">{magicianCompleted ? '✓ CALLED' : 'CALLED'}</span>
+                <span className="compact-label">{magicianCompleted ? '✓' : 'CALL'}</span>
+              </Badge>}
+            </span>}
           </span>
           <span className="scorecard-row-result">
             <span data-testid={`scorecard-score-${hand}`}>{score === undefined ? '—' : formatPlayerNumber(score)}</span>

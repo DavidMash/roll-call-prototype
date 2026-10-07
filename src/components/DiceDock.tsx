@@ -1,7 +1,7 @@
 import { Modal, Button, Group, Paper, Stack, Text } from '@mantine/core';
 import { useState } from 'react';
 import { activeFace } from '../game/dice';
-import { enhancementCost, ENHANCEMENTS, placementError } from '../game/enhancements';
+import { enhancementCost, placementError } from '../game/enhancements';
 import { activeFlameId, FLAMES, hasChargeBonfire, isChargeFlame } from '../game/flames';
 import { activeEncounterDice } from '../game/bosses';
 import { enhancementOfferIsFree } from '../game/specialOffers';
@@ -13,6 +13,7 @@ import { DiceRow } from './DiceRow';
 import type { FaceDetailsTarget } from './FaceDetailsModal';
 import type { FlameDetailsTarget } from './FlameDetailsModal';
 import { formatPlayerNumber } from '../game/copy';
+import { EnhancementIdentity } from './EnhancementIdentity';
 
 export function DiceDock({ board, event, busy, actionsEnabled, cinematic, display, selection, setSelection,
   selectedOffer, setSelectedOffer, selectedFlameOffer, submit, openFaceDetails, openFlameDetails }: {
@@ -128,7 +129,7 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
         onDropOffer={board.phase === 'shop' ? attemptPurchase : undefined}
         tutorialDieId={tutorialDieId} tutorialLabel={tutorialLabel} />
       {offer && <div className="dice-dock-context" data-testid="dock-placement-context">
-        <span><span>{ENHANCEMENTS[offer.enhancement].name} selected</span> · choose a die</span>
+        <span><span><EnhancementIdentity enhancement={offer.enhancement} /> selected</span> · choose a die</span>
         <Button size="compact-xs" variant="subtle" color="gray" disabled={!actionsEnabled}
           onClick={() => setSelectedOffer(null)}>Cancel placement</Button>
       </div>}

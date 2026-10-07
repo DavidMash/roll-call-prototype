@@ -1,5 +1,6 @@
 import { ActionIcon, Popover, Text } from '@mantine/core';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
 export function InfoCircleIcon() {
   return <svg className="info-circle-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -9,7 +10,7 @@ export function InfoCircleIcon() {
   </svg>;
 }
 
-export function InfoPopover({ label, description }: { label: string; description: string }) {
+export function InfoPopover({ label, description, heading }: { label: string; description: string; heading?: ReactNode }) {
   const [opened, setOpened] = useState(false);
   return <Popover opened={opened} onChange={setOpened} position="bottom-end" width={260} shadow="md" withArrow withinPortal>
     <Popover.Target>
@@ -19,6 +20,6 @@ export function InfoPopover({ label, description }: { label: string; description
         <InfoCircleIcon />
       </ActionIcon>
     </Popover.Target>
-    <Popover.Dropdown role="tooltip"><Text size="xs">{description}</Text></Popover.Dropdown>
+    <Popover.Dropdown role="tooltip">{heading && <Text size="sm" fw={800} mb={3}>{heading}</Text>}<Text size="xs">{description}</Text></Popover.Dropdown>
   </Popover>;
 }

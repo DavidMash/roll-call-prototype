@@ -1,10 +1,11 @@
 import { Button, Group, Paper, Text } from '@mantine/core';
-import { ENHANCEMENTS } from '../game/enhancements';
 import { FLAMES } from '../game/flames';
 import { HANDS } from '../game/hands';
 import type { GameEvent } from '../game/types';
 import { formatPlayerNumber } from '../game/copy';
 import { scoreAnnouncement, scorePresentation, type ScoreMetric } from '../game/scorePresentation';
+import { EnhancementIdentity, EnhancementSymbol } from './EnhancementIdentity';
+import type { ReactNode } from 'react';
 
 function ScoreBox({ label, value, color, active, tutorial }: {
   label: 'PIPS' | 'MULT' | 'XMULT';
@@ -33,12 +34,13 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText }: {
   scoreText?: string;
 }) {
   const score = scorePresentation(event);
-  let heading = idleText ?? '';
+  const scoreEnhancement = event?.enhancement ?? (event?.type === 'HITCHHIKER_ADDED_PIPS' ? 'hitchhiker' : null);
+  let heading: ReactNode = idleText ?? '';
   if (event?.type === 'HAND_SCORE_FINALIZED' || event?.type === 'STANDALONE_SCORE_CALCULATED') heading = `+${formatPlayerNumber(event.amount ?? 0)}`;
-  else if (event?.type === 'JUMPING_BEAN_FREE_PLAY' && event.hand) heading = `JUMPING BEAN · FREE ${HANDS[event.hand].name.toUpperCase()}`;
+  else if (event?.type === 'JUMPING_BEAN_FREE_PLAY' && event.hand) heading = <><EnhancementIdentity enhancement="jumpingBean" uppercase /> · FREE {HANDS[event.hand].name.toUpperCase()}</>;
   else if (event?.type === 'SCORE_ADDED') heading = (event.amount ?? 0) < 0 ? `−${formatPlayerNumber(Math.abs(event.amount!))}` : `+${formatPlayerNumber(event.amount ?? 0)}`;
   else if (event?.flame) heading = FLAMES[event.flame].name.toUpperCase();
-  else if (event?.enhancement) heading = ENHANCEMENTS[event.enhancement].name.toUpperCase();
+  else if (event?.enhancement) heading = <EnhancementIdentity enhancement={event.enhancement} uppercase />;
   else if (event?.type === 'TRAINING_PURCHASED' && event.hand) heading = `${HANDS[event.hand].name} · Lv. ${formatPlayerNumber(event.board.handLevels[event.hand])}`;
   else if (event?.type === 'GOLD_ADDED') heading = `+${formatPlayerNumber(event.amount ?? 0)} Gold`;
   else if (event?.type === 'MANUAL_REROLL_STARTED') heading = 'Reroll';
@@ -66,7 +68,9 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText }: {
       {score.bossFactor !== 1 && <div className="score-boss-stage" data-testid="hand-boss-factor">
         <span>×</span><small>BOSS MODIFIER</small><strong>{formatPlayerNumber(score.bossFactor)}</strong>
       </div>}
-      {score.callout && <Text key={event?.id} className="score-effect-callout score-tick" fw={800}>{score.callout}</Text>}
+      {score.callout && <Text key={event?.id} className="score-effect-callout score-tick" fw={800}>
+        {scoreEnhancement && <EnhancementSymbol enhancement={scoreEnhancement} decorative />} {score.callout}
+      </Text>}
       {score.finalScore !== null && <div className={`score-final${score.activeMetric === 'final' ? ' is-awarded' : ''}`} data-testid="hand-final-score" aria-hidden="true">
         <span>FINAL SCORE</span><strong className={formatPlayerNumber(score.finalScore).length > 16 ? 'is-very-long' : formatPlayerNumber(score.finalScore).length > 10 ? 'is-long' : ''}>{formatPlayerNumber(score.finalScore)}</strong>
       </div>}

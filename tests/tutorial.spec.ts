@@ -279,17 +279,17 @@ test('Shop Training and Bonus placement expose only the current atomic action', 
   expect(neighborAfter?.height).toBe(neighborBefore?.height);
   expect(neighborAfter?.y).toBe(neighborBefore?.y);
 
-  for (const title of ['FULL HOUSE · LV. 2', 'ENHANCEMENTS', 'BONUS']) {
+  for (const title of ['FULL HOUSE · LV. 2', 'ENHANCEMENTS', '+ BONUS']) {
     await expect(page.locator('.driver-popover')).toContainText(title);
     await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
   }
-  await expect(page.locator('.driver-popover-title')).toHaveText('BUY BONUS');
+  await expect(page.locator('.driver-popover-title')).toHaveText('BUY + BONUS');
   await expect(page.locator('[data-tutorial="enhancement-bonus"] .offer-action')).not.toHaveAttribute('aria-disabled', 'true');
   await expect(page.locator('[data-tutorial="enhancement-bonus"] .offer-action')).toHaveClass(/tutorial-interactive/);
   await expect(page.locator('[data-tutorial^="enhancement-"]:not([data-tutorial="enhancement-bonus"]) .offer-action').first()).toHaveAttribute('aria-disabled', 'true');
   await page.locator('[data-tutorial="enhancement-bonus"] .offer-action').click();
   await expect(page.locator('.driver-popover-title')).toHaveText('PUT IT HERE');
-  await expect(page.locator('.driver-popover')).toContainText('Put Bonus on this 2.');
+  await expect(page.locator('.driver-popover')).toContainText('Put + Bonus on this 2.');
   await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(2);
   await expect(page.locator('[data-tutorial="enhancement-bonus"] .offer-action')).toHaveAttribute('aria-disabled', 'true');
   await expect(page.locator('[data-tutorial="die-2"] .die')).not.toHaveAttribute('aria-disabled', 'true');
@@ -313,9 +313,9 @@ test('Workout purchase and placement use separate guided targets', async ({ page
   session.scenario.completedBeatIds.push('shop-r4-workout-info');
   await resumeSession(page, session);
 
-  await expect(page.locator('.driver-popover-title')).toHaveText('BUY WORKOUT');
+  await expect(page.locator('.driver-popover-title')).toHaveText('BUY ▲ WORKOUT');
   await page.locator('[data-tutorial="enhancement-workout"] .offer-action').click();
-  await expect(page.locator('.driver-popover-title')).toHaveText('PLACE WORKOUT');
+  await expect(page.locator('.driver-popover-title')).toHaveText('PLACE ▲ WORKOUT');
   await expect(page.locator('.driver-popover')).toContainText('Put it on this 5.');
   await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(2);
   await expect(page.locator('[data-tutorial="die-1"] .die')).not.toHaveAttribute('aria-disabled', 'true');
