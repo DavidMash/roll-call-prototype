@@ -88,8 +88,8 @@ export default function App() {
       target: `[data-tutorial="flame-badge"][data-flame-die-id="${board.flameTutorial.pendingDieId}"]`,
       highlightTargets: [`[data-tutorial="flame-badge"][data-flame-die-id="${board.flameTutorial.pendingDieId}"]`],
       interactiveTargets: [`[data-tutorial="flame-badge"][data-flame-die-id="${board.flameTutorial.pendingDieId}"]`],
-      blocking: false, gateInteractions: false, requiredAction: 'Open the Flame details.',
-      completion: { kind: 'action', description: 'Open the Flame details.' },
+      blocking: false, gateInteractions: false, actionLabel: 'GOT IT',
+      completion: { kind: 'acknowledge' },
     } : null;
   useLayoutEffect(() => setSeedInput(state.seed), [state.seed]);
   useEffect(() => saveDiceDisplay(diceDisplay), [diceDisplay]);

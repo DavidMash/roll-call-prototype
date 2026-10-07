@@ -183,6 +183,7 @@ export function TutorialDirector({ session, uiState, paused, beatOverride, onAck
         return;
       }
       const finishBeat = () => beat.id === 'tutorial-run-over' ? finish.current() : acknowledged.current(beat.id);
+      const showsAcknowledgeButton = beat.blocking || beat.completion?.kind === 'acknowledge';
       const control = driver({
         animate: true,
         allowClose: false,
@@ -193,7 +194,7 @@ export function TutorialDirector({ session, uiState, paused, beatOverride, onAck
         popoverClass: 'roll-call-tutorial-popover',
         disableActiveInteraction: beat.blocking,
         showProgress: false,
-        showButtons: beat.blocking ? ['next'] : [],
+        showButtons: showsAcknowledgeButton ? ['next'] : [],
         nextBtnText: beat.actionLabel ?? 'GOT IT',
         onNextClick: finishBeat,
       });
@@ -205,7 +206,7 @@ export function TutorialDirector({ session, uiState, paused, beatOverride, onAck
           description: descriptionHtml(beat),
           side: beat.side ?? 'bottom',
           align: 'center',
-          showButtons: beat.blocking ? ['next'] : [],
+          showButtons: showsAcknowledgeButton ? ['next'] : [],
           nextBtnText: beat.actionLabel ?? 'GOT IT',
           onNextClick: finishBeat,
         },
@@ -217,7 +218,7 @@ export function TutorialDirector({ session, uiState, paused, beatOverride, onAck
         const popover = document.querySelector<HTMLElement>('.driver-popover');
         if (!beat.blocking) {
           document.querySelector<SVGElement>('.driver-overlay')?.style.setProperty('pointer-events', 'none', 'important');
-          popover?.style.setProperty('pointer-events', 'none', 'important');
+          if (!showsAcknowledgeButton) popover?.style.setProperty('pointer-events', 'none', 'important');
         }
         popover?.setAttribute('role', 'dialog');
         popover?.setAttribute('aria-modal', beat.blocking ? 'true' : 'false');

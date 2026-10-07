@@ -137,6 +137,7 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
   await expect(page.getByRole('button', { name: new RegExp(`^Die 1, face ${rewardFaces[0]},.*Ember ${FLAMES.minigun.name}`) })).toBeVisible();
   await expect(page.locator('.driver-popover')).toContainText('NEW EMBER');
+  await expect(page.locator('.driver-popover').getByRole('button', { name: 'GOT IT', exact: true })).toBeVisible();
   const flameBadge = page.getByTestId('active-flame-minigun');
   await expect(flameBadge).toHaveClass(/driver-active-element/);
   await expect(page.getByTestId('flame-die-0')).not.toHaveClass(/driver-active-element/);
@@ -215,10 +216,11 @@ test('Flame Selection only acquires while Shop Manage Die supports arbitrary Sto
   expect(game.phase).toBe('shop');
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
   await expect(page.locator('.driver-popover')).toContainText('NEW EMBER');
-  await active.click();
+  await page.locator('.driver-popover').getByRole('button', { name: 'GOT IT', exact: true }).click();
   game = dispatch(game, { type: 'DISMISS_FLAME_TUTORIAL' }).state;
   await ready(page);
   await expect(page.locator('.driver-popover')).toHaveCount(0);
+  await active.click();
   const stoke = page.getByRole('dialog', { name: FLAMES[offer.flame].name });
   await expect(stoke).toContainText('BONFIRE AT 100');
   await expect(stoke).not.toContainText('Full strength');
