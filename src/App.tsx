@@ -34,6 +34,7 @@ import { defaultOnboardingMetadata, isResumableTutorial, loadOnboardingMetadata,
 import type { OnboardingMetadata, TutorialBeat } from './tutorial/types';
 import { isChapterMapTransition } from './game/playback';
 import { RunActionRow, RunActionRowContext } from './components/RunActionRow';
+import { HoodedFigureScreen } from './components/HoodedFigureScreen';
 
 const freshSeed = () => `roll-${Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join('-')}`;
 const query = new URLSearchParams(window.location.search);
@@ -182,7 +183,7 @@ export default function App() {
     className={`app-container screen-theme ${board.phase === 'round' ? 'active-gameplay' : ''}`}
     data-screen-theme={theme.id} data-playback-speed={speed}
     style={{ '--screen-primary': theme.accent, '--screen-secondary': theme.accentStrong } as React.CSSProperties}>
-    {!showingChapterSplash && <TopHud board={board} speed={speed} setSpeed={setSpeed} diceDisplay={diceDisplay} setDiceDisplay={setDiceDisplay}
+    {!showingChapterSplash && board.phase !== 'hoodedFigure' && <TopHud board={board} speed={speed} setSpeed={setSpeed} diceDisplay={diceDisplay} setDiceDisplay={setDiceDisplay}
       openRunInfo={() => setRunInfoOpen(true)} openHelp={() => setHelpOpen(true)}
       openRestoreLives={() => setRestoreLivesOpen(true)} openFlameDetails={openFlameDetails} onMenuOpenChange={setGameMenuOpen}
       returnToTitle={returnToTitle} />}
@@ -192,6 +193,7 @@ export default function App() {
         && <span className="visually-hidden">EVENT {progress.current} / {progress.total}</span>}
       {event?.type === 'CHAPTER_STARTED' ? <ChapterSplash key={event.id} event={event} onComplete={game.continuePlayback} />
         : showingMap ? <RunMapTransition key={event!.id} seed={state.seed} event={event!} onContinue={game.continuePlayback} />
+        : board.phase === 'hoodedFigure' ? <HoodedFigureScreen board={board} busy={busy} submit={submit} />
         : board.phase === 'roundSummary' && board.roundSummary ? <RoundSummaryScreen board={board} busy={busy} submit={submit} />
         : board.phase === 'flameSelection' && board.flameSelection ? <FlameSelectionScreen board={board} event={event} busy={busy}
         selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} openFlameDetails={openFlameDetails} />
@@ -213,11 +215,11 @@ export default function App() {
         : <RoundScreen board={board} event={event} busy={busy} inputBlocked={busy || gameMenuOpen || runInfoOpen || helpOpen || restoreLivesOpen || faceDetails !== null || flameDetails !== null}
           selection={selection} setSelection={setSelection} submit={submit} skip={game.skip} />}
     </main>
-    <DiceDock board={board} event={event} busy={busy} actionsEnabled={dockActionsEnabled} cinematic={showingChapterSplash}
+    {board.phase !== 'hoodedFigure' && <DiceDock board={board} event={event} busy={busy} actionsEnabled={dockActionsEnabled} cinematic={showingChapterSplash}
       display={diceDisplay} selection={selection} setSelection={setSelection}
       selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} selectedFlameOffer={selectedFlameOffer}
-      submit={submit} openFaceDetails={setFaceDetails} openFlameDetails={openFlameDetails} />
-    <RunActionRow setTarget={setActionRowTarget} />
+      submit={submit} openFaceDetails={setFaceDetails} openFlameDetails={openFlameDetails} />}
+    {board.phase !== 'hoodedFigure' && <RunActionRow setTarget={setActionRowTarget} />}
     <RunInfoModal state={state} visibleEventId={event?.id} busy={busy} opened={runInfoOpen} onClose={() => setRunInfoOpen(false)}
       seedInput={seedInput} setSeedInput={setSeedInput} startSeed={() => restart(seedInput.trim())}
       restartSeed={() => restart(state.seed)} newSeed={() => restart(freshSeed())} />

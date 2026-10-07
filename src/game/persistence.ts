@@ -11,7 +11,7 @@ interface PersistedRun {
   state: GameState;
 }
 
-const PHASES = new Set(['round', 'roundSummary', 'bust', 'flameSelection', 'specialOffer', 'shop', 'lost', 'error']);
+const PHASES = new Set(['round', 'roundSummary', 'bust', 'flameSelection', 'specialOffer', 'hoodedFigure', 'shop', 'lost', 'error']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -25,7 +25,8 @@ function hasTemplateShape(value: unknown, template: unknown): boolean {
     return isRecord(value) && Object.entries(template).every(([key, child]) =>
       (['maxCharge', 'decisionId', 'sixPackXMult', 'sixPackUpperHandsPlayed', 'handFamilyFlameStages', 'bossSilenced',
         'specialOfferEffects', 'suppressedPostBossRewardRounds', 'specialOffer', 'badDreamCheckpoint',
-        'freeEnhancementOfferIds', 'freeTrainingOfferKeys', 'chapterPlans', 'presentedChapters', 'scorecardCycleConsumed'].includes(key) && !Object.hasOwn(value, key))
+        'freeEnhancementOfferIds', 'freeTrainingOfferKeys', 'chapterPlans', 'presentedChapters', 'scorecardCycleConsumed',
+        'wildfires', 'bonfireContributions', 'bonfireRoundContributions', 'chargeAttribution', 'hoodedFigure'].includes(key) && !Object.hasOwn(value, key))
       || (Object.hasOwn(value, key) && hasTemplateShape(value[key], child)));
   }
   return typeof value === typeof template;

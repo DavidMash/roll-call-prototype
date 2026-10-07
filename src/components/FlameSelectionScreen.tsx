@@ -25,6 +25,11 @@ export function FlameSelectionScreen({ board, event, busy, selectedOffer, setSel
         color="red" variant="light" className="flame-detail-trigger" aria-label={`View ${FLAMES[id].name} Flame details`}
         onClick={() => openFlameDetails({ flame: id, kind: 'bonfire' })}>🔥 {FLAMES[id].name}</Badge>)}</Group>
     </Paper>}
+    {board.wildfires.length > 0 && <Paper p="xs" className="shop-section bonfire-strip" data-testid="wildfires">
+      <Group gap="xs"><Text fw={700} size="sm" tt="uppercase">Wildfires</Text>{board.wildfires.map(item => <Badge component="button" type="button" key={item.flame}
+        color="orange" variant="filled" className="flame-detail-trigger" aria-label={`View ${FLAMES[item.flame].name} Wildfire details`}
+        onClick={() => openFlameDetails({ flame: item.flame, kind: 'wildfire' })}>W {FLAMES[item.flame].name}</Badge>)}</Group>
+    </Paper>}
     <Paper p="xs" className="shop-section flame-offers-section" data-tutorial="flame-offers">
       <Group justify="space-between" className="section-heading"><Text fw={700} size="sm" tt="uppercase">Flame Offers</Text></Group>
       {reward.offers.length === 0 && <Text ta="center" fw={900} py="md" data-testid="all-flames-collected">ALL FLAMES COLLECTED</Text>}

@@ -4,10 +4,11 @@ import { activeFlameId, activeFlameInvestment, flameDetailsPresentation, flameEf
 import type { Action, Board, Flame } from '../game/types';
 import { formatPlayerNumber } from '../game/copy';
 import { RarityBadge } from './RarityBadge';
+import { wildfirePreview } from '../game/hoodedFigure';
 
 export interface FlameDetailsTarget {
   flame: Flame;
-  kind: 'ember' | 'bonfire' | 'offer';
+  kind: 'ember' | 'bonfire' | 'wildfire' | 'offer';
   dieId?: number;
 }
 
@@ -24,7 +25,8 @@ export function FlameDetailsModal({ board, target, busy, actionsEnabled, onClose
   const activeId = activeFlameId(die?.flame);
   const flameId = target?.flame ?? null;
   const isEmber = target?.kind === 'ember' && !!die && activeId === flameId;
-  const invested = target?.kind === 'bonfire' ? 100 : isEmber ? activeFlameInvestment(die.flame) : 0;
+  const invested = target?.kind === 'bonfire' || target?.kind === 'wildfire' ? 100 : isEmber ? activeFlameInvestment(die.flame) : 0;
+  const wildfire = target?.kind === 'wildfire' ? board.wildfires.find(item => item.flame === flameId) ?? null : null;
   const maxStoke = isEmber ? Math.min(board.gold, 100 - invested) : 0;
   const amount = Math.max(0, Math.min(Math.floor(stokeAmount || 0), maxStoke));
   const canStoke = isEmber && board.phase === 'shop' && actionsEnabled;
@@ -48,20 +50,20 @@ export function FlameDetailsModal({ board, target, busy, actionsEnabled, onClose
     title={definition.name} centered transitionProps={{ duration: 0 }} data-testid="flame-details-modal">
     <Stack gap="sm">
       <Group justify="space-between">
-        <Group gap="xs"><Badge color={target?.kind === 'bonfire' ? 'red' : 'orange'} variant="light">
-          🔥 {target?.kind === 'bonfire' ? 'BONFIRE' : target?.kind === 'ember' ? 'EMBER' : 'FLAME'}
+        <Group gap="xs"><Badge color={target?.kind === 'wildfire' ? 'orange' : target?.kind === 'bonfire' ? 'red' : 'orange'} variant="light">
+          🔥 {target?.kind === 'wildfire' ? 'WILDFIRE' : target?.kind === 'bonfire' ? 'BONFIRE' : target?.kind === 'ember' ? 'EMBER' : 'FLAME'}
         </Badge><RarityBadge rarity={definition.rarity} /></Group>
         {isEmber && <Badge color="yellow" variant="light">{formatPlayerNumber(board.gold)} Gold held</Badge>}
       </Group>
       <div className="flame-detail-progress">
-        <Group justify="space-between"><Text size="sm" fw={800}>Investment: {formatPlayerNumber(invested)} / 100 Gold</Text><Text size="xs" c="dimmed">{target?.kind === 'bonfire' ? 'FULL STRENGTH' : 'BONFIRE AT 100'}</Text></Group>
+        <Group justify="space-between"><Text size="sm" fw={800}>{target?.kind === 'wildfire' ? 'Resolved permanent strength' : `Investment: ${formatPlayerNumber(invested)} / 100 Gold`}</Text><Text size="xs" c="dimmed">{target?.kind === 'wildfire' ? 'WILDFIRE' : target?.kind === 'bonfire' ? 'FULL STRENGTH' : 'BONFIRE AT 100'}</Text></Group>
         <Progress value={invested} color="orange" size="lg" mt={5} aria-label={`${definition.name} investment`} />
       </div>
       <div className="modal-stat flame-current-effect" data-testid="flame-current-effect">
-        {details.maxChargeContribution !== null && <Text size="sm">
+        {wildfire ? wildfirePreview(wildfire).slice(1).map(line => <Text size="sm" fw={700} key={line}>{line}</Text>) : <>{details.maxChargeContribution !== null && <Text size="sm">
           <strong>Max Flame Contribution:</strong> +{formatPlayerNumber(details.maxChargeContribution)} Max Charge
         </Text>}
-        <Text size="sm"><strong>{details.currentLabel}:</strong> {details.currentValue}</Text>
+        <Text size="sm"><strong>{details.currentLabel}:</strong> {details.currentValue}</Text></>}
       </div>
       <Text size="sm">{definition.description}</Text>
       {flameId === 'fetch' && <Text size="sm" fw={700} c="orange">

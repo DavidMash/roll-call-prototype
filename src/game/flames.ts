@@ -5,6 +5,7 @@ import { LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from './hands';
 import { finalizeScore, handScore } from './scoring';
 import type { ActiveFlame, Board, Die, Flame, GameState, HandId, Rarity, XMultFactor } from './types';
 import { formatPlayerNumber } from './copy';
+import { wildfireFactor } from './hoodedFigure';
 
 export interface FlameDefinition {
   name: string;
@@ -149,28 +150,32 @@ export const activeFlameId = (flame: ActiveFlame | null | unknown): Flame | null
 export const activeFlameInvestment = (flame: ActiveFlame | null | unknown) =>
   typeof flame === 'object' && flame !== null && 'investedGold' in flame && Number.isFinite((flame as ActiveFlame).investedGold)
     ? Math.max(0, Math.min(100, (flame as ActiveFlame).investedGold)) : 0;
-export const hasOwnedFlame = (state: Pick<GameState, 'dice' | 'bonfires'>, id: Flame) =>
-  state.bonfires.includes(id) || state.dice.some(die => activeFlameId(die.flame) === id);
+export const hasOwnedFlame = (state: Pick<GameState, 'dice' | 'bonfires' | 'wildfires'>, id: Flame) =>
+  state.bonfires.includes(id) || state.wildfires.some(wildfire => wildfire.flame === id)
+  || state.dice.some(die => activeFlameId(die.flame) === id);
 export const isChargeFlame = (id: Flame | null | undefined): id is ChargeFlame =>
   id !== null && id !== undefined && (CHARGE_FLAME_IDS as readonly Flame[]).includes(id);
-export const hasChargeBonfire = (state: Pick<Board, 'bonfires'>) => state.bonfires.some(isChargeFlame);
-export const hasOwnedChargeFlame = (state: Pick<Board, 'dice' | 'bonfires'>) =>
+export const hasChargeBonfire = (state: Pick<Board, 'bonfires' | 'wildfires'>) => state.bonfires.some(isChargeFlame)
+  || state.wildfires.some(wildfire => isChargeFlame(wildfire.flame));
+export const hasOwnedChargeFlame = (state: Pick<Board, 'dice' | 'bonfires' | 'wildfires'>) =>
   hasChargeBonfire(state) || state.dice.some(die => isChargeFlame(activeFlameId(die.flame)));
 export const chargeFlameDieIds = (state: Pick<Board, 'dice'>) => state.dice
   .filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id).sort((a, b) => a - b);
-export function calculateMaxCharge(state: Pick<Board, 'dice' | 'bonfires'>): number {
+export function calculateMaxCharge(state: Pick<Board, 'dice' | 'bonfires' | 'wildfires'>): number {
   const emberCapacity = state.dice.reduce((sum, die) => isChargeFlame(activeFlameId(die.flame))
     ? sum + maxChargeContribution(activeFlameInvestment(die.flame)) : sum, 0);
   const bonfireCapacity = state.bonfires.filter(isChargeFlame).length * maxChargeContribution(100);
-  return Number(Math.max(1, emberCapacity + bonfireCapacity).toFixed(12));
+  const wildfireCapacity = state.wildfires.reduce((sum, wildfire) => sum
+    + (wildfire.resolved.kind === 'charge' ? wildfire.resolved.maxCharge : 0), 0);
+  return Number(Math.max(1, emberCapacity + bonfireCapacity + wildfireCapacity).toFixed(12));
 }
-export function recalculateMaxCharge(state: Pick<Board, 'dice' | 'bonfires' | 'chargeXMult' | 'maxCharge' | 'chargeArmed'>): void {
+export function recalculateMaxCharge(state: Pick<Board, 'dice' | 'bonfires' | 'wildfires' | 'chargeXMult' | 'maxCharge' | 'chargeArmed'>): void {
   state.maxCharge = calculateMaxCharge(state);
   state.chargeXMult = Number(Math.min(Math.max(1, state.chargeXMult), state.maxCharge).toFixed(12));
   if (state.chargeXMult <= 1) state.chargeArmed = false;
 }
-export const hasXMultFlame = (dice: Die[], bonfires: Flame[] = []) =>
-  bonfires.some(id => FLAMES[id]?.affectsXMult) || dice.some(die => {
+export const hasXMultFlame = (dice: Die[], bonfires: Flame[] = [], wildfires: import('./types').Wildfire[] = []) =>
+  bonfires.some(id => FLAMES[id]?.affectsXMult) || wildfires.some(item => FLAMES[item.flame]?.affectsXMult) || dice.some(die => {
     const id = activeFlameId(die.flame);
     return id !== null && FLAMES[id].affectsXMult;
   });
@@ -190,6 +195,7 @@ export interface HandStartSnapshot {
   chargeArmed: boolean;
   speedDemonDecisionMs: number | null;
   sixPackXMult: number;
+  sixPackUpperHandsPlayed: number;
   lastPlayDanger: import('./bosses').LastPlayDanger;
   selectedBasePips: number;
   selectedBaseMultiplier: number;
@@ -197,12 +203,13 @@ export interface HandStartSnapshot {
   bossFactor: number;
   lifetimeNormalShopGoldSpent: number;
   bonfires: Flame[];
+  wildfires: import('./types').Wildfire[];
   fetchTarget: { dieId: number; physicalFace: import('./types').Rank } | null;
   dice: { dieId: number; flame: Flame | null; investedGold: number; faceValue: number; physicalFace: import('./types').Rank;
     golden: boolean; jackpot: boolean; vintage: boolean }[];
 }
 
-export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'gold' | 'manualRerollsRemaining' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'bonfires' | 'dice' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null): HandStartSnapshot {
+export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'gold' | 'manualRerollsRemaining' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackUpperHandsPlayed' | 'bonfires' | 'wildfires' | 'dice' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null): HandStartSnapshot {
   const selectedScore = handScore(state.dice, hand, selectedDieIds, state.handLevels[hand]);
   return {
     score: state.score,
@@ -219,6 +226,7 @@ export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'go
     chargeArmed: state.chargeArmed,
     speedDemonDecisionMs,
     sixPackXMult: state.sixPackXMult,
+    sixPackUpperHandsPlayed: state.sixPackUpperHandsPlayed,
     lastPlayDanger: lastPlayDanger(state, hand),
     selectedBasePips: selectedScore.pips,
     selectedBaseMultiplier: selectedScore.multiplier,
@@ -227,6 +235,7 @@ export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'go
     lifetimeNormalShopGoldSpent: state.lifetimeNormalShopGoldSpent,
     fetchTarget: state.fetchTarget ? { ...state.fetchTarget } : null,
     bonfires: [...state.bonfires],
+    wildfires: structuredClone(state.wildfires),
     dice: state.dice.map(die => ({ dieId: die.id, flame: activeFlameId(die.flame), investedGold: activeFlameInvestment(die.flame),
       faceValue: activeFace(die).rank, physicalFace: die.value, golden: stacks(activeFace(die), 'golden') > 0,
       jackpot: stacks(activeFace(die), 'jackpot') > 0, vintage: stacks(activeFace(die), 'vintage') > 0 })),
@@ -297,6 +306,17 @@ function contributions(snapshot: HandStartSnapshot, hand: HandId, scoringDieIds:
       result.push({ source: id, value, dieId: null, ...context, detail: `Bonfire${context.detail ? `; ${context.detail}` : ''}` });
     }
   }
+  for (const wildfire of snapshot.wildfires) {
+    const id = wildfire.flame;
+    if (!FLAMES[id]?.affectsXMult || isChargeFlame(id) || (!includeFullOfGrace && id === 'fullOfGrace') || !qualifies(id, snapshot, hand, scoringDieIds)) continue;
+    const ordinary = id === 'sixPack' ? sixPackMultiplierAfterUpperHands(6, snapshot.sixPackUpperHandsPlayed)
+      : factorValue(id, 100, snapshot, scoringDieIds);
+    const value = wildfireFactor(wildfire, ordinary);
+    if (value > 1 || id === 'speedDemon' || id === 'fetch' || isHandFamilyFlame(id)) {
+      const context = factorInput(id, snapshot, scoringDieIds);
+      result.push({ source: id, value, dieId: null, ...context, detail: `Wildfire${context.detail ? `; ${context.detail}` : ''}` });
+    }
+  }
   for (const die of snapshot.dice) {
     const id = die.flame;
     if (!id || !scoring.has(die.dieId) || !FLAMES[id].affectsXMult || isChargeFlame(id)
@@ -321,18 +341,19 @@ export function isGuaranteedWinningPlay(snapshot: HandStartSnapshot, hand: HandI
 export const composeXMult = (factors: readonly (number | XMultFactor)[]) =>
   Number(factors.map(item => typeof item === 'number' ? item : item.value).sort((a, b) => a - b)
     .reduce((product, value) => product * value, 1).toFixed(12));
-export const ownedFlameIds = (state: Pick<GameState, 'dice' | 'bonfires'>) => new Set<Flame>([
+export const ownedFlameIds = (state: Pick<GameState, 'dice' | 'bonfires' | 'wildfires'>) => new Set<Flame>([
   ...state.bonfires,
+  ...state.wildfires.map(wildfire => wildfire.flame),
   ...state.dice.map(die => activeFlameId(die.flame)).filter((id): id is Flame => id !== null),
 ]);
 export const isHandFamilyFlame = (id: Flame | null | undefined): id is HandFamilyFlame =>
   id !== null && id !== undefined && Object.hasOwn(HAND_FAMILY_FLAMES, id);
-export function initialHandFamilyFlameStages(state: Pick<GameState, 'dice' | 'bonfires'>): Pick<Partial<Record<Flame, import('./types').HandFamilyFlameStage>>, HandFamilyFlame> {
+export function initialHandFamilyFlameStages(state: Pick<GameState, 'dice' | 'bonfires' | 'wildfires'>): Pick<Partial<Record<Flame, import('./types').HandFamilyFlameStage>>, HandFamilyFlame> {
   const owned = ownedFlameIds(state);
   return Object.fromEntries(HAND_FAMILY_FLAME_IDS.filter(id => owned.has(id)).map(id => [id, 'setup'])) as Pick<Partial<Record<Flame, import('./types').HandFamilyFlameStage>>, HandFamilyFlame>;
 }
-export function handFamilyFlameTargets(state: Pick<Board, 'dice' | 'bonfires' | 'handFamilyFlameStages'>): HandId[] {
-  const owned = ownedFlameIds(state as Pick<GameState, 'dice' | 'bonfires'>);
+export function handFamilyFlameTargets(state: Pick<Board, 'dice' | 'bonfires' | 'wildfires' | 'handFamilyFlameStages'>): HandId[] {
+  const owned = ownedFlameIds(state);
   return HAND_FAMILY_FLAME_IDS.flatMap(id => {
     if (!owned.has(id)) return [];
     const stage = state.handFamilyFlameStages[id];

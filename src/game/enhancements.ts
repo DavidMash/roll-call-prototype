@@ -69,6 +69,12 @@ export function placementError(die: Pick<Die, 'faces'>, face: Face, enhancement:
 }
 export const canAttach = (face: Face, enhancement: Enhancement) => attachmentError(face, enhancement) === null;
 export const canPlace = (die: Pick<Die, 'faces'>, face: Face, enhancement: Enhancement) => placementError(die, face, enhancement) === null;
+/** A pull needs a held Magnetic source plus a different Magnetic-bearing die that can roll without Bump winning. */
+export const magneticPullCapable = (dice: readonly Pick<Die, 'owner' | 'faces'>[]) => {
+  const magneticDice = dice.filter(die => die.owner === 'player'
+    && die.faces.some(face => stacks(face, 'magnetic') > 0));
+  return magneticDice.length >= 2 && magneticDice.some(die => die.faces.some(face => stacks(face, 'bump') === 0));
+};
 export const enhancementCost = (enhancement: Enhancement) => ENHANCEMENTS[enhancement].purchasePrice;
 export const VINTAGE_BASE_SELL_CAP = 30;
 export const vintageBaseSellValue = (face: Face) => Math.min(VINTAGE_BASE_SELL_CAP, Math.max(0, Math.floor(face.vintageSellValue ?? 0)));

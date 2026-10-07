@@ -82,6 +82,11 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
         size="xs" color="red" variant="light" className="flame-detail-trigger" aria-label={`View ${FLAMES[id].name} Flame details`}
         onClick={() => openFlameDetails({ flame: id, kind: 'bonfire' })}>🔥 {FLAMES[id].shortName}</Badge>)}
     </Group>}
+    {board.wildfires.length > 0 && <Group gap={4} px="xs" py={3} className="bonfire-strip wildfire-strip" aria-label="Active Wildfires">
+      <Text size="xs" fw={700} c="orange">WILDFIRES</Text>{board.wildfires.map(item => <Badge component="button" type="button" key={item.flame}
+        size="xs" color="orange" variant="filled" className="flame-detail-trigger" aria-label={`View ${FLAMES[item.flame].name} Wildfire details`}
+        onClick={() => openFlameDetails({ flame: item.flame, kind: 'wildfire' })}>W {FLAMES[item.flame].shortName}</Badge>)}
+    </Group>}
     {specialOfferStatuses.length > 0 && <Group gap={4} px="xs" py={3} wrap="nowrap" className="special-effects-strip" data-tutorial="special-offer-status"
       aria-label="Active Special Offers" data-testid="special-effects-status">
       <Text className="special-effects-heading" size="xs" fw={700}>SPECIAL EFFECTS</Text>

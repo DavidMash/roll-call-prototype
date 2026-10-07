@@ -17,6 +17,7 @@ import { postBossShopNodeAfter } from './progression';
 import { formatPlayerNumber } from './copy';
 import { rarityLabel } from './rarity';
 import { enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey, usableManualRerolls } from './specialOffers';
+import { rankedRecipients, rankedSacrifices } from './hoodedFigure';
 import type { Action, Board, GameState, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
 
 const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`${seed}:round:${round}:attempt:${attempt}`);
@@ -46,8 +47,19 @@ function normalizeSpecialRuntime(state: GameState | GameState['roundCheckpoint']
   state.specialOffer ??= null;
 }
 
-function normalizeSixPackRuntime(state: Pick<Board, 'dice' | 'bonfires' | 'sixPackXMult' | 'sixPackUpperHandsPlayed'>): void {
-  const startingFactor = state.bonfires.includes('sixPack') ? sixPackStartingMultiplier(100)
+function normalizeHoodedRuntime(state: GameState | GameState['roundCheckpoint']): void {
+  if (!state) return;
+  state.wildfires ??= [];
+  state.bonfireContributions ??= {};
+  state.bonfireRoundContributions ??= {};
+  state.chargeAttribution ??= {};
+  state.hoodedFigure ??= { seen: false, previousChallengeId: null, active: null, interaction: null, contributionCheckpoint: null };
+}
+
+function normalizeSixPackRuntime(state: Pick<Board, 'dice' | 'bonfires' | 'wildfires' | 'sixPackXMult' | 'sixPackUpperHandsPlayed'>): void {
+  const wildfire = state.wildfires.find(item => item.flame === 'sixPack');
+  const startingFactor = wildfire?.resolved.kind === 'xMult' ? wildfire.resolved.max
+    : state.bonfires.includes('sixPack') ? sixPackStartingMultiplier(100)
     : sixPackStartingMultiplier(activeFlameInvestment(state.dice.find(die => activeFlameId(die.flame) === 'sixPack')?.flame ?? null));
   const missingCount = state.sixPackUpperHandsPlayed === undefined;
   const inferred = startingFactor <= 1 ? 0 : Math.round(6 * (startingFactor - Math.max(1, state.sixPackXMult ?? 1)) / (startingFactor - 1));
@@ -56,9 +68,9 @@ function normalizeSixPackRuntime(state: Pick<Board, 'dice' | 'bonfires' | 'sixPa
     : Math.max(1, state.sixPackXMult ?? 1);
 }
 
-function normalizeHandFamilyFlameRuntime(state: Pick<Board, 'dice' | 'bonfires' | 'handFamilyFlameStages'>): void {
+function normalizeHandFamilyFlameRuntime(state: Pick<Board, 'dice' | 'bonfires' | 'wildfires' | 'handFamilyFlameStages'>): void {
   const stages = state.handFamilyFlameStages ?? {};
-  const owned = ownedFlameIds(state as Pick<GameState, 'dice' | 'bonfires'>);
+  const owned = ownedFlameIds(state);
   state.handFamilyFlameStages = Object.fromEntries(HAND_FAMILY_FLAME_IDS.filter(id => owned.has(id)).map(id => {
     const stage = stages[id];
     return [id, stage === 'payoff' || stage === 'spent' ? stage : 'setup'];
@@ -70,6 +82,7 @@ export function normalizeGameState(state: GameState): GameState {
   next.scorecardCycleConsumed ??= next.consumed.filter(hand =>
     next.bossSilenced || next.boss?.type !== 'neglected' || !next.boss.neglectedHands.includes(hand));
   normalizeSpecialRuntime(next);
+  normalizeHoodedRuntime(next);
   const legacy = next as GameState & { flameReward?: GameState['flameSelection'] };
   if (!next.flameSelection && legacy.flameReward) next.flameSelection = legacy.flameReward;
   delete legacy.flameReward;
@@ -123,6 +136,7 @@ export function normalizeGameState(state: GameState): GameState {
     );
     ensureChapterPlan(next.roundCheckpoint, chapterNumberForRound(next.roundCheckpoint.round));
     normalizeSpecialRuntime(next.roundCheckpoint);
+    normalizeHoodedRuntime(next.roundCheckpoint);
     if (next.roundCheckpoint.shop) normalizeShop(next.roundCheckpoint.shop);
     for (const die of next.roundCheckpoint.dice) {
       for (const face of die.faces) {
@@ -164,6 +178,7 @@ export function normalizeGameState(state: GameState): GameState {
   next.presentedChapters ??= Array.from({ length: chapterNumberForRound(next.round) }, (_, index) => index + 1);
   ensureChapterPlan(next, chapterNumberForRound(next.round));
   if (next.badDreamCheckpoint) {
+    normalizeHoodedRuntime(next.badDreamCheckpoint);
     next.badDreamCheckpoint.scorecardCycleConsumed ??= next.badDreamCheckpoint.consumed.filter(hand =>
       next.badDreamCheckpoint!.bossSilenced || next.badDreamCheckpoint!.boss?.type !== 'neglected'
       || !next.badDreamCheckpoint!.boss.neglectedHands.includes(hand));
@@ -269,6 +284,21 @@ const requiredChargeFlameDieIds = (state: Board) => activeEncounterDice(state)
   .filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id).sort((a, b) => a - b);
 
 export function validateAction(state: Board, action: Action): string | null {
+  if (action.type === 'ADVANCE_HOODED_FIGURE' || action.type === 'SELECT_WILDFIRE_RECIPIENT'
+    || action.type === 'SELECT_WILDFIRE_SACRIFICE' || action.type === 'BACK_WILDFIRE'
+    || action.type === 'CONFIRM_WILDFIRE' || action.type === 'WALK_AWAY_WILDFIRE') {
+    const interaction = state.hoodedFigure.interaction;
+    if (state.phase !== 'hoodedFigure' || !interaction) return 'The Hooded Figure is not present.';
+    if (action.type === 'ADVANCE_HOODED_FIGURE') return interaction.stage === 'story' ? null : 'The story is not advancing.';
+    if (action.type === 'SELECT_WILDFIRE_RECIPIENT') return interaction.kind === 'return' && interaction.stage === 'recipient'
+      && rankedRecipients(state as GameState).includes(action.flame) ? null : 'Choose an offered ordinary Bonfire.';
+    if (action.type === 'SELECT_WILDFIRE_SACRIFICE') return interaction.stage === 'sacrifice' && interaction.recipient
+      && rankedSacrifices(state as GameState, interaction.recipient).includes(action.flame) ? null : 'Choose an offered sacrifice.';
+    if (action.type === 'BACK_WILDFIRE') return interaction.kind === 'return' && interaction.stage !== 'story' ? null : 'There is no previous selection.';
+    if (action.type === 'CONFIRM_WILDFIRE') return interaction.stage === 'confirm' && !!interaction.recipient && !!interaction.sacrifice
+      ? null : 'Choose both Bonfires before confirming.';
+    return interaction.kind === 'return' ? null : 'The opening encounter cannot be declined.';
+  }
   if (action.type === 'CONTINUE_ROUND_SUMMARY') return state.phase === 'roundSummary' && !!state.roundSummary
     ? null : 'A completed encounter summary is required.';
   if (action.type === 'RETRY_ROUND') return state.phase === 'shop' && !!state.shop && !!state.bust && state.lives > 0
@@ -407,7 +437,9 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
     phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: CONFIG.baseTarget,
     score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, roundAttemptNumber: 1,
     bossSchedule: {}, chapterPlans: {}, presentedChapters: [], boss: null, bossSilenced: false, currentNodeId: '',
-    bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], chargeXMult: 1, maxCharge: 1,
+    bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], wildfires: [],
+    bonfireContributions: {}, bonfireRoundContributions: {}, chargeAttribution: {},
+    hoodedFigure: { seen: false, previousChallengeId: null, active: null, interaction: null, contributionCheckpoint: null }, chargeXMult: 1, maxCharge: 1,
     chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
     fetchTarget: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
@@ -528,6 +560,12 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         break;
       case 'CHOOSE_SPECIAL_OFFER': resolver.chooseSpecialOffer(action.offerId); break;
       case 'CONTINUE_SPECIAL_OFFER': resolver.continueSpecialOffer(); break;
+      case 'ADVANCE_HOODED_FIGURE': resolver.advanceHoodedFigure(); break;
+      case 'SELECT_WILDFIRE_RECIPIENT': resolver.selectWildfireRecipient(action.flame); break;
+      case 'SELECT_WILDFIRE_SACRIFICE': resolver.selectWildfireSacrifice(action.flame); break;
+      case 'BACK_WILDFIRE': resolver.backWildfire(); break;
+      case 'CONFIRM_WILDFIRE': resolver.confirmWildfire(); break;
+      case 'WALK_AWAY_WILDFIRE': resolver.walkAwayWildfire(); break;
       case 'REROLL_DICE':
         resolver.spendGold(diceRerollCost(next.shop!.diceRerolls), 'Paid for shop dice reroll', 'shopDiceReroll');
         next.shop!.diceRerolls++;

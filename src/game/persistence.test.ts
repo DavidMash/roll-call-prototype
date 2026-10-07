@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dispatch, newRun } from './engine';
+import { projectWildfire, rankedRecipients } from './hoodedFigure';
 import { isResumableRun, loadPersistedRun, RUN_STORAGE_KEY, RUN_STORAGE_VERSION, savePersistedRun } from './persistence';
 
 class MemoryStorage {
@@ -46,6 +47,71 @@ describe('run persistence', () => {
 
     expect(savePersistedRun(storage, encounter)).toBe(true);
     expect(loadPersistedRun(storage, encounter.seed)).toEqual(encounter);
+  });
+
+  it('round-trips active Hooded Figure, contribution, and resolved Wildfire state', () => {
+    const storage = new MemoryStorage();
+    const state = newRun('saved-wildfire').state;
+    state.bonfires = ['ultimate', 'minigun'];
+    state.bonfireContributions.ultimate = { roundCount: 2, factorSum: 7 };
+    state.wildfires = [{ flame: 'momentum', sacrificedFlame: 'vineyard', sacrificedAverage: 5,
+      transferMultiplier: 6, resolved: { kind: 'charge', gain: 3, maxCharge: 30 } }];
+    state.hoodedFigure.seen = true;
+    state.hoodedFigure.previousChallengeId = 'beanSalad';
+    state.hoodedFigure.active = {
+      id: 'theLongWay', issuedChapter: 5, target: 3,
+      committed: { value: 1, keys: [], invalid: false, jackpotPaid: false },
+      attempt: { value: 2, keys: [], invalid: false, jackpotPaid: false }, complete: false, dialogueLine: 'persisted',
+    };
+    expect(savePersistedRun(storage, state)).toBe(true);
+    const loaded = loadPersistedRun(storage, state.seed);
+    expect(loaded?.hoodedFigure).toEqual(state.hoodedFigure);
+    expect(loaded?.bonfireContributions).toEqual(state.bonfireContributions);
+    expect(loaded?.wildfires).toEqual(state.wildfires);
+    expect(loaded?.maxCharge).toBe(30);
+  });
+
+  it('loads a pre-feature save with ordinary Bonfires at neutral finite contribution', () => {
+    const storage = new MemoryStorage();
+    const state = newRun('pre-hooded-feature').state;
+    state.bonfires = ['ultimate', 'minigun', 'hailMary', 'fullOfGrace', 'vineyard'];
+    for (const key of ['wildfires', 'bonfireContributions', 'bonfireRoundContributions', 'chargeAttribution', 'hoodedFigure'] as const)
+      delete (state as unknown as Record<string, unknown>)[key];
+    if (!state.roundCheckpoint) throw new Error('Expected initial round checkpoint');
+    for (const key of ['wildfires', 'bonfireContributions', 'bonfireRoundContributions', 'chargeAttribution', 'hoodedFigure'] as const)
+      delete (state.roundCheckpoint as unknown as Record<string, unknown>)[key];
+    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION, state }));
+
+    const loaded = loadPersistedRun(storage, null)!;
+    expect(loaded.hoodedFigure).toEqual({ seen: false, previousChallengeId: null, active: null,
+      interaction: null, contributionCheckpoint: null });
+    expect(loaded.wildfires).toEqual([]);
+    expect(rankedRecipients(loaded)).toEqual(['fullOfGrace', 'hailMary', 'minigun']);
+    const projection = projectWildfire(loaded, 'fullOfGrace', 'ultimate');
+    expect(projection.sacrificedAverage).toBe(1);
+    expect(projection.transferMultiplier).toBe(1);
+    expect(Number.isFinite((projection.resolved as { max: number }).max)).toBe(true);
+  });
+
+  it('round-trips recipient and sacrifice selection with an unchanged projection', () => {
+    const storage = new MemoryStorage();
+    const state = newRun('saved-selection').state;
+    state.phase = 'hoodedFigure';
+    state.bonfires = ['ultimate', 'minigun', 'hailMary', 'fullOfGrace', 'vineyard'];
+    state.bonfireContributions.vineyard = { roundCount: 2, factorSum: 10 };
+    state.hoodedFigure.interaction = { kind: 'return', stage: 'sacrifice', lines: [], lineIndex: 0,
+      recipient: 'ultimate', sacrifice: null };
+    expect(savePersistedRun(storage, state)).toBe(true);
+    const recipientLoaded = loadPersistedRun(storage, state.seed)!;
+    expect(recipientLoaded.hoodedFigure.interaction).toEqual(state.hoodedFigure.interaction);
+
+    recipientLoaded.hoodedFigure.interaction = { ...recipientLoaded.hoodedFigure.interaction!,
+      stage: 'confirm', sacrifice: 'vineyard' };
+    const before = projectWildfire(recipientLoaded, 'ultimate', 'vineyard');
+    expect(savePersistedRun(storage, recipientLoaded)).toBe(true);
+    const sacrificeLoaded = loadPersistedRun(storage, state.seed)!;
+    expect(sacrificeLoaded.hoodedFigure.interaction).toEqual(recipientLoaded.hoodedFigure.interaction);
+    expect(projectWildfire(sacrificeLoaded, 'ultimate', 'vineyard')).toEqual(before);
   });
 
   it('rejects malformed, unsupported, and incomplete saves', () => {

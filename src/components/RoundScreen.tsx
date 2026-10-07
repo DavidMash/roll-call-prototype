@@ -19,6 +19,7 @@ import { formatPlayerNumber, formatScoreEquation, formatScoreProgress, playActio
 import { DecisionTimer } from '../game/decisionTimer';
 import { usableManualRerolls } from '../game/specialOffers';
 import { RunActionLayout, RunActionPortal } from './RunActionRow';
+import { ChallengeTracker } from './ChallengeTracker';
 
 export function RoundScreen({ board, event, busy, inputBlocked, selection, setSelection, submit, skip }: {
   board: Board; event: GameEvent | null; busy: boolean; inputBlocked: boolean;
@@ -132,6 +133,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
         scoreText={formatScoreProgress(board.score, board.target)} />
     </div>
     <BossPanel board={board} />
+    <ChallengeTracker board={board} />
     {scorecardRefreshing && <div className="scorecard-refresh-celebration" data-testid="scorecard-refresh-celebration"
       role="status" aria-live="polite" aria-atomic="true" aria-label="Scorecard filled. All hands refreshed.">
       <span aria-hidden="true">SCORECARD FILLED</span>
