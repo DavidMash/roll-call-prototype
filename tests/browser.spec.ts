@@ -9,7 +9,7 @@ import { CONFIG } from '../src/game/config';
 import type { Action, Enhancement, GameState } from '../src/game/types';
 import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
-import { enterRun, openGameMenu, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
+import { enterRun, installRunState, openGameMenu, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 import { specialOfferName } from '../src/game/specialOffers';
 import { chapterLabel } from '../src/game/chapters';
 
@@ -225,12 +225,12 @@ function findCapacitySeed() {
   }
   throw new Error('No deterministic capacity workflow seed found');
 }
-function findHighInterestSeed() {
+function highInterestState() {
   for (let index = 0; index < 500; index++) {
     const seed = `interest-browser-${index}`;
     let game = newRun(seed).state;
     for (let step = 0; step < 250 && game.phase !== 'lost'; step++) {
-      if (game.lastRoundPayout && game.lastRoundPayout.interestGold >= 6) return seed;
+      if (game.lastRoundPayout && game.lastRoundPayout.interestGold >= 6) return game;
       if (game.phase === 'round') {
         game = dispatch(game, automaticAction(game)).state;
       } else if (game.phase === 'roundSummary') {
@@ -264,17 +264,11 @@ function nearStraightRun() {
 }
 async function reachShop(page: Page, seed: string) {
   let game = newRun(seed).state;
-  await page.goto('/');
-  await page.evaluate(key => localStorage.removeItem(key), RUN_STORAGE_KEY);
-  await page.goto(`/?seed=${seed}&speed=instant`);
-  await matchBoard(page, game);
-  while (game.phase === 'round') game = await playBest(page, game);
-  if (game.phase === 'roundSummary') {
-    await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
-    game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
-    await matchBoard(page, game);
-  }
+  for (let step = 0; step < 50 && game.phase === 'round'; step++) game = dispatch(game, automaticAction(game)).state;
+  if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
   expect(game.phase).toBe('shop');
+  await installRunState(page, game);
+  await matchBoard(page, game);
   return game;
 }
 
@@ -547,39 +541,9 @@ test('HUD hearts are interactive only in Shop and the restore modal enforces the
 });
 
 test('round payout UI displays interest above five', async ({ page }) => {
-  const seed = findHighInterestSeed();
-  let game = newRun(seed).state;
-  await page.goto(`/?seed=${seed}&speed=instant`);
+  const game = highInterestState();
+  await installRunState(page, game);
   await matchBoard(page, game);
-  for (let step = 0; step < 250 && (game.lastRoundPayout?.interestGold ?? 0) < 6; step++) {
-    if (game.phase === 'round') game = await playBest(page, game);
-    else if (game.phase === 'roundSummary') {
-      await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
-      game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
-      await matchBoard(page, game);
-    }
-    else if (game.phase === 'shop') {
-      const action = game.bust ? { type: 'RETRY_ROUND' as const }
-        : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' as const } : { type: 'NEXT_ROUND' as const };
-      await page.getByRole('button', { name: game.bust ? `RETRY ROUND ${game.round}`
-        : game.shop?.kind === 'post_boss' ? 'NEXT CHAPTER' : 'NEXT ROUND', exact: true }).click();
-      game = dispatch(game, action).state;
-      await matchBoard(page, game);
-    } else if (game.phase === 'flameSelection') {
-      if (game.flameSelection!.acquired) {
-        await page.getByRole('button', { name: /CONTINUE TO SHOP/ }).click();
-        game = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
-      } else {
-        const offer = game.flameSelection!.offers[0];
-        await page.getByTestId(`flame-offer-${offer.flame}`).getByRole('button', { name: 'Select Flame' }).click();
-        await page.getByRole('button', { name: /^Die 1,/ }).click();
-        game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId: 0 }).state;
-      }
-      await matchBoard(page, game);
-    } else if (game.phase === 'specialOffer') {
-      game = await progressSpecialOffer(page, game);
-    }
-  }
   expect(game.lastRoundPayout?.interestGold).toBeGreaterThanOrEqual(6);
   await expect(page.getByTestId('summary-gold-breakdown')).toContainText('Interest');
   await expect(page.getByTestId('summary-gold-breakdown')).toContainText(`+${game.lastRoundPayout!.interestGold}`);

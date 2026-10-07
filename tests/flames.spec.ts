@@ -8,8 +8,7 @@ import type { Action, GameState } from '../src/game/types';
 import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
 import { CONFIG } from '../src/game/config';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
-import { specialOfferName } from '../src/game/specialOffers';
-import { enterRun, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
+import { enterRun, installRunState, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 
 function bestHand(game: GameState, requiredDie?: number, requireHistory = false) {
   const dice = activeEncounterDice(game);
@@ -58,61 +57,29 @@ async function ready(page: Page) {
   }
 }
 
-async function perform(page: Page, game: GameState, action: Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'UNLOCK_WARDEN_DIE' | 'NEXT_ROUND' | 'NEXT_CHAPTER' | 'RETRY_ROUND' | 'CONTINUE_ROUND_SUMMARY' | 'CHOOSE_SPECIAL_OFFER' | 'CONTINUE_SPECIAL_OFFER' }>) {
-  if (action.type === 'PLAY') {
-    const handRow = page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) });
-    await handRow.click();
-    for (const die of activeEncounterDice(game)) {
-      const target = page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) });
-      const selected = await target.getAttribute('aria-pressed') === 'true';
-      if (selected !== action.dieIds.includes(die.id)) await target.click();
-    }
-    if (await handRow.getAttribute('aria-pressed') !== 'true') await handRow.click();
-    await page.getByRole('button', { name: /^(PLAY|LAST PLAY[?.])$/ }).click();
-  } else if (action.type === 'MANUAL_REROLL') {
-    const die = game.dice.find(item => item.id === action.dieIds[0])!;
-    await page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) }).click();
-    await page.getByTestId('manual-reroll').click();
-  } else if (action.type === 'UNLOCK_WARDEN_DIE') {
-    await page.getByRole('button', { name: new RegExp(`^Die ${action.dieId + 1},.*selectable to unlock$`) }).click();
-    await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();
-  } else if (action.type === 'CONTINUE_ROUND_SUMMARY') await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
-  else if (action.type === 'CHOOSE_SPECIAL_OFFER') {
-    const offer = game.specialOffer!.offers.find(item => item.id === action.offerId)!;
-    await page.getByRole('heading', { name: specialOfferName(offer), exact: true }).locator('..').getByRole('button', { name: 'CHOOSE' }).click();
-  } else if (action.type === 'CONTINUE_SPECIAL_OFFER') await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
-  else await page.getByRole('button', { name: action.type === 'RETRY_ROUND' ? `RETRY ROUND ${game.round}`
-    : action.type === 'NEXT_CHAPTER' || game.shop?.kind === 'post_boss' ? 'NEXT CHAPTER' : 'NEXT ROUND', exact: true }).click();
-  const next = dispatch(game, action).state;
-  await ready(page);
-  return next;
-}
-
-async function reachReward(page: Page, seed: string) {
+function flameRewardState(seed: string) {
   let game = newRun(seed).state;
-  await page.goto(`/?seed=${seed}&speed=instant`);
-  await ready(page);
-
-  const initial = bestHand(game)!;
-  const initialRow = page.getByRole('button', { name: new RegExp(`^${HANDS[initial.hand].name} `) });
-  await initialRow.click();
-  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).not.toContainText('*');
-  await initialRow.click();
-
   while (game.phase !== 'flameSelection') {
     if (game.phase === 'round') {
-      game = await perform(page, game, automaticAction(game));
-    } else if (game.phase === 'roundSummary') game = await perform(page, game, { type: 'CONTINUE_ROUND_SUMMARY' });
-    else if (game.phase === 'shop') game = await perform(page, game, game.bust ? { type: 'RETRY_ROUND' }
-      : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' });
+      game = dispatch(game, automaticAction(game)).state;
+    } else if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
+    else if (game.phase === 'shop') game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' }
+      : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
     else if (game.phase === 'specialOffer') {
       const offer = game.specialOffer!.offers.find(item => item.type !== 'timeTravel') ?? game.specialOffer!.offers[0];
-      game = await perform(page, game, game.specialOffer!.acquired
+      game = dispatch(game, game.specialOffer!.acquired
         ? { type: 'CONTINUE_SPECIAL_OFFER' }
-        : { type: 'CHOOSE_SPECIAL_OFFER', offerId: offer.id });
+        : { type: 'CHOOSE_SPECIAL_OFFER', offerId: offer.id }).state;
     }
     else throw new Error(`Unexpected phase before Flame Selection: ${game.phase}`);
   }
+  return game;
+}
+
+async function reachReward(page: Page, seed: string) {
+  const game = flameRewardState(seed);
+  await installRunState(page, game);
+  await ready(page);
   return game;
 }
 

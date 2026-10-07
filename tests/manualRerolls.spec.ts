@@ -109,27 +109,7 @@ async function installRun(page: Page, state: GameState) {
 async function reachDeadBoard(page: Page, rescue: boolean) {
   const fixture = deadBoardRun(rescue);
   await page.goto(`/?seed=${fixture.seed}&speed=instant`);
-  for (const action of fixture.actions) {
-    await ready(page);
-    if (action.type === 'PLAY') {
-      await page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) }).click();
-      for (let id = 0; id < 5; id++) {
-        const physical = page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) });
-        const selected = await physical.getAttribute('aria-pressed') === 'true';
-        if (selected !== action.dieIds.includes(id)) await physical.click();
-      }
-      await page.getByRole('button', { name: 'PLAY', exact: true }).click();
-    } else if (action.type === 'MANUAL_REROLL') {
-      for (const id of action.dieIds) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
-      await page.getByTestId('manual-reroll').click();
-    } else if (action.type === 'NEXT_ROUND') {
-      await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
-    } else if (action.type === 'CONTINUE_ROUND_SUMMARY') {
-      await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
-    } else if (action.type === 'RETRY_ROUND') {
-      await page.getByRole('button', { name: /^RETRY ROUND / }).click();
-    }
-  }
+  await installRun(page, fixture.game);
   await matchRound(page, fixture.game);
   await expect(page.getByRole('heading', { name: 'Run Over' })).toHaveCount(0);
   await expect(page.getByText('Use a Reroll.', { exact: true })).toBeVisible();

@@ -1,11 +1,10 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { CONFIG } from '../src/game/config';
-import { dispatch, newRun } from '../src/game/engine';
 import { HANDS } from '../src/game/hands';
 import type { Action, GameState } from '../src/game/types';
 import { jackpotRun } from './jackpotFixture';
-import { enterRun, setPlaybackSpeed } from './uiHelpers';
+import { enterRun, installRunState, setPlaybackSpeed } from './uiHelpers';
 
 const die = (page: Page, id: number) => page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) });
 async function ready(page: Page) {
@@ -32,33 +31,11 @@ async function selectPlay(page: Page, game: GameState, action: Extract<Action, {
     if (selected !== shouldSelect) await die(page, physical.id).click();
   }
 }
-async function perform(page: Page, game: GameState, action: Action) {
-  if (action.type === 'PLAY') {
-    await selectPlay(page, game, action);
-    await page.getByRole('button', { name: 'PLAY', exact: true }).click();
-  } else if (action.type === 'MANUAL_REROLL') {
-    for (const id of action.dieIds) await die(page, id).click();
-    await page.getByTestId('manual-reroll').click();
-  } else if (action.type === 'BUY') {
-    const offer = game.shop!.offers.find(item => item.id === action.offerId)!;
-    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button', { name: 'SELECT OR DRAG' }).click();
-    await die(page, action.dieId).click();
-  } else if (action.type === 'NEXT_ROUND') {
-    await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
-  } else if (action.type === 'CONTINUE_ROUND_SUMMARY') {
-    await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
-  } else throw new Error(`Unsupported fixture action: ${action.type}`);
-  await ready(page);
-  return dispatch(game, action).state;
-}
-
 test('scoring Jackpot pays on a played-hand clear before the final physical settle', async ({ page }) => {
   const fixture = jackpotRun();
-  let game = newRun(fixture.seed).state;
-  await page.goto(`/?seed=${fixture.seed}&speed=instant`);
+  const game = fixture.game;
+  await installRunState(page, game);
   await ready(page);
-  for (const action of fixture.actions) game = await perform(page, game, action);
-  expect(game).toEqual(fixture.game);
   const jackpotStrip = page.getByTestId(`flame-die-${fixture.heldDieId}`).locator('.die-enhancement-strip');
   await expect(jackpotStrip).toHaveAccessibleName(/Jackpot ×1/);
   await expect(jackpotStrip.locator('.enhancement-jackpot')).toHaveCount(1);

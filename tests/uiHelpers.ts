@@ -1,4 +1,13 @@
 import type { Page } from '@playwright/test';
+import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
+import type { GameState } from '../src/game/types';
+
+export async function installRunState(page: Page, state: GameState, speed: 'normal' | 'fast' | 'instant' = 'instant') {
+  await page.goto('/');
+  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved })),
+    [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
+  await page.goto(`/?seed=${encodeURIComponent(state.seed)}&speed=${speed}`);
+}
 
 export async function enterRun(page: Page) {
   const title = page.getByRole('heading', { name: 'ROLL CALL', exact: true });

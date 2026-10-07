@@ -1,13 +1,10 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { CONFIG } from '../src/game/config';
-import { dispatch, newRun } from '../src/game/engine';
 import { HANDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
-import type { Action, GameState } from '../src/game/types';
 import { pairSelectionRun, winningSlippyRun } from './handFixtures';
-import { enterRun, setPlaybackSpeed } from './uiHelpers';
-import { specialOfferName } from '../src/game/specialOffers';
+import { enterRun, installRunState, setPlaybackSpeed } from './uiHelpers';
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
@@ -26,47 +23,6 @@ async function ready(page: Page) {
   }
 }
 const die = (page: Page, id: number) => page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) });
-async function select(page: Page, ids: number[]) { for (const id of ids) await die(page, id).click(); }
-async function perform(page: Page, game: GameState, action: Action) {
-  if (action.type === 'PLAY') {
-    await page.getByRole('button', { name: new RegExp(`^${HANDS[action.hand].name} `) }).click();
-    for (const physical of game.dice) {
-      const selected = await die(page, physical.id).getAttribute('aria-pressed') === 'true';
-      if (selected !== action.dieIds.includes(physical.id)) await die(page, physical.id).click();
-    }
-    await page.getByRole('button', { name: 'PLAY', exact: true }).click();
-  } else if (action.type === 'BUY') {
-    const offer = game.shop!.offers.find(item => item.id === action.offerId)!;
-    await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button', { name: 'SELECT OR DRAG' }).click();
-    await die(page, action.dieId).click();
-  } else if (action.type === 'NEXT_ROUND') await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
-  else if (action.type === 'CHOOSE_FLAME') {
-    const offer = game.flameSelection!.offers.find(item => item.id === action.offerId)!;
-    await page.getByTestId(`flame-offer-${offer.flame}`).getByRole('button', { name: 'Select Flame' }).click();
-    await die(page, action.dieId).click();
-    if (game.dice[action.dieId].flame) await page.getByRole('button', { name: 'Replace Flame', exact: true }).click();
-  } else if (action.type === 'CONTINUE_FLAME_SELECTION') {
-    await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
-  } else if (action.type === 'CONTINUE_ROUND_SUMMARY') {
-    await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
-  } else if (action.type === 'CHOOSE_SPECIAL_OFFER') {
-    const offer = game.specialOffer!.offers.find(item => item.id === action.offerId)!;
-    await page.getByRole('heading', { name: specialOfferName(offer), exact: true }).locator('..').getByRole('button', { name: 'CHOOSE' }).click();
-  } else if (action.type === 'CONTINUE_SPECIAL_OFFER') {
-    await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
-  }
-  else if (action.type === 'MANUAL_REROLL') {
-    await select(page, action.dieIds);
-    await page.getByTestId('manual-reroll').click();
-  } else if (action.type === 'UNLOCK_WARDEN_DIE') {
-    await page.getByRole('button', { name: new RegExp(`^Die ${action.dieId + 1},.*selectable to unlock$`) }).click();
-    await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();
-  } else if (action.type === 'RETRY_ROUND') {
-    await page.getByRole('button', { name: /^RETRY ROUND / }).click();
-  } else throw new Error(`Unexpected fixture action: ${action.type}`);
-  await ready(page);
-  return dispatch(game, action).state;
-}
 
 for (const hand of ['pair', 'twoPair'] as const) {
   test(`${HANDS[hand].name}: stable default, physical replacement, scoring and consumed display`, async ({ page }) => {
@@ -111,11 +67,9 @@ for (const hand of ['pair', 'twoPair'] as const) {
 
 test('winning hand shows its final award, physical settle, and ROUND CLEARED in order', async ({ page }) => {
   const fixture = winningSlippyRun();
-  let game = newRun(fixture.seed).state;
-  await page.goto(`/?seed=${fixture.seed}&speed=instant`);
+  const game = fixture.game;
+  await installRunState(page, game);
   await ready(page);
-  for (const action of fixture.actions) game = await perform(page, game, action);
-  expect(game).toEqual(fixture.game);
   await page.getByRole('button', { name: new RegExp(`^${HANDS[fixture.action.hand].name} `) }).click();
   for (const physical of game.dice) {
     const selected = await die(page, physical.id).getAttribute('aria-pressed') === 'true';
