@@ -1,4 +1,5 @@
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type Rarity = 'common' | 'uncommon' | 'rare';
 export type BigBossType = 'caller' | 'warden' | 'hexer' | 'marathon' | 'quickdraw' | 'fly' | 'snakeEyes' | 'infected';
 export type MiniBossType = 'juggler' | 'capitalReturn' | 'neglected' | 'clockmaker'
   | 'tightrope' | 'crawler' | 'magician' | 'mugger';
@@ -17,8 +18,8 @@ export type Flame =
   | 'ultimate' | 'minigun' | 'hailMary' | 'fullOfGrace'
   | 'momentum' | 'thirdRail' | 'jumpStart' | 'powerSurge'
   | 'speedDemon' | 'sixPack' | 'fluxCapacitor'
-  | 'dragonsHoard' | 'wellTrained' | 'targetPractice'
-  | 'hotStreak' | 'moneyToBurn' | 'lowball' | 'straightShooter' | 'doubleDown'
+  | 'fatCat' | 'vineyard' | 'fetch' | 'targetPractice'
+  | 'hotStreak' | 'lowball' | 'straightShooter' | 'doubleDown'
   | 'threesCompany' | 'boxSet' | 'missingPair' | 'oneShort';
 export type HandId =
   | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes'
@@ -131,7 +132,9 @@ export interface Face {
   workoutPips: number;
   enhancements: Partial<Record<Enhancement, number>>;
   weightedTarget?: Rank;
+  /** Base accrued Vintage value. Sommelier is applied separately at sale/display time. */
   vintageSellValue?: number;
+  vintageSommelierBoosted?: boolean;
   snakeEyed?: boolean;
   infected?: boolean;
   snakeEyesOriginalRank?: Rank;
@@ -168,7 +171,7 @@ export interface FlameOffer { id: number; flame: Flame }
 export interface FlameSelection { offers: FlameOffer[]; acquired: boolean }
 export type SpecialOfferType = 'onTheHouse' | 'greatFairy' | 'focus' | 'timeTravel' | 'carePackage'
   | 'silence' | 'sommelier' | 'taxEvasion' | 'fireKeeper' | 'cashBonus' | 'orangeTheory'
-  | 'powerball' | 'bottledFairy' | 'badDream';
+  | 'powerball' | 'bottledFairy' | 'badDream' | 'semester';
 export interface SpecialOffer { id: number; type: SpecialOfferType; hand?: HandId }
 export interface SpecialOfferSelection { offers: SpecialOffer[]; acquired: boolean; chosen?: SpecialOffer }
 export interface SpecialOfferEffects {
@@ -182,6 +185,7 @@ export interface SpecialOfferEffects {
   bottledFairyRounds: number;
   bottledFairyTriggeredThisRound: boolean;
   badDreamRounds: number;
+  semesterShopsRemaining: number;
 }
 export interface RoundPayout {
   baseGold: number;
@@ -250,6 +254,7 @@ export interface Board {
   handLevels: HandLevels;
   handPlayCounts: Record<HandId, number>;
   targetPracticeHand: HandId | null;
+  fetchTarget: { dieId: number; physicalFace: Rank } | null;
   lastRoundPayout: RoundPayout | null;
   roundSummary: RoundSummary | null;
   shop: Shop | null;
@@ -417,7 +422,6 @@ export interface RunStats {
   hotStreakCharges: number;
   hotStreakSkippedHands: { round: number; hand: HandId }[];
   lifetimeNormalShopGoldSpent: number;
-  moneyToBurnMultipliers: number[];
   lowballAverages: number[];
   magneticAnchorBatches: number;
   magneticAttractions: number;
@@ -461,6 +465,7 @@ export type EventType =
   | 'FLAME_SKIPPED' | 'FLAME_INVESTED' | 'BONFIRE_CREATED' | 'FLAME_TRIGGERED' | 'HAND_XMULT_CHANGED'
   | 'TARGET_PRACTICE_SELECTED' | 'CHARGE_CHANGED' | 'CHARGE_ARMED' | 'HOT_STREAK_CHANGED'
   | 'SPEED_DEMON_REVEALED' | 'SIX_PACK_CHANGED'
+  | 'FETCH_TARGET_CHANGED'
   | 'ENHANCEMENT_SOLD' | 'VINTAGE_GROWN' | 'MAGNETIC_ATTRACTION' | 'BUMP_ROLL'
   | 'JUMPING_BEAN_FREE_PLAY' | 'JUMPING_BEAN_FOLLOWUP'
   | 'ROUND_BUST' | 'SHOP_REOPENED_AFTER_BUST' | 'ROUND_RETRY_STARTED' | 'LIFE_RESTORED' | 'FLAME_TUTORIAL_COMPLETED'
@@ -496,6 +501,8 @@ export interface EventRecord {
   source?: ScoreSource;
   goldSource?: GoldSource;
   goldSpendSource?: GoldSpendSource;
+  rarity?: Rarity;
+  offerSet?: { name: string; rarity: Rarity }[];
   face?: Rank;
   rollSource?: 'manual_reroll' | 'automatic';
   previousFace?: Rank;

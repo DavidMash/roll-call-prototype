@@ -183,24 +183,21 @@ describe('Jumping Bean effects and Flames', () => {
     { flame: 'ultimate' as const, rank: 4 as Rank, expected: 5, trained: true, expectedScore: 98 },
     { flame: 'minigun' as const, rank: 4 as Rank, expected: 5 },
     { flame: 'hailMary' as const, rank: 4 as Rank, expected: 5, zeroRerolls: true },
-    { flame: 'dragonsHoard' as const, rank: 4 as Rank, expected: 5, gold: 100 },
-    { flame: 'wellTrained' as const, rank: 4 as Rank, expected: 3, previous: 10 },
-    { flame: 'moneyToBurn' as const, rank: 4 as Rank, expected: 5, spend: 100 },
+    { flame: 'fatCat' as const, rank: 4 as Rank, expected: 5, qualifying: 'golden' as const },
+    { flame: 'vineyard' as const, rank: 4 as Rank, expected: 5, qualifying: 'vintage' as const },
     { flame: 'lowball' as const, rank: 2 as Rank, expected: 5 },
   ])('$flame applies as a normal hand-based factor', testCase => {
     const result = deterministicBean(testCase.rank, game => {
       game.dice[0].flame = { id: testCase.flame, investedGold: 100 };
       if (testCase.zeroRerolls) game.manualRerollsRemaining = 1;
-      if (testCase.gold) game.gold = testCase.gold;
-      if (testCase.previous) game.handPlayCounts[upperByRank[testCase.rank]] = testCase.previous;
-      if (testCase.spend) game.lifetimeNormalShopGoldSpent = testCase.spend;
+      if (testCase.qualifying) add(game, 0, testCase.qualifying, testCase.rank);
       if (testCase.trained) game.handLevels[upperByRank[testCase.rank]] = 2;
     });
     expect(result.state.stats.handScores[0].xMult).toBe(testCase.expected);
     expect(result.state.stats.handScores[0].score).toBe(testCase.expectedScore ?? (7 + testCase.rank) * testCase.expected);
   });
 
-  it('allows Personal Trainer after finalization and reads Well Trained history before increment', () => {
+  it('allows Personal Trainer after finalization', () => {
     const trainer = deterministicBean(5, game => {
       add(game, 0, 'personalTrainer', 5);
     }, constant(0));
@@ -208,13 +205,6 @@ describe('Jumping Bean effects and Flames', () => {
     expect(trainer.state.handLevels.fives).toBe(2);
     expect(trainer.state.handPlayCounts.fives).toBe(1);
     expect(trainer.state.stats.jumpingBeanFreePlays[0].personalTrainerSucceeded).toBe(true);
-
-    const well = deterministicBean(5, game => {
-      game.dice[0].flame = { id: 'wellTrained', investedGold: 100 };
-      game.handPlayCounts.fives = 10;
-    });
-    expect(well.state.stats.handScores[0].xMult).toBe(3);
-    expect(well.state.handPlayCounts.fives).toBe(11);
   });
 
   it('does not activate Lower-only Flames or change Hot Streak', () => {

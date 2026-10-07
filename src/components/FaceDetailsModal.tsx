@@ -66,14 +66,16 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
             const faceIds = ENHANCEMENT_IDS.filter(id => (candidate.enhancements[id] ?? 0) > 0);
             const typeCount = faceEnhancementTypes(candidate).length;
             const enhancementLabel = faceIds.map(id => enhancementAccessibleName(id, candidate.enhancements[id]!)).join(', ');
+            const isFetchTarget = board.fetchTarget?.dieId === die.id && board.fetchTarget.physicalFace === physicalFace;
             return <Paper component="button" type="button" key={physicalFace} withBorder p="xs" data-testid={`manage-face-${physicalFace}`}
               className={`manage-face-tile ${focusedFace === physicalFace ? 'focused' : ''} ${die.value === physicalFace ? 'exposed-face' : ''}`}
-              aria-label={`D${die.id + 1} face ${physicalFace}${enhancementLabel ? `. Enhancements: ${enhancementLabel}` : '. No Enhancements'}`}
+              aria-label={`D${die.id + 1} face ${physicalFace}${isFetchTarget ? ', Fetch target' : ''}${enhancementLabel ? `. Enhancements: ${enhancementLabel}` : '. No Enhancements'}`}
               aria-pressed={focusedFace === physicalFace} onClick={() => setFocusedFace(physicalFace)}>
               {diceDisplay === 'pips' ? <PipFace value={candidate.rank} compact label={`D${die.id + 1} face ${physicalFace}`} />
                 : <span className="manage-face-number" aria-label={`D${die.id + 1} face ${physicalFace}`}>{candidate.rank}</span>}
               <strong>FACE {physicalFace}</strong>
               {die.value === physicalFace && <span className="manage-face-exposed">EXPOSED</span>}
+              {isFetchTarget && <span className="manage-face-fetch">FETCH</span>}
               <small>{typeCount} / {FACE_TYPE_LIMIT} ENHANCEMENTS</small>
               <span className="manage-face-enhancements" data-testid={`manage-face-enhancements-${physicalFace}`}>
                 {faceIds.map(id => <EnhancementSymbol key={id} enhancement={id} stacks={candidate.enhancements[id]!} decorative />)}
@@ -90,7 +92,7 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
         <Stack gap="xs" className="face-detail-list">
           {ids.map(id => {
             const stacks = face.enhancements[id]!;
-            const dynamic = id === 'vintage' ? `Current sell value: ${formatPlayerNumber(enhancementSellValue(face, id))} Gold`
+            const dynamic = id === 'vintage' ? `Current sell value: ${formatPlayerNumber(enhancementSellValue(face, id))} Gold${face.vintageSommelierBoosted ? ' · Sommelier ×2' : ''}`
               : id === 'workout' && face.workoutPips > 0 ? `Current added Pips: ${formatPlayerNumber(face.workoutPips)}`
                 : id === 'magnetic' && face.magneticSourceUsed ? 'Pull used this Round'
                   : id === 'personalTrainer' ? `Base training chance: ${formatPercentage(diminishingHalfChance(stacks))} before hand-level adjustment` : null;

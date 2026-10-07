@@ -5,6 +5,8 @@ import { ScoreResolution } from './ScoreResolution';
 import { formatPlayerNumber } from '../game/copy';
 import type { FlameDetailsTarget } from './FlameDetailsModal';
 import { RunActionPortal } from './RunActionRow';
+import { rarityClassName, rarityLabel } from '../game/rarity';
+import { RarityBadge } from './RarityBadge';
 
 export function FlameSelectionScreen({ board, event, busy, selectedOffer, setSelectedOffer, submit, skip, openFlameDetails }: {
   board: Board; event: GameEvent | null; busy: boolean;
@@ -28,12 +30,13 @@ export function FlameSelectionScreen({ board, event, busy, selectedOffer, setSel
       {reward.offers.length === 0 && <Text ta="center" fw={900} py="md" data-testid="all-flames-collected">ALL FLAMES COLLECTED</Text>}
       <div className="shop-grid flame-offers">{reward.offers.map(item => <Card key={item.id} p="sm"
         data-tutorial={board.round === 12 && reward.offers[0]?.id === item.id ? 'recommended-flame' : undefined}
-        className={`flame-offer ${selectedOffer === item.id && !reward.acquired ? 'selected' : ''}`} data-testid={`flame-offer-${item.flame}`}>
+        className={`flame-offer ${rarityClassName(FLAMES[item.flame].rarity)} ${selectedOffer === item.id && !reward.acquired ? 'selected' : ''}`}
+        aria-label={`${FLAMES[item.flame].name}, ${rarityLabel(FLAMES[item.flame].rarity)} Flame`} data-testid={`flame-offer-${item.flame}`}>
         <Group className="flame-offer-header" justify="space-between" wrap="nowrap"><Group className="flame-offer-identity" gap={3} wrap="nowrap">
           <span className="flame-offer-icon" aria-hidden="true">🔥</span><Text className="flame-offer-name" fw={750}>{FLAMES[item.flame].name}</Text>
           <Button className="flame-offer-info" size="compact-xs" variant="subtle" color="gray"
-            aria-label={`About ${FLAMES[item.flame].name}`} onClick={() => openFlameDetails({ flame: item.flame, kind: 'offer' })}>ⓘ</Button>
-        </Group><Badge className="flame-offer-price" size="xs" color="teal">FREE</Badge></Group>
+            aria-label={`About ${FLAMES[item.flame].name}, ${rarityLabel(FLAMES[item.flame].rarity)} Flame`} onClick={() => openFlameDetails({ flame: item.flame, kind: 'offer' })}>ⓘ</Button>
+        </Group><Group gap={4} wrap="nowrap"><RarityBadge rarity={FLAMES[item.flame].rarity} compact /><Badge className="flame-offer-price" size="xs" color="teal">FREE</Badge></Group></Group>
         <Button className="flame-offer-action" size="compact-xs" fullWidth mt="xs" color="orange"
           variant={selectedOffer === item.id && !reward.acquired ? 'filled' : 'light'} disabled={busy || reward.acquired}
           onClick={() => setSelectedOffer(selectedOffer === item.id ? null : item.id)}>{selectedOffer === item.id ? 'Choose a die below' : 'Select Flame'}</Button>

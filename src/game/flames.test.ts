@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { dispatch, newRun, validateAction } from './engine';
 import { Resolver } from './effects';
 import {
-  captureHandStart, composeXMult, dragonsHoardMultiplier, flameEffectText, FLAME_IDS, momentumChargeGain,
-  handFamilyFlameMultiplier, handXMultContributions, hotStreakMultiplier, lowballMultiplier, moneyToBurnMultiplier, standardFlameMultiplier,
-  targetPracticeMultiplier, wellTrainedMultiplier, XMult_FLAME_IDS,
+  captureHandStart, composeXMult, flameEffectText, FLAME_IDS, momentumChargeGain,
+  handFamilyFlameMultiplier, handXMultContributions, hotStreakMultiplier, lowballMultiplier, standardFlameMultiplier,
+  targetPracticeMultiplier, XMult_FLAME_IDS,
 } from './flames';
 import type { Flame, GameState, RandomSource, Rank } from './types';
 
@@ -20,7 +20,7 @@ const play = (state: GameState, hand = 'threeKind' as const, dieIds = [0, 1, 2],
 
 describe('multiplicative Flame formulas', () => {
   it('contains the final unique 15-Flame roster without Personal Trainer', () => {
-    expect(FLAME_IDS).toEqual(['ultimate', 'minigun', 'hailMary', 'fullOfGrace', 'momentum', 'thirdRail', 'jumpStart', 'powerSurge', 'speedDemon', 'sixPack', 'fluxCapacitor', 'dragonsHoard', 'wellTrained', 'targetPractice', 'hotStreak', 'moneyToBurn', 'lowball', 'straightShooter', 'doubleDown', 'threesCompany', 'boxSet', 'missingPair', 'oneShort']);
+    expect(FLAME_IDS).toEqual(['ultimate', 'minigun', 'hailMary', 'fullOfGrace', 'momentum', 'thirdRail', 'jumpStart', 'powerSurge', 'speedDemon', 'sixPack', 'fluxCapacitor', 'fatCat', 'vineyard', 'fetch', 'targetPractice', 'hotStreak', 'lowball', 'straightShooter', 'doubleDown', 'threesCompany', 'boxSet', 'missingPair', 'oneShort']);
     expect(FLAME_IDS).not.toContain('personalTrainer');
     expect(FLAME_IDS).not.toContain('weighted');
     expect(FLAME_IDS).not.toContain('clockwork');
@@ -28,28 +28,20 @@ describe('multiplicative Flame formulas', () => {
   it.each([[0, 1], [10, 1.4], [25, 2], [50, 3], [100, 5]] as const)('standard scale %s => ×%s', (gold, factor) => expect(standardFlameMultiplier(gold)).toBe(factor));
   it.each([[0, 1], [25, 3], [50, 5], [100, 9]] as const)('hand-family payoff scale %s => ×%s', (gold, factor) => expect(handFamilyFlameMultiplier(gold)).toBe(factor));
   it.each([
-    [0, 1, 0, 1, 1, 1, 1],
-    [10, 1.8, 0.05, 1.4, 1.2, 1.4, 1.4],
-    [25, 3, 0.125, 2, 1.5, 2, 2],
-    [50, 5, 0.25, 3, 2, 3, 3],
-    [100, 9, 0.5, 5, 3, 5, 5],
-  ] as const)('uses doubled bonus-above-neutral curves at %s%%', (gold, target, charge, dragon, trained, burn, lowball) => {
+    [0, 1, 0, 1],
+    [10, 1.8, 0.05, 1.4],
+    [25, 3, 0.125, 2],
+    [50, 5, 0.25, 3],
+    [100, 9, 0.5, 5],
+  ] as const)('uses doubled bonus-above-neutral curves at %s%%', (gold, target, charge, lowball) => {
     expect(targetPracticeMultiplier(gold)).toBe(target);
     expect(momentumChargeGain(gold)).toBe(charge);
-    expect(dragonsHoardMultiplier(gold, 100)).toBe(dragon);
-    expect(wellTrainedMultiplier(gold, 10)).toBe(trained);
-    expect(moneyToBurnMultiplier(gold, 100)).toBe(burn);
     expect(lowballMultiplier(gold, 2)).toBe(lowball);
   });
   it.each([[0, 1], [10, 1.2], [25, 1.5], [50, 2], [100, 3]] as const)('Hot Streak at %s%% doubles its two-charge bonus to ×%s', (gold, factor) => {
     expect(hotStreakMultiplier(gold, 2)).toBeCloseTo(factor);
   });
   it('preserves unique inputs while doubling coefficients and raising factor caps', () => {
-    expect(dragonsHoardMultiplier(100, 20)).toBe(1.8);
-    expect(dragonsHoardMultiplier(100, 200)).toBe(5);
-    expect(wellTrainedMultiplier(100, 30)).toBe(5);
-    expect(moneyToBurnMultiplier(100, 75)).toBe(4);
-    expect(moneyToBurnMultiplier(100, 200)).toBe(5);
     expect(lowballMultiplier(100, 3)).toBe(4);
     expect(lowballMultiplier(50, 3)).toBe(2.5);
     expect(hotStreakMultiplier(50, 2)).toBe(2);
@@ -59,7 +51,7 @@ describe('multiplicative Flame formulas', () => {
     expect(flameEffectText('ultimate', 25, state)).toContain('×2 XMult');
     expect(flameEffectText('targetPractice', 25, state)).toContain('×3 XMult');
     expect(flameEffectText('momentum', 25, state)).toContain('+0.125');
-    expect(flameEffectText('moneyToBurn', 25, state)).toContain('×2 XMult');
+    expect(flameEffectText('fatCat', 25, state)).toContain('×2 XMult');
   });
   it('multiplies factors centrally and without order dependence', () => {
     expect(composeXMult([2.2, 1.5, 3])).toBe(9.9);
@@ -107,33 +99,38 @@ describe('conditional Flames and Bonfires', () => {
     expect(handXMultContributions(captureHandStart(ember, hand, [1, 2]), hand, 1, [1, 2]))
       .toMatchObject([{ source: id, value: 9, dieId: null }]);
   });
-  it('uses previous plays and the held-Gold/shop-spend snapshots', () => {
-    const state = game(); state.gold = 50; state.handPlayCounts.threeKind = 10; state.lifetimeNormalShopGoldSpent = 75;
-    flame(state, 0, 'dragonsHoard'); flame(state, 1, 'wellTrained'); flame(state, 2, 'moneyToBurn');
-    expect(handXMultContributions(captureHandStart(state, 'threeKind', [0, 1, 2]), 'threeKind', 1, [0, 1, 2]).map(item => item.value)).toEqual([3, 3, 4]);
+  it('uses actual Golden/Jackpot and Vintage scoring participation', () => {
+    const state = game(); flame(state, 0, 'fatCat'); flame(state, 1, 'vineyard');
+    state.dice[2].faces[state.dice[2].value - 1].enhancements.golden = 1;
+    state.dice[2].faces[state.dice[2].value - 1].enhancements.vintage = 1;
+    expect(handXMultContributions(captureHandStart(state, 'threeKind', [0, 1, 2]), 'threeKind', 1, [0, 1, 2])
+      .map(item => [item.source, item.value])).toEqual([['fatCat', 5], ['vineyard', 5]]);
+    expect(handXMultContributions(captureHandStart(state, 'threeKind', [0, 1]), 'threeKind', 1, [0, 1])).toEqual([]);
   });
   it('exposes all XMult Flames as factors and multiplies simultaneous real factors', () => {
     expect(XMult_FLAME_IDS).toEqual(FLAME_IDS);
-    const state = game([4, 4, 4, 2, 6]); state.gold = 25;
-    state.bonfires = ['ultimate', 'dragonsHoard']; flame(state, 0, 'wellTrained', 50);
+    const state = game([4, 4, 4, 2, 6]);
+    state.bonfires = ['ultimate', 'fatCat']; flame(state, 0, 'vineyard', 50);
+    state.dice[0].faces[3].enhancements.vintage = 1;
+    state.dice[1].faces[3].enhancements.golden = 1;
     state.handLevels.threeKind = 2;
     state.handPlayCounts.threeKind = 10;
     const factors = handXMultContributions(captureHandStart(state, 'threeKind', [0, 1, 2]), 'threeKind', 1, [0, 1, 2]);
-    expect(factors.map(factor => [factor.source, factor.value])).toEqual([['ultimate', 5], ['dragonsHoard', 2], ['wellTrained', 2]]);
-    expect(composeXMult(factors)).toBe(20);
-    expect(flameEffectText('dragonsHoard', 50, state)).toContain('×1.5 XMult');
+    expect(factors.map(factor => [factor.source, factor.value])).toEqual([['ultimate', 5], ['fatCat', 5], ['vineyard', 3]]);
+    expect(composeXMult(factors)).toBe(75);
+    expect(flameEffectText('fatCat', 50, state)).toContain('×3 XMult');
   });
   it('plays back factor-by-factor multiplication instead of additive XMult wording', () => {
-    const state = game([4, 4, 4, 2, 6]); state.gold = 25; state.bonfires = ['ultimate', 'dragonsHoard'];
-    flame(state, 0, 'wellTrained', 50); state.handPlayCounts.threeKind = 10; state.handLevels.threeKind = 2;
+    const state = game([4, 4, 4, 2, 6]); state.bonfires = ['ultimate', 'fatCat'];
+    flame(state, 0, 'vineyard', 50); state.dice[0].faces[3].enhancements.vintage = 1; state.dice[1].faces[3].enhancements.golden = 1; state.handLevels.threeKind = 2;
     const result = play(state);
     const messages = result.events.filter(event => event.type === 'HAND_XMULT_CHANGED').map(event => event.message);
     expect(messages).toEqual([
       'Ultimate: XMult ×1 × factor ×5 = ×5',
-      'Dragon’s Hoard: XMult ×5 × factor ×2 = ×10',
-      'Well Trained: XMult ×10 × factor ×2 = ×20',
+      'Fat Cat: XMult ×5 × factor ×5 = ×25',
+      'Vineyard: XMult ×25 × factor ×3 = ×75',
     ]);
-    expect(result.state.stats.handScores[0].xMult).toBe(20);
+    expect(result.state.stats.handScores[0].xMult).toBe(75);
   });
 });
 
@@ -170,17 +167,17 @@ describe('investment, uniqueness, and reward lifecycle', () => {
   it.each([1, 2, 4, 8])('allows arbitrary Stoke at an ordinary round-%s shop without enabling acquisition', round => {
     const state = game(); state.phase = 'shop'; state.round = round; state.gold = 14;
     state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
-    flame(state, 0, 'dragonsHoard', 27);
+    flame(state, 0, 'fatCat', 27);
     expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 0, amount: 14 })).toBeNull();
     expect(validateAction(state, { type: 'CHOOSE_FLAME', offerId: 1, dieId: 0 })).toContain('Flame Selection');
     const result = dispatch(state, { type: 'STOKE_FLAME', dieId: 0, amount: 14 });
     expect(result.state.gold).toBe(0);
-    expect(result.state.dice[0].flame).toEqual({ id: 'dragonsHoard', investedGold: 41 });
-    expect(result.state.stats.flameStokes.at(-1)).toEqual({ round, dieId: 0, flame: 'dragonsHoard', amount: 14,
+    expect(result.state.dice[0].flame).toEqual({ id: 'fatCat', investedGold: 41 });
+    expect(result.state.stats.flameStokes.at(-1)).toEqual({ round, dieId: 0, flame: 'fatCat', amount: 14,
       from: 27, total: 41, source: 'shop' });
     expect(result.events.find(event => event.type === 'FLAME_INVESTED')?.message).toContain('27 → 41 / 100');
     const nextRound = dispatch(result.state, { type: 'NEXT_ROUND' }, constant()).state;
-    expect(nextRound.dice[0].flame).toEqual({ id: 'dragonsHoard', investedGold: 41 });
+    expect(nextRound.dice[0].flame).toEqual({ id: 'fatCat', investedGold: 41 });
   });
   it('validates Shop Stoke Gold and cap, persists investment, and creates the same Bonfire at 100', () => {
     const state = game(); state.phase = 'shop'; state.gold = 10;

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { activeFlameId, activeFlameInvestment, flameDetailsPresentation, flameEffectText, FLAMES } from '../game/flames';
 import type { Action, Board, Flame } from '../game/types';
 import { formatPlayerNumber } from '../game/copy';
+import { RarityBadge } from './RarityBadge';
 
 export interface FlameDetailsTarget {
   flame: Flame;
@@ -47,9 +48,9 @@ export function FlameDetailsModal({ board, target, busy, actionsEnabled, onClose
     title={definition.name} centered transitionProps={{ duration: 0 }} data-testid="flame-details-modal">
     <Stack gap="sm">
       <Group justify="space-between">
-        <Badge color={target?.kind === 'bonfire' ? 'red' : 'orange'} variant="light">
+        <Group gap="xs"><Badge color={target?.kind === 'bonfire' ? 'red' : 'orange'} variant="light">
           🔥 {target?.kind === 'bonfire' ? 'BONFIRE' : target?.kind === 'ember' ? 'EMBER' : 'FLAME'}
-        </Badge>
+        </Badge><RarityBadge rarity={definition.rarity} /></Group>
         {isEmber && <Badge color="yellow" variant="light">{formatPlayerNumber(board.gold)} Gold held</Badge>}
       </Group>
       <div className="flame-detail-progress">
@@ -63,6 +64,9 @@ export function FlameDetailsModal({ board, target, busy, actionsEnabled, onClose
         <Text size="sm"><strong>{details.currentLabel}:</strong> {details.currentValue}</Text>
       </div>
       <Text size="sm">{definition.description}</Text>
+      {flameId === 'fetch' && <Text size="sm" fw={700} c="orange">
+        Target: {board.fetchTarget ? `D${board.fetchTarget.dieId + 1} face ${board.fetchTarget.physicalFace}` : 'Not set'}
+      </Text>}
       {target?.kind === 'bonfire' && definition.bonfireDescription !== definition.description
         && <Text size="xs" c="dimmed">{definition.bonfireDescription}</Text>}
       {canStoke && <Stack gap="sm" data-testid="stoke-flame-controls" data-tutorial="stoke">

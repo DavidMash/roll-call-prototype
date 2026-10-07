@@ -115,6 +115,7 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
       data-testid="dice-dock" data-phase={board.phase} data-cinematic={cinematic || undefined}
       aria-label="Persistent Dice Dock">
       <DiceRow dice={dice} display={display} event={event} disabled={busy || !actionsEnabled}
+        fetchTarget={board.fetchTarget}
         detailsDisabled={cinematic} selected={selectedWardenDieId === null ? effectiveSelection.dieIds : [selectedWardenDieId]}
         eligibleIds={board.phase === 'shop' ? eligibleIds : flameOffer ? dice.map(die => die.id) : undefined}
         restrictToEligible={board.phase === 'shop' && !!offer} ineligibleReasons={placementErrors}

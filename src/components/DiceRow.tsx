@@ -1,6 +1,6 @@
 import { Die } from './Die';
 import type { CSSProperties } from 'react';
-import type { Die as PhysicalDie, Flame, GameEvent } from '../game/types';
+import type { Die as PhysicalDie, Flame, GameEvent, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
 
 interface Props {
@@ -23,18 +23,20 @@ interface Props {
   onEnhancements: (dieId: number) => void;
   onFlame: (dieId: number, flame: Flame) => void;
   detailsDisabled?: boolean;
+  fetchTarget?: { dieId: number; physicalFace: Rank } | null;
   onDropOffer?: (offerId: number, dieId: number) => void;
 }
 export function DiceRow({ dice, display, selected = [], event, disabled, eligibleIds, restrictToEligible = false,
   ineligibleReasons = {}, actionableIneligibleIds = [], lockedIds = [], lockedReasons = {}, lockedUntilByDieId = {}, detailsDisabled = false,
   wardenLockedIds = [], wardenSelectableIds = [], wardenChoiceMode = false,
-  onClick, onEnhancements, onFlame, onDropOffer }: Props) {
+  onClick, onEnhancements, onFlame, onDropOffer, fetchTarget }: Props) {
   return <div className="dice-row" data-dice-count={dice.length}
     style={{ '--dice-columns': dice.length } as CSSProperties}>{dice.map(die => {
     const involved = event?.dieIds?.includes(die.id) ?? false;
     const resolving = involved && (event?.type === 'HAND_PIPS_CHANGED' || event?.type === 'HITCHHIKER_ADDED_PIPS'
       || event?.type === 'HAND_XMULT_CHANGED' || event?.type === 'WORKOUT_INCREMENTED');
     return <Die key={die.id} die={die} display={display}
+      fetchTarget={fetchTarget}
       selected={selected.includes(die.id)} highlighted={involved && event?.type !== 'DIE_ROLLED'}
       rolling={involved && event?.type === 'DICE_REROLL_STARTED'}
       resolving={resolving}

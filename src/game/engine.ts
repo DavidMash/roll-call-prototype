@@ -2,7 +2,7 @@ import { CONFIG, diceRerollCost, handTrainingCost, lifeRestoreCost, offerRerollC
 import { activeFace, createDice } from './dice';
 import { Resolver } from './effects';
 import type { ResolverOptions } from './effects';
-import { enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, placementError, stacks } from './enhancements';
+import { enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, placementError, stacks, VINTAGE_BASE_SELL_CAP } from './enhancements';
 import {
   activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasChargeBonfire, hasOwnedChargeFlame,
   HAND_FAMILY_FLAME_IDS, hasOwnedFlame, isChargeFlame, isFlame, ownedFlameIds, recalculateMaxCharge,
@@ -15,6 +15,7 @@ import { activeEncounterDice, bossSchedule, isBigBossRound, unavailableEncounter
 import { chapterNumberForRound, ensureChapterPlan } from './chapters';
 import { postBossShopNodeAfter } from './progression';
 import { formatPlayerNumber } from './copy';
+import { rarityLabel } from './rarity';
 import { enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey, usableManualRerolls } from './specialOffers';
 import type { Action, Board, GameState, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
 
@@ -39,6 +40,7 @@ function normalizeSpecialRuntime(state: GameState | GameState['roundCheckpoint']
   state.specialOfferEffects.carePackageRerolls = Math.max(0, Math.floor(state.specialOfferEffects.carePackageRerolls));
   for (const key of ['taxEvasionRounds', 'cashBonusRounds', 'powerballRounds', 'bottledFairyRounds', 'badDreamRounds'] as const)
     state.specialOfferEffects[key] = Math.max(0, Math.floor(state.specialOfferEffects[key]));
+  state.specialOfferEffects.semesterShopsRemaining = Math.max(0, Math.floor(state.specialOfferEffects.semesterShopsRemaining));
   state.suppressedPostBossRewardRounds ??= [];
   state.bossSilenced ??= false;
   state.specialOffer ??= null;
@@ -88,8 +90,14 @@ export function normalizeGameState(state: GameState): GameState {
         if (clamped > 0) face.enhancements[id] = clamped;
         else delete face.enhancements[id];
       }
-      if ((face.enhancements.vintage ?? 0) > 0) face.vintageSellValue = Math.max(0, Math.floor(face.vintageSellValue ?? 0));
-      else delete face.vintageSellValue;
+      if ((face.enhancements.vintage ?? 0) > 0) {
+        face.vintageSellValue = Math.min(VINTAGE_BASE_SELL_CAP, Math.max(0, Math.floor(face.vintageSellValue ?? 0)));
+        if (face.vintageSommelierBoosted) face.vintageSommelierBoosted = true;
+        else delete face.vintageSommelierBoosted;
+      } else {
+        delete face.vintageSellValue;
+        delete face.vintageSommelierBoosted;
+      }
     }
     const rawFlame = die.flame as unknown;
     const rawId = typeof rawFlame === 'string' ? rawFlame
@@ -121,6 +129,14 @@ export function normalizeGameState(state: GameState): GameState {
         const legacyMagnetic = face as typeof face & { magneticUsed?: boolean; magneticDestinationUsed?: boolean };
         delete legacyMagnetic.magneticUsed;
         delete legacyMagnetic.magneticDestinationUsed;
+        if ((face.enhancements.vintage ?? 0) > 0) {
+          face.vintageSellValue = Math.min(VINTAGE_BASE_SELL_CAP, Math.max(0, Math.floor(face.vintageSellValue ?? 0)));
+          if (face.vintageSommelierBoosted) face.vintageSommelierBoosted = true;
+          else delete face.vintageSommelierBoosted;
+        } else {
+          delete face.vintageSellValue;
+          delete face.vintageSommelierBoosted;
+        }
       }
       const rawFlame = die.flame as unknown;
       const rawId = typeof rawFlame === 'string' ? rawFlame
@@ -141,6 +157,7 @@ export function normalizeGameState(state: GameState): GameState {
     .map(offer => ({ ...offer, flame: (offer.flame as string) === 'charge' ? 'momentum' as const : offer.flame }))
     .filter(offer => isFlame(offer.flame));
   next.roundSummary ??= null;
+  next.fetchTarget ??= null;
   next.stats.jumpingBeanFreePlays ??= [];
   next.bossSchedule ??= bossSchedule(next.seed);
   next.chapterPlans ??= {};
@@ -392,6 +409,7 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
     bossSchedule: {}, chapterPlans: {}, presentedChapters: [], boss: null, bossSilenced: false, currentNodeId: '',
     bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], chargeXMult: 1, maxCharge: 1,
     chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
+    fetchTarget: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
     scoreByHand: {}, effectScore: 0, lastRoundPayout: null, roundSummary: null, flameSelection: null, specialOffer: null,
     manualRerollsRemaining: CONFIG.manualRerollsPerRound, specialOfferEffects: initialSpecialOfferEffects(), suppressedPostBossRewardRounds: [],
@@ -428,16 +446,16 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const die = next.dice[action.dieId];
         const face = activeFace(die);
         const cost = enhancementOfferIsFree(next.shop!, offer.id) ? 0 : enhancementCost(offer.enhancement);
-        if (cost) resolver.spendGold(cost, `Bought ${ENHANCEMENTS[offer.enhancement].name}: −${formatPlayerNumber(cost)} gold`, 'enhancement');
+        if (cost) resolver.spendGold(cost, `Bought ${ENHANCEMENTS[offer.enhancement].name} [${rarityLabel(ENHANCEMENTS[offer.enhancement].rarity)}]: −${formatPlayerNumber(cost)} gold`, 'enhancement');
         next.shop!.freeEnhancementOfferIds = (next.shop!.freeEnhancementOfferIds ?? []).filter(id => id !== offer.id);
         face.enhancements[offer.enhancement] = (face.enhancements[offer.enhancement] ?? 0) + 1;
-        if (offer.enhancement === 'vintage') face.vintageSellValue = 0;
+        if (offer.enhancement === 'vintage') { face.vintageSellValue = 0; delete face.vintageSommelierBoosted; }
         offer.purchased = true;
         next.stats.purchases.push({ round: next.round, enhancement: offer.enhancement, dieId: die.id, face: face.rank, cost, stacksApplied: 1 });
         const key = `D${die.id + 1}:${face.rank}`;
         if (!next.stats.enhancedFaces.includes(key)) next.stats.enhancedFaces.push(key);
-        resolver.emit({ type: 'OFFER_PURCHASED', enhancement: offer.enhancement, dieIds: [die.id], face: face.rank,
-          message: `${ENHANCEMENTS[offer.enhancement].name} added to D${die.id + 1} face ${face.rank}` });
+        resolver.emit({ type: 'OFFER_PURCHASED', enhancement: offer.enhancement, rarity: ENHANCEMENTS[offer.enhancement].rarity, dieIds: [die.id], face: face.rank,
+          message: `${ENHANCEMENTS[offer.enhancement].name} [${rarityLabel(ENHANCEMENTS[offer.enhancement].rarity)}] added to D${die.id + 1} face ${face.rank}` });
         break;
       }
       case 'SELL_ENHANCEMENT': {
@@ -449,7 +467,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const goldBefore = next.gold;
         const vintageSellValue = action.enhancement === 'vintage' ? totalProceeds : undefined;
         delete face.enhancements[action.enhancement];
-        if (action.enhancement === 'vintage') delete face.vintageSellValue;
+        if (action.enhancement === 'vintage') { delete face.vintageSellValue; delete face.vintageSommelierBoosted; }
         resolver.addGold(totalProceeds, `Sold ${definition.name} ×${formatPlayerNumber(stacksSold)}: +${formatPlayerNumber(totalProceeds)} Gold`, 'enhancementSale', die.id, action.enhancement, face.rank);
         next.stats.sales.push({ round: next.round, enhancement: action.enhancement, dieId: die.id, face: face.rank, stacksSold,
           baseSellPrice: definition.baseSellPrice, totalProceeds, goldBefore, goldAfter: next.gold, vintageSellValue });
@@ -463,14 +481,16 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const replaced = activeFlameId(die.flame);
         const firstFlame = next.stats.flameAcquisitions.length === 0;
         die.flame = { id: offer.flame, investedGold: 0 };
+        if (replaced === 'fetch') next.fetchTarget = null;
+        if (offer.flame === 'fetch') resolver.setFetchTarget(die.id, null);
         normalizeHandFamilyFlameRuntime(next);
         recalculateMaxCharge(next);
         next.flameSelection!.acquired = true;
         next.stats.flameAcquisitions.push({ round: next.round, dieId: die.id, flame: offer.flame, replaced });
         if (firstFlame && !next.flameTutorial.completed) next.flameTutorial.pendingDieId = die.id;
-        resolver.emit({ type: replaced ? 'FLAME_REPLACED' : 'FLAME_ACQUIRED', flame: offer.flame, dieIds: [die.id],
-          message: replaced ? `D${die.id + 1} replaced ${FLAMES[replaced].name} with ${FLAMES[offer.flame].name}; prior investment was lost`
-            : `D${die.id + 1} acquired ${FLAMES[offer.flame].name} as a 0-Gold ember` });
+        resolver.emit({ type: replaced ? 'FLAME_REPLACED' : 'FLAME_ACQUIRED', flame: offer.flame, rarity: FLAMES[offer.flame].rarity, dieIds: [die.id],
+          message: replaced ? `D${die.id + 1} replaced ${FLAMES[replaced].name} with ${FLAMES[offer.flame].name} [${rarityLabel(FLAMES[offer.flame].rarity)}]; prior investment was lost`
+            : `D${die.id + 1} acquired ${FLAMES[offer.flame].name} [${rarityLabel(FLAMES[offer.flame].rarity)}] as a 0-Gold ember` });
         break;
       }
       case 'STOKE_FLAME': {

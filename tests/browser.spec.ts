@@ -357,8 +357,8 @@ test('Play action distinguishes possible, definite, and guaranteed final chances
   async function load(consumed: typeof HAND_IDS, score: number) {
     state.consumed = [...consumed];
     state.score = score;
-    await page.evaluate(([key, stored]) => localStorage.setItem(key, JSON.stringify({ version: 1, state: stored })),
-      [RUN_STORAGE_KEY, state] as const);
+    await page.evaluate(([key, version, stored]) => localStorage.setItem(key, JSON.stringify({ version, state: stored })),
+      [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
     await page.reload();
     await ready(page);
     await page.getByTestId(`scorecard-row-${selected.id}`).click();

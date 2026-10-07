@@ -225,6 +225,15 @@ button { font: inherit; }
 .offer[draggable="true"] { cursor: grab; user-select: none; }
 .offer.selected { border-color: var(--mantine-color-teal-5); background: rgba(18,184,134,.1); }
 .offer.purchased { opacity: .5; }
+.offer.rarity-uncommon, .flame-offer.rarity-uncommon, .special-offer-card.rarity-uncommon {
+  border-color: rgba(34, 184, 207, .34);
+}
+.offer.rarity-rare, .flame-offer.rarity-rare, .special-offer-card.rarity-rare {
+  border-color: rgba(177, 151, 252, .58); box-shadow: inset 0 0 18px rgba(132, 94, 247, .06), 0 0 12px rgba(132, 94, 247, .08);
+}
+.rarity-badge.rarity-common { color: var(--mantine-color-gray-4); background: rgba(134,142,150,.12); }
+.rarity-badge.rarity-uncommon { color: var(--mantine-color-cyan-2); background: rgba(34,184,207,.14); }
+.rarity-badge.rarity-rare { color: var(--mantine-color-violet-2); background: rgba(132,94,247,.18); }
 .enhancement-identity { min-width: 0; display: inline-flex; align-items: center; gap: 5px; vertical-align: middle; }
 .enhancement-identity-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .enhancement-identity-stacks { flex: none; font-variant-numeric: tabular-nums; }
@@ -942,6 +951,9 @@ body, #root { overflow: hidden; }
   font-size: .56rem; font-weight: 950;
 }
 .boss-face-badge.infected { border-color: #f87171; color: #fee2e2; background: #7f1d1d; }
+.fetch-face-badge { position: absolute; top: 18px; right: 2px; z-index: 3; padding: 1px 3px; border-radius: 4px;
+  color: var(--mantine-color-orange-1); background: rgba(230,119,0,.88); font-size: .42rem; font-weight: 950; letter-spacing: .02em; }
+.manage-face-fetch { color: var(--mantine-color-orange-2); font-size: .48rem; font-weight: 950; }
 .die-state-dot { position: absolute; left: -3px; bottom: -4px; z-index: 3; color: var(--mantine-color-violet-3); font-size: .62rem; }
 .dice-dock-context { margin-top: 2px; color: var(--mantine-color-teal-3); font-size: .58rem; font-weight: 800; text-align: center; text-transform: uppercase; }
 .dice-dock-context:has(.mantine-Button-root) { display: flex; align-items: center; justify-content: center; gap: 5px; }

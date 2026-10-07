@@ -28,11 +28,10 @@ describe('shared Flame numeric details', () => {
     expect(flameDetailsPresentation(flame, 25, board())).toMatchObject({ currentLabel: 'Current Effect', currentValue });
   });
 
-  it('uses formatted live state for non-static effects without float artifacts', () => {
+  it('uses the standard curve for the new scoring-condition Flames', () => {
     const state = board();
-    state.gold = 65;
-    state.lifetimeNormalShopGoldSpent = 37;
-    expect(flameDetailsPresentation('dragonsHoard', 35, state).currentValue).toBe('×1.91 at current Gold');
-    expect(flameDetailsPresentation('moneyToBurn', 35, state).currentValue).toBe('×1.518 at current Shop spend');
+    expect(flameDetailsPresentation('fatCat', 35, state).currentValue).toBe('up to ×2.4');
+    expect(flameDetailsPresentation('vineyard', 35, state).currentValue).toBe('up to ×2.4');
+    expect(flameDetailsPresentation('fetch', 35, state).currentValue).toBe('up to ×2.4');
   });
 });

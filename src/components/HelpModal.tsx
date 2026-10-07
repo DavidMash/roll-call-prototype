@@ -7,6 +7,7 @@ import { BOSSES, BOSS_TYPES, MINI_BOSS_TYPES } from '../game/bosses';
 import type { HandId } from '../game/types';
 import { SPECIAL_OFFERS, SPECIAL_OFFER_IDS } from '../game/specialOffers';
 import { EnhancementIdentity } from './EnhancementIdentity';
+import { RarityBadge } from './RarityBadge';
 
 const LOWER_HAND_RULES: Partial<Record<HandId, string>> = {
   pair: 'Two matching Faces.',
@@ -34,7 +35,7 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
         <RuleSection title="LIVES">Busting costs a Life and sends you back to the Shop. Lose all {CONFIG.maxLives} Lives and the run ends.</RuleSection>
       </Stack></Tabs.Panel>
       <Tabs.Panel value="offers" pt="md"><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{SPECIAL_OFFER_IDS.map(id => <div key={id} className="help-item">
-        <Text size="sm" fw={700}>{SPECIAL_OFFERS[id].name}</Text><Text size="xs" c="dimmed">{SPECIAL_OFFERS[id].description}</Text>
+        <Text size="sm" fw={700}>{SPECIAL_OFFERS[id].name} <RarityBadge rarity={SPECIAL_OFFERS[id].rarity} compact /></Text><Text size="xs" c="dimmed">{SPECIAL_OFFERS[id].description}</Text>
       </div>)}</SimpleGrid></Tabs.Panel>
       <Tabs.Panel value="scoring" pt="md"><Stack gap="xs">
         <Title order={3}>Pips × Mult × XMult = Score</Title>
@@ -50,12 +51,12 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
         </div>)}</SimpleGrid></div>
       </Stack></Tabs.Panel>
       <Tabs.Panel value="enhancements" pt="md"><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{ENHANCEMENT_IDS.map(id => <div key={id} className="help-item" data-testid={`help-enhancement-${id}`}>
-        <Text size="sm" fw={700}><EnhancementIdentity enhancement={id} /></Text><Text size="xs" c="dimmed">{ENHANCEMENTS[id].description}</Text>
+        <Text size="sm" fw={700}><EnhancementIdentity enhancement={id} /> <RarityBadge rarity={ENHANCEMENTS[id].rarity} compact /></Text><Text size="xs" c="dimmed">{ENHANCEMENTS[id].description}</Text>
       </div>)}</SimpleGrid></Tabs.Panel>
       <Tabs.Panel value="flames" pt="md"><Stack gap="sm">
         <Text size="sm">Flames begin as Embers. Stoke them in the Shop; at 100 Gold, an Ember becomes a Bonfire and works globally.</Text>
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{FLAME_IDS.map(id => <div key={id} className="help-item">
-          <Text size="sm" fw={700}>🔥 {FLAMES[id].name}</Text><Text size="xs" c="dimmed">{FLAMES[id].description}</Text>
+          <Text size="sm" fw={700}>🔥 {FLAMES[id].name} <RarityBadge rarity={FLAMES[id].rarity} compact /></Text><Text size="xs" c="dimmed">{FLAMES[id].description}</Text>
           {isChargeFlame(id) && <Text size="xs" c="orange">Bonfire: {FLAMES[id].bonfireDescription}</Text>}
         </div>)}</SimpleGrid>
       </Stack></Tabs.Panel>

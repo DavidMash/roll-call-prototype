@@ -1,13 +1,13 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { dispatch, newRun } from '../src/game/engine';
-import { FLAMES, wellTrainedMultiplier } from '../src/game/flames';
+import { FLAMES, standardFlameMultiplier } from '../src/game/flames';
 import { handOptions, HANDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
 import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
 import { CONFIG } from '../src/game/config';
-import { RUN_STORAGE_KEY } from '../src/game/persistence';
+import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import { specialOfferName } from '../src/game/specialOffers';
 import { enterRun, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 
@@ -37,33 +37,9 @@ function automaticAction(game: GameState): Extract<Action, { type: 'PLAY' | 'MAN
     : { type: 'MANUAL_REROLL', dieIds: [activeEncounterDice(game)[0].id] };
 }
 
-function flameSeed() {
-  for (let index = 0; index < 2500; index++) {
-    const seed = `flame-browser-${index}`;
-    let game = newRun(seed).state;
-    for (let step = 0; step < 250; step++) {
-      if (game.phase === 'round') {
-        game = dispatch(game, automaticAction(game)).state;
-      } else if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
-      else if (game.phase === 'shop') game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' }
-        : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
-      else if (game.phase === 'flameSelection') {
-        if (game.flameSelection!.offers.some(offer => offer.flame === 'wellTrained')) {
-          const shop = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
-          const next = dispatch(shop, { type: 'NEXT_CHAPTER' }).state;
-          if (bestHand(next, 0, true)) return seed;
-        }
-        break;
-      } else if (game.phase === 'specialOffer') {
-        const offer = game.specialOffer!.offers.find(item => item.type !== 'timeTravel') ?? game.specialOffer!.offers[0];
-        game = dispatch(game, game.specialOffer!.acquired
-          ? { type: 'CONTINUE_SPECIAL_OFFER' }
-          : { type: 'CHOOSE_SPECIAL_OFFER', offerId: offer.id }).state;
-      } else break;
-    }
-  }
-  throw new Error('No deterministic three-round Flame Selection seed found.');
-}
+// Rarity consumes authoritative RNG, so this snapshot intentionally pins the
+// post-rarity seed instead of spending ~30 seconds rediscovering it per test.
+const flameSeed = () => 'flame-browser-61';
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
@@ -140,7 +116,7 @@ async function reachReward(page: Page, seed: string) {
   return game;
 }
 
-test('Flame Selection has fixed offers, preserves faces, reveals XMult, and previews Well Trained', async ({ page }) => {
+test('Flame Selection has fixed offers, preserves faces, reveals XMult, and previews Minigun', async ({ page }) => {
   test.setTimeout(120_000);
   const seed = flameSeed();
   let game = await reachReward(page, seed);
@@ -173,11 +149,11 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
   await expect(page.getByTestId('stat-gold').getByText(String(game.gold), { exact: true })).toBeVisible();
 
-  const offer = game.flameSelection!.offers.find(item => item.flame === 'wellTrained')!;
-  const card = page.getByTestId('flame-offer-wellTrained');
-  await expect(card).not.toContainText(FLAMES.wellTrained.description);
-  await card.getByRole('button', { name: `About ${FLAMES.wellTrained.name}` }).click();
-  await expect(page.getByRole('dialog', { name: FLAMES.wellTrained.name })).toContainText(FLAMES.wellTrained.description);
+  const offer = game.flameSelection!.offers.find(item => item.flame === 'minigun')!;
+  const card = page.getByTestId('flame-offer-minigun');
+  await expect(card).not.toContainText(FLAMES.minigun.description);
+  await card.getByRole('button', { name: new RegExp(`About ${FLAMES.minigun.name}`) }).click();
+  await expect(page.getByRole('dialog', { name: FLAMES.minigun.name })).toContainText(FLAMES.minigun.description);
   await page.keyboard.press('Escape');
   await card.getByRole('button', { name: 'Select Flame', exact: true }).click();
   await page.getByRole('button', { name: /^Die 1,/ }).click();
@@ -185,21 +161,21 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   await ready(page);
 
   expect(game.phase).toBe('flameSelection');
-  await expect(page.getByTestId('active-flame-wellTrained')).toHaveAccessibleName('View Well Trained Flame details, Ember at 0 of 100 Gold');
+  await expect(page.getByTestId('active-flame-minigun')).toHaveAccessibleName('View Minigun Flame details, Ember at 0 of 100 Gold');
   await page.screenshot({ path: test.info().outputPath('flame-selection-acquired-mobile.png'), fullPage: true });
   await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
   game = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
   await ready(page);
   expect(game.phase).toBe('shop');
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
-  await expect(page.getByRole('button', { name: new RegExp(`^Die 1, face ${rewardFaces[0]},.*Ember ${FLAMES.wellTrained.name}`) })).toBeVisible();
+  await expect(page.getByRole('button', { name: new RegExp(`^Die 1, face ${rewardFaces[0]},.*Ember ${FLAMES.minigun.name}`) })).toBeVisible();
   await expect(page.locator('.driver-popover')).toContainText('NEW EMBER');
-  const flameBadge = page.getByTestId('active-flame-wellTrained');
+  const flameBadge = page.getByTestId('active-flame-minigun');
   await expect(flameBadge).toHaveClass(/driver-active-element/);
   await expect(page.getByTestId('flame-die-0')).not.toHaveClass(/driver-active-element/);
   await expect(page.locator('.driver-popover')).toContainText('Stoke Flames in the Shop. At 100 Gold, they become Bonfires.');
   await expect(page.locator('.flame-tutorial-anchor')).toHaveCount(0);
-  await expect(page.getByTestId('active-flame-wellTrained')).toBeVisible();
+  await expect(page.getByTestId('active-flame-minigun')).toBeVisible();
   await expect(page.locator('[data-testid^="flame-offer-"]')).toHaveCount(0);
 
   const goldBeforeStoke = game.gold;
@@ -207,8 +183,8 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   game = dispatch(game, { type: 'DISMISS_FLAME_TUTORIAL' }).state;
   await ready(page);
   await expect(page.locator('.driver-popover')).toHaveCount(0);
-  const shopStoke = page.getByRole('dialog', { name: FLAMES.wellTrained.name });
-  await shopStoke.getByLabel(`Stoke amount for ${FLAMES.wellTrained.name}`).fill('2');
+  const shopStoke = page.getByRole('dialog', { name: FLAMES.minigun.name });
+  await shopStoke.getByLabel(`Stoke amount for ${FLAMES.minigun.name}`).fill('2');
   await expect(shopStoke.getByText(/AFTER STOKE · 2\/100/)).toBeVisible();
   await shopStoke.getByRole('button', { name: 'STOKE 2 GOLD', exact: true }).click();
   game = dispatch(game, { type: 'STOKE_FLAME', dieId: 0, amount: 2 }).state;
@@ -231,9 +207,9 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
     const selected = await target.getAttribute('aria-pressed') === 'true';
     if (selected !== choice.dieIds.includes(die.id)) await target.click();
   }
-  const wellTrained = Number(wellTrainedMultiplier(2, game.handPlayCounts[choice.hand]).toFixed(4));
+  const expectedFlameFactor = Number(standardFlameMultiplier(2).toFixed(4));
   await expect(page.getByTestId(`well-trained-preview-${choice.hand}`)).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toContainText(`× ${wellTrained} =`);
+  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toContainText(`× ${expectedFlameFactor} =`);
   await page.setViewportSize({ width: 500, height: 520 });
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   const panel = page.getByTestId('live-score-panel');
@@ -242,7 +218,7 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   await setPlaybackSpeed(page, 'NORMAL');
   await page.getByRole('button', { name: /^(PLAY|LAST PLAY[?.])$/ }).click();
   const result = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds });
-  const xMultIndex = result.events.findIndex(event => event.type === 'HAND_XMULT_CHANGED' && event.flame === 'wellTrained');
+  const xMultIndex = result.events.findIndex(event => event.type === 'HAND_XMULT_CHANGED' && event.flame === 'minigun');
   expect(xMultIndex).toBeGreaterThan(0);
   await page.clock.runFor(CONFIG.tickMs.normal * xMultIndex);
   await expect(page.getByTestId('hand-xmult')).toHaveText(String(result.events[xMultIndex].handScore!.currentXMult));
@@ -253,7 +229,7 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
 });
 
 test('Flame Selection only acquires while Shop Manage Die supports arbitrary Stoke and optional acquisition', async ({ page }) => {
-  test.setTimeout(150_000);
+  test.setTimeout(180_000);
   const seed = flameSeed();
   let game = await reachReward(page, seed);
   const rewardFaces = game.dice.map(die => die.value);
@@ -307,8 +283,9 @@ test('arming and canceling Charge preserves the selected hand and dice', async (
   const choice = bestHand(game)!;
 
   await page.goto('/');
-  await page.evaluate(({ key, state }) => localStorage.setItem(key, JSON.stringify({ version: 1, state })), {
+  await page.evaluate(({ key, version, state }) => localStorage.setItem(key, JSON.stringify({ version, state })), {
     key: RUN_STORAGE_KEY,
+    version: RUN_STORAGE_VERSION,
     state: game,
   });
   await page.goto(`/?seed=${seed}&speed=instant`);
@@ -359,8 +336,9 @@ test('Speed Demon meter pauses in modals, stays out of preview, and reveals the 
   game.stats.rounds[0].target = game.target;
 
   await page.goto('/');
-  await page.evaluate(({ key, state }) => localStorage.setItem(key, JSON.stringify({ version: 1, state })), {
+  await page.evaluate(({ key, version, state }) => localStorage.setItem(key, JSON.stringify({ version, state })), {
     key: RUN_STORAGE_KEY,
+    version: RUN_STORAGE_VERSION,
     state: game,
   });
   await page.clock.install({ time: new Date('2026-09-29T12:00:00Z') });

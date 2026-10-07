@@ -10,7 +10,7 @@ export function InfoCircleIcon() {
   </svg>;
 }
 
-export function InfoPopover({ label, description, heading }: { label: string; description: string; heading?: ReactNode }) {
+export function InfoPopover({ label, description, heading, meta }: { label: string; description: string; heading?: ReactNode; meta?: ReactNode }) {
   const [opened, setOpened] = useState(false);
   return <Popover opened={opened} onChange={setOpened} position="bottom-end" width={260} shadow="md" withArrow withinPortal>
     <Popover.Target>
@@ -20,6 +20,6 @@ export function InfoPopover({ label, description, heading }: { label: string; de
         <InfoCircleIcon />
       </ActionIcon>
     </Popover.Target>
-    <Popover.Dropdown role="tooltip">{heading && <Text size="sm" fw={800} mb={3}>{heading}</Text>}<Text size="xs">{description}</Text></Popover.Dropdown>
+    <Popover.Dropdown role="tooltip">{heading && <Text size="sm" fw={800} mb={3}>{heading}</Text>}{meta}<Text size="xs">{description}</Text></Popover.Dropdown>
   </Popover>;
 }

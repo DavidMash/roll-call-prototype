@@ -1,29 +1,32 @@
 import { stacks } from './enhancements';
 import { HANDS } from './hands';
-import type { GameState, HandId, Shop, SpecialOffer, SpecialOfferEffects, SpecialOfferType, TrainingOffer } from './types';
+import type { GameState, HandId, Rarity, Shop, SpecialOffer, SpecialOfferEffects, SpecialOfferType, TrainingOffer } from './types';
 
 export const SPECIAL_OFFER_COLOR = '#2ED68F';
 
 export const SPECIAL_OFFER_IDS: readonly SpecialOfferType[] = [
   'onTheHouse', 'greatFairy', 'focus', 'timeTravel', 'carePackage', 'silence', 'sommelier',
   'taxEvasion', 'fireKeeper', 'cashBonus', 'orangeTheory', 'powerball', 'bottledFairy', 'badDream',
+  'semester',
 ];
 
-export const SPECIAL_OFFERS: Record<SpecialOfferType, { name: string; description: string }> = {
-  onTheHouse: { name: 'On The House', description: 'The next Shop’s initial displayed purchases are free.' },
-  greatFairy: { name: 'Great Fairy', description: 'Restore all Lives. If already full, gain 15 Gold.' },
-  focus: { name: 'Focus: [HAND]', description: 'Train [HAND] 4 times for free.' },
-  timeTravel: { name: 'Time Travel', description: 'Go back 3 Rounds with your current build.' },
-  carePackage: { name: 'Care Package', description: 'Gain 3 extra manual Rerolls that carry over until used.' },
-  silence: { name: 'Silence', description: 'Disable the next Boss effect.' },
-  sommelier: { name: 'Sommelier', description: 'Double the current sell value of all held Vintage faces.' },
-  taxEvasion: { name: 'Tax Evasion', description: 'Earn double Interest for the next 3 Rounds.' },
-  fireKeeper: { name: 'Fire Keeper', description: 'Stoke a random held Ember halfway to Bonfire.' },
-  cashBonus: { name: 'Cash Bonus', description: 'For the next 3 Rounds, gain 1 Gold per Bonus stack whenever Bonus activates.' },
-  orangeTheory: { name: 'Orange Theory', description: 'All Workout faces gain +5 Pips per Workout stack immediately.' },
-  powerball: { name: 'Powerball', description: 'The first Jackpot triggered in the next 3 Rounds pays 50 Gold.' },
-  bottledFairy: { name: 'Bottled Fairy', description: 'For the next 3 Rounds, your manual Rerolls refill once per Round if you would Bust.' },
-  badDream: { name: 'Bad Dream', description: 'If your run ends in the next 3 Rounds, return here with 1 Life.' },
+export interface SpecialOfferDefinition { name: string; description: string; rarity: Rarity }
+export const SPECIAL_OFFERS: Record<SpecialOfferType, SpecialOfferDefinition> = {
+  onTheHouse: { name: 'On The House', description: 'The next Shop’s initial displayed purchases are free.', rarity: 'uncommon' },
+  greatFairy: { name: 'Great Fairy', description: 'Restore all Lives. If already full, gain 15 Gold.', rarity: 'common' },
+  focus: { name: 'Focus: [HAND]', description: 'Train [HAND] 4 times for free.', rarity: 'common' },
+  timeTravel: { name: 'Time Travel', description: 'Go back 3 Rounds with your current build.', rarity: 'rare' },
+  carePackage: { name: 'Care Package', description: 'Gain 3 extra manual Rerolls that carry over until used.', rarity: 'common' },
+  silence: { name: 'Silence', description: 'Disable the next Boss effect.', rarity: 'rare' },
+  sommelier: { name: 'Sommelier', description: 'Double the current sell value of all held Vintage faces.', rarity: 'rare' },
+  taxEvasion: { name: 'Tax Evasion', description: 'Earn double Interest for the next 3 Rounds.', rarity: 'uncommon' },
+  fireKeeper: { name: 'Fire Keeper', description: 'Stoke a random held Ember halfway to Bonfire.', rarity: 'uncommon' },
+  cashBonus: { name: 'Cash Bonus', description: 'For the next 3 Rounds, gain 3 Gold per Bonus stack whenever Bonus activates.', rarity: 'uncommon' },
+  orangeTheory: { name: 'Orange Theory', description: 'All Workout faces gain +5 Pips per Workout stack immediately.', rarity: 'common' },
+  powerball: { name: 'Powerball', description: 'The first Jackpot triggered in the next 3 Rounds pays 50 Gold.', rarity: 'common' },
+  bottledFairy: { name: 'Bottled Fairy', description: 'For the next 3 Rounds, your manual Rerolls refill once per Round if you would Bust.', rarity: 'uncommon' },
+  badDream: { name: 'Bad Dream', description: 'If your run ends in the next 3 Rounds, return here with 1 Life.', rarity: 'rare' },
+  semester: { name: 'Semester', description: 'Team Training is guaranteed in your next 3 Shops.', rarity: 'uncommon' },
 };
 
 export const initialSpecialOfferEffects = (): SpecialOfferEffects => ({
@@ -37,6 +40,7 @@ export const initialSpecialOfferEffects = (): SpecialOfferEffects => ({
   bottledFairyRounds: 0,
   bottledFairyTriggeredThisRound: false,
   badDreamRounds: 0,
+  semesterShopsRemaining: 0,
 });
 
 export function usableManualRerolls(state: Pick<GameState, 'manualRerollsRemaining' | 'specialOfferEffects'>): number {
@@ -72,14 +76,16 @@ export function restoreSpecialOfferEffectsAfterBust(
   };
 }
 
-export function specialOfferEligible(state: Pick<GameState, 'dice'>, type: SpecialOfferType): boolean {
+export function specialOfferEligible(state: Pick<GameState, 'dice' | 'specialOfferEffects'>, type: SpecialOfferType): boolean {
   if (type === 'fireKeeper') return state.dice.some(die => die.owner === 'player' && die.flame !== null && die.flame.investedGold < 100);
   if (type === 'orangeTheory') return state.dice.some(die => die.owner === 'player' && die.faces.some(face => stacks(face, 'workout') > 0));
-  if (type === 'sommelier') return state.dice.some(die => die.owner === 'player' && die.faces.some(face => stacks(face, 'vintage') > 0));
+  if (type === 'sommelier') return state.dice.some(die => die.owner === 'player'
+    && die.faces.some(face => stacks(face, 'vintage') > 0 && !face.vintageSommelierBoosted));
+  if (type === 'semester') return state.specialOfferEffects.semesterShopsRemaining <= 0;
   return true;
 }
 
-export const eligibleSpecialOfferTypes = (state: Pick<GameState, 'dice'>): SpecialOfferType[] =>
+export const eligibleSpecialOfferTypes = (state: Pick<GameState, 'dice' | 'specialOfferEffects'>): SpecialOfferType[] =>
   SPECIAL_OFFER_IDS.filter(type => specialOfferEligible(state, type));
 
 export function specialOfferName(offer: SpecialOffer): string {
@@ -134,6 +140,11 @@ export function activeSpecialOfferStatusItems(effects: SpecialOfferEffects): Act
   });
   if (effects.bottledFairyRounds > 0) statuses.push(countedStatus('bottledFairy', effects.bottledFairyRounds, 'Round'));
   if (effects.badDreamRounds > 0) statuses.push(countedStatus('badDream', effects.badDreamRounds, 'Round'));
+  if (effects.semesterShopsRemaining > 0) statuses.push({
+    type: 'semester',
+    label: `Semester · ${effects.semesterShopsRemaining} Shop${effects.semesterShopsRemaining === 1 ? '' : 's'} Left`,
+    description: SPECIAL_OFFERS.semester.description,
+  });
   return statuses;
 }
 

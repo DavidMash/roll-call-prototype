@@ -94,7 +94,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     };
     state.dice.forEach((die, index) => { die.value = (index + 1) as Rank; });
     activeFace(state.dice[0]).enhancements.bonus = 1;
-    state.dice[1].flame = { id: 'wellTrained', investedGold: 23 };
+    state.dice[1].flame = { id: 'fatCat', investedGold: 23 };
     state.handLevels.ones = 2;
     const expectedShop = structuredClone(state.shop);
     const expectedDice = structuredClone(state.dice);
@@ -271,7 +271,7 @@ describe('life restoration economy', () => {
     expect(lifeRestoreCost(state.shop!.lifeRestores)).toBe(25);
   });
 
-  it('counts life restoration spending toward Money to Burn exactly as before', () => {
+  it('counts life restoration in lifetime normal-Shop spending', () => {
     let state = shop('restore-money-to-burn');
     state.lives = 1;
     state.gold = 1000;
@@ -389,7 +389,7 @@ describe('enhancement selling and Vintage', () => {
     expect(shopRoll.dice[4].faces[5].vintageSellValue).toBe(0);
   });
 
-  it('sells Vintage at its current uncapped value and repurchase starts again at 0', () => {
+  it('caps Vintage base sell value at 30 and repurchase starts again at 0', () => {
     let state = shop('vintage-sale');
     state.gold = 20;
     const face = activeFace(state.dice[0]);
@@ -397,9 +397,9 @@ describe('enhancement selling and Vintage', () => {
     face.vintageSellValue = 31;
     const rank = face.rank;
     state = dispatch(state, { type: 'SELL_ENHANCEMENT', dieId: 0, face: rank, enhancement: 'vintage' }).state;
-    expect(state.gold).toBe(51);
+    expect(state.gold).toBe(50);
     expect(activeFace(state.dice[0]).vintageSellValue).toBeUndefined();
-    expect(state.stats.sales.at(-1)).toMatchObject({ totalProceeds: 31, vintageSellValue: 31 });
+    expect(state.stats.sales.at(-1)).toMatchObject({ totalProceeds: 30, vintageSellValue: 30 });
     state.shop!.offers = [{ id: 1, enhancement: 'vintage', purchased: false }];
     state = dispatch(state, { type: 'BUY', offerId: 1, dieId: 0 }).state;
     expect(activeFace(state.dice[0]).vintageSellValue).toBe(0);
@@ -437,11 +437,11 @@ describe('Flame Selection spending boundary and tutorial state', () => {
     expect(state.flameTutorial).toEqual({ pendingDieId: null, completed: true });
   });
 
-  it('keeps Stoke excluded from Money to Burn spend while life restoration counts', () => {
+  it('keeps Stoke excluded from lifetime normal-Shop spend while life restoration counts', () => {
     let state = shop('spend-boundary');
     state.gold = 100;
     state.lives = 2;
-    state.dice[0].flame = { id: 'moneyToBurn', investedGold: 0 };
+    state.dice[0].flame = { id: 'fatCat', investedGold: 0 };
     state = dispatch(state, { type: 'STOKE_FLAME', dieId: 0, amount: 10 }).state;
     expect(state.lifetimeNormalShopGoldSpent).toBe(0);
     state = dispatch(state, { type: 'RESTORE_LIFE' }).state;

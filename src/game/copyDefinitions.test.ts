@@ -20,7 +20,7 @@ describe('canonical player-facing definitions', () => {
       jackpot: 'Gain +3 Gold if this face scores in the hand that clears the Round. Stack up to three for more Gold.',
       personalTrainer: 'When this face scores, it may train the hand. Your below-average hands are more likely to train.\nStack up to three to increase the odds.',
       bump: 'While showing, this die’s next roll moves up one face.',
-      vintage: 'Each time this face scores, its sell value increases by 3 Gold.',
+      vintage: 'Each time this face scores, its base sell value increases by 3 Gold, up to 30.',
     });
   });
 
@@ -37,11 +37,11 @@ describe('canonical player-facing definitions', () => {
       speedDemon: 'Play quickly for up to ×9 XMult.',
       sixPack: 'Starts at up to ×6 XMult. Reduces when an Upper hand is played.',
       fluxCapacitor: 'Pulling Magnetic faces multiplies your XMult Charge.',
-      dragonsHoard: 'Holding more Gold earns up to ×5 XMult.',
-      wellTrained: 'Hands you play often gain up to ×5 XMult.',
+      fatCat: 'Hands with Golden or Jackpot gain up to ×5 XMult.',
+      vineyard: 'Hands with Vintage gain up to ×5 XMult.',
+      fetch: 'Score the marked FETCH face for up to ×5 XMult. Then FETCH moves.',
       targetPractice: 'Hit your Target for up to ×9 XMult.',
       hotStreak: 'Chain Lower hands in order to build XMult, up to ×9.',
-      moneyToBurn: 'Spending Gold in Shops earns up to ×5 XMult.',
       lowball: 'Low face values earn up to ×5 XMult.',
       straightShooter: 'Play Small Straight before Large Straight for up to ×9 XMult.',
       doubleDown: 'Play Pair before Two Pair for up to ×9 XMult.',

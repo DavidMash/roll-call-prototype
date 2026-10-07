@@ -5,7 +5,7 @@ import { dispatch, newRun } from '../src/game/engine';
 import { handOptions, HANDS, HAND_IDS, ultimateHands } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { BigBossType, GameState } from '../src/game/types';
-import { RUN_STORAGE_KEY } from '../src/game/persistence';
+import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import { enterRun, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 
 const seedFor = (boss: BigBossType) => {
@@ -71,7 +71,8 @@ async function reachBossShop(page: Page, boss: BigBossType, seed = seedFor(boss)
   game.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   game.bossSchedule[6] = boss;
   await page.goto(`/?seed=${seed}&speed=instant`);
-  await page.evaluate(([key, state]) => localStorage.setItem(key, JSON.stringify({ version: 1, state })), [RUN_STORAGE_KEY, game] as const);
+  await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state })),
+    [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, game] as const);
   await page.reload();
   await ready(page);
   return game;
@@ -208,7 +209,8 @@ test('every boss uses a readable compact mobile status without displacing core g
     if (game.boss.type === 'snakeEyes') game.boss.mutatedFaces = [{ dieId: 0, physicalFace: 1 }, { dieId: 1, physicalFace: 2 }];
     if (game.boss.type === 'infected') game.boss.infectedFaces = [{ dieId: 0, physicalFace: 1 }, { dieId: 1, physicalFace: 2 }];
     if (type === 'hexer') game.dice.push(createCursedDie());
-    await page.evaluate(([key, state]) => localStorage.setItem(key, JSON.stringify({ version: 1, state })), [RUN_STORAGE_KEY, game] as const);
+    await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state })),
+      [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, game] as const);
     await page.reload();
     await ready(page);
 
@@ -235,7 +237,8 @@ test('desktop boss HUD stays concise and does not repeat the full rule', async (
   game.boss = createBossRuntime(seed, game.round, 'caller');
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto(`/?seed=${seed}&speed=instant`);
-  await page.evaluate(([key, state]) => localStorage.setItem(key, JSON.stringify({ version: 1, state })), [RUN_STORAGE_KEY, game] as const);
+  await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state })),
+    [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, game] as const);
   await page.reload();
   await ready(page);
 
@@ -251,7 +254,8 @@ test('Boss information stays pinned right and opens the shared accessible modal'
   game.boss = createBossRuntime(seed, game.round, 'caller');
   await page.setViewportSize({ width: 320, height: 700 });
   await page.goto(`/?seed=${seed}&speed=instant`);
-  await page.evaluate(([key, state]) => localStorage.setItem(key, JSON.stringify({ version: 1, state })), [RUN_STORAGE_KEY, game] as const);
+  await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state })),
+    [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, game] as const);
   await page.reload();
   await ready(page);
 
@@ -292,7 +296,8 @@ test('score resolution owns the layer above a stationary Boss bar', async ({ pag
   game.boss = createBossRuntime(seed, game.round, 'caller');
   await page.setViewportSize({ width: 390, height: 760 });
   await page.goto(`/?seed=${seed}&speed=normal`);
-  await page.evaluate(([key, state]) => localStorage.setItem(key, JSON.stringify({ version: 1, state })), [RUN_STORAGE_KEY, game] as const);
+  await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state })),
+    [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, game] as const);
   await page.reload();
   await ready(page);
 
@@ -338,7 +343,8 @@ test('scorecard Ultimate badges require the Flame or Bonfire and match the domai
   game.handLevels.ones = 2;
   game.dice[0].flame = { id: 'ultimate', investedGold: 50 };
   const expected = ultimateHands(game.handLevels);
-  await page.evaluate(saved => localStorage.setItem('roll-call:active-run', JSON.stringify({ version: 1, state: saved })), game);
+  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved })),
+    [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, game] as const);
   await page.reload();
   await ready(page);
   await expect(page.locator('[data-testid^="ultimate-badge-"]')).toHaveCount(1);
@@ -348,7 +354,8 @@ test('scorecard Ultimate badges require the Flame or Bonfire and match the domai
 
   game.dice[0].flame = null;
   game.bonfires.push('ultimate');
-  await page.evaluate(saved => localStorage.setItem('roll-call:active-run', JSON.stringify({ version: 1, state: saved })), game);
+  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved })),
+    [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, game] as const);
   await page.reload();
   await ready(page);
   await expect(page.locator('[data-testid^="ultimate-badge-"]')).toHaveCount(1);
@@ -496,7 +503,8 @@ test('Hexer face 7 renders seven pips with Bonus and Mirror and remains freely s
   await ready(page);
   let cursed = game.dice.find(die => die.owner === 'boss')!;
   cursed.value = 7;
-  await page.evaluate(saved => localStorage.setItem('roll-call:active-run', JSON.stringify({ version: 1, state: saved })), game);
+  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved })),
+    [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, game] as const);
   await page.reload();
   await ready(page);
   await setDiceDisplay(page, 'PIPS');

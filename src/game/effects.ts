@@ -1,6 +1,6 @@
 import { bossRewardForRound, CONFIG, interestForGold, roundReward, targetForRound } from './config';
 import { activeFace, rollPhysicalDie, scoringPips, weightedSourceFace } from './dice';
-import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, personalTrainerChance, stacks } from './enhancements';
+import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, personalTrainerChance, stacks, VINTAGE_BASE_SELL_CAP } from './enhancements';
 import {
   activeFlameId, activeFlameInvestment, captureHandStart, FLAMES, FLAME_IDS, handXMultContributions,
   fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, hasChargeBonfire, HOT_STREAK_SEQUENCE,
@@ -9,6 +9,7 @@ import {
 } from './flames';
 import { hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
+import { OFFER_RARITY_WEIGHTS, rarityFirstSelection, rarityLabel } from './rarity';
 import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, handContributions } from './scoring';
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie,
@@ -18,7 +19,7 @@ import { formatPercentage, formatPlayerNumber } from './copy';
 import { chapterNumberForRound, ensureChapterPlan } from './chapters';
 import {
   captureBustPersistentSpecialOfferState, eligibleSpecialOfferTypes, restoreSpecialOfferEffectsAfterBust,
-  specialOfferDescription, specialOfferName, trainingOfferKey, usableManualRerolls,
+  SPECIAL_OFFERS, specialOfferDescription, specialOfferName, trainingOfferKey, usableManualRerolls,
 } from './specialOffers';
 import type { ChargeFlame } from './flames';
 import type { Enhancement, EventRecord, Face, Flame, GameEvent, GameState, GameStateBase, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, RunNode, ScoreSource, SpecialOffer } from './types';
@@ -80,6 +81,19 @@ export class Resolver {
     if (xMult !== undefined) (this.state.stats.xMultFactorsByFlame[flame] ??= []).push(xMult);
     this.emit({ type: 'FLAME_TRIGGERED', flame, dieIds: dieId === null ? undefined : [dieId], hand, xMult,
       message: `${dieId === null ? 'Bonfire' : `D${dieId + 1}`} ${FLAMES[flame].name}${detail ? `: ${detail}` : ''}` });
+  }
+  setFetchTarget(attachedDieId?: number, previous = this.state.fetchTarget): void {
+    const fetchDie = attachedDieId === undefined
+      ? this.state.dice.find(die => die.owner === 'player' && activeFlameId(die.flame) === 'fetch')
+      : this.state.dice.find(die => die.owner === 'player' && die.id === attachedDieId);
+    const global = this.state.bonfires.includes('fetch');
+    const dice = fetchDie ? [fetchDie] : global ? this.state.dice.filter(die => die.owner === 'player' && die.id >= 0 && die.id < CONFIG.diceCount) : [];
+    const targets = dice.flatMap(die => die.faces.slice(0, 6).map((_, index) => ({ dieId: die.id, physicalFace: (index + 1) as import('./types').Rank })))
+      .filter(target => !previous || target.dieId !== previous.dieId || target.physicalFace !== previous.physicalFace);
+    if (!targets.length) { this.state.fetchTarget = null; return; }
+    this.state.fetchTarget = targets[randomIndex(this.rng, targets.length)];
+    this.emit({ type: 'FETCH_TARGET_CHANGED', flame: 'fetch', dieIds: [this.state.fetchTarget.dieId], face: this.state.fetchTarget.physicalFace,
+      message: `Fetch target: D${this.state.fetchTarget.dieId + 1} face ${this.state.fetchTarget.physicalFace}` });
   }
   checkProbability(enhancement: 'sticky' | 'hitchhiker' | 'personalTrainer', stackCount: number, dieIds: number[], hand?: HandId, effectiveChance?: number): boolean {
     const chance = effectiveChance ?? diminishingHalfChance(stackCount);
@@ -151,9 +165,10 @@ export class Resolver {
     const workout = stacks(snapshot, 'workout');
     const bonus = stacks(snapshot, 'bonus');
     if (bonus && this.state.specialOfferEffects.cashBonusRounds > 0) {
-      this.addGold(bonus, `Cash Bonus · Bonus ×${this.format(bonus)}: +${this.format(bonus)} Gold`, 'cashBonus', dieId, 'bonus', snapshot.rank);
-      this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', enhancement: 'bonus', dieIds: [dieId], amount: bonus,
-        message: `Cash Bonus paid ${this.format(bonus)} Gold` });
+      const payout = bonus * 3;
+      this.addGold(payout, `Cash Bonus · Bonus ×${this.format(bonus)}: +${this.format(payout)} Gold`, 'cashBonus', dieId, 'bonus', snapshot.rank);
+      this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', enhancement: 'bonus', dieIds: [dieId], amount: payout,
+        message: `Cash Bonus paid ${this.format(payout)} Gold` });
     }
     if (workout) {
       this.state.stats.triggers.workout = (this.state.stats.triggers.workout ?? 0) + 1;
@@ -169,12 +184,12 @@ export class Resolver {
     if (stacks(snapshot, 'vintage')) {
       const live = activeFace(this.state.dice.find(die => die.id === dieId)!);
       const before = Math.max(0, live.vintageSellValue ?? 0);
-      live.vintageSellValue = before + 3;
+      live.vintageSellValue = Math.min(VINTAGE_BASE_SELL_CAP, before + 3);
       this.state.stats.triggers.vintage = (this.state.stats.triggers.vintage ?? 0) + 1;
       this.state.stats.vintageGrowth.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
         dieId, face: snapshot.rank, hand, playSource, participation, from: before, to: live.vintageSellValue });
       this.emit({ type: 'VINTAGE_GROWN', enhancement: 'vintage', dieIds: [dieId], face: snapshot.rank, hand, playSource,
-        amount: 3, message: `D${dieId + 1} face ${snapshot.rank} Vintage · ${HANDS[hand].name} (${playSource === 'jumpingBean' ? 'Jumping Bean free play' : participation}) · sell value ${this.format(before)} → ${this.format(live.vintageSellValue)}` });
+        amount: live.vintageSellValue - before, message: `D${dieId + 1} face ${snapshot.rank} Vintage · ${HANDS[hand].name} (${playSource === 'jumpingBean' ? 'Jumping Bean free play' : participation}) · base sell value ${this.format(before)} → ${this.format(live.vintageSellValue)}` });
     }
   }
   resolveJackpot(scoringDieIds: number[]): number {
@@ -728,12 +743,18 @@ export class Resolver {
         message: `Speed Demon ×${this.format(factor.value)}` });
       const beforeXMult = this.handAccumulator.currentXMult;
       applyXMult(this.handAccumulator, factor);
-      if (factor.source === 'moneyToBurn') this.state.stats.moneyToBurnMultipliers.push(factor.value);
       if (factor.source === 'lowball' && factor.input !== undefined) this.state.stats.lowballAverages.push(factor.input);
       if (factor.source !== 'charge') this.triggerFlame(factor.source, factor.dieId, `factor ×${this.format(factor.value)}`, hand, factor.value);
       this.emit({ type: 'HAND_XMULT_CHANGED', flame: factor.source === 'charge' ? undefined : factor.source, hand,
         dieIds: factor.dieId === null ? undefined : [factor.dieId], xMult: this.handAccumulator.currentXMult, xMultFactor: factor,
         message: `${factor.source === 'charge' ? 'Charge' : FLAMES[factor.source].name}: XMult ×${this.format(beforeXMult)} × factor ×${this.format(factor.value)} = ×${this.format(this.handAccumulator.currentXMult)}` });
+    }
+    if (xMultFactors.some(factor => factor.source === 'fetch')) {
+      const completed = this.state.fetchTarget;
+      this.setFetchTarget(undefined, completed);
+      if (completed && this.state.fetchTarget) this.log({ type: 'ABILITY_EVALUATED', flame: 'fetch',
+        dieIds: [completed.dieId, this.state.fetchTarget.dieId], face: completed.physicalFace,
+        message: `Fetch hit on D${completed.dieId + 1} face ${completed.physicalFace} · new target D${this.state.fetchTarget.dieId + 1} face ${this.state.fetchTarget.physicalFace}` });
     }
     this.advanceHandFamilyFlames(hand, xMultFactors);
     const bossFactor = this.flyFactor(hand, playSource);
@@ -1085,11 +1106,12 @@ export class Resolver {
     if (this.state.phase === 'round') this.state.decisionId++;
   }
   freshOffers(): void {
-    const pool = [...ENHANCEMENT_IDS];
-    this.state.shop!.offers = Array.from({ length: Math.min(3, pool.length) }, () => {
-      const [enhancement] = pool.splice(randomIndex(this.rng, pool.length), 1);
-      return { id: this.state.nextOfferId++, enhancement, purchased: false };
-    });
+    const selected = rarityFirstSelection(ENHANCEMENT_IDS, 3, id => ENHANCEMENTS[id].rarity,
+      OFFER_RARITY_WEIGHTS.enhancement, this.rng);
+    this.state.shop!.offers = selected.map(enhancement => ({ id: this.state.nextOfferId++, enhancement, purchased: false }));
+    const offerSet = selected.map(id => ({ name: ENHANCEMENTS[id].name, rarity: ENHANCEMENTS[id].rarity }));
+    this.log({ type: 'OFFERS_REFRESHED', offerSet,
+      message: `Enhancement offers: ${offerSet.map(item => `${item.name} [${rarityLabel(item.rarity)}]`).join(', ')}` });
   }
   freshTrainingOffers(): void {
     const pool: (HandId | 'team')[] = [...HAND_IDS, 'team'];
@@ -1103,18 +1125,24 @@ export class Resolver {
   freshFlameOffers(): void {
     const owned = ownedFlameIds(this.state);
     const pool = FLAME_IDS.filter(id => !owned.has(id));
-    this.state.flameSelection!.offers = Array.from({ length: Math.min(3, pool.length) }, () => {
-      const [flame] = pool.splice(randomIndex(this.rng, pool.length), 1); return { id: this.state.nextOfferId++, flame };
-    });
+    const selected = rarityFirstSelection(pool, 3, id => FLAMES[id].rarity, OFFER_RARITY_WEIGHTS.flame, this.rng);
+    this.state.flameSelection!.offers = selected.map(flame => ({ id: this.state.nextOfferId++, flame }));
+    const offerSet = selected.map(id => ({ name: FLAMES[id].name, rarity: FLAMES[id].rarity }));
+    this.log({ type: 'FLAME_OFFERS_REFRESHED', offerSet,
+      message: `Flame offers: ${offerSet.map(item => `${item.name} [${rarityLabel(item.rarity)}]`).join(', ')}` });
   }
   freshSpecialOffers(): void {
     const pool = eligibleSpecialOfferTypes(this.state);
-    this.state.specialOffer!.offers = Array.from({ length: Math.min(3, pool.length) }, () => {
-      const [type] = pool.splice(randomIndex(this.rng, pool.length), 1);
+    const selected = rarityFirstSelection(pool, 3, type => SPECIAL_OFFERS[type].rarity,
+      OFFER_RARITY_WEIGHTS.specialOffer, this.rng);
+    this.state.specialOffer!.offers = selected.map(type => {
       const offer: SpecialOffer = { id: this.state.nextOfferId++, type };
       if (type === 'focus') offer.hand = HAND_IDS[randomIndex(this.rng, HAND_IDS.length)];
       return offer;
     });
+    const offerSet = this.state.specialOffer!.offers.map(offer => ({ name: specialOfferName(offer), rarity: SPECIAL_OFFERS[offer.type].rarity }));
+    this.log({ type: 'SPECIAL_OFFER_OPENED', offerSet,
+      message: `Special Offers: ${offerSet.map(item => `${item.name} [${rarityLabel(item.rarity)}]`).join(', ')}` });
   }
   selectTargetPractice(): void {
     if (!ownedFlameIds(this.state).has('targetPractice')) return;
@@ -1144,6 +1172,14 @@ export class Resolver {
     if (upcomingBoss) this.state.bossSchedule[upcomingRound] = upcomingBoss;
     this.mapTransition(postBoss ? postBossShopNodeAfter(this.state.round) : shopNodeBefore(upcomingRound), direction);
     this.freshOffers(); this.freshTrainingOffers();
+    if (this.state.specialOfferEffects.semesterShopsRemaining > 0) {
+      if (!this.state.shop.trainingOffers.some(offer => offer.kind === 'team')) {
+        this.state.shop.trainingOffers[this.state.shop.trainingOffers.length - 1] = { kind: 'team', purchases: 0 };
+      }
+      this.state.specialOfferEffects.semesterShopsRemaining--;
+      this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', rarity: SPECIAL_OFFERS.semester.rarity,
+        message: `Semester guaranteed Team Training · ${this.state.specialOfferEffects.semesterShopsRemaining} future Shop${this.state.specialOfferEffects.semesterShopsRemaining === 1 ? '' : 's'} left` });
+    }
     if (this.state.specialOfferEffects.onTheHouse) {
       this.state.shop.freeEnhancementOfferIds = this.state.shop.offers.map(offer => offer.id);
       this.state.shop.freeTrainingOfferKeys = this.state.shop.trainingOffers.map(trainingOfferKey);
@@ -1202,7 +1238,7 @@ export class Resolver {
       case 'silence': this.state.specialOfferEffects.silence = true; break;
       case 'sommelier':
         for (const die of this.state.dice.filter(item => item.owner === 'player')) for (const face of die.faces)
-          if (stacks(face, 'vintage')) face.vintageSellValue = Math.max(0, face.vintageSellValue ?? 0) * 2;
+          if (stacks(face, 'vintage') && !face.vintageSommelierBoosted) face.vintageSommelierBoosted = true;
         break;
       case 'taxEvasion': this.state.specialOfferEffects.taxEvasionRounds += 3; break;
       case 'fireKeeper': {
@@ -1239,9 +1275,11 @@ export class Resolver {
         this.state.specialOfferEffects.badDreamRounds = 3;
         captureBadDream = true;
         break;
+      case 'semester': this.state.specialOfferEffects.semesterShopsRemaining = 3; break;
     }
-    this.emit({ type: 'SPECIAL_OFFER_SELECTED', hand: offer.hand,
-      message: `${specialOfferName(offer)} — ${specialOfferDescription(offer)}` });
+    const rarity = SPECIAL_OFFERS[offer.type].rarity;
+    this.emit({ type: 'SPECIAL_OFFER_SELECTED', hand: offer.hand, rarity,
+      message: `${specialOfferName(offer)} [${rarityLabel(rarity)}] selected — ${specialOfferDescription(offer)}` });
     if (timeTravelDestination !== null) this.state.round = timeTravelDestination;
     if (captureBadDream) {
       const clone = structuredClone(this.state);

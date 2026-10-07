@@ -87,13 +87,15 @@ A failed attempt pays none of these rewards. Interest is +1 per 5 Gold held, rea
 
 Every successful encounter pauses on a concise Round Summary before the next map transition. Its domain-owned snapshot shows score/target, Gold before and after, total Gold earned, and reconciled aggregate rows for Base Reward, unused rerolls, interest, Golden, Jackpot, other gameplay Gold, and Boss Reward when applicable. Bust attempts never create a successful summary.
 
-Lost lives can be restored one at a time only in a normal Shop. Each newly reached Shop starts the prices at `25, 40, 60, 90, 130, 180, 240, 310, 390, 480…`; after 390, each new increment is 10 larger than the prior increment. A Bust return preserves the same Shop's escalation, while the next new Shop resets it to 25. Restoration spending counts toward Money to Burn, and lives cannot exceed three.
+Lost lives can be restored one at a time only in a normal Shop. Each newly reached Shop starts the prices at `25, 40, 60, 90, 130, 180, 240, 310, 390, 480…`; after 390, each new increment is 10 larger than the prior increment. A Bust return preserves the same Shop's escalation, while the next new Shop resets it to 25. Lives cannot exceed three.
 
 Lifetime normal-Shop spending includes enhancement purchases, Hand Training, both paid Shop rerolls, and life restoration. Flame Stoke does not count. Enhancement sales are income and do not reduce or increase historical spending.
 
 ## Enhancements and selling
 
 Enhancements attach to the exposed physical face. A face holds at most three distinct types; extra stacks of an existing type use no additional slot. Clicking a die with no offer selected opens Manage Die for all six faces and its Ember. A fourth-type attempt opens Manage Die on the full face and preserves the pending offer, allowing a sale followed by immediate application.
+
+Enhancements, Flames, and Special Offers each have one fixed Common, Uncommon, or Rare classification. Rarity changes offer frequency only—not price, strength, stack limits, or Flame investment. Normal three-card sets roll rarity first from system-specific weights and contain at most one Rare; authored tutorial offers bypass random rarity generation.
 
 Selling removes every stack of the selected enhancement type from that face. Normal stack sales pay `stack count × base sell price`. Sale prices and purchase prices are authoritative enhancement metadata.
 
@@ -125,17 +127,21 @@ Jumping Bean and Magnetic remain nonstackable on a Face, and each is limited to 
 
 Vintage is unique and non-stackable. A new instance starts with a 0-Gold sell value and has no direct scoring effect. Whenever its physical face participates in a resolved scoring hand, its sell value increases by 3 Gold exactly once. Selected dice, successful Hitchhikers, and Jumping Bean free plays qualify; rolls, displayed faces, failed Hitchhikers, Shop rolls, and Flame Selection rolls do not. Separate Bean-chain hand resolutions may each grow it.
 
-Vintage has no value cap and may exceed its 3-Gold purchase price. Selling pays its current value and deletes that accumulated state; repurchasing starts at 0. Failed-attempt growth rolls back with the round checkpoint.
+Vintage's base sell value is capped at 30 Gold. Sommelier marks currently held, unboosted Vintage faces with a persistent ×2 modifier, for an effective maximum of 60 Gold; later Vintage purchases are not automatically boosted, and the modifier cannot stack. Selling pays the actual boosted value and deletes that accumulated state; repurchasing starts at 0. Failed-attempt growth rolls back with the round checkpoint.
 
 ### Personal Trainer
 
 Personal Trainer is stackable to three. Each scoring face checks independently after its hand's score is awarded, starting from a 50%, 75%, or 87.5% base chance and scaling down according to the played hand's level relative to the full scorecard. Lowest-level hands retain the full base chance, average-level hands use 75% of it, above-average hands fall off more quickly, and the effective chance never drops below 1%. Each check recalculates immediately before it rolls, so one success can affect the next check in the same hand. A success raises that hand by one level. Selected scoring dice, successful Hitchhikers, and Jumping Bean free plays qualify; rolls and merely exposed faces do not. Multiple successes can train one hand multiple times, and failed-attempt gains roll back with the round checkpoint.
 
+## Special Offers
+
+Cash Bonus pays 3 Gold per Bonus stack whenever Bonus activates during its three-Round window. Semester guarantees exactly one Team Training offer in each of the next three genuinely entered Shops; it does not change the offer's price, and reopening the same checkpoint Shop after a Bust does not consume another Shop.
+
 ## Flame Selections, Embers, and Bonfires
 
 Odd-numbered Boss clears add the escalating Boss Reward, show the Round Summary, and then open Flame Selection before the Shop. This screen only allows the player to select one of the three deterministic distinct offers and assign it to a physical die, or skip. Even-numbered Boss clears instead present three distinct seeded Special Offers and require one choice. There are no paid offer rerolls and no Stoke controls on either reward screen. If every Flame is currently owned as an Ember or Bonfire, Flame Selection reports that all Flames are collected and continues normally to the Shop; a replaced Ember becomes eligible for a later selection again.
 
-New Flames begin as 0-Gold Embers. The immediately following Shop shows a one-time controlled tooltip on the first Flame’s die, teaching the player to click the die, Stoke it, and reach Bonfire at 100 Gold. All Flame investment occurs through Manage Die in a normal Shop. Arbitrary positive whole-Gold Stoke amounts are supported and do not count toward Money to Burn spending.
+New Flames begin as 0-Gold Embers. The immediately following Shop shows a one-time controlled tooltip on the first Flame’s die, teaching the player to click the die, Stoke it, and reach Bonfire at 100 Gold. All Flame investment occurs through Manage Die in a normal Shop. Arbitrary positive whole-Gold Stoke amounts are supported and do not count toward lifetime normal-Shop spending.
 
 At exactly 100 invested Gold an Ember becomes a global Bonfire, detaches from its die, and cannot be reacquired. Replacing an active Ember during a later Flame Selection destroys its investment. The threshold and all Flame formulas remain unchanged.
 
@@ -154,11 +160,11 @@ Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a f
 | Speed Demon | Actual unblocked decision time: full strength for 1 second, then smooth decay to ×1 at about 10 seconds; peak `1 + 8p` |
 | Six Pack | Starts each Round at `S = 1 + 5p`; after `n` played Upper hands its factor is `1 + (S - 1)(1 - n/6)`, floored at ×1 |
 | Flux Capacitor | One Magnetic source activation that pulls `m` Magnetic faces multiplies current Charge by `1 + mp`, clamped to Max Charge |
-| Dragon's Hoard | `1 + 4p × min(heldGold/100, 1)`, max ×5 |
-| Well Trained | `min(5, 1 + previousPlays × 0.2p)` |
+| Fat Cat | A scoring Golden or Jackpot face enables `1 + 4p`, max ×5 |
+| Vineyard | A scoring Vintage face enables `1 + 4p`, max ×5 |
+| Fetch | The marked persistent physical face scores for `1 + 4p`, max ×5, then moves |
 | Target Practice | Targeted Lower hand: `1 + 8p`, max ×9 |
 | Hot Streak | `1 + successfulCharges × p` |
-| Money to Burn | `1 + 4p × min(shopSpend/100, 1)`, max ×5 |
 | Lowball | `1 + 2 × (printedFaceTier − 1) × p`, max ×5 |
 | Straight Shooter | Play Small Straight, then pay once on Large Straight: `1 + 8p`, max ×9 |
 | Double Down | Play Pair, then pay once on Two Pair: `1 + 8p`, max ×9 |

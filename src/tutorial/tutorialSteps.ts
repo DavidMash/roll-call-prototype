@@ -1,6 +1,6 @@
 import { combinationsForHand, HANDS } from '../game/hands';
 import { activeSpecialOfferStatusItems } from '../game/specialOffers';
-import { enhancementLabel } from '../game/enhancements';
+import { enhancementLabel, enhancementSellValue } from '../game/enhancements';
 import { formatPlayerNumber } from '../game/copy';
 import type { HandId } from '../game/types';
 import type { TutorialBeat, TutorialSession, TutorialUiState } from './types';
@@ -430,7 +430,7 @@ function contextualCopy(beat: TutorialBeat, session: TutorialSession): TutorialB
   ] };
   if (beat.id === 'context-selling') {
     const vintage = session.game.dice.flatMap(candidate => candidate.faces.map((face, faceIndex) => ({
-      dieId: candidate.id, faceIndex, rank: face.rank, value: face.vintageSellValue ?? 0,
+      dieId: candidate.id, faceIndex, rank: face.rank, value: enhancementSellValue(face, 'vintage'),
       owned: (face.enhancements.vintage ?? 0) > 0,
     }))).filter(candidate => candidate.owned && candidate.value > 0)
       .sort((a, b) => b.value - a.value || a.dieId - b.dieId || a.faceIndex - b.faceIndex)[0];

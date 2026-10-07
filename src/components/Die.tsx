@@ -2,7 +2,7 @@ import { Paper, Text } from '@mantine/core';
 import { activeFace, scoringPips } from '../game/dice';
 import { ENHANCEMENTS, ENHANCEMENT_IDS } from '../game/enhancements';
 import { activeFlameId, activeFlameInvestment, FLAMES } from '../game/flames';
-import type { Die as PhysicalDie, Enhancement, Flame } from '../game/types';
+import type { Die as PhysicalDie, Enhancement, Flame, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
 import { PipFace } from './PipFace';
 import { formatPlayerNumber } from '../game/copy';
@@ -30,11 +30,12 @@ interface Props {
   onEnhancements: () => void;
   onFlame: (flame: Flame) => void;
   onDropOffer?: (offerId: number) => void;
+  fetchTarget?: { dieId: number; physicalFace: Rank } | null;
 }
 
 export function Die({ die, display, selected, highlighted, rolling, resolving = false, ability, flameAbility, disabled, detailsDisabled = false, eligible,
   wardenLocked = false, wardenSelectable = false, unlockAt, ineligibleReason, lockedReason, allowIneligibleClick = false,
-  onClick, onEnhancements, onFlame, onDropOffer }: Props) {
+  onClick, onEnhancements, onFlame, onDropOffer, fetchTarget }: Props) {
   const face = activeFace(die);
   const enhancements = ENHANCEMENT_IDS.filter(id => (face.enhancements[id] ?? 0) > 0)
     .sort((a, b) => (face.enhancements[b] ?? 0) - (face.enhancements[a] ?? 0));
@@ -49,9 +50,11 @@ export function Die({ die, display, selected, highlighted, rolling, resolving = 
     face.infected ? 'infected face; 3 fewer Pips; Enhancements disabled' : '',
     face.magneticSourceUsed && face.enhancements.magnetic ? 'Magnetic source pull used this Round' : '',
   ].filter(Boolean);
+  const isFetchTarget = fetchTarget?.dieId === die.id && fetchTarget.physicalFace === die.value;
   const dieDetails = `${dieLabel}, face ${formatPlayerNumber(face.rank)}, ${formatPlayerNumber(pips)} Pips`
     + `${temporaryStates.length ? `, ${temporaryStates.join(', ')}` : ''}`
     + `${flameId ? `, Ember ${FLAMES[flameId].name}, ${formatPlayerNumber(flameInvestment)} of 100 Gold` : ''}`
+    + `${isFetchTarget ? ', Fetch target' : ''}`
     + `${enhancementSummary ? `, ${enhancementSummary}` : ''}`;
   const accessibilityLabel = wardenLocked
     ? `${dieDetails}, locked${unlockAt === undefined ? '' : ` until ${formatPlayerNumber(unlockAt)} points`}${wardenSelectable ? ', selectable to unlock' : ''}`
@@ -88,6 +91,7 @@ export function Die({ die, display, selected, highlighted, rolling, resolving = 
       {face.snakeEyed && <span className="boss-face-badge" aria-hidden="true" title="Snake Eyes">S</span>}
       {face.infected && <span className="boss-face-badge infected" aria-hidden="true" title="Infected">!</span>}
       {face.magneticSourceUsed && <span className="die-state-dot" aria-hidden="true" title="Magnetic pull used">●</span>}
+      {isFetchTarget && <span className="fetch-face-badge" aria-hidden="true" title="Fetch target">FETCH</span>}
       {display === 'pips'
         ? <PipFace value={face.rank} label={`${dieLabel} showing ${face.rank}`} />
         : <Text component="span" className="die-number" role="img" aria-label={`${dieLabel} showing ${face.rank}`}>{face.rank}</Text>}

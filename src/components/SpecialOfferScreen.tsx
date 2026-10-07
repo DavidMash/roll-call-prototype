@@ -1,5 +1,7 @@
 import { Badge, Button, Group, Paper, SimpleGrid, Stack, Text, Title } from '@mantine/core';
-import { specialOfferDescription, specialOfferName } from '../game/specialOffers';
+import { SPECIAL_OFFERS, specialOfferDescription, specialOfferName } from '../game/specialOffers';
+import { rarityClassName, rarityLabel } from '../game/rarity';
+import { RarityBadge } from './RarityBadge';
 import type { Action, Board } from '../game/types';
 import { RunActionPortal } from './RunActionRow';
 
@@ -20,9 +22,12 @@ export function SpecialOfferScreen({ board, busy, submit }: {
     <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md" data-tutorial="special-offers">
       {selection.offers.map(offer => {
         const chosen = selection.chosen?.id === offer.id;
-        return <Paper key={offer.id} withBorder p="lg" className={`special-offer-card ${chosen ? 'selected' : ''}`}>
+        const rarity = SPECIAL_OFFERS[offer.type].rarity;
+        return <Paper key={offer.id} withBorder p="lg" className={`special-offer-card ${rarityClassName(rarity)} ${chosen ? 'selected' : ''}`}
+          aria-label={`${specialOfferName(offer)}, ${rarityLabel(rarity)} Special Offer`}>
           <Stack gap="sm" h="100%">
             <Title order={3}>{specialOfferName(offer)}</Title>
+            <RarityBadge rarity={rarity} compact />
             <Text size="sm" c="dimmed" style={{ flex: 1 }}>{specialOfferDescription(offer)}</Text>
             <Button color="teal" disabled={busy || selection.acquired} onClick={() => submit({ type: 'CHOOSE_SPECIAL_OFFER', offerId: offer.id })}>
               {chosen ? 'CHOSEN' : 'CHOOSE'}

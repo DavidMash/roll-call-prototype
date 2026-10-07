@@ -2,7 +2,7 @@ import { newRun, normalizeGameState } from './engine';
 import type { GameState } from './types';
 
 export const RUN_STORAGE_KEY = 'roll-call:active-run';
-export const RUN_STORAGE_VERSION = 1;
+export const RUN_STORAGE_VERSION = 2;
 
 type RunStorage = Pick<Storage, 'getItem' | 'setItem'>;
 

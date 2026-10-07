@@ -123,7 +123,9 @@ describe('immediate and Shop Special Offers', () => {
     const wine = offerState('sommelier');
     wine.dice[0].faces[0].enhancements.vintage = 1;
     wine.dice[0].faces[0].vintageSellValue = 9;
-    expect(dispatch(wine, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }).state.dice[0].faces[0].vintageSellValue).toBe(18);
+    const sommelier = dispatch(wine, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }).state.dice[0].faces[0];
+    expect(sommelier.vintageSellValue).toBe(9);
+    expect(sommelier.vintageSommelierBoosted).toBe(true);
 
     const workout = offerState('orangeTheory');
     workout.dice[0].faces[0].enhancements.workout = 3;
@@ -328,7 +330,7 @@ describe('temporary Special Offers', () => {
     expect(state.specialOfferEffects.carePackageRerolls).toBe(2);
   });
 
-  it('Cash Bonus pays one Gold per Bonus stack for each scoring face', () => {
+  it('Cash Bonus pays three Gold per Bonus stack for each scoring face', () => {
     const state = choose('cashBonus');
     state.phase = 'round';
     const first = structuredClone(activeFace(state.dice[0]));
@@ -338,8 +340,8 @@ describe('temporary Special Offers', () => {
     const resolver = new Resolver(state, constant());
     resolver.whenScored(0, first, 'ones', 'manual', 'selected');
     resolver.whenScored(1, second, 'ones', 'manual', 'selected');
-    expect(state.gold).toBe(4);
-    expect(state.stats.goldBySource.cashBonus).toBe(4);
+    expect(state.gold).toBe(12);
+    expect(state.stats.goldBySource.cashBonus).toBe(12);
   });
 
   it('Tax Evasion doubles only Interest and expires by completed encounter', () => {
