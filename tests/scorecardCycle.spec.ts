@@ -59,7 +59,7 @@ test('filled scorecard reactivates Used rows and shows the exact accessible cele
   await expect(page.getByTestId('scorecard-row-ones')).not.toBeDisabled();
   await expect(page.getByTestId('round-score-progress')).toContainText('81');
   await expect(page.getByTestId('stat-gold')).toContainText('19');
-  await expect(page.getByTestId('manual-reroll')).toHaveAccessibleName(/2 REROLLS REMAINING/);
+  await expect(page.getByTestId('manual-reroll')).toHaveAccessibleName(/2 REROLLS LEFT/);
 });
 
 for (const speed of ['fast', 'instant'] as const) {

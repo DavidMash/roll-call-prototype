@@ -115,15 +115,16 @@ function TutorialSpotlightLayer({ beat, rects, viewport }: {
   </div>;
 }
 
-export function TutorialDirector({ session, uiState, paused, onAcknowledge, onRecover, onFinish }: {
+export function TutorialDirector({ session, uiState, paused, beatOverride, onAcknowledge, onRecover, onFinish }: {
   session: TutorialSession;
   uiState: TutorialUiState;
   paused: boolean;
+  beatOverride?: TutorialBeat;
   onAcknowledge: (beatId: string) => void;
   onRecover: (beatId: string) => void;
   onFinish: () => void;
 }) {
-  const beat = useMemo(() => paused ? null : activeTutorialBeat(session, uiState), [paused, session, uiState.selection,
+  const beat = useMemo(() => paused ? null : beatOverride ?? activeTutorialBeat(session, uiState), [paused, beatOverride, session, uiState.selection,
     uiState.selectedOffer, uiState.selectedFlameOffer, uiState.flameDetailsOpen]);
   const highlightTargets = beat?.highlightTargets ?? (beat?.target ? [beat.target] : []);
   const interactiveTargets = beat?.interactiveTargets ?? [];
@@ -146,7 +147,8 @@ export function TutorialDirector({ session, uiState, paused, onAcknowledge, onRe
     instance.current?.destroy();
     instance.current = null;
     releaseTutorialInteractionGate();
-    document.body.classList.toggle('tutorial-required-action', !!beat && !beat.blocking);
+    const gatesInteractions = !!beat && !beat.blocking && beat.gateInteractions !== false;
+    document.body.classList.toggle('tutorial-required-action', gatesInteractions);
     document.body.classList.toggle('tutorial-multi-spotlight-active', !!beat && usesMultiSpotlight);
     if (!beat) return () => {
       document.body.classList.remove('tutorial-required-action', 'tutorial-multi-spotlight-active');
@@ -208,7 +210,7 @@ export function TutorialDirector({ session, uiState, paused, onAcknowledge, onRe
           onNextClick: finishBeat,
         },
       });
-      if (!beat.blocking) gateGeneration = configureTutorialInteractionGate(interactiveTargets,
+      if (gatesInteractions) gateGeneration = configureTutorialInteractionGate(interactiveTargets,
         () => recover.current(beat.recoveryBeatId ?? beat.id));
       popoverTimer = window.setTimeout(() => {
         if (cancelled) return;
@@ -221,6 +223,7 @@ export function TutorialDirector({ session, uiState, paused, onAcknowledge, onRe
         popover?.setAttribute('aria-modal', beat.blocking ? 'true' : 'false');
         popover?.setAttribute('aria-label', beat.title ?? 'Tutorial');
         if (beat.blocking) popover?.querySelector<HTMLElement>('button')?.focus();
+        else if (!gatesInteractions) queryElements(interactiveTargets)[0]?.focus();
       }, 0);
     };
     show();
@@ -233,7 +236,8 @@ export function TutorialDirector({ session, uiState, paused, onAcknowledge, onRe
       instance.current = null;
       document.body.classList.remove('tutorial-required-action', 'tutorial-multi-spotlight-active');
     };
-  }, [beat?.id, beat?.body.join('|'), beat?.target, beat?.blocking, highlightTargets.join('|'), interactiveTargets.join('|'), usesMultiSpotlight]);
+  }, [beat?.id, beat?.body.join('|'), beat?.target, beat?.blocking, beat?.gateInteractions,
+    highlightTargets.join('|'), interactiveTargets.join('|'), usesMultiSpotlight]);
 
   return <>
     {beat && usesMultiSpotlight && <TutorialSpotlightLayer beat={beat} rects={rects} viewport={viewport} />}

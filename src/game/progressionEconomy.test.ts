@@ -424,6 +424,19 @@ describe('Flame Selection spending boundary and tutorial state', () => {
     expect(state.stats.flameAcquisitions).toHaveLength(1);
   });
 
+  it('permanently dismisses an unopened first-Flame cue when leaving its Shop', () => {
+    let state = newRun('first-flame-skip', constant(0.2)).state;
+    state.round = 6;
+    state.phase = 'flameSelection';
+    state.flameSelection = { offers: [{ id: 1, flame: 'ultimate' }], acquired: false };
+    state.shop = null;
+    state = dispatch(state, { type: 'CHOOSE_FLAME', offerId: 1, dieId: 2 }).state;
+    state = dispatch(state, { type: 'CONTINUE_FLAME_SELECTION' }, constant(0.2)).state;
+    expect(state.flameTutorial).toEqual({ pendingDieId: 2, completed: false });
+    state = dispatch(state, { type: 'NEXT_CHAPTER' }, constant(0.2)).state;
+    expect(state.flameTutorial).toEqual({ pendingDieId: null, completed: true });
+  });
+
   it('keeps Stoke excluded from Money to Burn spend while life restoration counts', () => {
     let state = shop('spend-boundary');
     state.gold = 100;

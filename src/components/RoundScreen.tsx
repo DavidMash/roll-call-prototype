@@ -78,8 +78,9 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const manualRerolls = usableManualRerolls(board);
   const rerollMainText = selectedRerollDice === 0 ? 'REROLL'
     : `REROLL ${selectedRerollDice} ${selectedRerollDice === 1 ? 'DIE' : 'DICE'}`;
-  const rerollResourceText = `${board.manualRerollsRemaining} REROLL${board.manualRerollsRemaining === 1 ? '' : 'S'} REMAINING${carePackageRerolls ? ` + ${carePackageRerolls}` : ''}`;
-  const rerollVisualResourceText = `NORMAL ${board.manualRerollsRemaining}${carePackageRerolls ? ` · EXTRA ${carePackageRerolls}` : ''}`;
+  const rerollResourceText = `${board.manualRerollsRemaining} REROLL${board.manualRerollsRemaining === 1 ? '' : 'S'} LEFT${carePackageRerolls
+    ? `, PLUS ${carePackageRerolls} CARE PACKAGE REROLL${carePackageRerolls === 1 ? '' : 'S'}` : ''}`;
+  const rerollVisualResourceText = `${board.manualRerollsRemaining} LEFT${carePackageRerolls ? ` + ${carePackageRerolls}` : ''}`;
   const normalRerollFill = Math.max(0, Math.min(1, board.manualRerollsRemaining / CONFIG.manualRerollsPerRound));
   const deadBoard = !hasPlayableHand(encounterDice, unavailableHands, requiredDieIds);
   const chargeAction: Action = { type: 'TOGGLE_CHARGE', hand: effectiveSelection.hand, dieIds: effectiveSelection.dieIds };

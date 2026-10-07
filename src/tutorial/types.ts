@@ -78,6 +78,7 @@ export interface TutorialBeat {
   interactiveTargets?: string[];
   side?: 'top' | 'right' | 'bottom' | 'left';
   blocking: boolean;
+  gateInteractions?: boolean;
   requiredAction?: string;
   actionLabel?: string;
   completion?: TutorialCompletion;

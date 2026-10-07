@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { ONBOARDING_STORAGE_KEY, TUTORIAL_RUN_STORAGE_KEY } from '../src/tutorial/tutorialPersistence';
-import { RUN_STORAGE_KEY } from '../src/game/persistence';
+import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import { dispatchTutorial, newTutorialSession } from '../src/tutorial/scenario';
 import type { Action, Flame, HandId, Rank } from '../src/game/types';
 import type { TutorialSession } from '../src/tutorial/types';
@@ -297,7 +297,7 @@ test('Shop Training and Bonus placement expose only the current atomic action', 
   await page.locator('[data-tutorial="die-1"] .die').evaluate((element: HTMLButtonElement) => element.click());
   await expect(page.locator('.driver-popover-title')).toHaveText('PUT IT HERE');
   await page.locator('[data-tutorial="die-2"] .die').click();
-  await expect(page.locator('.driver-popover')).toContainText('physical face');
+  await expect(page.locator('.driver-popover')).toContainText('face of the die');
   const savedBinding = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).session.scenario.bonusBinding,
     TUTORIAL_RUN_STORAGE_KEY);
   expect(savedBinding).toEqual({ dieId: 1, faceRank: 2 });
@@ -371,6 +371,19 @@ test('first Flame assignment highlights and exposes every legal destination die 
   await resumeSession(page, session);
 
   await expect(page.locator('.driver-popover-title')).toHaveText('CHOOSE A FLAME');
+  const infoButtons = page.locator('.flame-offer-info');
+  await expect(infoButtons).toHaveCount(3);
+  expect(await infoButtons.evaluateAll(buttons => buttons.every(button =>
+    !button.hasAttribute('data-tutorial-gated') && !button.hasAttribute('aria-disabled')))).toBe(true);
+  await infoButtons.first().focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'Minigun' })).toBeVisible();
+  await expect(page.locator('.driver-popover')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.driver-popover-title')).toHaveText('CHOOSE A FLAME');
+  await expect(page.getByTestId('flame-offer-minigun')).not.toHaveClass(/selected/);
+  await expect(infoButtons.first()).not.toHaveAttribute('tabindex', '-1');
+  expect(await page.evaluate(() => !!document.activeElement?.closest('.flame-offer'))).toBe(true);
   await page.getByTestId('flame-offer-minigun').locator('.flame-offer-action').click();
   await expect(page.locator('.driver-popover-title')).toHaveText('ASSIGN YOUR FLAME');
   await expect(page.locator('.driver-popover')).toContainText('Put the Flame on any die you like.');
@@ -385,18 +398,23 @@ test('first Flame assignment highlights and exposes every legal destination die 
   await expect(page.locator('.driver-popover-title')).toHaveText('FLAMES');
 });
 
-test('first Stoke moves focus from the Flame cap into the modal controls', async ({ page }) => {
+test('first Stoke highlights only the Flame badge and moves focus into modal controls', async ({ page }) => {
   const session = shopOneSession();
   session.game.round = 6;
   session.game.gold = 20;
   session.game.dice[0].flame = { id: 'doubleDown', investedGold: 0 };
   session.scenario.firstFlame = 'doubleDown';
   session.scenario.firstFlameDieId = 0;
+  session.game.flameTutorial = { pendingDieId: 0, completed: false };
   session.scenario.completedBeatIds.push('flame-basics', 'flame-xmult', 'flame-ember');
   await resumeSession(page, session);
 
-  await expect(page.locator('[data-tutorial="flame-cap"]')).toBeFocused();
-  await page.locator('[data-tutorial="flame-cap"]').click();
+  const badge = page.locator('[data-tutorial="flame-badge"][data-flame-die-id="0"]');
+  await expect(badge).toBeFocused();
+  await expect(badge).toHaveClass(/driver-active-element/);
+  await expect(page.locator('[data-tutorial="die-1"]')).not.toHaveClass(/driver-active-element/);
+  await expect(page.locator('[data-tutorial="die-1"] .die')).not.toHaveClass(/driver-active-element/);
+  await badge.click();
   await expect(page.locator('.driver-popover-title')).toHaveText('STOKE');
   const controls = page.getByTestId('stoke-flame-controls');
   await expect(controls.getByRole('button', { name: '+1', exact: true })).toBeFocused();
@@ -409,6 +427,63 @@ test('first Stoke moves focus from the Flame cap into the modal controls', async
   await expect(close).not.toHaveAttribute('aria-disabled', 'true');
   await close.click();
   await expect(page.locator('.driver-popover-title')).toHaveText('BONFIRES');
+});
+
+test('Tutorial Shop progression nudge waits for five neutral seconds and stops after Chapter 2', async ({ page }) => {
+  await page.clock.install();
+  async function installShop(round: number, kind: 'between_rounds' | 'post_boss') {
+    await page.clock.resume();
+    const session = shopOneSession();
+    session.game.round = round;
+    session.game.phase = 'shop';
+    session.game.bust = null;
+    session.game.shop!.kind = kind;
+    session.scenario.completedBeatIds.push('chapter-2');
+    if (round > 12) session.scenario.completedBeatIds.push('curriculum-complete');
+    await page.evaluate(([key, saved]) => localStorage.setItem(key, JSON.stringify({ version: 1, session: saved })),
+      [TUTORIAL_RUN_STORAGE_KEY, session] as const);
+    await page.reload();
+    await page.getByRole('button', { name: 'CONTINUE TUTORIAL', exact: true }).click();
+    const action = page.getByTestId('shop-progression-action');
+    await expect(action).toBeVisible();
+    await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
+    return action;
+  }
+
+  let progression = await installShop(2, 'between_rounds');
+  await expect(progression).toHaveAccessibleName('NEXT ROUND');
+  await page.getByRole('button', { name: 'Open menu', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Menu' }).getByRole('button', { name: 'How to Play', exact: true }).click();
+  await expect(progression).not.toHaveAttribute('data-tutorial-nudge');
+  await page.keyboard.press('Escape');
+  await page.clock.runFor(0);
+  await page.clock.fastForward(4999);
+  await expect(progression).not.toHaveAttribute('data-tutorial-nudge');
+  await page.clock.fastForward(1);
+  await expect(progression).toHaveAttribute('data-tutorial-nudge', 'true');
+
+  progression = await installShop(12, 'post_boss');
+  await expect(progression).toHaveAccessibleName('NEXT CHAPTER');
+  await page.clock.fastForward(5000);
+  await expect(progression).toHaveAttribute('data-tutorial-nudge', 'true');
+
+  progression = await installShop(13, 'between_rounds');
+  await page.clock.fastForward(6000);
+  await expect(progression).not.toHaveAttribute('data-tutorial-nudge');
+});
+
+test('Shop progression nudge is not used in a normal run', async ({ page }) => {
+  await page.clock.install();
+  const session = shopOneSession();
+  session.game.round = 2;
+  await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state })),
+    [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, session.game] as const);
+  await page.reload();
+  await page.getByRole('button', { name: /^Continue Chapter 1 Round 2,/ }).click();
+  const progression = page.getByTestId('shop-progression-action');
+  await expect(progression).toBeVisible();
+  await page.clock.fastForward(6000);
+  await expect(progression).not.toHaveAttribute('data-tutorial-nudge');
 });
 
 for (const branch of [

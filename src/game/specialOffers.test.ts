@@ -242,7 +242,7 @@ describe('temporary Special Offers', () => {
       specialOfferEffects: { carePackageRerolls: 3 },
     });
     expect(result.events.find(event => event.type === 'MANUAL_REROLL_STARTED')?.message)
-      .toBe('Manual reroll · Normal 0 · Care Package 3');
+      .toBe('Manual reroll · 0 Rerolls left · Care Package 3');
 
     result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0, 1, 2] }, constant(.4));
     state = result.state;
@@ -250,9 +250,9 @@ describe('temporary Special Offers', () => {
     expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
     expect(state.roundCheckpoint?.specialOfferEffects.carePackageRerolls).toBe(0);
     expect(result.events.find(event => event.type === 'MANUAL_REROLL_STARTED')?.message)
-      .toBe('Care Package depleted · Normal 0');
+      .toBe('Care Package depleted · 0 Rerolls left');
     expect(result.events.find(event => event.type === 'SHOP_REOPENED_AFTER_BUST')?.message)
-      .toContain('Normal 3 · Care Package 0');
+      .toContain('3 Rerolls left · Care Package 0');
 
     state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.4)).state;
     expect(state).toMatchObject({

@@ -79,6 +79,9 @@ export function loadTutorialSession(storage: TutorialStorage | null): TutorialSe
     const game = normalizeGameState(saved.session.game as unknown as GameState);
     const session = { tutorialVersion: TUTORIAL_VERSION, game,
       scenario: { ...initialTutorialScenario(), ...saved.session.scenario } } as TutorialSession;
+    if (game.flameTutorial.completed && !session.scenario.completedBeatIds.includes('flame-details')) {
+      session.scenario.completedBeatIds.push('flame-details');
+    }
     reconcileTutorialBindings(session);
     return session;
   } catch { return null; }

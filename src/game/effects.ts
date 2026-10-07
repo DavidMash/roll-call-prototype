@@ -314,7 +314,7 @@ export class Resolver {
       this.emit({ type: 'DIE_ROLLED', dieIds: [die.id], face: face.rank,
         rollSource: excludeStartingFace ? 'manual_reroll' : 'automatic', previousFace: result.before, resultFace: face.rank,
         sameFaceExcluded: excludeStartingFace && !result.bumped,
-        message: `D${die.id + 1} rolled: ${result.before} → ${face.rank}${excludeStartingFace ? ' · previous physical face excluded' : ''}` });
+        message: `D${die.id + 1} rolled: ${result.before} → ${face.rank}${excludeStartingFace ? ' · previous face excluded' : ''}` });
       if ((context === 'gameplay' || context === 'wardenSetup') && face.rank === 3) {
         const source = this.chargeFlameSource('thirdRail');
         if (source) this.growCharge('thirdRail', thirdRailChargeGain(source.investment), `D${die.id + 1} rolled a 3`, [die.id]);
@@ -635,7 +635,7 @@ export class Resolver {
       face.rank = 1;
       boss.mutatedFaces.push({ dieId: die.id, physicalFace });
       this.emit({ type: 'BOSS_FACE_CHANGED', boss: 'snakeEyes', dieIds: [die.id], face: 1,
-        message: `D${die.id + 1} physical face ${physicalFace} became Snake-Eyed (1)` });
+        message: `D${die.id + 1} face ${physicalFace} became Snake-Eyed (1)` });
     }
   }
   private resolveInfected(scoringIds: number[]): void {
@@ -840,9 +840,9 @@ export class Resolver {
     const carePackageRemaining = this.state.specialOfferEffects.carePackageRerolls;
     const message = carePackageSpent > 0
       ? carePackageRemaining > 0
-        ? `Care Package reroll${carePackageSpent === 1 ? '' : 's'} used · ${this.format(carePackageRemaining)} remaining · Normal ${this.format(normalRemaining)}`
-        : `Care Package depleted · Normal ${this.format(normalRemaining)}`
-      : `Manual reroll · Normal ${this.format(normalRemaining)} · Care Package ${this.format(carePackageRemaining)}`;
+        ? `Care Package reroll${carePackageSpent === 1 ? '' : 's'} used · ${this.format(carePackageRemaining)} remaining · ${this.format(normalRemaining)} Rerolls left`
+        : `Care Package depleted · ${this.format(normalRemaining)} Rerolls left`
+      : `Manual reroll · ${this.format(normalRemaining)} Rerolls left · Care Package ${this.format(carePackageRemaining)}`;
     this.emit({ type: 'MANUAL_REROLL_STARTED', dieIds: ids, amount: ids.length, message });
     if (this.state.chargeArmed && !hasChargeBonfire(this.state)) {
       this.state.chargeArmed = false;
@@ -980,7 +980,7 @@ export class Resolver {
       this.state.currentNodeId = failedNodeId;
       this.mapTransition(shopNodeBefore(failure.round), 'backward');
       this.emit({ type: 'SHOP_REOPENED_AFTER_BUST',
-        message: `Round ${this.format(failure.round)} attempt ${this.format(failure.attempt)} checkpoint restored · Normal ${this.format(this.state.manualRerollsRemaining)} · Care Package ${this.format(this.state.specialOfferEffects.carePackageRerolls)} · returned to the same Shop · prepare for attempt ${this.format(failure.attempt + 1)}` });
+        message: `Round ${this.format(failure.round)} attempt ${this.format(failure.attempt)} checkpoint restored · ${this.format(this.state.manualRerollsRemaining)} Rerolls left · Care Package ${this.format(this.state.specialOfferEffects.carePackageRerolls)} · returned to the same Shop · prepare for attempt ${this.format(failure.attempt + 1)}` });
     } else {
       this.state.stats.loss = { round: failure.round, afterHand: failureLastHand, score: failure.score, afterAction: failureLastAction,
         manualRerollsRemaining: 0, values: failureValues, consumed: failureConsumed };

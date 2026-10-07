@@ -437,7 +437,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const key = `D${die.id + 1}:${face.rank}`;
         if (!next.stats.enhancedFaces.includes(key)) next.stats.enhancedFaces.push(key);
         resolver.emit({ type: 'OFFER_PURCHASED', enhancement: offer.enhancement, dieIds: [die.id], face: face.rank,
-          message: `${ENHANCEMENTS[offer.enhancement].name} attached to D${die.id + 1}, physical face ${face.rank}` });
+          message: `${ENHANCEMENTS[offer.enhancement].name} added to D${die.id + 1} face ${face.rank}` });
         break;
       }
       case 'SELL_ENHANCEMENT': {
@@ -573,8 +573,12 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         resolver.emit({ type: 'FLAME_TUTORIAL_COMPLETED', message: 'First-Flame shop tutorial completed' });
         break;
       case 'RETRY_ROUND': resolver.startRound(true); break;
-      case 'NEXT_CHAPTER': next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
-      case 'NEXT_ROUND': next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
+      case 'NEXT_CHAPTER':
+        if (next.flameTutorial.pendingDieId !== null && !next.flameTutorial.completed) next.flameTutorial = { pendingDieId: null, completed: true };
+        next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
+      case 'NEXT_ROUND':
+        if (next.flameTutorial.pendingDieId !== null && !next.flameTutorial.completed) next.flameTutorial = { pendingDieId: null, completed: true };
+        next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
     }
   }, random, rngStateOverride, options);
 }

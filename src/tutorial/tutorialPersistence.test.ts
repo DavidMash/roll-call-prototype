@@ -56,4 +56,12 @@ describe('tutorial persistence isolation', () => {
     expect(restored?.scenario.workoutBinding).toEqual({ dieId: 0, faceRank: 5 });
     expect(restored?.scenario.round2Plan).toEqual(tutorial.scenario.round2Plan);
   });
+
+  it('preserves first-Flame cue acknowledgement across refresh', () => {
+    const storage = new MemoryStorage();
+    const tutorial = newTutorialSession().session;
+    tutorial.game.flameTutorial = { pendingDieId: null, completed: true };
+    expect(saveTutorialSession(storage, tutorial)).toBe(true);
+    expect(loadTutorialSession(storage)?.scenario.completedBeatIds).toContain('flame-details');
+  });
 });

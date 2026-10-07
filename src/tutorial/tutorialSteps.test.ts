@@ -53,6 +53,39 @@ describe('tutorial contextual lessons', () => {
     session.game.boss = { type: 'quickdraw', lowerShotUsed: false, playedLowerHand: null };
     expect(activeTutorialBeat(session)?.id).not.toBe('context-later-boss');
   });
+
+  it('only teaches accrued Vintage value when a positive authoritative value exists', () => {
+    const { session } = newTutorialSession();
+    session.game.round = 19;
+    session.game.phase = 'shop';
+    session.game.bust = { round: 19, attempt: 1, score: 10, target: 100, shortfall: 90,
+      livesBefore: 3, livesAfter: 2 };
+    session.scenario.completedBeatIds.push('curriculum-complete');
+    session.scenario.seenLessonIds.push('bust');
+    const first = session.game.dice[0].faces[1];
+    first.enhancements.vintage = 1;
+    first.vintageSellValue = 0;
+    expect(activeTutorialBeat(session)).toMatchObject({ id: 'context-selling',
+      body: ['You can sell Enhancements from your dice to free up Gold and rework your build.'] });
+
+    const lowerTieBreak = session.game.dice[0].faces[2];
+    lowerTieBreak.enhancements.vintage = 1;
+    lowerTieBreak.vintageSellValue = 12;
+    const higherDie = session.game.dice[2].faces[0];
+    higherDie.enhancements.vintage = 1;
+    higherDie.vintageSellValue = 12;
+    expect(activeTutorialBeat(session)).toMatchObject({
+      id: 'context-selling',
+      target: '[data-tutorial="die-1"] .die',
+      body: expect.arrayContaining([expect.stringContaining('V Vintage on D1 face 3 is now worth 12 Gold.')]),
+    });
+
+    higherDie.vintageSellValue = 18;
+    expect(activeTutorialBeat(session)).toMatchObject({
+      target: '[data-tutorial="die-3"] .die',
+      body: expect.arrayContaining([expect.stringContaining('18 Gold')]),
+    });
+  });
 });
 
 describe('tutorial guided interaction beats', () => {
@@ -208,7 +241,7 @@ describe('tutorial guided interaction beats', () => {
     session.game.phase = 'flameSelection';
     session.scenario.completedBeatIds.push('flame-selection-1');
     expect(activeTutorialBeat(session, ui())).toMatchObject({
-      id: 'flame-select-first', interactiveTargets: ['.flame-offer-action'], completion: { kind: 'selection' },
+      id: 'flame-select-first', interactiveTargets: ['.flame-offer-action', '.flame-offer-info'], completion: { kind: 'selection' },
     });
     expect(activeTutorialBeat(session, ui({ selectedFlameOffer: 7 }))).toMatchObject({
       id: 'flame-assign-first', interactiveTargets: ['[data-tutorial="dice-dock"] .die'], completion: { kind: 'action' },
@@ -221,6 +254,38 @@ describe('tutorial guided interaction beats', () => {
       id: 'flame-stoke',
       interactiveTargets: ['[data-tutorial="stoke"] button', '[data-tutorial="stoke"] input'],
     });
+  });
+
+  it('targets only the persisted first-Flame badge and allows leaving its Shop', () => {
+    const { session } = newTutorialSession();
+    session.game.round = 6;
+    session.game.phase = 'shop';
+    session.game.shop = { kind: 'post_boss', offers: [], trainingOffers: [], diceRerolls: 0,
+      offerRerolls: 0, lifeRestores: 0 };
+    session.game.flameTutorial = { pendingDieId: 3, completed: false };
+    session.scenario.firstFlame = 'doubleDown';
+    session.scenario.firstFlameDieId = 3;
+    session.scenario.completedBeatIds.push('flame-basics', 'flame-xmult', 'flame-ember');
+    expect(activeTutorialBeat(session, ui())).toMatchObject({
+      id: 'flame-details',
+      target: '[data-tutorial="flame-badge"][data-flame-die-id="3"]',
+      highlightTargets: ['[data-tutorial="flame-badge"][data-flame-die-id="3"]'],
+      interactiveTargets: ['[data-tutorial="flame-badge"][data-flame-die-id="3"]'],
+      gateInteractions: false,
+    });
+    const next = action(session, { type: 'NEXT_CHAPTER' });
+    expect(next.game.flameTutorial).toEqual({ pendingDieId: null, completed: true });
+    expect(next.scenario.completedBeatIds).toContain('flame-details');
+  });
+
+  it('does not insert a dedicated Bonus interruption after the C1 R2 scoring lesson', () => {
+    const { session } = newTutorialSession();
+    session.game.round = 2;
+    session.game.phase = 'round';
+    session.game.stats.triggers.bonus = 1;
+    session.scenario.completedBeatIds.push('c1-r2-two-pair', 'c1-r2-choice', 'c1-r2-select-twos',
+      R.r2Twos, 'c1-r2-nice', R.r2FullHouse);
+    expect(activeTutorialBeat(session, ui())?.id).not.toBe('c1-r2-bonus-trigger');
   });
 
   it.each([

@@ -247,8 +247,8 @@ button { font: inherit; }
 .hud-lives { color: var(--mantine-color-red-5); font-weight: 900; letter-spacing: .08em; white-space: nowrap; padding: 4px 6px; border-radius: 6px; }
 .hud-lives.interactive { border: 1px solid rgba(250,82,82,.45); cursor: pointer; }
 .hud-lives.interactive:hover, .hud-lives.interactive:focus-visible { background: rgba(250,82,82,.12); outline: 2px solid var(--mantine-color-red-5); }
-.flame-tutorial-anchor { display: inline-flex; border-radius: 12px; animation: flame-tutorial-pulse 1.8s ease-in-out infinite; }
 @keyframes flame-tutorial-pulse { 0%, 100% { box-shadow: 0 0 0 2px rgba(255,146,43,.35); } 50% { box-shadow: 0 0 0 7px rgba(255,146,43,.08); } }
+.tutorial-progression-nudge { animation: flame-tutorial-pulse 1.8s ease-in-out infinite; }
 .shop-action-dock { min-height: 36px; }
 .phase-sticky-header { position: sticky; top: 0; z-index: 14; padding: 5px 7px; border-radius: var(--mantine-radius-md); background: rgba(20,26,30,.97); box-shadow: 0 7px 20px rgba(0,0,0,.2); backdrop-filter: blur(10px); }
 .flame-selection-screen { min-width: 0; }

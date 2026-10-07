@@ -19,7 +19,7 @@ export function randomValueForPhysicalFace(die: Die, target: Rank, excludedFace?
   const total = weights.reduce((sum, weight) => sum + weight, 0);
   const before = weights.slice(0, target - 1).reduce((sum, weight) => sum + weight, 0);
   const weight = weights[target - 1];
-  if (!weight) throw new Error(`Tutorial roll cannot reach D${die.id + 1} physical face ${target}.`);
+  if (!weight) throw new Error(`Tutorial roll cannot reach D${die.id + 1} face ${target}.`);
   return (before + weight / 2) / total;
 }
 

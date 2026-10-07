@@ -1,4 +1,4 @@
-import { Modal, Button, Group, Paper, Stack, Text } from '@mantine/core';
+import { Modal, Button, Group, Paper, Text } from '@mantine/core';
 import { useState } from 'react';
 import { activeFace } from '../game/dice';
 import { enhancementCost, placementError } from '../game/enhancements';
@@ -54,8 +54,6 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
   const capacityBlockedIds = offer ? dice.filter(die => placementErrors[die.id]?.startsWith('This Face is full.')).map(die => die.id) : [];
   const flameOffer = board.phase === 'flameSelection' && !board.flameSelection?.acquired
     ? board.flameSelection?.offers.find(item => item.id === selectedFlameOffer) : undefined;
-  const tutorialDieId = board.phase === 'shop' && !board.flameTutorial.completed ? board.flameTutorial.pendingDieId : null;
-  const tutorialLabel = <Stack gap={3}><Text size="sm" fw={800}>NEW EMBER</Text><Text size="xs">Stoke Flames in the Shop. At 100 Gold, they become Bonfires.</Text></Stack>;
   const lockedUntilByDieId = wardenBoss?.nextUnlockTarget === null || wardenBoss?.nextUnlockTarget === undefined
     ? undefined : Object.fromEntries(wardenLockedIds.map(id => [id, wardenBoss.nextUnlockTarget!])) as Record<number, number>;
 
@@ -90,7 +88,6 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
       return;
     }
     if (board.phase === 'shop') {
-      if (board.flameTutorial.pendingDieId === dieId && !board.flameTutorial.completed) submit({ type: 'DISMISS_FLAME_TUTORIAL' });
       if (offer) attemptPurchase(offer.id, dieId);
       else openFaceDetails({ dieId, face: die.value });
       return;
@@ -126,18 +123,13 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
         wardenChoiceMode={awaitingWardenChoice}
         lockedUntilByDieId={lockedUntilByDieId}
         onClick={clickDie} onEnhancements={openEnhancements} onFlame={openFlame}
-        onDropOffer={board.phase === 'shop' ? attemptPurchase : undefined}
-        tutorialDieId={tutorialDieId} tutorialLabel={tutorialLabel} />
+        onDropOffer={board.phase === 'shop' ? attemptPurchase : undefined} />
       {offer && <div className="dice-dock-context" data-testid="dock-placement-context">
         <span><span><EnhancementIdentity enhancement={offer.enhancement} /> selected</span> · choose a die</span>
         <Button size="compact-xs" variant="subtle" color="gray" disabled={!actionsEnabled}
           onClick={() => setSelectedOffer(null)}>Cancel placement</Button>
       </div>}
       {flameOffer && <div className="dice-dock-context flame">{FLAMES[flameOffer.flame].name} selected · choose a die</div>}
-      {tutorialDieId !== null && <div className="dice-dock-context flame">
-        <Button size="compact-xs" variant="subtle" color="orange" disabled={!actionsEnabled}
-          onClick={() => submit({ type: 'DISMISS_FLAME_TUTORIAL' })}>Dismiss Flame tip</Button>
-      </div>}
     </Paper>
     <Modal opened={replacementDieId !== null} onClose={() => setReplacementDieId(null)} title="Replace Flame?" centered transitionProps={{ duration: 0 }}>
       {replacingFlame && flameOffer && <><Text>Replace <strong>{FLAMES[replacingFlame].name}</strong> with <strong>{FLAMES[flameOffer.flame].name}</strong>?</Text>

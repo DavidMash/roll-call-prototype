@@ -10,12 +10,14 @@ import { formatPlayerNumber } from '../game/copy';
 import { enhancementOfferIsFree, trainingOfferIsFree } from '../game/specialOffers';
 import { chapterLabel, chapterRoundForRound } from '../game/chapters';
 import { RunActionLayout, RunActionPortal } from './RunActionRow';
+import { useEffect, useState } from 'react';
 
 const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
 
-export function ShopScreen({ board, event, busy, selectedOffer, setSelectedOffer, submit, skip }: {
+export function ShopScreen({ board, event, busy, selectedOffer, setSelectedOffer, submit, skip, tutorialProgressNudgeEligible = false }: {
   board: Board; event: GameEvent | null; busy: boolean;
   selectedOffer: number | null; setSelectedOffer: (id: number | null) => void; submit: (action: Action) => void; skip: () => void;
+  tutorialProgressNudgeEligible?: boolean;
 }) {
   const shop = board.shop!;
   const returnedFromBust = board.bust;
@@ -23,6 +25,13 @@ export function ShopScreen({ board, event, busy, selectedOffer, setSelectedOffer
   const upcomingBoss = board.bossSchedule[board.round + 1];
   const retryRound = chapterRoundForRound(board.round);
   const rerollCost = diceRerollCost(shop.diceRerolls);
+  const [showProgressNudge, setShowProgressNudge] = useState(false);
+  useEffect(() => {
+    setShowProgressNudge(false);
+    if (!tutorialProgressNudgeEligible) return;
+    const timer = window.setTimeout(() => setShowProgressNudge(true), 5000);
+    return () => window.clearTimeout(timer);
+  }, [tutorialProgressNudgeEligible]);
 
   return <Stack gap="xs" className="shop-screen">
     <div className="shop-summary phase-sticky-header">{returnedFromBust ? <Paper px="sm" py={6} className="bust-shop-banner" data-testid="bust-shop-banner">
@@ -55,6 +64,8 @@ export function ShopScreen({ board, event, busy, selectedOffer, setSelectedOffer
         aria-label={`REROLL ALL DICE FOR ${formatPlayerNumber(rerollCost)} GOLD`} data-testid="shop-dice-reroll"
         onClick={() => submit({ type: 'REROLL_DICE' })}>REROLL ALL DICE FOR {formatPlayerNumber(rerollCost)} GOLD</Button>}
       right={<Button size="sm" disabled={busy} aria-label={returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : nextChapter ? 'NEXT CHAPTER' : 'NEXT ROUND'}
+        className={showProgressNudge ? 'tutorial-progression-nudge' : undefined}
+        data-testid="shop-progression-action" data-tutorial-nudge={showProgressNudge || undefined}
         color={returnedFromBust ? 'red' : undefined} onClick={() => submit(returnedFromBust ? { type: 'RETRY_ROUND' } : nextChapter ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' })}>
         {returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : nextChapter ? 'NEXT CHAPTER' : 'NEXT ROUND'} →
       </Button>} /></RunActionPortal>

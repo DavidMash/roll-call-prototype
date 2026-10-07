@@ -4,6 +4,7 @@ import { boardSnapshot } from '../game/telemetry';
 import type { Action, GameState, HandId, Rank, Resolution } from '../game/types';
 import { chapterNumberForRound } from '../game/chapters';
 import { combinationsForHand, HANDS, UPPER_HAND_IDS } from '../game/hands';
+import { enhancementLabel } from '../game/enhancements';
 import { curateTutorialOffers } from './curatedOffers';
 import { scriptedRollSource, targetMap, type EventAddressedRollSource } from './scriptedRolls';
 import { initialTutorialScenario } from './tutorialPersistence';
@@ -180,6 +181,9 @@ function synchronizeScenario(previous: TutorialSession, action: Action, next: Tu
   }
   if (action.type === 'BUY' && state.stats.purchases.at(-1)?.enhancement === 'vintage') scenario.vintagePurchased = true;
   if (action.type === 'STOKE_FLAME') complete(scenario, 'flame-stoke');
+  if (action.type === 'DISMISS_FLAME_TUTORIAL'
+    || ((action.type === 'NEXT_ROUND' || action.type === 'NEXT_CHAPTER') && previous.game.phase === 'shop'
+      && !!previous.scenario.firstFlame && !done(previous.scenario, 'flame-details'))) complete(scenario, 'flame-details');
   if (previous.game.round === 7 && action.type === 'PLAY') {
     if ((scenario.firstFlame === 'doubleDown' && action.hand === 'pair')
       || (scenario.firstFlame === 'straightShooter' && action.hand === 'smallStraight')) complete(scenario, REQUIRED_BEATS.flameDemoSetup);
@@ -238,7 +242,7 @@ export function tutorialActionError(session: TutorialSession, action: Action): s
       if (!binding || !bindingIsCurrent(session, binding)) return null;
       const offer = state.shop?.offers.find(item => item.id === (action.type === 'BUY' ? action.offerId : -1));
       if (action.type !== 'BUY' || offer?.enhancement !== 'bonus' || action.dieId !== binding.dieId)
-        return `Buy Bonus and put it on D${binding.dieId + 1} showing ${binding.faceRank}.`;
+        return `Buy ${enhancementLabel('bonus')} and put it on D${binding.dieId + 1} showing ${binding.faceRank}.`;
     }
   }
   if (state.round === 2 && state.phase === 'round') {
@@ -255,13 +259,13 @@ export function tutorialActionError(session: TutorialSession, action: Action): s
     if (!binding || !bindingIsCurrent(session, binding)) return null;
     const offer = state.shop?.offers.find(item => item.id === (action.type === 'BUY' ? action.offerId : -1));
     if (action.type !== 'BUY' || offer?.enhancement !== 'workout' || action.dieId !== binding.dieId)
-      return `Buy Workout and put it on D${binding.dieId + 1} showing ${binding.faceRank}.`;
+      return `Buy ${enhancementLabel('workout')} and put it on D${binding.dieId + 1} showing ${binding.faceRank}.`;
   }
   if (state.round === 4 && state.phase === 'round') {
     const plan = scenario.round4Plan;
     if (planPlayable(plan) && plan && requires(REQUIRED_BEATS.r4Twos)
       && (action.type !== 'PLAY' || action.hand !== plan.upperHand || !action.dieIds.includes(plan.singletonDieId)))
-      return `Play ${HANDS[plan.upperHand].name} with the Workout die.`;
+      return `Play ${HANDS[plan.upperHand].name} with the ${enhancementLabel('workout')} die.`;
     if (plan && !requires(REQUIRED_BEATS.r4Twos) && requires(REQUIRED_BEATS.r4FullHouse)
       && combinationsForHand(state.dice.filter(die => die.owner === 'player'), 'fullHouse').length > 0
       && (action.type !== 'PLAY' || action.hand !== 'fullHouse')) return 'Play Full House again.';

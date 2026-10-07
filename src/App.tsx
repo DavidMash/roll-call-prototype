@@ -20,7 +20,7 @@ import { useGame } from './useGame';
 import type { PlaybackSpeed } from './useGame';
 import { loadDiceDisplay, saveDiceDisplay } from './uiSettings';
 import { formatScoreProgress } from './game/copy';
-import { chapterLabel } from './game/chapters';
+import { chapterLabel, chapterNumberForRound } from './game/chapters';
 import { FaceDetailsModal } from './components/FaceDetailsModal';
 import type { FaceDetailsTarget } from './components/FaceDetailsModal';
 import { FlameDetailsModal } from './components/FlameDetailsModal';
@@ -29,8 +29,9 @@ import { LandingScreen } from './components/LandingScreen';
 import { isResumableRun } from './game/persistence';
 import { useTutorialGame } from './tutorial/useTutorialGame';
 import { TutorialDirector } from './tutorial/TutorialDirector';
+import { activeTutorialBeat } from './tutorial/tutorialSteps';
 import { defaultOnboardingMetadata, isResumableTutorial, loadOnboardingMetadata, saveOnboardingMetadata } from './tutorial/tutorialPersistence';
-import type { OnboardingMetadata } from './tutorial/types';
+import type { OnboardingMetadata, TutorialBeat } from './tutorial/types';
 import { isChapterMapTransition } from './game/playback';
 import { RunActionRow, RunActionRowContext } from './components/RunActionRow';
 
@@ -71,6 +72,25 @@ export default function App() {
   const showingMap = isChapterMapTransition(event);
   const dockActionsEnabled = !busy && !showingChapterSplash && !showingMap && !gameMenuOpen && !runInfoOpen && !helpOpen
     && !restoreLivesOpen && faceDetails === null && flameDetails === null;
+  const tutorialUiState = { selection, selectedOffer, selectedFlameOffer, flameDetailsOpen: flameDetails !== null };
+  const tutorialPaused = busy || showingChapterSplash || showingMap || gameMenuOpen || runInfoOpen || helpOpen || restoreLivesOpen || faceDetails !== null
+    || (flameDetails !== null && !(tutorialGame.session.scenario.completedBeatIds.includes('flame-details')
+      && tutorialGame.session.game.stats.flameStokes.length === 0));
+  const currentTutorialBeat = runMode === 'tutorial' && !tutorialPaused
+    ? activeTutorialBeat(tutorialGame.session, tutorialUiState) : null;
+  const tutorialProgressNudgeEligible = runMode === 'tutorial' && board.phase === 'shop' && !!board.shop && !board.bust
+    && chapterNumberForRound(board.round) <= 2 && !tutorialPaused && currentTutorialBeat === null
+    && selectedOffer === null && selectedFlameOffer === null;
+  const contextualFlameCue: TutorialBeat | null = runMode === 'normal' && board.phase === 'shop'
+    && board.flameTutorial.pendingDieId !== null && !board.flameTutorial.completed ? {
+      id: 'first-flame-ember', title: 'NEW EMBER',
+      body: ['Stoke Flames in the Shop. At 100 Gold, they become Bonfires.'],
+      target: `[data-tutorial="flame-badge"][data-flame-die-id="${board.flameTutorial.pendingDieId}"]`,
+      highlightTargets: [`[data-tutorial="flame-badge"][data-flame-die-id="${board.flameTutorial.pendingDieId}"]`],
+      interactiveTargets: [`[data-tutorial="flame-badge"][data-flame-die-id="${board.flameTutorial.pendingDieId}"]`],
+      blocking: false, gateInteractions: false, requiredAction: 'Open the Flame details.',
+      completion: { kind: 'action', description: 'Open the Flame details.' },
+    } : null;
   useLayoutEffect(() => setSeedInput(state.seed), [state.seed]);
   useEffect(() => saveDiceDisplay(diceDisplay), [diceDisplay]);
   useEffect(() => { saveOnboardingMetadata(window.localStorage, onboarding); }, [onboarding]);
@@ -132,8 +152,27 @@ export default function App() {
     setRunMode(null);
   }
   function openFlameDetails(target: FlameDetailsTarget) {
-    if (runMode === 'tutorial' && target.kind === 'ember') tutorialGame.completeBeat('flame-details');
+    if (target.kind === 'ember' && target.dieId === state.flameTutorial.pendingDieId && !state.flameTutorial.completed) {
+      submit({ type: 'DISMISS_FLAME_TUTORIAL' });
+    } else if (runMode === 'tutorial' && target.kind === 'ember'
+      && target.dieId === tutorialGame.session.scenario.firstFlameDieId
+      && !tutorialGame.session.scenario.completedBeatIds.includes('flame-details')) {
+      tutorialGame.completeBeat('flame-details');
+    }
     setFlameDetails(target);
+  }
+  function closeFlameDetails() {
+    const closing = flameDetails;
+    setFlameDetails(null);
+    window.setTimeout(() => {
+      if (!closing) return;
+      const selector = closing.kind === 'offer'
+        ? `[data-testid="flame-offer-${closing.flame}"] .flame-offer-info`
+        : closing.kind === 'ember' && closing.dieId !== undefined
+          ? `[data-tutorial="flame-badge"][data-flame-die-id="${closing.dieId}"]`
+          : null;
+      if (selector) document.querySelector<HTMLElement>(selector)?.focus();
+    }, 0);
   }
   if (atLanding) return <Container size={1180} px={{ base: 6, sm: 'sm' }} py={8} className="landing-container">
     <LandingScreen resumableRun={resumableRun} resumableTutorial={resumableTutorial} onboarding={onboarding}
@@ -158,7 +197,8 @@ export default function App() {
         selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} openFlameDetails={openFlameDetails} />
         : board.phase === 'specialOffer' && board.specialOffer ? <SpecialOfferScreen board={board} busy={busy} submit={submit} />
         : board.phase === 'shop' && board.shop ? <ShopScreen board={board} event={event} busy={busy}
-        selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} submit={submit} skip={game.skip} />
+        selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} submit={submit} skip={game.skip}
+        tutorialProgressNudgeEligible={tutorialProgressNudgeEligible} />
       : (board.phase === 'bust' || (board.phase === 'lost' && board.bust)) ? <BustScreen board={board}
           onContinue={event?.type === 'ROUND_BUST' && (board.bust?.livesAfter ?? 0) > 0 ? game.continuePlayback : undefined}
           restartSame={() => restart(state.seed)} newRun={() => restart(freshSeed())} />
@@ -188,12 +228,16 @@ export default function App() {
       setSelectedOffer={setSelectedOffer} busy={busy} actionsEnabled={!busy && !showingChapterSplash && !showingMap}
       onClose={() => setFaceDetails(null)} submit={submit} />
     <FlameDetailsModal board={board} target={flameDetails} busy={busy} actionsEnabled={!busy && !showingChapterSplash && !showingMap}
-      onClose={() => setFlameDetails(null)} submit={submit} />
+      onClose={closeFlameDetails} submit={submit} />
     {runMode === 'tutorial' && <TutorialDirector session={tutorialGame.session}
-      uiState={{ selection, selectedOffer, selectedFlameOffer, flameDetailsOpen: flameDetails !== null }}
-      paused={busy || showingChapterSplash || showingMap || gameMenuOpen || runInfoOpen || helpOpen || restoreLivesOpen || faceDetails !== null
-        || (flameDetails !== null && !(tutorialGame.session.scenario.completedBeatIds.includes('flame-details')
-          && tutorialGame.session.game.stats.flameStokes.length === 0))}
+      uiState={tutorialUiState}
+      paused={tutorialPaused}
       onAcknowledge={tutorialGame.acknowledge} onRecover={tutorialGame.completeBeat} onFinish={finishTutorial} />}
+    {contextualFlameCue && <TutorialDirector session={tutorialGame.session} uiState={tutorialUiState}
+      beatOverride={contextualFlameCue}
+      paused={busy || showingChapterSplash || showingMap || gameMenuOpen || runInfoOpen || helpOpen || restoreLivesOpen
+        || faceDetails !== null || flameDetails !== null}
+      onAcknowledge={() => submit({ type: 'DISMISS_FLAME_TUTORIAL' })}
+      onRecover={() => submit({ type: 'DISMISS_FLAME_TUTORIAL' })} onFinish={() => undefined} />}
   </Container></RunActionRowContext.Provider>;
 }
