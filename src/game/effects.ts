@@ -1,6 +1,6 @@
 import { bossRewardForRound, CONFIG, interestForGold, roundReward, targetForRound } from './config';
 import { activeFace, rollPhysicalDie, scoringPips, weightedSourceFace } from './dice';
-import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, personalTrainerChance, stacks, VINTAGE_BASE_SELL_CAP } from './enhancements';
+import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, loneWolfPipsFactor, personalTrainerChance, stacks, tankMultiplierFactor, VINTAGE_BASE_SELL_CAP } from './enhancements';
 import {
   activeFlameId, activeFlameInvestment, captureHandStart, FLAMES, FLAME_IDS, handXMultContributions,
   fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, hasChargeBonfire, HOT_STREAK_SEQUENCE, isChargeFlame,
@@ -10,7 +10,7 @@ import {
 import { hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
 import { OFFER_RARITY_WEIGHTS, rarityFirstSelection, rarityLabel } from './rarity';
-import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, finalizeScore, handContributions } from './scoring';
+import { applyHandContribution, applyHandMultiplier, applyXMult, createHandAccumulator, finalizeHandScore, finalizeScore, ordinaryFaceContributions, resolvedOrdinaryPips, type HandScoreContribution, type ScoringParticipant } from './scoring';
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie,
   isBigBossRound, isCursedDie, isMiniBossType, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
@@ -102,7 +102,7 @@ export class Resolver {
     this.emit({ type: 'FETCH_TARGET_CHANGED', flame: 'fetch', dieIds: [this.state.fetchTarget.dieId], face: this.state.fetchTarget.physicalFace,
       message: `Fetch target: D${this.state.fetchTarget.dieId + 1} face ${this.state.fetchTarget.physicalFace}` });
   }
-  checkProbability(enhancement: 'sticky' | 'hitchhiker' | 'personalTrainer', stackCount: number, dieIds: number[], hand?: HandId, effectiveChance?: number): boolean {
+  checkProbability(enhancement: 'sticky' | 'hitchhiker' | 'personalTrainer' | 'doubleTime', stackCount: number, dieIds: number[], hand?: HandId, effectiveChance?: number): boolean {
     const chance = effectiveChance ?? diminishingHalfChance(stackCount);
     const succeeded = probabilityCheck(this.rng, chance);
     const stats = this.state.stats.probabilityProcs[enhancement];
@@ -199,6 +199,69 @@ export class Resolver {
         amount: live.vintageSellValue - before, message: `D${dieId + 1} face ${snapshot.rank} Vintage · ${HANDS[hand].name} (${playSource === 'jumpingBean' ? 'Jumping Bean free play' : participation}) · base sell value ${this.format(before)} → ${this.format(live.vintageSellValue)}` });
     }
   }
+  private applyScoringContribution(contribution: HandScoreContribution, hand: HandId, playSource: HandPlaySource,
+    scoringDice: number): void {
+    const { dieId, face, kind, role, amount } = contribution;
+    if (kind !== 'base') {
+      const detail = kind === 'loneWolf'
+        ? `×${this.format(loneWolfPipsFactor(scoringDice))}: +${this.format(amount)} Pips`
+        : kind === 'teamwork' ? `copied +${this.format(amount)} Pips` : `+${this.format(amount)} hand pips`;
+      this.trigger(kind, dieId, face, detail, { hand });
+    }
+    applyHandContribution(this.handAccumulator!, contribution);
+    this.emit({ type: role === 'hitchhiker' ? 'HITCHHIKER_ADDED_PIPS' : 'HAND_PIPS_CHANGED',
+      hand, dieIds: [dieId], face: face.rank, amount, enhancement: kind === 'base' ? undefined : kind,
+      source: playSource === 'jumpingBean' ? 'jumpingBean' : 'hand', playSource,
+      pips: this.handAccumulator!.currentPips, multiplier: this.handAccumulator!.currentMultiplier,
+      message: `D${dieId + 1}${role === 'hitchhiker' ? ' Hitchhiker' : ''} ${kind === 'teamwork' ? 'Teamwork copied' : 'added'} ${this.format(amount)} Pips` });
+  }
+
+  private resolvePersonalTrainerActivation(hand: HandId, id: number, face: Face): boolean | null {
+    const count = stacks(face, 'personalTrainer');
+    if (!count) return null;
+    this.state.stats.personalTrainerAttempts++;
+    const chance = personalTrainerChance(count, this.state.handLevels[hand], Object.values(this.state.handLevels));
+    if (!this.checkProbability('personalTrainer', count, [id], hand, chance)) return false;
+    const before = this.state.handLevels[hand]++;
+    this.state.stats.personalTrainerSuccesses++;
+    this.state.stats.personalTrainerLevelsGranted++;
+    this.trigger('personalTrainer', id, face, `${HANDS[hand].name} Lv. ${this.format(before)} to ${this.format(this.state.handLevels[hand])}`, { hand });
+    return true;
+  }
+
+  private activateScoringFace(participant: ScoringParticipant, participants: ScoringParticipant[], hand: HandId,
+    playSource: HandPlaySource, allowDoubleTime: boolean): ScoringParticipant[] {
+    const scoringDice = participants.length;
+    const teamwork = stacks(participant.face, 'teamwork');
+    if (teamwork) {
+      const copiedPips = participants.filter(other => other.id !== participant.id)
+        .reduce((sum, other) => sum + resolvedOrdinaryPips(other, scoringDice), 0);
+      this.applyScoringContribution({ kind: 'teamwork', role: participant.role, dieId: participant.id,
+        face: participant.face, amount: copiedPips }, hand, playSource, scoringDice);
+    }
+    const tank = stacks(participant.face, 'tank');
+    if (tank) {
+      const factor = tankMultiplierFactor(tank);
+      const before = this.handAccumulator!.currentMultiplier;
+      this.trigger('tank', participant.id, participant.face, `Mult ×${this.format(factor)}`, { hand });
+      applyHandMultiplier(this.handAccumulator!, factor);
+      this.emit({ type: 'HAND_MULTIPLIER_CHANGED', enhancement: 'tank', hand, dieIds: [participant.id],
+        face: participant.face.rank, amount: factor, multiplier: this.handAccumulator!.currentMultiplier,
+        message: `D${participant.id + 1} Tank ×${this.format(tank)}: Mult ${this.format(before)} × ${this.format(factor)} = ${this.format(this.handAccumulator!.currentMultiplier)}` });
+    }
+    this.whenScored(participant.id, participant.face, hand, playSource, participant.role);
+    const trainerActivations = stacks(participant.face, 'personalTrainer') ? [participant] : [];
+    const doubleTime = allowDoubleTime ? stacks(participant.face, 'doubleTime') : 0;
+    if (doubleTime && this.checkProbability('doubleTime', doubleTime, [participant.id], hand)) {
+      this.trigger('doubleTime', participant.id, participant.face, 'scored again', { hand });
+      for (const contribution of ordinaryFaceContributions(participant, scoringDice))
+        this.applyScoringContribution(contribution, hand, playSource, scoringDice);
+      const bonus = this.activateScoringFace(participant, participants, hand, playSource, false);
+      trainerActivations.push(...bonus);
+    }
+    return trainerActivations;
+  }
+
   resolveJackpot(scoringDieIds: number[]): number {
     const scoring = new Set(scoringDieIds);
     let total = 0;
@@ -418,24 +481,6 @@ export class Resolver {
     this.queue = [];
   }
 
-  private resolvePersonalTrainer(hand: HandId, scoringParticipants: { id: number; face: Face }[]): boolean | null {
-    let attempts = 0;
-    let successes = 0;
-    for (const { id, face } of scoringParticipants) {
-      const count = stacks(face, 'personalTrainer');
-      if (!count) continue;
-      attempts++;
-      this.state.stats.personalTrainerAttempts++;
-      const chance = personalTrainerChance(count, this.state.handLevels[hand], Object.values(this.state.handLevels));
-      if (!this.checkProbability('personalTrainer', count, [id], hand, chance)) continue;
-      const before = this.state.handLevels[hand]++;
-      successes++;
-      this.state.stats.personalTrainerSuccesses++;
-      this.state.stats.personalTrainerLevelsGranted++;
-      this.trigger('personalTrainer', id, face, `${HANDS[hand].name} Lv. ${this.format(before)} → ${this.format(this.state.handLevels[hand])}`, { hand });
-    }
-    return attempts === 0 ? null : successes > 0;
-  }
   private advanceHotStreak(hand: HandId, scoringIds: number[]): void {
     if (this.state.hotStreakGoal !== hand) return;
     const bonfire = this.state.bonfires.includes('hotStreak') || this.state.wildfires.some(item => item.flame === 'hotStreak');
@@ -744,21 +789,18 @@ export class Resolver {
     observeScoringEvent(this.state.hoodedFigure.active,
       scoringParticipants.map(item => ({ printed: this.state.dice.find(die => die.id === item.id)!.value,
         enhancements: { ...item.face.enhancements }, enhancementsActive: !item.face.infected })), playSource);
-    const contributions = handContributions(this.state.dice, ids, hitchhikers.map(item => item.id));
     for (const { id, face } of shapeParticipants) {
       const wild: Enhancement | null = hand === 'smallStraight' || hand === 'largeStraight' ? 'missingLink' : HANDS[hand].rank ? null : 'mirror';
       if (wild && stacks(face, wild)) this.trigger(wild, id, face, 'wild qualification; actual printed pips score');
     }
-    for (const contribution of contributions) {
-      const { dieId, face, kind, role, amount } = contribution;
-      if (kind !== 'base') this.trigger(kind, dieId, face, `+${this.format(amount)} hand pips`, { hand });
-      applyHandContribution(this.handAccumulator, contribution);
-      this.emit({ type: role === 'hitchhiker' ? 'HITCHHIKER_ADDED_PIPS' : 'HAND_PIPS_CHANGED',
-        hand, dieIds: [dieId], face: face.rank, amount, enhancement: kind === 'base' ? undefined : kind, source: freeBean ? 'jumpingBean' : 'hand', playSource,
-        pips: this.handAccumulator.currentPips, multiplier: this.handAccumulator.currentMultiplier,
-        message: `D${dieId + 1}${role === 'hitchhiker' ? ' Hitchhiker' : ''} added ${this.format(amount)} Pips` });
+    const originalContributions = scoringParticipants.flatMap(participant =>
+      ordinaryFaceContributions(participant, scoringParticipants.length));
+    for (const kind of ['base', 'bonus', 'loneWolf'] as const) for (const contribution of originalContributions)
+      if (contribution.kind === kind) this.applyScoringContribution(contribution, hand, playSource, scoringParticipants.length);
+    const trainerActivations: ScoringParticipant[] = [];
+    for (const participant of scoringParticipants) {
+      trainerActivations.push(...this.activateScoringFace(participant, scoringParticipants, hand, playSource, true));
     }
-    for (const { id, face, role } of scoringParticipants) this.whenScored(id, face, hand, playSource, role === 'hitchhiker' ? 'hitchhiker' : 'selected');
     const xMultFactors = handXMultContributions(handStart, hand, handLevel, scoringIds);
     for (const factor of xMultFactors) {
       if (factor.source === 'speedDemon') this.emit({ type: 'SPEED_DEMON_REVEALED', flame: 'speedDemon', hand,
@@ -827,7 +869,11 @@ export class Resolver {
         message: `Six Pack ×${this.format(before)} → ×${this.format(this.state.sixPackXMult)}` });
     }
     if (!freeBean) this.advanceHotStreak(hand, scoringIds);
-    const personalTrainerSucceeded = this.resolvePersonalTrainer(hand, scoringParticipants);
+    let personalTrainerSucceeded: boolean | null = trainerActivations.length ? false : null;
+    for (const participant of trainerActivations) {
+      const succeeded = this.resolvePersonalTrainerActivation(hand, participant.id, participant.face) === true;
+      if (succeeded) personalTrainerSucceeded = true;
+    }
     this.state.handPlayCounts[hand]++;
     this.state.stats.handsPlayed[hand] = (this.state.stats.handsPlayed[hand] ?? 0) + 1;
     this.log({ type: 'ABILITY_EVALUATED', enhancement: freeBean ? 'jumpingBean' : undefined, hand, dieIds: scoringIds, playSource,

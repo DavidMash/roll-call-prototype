@@ -4,8 +4,9 @@ import { activeFace } from './dice';
 import { dispatch, newRun, validateAction } from './engine';
 import {
   HAND_IDS,
+  HAND_MULT_EXPONENT,
   handStats,
-  roundToNearestHalf,
+  roundToNearestQuarter,
   startingBasePips,
 } from './hands';
 import { handScore } from './scoring';
@@ -63,16 +64,16 @@ describe('derived hand levels', () => {
   });
 
   it.each([
-    [1.24, 1], [1.25, 1.5], [1.74, 1.5], [1.75, 2], [4.26, 4.5], [7.73, 7.5],
-  ])('rounds %s to the nearest half as %s', (value, expected) => {
-    expect(roundToNearestHalf(value)).toBe(expected);
+    [1.12, 1], [1.125, 1.25], [1.37, 1.25], [1.375, 1.5], [4.26, 4.25], [7.73, 7.75],
+  ])('rounds %s to the nearest quarter as %s', (value, expected) => {
+    expect(roundToNearestQuarter(value)).toBe(expected);
   });
 
   it.each([
-    ['ones', [[7, 1], [9, 1.5], [12, 2], [15, 2.5], [18, 3]]],
-    ['pair', [[8, 1.5], [11, 2], [14, 2.5], [17, 3], [20, 3.5]]],
-    ['fullHouse', [[12, 3.5], [16, 4.5], [20, 5.5], [24, 6.5], [28, 7.5]]],
-    ['fiveKind', [[15, 5], [20, 6], [25, 7.5], [30, 9], [35, 10.5]]],
+    ['ones', [[7, 1], [9, 1.5], [12, 2], [15, 2.5], [18, 3.25]]],
+    ['pair', [[8, 1.5], [11, 2.25], [14, 3], [17, 3.75], [20, 4.75]]],
+    ['fullHouse', [[12, 3.5], [16, 5], [20, 6.75], [24, 9], [28, 11.25]]],
+    ['fiveKind', [[15, 5], [20, 7.25], [25, 9.75], [30, 12.75], [35, 16.25]]],
   ] as [HandId, [number, number][]][])('%s follows the universal rounded progression', (hand, expected) => {
     expect(expected.map((_, index) => {
       const stats = handStats(hand, index + 1);
@@ -88,18 +89,20 @@ describe('derived hand levels', () => {
     }
   });
 
-  it('never decreases either level-up increase and always grants at least 0.5 Mult', () => {
+  it('uses exponent 2.3, quarter steps, and never decreases a level-up increase', () => {
+    expect(HAND_MULT_EXPONENT).toBe(2.3);
     for (const hand of HAND_IDS) {
       let previous = handStats(hand, 1);
       let previousPipsIncrease = 0;
-      let previousMultiplierIncrease = 0.5;
+      let previousMultiplierIncrease = 0.25;
       for (let level = 2; level <= 100; level++) {
         const current = handStats(hand, level);
         const pipsIncrease = current.basePips - previous.basePips;
         const multiplierIncrease = current.baseMultiplier - previous.baseMultiplier;
         expect(pipsIncrease, `${hand} Pips at level ${level}`).toBeGreaterThanOrEqual(previousPipsIncrease);
         expect(multiplierIncrease, `${hand} Mult at level ${level}`).toBeGreaterThanOrEqual(previousMultiplierIncrease);
-        expect(multiplierIncrease, `${hand} Mult at level ${level}`).toBeGreaterThanOrEqual(0.5);
+        expect(multiplierIncrease, `${hand} Mult at level ${level}`).toBeGreaterThanOrEqual(0.25);
+        expect(current.baseMultiplier * 4, `${hand} Mult quarter step at level ${level}`).toBe(Math.round(current.baseMultiplier * 4));
         previous = current;
         previousPipsIncrease = pipsIncrease;
         previousMultiplierIncrease = multiplierIncrease;
@@ -108,11 +111,20 @@ describe('derived hand levels', () => {
   });
 
   it('accelerates Mult growth at higher levels when the formula requires it', () => {
-    expect(handStats('fullHouse', 10).baseMultiplier).toBe(12.5);
-    expect(handStats('fullHouse', 11).baseMultiplier).toBe(14);
-    expect(handStats('fullHouse', 12).baseMultiplier).toBe(15.5);
-    expect(handStats('fullHouse', 11).baseMultiplier - handStats('fullHouse', 10).baseMultiplier).toBe(1.5);
-    expect(handStats('fullHouse', 12).baseMultiplier - handStats('fullHouse', 11).baseMultiplier).toBe(1.5);
+    expect(handStats('fullHouse', 10).baseMultiplier).toBe(28.75);
+    expect(handStats('fullHouse', 11).baseMultiplier).toBe(33.5);
+    expect(handStats('fullHouse', 12).baseMultiplier).toBe(38.5);
+    expect(handStats('ones', 2).baseMultiplier - handStats('ones', 1).baseMultiplier).toBe(.5);
+    expect(handStats('pair', 2).baseMultiplier - handStats('pair', 1).baseMultiplier).toBe(.75);
+  });
+
+  it.each([
+    ['ones', [1, 1.5, 2, 2.5, 3.25, 4, 5, 6, 7, 8.25]],
+    ['pair', [1.5, 2.25, 3, 3.75, 4.75, 6, 7.5, 9, 10.5, 12.25]],
+    ['fullHouse', [3.5, 5, 6.75, 9, 11.25, 14, 17.25, 20.75, 24.5, 28.75]],
+    ['fiveKind', [5, 7.25, 9.75, 12.75, 16.25, 20.25, 24.5, 29.5, 35, 41.25]],
+  ] as [HandId, number[]][])('%s matches the Level 1–10 Mult regression table', (hand, expected) => {
+    expect(expected.map((_, index) => handStats(hand, index + 1).baseMultiplier)).toEqual(expected);
   });
 
   it('uses trained stats as the live accumulator base with existing effects layered afterward', () => {
@@ -120,18 +132,18 @@ describe('derived hand levels', () => {
     const values: Rank[] = [4, 4, 2, 3, 6];
     game.dice.forEach((die, index) => { die.value = values[index]; });
     game.handLevels.pair = 3;
-    expect(handScore(game.dice, 'pair', [0, 1], 3)).toEqual({ pips: 22, multiplier: 2.5, rawScore: 55, score: 55 });
+    expect(handScore(game.dice, 'pair', [0, 1], 3)).toEqual({ pips: 22, multiplier: 3, rawScore: 66, score: 66 });
 
     activeFace(game.dice[0]).enhancements.bonus = 1;
     activeFace(game.dice[4]).enhancements.hitchhiker = 1;
     const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0));
-    expect(result.state.score).toBe(95);
+    expect(result.state.score).toBe(114);
     expect(result.state.stats.handScores[0]).toMatchObject({
-      hand: 'pair', handLevel: 3, basePips: 14, baseMultiplier: 2.5,
-      pips: 38, multiplier: 2.5, rawScore: 95, score: 95, bonusPips: 10, hitchhikerPips: 6,
+      hand: 'pair', handLevel: 3, basePips: 14, baseMultiplier: 3,
+      pips: 38, multiplier: 3, rawScore: 114, score: 114, bonusPips: 10, hitchhikerPips: 6,
     });
     expect(result.events.find(event => event.type === 'HAND_STARTED')?.handScore).toMatchObject({
-      handLevel: 3, basePips: 14, baseMultiplier: 2.5, currentPips: 14, currentMultiplier: 2.5,
+      handLevel: 3, basePips: 14, baseMultiplier: 3, currentPips: 14, currentMultiplier: 3,
     });
   });
 });
@@ -152,9 +164,9 @@ describe('Hand Training purchases and persistence', () => {
     const second = dispatch(first.state, { type: 'TRAIN_HAND', hand: 'fullHouse' });
     const third = dispatch(second.state, { type: 'TRAIN_HAND', hand: 'fullHouse' });
 
-    expect(beforeStats).toEqual({ level: 3, basePips: 20, baseMultiplier: 5.5 });
+    expect(beforeStats).toEqual({ level: 3, basePips: 20, baseMultiplier: 6.75 });
     expect(first.state.handLevels.fullHouse).toBe(4);
-    expect(handStats('fullHouse', first.state.handLevels.fullHouse)).toEqual({ level: 4, basePips: 24, baseMultiplier: 6.5 });
+    expect(handStats('fullHouse', first.state.handLevels.fullHouse)).toEqual({ level: 4, basePips: 24, baseMultiplier: 9 });
     expect(second.state.handLevels.fullHouse).toBe(5);
     expect(third.state.handLevels.fullHouse).toBe(6);
     expect(third.state.gold).toBe(186);

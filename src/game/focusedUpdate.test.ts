@@ -36,23 +36,50 @@ function deterministicBean(rank: Rank, configure?: (game: GameState) => void, rn
 }
 
 describe('focused enhancement roster and migration', () => {
-  it('contains the current 15 enhancements and locks their prices', () => {
+  it('contains the current 19 enhancements and locks their prices', () => {
     expect(ENHANCEMENT_IDS).toEqual([
       'bonus', 'jumpingBean', 'golden', 'workout', 'missingLink', 'mirror', 'magnetic',
       'sticky', 'slippy', 'hitchhiker', 'weighted', 'jackpot', 'personalTrainer', 'bump', 'vintage',
+      'teamwork', 'loneWolf', 'doubleTime', 'tank',
     ]);
     expect(Object.fromEntries(ENHANCEMENT_IDS.map(id => [id, enhancementCost(id)]))).toEqual({
-      bonus: 3, jumpingBean: 2, golden: 2, workout: 3, missingLink: 2, mirror: 2,
-      magnetic: 3, sticky: 2, slippy: 2, hitchhiker: 2, weighted: 3, jackpot: 3, personalTrainer: 8, bump: 2, vintage: 3,
+      bonus: 3, jumpingBean: 5, golden: 2, workout: 3, missingLink: 4, mirror: 4,
+      magnetic: 3, sticky: 3, slippy: 2, hitchhiker: 3, weighted: 3, jackpot: 3, personalTrainer: 8, bump: 2, vintage: 3,
+      teamwork: 3, loneWolf: 3, doubleTime: 7, tank: 8,
     });
     expect((ENHANCEMENTS as Record<string, unknown>).multiplier).toBeUndefined();
+  });
+
+  it('locks the targeted post-rarity price update independently of rarity', () => {
+    expect(Object.fromEntries((['sticky', 'hitchhiker', 'jumpingBean', 'mirror', 'missingLink'] as const)
+      .map(id => [id, enhancementCost(id)]))).toEqual({
+      sticky: 3, hitchhiker: 3, jumpingBean: 5, mirror: 4, missingLink: 4,
+    });
+    expect(Object.fromEntries((['slippy', 'jackpot', 'magnetic', 'personalTrainer', 'doubleTime', 'tank'] as const)
+      .map(id => [id, enhancementCost(id)]))).toEqual({
+      slippy: 2, jackpot: 3, magnetic: 3, personalTrainer: 8, doubleTime: 7, tank: 8,
+    });
+  });
+
+  it.each([
+    ['sticky', 3], ['hitchhiker', 3], ['jumpingBean', 5], ['mirror', 4], ['missingLink', 4],
+  ] as const)('charges exactly %s’s canonical %s-Gold Shop price', (enhancement, price) => {
+    const game = baseState();
+    game.phase = 'shop';
+    game.gold = 20;
+    game.shop = { offers: [{ id: 1, enhancement, purchased: false }], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    const result = dispatch(game, { type: 'BUY', offerId: 1, dieId: 0 });
+    expect(result.error).toBeUndefined();
+    expect(result.state.gold).toBe(20 - price);
+    expect(result.state.stats.goldSpentBySource.enhancement).toBe(price);
+    expect(result.state.shop!.offers[0].purchased).toBe(true);
   });
 
   it('uses authoritative stack metadata and rejects a fourth capped stack', () => {
     expect(ENHANCEMENTS.golden.maxStacks).toBe(3);
     expect(ENHANCEMENTS.jackpot.maxStacks).toBe(3);
     expect(ENHANCEMENTS.personalTrainer.maxStacks).toBe(3);
-    for (const enhancement of ['sticky', 'hitchhiker', 'golden', 'jackpot', 'personalTrainer'] as const) {
+    for (const enhancement of ['sticky', 'hitchhiker', 'golden', 'jackpot', 'personalTrainer', 'doubleTime', 'tank'] as const) {
       const face = baseState().dice[0].faces[0];
       face.enhancements[enhancement] = 3;
       expect(attachmentError(face, enhancement)).toContain('capped at 3');

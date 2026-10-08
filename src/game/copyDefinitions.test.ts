@@ -21,6 +21,10 @@ describe('canonical player-facing definitions', () => {
       personalTrainer: 'When this face scores, it may train the hand. Your below-average hands are more likely to train.\nStack up to three to increase the odds.',
       bump: 'While showing, this die’s next roll moves up one face.',
       vintage: 'Each time this face scores, its base sell value increases by 3 Gold, up to 30.',
+      teamwork: 'Other scoring dice contribute their Pips again. Multiple Teamwork faces can each activate.',
+      loneWolf: 'Gain up to ×4 Pips when fewer dice score. 1/2/3/4/5+ dice: ×4/×3/×2/×1.5/×1.',
+      doubleTime: 'Chance for this face to score twice. Stack up to three for a 50%/75%/87.5% chance.',
+      tank: 'Multiply Mult when this face scores. ×1/×2/×3 stacks: Mult ×1.5/×2/×2.5. Multiple Tank faces each activate.',
     });
   });
 

@@ -11,9 +11,9 @@ export type OfferRaritySystem = 'enhancement' | 'flame' | 'specialOffer';
 export type RarityWeights = Readonly<Record<Rarity, number>>;
 
 export const OFFER_RARITY_WEIGHTS: Readonly<Record<OfferRaritySystem, RarityWeights>> = {
-  enhancement: { common: 70, uncommon: 25, rare: 5 },
-  flame: { common: 55, uncommon: 35, rare: 10 },
-  specialOffer: { common: 55, uncommon: 35, rare: 10 },
+  enhancement: { common: 50, uncommon: 35, rare: 15 },
+  flame: { common: 50, uncommon: 35, rare: 15 },
+  specialOffer: { common: 50, uncommon: 35, rare: 15 },
 };
 
 const RARITY_ORDER: readonly Rarity[] = ['common', 'uncommon', 'rare'];

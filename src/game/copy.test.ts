@@ -8,6 +8,12 @@ describe('shared player-facing number formatting', () => {
     [2.6667, '2.667'],
     [4.500, '4.5'],
     [5.000, '5'],
+    [3, '3'],
+    [3.5, '3.5'],
+    [3.25, '3.25'],
+    [3.75, '3.75'],
+    [10, '10'],
+    [10.5, '10.5'],
     [-0, '0'],
   ] as const)('formats %s as %s', (value, expected) => {
     expect(formatPlayerNumber(value)).toBe(expected);

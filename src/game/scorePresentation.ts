@@ -33,7 +33,9 @@ export function scorePresentation(event: GameEvent | null): ScorePresentation | 
         : `${event.dieIds?.[0] === undefined ? 'DIE' : `D${event.dieIds[0] + 1}`} +${amount(event.amount)} PIPS`;
     } else if (event.type === 'HITCHHIKER_ADDED_PIPS') {
       activeMetric = 'pips';
-      callout = `HITCHHIKER +${amount(event.amount)}`;
+      callout = event.enhancement
+        ? `${ENHANCEMENTS[event.enhancement].name.toUpperCase()} +${amount(event.amount)}`
+        : `HITCHHIKER +${amount(event.amount)}`;
     } else if (event.type === 'HAND_MULTIPLIER_CHANGED') {
       activeMetric = 'mult';
       callout = event.enhancement ? ENHANCEMENTS[event.enhancement].name.toUpperCase() : 'MULT UPDATED';

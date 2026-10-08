@@ -19,6 +19,14 @@ describe('restrained rarity presentation', () => {
     }
   });
 
+  it.each([
+    ['sticky', 3], ['hitchhiker', 3], ['jumpingBean', 5], ['mirror', 4], ['missingLink', 4],
+  ] as const)('renders %s with its exact canonical %s-Gold price', (enhancement, price) => {
+    const html = wrap(<EnhancementCard offer={{ id: 1, enhancement, purchased: false }} selected={false}
+      gold={100} busy={false} onSelect={() => {}} />);
+    expect(html).toContain(`>${price} GOLD<`);
+  });
+
   it('labels Flame and Special Offer cards without adding rarity to owned compact badges', () => {
     const flameBoard = newRun('rarity-ui', { next: () => .5 }).state;
     flameBoard.phase = 'flameSelection';

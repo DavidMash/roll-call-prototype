@@ -18,6 +18,10 @@ const IMPLEMENTED_ENHANCEMENTS: Enhancement[] = [
   'personalTrainer',
   'bump',
   'vintage',
+  'teamwork',
+  'loneWolf',
+  'doubleTime',
+  'tank',
 ];
 
 describe('canonical Enhancement visual metadata', () => {

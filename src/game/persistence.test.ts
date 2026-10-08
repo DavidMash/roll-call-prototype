@@ -130,6 +130,7 @@ describe('run persistence', () => {
     const storage = new MemoryStorage();
     const state = newRun('retired-trainer-flame').state;
     delete (state.stats.probabilityProcs as Partial<typeof state.stats.probabilityProcs>).personalTrainer;
+    delete (state.stats.probabilityProcs as Partial<typeof state.stats.probabilityProcs>).doubleTime;
     state.dice[0].flame = { id: 'personalTrainer', investedGold: 75 } as unknown as typeof state.dice[0]['flame'];
     state.bonfires = ['personalTrainer' as unknown as typeof state.bonfires[number]];
     storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION, state }));
@@ -138,6 +139,7 @@ describe('run persistence', () => {
     expect(loaded?.dice[0].flame).toBeNull();
     expect(loaded?.bonfires).toEqual([]);
     expect(loaded?.stats.probabilityProcs.personalTrainer).toEqual({ checks: 0, successes: 0, failures: 0, stacksAtCheck: [] });
+    expect(loaded?.stats.probabilityProcs.doubleTime).toEqual({ checks: 0, successes: 0, failures: 0, stacksAtCheck: [] });
   });
 
   it('migrates the retired Charge Flame to Momentum and derives capacity in the run and checkpoint', () => {

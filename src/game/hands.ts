@@ -39,6 +39,8 @@ export interface HandStats {
 }
 export const startingBasePips = (hand: HandId) => 5 + 2 * HANDS[hand].baseMultiplier;
 export const roundToNearestHalf = (value: number) => Math.round(value * 2) / 2;
+export const roundToNearestQuarter = (value: number) => Math.round(value * 4) / 4;
+export const HAND_MULT_EXPONENT = 2.3;
 
 function monotonicProgression(
   originalValue: number,
@@ -64,8 +66,8 @@ export function handStats(hand: HandId, level: number): HandStats {
     level,
     basePips: monotonicProgression(originalBasePips, level, 1,
       currentLevel => Math.round(originalBasePips * ((currentLevel + 2) / 3))),
-    baseMultiplier: monotonicProgression(originalBaseMultiplier, level, 0.5,
-      currentLevel => roundToNearestHalf(originalBaseMultiplier * ((currentLevel + 5) / 6) ** 1.4)),
+    baseMultiplier: monotonicProgression(originalBaseMultiplier, level, 0.25,
+      currentLevel => roundToNearestQuarter(originalBaseMultiplier * ((currentLevel + 5) / 6) ** HAND_MULT_EXPONENT)),
   };
 }
 export const trainedBaselineStrength = (hand: HandId, level: number) => {

@@ -25,11 +25,12 @@ function scoringState(values: Rank[] = [4, 4, 4, 2, 6]): GameState {
 
 describe('canonical rarity metadata', () => {
   it('assigns every Enhancement exactly the authored rarity', () => {
-    expect(ENHANCEMENT_IDS).toHaveLength(15);
+    expect(ENHANCEMENT_IDS).toHaveLength(19);
     expect(Object.fromEntries(ENHANCEMENT_IDS.map(id => [id, ENHANCEMENTS[id].rarity]))).toEqual({
       bonus: 'common', jumpingBean: 'rare', golden: 'common', workout: 'common', missingLink: 'rare',
-      mirror: 'rare', magnetic: 'uncommon', sticky: 'uncommon', slippy: 'common', hitchhiker: 'uncommon',
+      mirror: 'rare', magnetic: 'uncommon', sticky: 'uncommon', slippy: 'uncommon', hitchhiker: 'uncommon',
       weighted: 'common', jackpot: 'uncommon', personalTrainer: 'rare', bump: 'common', vintage: 'common',
+      teamwork: 'common', loneWolf: 'common', doubleTime: 'rare', tank: 'rare',
     });
   });
 
@@ -65,9 +66,9 @@ describe('rarity-first generation', () => {
 
   it('keeps the three system weights centralized and exact', () => {
     expect(OFFER_RARITY_WEIGHTS).toEqual({
-      enhancement: { common: 70, uncommon: 25, rare: 5 },
-      flame: { common: 55, uncommon: 35, rare: 10 },
-      specialOffer: { common: 55, uncommon: 35, rare: 10 },
+      enhancement: { common: 50, uncommon: 35, rare: 15 },
+      flame: { common: 50, uncommon: 35, rare: 15 },
+      specialOffer: { common: 50, uncommon: 35, rare: 15 },
     });
   });
 

@@ -196,8 +196,12 @@ function findStickyStackSeed() {
     if (game.phase !== 'shop' || game.bust) continue;
     const first = game.shop!.offers.find(offer => offer.enhancement === 'sticky');
     if (!first) continue;
-    game = dispatch(game, { type: 'BUY', offerId: first.id, dieId: 0 }).state;
-    game = dispatch(game, { type: 'REROLL_OFFERS' }).state;
+    const purchase = dispatch(game, { type: 'BUY', offerId: first.id, dieId: 0 });
+    if (purchase.state === game) continue;
+    game = purchase.state;
+    const reroll = dispatch(game, { type: 'REROLL_OFFERS' });
+    if (reroll.state === game) continue;
+    game = reroll.state;
     if (game.shop!.offers.some(offer => offer.enhancement === 'sticky')) return seed;
   }
   throw new Error('No shop seed found for a repeated Sticky purchase');
@@ -896,6 +900,12 @@ test('mobile Enhancement offers keep the longest canonical symbol and name insid
 
 test('stackable enhancement purchases show a single readable count badge', async ({ page }) => {
   let game = await reachShop(page, findStickyStackSeed());
+  const requiredGold = enhancementCost('sticky') * 2 + 3;
+  if (game.gold < requiredGold) {
+    game.gold = requiredGold;
+    await installRunState(page, game);
+    await matchBoard(page, game);
+  }
   await setDiceDisplay(page, 'PIPS');
   const startingGold = game.gold;
   const first = game.shop!.offers.find(offer => offer.enhancement === 'sticky')!;
@@ -919,7 +929,7 @@ test('stackable enhancement purchases show a single readable count badge', async
   await expect(physicalSlot.locator('.enhancement-sticky')).toContainText('×2');
   await expectCenteredPips(physical);
   expect(game.dice[0].faces[game.dice[0].value - 1].enhancements.sticky).toBe(2);
-  expect(game.gold).toBe(startingGold - 7); // two 2-Gold Sticky stacks and one 3-Gold offer reroll
+  expect(game.gold).toBe(startingGold - 9); // two 3-Gold Sticky stacks and one 3-Gold offer reroll
   const face = game.dice[0].value;
   await expect(page.getByText('Manage faces', { exact: true })).toHaveCount(0);
   await physical.click();
@@ -935,7 +945,7 @@ test('stackable enhancement purchases show a single readable count badge', async
   await manager.getByRole('button', { name: 'Close', exact: true }).click();
   await matchBoard(page, game);
   await expect(physicalSlot.locator('.enhancement-sticky')).toHaveCount(0);
-  expect(game.gold).toBe(startingGold - 5);
+  expect(game.gold).toBe(startingGold - 7);
 });
 
 test('a fourth enhancement type opens Manage Die and preserves the offer through sell and apply', async ({ page }) => {

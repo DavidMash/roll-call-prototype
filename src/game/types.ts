@@ -13,7 +13,8 @@ export type RunNodeType = 'normal_round' | 'mini_boss_round' | 'boss_round' | 's
 export type Enhancement =
   | 'bonus' | 'jumpingBean' | 'golden' | 'workout'
   | 'missingLink' | 'mirror' | 'magnetic' | 'sticky' | 'slippy'
-  | 'hitchhiker' | 'weighted' | 'jackpot' | 'personalTrainer' | 'bump' | 'vintage';
+  | 'hitchhiker' | 'weighted' | 'jackpot' | 'personalTrainer' | 'bump' | 'vintage'
+  | 'teamwork' | 'loneWolf' | 'doubleTime' | 'tank';
 export type Flame =
   | 'ultimate' | 'minigun' | 'hailMary' | 'fullOfGrace'
   | 'momentum' | 'thirdRail' | 'jumpStart' | 'powerSurge'
@@ -499,7 +500,7 @@ export interface RunStats {
   goldSpent: number;
   goldSpentBySource: Record<GoldSpendSource, number>;
   triggers: Partial<Record<Enhancement, number>>;
-  probabilityProcs: Record<'sticky' | 'hitchhiker' | 'personalTrainer', ProbabilityProcStats>;
+  probabilityProcs: Record<'sticky' | 'hitchhiker' | 'personalTrainer' | 'doubleTime', ProbabilityProcStats>;
   scoreBySource: Record<ScoreSource, number>;
   scoreByHand: Partial<Record<HandId, number>>;
   handScores: HandScoreRecord[];
@@ -582,7 +583,7 @@ export interface EventRecord {
   bossRewardGold?: number;
   goldenGold?: number;
   jackpotGold?: number;
-  probability?: { enhancement: 'sticky' | 'hitchhiker' | 'personalTrainer'; stacks: number; chance: number; succeeded: boolean };
+  probability?: { enhancement: 'sticky' | 'hitchhiker' | 'personalTrainer' | 'doubleTime'; stacks: number; chance: number; succeeded: boolean };
   decisionMs?: number;
   handScore?: HandScoreAccumulator;
   challengeId?: ChallengeId;

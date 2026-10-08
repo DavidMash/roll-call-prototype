@@ -239,6 +239,11 @@ export function normalizeGameState(state: GameState): GameState {
   next.stats.lifeRestores ??= [];
   next.stats.vintageGrowth ??= [];
   next.stats.probabilityProcs.personalTrainer ??= { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] };
+  next.stats.probabilityProcs.doubleTime ??= { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] };
+  if (next.roundCheckpoint) next.roundCheckpoint.stats.probabilityProcs.doubleTime ??=
+    { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] };
+  if (next.badDreamCheckpoint) next.badDreamCheckpoint.stats.probabilityProcs.doubleTime ??=
+    { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] };
   next.stats.rounds = next.stats.rounds.map(round => {
     const legacyPayout = round.payout as (typeof round.payout & { flameBonusGold?: number }) | null;
     const payout = legacyPayout ? { ...legacyPayout,

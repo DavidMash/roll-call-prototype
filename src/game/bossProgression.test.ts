@@ -132,7 +132,7 @@ describe('The Warden', () => {
     expect(wardenIdealNaturalPips('largeStraight', 5)).toBe(20);
     expect(wardenBaselineCapacity(levels, [], 1)).toBe(63);
     levels.pair = 2;
-    expect(wardenBaselineCapacity(levels, [], 2)).toBe(130);
+    expect(wardenBaselineCapacity(levels, [], 2)).toBe(136);
   });
 
   it('caps the first unlock at the two weakest Upper baselines and half the Pair baseline', () => {
@@ -159,8 +159,8 @@ describe('The Warden', () => {
     expect(wardenUnlockCost(levels, UPPER_HAND_IDS, 2, 15)).toBe(30);
 
     levels.pair = 2;
-    expect(wardenBaselineHandScore(levels, 'pair', 2)).toBe(46);
-    expect(wardenUnlockCost(levels, [], 2, 15)).toBe(45);
+    expect(wardenBaselineHandScore(levels, 'pair', 2)).toBe(52);
+    expect(wardenUnlockCost(levels, [], 2, 15)).toBe(50);
   });
 
   it('keeps unscaled costs when the final unlock is already at or below half the Goal', () => {

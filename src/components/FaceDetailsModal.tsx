@@ -1,6 +1,6 @@
 import { Alert, Button, Group, Modal, Paper, SimpleGrid, Stack, Text } from '@mantine/core';
 import { useEffect, useState } from 'react';
-import { diminishingHalfChance, enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, FACE_TYPE_LIMIT, faceEnhancementTypes, placementError } from '../game/enhancements';
+import { diminishingHalfChance, enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, FACE_TYPE_LIMIT, faceEnhancementTypes, placementError, tankMultiplierFactor } from '../game/enhancements';
 import { enhancementOfferIsFree } from '../game/specialOffers';
 import type { Action, Board, Enhancement, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
@@ -95,7 +95,9 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
             const dynamic = id === 'vintage' ? `Current sell value: ${formatPlayerNumber(enhancementSellValue(face, id))} Gold${face.vintageSommelierBoosted ? ' · Sommelier ×2' : ''}`
               : id === 'workout' && face.workoutPips > 0 ? `Current added Pips: ${formatPlayerNumber(face.workoutPips)}`
                 : id === 'magnetic' && face.magneticSourceUsed ? 'Pull used this Round'
-                  : id === 'personalTrainer' ? `Base training chance: ${formatPercentage(diminishingHalfChance(stacks))} before hand-level adjustment` : null;
+                  : id === 'personalTrainer' ? `Base training chance: ${formatPercentage(diminishingHalfChance(stacks))} before hand-level adjustment`
+                    : id === 'doubleTime' ? `Score-twice chance: ${formatPercentage(diminishingHalfChance(stacks))}`
+                      : id === 'tank' ? `Mult factor per scoring activation: ×${formatPlayerNumber(tankMultiplierFactor(stacks))}` : null;
             return <Paper key={id} withBorder p="sm" className="face-detail-item">
               <Group justify="space-between" align="flex-start" wrap="nowrap">
                 <Group align="flex-start" wrap="nowrap"><div><Text fw={800}><EnhancementIdentity enhancement={id} stacks={stacks} /></Text>
