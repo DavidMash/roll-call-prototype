@@ -16,9 +16,11 @@ import { chapterNumberForRound, ensureChapterPlan } from './chapters';
 import { postBossShopNodeAfter } from './progression';
 import { formatPlayerNumber } from './copy';
 import { rarityLabel } from './rarity';
+import { appendCriticalDiagnostic, appendDebugTrace, createDebugTrace, normalizeDebugTrace, type DebugTraceMode } from './debugTrace';
+import { isRollbackState } from './rollback';
 import { enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey, usableManualRerolls } from './specialOffers';
 import { rankedRecipients, rankedSacrifices } from './hoodedFigure';
-import type { Action, Board, GameState, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
+import type { Action, Board, GameState, GameStateBase, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
 
 const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`${seed}:round:${round}:attempt:${attempt}`);
 
@@ -35,7 +37,7 @@ function normalizeShop(shop: Shop): void {
   shop.lifeRestores = Math.max(0, Math.floor(shop.lifeRestores ?? 0));
 }
 
-function normalizeSpecialRuntime(state: GameState | GameState['roundCheckpoint']): void {
+function normalizeSpecialRuntime(state: Board): void {
   if (!state) return;
   state.specialOfferEffects = { ...initialSpecialOfferEffects(), ...(state.specialOfferEffects ?? {}) };
   state.specialOfferEffects.carePackageRerolls = Math.max(0, Math.floor(state.specialOfferEffects.carePackageRerolls));
@@ -47,7 +49,7 @@ function normalizeSpecialRuntime(state: GameState | GameState['roundCheckpoint']
   state.specialOffer ??= null;
 }
 
-function normalizeHoodedRuntime(state: GameState | GameState['roundCheckpoint']): void {
+function normalizeHoodedRuntime(state: Board): void {
   if (!state) return;
   state.wildfires ??= [];
   state.bonfireContributions ??= {};
@@ -79,6 +81,19 @@ function normalizeHandFamilyFlameRuntime(state: Pick<Board, 'dice' | 'bonfires' 
 
 export function normalizeGameState(state: GameState): GameState {
   const next = structuredClone(state);
+  const legacyStats = next.stats as typeof next.stats & { actions?: Action[] };
+  next.actionJournal ??= structuredClone(legacyStats.actions ?? []);
+  delete legacyStats.actions;
+  next.nextPlaybackEventId = Math.max(0, Math.floor(next.nextPlaybackEventId
+    ?? (next.history.length ? Math.max(...next.history.map(record => record.id)) + 1 : 0)));
+  next.historyV2 ??= [];
+  next.historyV2TimelineId = Math.max(0, Math.floor(next.historyV2TimelineId ?? 0));
+  next.historyV2Coverage ??= next.historyV2.some(event => event.kind === 'run_started')
+    ? { complete: true, firstRound: 1, firstActionId: 0, firstSeq: 0 }
+    : { complete: false, firstRound: next.historyV2[0]?.round ?? next.round,
+      firstActionId: next.historyV2[0]?.actionId ?? next.actionJournal.length,
+      firstSeq: next.historyV2[0]?.seq ?? 0 };
+  next.debugTrace = normalizeDebugTrace(next.debugTrace);
   next.scorecardCycleConsumed ??= next.consumed.filter(hand =>
     next.bossSilenced || next.boss?.type !== 'neglected' || !next.boss.neglectedHands.includes(hand));
   normalizeSpecialRuntime(next);
@@ -127,18 +142,23 @@ export function normalizeGameState(state: GameState): GameState {
     if (!next.shop.kind && next.phase === 'shop' && !next.bust && isBigBossRound(next.round)) next.shop.kind = 'post_boss';
   }
   if (next.roundCheckpoint) {
-    next.roundCheckpoint.scorecardCycleConsumed ??= next.roundCheckpoint.consumed.filter(hand =>
-      next.roundCheckpoint!.bossSilenced || next.roundCheckpoint!.boss?.type !== 'neglected'
-      || !next.roundCheckpoint!.boss.neglectedHands.includes(hand));
-    next.roundCheckpoint.chapterPlans ??= structuredClone(next.chapterPlans ?? {});
-    next.roundCheckpoint.presentedChapters ??= Array.from(
-      { length: chapterNumberForRound(next.roundCheckpoint.round) }, (_, index) => index + 1,
+    const legacy = next.roundCheckpoint as unknown as GameStateBase;
+    if (!isRollbackState(next.roundCheckpoint)) next.roundCheckpoint = {
+      board: boardSnapshot(legacy as GameState), rngState: legacy.rngState, nextOfferId: legacy.nextOfferId,
+    };
+    const checkpoint = next.roundCheckpoint.board;
+    checkpoint.scorecardCycleConsumed ??= checkpoint.consumed.filter(hand =>
+      checkpoint.bossSilenced || checkpoint.boss?.type !== 'neglected'
+      || !checkpoint.boss.neglectedHands.includes(hand));
+    checkpoint.chapterPlans ??= structuredClone(next.chapterPlans ?? {});
+    checkpoint.presentedChapters ??= Array.from(
+      { length: chapterNumberForRound(checkpoint.round) }, (_, index) => index + 1,
     );
-    ensureChapterPlan(next.roundCheckpoint, chapterNumberForRound(next.roundCheckpoint.round));
-    normalizeSpecialRuntime(next.roundCheckpoint);
-    normalizeHoodedRuntime(next.roundCheckpoint);
-    if (next.roundCheckpoint.shop) normalizeShop(next.roundCheckpoint.shop);
-    for (const die of next.roundCheckpoint.dice) {
+    ensureChapterPlan({ ...checkpoint, seed: next.seed }, chapterNumberForRound(checkpoint.round));
+    normalizeSpecialRuntime(checkpoint);
+    normalizeHoodedRuntime(checkpoint);
+    if (checkpoint.shop) normalizeShop(checkpoint.shop);
+    for (const die of checkpoint.dice) {
       for (const face of die.faces) {
         const legacyMagnetic = face as typeof face & { magneticUsed?: boolean; magneticDestinationUsed?: boolean };
         delete legacyMagnetic.magneticUsed;
@@ -160,12 +180,12 @@ export function normalizeGameState(state: GameState): GameState {
       const id = activeFlameId(die.flame);
       die.flame = id ? { id, investedGold: activeFlameInvestment(die.flame) } : null;
     }
-    next.roundCheckpoint.bonfires = [...new Set(next.roundCheckpoint.bonfires
+    checkpoint.bonfires = [...new Set(checkpoint.bonfires
       .map(id => (id as string) === 'charge' ? 'momentum' : id).filter(isFlame))];
-    recalculateMaxCharge(next.roundCheckpoint);
-    next.roundCheckpoint.decisionId = Math.max(0, Math.floor(next.roundCheckpoint.decisionId ?? 0));
-    normalizeSixPackRuntime(next.roundCheckpoint);
-    normalizeHandFamilyFlameRuntime(next.roundCheckpoint);
+    recalculateMaxCharge(checkpoint);
+    checkpoint.decisionId = Math.max(0, Math.floor(checkpoint.decisionId ?? 0));
+    normalizeSixPackRuntime(checkpoint);
+    normalizeHandFamilyFlameRuntime(checkpoint);
   }
   if (next.flameSelection) next.flameSelection.offers = next.flameSelection.offers
     .map(offer => ({ ...offer, flame: (offer.flame as string) === 'charge' ? 'momentum' as const : offer.flame }))
@@ -178,15 +198,20 @@ export function normalizeGameState(state: GameState): GameState {
   next.presentedChapters ??= Array.from({ length: chapterNumberForRound(next.round) }, (_, index) => index + 1);
   ensureChapterPlan(next, chapterNumberForRound(next.round));
   if (next.badDreamCheckpoint) {
-    normalizeHoodedRuntime(next.badDreamCheckpoint);
-    next.badDreamCheckpoint.scorecardCycleConsumed ??= next.badDreamCheckpoint.consumed.filter(hand =>
-      next.badDreamCheckpoint!.bossSilenced || next.badDreamCheckpoint!.boss?.type !== 'neglected'
-      || !next.badDreamCheckpoint!.boss.neglectedHands.includes(hand));
-    next.badDreamCheckpoint.chapterPlans ??= structuredClone(next.chapterPlans);
-    next.badDreamCheckpoint.presentedChapters ??= Array.from(
-      { length: chapterNumberForRound(next.badDreamCheckpoint.round) }, (_, index) => index + 1,
+    const legacy = next.badDreamCheckpoint as unknown as GameStateBase;
+    if (!isRollbackState(next.badDreamCheckpoint)) next.badDreamCheckpoint = {
+      board: boardSnapshot(legacy as GameState), rngState: legacy.rngState, nextOfferId: legacy.nextOfferId,
+    };
+    const checkpoint = next.badDreamCheckpoint.board;
+    normalizeHoodedRuntime(checkpoint);
+    checkpoint.scorecardCycleConsumed ??= checkpoint.consumed.filter(hand =>
+      checkpoint.bossSilenced || checkpoint.boss?.type !== 'neglected'
+      || !checkpoint.boss.neglectedHands.includes(hand));
+    checkpoint.chapterPlans ??= structuredClone(next.chapterPlans);
+    checkpoint.presentedChapters ??= Array.from(
+      { length: chapterNumberForRound(checkpoint.round) }, (_, index) => index + 1,
     );
-    ensureChapterPlan(next.badDreamCheckpoint, chapterNumberForRound(next.badDreamCheckpoint.round));
+    ensureChapterPlan({ ...checkpoint, seed: next.seed }, chapterNumberForRound(checkpoint.round));
   }
   next.boss ??= null;
   if (next.boss?.type === 'warden') next.boss.unlockCosts ??= [];
@@ -194,7 +219,7 @@ export function normalizeGameState(state: GameState): GameState {
     next.boss.manualHandsPlayed ??= Math.max(0, 3 - next.boss.playsRemaining);
     next.boss.callDeadline ??= next.boss.manualHandsPlayed + next.boss.playsRemaining;
   }
-  if (next.roundCheckpoint?.boss?.type === 'warden') next.roundCheckpoint.boss.unlockCosts ??= [];
+  if (next.roundCheckpoint?.board.boss?.type === 'warden') next.roundCheckpoint.board.boss.unlockCosts ??= [];
   next.currentNodeId ??= '';
   next.lives = Math.max(0, Math.min(CONFIG.maxLives, Math.floor(next.lives ?? CONFIG.maxLives)));
   next.roundAttemptNumber = Math.max(1, Math.floor(next.roundAttemptNumber ?? 1));
@@ -240,10 +265,6 @@ export function normalizeGameState(state: GameState): GameState {
   next.stats.vintageGrowth ??= [];
   next.stats.probabilityProcs.personalTrainer ??= { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] };
   next.stats.probabilityProcs.doubleTime ??= { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] };
-  if (next.roundCheckpoint) next.roundCheckpoint.stats.probabilityProcs.doubleTime ??=
-    { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] };
-  if (next.badDreamCheckpoint) next.badDreamCheckpoint.stats.probabilityProcs.doubleTime ??=
-    { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] };
   next.stats.rounds = next.stats.rounds.map(round => {
     const legacyPayout = round.payout as (typeof round.payout & { flameBonusGold?: number }) | null;
     const payout = legacyPayout ? { ...legacyPayout,
@@ -265,14 +286,13 @@ export function normalizeGameState(state: GameState): GameState {
   const legacyGold = next.stats.goldBySource as Record<string, number>;
   next.stats.goldBySource.bossReward ??= legacyGold.flameBonus ?? 0;
   delete legacyGold.flameBonus;
-  next.stats.roundSummaries ??= [];
   next.history = next.history.map(record => {
     if ((record.type as string) !== 'FLAME_REWARD_OPENED' && (record.nodeType as string) !== 'flame_reward') return record;
     return { ...record,
       type: (record.type as string) === 'FLAME_REWARD_OPENED' ? 'FLAME_SELECTION_OPENED' as const : record.type,
       nodeType: (record.nodeType as string) === 'flame_reward' ? 'flame_selection' as const : record.nodeType };
   });
-  next.stats.actions = next.stats.actions.map(action => (action.type as string) === 'CONTINUE_FLAME_REWARD'
+  next.actionJournal = next.actionJournal.map(action => (action.type as string) === 'CONTINUE_FLAME_REWARD'
     ? { type: 'CONTINUE_FLAME_SELECTION' } : action);
   next.stats.goldBySource.enhancementSale ??= 0;
   next.stats.goldBySource.specialOffer ??= 0;
@@ -421,6 +441,7 @@ function execute(state: GameState, run: (resolver: Resolver) => void, random?: R
   options?: ResolverOptions): Resolution {
   const next = structuredClone(state);
   if (rngStateOverride !== undefined) next.rngState = rngStateOverride;
+  const rngBefore = next.rngState;
   const seeded = new SeededRng(next.rngState);
   const resolver = new Resolver(next, random ?? seeded, options);
   try { run(resolver); }
@@ -429,15 +450,20 @@ function execute(state: GameState, run: (resolver: Resolver) => void, random?: R
     console.error(`[Roll Call engine] ${message}`);
     next.phase = 'error';
     next.stats.resolutionError = message;
-    const record = { id: next.history.length, round: next.round, type: 'RESOLUTION_ERROR' as const, message };
-    next.history.push(record);
+    const record = { id: next.nextPlaybackEventId++, round: next.round, type: 'RESOLUTION_ERROR' as const, message };
     resolver.events.push({ ...record, board: boardSnapshot(next) });
+    resolver.emitV2Error(message);
+    appendCriticalDiagnostic(next.debugTrace, { round: next.round, attempt: next.roundAttemptNumber,
+      actionId: next.actionJournal.length }, { kind: 'error', detail: message });
   }
   next.rngState = resolver.rngStateAfterResolution ?? seeded.state;
+  appendDebugTrace(next.debugTrace, { round: next.round, attempt: next.roundAttemptNumber,
+    actionId: next.actionJournal.length }, { kind: 'resolution', rngBefore, rngAfter: next.rngState,
+    playbackEvents: resolver.events.length });
   return { state: next, events: resolver.events };
 }
 
-export function newRun(seed: string, random?: RandomSource): Resolution {
+export function newRun(seed: string, random?: RandomSource, options?: { debugTraceMode?: DebugTraceMode }): Resolution {
   const state: GameState = {
     phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: CONFIG.baseTarget,
     score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, roundAttemptNumber: 1,
@@ -450,9 +476,12 @@ export function newRun(seed: string, random?: RandomSource): Resolution {
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
     scoreByHand: {}, effectScore: 0, lastRoundPayout: null, roundSummary: null, flameSelection: null, specialOffer: null,
     manualRerollsRemaining: CONFIG.manualRerollsPerRound, specialOfferEffects: initialSpecialOfferEffects(), suppressedPostBossRewardRounds: [],
-    nextOfferId: 0, stats: createStats(seed), history: [], roundCheckpoint: null, badDreamCheckpoint: null,
+    nextOfferId: 0, nextPlaybackEventId: 0, stats: createStats(seed), actionJournal: [], history: [], historyV2: [], historyV2TimelineId: 0,
+    historyV2Coverage: { complete: true, firstRound: 1, firstActionId: 0, firstSeq: 0 },
+    debugTrace: createDebugTrace(options?.debugTraceMode),
+    roundCheckpoint: null, badDreamCheckpoint: null,
   };
-  return execute(state, resolver => resolver.startRound(), random, random ? undefined : attemptSeed(seed, 1, 1));
+  return execute(state, resolver => { resolver.emitRunStarted(); resolver.startRound(); }, random, random ? undefined : attemptSeed(seed, 1, 1));
 }
 
 export function dispatch(state: GameState, action: Action, random?: RandomSource, options?: ResolverOptions): Resolution {
@@ -467,7 +496,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         ? attemptSeed(normalized.seed, normalized.round, 1) : undefined;
   return execute(normalized, resolver => {
     const next = resolver.state;
-    next.stats.actions.push(structuredClone(action));
+    next.actionJournal.push(structuredClone(action));
     switch (action.type) {
       case 'PLAY': resolver.play(action.hand, action.dieIds, 'manual', action.decisionMs ?? null); break;
       case 'MANUAL_REROLL': resolver.manualReroll(action.dieIds); break;
@@ -516,7 +545,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const offer = next.flameSelection!.offers.find(item => item.id === action.offerId)!;
         const die = next.dice[action.dieId];
         const replaced = activeFlameId(die.flame);
-        const firstFlame = next.stats.flameAcquisitions.length === 0;
+        const firstFlame = ownedFlameIds(next).size === 0;
         die.flame = { id: offer.flame, investedGold: 0 };
         if (replaced === 'fetch') next.fetchTarget = null;
         if (offer.flame === 'fetch') resolver.setFetchTarget(die.id, null);
@@ -549,7 +578,6 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
           die.flame = null;
           if (!next.bonfires.includes(id)) next.bonfires.push(id);
           recalculateMaxCharge(next);
-          next.stats.bonfiresCreated.push({ round: next.round, flame: id });
           resolver.emit({ type: 'BONFIRE_CREATED', flame: id, dieIds: [die.id],
             message: `${FLAMES[id].name} became a Bonfire and detached from D${die.id + 1}` });
         }
@@ -558,7 +586,6 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       case 'CONTINUE_ROUND_SUMMARY': resolver.continueRoundSummary(); break;
       case 'CONTINUE_FLAME_SELECTION':
         if (!next.flameSelection!.acquired) {
-          next.stats.flameSkips.push(next.round);
           resolver.emit({ type: 'FLAME_SKIPPED', message: `Skipped Flame acquisition for round ${formatPlayerNumber(next.round)}` });
         }
         resolver.openShop();
@@ -575,13 +602,13 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         resolver.spendGold(diceRerollCost(next.shop!.diceRerolls), 'Paid for shop dice reroll', 'shopDiceReroll');
         next.shop!.diceRerolls++;
         next.stats.shopDiceRerolls++;
-        resolver.rollBatch(next.dice.map(die => die.id), 'Shop dice reroll', 'shop');
+        resolver.rollBatch(next.dice.map(die => die.id), 'Shop dice reroll', 'shop', false, 'shop');
         break;
       case 'REROLL_OFFERS':
         resolver.spendGold(offerRerollCost(next.shop!.offerRerolls), 'Paid for enhancement reroll', 'enhancementReroll');
         next.shop!.offerRerolls++;
         next.stats.enhancementShopRerolls++;
-        resolver.freshOffers();
+        resolver.freshOffers('reroll');
         resolver.emit({ type: 'OFFERS_REFRESHED', message: 'Three fresh distinct enhancement offers' });
         break;
       case 'TRAIN_HAND': {

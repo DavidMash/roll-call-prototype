@@ -11,6 +11,8 @@ import {
   usableManualRerolls,
 } from './specialOffers';
 import { SCREEN_THEMES } from './screenThemes';
+import { captureRollbackState } from './rollback';
+import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
 import type { GameState, HandId, RandomSource, RoundSummary, SpecialOfferType } from './types';
 
 const constant = (value = 0): RandomSource => ({ next: () => value });
@@ -250,7 +252,7 @@ describe('temporary Special Offers', () => {
     state = result.state;
     expect(state.phase).toBe('shop');
     expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
-    expect(state.roundCheckpoint?.specialOfferEffects.carePackageRerolls).toBe(0);
+    expect(state.roundCheckpoint?.board.specialOfferEffects.carePackageRerolls).toBe(0);
     expect(result.events.find(event => event.type === 'MANUAL_REROLL_STARTED')?.message)
       .toBe('Care Package depleted · 0 Rerolls left');
     expect(result.events.find(event => event.type === 'SHOP_REOPENED_AFTER_BUST')?.message)
@@ -422,9 +424,7 @@ describe('temporary Special Offers', () => {
     state.specialOfferEffects.taxEvasionRounds = 3;
     state.specialOfferEffects.bottledFairyRounds = 3;
     state.specialOfferEffects.badDreamRounds = 3;
-    const clone = structuredClone(state);
-    const { roundCheckpoint: _round, badDreamCheckpoint: _dream, ...base } = clone;
-    state.badDreamCheckpoint = base;
+    state.badDreamCheckpoint = captureRollbackState(state);
     for (let index = 0; index < 3; index++) {
       state.phase = 'round';
       state.roundSummary = null;
@@ -452,7 +452,7 @@ describe('replay and checkpoint Special Offers', () => {
     expect(savePersistedRun(storage, state)).toBe(true);
     const loaded = loadPersistedRun(storage, state.seed)!;
     expect(loaded.specialOfferEffects.carePackageRerolls).toBe(0);
-    expect(loaded.roundCheckpoint?.specialOfferEffects.carePackageRerolls).toBe(0);
+    expect(loaded.roundCheckpoint?.board.specialOfferEffects.carePackageRerolls).toBe(0);
     const retry = dispatch(loaded, { type: 'RETRY_ROUND' }, constant(.4)).state;
     expect(retry.manualRerollsRemaining).toBe(3);
     expect(retry.specialOfferEffects.carePackageRerolls).toBe(0);
@@ -482,7 +482,7 @@ describe('replay and checkpoint Special Offers', () => {
     expect(activeSpecialOfferStatusItems(state.specialOfferEffects).find(status => status.type === 'badDream')?.label)
       .toBe('Bad Dream · 3 Rounds');
     const checkpoint = structuredClone(state.badDreamCheckpoint!);
-    expect(checkpoint.phase).toBe('specialOffer');
+    expect(checkpoint.board.phase).toBe('specialOffer');
     state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.4)).state;
     state.lives = 1;
@@ -494,13 +494,19 @@ describe('replay and checkpoint Special Offers', () => {
     expect(state.phase).toBe('specialOffer');
     expect(state.lives).toBe(1);
     expect(state.rngState).toBe(checkpoint.rngState);
-    expect(state.handLevels).toEqual(checkpoint.handLevels);
-    expect(state.gold).toBe(checkpoint.gold);
+    expect(state.handLevels).toEqual(checkpoint.board.handLevels);
+    expect(state.gold).toBe(checkpoint.board.gold);
     expect(state.badDreamCheckpoint).toBeNull();
     expect(state.specialOfferEffects.badDreamRounds).toBe(0);
     expect(state.specialOfferEffects.carePackageRerolls).toBe(2);
     expect(activeSpecialOfferStatusItems(state.specialOfferEffects).map(status => status.type)).toEqual(['carePackage']);
     expect(state.specialOffer?.chosen?.type).toBe('badDream');
+    const timelines = classifyRunHistoryV2Timelines(state.historyV2, state.historyV2Coverage);
+    expect(timelines.ranges.at(-1)?.reason).toBe('bad_dream');
+    expect(state.historyV2.some(event => event.kind === 'round_attempt_finished' && timelines.status(event) === 'abandoned')).toBe(true);
+    expect(state.historyV2.some(event => event.kind === 'shop_transaction'
+      && event.transaction.type === 'special_offer_selected' && event.transaction.offer === 'badDream'
+      && timelines.status(event) === 'canonical')).toBe(true);
   });
 
   it('persists an active Bad Dream checkpoint as part of the run', () => {

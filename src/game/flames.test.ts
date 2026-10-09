@@ -186,12 +186,14 @@ describe('investment, uniqueness, and reward lifecycle', () => {
     expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 0, amount: 6 })).toContain('more than 100');
     const completed = dispatch(state, { type: 'STOKE_FLAME', dieId: 0, amount: 5 }).state;
     expect(completed.gold).toBe(5); expect(completed.dice[0].flame).toBeNull(); expect(completed.bonfires).toContain('ultimate');
-    expect(completed.stats.bonfiresCreated.at(-1)).toEqual({ round: 1, flame: 'ultimate' });
+    expect(completed.historyV2).toContainEqual(expect.objectContaining({ kind: 'flame_changed',
+      change: expect.objectContaining({ type: 'bonfire_created', flame: 'ultimate' }) }));
   });
   it('can skip acquisition and preserve reward faces into shop', () => {
     const state = reward(); const values = state.dice.map(die => die.value);
     const result = dispatch(state, { type: 'CONTINUE_FLAME_SELECTION' }, constant(0));
-    expect(result.state.phase).toBe('shop'); expect(result.state.dice.map(die => die.value)).toEqual(values); expect(result.state.stats.flameSkips).toEqual([1]);
+    expect(result.state.phase).toBe('shop'); expect(result.state.dice.map(die => die.value)).toEqual(values);
+    expect(result.state.historyV2).toContainEqual(expect.objectContaining({ kind: 'flame_changed', change: { type: 'skipped' } }));
   });
   it('keeps generated Flame offers unique, deterministic, and free of Personal Trainer', () => {
     const makeOffers = () => {

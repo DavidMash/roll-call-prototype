@@ -55,7 +55,7 @@ describe('persistent physical faces', () => {
     expect(result.state.dice.slice(0, 2).map(die => die.value)).toEqual([6, 6]);
     expect(result.events.find(event => event.type === 'DICE_REROLL_STARTED')?.message).toContain('Winning hand settle reroll');
     expect(result.events.some(event => event.type === 'JUMPING_BEAN_FREE_PLAY')).toBe(false);
-    expect(result.state.stats.handsPlayed.sixes).toBeUndefined();
+    expect(result.state.handPlayCounts.sixes).toBe(0);
     const score = result.state.score;
     const finalFaces = result.state.dice.map(die => die.value);
 
@@ -103,7 +103,8 @@ describe('Clockmaker roll pipeline', () => {
   it('Bumps every initial roll once through the shared roll pipeline', () => {
     const state = clockmakerEncounter();
     expect(state.dice.map(die => die.value)).toEqual([2, 3, 4, 5, 6]);
-    expect(state.history.filter(event => event.type === 'BUMP_ROLL' && event.boss === 'clockmaker').slice(-5)).toHaveLength(5);
+    const initial = [...state.historyV2].reverse().find(event => event.kind === 'roll_batch' && event.reason === 'initial_round');
+    expect(initial?.kind === 'roll_batch' ? initial.results.filter(result => result.bump?.source === 'clockmaker') : []).toHaveLength(5);
   });
 
   it('changes post-hand and manual rolling dice only, and actual Bump does not double-stack', () => {

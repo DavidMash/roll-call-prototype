@@ -3,30 +3,29 @@ import type { Board, GameState, RunStats } from './types';
 
 export function createStats(seed: string): RunStats {
   return {
-    seed, roundReached: 1, rounds: [], handsPlayed: {}, purchases: [], sales: [], busts: [],
+    seed, roundReached: 1, rounds: [], purchases: [], sales: [], busts: [],
     mapTransitions: [], bossEncounters: [], callerEvents: [], wardenEvents: [], hexerEvents: [],
     lifeRestores: [], vintageGrowth: [],
     trainingPurchases: [], trainingPurchasesTotal: 0, trainingGoldSpent: 0,
-    flameAcquisitions: [], flameSkips: [], flameStokes: [], totalFlameInvestment: 0,
-    bonfiresCreated: [], flameTriggers: {},
-    xMultFactorsByFlame: {}, targetPracticeTargets: [], chargeGained: 0, chargeArmed: 0,
+    flameAcquisitions: [], flameStokes: [], totalFlameInvestment: 0, flameTriggers: {},
+    chargeGained: 0, chargeArmed: 0,
     chargeConsumed: 0, chargeResets: 0, personalTrainerAttempts: 0, personalTrainerSuccesses: 0,
     personalTrainerLevelsGranted: 0, hotStreakCharges: 0, hotStreakSkippedHands: [],
-    lifetimeNormalShopGoldSpent: 0, lowballAverages: [], magneticAnchorBatches: 0, magneticAttractions: 0,
+    lifetimeNormalShopGoldSpent: 0, magneticAnchorBatches: 0, magneticAttractions: 0,
     bumpControlledRolls: 0, enhancedFaces: [], enhancementShopRerolls: 0, shopDiceRerolls: 0,
     goldEarned: 0,
     goldBySource: { golden: 0, jackpot: 0, enhancementSale: 0, roundBase: 0, unusedRerolls: 0, interest: 0, bossReward: 0, specialOffer: 0, cashBonus: 0 },
     goldSpent: 0,
     goldSpentBySource: { enhancement: 0, shopDiceReroll: 0, enhancementReroll: 0, handTraining: 0, flameInvestment: 0, lifeRestore: 0 },
-    manualRerollActions: 0, manualDiceRerolled: 0, manualRerolls: [], deadBoardRescues: 0, roundSummaries: [],
+    manualRerollActions: 0, manualDiceRerolled: 0, manualRerolls: [], deadBoardRescues: 0,
     triggers: {}, probabilityProcs: {
       sticky: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
       hitchhiker: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
       personalTrainer: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
       doubleTime: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
-    }, scoreBySource: { hand: 0, jumpingBean: 0, hitchhiker: 0, boss: 0 }, scoreByHand: {},
+    }, scoreBySource: { hand: 0, jumpingBean: 0, hitchhiker: 0, boss: 0 },
     handScores: [], jumpingBeanFreePlays: [], standaloneScores: [], handBonusPips: 0, hitchhikerPipsContributed: 0,
-    loss: null, actions: [], resolutionError: null,
+    loss: null, resolutionError: null,
   };
 }
 export function boardSnapshot(state: GameState): Board {
@@ -41,6 +40,8 @@ export function boardSnapshot(state: GameState): Board {
 }
 export function exportRun(state: GameState) {
   return { schemaVersion: 18, scoringModel: 'rarity-fetch-vintage-v1', ...state.stats,
+    actions: structuredClone(state.actionJournal),
+    scoreByHand: structuredClone(state.scoreByHand),
     bonfires: [...state.bonfires], wildfires: structuredClone(state.wildfires), finalHandLevels: structuredClone(state.handLevels),
     finalFlames: state.dice.filter(die => die.owner === 'player').map(die => ({ dieId: die.id, flame: activeFlameId(die.flame), investedGold: die.flame?.investedGold ?? 0 })),
     rngState: state.rngState, board: boardSnapshot(state) };

@@ -5,18 +5,13 @@ import { dispatch, newRun, validateAction } from './engine';
 import { ENHANCEMENTS, ENHANCEMENT_IDS, enhancementSellValue } from './enhancements';
 import { Resolver } from './effects';
 import { HAND_IDS } from './hands';
-import type { GameState, GameStateBase, RandomSource, Rank } from './types';
+import { captureRollbackState } from './rollback';
+import type { GameState, RandomSource, Rank, RollbackState } from './types';
 
 const constant = (value = 0): RandomSource => ({ next: () => value });
 const sequence = (...values: number[]): RandomSource => { let index = 0; return { next: () => values[index++] ?? 0 }; };
 
-function compactCheckpoint(state: GameState): GameStateBase {
-  const clone = structuredClone(state);
-  const { roundCheckpoint: _checkpoint, ...base } = clone;
-  base.history = [];
-  base.stats.actions = [];
-  return base;
-}
+function compactCheckpoint(state: GameState): RollbackState { return captureRollbackState(state); }
 function forceBust(state: GameState, rng: RandomSource = constant()): ReturnType<typeof dispatch> {
   state.dice.forEach((die, index) => { die.value = ([1, 2, 2, 4, 5] as Rank[])[index]; });
   state.score = 0;
@@ -156,7 +151,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     expect(lifeRestoreCost(state.shop!.lifeRestores)).toBe(40);
   });
 
-  it('rolls back failed-attempt Gold, Workout, Trainer, history, and Vintage growth', () => {
+  it('rolls back gameplay while retaining experienced analytics and V2 history', () => {
     const state = newRun('rollback', constant(0.2)).state;
     state.gold = 10;
     const face = state.dice[0].faces[0];
@@ -180,11 +175,12 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     expect(result.state.dice[0].faces[0]).toMatchObject({ workoutPips: 0, vintageSellValue: 0 });
     expect(result.state.handLevels.ones).toBe(1);
     expect(result.state.handPlayCounts.ones).toBe(0);
-    expect(result.state.stats.personalTrainerLevelsGranted).toBe(0);
-    expect(result.state.stats.probabilityProcs.personalTrainer.checks).toBe(0);
-    expect(result.state.stats.goldBySource.golden).toBe(0);
-    expect(result.state.stats.goldBySource.jackpot).toBe(0);
-    expect(result.state.stats.vintageGrowth).toEqual([]);
+    expect(result.state.stats.personalTrainerLevelsGranted).toBeGreaterThan(0);
+    expect(result.state.stats.probabilityProcs.personalTrainer.checks).toBeGreaterThan(0);
+    expect(result.state.stats.goldBySource.golden).toBeGreaterThan(0);
+    expect(result.state.stats.goldBySource.jackpot).toBe(3);
+    expect(result.state.stats.vintageGrowth).toHaveLength(1);
+    expect(result.state.historyV2.some(event => event.kind === 'checkpoint_restored' && event.reason === 'bust')).toBe(true);
     expect(result.state.chargeXMult).toBe(1);
     expect(result.state.chargeArmed).toBe(false);
     expect(result.state.hotStreakCharges).toBe(0);

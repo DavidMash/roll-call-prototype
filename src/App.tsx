@@ -41,6 +41,7 @@ const query = new URLSearchParams(window.location.search);
 const requestedSeed = query.get('seed')?.trim() || null;
 const initialSeed = requestedSeed ?? freshSeed();
 const initialSpeed = ['normal', 'fast', 'instant'].includes(query.get('speed') ?? '') ? query.get('speed') as PlaybackSpeed : 'normal';
+const initialDebugTraceMode = query.get('debugTrace') === 'full' ? 'full' as const : 'bounded' as const;
 
 export default function App() {
   const [runMode, setRunMode] = useState<'normal' | 'tutorial' | null>(null);
@@ -58,7 +59,7 @@ export default function App() {
   const [faceDetails, setFaceDetails] = useState<FaceDetailsTarget | null>(null);
   const [flameDetails, setFlameDetails] = useState<FlameDetailsTarget | null>(null);
   const [actionRowTarget, setActionRowTarget] = useState<HTMLDivElement | null>(null);
-  const normalGame = useGame(requestedSeed, initialSeed, speed, runMode === 'normal');
+  const normalGame = useGame(requestedSeed, initialSeed, speed, runMode === 'normal', initialDebugTraceMode);
   const tutorialGame = useTutorialGame(speed, runMode === 'tutorial');
   const game = runMode === 'tutorial' ? tutorialGame : normalGame;
   const [onboarding, setOnboarding] = useState<OnboardingMetadata>(() => {
@@ -220,7 +221,7 @@ export default function App() {
       selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} selectedFlameOffer={selectedFlameOffer}
       submit={submit} openFaceDetails={setFaceDetails} openFlameDetails={openFlameDetails} />}
     {board.phase !== 'hoodedFigure' && <RunActionRow setTarget={setActionRowTarget} />}
-    <RunInfoModal state={state} visibleEventId={event?.id} busy={busy} opened={runInfoOpen} onClose={() => setRunInfoOpen(false)}
+    <RunInfoModal state={state} busy={busy} opened={runInfoOpen} onClose={() => setRunInfoOpen(false)}
       seedInput={seedInput} setSeedInput={setSeedInput} startSeed={() => restart(seedInput.trim())}
       restartSeed={() => restart(state.seed)} newSeed={() => restart(freshSeed())} />
     <HelpModal opened={helpOpen} onClose={() => setHelpOpen(false)} />

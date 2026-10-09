@@ -231,7 +231,7 @@ describe('Mini-Boss mechanics', () => {
       game.seed = seed;
       game.dice[preview.missingDieId].flame = { id: 'momentum', investedGold: 50 };
     });
-    expect(state.roundCheckpoint?.dice[preview.missingDieId].flame).toMatchObject({ id: 'momentum', investedGold: 50 });
+    expect(state.roundCheckpoint?.board.dice[preview.missingDieId].flame).toMatchObject({ id: 'momentum', investedGold: 50 });
     state.target = 1_000_000;
     state.consumed = [...HAND_IDS];
     state.manualRerollsRemaining = 0;

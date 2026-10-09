@@ -149,7 +149,7 @@ describe('manual roll effects and hand independence', () => {
     expect(result.state.score).toBe(0);
     expect(result.state.gold).toBe(0);
     expect(result.state.consumed).toEqual([]);
-    expect(result.state.stats.handsPlayed).toEqual({});
+    expect(Object.values(result.state.handPlayCounts).every(count => count === 0)).toBe(true);
     expect(result.state.stats.triggers).toEqual({});
     expect(result.state.dice[4].value).toBe(5);
     expect(result.events.filter(event => event.type === 'DIE_ROLLED')).toHaveLength(1);

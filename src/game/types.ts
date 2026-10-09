@@ -1,3 +1,6 @@
+import type { RollReason, RunHistoryV2Coverage, RunHistoryV2Event } from './runHistoryV2';
+import type { DebugTraceState } from './debugTrace';
+
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type Rarity = 'common' | 'uncommon' | 'rare';
 export type BigBossType = 'caller' | 'warden' | 'hexer' | 'marathon' | 'quickdraw' | 'fly' | 'snakeEyes' | 'infected';
@@ -451,7 +454,6 @@ export interface RunStats {
   seed: string;
   roundReached: number;
   rounds: RoundStats[];
-  handsPlayed: Partial<Record<HandId, number>>;
   purchases: Purchase[];
   sales: EnhancementSale[];
   busts: BustRecord[];
@@ -466,13 +468,9 @@ export interface RunStats {
   trainingPurchasesTotal: number;
   trainingGoldSpent: number;
   flameAcquisitions: FlameAcquisition[];
-  flameSkips: number[];
   flameStokes: FlameStoke[];
   totalFlameInvestment: number;
-  bonfiresCreated: { round: number; flame: Flame }[];
   flameTriggers: Partial<Record<Flame, number>>;
-  xMultFactorsByFlame: Partial<Record<Flame, number[]>>;
-  targetPracticeTargets: { round: number; hand: HandId }[];
   chargeGained: number;
   chargeArmed: number;
   chargeConsumed: number;
@@ -483,7 +481,6 @@ export interface RunStats {
   hotStreakCharges: number;
   hotStreakSkippedHands: { round: number; hand: HandId }[];
   lifetimeNormalShopGoldSpent: number;
-  lowballAverages: number[];
   magneticAnchorBatches: number;
   magneticAttractions: number;
   bumpControlledRolls: number;
@@ -494,7 +491,6 @@ export interface RunStats {
   manualDiceRerolled: number;
   manualRerolls: ManualRerollStats[];
   deadBoardRescues: number;
-  roundSummaries: RoundSummaryRecord[];
   goldEarned: number;
   goldBySource: Record<GoldSource, number>;
   goldSpent: number;
@@ -502,7 +498,6 @@ export interface RunStats {
   triggers: Partial<Record<Enhancement, number>>;
   probabilityProcs: Record<'sticky' | 'hitchhiker' | 'personalTrainer' | 'doubleTime', ProbabilityProcStats>;
   scoreBySource: Record<ScoreSource, number>;
-  scoreByHand: Partial<Record<HandId, number>>;
   handScores: HandScoreRecord[];
   jumpingBeanFreePlays: JumpingBeanPlayRecord[];
   standaloneScores: StandaloneScoreRecord[];
@@ -510,7 +505,6 @@ export interface RunStats {
   hitchhikerPipsContributed: number;
   loss: null | { round: number; afterHand: HandId | null; afterAction: 'PLAY' | 'MANUAL_REROLL' | 'JUMPING_BEAN' | null;
     score: number; values: Rank[]; consumed: HandId[]; manualRerollsRemaining: number };
-  actions: Action[];
   resolutionError: string | null;
 }
 export type EventType =
@@ -569,6 +563,7 @@ export interface EventRecord {
   offerSet?: { name: string; rarity: Rarity }[];
   face?: Rank;
   rollSource?: 'manual_reroll' | 'automatic';
+  rollReason?: RollReason;
   previousFace?: Rank;
   resultFace?: Rank;
   sameFaceExcluded?: boolean;
@@ -608,12 +603,23 @@ export interface GameStateBase extends Board {
   seed: string;
   rngState: number;
   nextOfferId: number;
+  nextPlaybackEventId: number;
   stats: RunStats;
+  actionJournal: Action[];
   history: EventRecord[];
+  historyV2: RunHistoryV2Event[];
+  historyV2TimelineId: number;
+  historyV2Coverage: RunHistoryV2Coverage;
+  debugTrace: DebugTraceState;
+}
+export interface RollbackState {
+  board: Board;
+  rngState: number;
+  nextOfferId: number;
 }
 export interface GameState extends GameStateBase {
-  roundCheckpoint: GameStateBase | null;
-  badDreamCheckpoint: GameStateBase | null;
+  roundCheckpoint: RollbackState | null;
+  badDreamCheckpoint: RollbackState | null;
 }
 export type Action =
   | { type: 'PLAY'; hand: HandId; dieIds: number[]; decisionMs?: number }

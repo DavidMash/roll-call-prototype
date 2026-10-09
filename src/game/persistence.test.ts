@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dispatch, newRun } from './engine';
 import { projectWildfire, rankedRecipients } from './hoodedFigure';
-import { isResumableRun, loadPersistedRun, RUN_STORAGE_KEY, RUN_STORAGE_VERSION, savePersistedRun } from './persistence';
+import { compactGameStateForPersistence, isResumableRun, loadPersistedRun, RUN_STORAGE_KEY, RUN_STORAGE_VERSION, savePersistedRun } from './persistence';
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -29,8 +29,11 @@ describe('run persistence', () => {
     const state = dispatch(started, action).state;
 
     expect(savePersistedRun(storage, state)).toBe(true);
-    expect(loadPersistedRun(storage, null)).toEqual(state);
-    expect(loadPersistedRun(storage, 'saved-run')).toEqual(state);
+    const loaded = loadPersistedRun(storage, null);
+    expect(loaded).toEqual(compactGameStateForPersistence(state));
+    expect(loaded?.historyV2).toEqual(state.historyV2);
+    expect(loaded?.historyV2.some(event => event.kind === 'run_started')).toBe(true);
+    expect(loadPersistedRun(storage, 'saved-run')).toEqual(compactGameStateForPersistence(state));
     expect(loadPersistedRun(storage, 'another-run')).toBeNull();
   });
 
@@ -46,7 +49,7 @@ describe('run persistence', () => {
     const encounter = dispatch(state, { type: 'NEXT_ROUND' }, rng).state;
 
     expect(savePersistedRun(storage, encounter)).toBe(true);
-    expect(loadPersistedRun(storage, encounter.seed)).toEqual(encounter);
+    expect(loadPersistedRun(storage, encounter.seed)).toEqual(compactGameStateForPersistence(encounter));
   });
 
   it('round-trips active Hooded Figure, contribution, and resolved Wildfire state', () => {
@@ -79,7 +82,7 @@ describe('run persistence', () => {
       delete (state as unknown as Record<string, unknown>)[key];
     if (!state.roundCheckpoint) throw new Error('Expected initial round checkpoint');
     for (const key of ['wildfires', 'bonfireContributions', 'bonfireRoundContributions', 'chargeAttribution', 'hoodedFigure'] as const)
-      delete (state.roundCheckpoint as unknown as Record<string, unknown>)[key];
+      delete (state.roundCheckpoint.board as unknown as Record<string, unknown>)[key];
     storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION, state }));
 
     const loaded = loadPersistedRun(storage, null)!;
@@ -147,16 +150,16 @@ describe('run persistence', () => {
     const state = newRun('legacy-charge-flame').state;
     state.dice[0].flame = { id: 'charge', investedGold: 50 } as unknown as typeof state.dice[0]['flame'];
     if (!state.roundCheckpoint) throw new Error('Expected initial round checkpoint');
-    state.roundCheckpoint.dice[0].flame = { id: 'charge', investedGold: 50 } as unknown as typeof state.dice[0]['flame'];
+    state.roundCheckpoint.board.dice[0].flame = { id: 'charge', investedGold: 50 } as unknown as typeof state.dice[0]['flame'];
     delete (state as Partial<typeof state>).maxCharge;
-    delete (state.roundCheckpoint as Partial<typeof state.roundCheckpoint>).maxCharge;
+    delete (state.roundCheckpoint.board as Partial<typeof state.roundCheckpoint.board>).maxCharge;
     storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION, state }));
 
     const loaded = loadPersistedRun(storage, null);
     expect(loaded?.dice[0].flame).toEqual({ id: 'momentum', investedGold: 50 });
     expect(loaded?.maxCharge).toBe(3);
-    expect(loaded?.roundCheckpoint?.dice[0].flame).toEqual({ id: 'momentum', investedGold: 50 });
-    expect(loaded?.roundCheckpoint?.maxCharge).toBe(3);
+    expect(loaded?.roundCheckpoint?.board.dice[0].flame).toEqual({ id: 'momentum', investedGold: 50 });
+    expect(loaded?.roundCheckpoint?.board.maxCharge).toBe(3);
   });
 
   it('infers Six Pack progress for saves made before the Upper-hand counter', () => {
@@ -166,16 +169,16 @@ describe('run persistence', () => {
     state.sixPackXMult = 4.333333333333;
     delete (state as Partial<typeof state>).sixPackUpperHandsPlayed;
     if (!state.roundCheckpoint) throw new Error('Expected initial round checkpoint');
-    state.roundCheckpoint.dice[0].flame = { id: 'sixPack', investedGold: 100 };
-    state.roundCheckpoint.sixPackXMult = 5.166666666667;
-    delete (state.roundCheckpoint as Partial<typeof state.roundCheckpoint>).sixPackUpperHandsPlayed;
+    state.roundCheckpoint.board.dice[0].flame = { id: 'sixPack', investedGold: 100 };
+    state.roundCheckpoint.board.sixPackXMult = 5.166666666667;
+    delete (state.roundCheckpoint.board as Partial<typeof state.roundCheckpoint.board>).sixPackUpperHandsPlayed;
     storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION, state }));
 
     const loaded = loadPersistedRun(storage, null);
     expect(loaded?.sixPackUpperHandsPlayed).toBe(2);
     expect(loaded?.sixPackXMult).toBeCloseTo(4.333333333333);
-    expect(loaded?.roundCheckpoint?.sixPackUpperHandsPlayed).toBe(1);
-    expect(loaded?.roundCheckpoint?.sixPackXMult).toBeCloseTo(5.166666666667);
+    expect(loaded?.roundCheckpoint?.board.sixPackUpperHandsPlayed).toBe(1);
+    expect(loaded?.roundCheckpoint?.board.sixPackXMult).toBeCloseTo(5.166666666667);
   });
 
   it('treats storage read and write failures as non-fatal', () => {
@@ -186,5 +189,27 @@ describe('run persistence', () => {
     const state = newRun('storage-failure').state;
     expect(loadPersistedRun(broken, null)).toBeNull();
     expect(savePersistedRun(broken, state)).toBe(false);
+  });
+
+  it('loads additive pre-V2 saves with an empty parallel history stream', () => {
+    const storage = new MemoryStorage();
+    const state = newRun('pre-v2-history').state;
+    delete (state as Partial<typeof state>).historyV2;
+    delete (state as Partial<typeof state>).historyV2TimelineId;
+    delete (state as Partial<typeof state>).historyV2Coverage;
+    delete (state as Partial<typeof state>).debugTrace;
+    if (!state.roundCheckpoint) throw new Error('Expected initial round checkpoint');
+    const legacyCheckpoint = structuredClone(state) as unknown as Record<string, unknown>;
+    delete legacyCheckpoint.roundCheckpoint;
+    delete legacyCheckpoint.badDreamCheckpoint;
+    state.roundCheckpoint = legacyCheckpoint as unknown as typeof state.roundCheckpoint;
+    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: 2, state }));
+
+    const loaded = loadPersistedRun(storage, null);
+    expect(loaded?.historyV2).toEqual([]);
+    expect(loaded?.historyV2TimelineId).toBe(0);
+    expect(loaded?.historyV2Coverage).toMatchObject({ complete: false, firstRound: 1, firstActionId: 0 });
+    expect(loaded?.debugTrace.mode).toBe('bounded');
+    expect(loaded?.roundCheckpoint?.board).toBeDefined();
   });
 });

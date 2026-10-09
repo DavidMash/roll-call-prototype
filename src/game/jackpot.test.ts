@@ -63,8 +63,9 @@ describe('round-clearing scoring Jackpot', () => {
     enhance(held, 4, 'jackpot', 3);
     const result = playPair(held);
     expect(result.state.stats.goldBySource.jackpot).toBe(0);
-    expect(result.state.history.find(event => event.enhancement === 'jackpot' && event.dieIds?.includes(4))?.message)
-      .toContain('did not score');
+    const hand = result.state.historyV2.find(event => event.kind === 'hand_scored');
+    expect(hand?.kind === 'hand_scored' ? hand.sideEffects.some(effect => effect.type === 'gold' && effect.source === 'jackpot') : false)
+      .toBe(false);
   });
 
   it('pays a successful scoring Hitchhiker and never pays a failed one', () => {

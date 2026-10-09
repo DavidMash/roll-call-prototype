@@ -96,8 +96,11 @@ describe('rarity-first generation', () => {
     state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     new Resolver(state, constant(.2)).freshOffers();
     expect(state.shop.offers).toHaveLength(3);
-    expect(state.history.at(-1)).toMatchObject({ type: 'OFFERS_REFRESHED', offerSet: expect.any(Array) });
-    expect(state.history.at(-1)?.message).toMatch(/^Enhancement offers: .+ \[(Common|Uncommon|Rare)\]/);
+    const offers = [...state.historyV2].reverse().find(event => event.kind === 'shop_offers_presented'
+      && event.pool === 'enhancement');
+    expect(offers).toMatchObject({ kind: 'shop_offers_presented', offers: expect.any(Array) });
+    expect(offers?.kind === 'shop_offers_presented' ? offers.offers.every(offer =>
+      ['common', 'uncommon', 'rare'].includes(offer.rarity)) : false).toBe(true);
   });
 });
 

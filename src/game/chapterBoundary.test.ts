@@ -54,8 +54,8 @@ describe('post-Boss Chapter boundary', () => {
     expect(resumedFlame.flameSelection).toEqual(flame.state.flameSelection);
     const shop = dispatch(resumedFlame, { type: 'CONTINUE_FLAME_SELECTION' }, constant());
     expect(shop.state.phase).toBe('shop');
-    expect(shop.state.history.filter(event => event.type === 'FLAME_SELECTION_OPENED')).toHaveLength(1);
-    expect(shop.state.history.filter(event => event.type === 'SHOP_OPENED')).toHaveLength(1);
+    expect(shop.events.filter(event => event.type === 'FLAME_SELECTION_OPENED')).toHaveLength(0);
+    expect(shop.events.filter(event => event.type === 'SHOP_OPENED')).toHaveLength(1);
   });
 
   it('opens exactly one persisted Shop in the completed Chapter and advances only from NEXT_CHAPTER', () => {
@@ -65,8 +65,8 @@ describe('post-Boss Chapter boundary', () => {
     expect(opened.state.presentedChapters).toEqual([1]);
     expect(opened.state.chapterPlans[2]).toBeUndefined();
     expect(opened.events.map(event => event.type)).toEqual(['MAP_TRANSITION', 'SHOP_OPENED']);
-    expect(opened.state.history.filter(event => event.type === 'SHOP_OPENED')).toHaveLength(1);
-    expect(opened.state.history.filter(event => event.type === 'CHAPTER_STARTED' && event.chapterNumber === 2)).toHaveLength(0);
+    expect(opened.events.filter(event => event.type === 'SHOP_OPENED')).toHaveLength(1);
+    expect(opened.state.historyV2.filter(event => event.kind === 'chapter_started' && event.chapter === 2)).toHaveLength(0);
     expect(dispatch(opened.state, { type: 'NEXT_ROUND' }, constant()).error).toContain('Next Chapter');
 
     const offers = structuredClone(opened.state.shop!.offers);
@@ -81,8 +81,8 @@ describe('post-Boss Chapter boundary', () => {
     expect(advanced.state.nextOfferId).toBe(nextOfferId);
     expect(offers).toHaveLength(3);
     expect(training).toHaveLength(3);
-    expect(advanced.state.history.filter(event => event.type === 'SHOP_OPENED')).toHaveLength(1);
-    expect(advanced.state.history.filter(event => event.type === 'CHAPTER_STARTED' && event.chapterNumber === 2)).toHaveLength(1);
+    expect(advanced.state.historyV2.filter(event => event.kind === 'shop_offers_presented')).toHaveLength(1);
+    expect(advanced.state.historyV2.filter(event => event.kind === 'chapter_started' && event.chapter === 2)).toHaveLength(1);
 
     const duplicate = dispatch(advanced.state, { type: 'NEXT_CHAPTER' }, constant());
     expect(duplicate.error).toContain('open shop');
@@ -112,14 +112,17 @@ describe('post-Boss Chapter boundary', () => {
     state = dispatch(state, { type: 'REROLL_OFFERS' }, constant(.72)).state;
     const persistedShop = structuredClone(state.shop);
     const persistedDice = structuredClone(state.dice);
-    const persistedPurchases = structuredClone(state.stats.purchases);
+    const persistedPurchases = state.historyV2.filter(event => event.kind === 'shop_transaction'
+      && event.transaction.type === 'enhancement_purchased');
     expect(savePersistedRun(storage, state)).toBe(true);
 
     const resumed = loadPersistedRun(storage, state.seed)!;
     expect(resumed).toMatchObject({ phase: 'shop', round: 6, currentNodeId: 'shop:after-round:6' });
     expect(resumed.shop).toEqual(persistedShop);
     expect(resumed.dice).toEqual(persistedDice);
-    expect(resumed.stats.purchases).toEqual(persistedPurchases);
+    expect(resumed.stats.purchases).toEqual([]);
+    expect(resumed.historyV2.filter(event => event.kind === 'shop_transaction'
+      && event.transaction.type === 'enhancement_purchased')).toEqual(persistedPurchases);
     expect(resumed.shop?.offerRerolls).toBe(1);
     expect(resumed.stats.enhancementShopRerolls).toBe(1);
 
@@ -127,7 +130,9 @@ describe('post-Boss Chapter boundary', () => {
     expect(savePersistedRun(storage, advanced)).toBe(true);
     const resumedChapter = loadPersistedRun(storage, advanced.seed)!;
     expect(resumedChapter).toMatchObject({ phase: 'round', round: 7, currentNodeId: 'round:7' });
-    expect(resumedChapter.stats.purchases).toEqual(persistedPurchases);
+    expect(resumedChapter.stats.purchases).toEqual([]);
+    expect(resumedChapter.historyV2.filter(event => event.kind === 'shop_transaction'
+      && event.transaction.type === 'enhancement_purchased')).toEqual(persistedPurchases);
     expect(resumedChapter.presentedChapters).toEqual([1, 2]);
   });
 
@@ -148,10 +153,10 @@ describe('post-Boss Chapter boundary', () => {
     expect(migrated.presentedChapters).toEqual([1]);
     expect(migrated.chapterPlans[2]).toEqual(plan);
     expect(migrated.shop).toEqual(shop);
-    expect(migrated.history.some(event => event.type === 'CHAPTER_STARTED' && event.chapterNumber === 2)).toBe(false);
+    expect(migrated.historyV2.some(event => event.kind === 'chapter_started' && event.chapter === 2)).toBe(false);
 
     const advanced = dispatch(migrated, { type: 'NEXT_CHAPTER' }, constant());
     expect(advanced.state.chapterPlans[2]).toEqual(plan);
-    expect(advanced.state.history.filter(event => event.type === 'CHAPTER_STARTED' && event.chapterNumber === 2)).toHaveLength(1);
+    expect(advanced.state.historyV2.filter(event => event.kind === 'chapter_started' && event.chapter === 2)).toHaveLength(1);
   });
 });

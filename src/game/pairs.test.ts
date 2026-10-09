@@ -146,8 +146,8 @@ describe('Pair resolution and loss integration', () => {
     const result = dispatch(state, { type: 'PLAY', hand, dieIds: ids }, { next: () => 0 });
     expect(result.state.consumed).toContain(hand);
     expect(result.events.filter(event => event.type === 'HAND_CONSUMED')).toHaveLength(1);
-    expect(result.state.stats.handsPlayed[hand]).toBe(1);
-    expect(result.state.stats.scoreByHand[hand]).toBe(score);
+    expect(result.state.handPlayCounts[hand]).toBe(1);
+    expect(result.state.scoreByHand[hand]).toBe(score);
     const shop = dispatch(result.state, { type: 'CONTINUE_ROUND_SUMMARY' }, { next: () => 0.99 }).state;
     const rolls = [0.2, 0.2, 0.6, 0.6, 0.99];
     let index = 0;

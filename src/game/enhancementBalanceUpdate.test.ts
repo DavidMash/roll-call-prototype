@@ -179,7 +179,7 @@ describe('Double Time', () => {
     expect(result.state.stats.goldBySource.golden).toBe(2);
     expect(result.state.dice[0].faces[3].vintageSellValue).toBe(6);
     expect(result.state.handPlayCounts.threeKind).toBe(1);
-    expect(result.state.stats.handsPlayed.threeKind).toBe(1);
+    expect(result.state.historyV2.filter(event => event.kind === 'hand_scored' && event.hand === 'threeKind')).toHaveLength(1);
 
     const winning = scoringState();
     winning.target = 1;
@@ -223,8 +223,11 @@ describe('Double Time', () => {
     expect(savePersistedRun(storage, resolved)).toBe(true);
     const loaded = loadPersistedRun(storage, resolved.seed)!;
     expect(loaded.stats.probabilityProcs.doubleTime).toEqual(resolved.stats.probabilityProcs.doubleTime);
-    expect(loaded.stats.handScores[0]).toEqual(resolved.stats.handScores[0]);
-    expect(loaded.history.filter(event => event.probability?.enhancement === 'doubleTime')).toHaveLength(1);
+    expect(loaded.stats.handScores).toEqual([]);
+    expect(loaded.historyV2.find(event => event.kind === 'hand_scored'))
+      .toEqual(resolved.historyV2.find(event => event.kind === 'hand_scored'));
+    expect(loaded.historyV2.flatMap(event => event.kind === 'hand_scored' ? event.checks : [])
+      .filter(check => check.source === 'doubleTime')).toHaveLength(1);
   });
 });
 

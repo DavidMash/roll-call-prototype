@@ -4,17 +4,27 @@ import { CONFIG } from './game/config';
 import { dispatch, newRun } from './game/engine';
 import { browserRunStorage, loadPersistedRun, savePersistedRun } from './game/persistence';
 import type { Action, Resolution } from './game/types';
+import { appendCriticalDiagnostic, type DebugTraceMode } from './game/debugTrace';
 import { isChapterMapTransition, isPlaybackBarrier, isPlaybackCheckpoint, nextScorecardRefreshIndex,
   playbackBoard, SCORECARD_REFRESH_HOLD_MS, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump, type ScoreSummaryJump } from './game/playback';
 
 export type PlaybackSpeed = keyof typeof CONFIG.tickMs;
 
-export function useGame(requestedSeed: string | null, fallbackSeed: string, speed: PlaybackSpeed, active = true) {
+export function persistResolvedRun(storage: Parameters<typeof savePersistedRun>[0], state: Resolution['state']): boolean {
+  const saved = savePersistedRun(storage, state);
+  if (!saved) appendCriticalDiagnostic(state.debugTrace, { round: state.round,
+    attempt: state.roundAttemptNumber, actionId: state.actionJournal.length },
+  { kind: 'persistence_failure', detail: 'Browser storage write failed; this run is not safely resumable.', occurrences: 1 });
+  return saved;
+}
+
+export function useGame(requestedSeed: string | null, fallbackSeed: string, speed: PlaybackSpeed, active = true,
+  debugTraceMode: DebugTraceMode = 'bounded') {
   const reducedMotion = useReducedMotion();
   const [storage] = useState(browserRunStorage);
   const [initial] = useState(() => {
     const saved = loadPersistedRun(storage, requestedSeed);
-    return { result: saved ? { state: saved, events: [] } : newRun(requestedSeed ?? fallbackSeed), restored: saved !== null };
+    return { result: saved ? { state: saved, events: [] } : newRun(requestedSeed ?? fallbackSeed, undefined, { debugTraceMode }), restored: saved !== null };
   });
   const [result, setResult] = useState<Resolution>(initial.result);
   const [hasStoredRun, setHasStoredRun] = useState(initial.restored);
@@ -63,8 +73,8 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
   }, [result, index, speed, busy, reducedMotion, active, summaryJump]);
   function load(next: Resolution) {
     if (next.error) { setError(next.error); return; }
-    savePersistedRun(storage, next.state);
-    setHasStoredRun(true);
+    const saved = persistResolvedRun(storage, next.state);
+    setHasStoredRun(saved);
     setError(null);
     setResult(next);
     setIndex(0);
@@ -87,7 +97,7 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
       load(next);
       return true;
     },
-    restart: (nextSeed: string) => load(newRun(nextSeed)),
+    restart: (nextSeed: string) => load(newRun(nextSeed, undefined, { debugTraceMode })),
     skip: () => {
       const jump = scoreSummaryJump(result.events, index);
       if (jump) { setSummaryJump(jump); setIndex(jump.summaryIndex); }

@@ -174,6 +174,7 @@ describe('Missing Pair and One Short', () => {
     state = dispatch(state, { type: 'STOKE_FLAME', dieId: 0, amount: 100 }, constant()).state;
     expect(state.dice[0].flame).toBeNull();
     expect(state.bonfires).toContain(id);
-    expect(state.stats.bonfiresCreated.at(-1)).toEqual({ round: 1, flame: id });
+    expect(state.historyV2).toContainEqual(expect.objectContaining({ kind: 'flame_changed',
+      change: expect.objectContaining({ type: 'bonfire_created', flame: id }) }));
   });
 });

@@ -240,7 +240,7 @@ test('Flame Selection only acquires while Shop Manage Die supports arbitrary Sto
   game = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
   await ready(page);
   expect(game.phase).toBe('shop');
-  expect(game.stats.flameSkips).toContain(game.round);
+  expect(game.historyV2).toContainEqual(expect.objectContaining({ kind: 'flame_changed', change: { type: 'skipped' } }));
 });
 
 test('arming and canceling Charge preserves the selected hand and dice', async ({ page }) => {
@@ -352,7 +352,7 @@ test('Speed Demon meter pauses in modals, stays out of preview, and reveals the 
   await play.evaluate(element => (element as HTMLElement).click());
   const storedAction = await page.evaluate(key => {
     const saved = JSON.parse(localStorage.getItem(key)!).state as GameState;
-    return saved.stats.actions.at(-1)!;
+    return saved.actionJournal.at(-1)!;
   }, RUN_STORAGE_KEY);
   if (storedAction.type !== 'PLAY' || storedAction.decisionMs === undefined) throw new Error('Missing frozen Speed Demon decision time');
   expect(storedAction.decisionMs).toBeGreaterThanOrEqual(5400);

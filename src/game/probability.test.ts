@@ -53,8 +53,9 @@ describe('Sticky probability', () => {
     expect(result.state.dice[0].value).toBe(6);
     expect(result.events.filter(event => event.type === 'DIE_ROLLED')).toHaveLength(1);
     expect(result.events.some(event => event.enhancement === 'sticky')).toBe(false);
-    expect(result.state.history.find(event => event.type === 'ABILITY_CHECKED'))
-      .toMatchObject({ probability: { enhancement: 'sticky', stacks: 1, chance: 0.5, succeeded: false } });
+    expect(result.state.historyV2.flatMap(event => event.kind === 'hand_scored' ? event.checks : [])
+      .find(check => check.source === 'sticky'))
+      .toMatchObject({ source: 'sticky', stacks: 1, chance: 0.5, succeeded: false });
   });
 
   it.each([

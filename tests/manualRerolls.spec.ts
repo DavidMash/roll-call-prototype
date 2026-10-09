@@ -237,7 +237,7 @@ test('dead-board UI and engine stay usable while only Care Package Rerolls remai
 test('Bust UI and retry keep a depleted Care Package reserve depleted', async ({ page }) => {
   let game = newRun('care-package-bust-checkpoint-ui').state;
   game.specialOfferEffects.carePackageRerolls = 3;
-  game.roundCheckpoint!.specialOfferEffects.carePackageRerolls = 3;
+  game.roundCheckpoint!.board.specialOfferEffects.carePackageRerolls = 3;
   game.target = 1_000_000;
   game.consumed = [...HAND_IDS];
   game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0, 1, 2] }).state;
@@ -288,7 +288,7 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   await page.waitForTimeout(1500);
   await expect(page.getByRole('heading', { name: `ROUND ${game.round} BUST`, exact: true })).toBeVisible();
   const failedRound = game.round;
-  const expectedShop = structuredClone(game.roundCheckpoint?.shop);
+  const expectedShop = structuredClone(game.roundCheckpoint?.board.shop);
   game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
   await bustContinue.click();
   const fallbackMap = page.getByTestId('run-map-transition');

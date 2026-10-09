@@ -88,7 +88,7 @@ describe('authoritative scorecard cycles', () => {
     const second = playFinalHand(secondCycle);
 
     expect(second.events.filter(event => event.type === 'SCORECARD_REFRESHED')).toHaveLength(1);
-    expect(second.state.history.filter(event => event.type === 'SCORECARD_REFRESHED')).toHaveLength(2);
+    expect(second.state.historyV2.filter(event => event.kind === 'scorecard_refreshed')).toHaveLength(2);
     expect(second.state.score).toBe(first.state.score + 8);
     expect(second.state.consumed).toEqual([]);
   });

@@ -40,8 +40,9 @@ describe('Personal Trainer enhancement', () => {
     enhance(success, 0, 'personalTrainer', stackCount);
     const trained = playThreeKind(success, constant(chance - 0.001));
     expect(trained.state.handLevels.threeKind).toBe(2);
-    expect(trained.state.history.find(event => event.probability?.enhancement === 'personalTrainer')?.probability)
-      .toEqual({ enhancement: 'personalTrainer', stacks: stackCount, chance, succeeded: true });
+    const check = trained.state.historyV2.flatMap(event => event.kind === 'hand_scored' ? event.checks : [])
+      .find(item => item.source === 'personalTrainer');
+    expect(check).toMatchObject({ source: 'personalTrainer', stacks: stackCount, chance, succeeded: true });
 
     const failure = game();
     enhance(failure, 0, 'personalTrainer', stackCount);
@@ -64,13 +65,10 @@ describe('Personal Trainer enhancement', () => {
     enhance(state, 0, 'personalTrainer');
     enhance(state, 1, 'personalTrainer');
     const result = playThreeKind(state, sequence(0.49, 0.02));
-    const checks = result.state.history.filter(event => event.probability?.enhancement === 'personalTrainer');
-    expect(checks.map(event => event.probability?.chance)).toEqual([0.5, 0.01]);
-    expect(checks.map(event => event.probability?.succeeded)).toEqual([true, false]);
-    expect(checks.map(event => event.message)).toEqual([
-      expect.stringContaining('50%'),
-      expect.stringContaining('1%'),
-    ]);
+    const checks = result.state.historyV2.flatMap(event => event.kind === 'hand_scored' ? event.checks : [])
+      .filter(check => check.source === 'personalTrainer');
+    expect(checks.map(check => check.chance)).toEqual([0.5, 0.01]);
+    expect(checks.map(check => check.succeeded)).toEqual([true, false]);
     expect(result.state.handLevels.threeKind).toBe(2);
   });
 
@@ -97,13 +95,12 @@ describe('Personal Trainer enhancement', () => {
     const result = playThreeKind(state, constant(0));
     expect(result.state.stats.handScores[0].handLevel).toBe(1);
     expect(result.state.handLevels.threeKind).toBe(2);
-    const finalized = result.state.history.findIndex(event => event.type === 'HAND_SCORE_FINALIZED');
-    const awarded = result.state.history.findIndex(event => event.type === 'SCORE_ADDED');
-    const checked = result.state.history.findIndex(event => event.probability?.enhancement === 'personalTrainer');
-    const trained = result.state.history.findIndex(event => event.type === 'ABILITY_TRIGGERED' && event.enhancement === 'personalTrainer');
-    expect(finalized).toBeLessThan(checked);
-    expect(awarded).toBeLessThan(checked);
-    expect(checked).toBeLessThan(trained);
+    const scored = result.state.historyV2.find(event => event.kind === 'hand_scored' && event.hand === 'threeKind');
+    expect(scored?.kind).toBe('hand_scored');
+    if (scored?.kind !== 'hand_scored') throw new Error('Missing structured hand event');
+    expect(scored.level).toBe(1);
+    expect(scored.checks).toContainEqual(expect.objectContaining({ source: 'personalTrainer', succeeded: true }));
+    expect(scored.sideEffects).toContainEqual(expect.objectContaining({ type: 'personal_trainer', beforeLevel: 1, afterLevel: 2 }));
   });
 
   it('counts a successful scoring Hitchhiker but not a failed one', () => {

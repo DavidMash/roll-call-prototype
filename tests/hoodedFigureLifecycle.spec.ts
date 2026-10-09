@@ -66,9 +66,12 @@ test('R3 normal order is Mini-Boss summary, Special Offer, Hooded return, then S
   const story = page.getByRole('dialog', { name: 'Hooded Figure encounter' });
   await expect(story).toContainText('The hooded figure approaches again.');
   const stateAtReturn = await persistedState(page);
-  const types = stateAtReturn.history.map(record => record.type);
-  expect(types.lastIndexOf('SPECIAL_OFFER_OPENED')).toBeLessThan(types.lastIndexOf('SPECIAL_OFFER_SELECTED'));
-  expect(types.lastIndexOf('SPECIAL_OFFER_SELECTED')).toBeLessThan(types.lastIndexOf('HOODED_FIGURE_RETURNED'));
+  const opened = stateAtReturn.historyV2.findIndex(event => event.kind === 'shop_offers_presented' && event.pool === 'special_offer');
+  const selected = stateAtReturn.historyV2.findIndex(event => event.kind === 'shop_transaction'
+    && event.transaction.type === 'special_offer_selected');
+  const returned = stateAtReturn.historyV2.findIndex(event => event.kind === 'hooded_challenge_changed' && event.change === 'returned');
+  expect(opened).toBeLessThan(selected);
+  expect(selected).toBeLessThan(returned);
 
   await story.click(); await story.click(); await story.click();
   await expect(page.getByRole('dialog', { name: 'Create a Wildfire' })).toBeVisible();
@@ -102,6 +105,6 @@ test('R3 Time Travel rewinds before any Hooded return and restores the Chapter c
   expect(rewound.hoodedFigure.active?.committed.value).toBe(0);
   expect(rewound.hoodedFigure.interaction).toBeNull();
   expect(rewound.bonfireContributions).toEqual({ ultimate: { roundCount: 1, factorSum: 2 } });
-  expect(rewound.history.some(record => record.type === 'HOODED_FIGURE_RETURNED')).toBe(false);
-  expect(rewound.history.some(record => record.type === 'HOODED_CHALLENGE_TIME_TRAVEL_RESET')).toBe(true);
+  expect(rewound.historyV2.some(event => event.kind === 'hooded_challenge_changed' && event.change === 'returned')).toBe(false);
+  expect(rewound.historyV2.some(event => event.kind === 'hooded_challenge_changed' && event.change === 'time_travel_reset')).toBe(true);
 });

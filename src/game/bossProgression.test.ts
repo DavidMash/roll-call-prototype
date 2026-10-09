@@ -119,8 +119,8 @@ describe('The Warden', () => {
     const state = bossRound('warden');
     expect(state.boss).toMatchObject({ type: 'warden', nextUnlockTarget: null, unlockTargets: [],
       startingDieId: null, activeDieIds: [], pendingReinforcements: 1 });
-    const opening = [...state.history].reverse().find(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Warden opening roll'))!;
-    expect(state.history.filter(event => event.id > opening.id && event.type === 'DIE_ROLLED').map(event => event.dieIds?.[0])).toEqual([0, 1, 2, 3, 4]);
+    const opening = [...state.historyV2].reverse().find(event => event.kind === 'roll_batch' && event.reason === 'warden_opening');
+    expect(opening?.kind === 'roll_batch' ? opening.results.map(result => result.dieId) : []).toEqual([0, 1, 2, 3, 4]);
     expect(activeEncounterDice(state)).toEqual([]);
   });
 
@@ -283,8 +283,8 @@ describe('The Warden', () => {
     state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.55)).state;
     expect(state.boss).toMatchObject({ type: 'warden', startingDieId: null, activeDieIds: [],
       nextUnlockTarget: null, unlockTargets: [], pendingReinforcements: 1 });
-    const opening = [...state.history].reverse().find(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Warden opening roll'))!;
-    expect(state.history.filter(event => event.id > opening.id && event.type === 'DIE_ROLLED')).toHaveLength(5);
+    const opening = [...state.historyV2].reverse().find(event => event.kind === 'roll_batch' && event.reason === 'warden_opening');
+    expect(opening?.kind === 'roll_batch' ? opening.results : []).toHaveLength(5);
   });
 });
 

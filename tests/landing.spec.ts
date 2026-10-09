@@ -126,7 +126,7 @@ test('New Run confirmation preserves the save on open and Cancel, then replaces 
   state.lives = 1;
   activeFace(state.dice[0]).enhancements.bonus = 2;
   if (!state.roundCheckpoint) throw new Error('Expected a run checkpoint');
-  state.roundCheckpoint.gold = 19;
+  state.roundCheckpoint.board.gold = 19;
   await installRun(page, state);
   const rawBefore = await page.evaluate(key => localStorage.getItem(key), RUN_STORAGE_KEY);
   const newRunButton = page.getByRole('button', { name: 'SKIP TUTORIAL', exact: true });
@@ -146,5 +146,5 @@ test('New Run confirmation preserves the save on open and Cancel, then replaces 
   expect(replaced).toMatchObject({ seed: state.seed, round: 1, phase: 'round', gold: 0, lives: 3 });
   expect(replaced.rngState).toBe(newRun(state.seed).state.rngState);
   expect(activeFace(replaced.dice[0]).enhancements.bonus).toBeUndefined();
-  expect(replaced.roundCheckpoint?.gold).toBe(0);
+  expect(replaced.roundCheckpoint?.board.gold).toBe(0);
 });

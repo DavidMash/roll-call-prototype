@@ -25,7 +25,8 @@ describe('revised Hitchhiker', () => {
     enhance(game, 4, 'hitchhiker', 3);
     const result = play(game, constant(0.8));
     expect(result.state.stats.probabilityProcs.hitchhiker).toEqual({ checks: 1, successes: 1, failures: 0, stacksAtCheck: [3] });
-    expect(result.state.history.find(event => event.probability?.enhancement === 'hitchhiker')?.probability).toMatchObject({ stacks: 3, chance: 0.875, succeeded: true });
+    expect(result.state.historyV2.flatMap(event => event.kind === 'hand_scored' ? event.checks : [])
+      .find(check => check.source === 'hitchhiker')).toMatchObject({ stacks: 3, chance: 0.875, succeeded: true });
   });
 
   it('success joins the scoring hand while failure does not, reproducibly', () => {
