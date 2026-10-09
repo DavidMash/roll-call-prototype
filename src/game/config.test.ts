@@ -10,12 +10,12 @@ describe('prototype balance progression', () => {
   it('starts at 100 / 175 / 200 and uses the centralized three-round cadence', () => {
     expect(CONFIG.baseTarget).toBe(100);
     expect(CONFIG.baseBossTarget).toBe(200);
-    expect(CONFIG.targetGrowth).toBe(1.32);
+    expect(CONFIG.targetGrowth).toBe(1.30);
     expect(CONFIG.targetBlockSize).toBe(3);
     expect(CONFIG.targetRounding).toBe(5);
     expect(TARGET_BLOCK_RATIOS).toEqual([1 / 2, 5 / 6, 1]);
     expect(Array.from({ length: 9 }, (_, index) => targetForRound(index + 1)))
-      .toEqual([100, 175, 200, 225, 375, 450, 525, 875, 1_050]);
+      .toEqual([100, 175, 200, 225, 375, 450, 500, 825, 975]);
   });
 
   it('derives every block from one rounded Boss anchor at 1/2, 5/6, and 1', () => {
@@ -28,10 +28,17 @@ describe('prototype balance progression', () => {
     }
   });
 
-  it('keeps approximately 32% equivalent per-round growth between Boss anchors', () => {
-    expect(TARGET_BLOCK_GROWTH).toBeCloseTo(2.299968, 12);
+  it('uses exactly 30% equivalent per-round growth between Boss anchors', () => {
+    expect(TARGET_BLOCK_GROWTH).toBeCloseTo(2.197, 12);
     const equivalentGrowth = (bossAnchorForBlock(10) / bossAnchorForBlock(9)) ** (1 / 3);
-    expect(equivalentGrowth).toBeCloseTo(1.32, 2);
+    expect(equivalentGrowth).toBeCloseTo(1.30, 2);
+  });
+
+  it('follows the deterministic unmodified 30% smooth curve at later rounds', () => {
+    const smoothBaseGoal = (round: number) =>
+      Math.round(CONFIG.baseTarget * CONFIG.targetGrowth ** (round - 1));
+    expect([1, 12, 24, 36, 42, 48, 60].map(smoothBaseGoal))
+      .toEqual([100, 1_792, 41_754, 972_786, 4_695_452, 22_664_052, 528_029_013]);
   });
 
   it('pretty-rounds at multiple magnitudes with decade-scaled increments', () => {
@@ -45,10 +52,40 @@ describe('prototype balance progression', () => {
 
   it('calculates later Boss anchors from the unrounded base formula without accumulated drift', () => {
     for (const block of [1, 5, 10, 15, 20]) {
-      expect(bossAnchorForBlock(block)).toBe(prettyRoundTarget(200 * (1.32 ** 3) ** block));
+      expect(bossAnchorForBlock(block)).toBe(prettyRoundTarget(200 * (1.30 ** 3) ** block));
     }
-    expect(bossAnchorForBlock(3)).toBe(2_450);
-    expect(bossAnchorForBlock(3)).not.toBe(2_400); // recursively growing rounded anchors would drift here
+    expect(bossAnchorForBlock(3)).toBe(2_100);
+    expect(bossAnchorForBlock(3)).not.toBe(2_200); // recursively growing rounded anchors would drift here
+  });
+
+  it('keeps unrelated balance constants unchanged', () => {
+    const { targetGrowth: _targetGrowth, ...unchanged } = CONFIG;
+    expect(unchanged).toEqual({
+      diceCount: 5,
+      baseTarget: 100,
+      baseBossTarget: 200,
+      targetBlockSize: 3,
+      targetRounding: 5,
+      startingGold: 0,
+      maxLives: 3,
+      manualRerollsPerRound: 3,
+      roundRewardBase: 5,
+      infectedFacePipPenalty: 3,
+      interestInterval: 5,
+      interestCap: 10,
+      diceRerollBase: 2,
+      offerRerollBase: 3,
+      handTrainingCost: 2,
+      teamTrainingCost: 15,
+      rerollCostGrowth: 2,
+      bonusPips: 10,
+      standaloneMultiplier: 1,
+      goldenGold: 1,
+      jackpotGold: 3,
+      workoutIncrement: 1,
+      tickMs: { normal: 350, fast: 90, instant: 0 },
+      resolutionEventCap: 10_000,
+    });
   });
 
   it('grants a flat five-gold base reward in every round', () => {

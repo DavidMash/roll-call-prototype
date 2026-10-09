@@ -168,9 +168,11 @@ describe('base target modifier boundary', () => {
   it('applies existing Boss modifiers only after the block target is determined', () => {
     expect(targetForBoss('marathon', targetForRound(3))).toBe(600);
     expect(targetForBoss('quickdraw', targetForRound(3))).toBe(65);
-    expect(targetForBoss('quickdraw', targetForRound(6))).toBe(150);
+    expect(targetForBoss('marathon', targetForRound(9))).toBe(2_925);
+    expect(targetForBoss('quickdraw', targetForRound(9))).toBe(325);
+    expect(targetForBoss('tightrope', targetForRound(9))).toBe(487.5);
     for (const boss of ['caller', 'warden', 'hexer', 'fly', 'snakeEyes', 'infected'] as const) {
-      expect(targetForBoss(boss, targetForRound(6))).toBe(450);
+      expect(targetForBoss(boss, targetForRound(9))).toBe(975);
     }
   });
 });
