@@ -251,6 +251,7 @@ test('arming and canceling Charge preserves the selected hand and dice', async (
   game.dice.forEach(die => { die.value = 1; });
   const choice = bestHand(game)!;
 
+  await page.setViewportSize({ width: 320, height: 568 });
   await page.goto('/');
   await page.evaluate(({ key, version, state }) => localStorage.setItem(key, JSON.stringify({ version, state })), {
     key: RUN_STORAGE_KEY,
@@ -261,6 +262,22 @@ test('arming and canceling Charge preserves the selected hand and dice', async (
   await ready(page);
   await expect(page.getByTestId('charge-status')).toHaveText('⚡ MAX CHARGE ×3');
   await expect(page.getByTestId('charge-guidance')).toHaveText('SELECT CHARGE DIE TO USE');
+  await expect(page.getByTestId('dice-dock').getByTestId('charge-dock-controls')).toBeVisible();
+  await expect(page.getByTestId('run-action-row').getByTestId('charge-dock-controls')).toHaveCount(0);
+  const dockGeometry = await page.evaluate(() => {
+    const charge = document.querySelector<HTMLElement>('[data-testid="charge-dock-controls"]')!.getBoundingClientRect();
+    const dice = document.querySelector<HTMLElement>('.dice-dock .dice-row')!.getBoundingClientRect();
+    const dock = document.querySelector<HTMLElement>('[data-testid="dice-dock"]')!.getBoundingClientRect();
+    const actions = document.querySelector<HTMLElement>('[data-testid="run-action-row"]')!.getBoundingClientRect();
+    const play = document.querySelector<HTMLElement>('[data-testid="play-action"]')!.getBoundingClientRect();
+    return { chargeBottom: charge.bottom, diceTop: dice.top, dockBottom: dock.bottom,
+      actionTop: actions.top, actionBottom: actions.bottom, playTop: play.top, playBottom: play.bottom };
+  });
+  expect(dockGeometry.chargeBottom).toBeLessThanOrEqual(dockGeometry.diceTop + 1);
+  expect(dockGeometry.dockBottom).toBeLessThanOrEqual(dockGeometry.actionTop + 1);
+  expect(dockGeometry.playTop).toBeGreaterThanOrEqual(dockGeometry.actionTop);
+  expect(dockGeometry.playBottom).toBeLessThanOrEqual(dockGeometry.actionBottom);
+  await expect(page.getByTestId('play-action')).toBeInViewport();
 
   const handRow = page.getByTestId(`scorecard-row-${choice.hand}`);
   await handRow.click();

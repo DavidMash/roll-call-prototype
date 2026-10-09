@@ -1,8 +1,9 @@
 import { Modal, Button, Group, Paper, Text } from '@mantine/core';
 import { useState } from 'react';
+import { validateAction } from '../game/engine';
 import { activeFace } from '../game/dice';
 import { enhancementCost, placementError } from '../game/enhancements';
-import { activeFlameId, FLAMES, hasChargeBonfire, isChargeFlame } from '../game/flames';
+import { activeFlameId, FLAMES, hasChargeBonfire, hasOwnedChargeFlame, isChargeFlame } from '../game/flames';
 import { activeEncounterDice } from '../game/bosses';
 import { enhancementOfferIsFree } from '../game/specialOffers';
 import { normalizeBoardSelection, toggleBoardDie } from '../game/selection';
@@ -56,6 +57,12 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
     ? board.flameSelection?.offers.find(item => item.id === selectedFlameOffer) : undefined;
   const lockedUntilByDieId = wardenBoss?.nextUnlockTarget === null || wardenBoss?.nextUnlockTarget === undefined
     ? undefined : Object.fromEntries(wardenLockedIds.map(id => [id, wardenBoss.nextUnlockTarget!])) as Record<number, number>;
+  const chargeAction: Action = { type: 'TOGGLE_CHARGE', hand: effectiveSelection.hand, dieIds: effectiveSelection.dieIds };
+  const canToggleCharge = validateAction(board, chargeAction) === null;
+  const chargeDieIds = board.phase === 'round' ? activeEncounterDice(board)
+    .filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id) : [];
+  const missingChargeDie = !hasChargeBonfire(board) && chargeDieIds.some(id => !effectiveSelection.dieIds.includes(id));
+  const chargeAtMax = board.chargeXMult >= board.maxCharge - 1e-9;
 
   function changeRoundSelection(next: Selection) {
     if (board.chargeArmed && !hasChargeBonfire(board)) {
@@ -114,6 +121,23 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
     <Paper component="section" p="xs" className={`dice-dock gameplay-dock${cinematic ? ' cinematic' : ''}`} data-tutorial="dice-dock"
       data-testid="dice-dock" data-phase={board.phase} data-cinematic={cinematic || undefined}
       aria-label="Persistent Dice Dock">
+      {board.phase === 'round' && hasOwnedChargeFlame(board) && <Group
+        className={`charge-controls charge-dock-controls${chargeAtMax ? ' is-max' : ''}${board.chargeArmed ? ' is-armed' : ''}`}
+        gap="xs" justify="space-between" wrap="nowrap" data-testid="charge-dock-controls">
+        <Text size="xs" fw={800} className="charge-status" component="div">
+          <span className="charge-status-main" data-testid="charge-status">{board.chargeArmed
+            ? `⚡ ×${formatPlayerNumber(board.chargeXMult)} ARMED`
+            : chargeAtMax ? `⚡ MAX CHARGE ×${formatPlayerNumber(board.maxCharge)}`
+              : `CHARGE ×${formatPlayerNumber(board.chargeXMult)} / ×${formatPlayerNumber(board.maxCharge)}`}</span>
+          {chargeAtMax && missingChargeDie && !board.chargeArmed
+            && <span className="charge-guidance" data-testid="charge-guidance">SELECT CHARGE DIE TO USE</span>}
+        </Text>
+        <Button className={`charge-action${chargeAtMax ? ' is-max' : ''}`} size="compact-xs"
+          color={board.chargeArmed ? 'orange' : 'yellow'} variant={board.chargeArmed || chargeAtMax ? 'filled' : 'light'}
+          disabled={busy || !actionsEnabled || !canToggleCharge} onClick={() => submit(chargeAction)}>
+          {board.chargeArmed ? 'DISARM' : 'ARM CHARGE'}
+        </Button>
+      </Group>}
       <DiceRow dice={dice} display={display} event={event} disabled={busy || !actionsEnabled}
         fetchTarget={board.fetchTarget}
         detailsDisabled={cinematic} selected={selectedWardenDieId === null ? effectiveSelection.dieIds : [selectedWardenDieId]}

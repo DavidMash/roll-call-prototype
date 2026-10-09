@@ -25,6 +25,16 @@ async function actionGeometry(page: Page) {
   });
 }
 
+async function roundButtonGeometry(page: Page) {
+  return page.getByTestId('run-action-row').evaluate(element => {
+    const bounds = (selector: string) => {
+      const box = element.querySelector<HTMLElement>(selector)!.getBoundingClientRect();
+      return { x: box.x, width: box.width };
+    };
+    return { reroll: bounds('.reroll-action'), play: bounds('.play-action') };
+  });
+}
+
 test('shared action row keeps manipulation left and progression right on narrow screens', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   const round = newRun('shared-action-row-round').state;
@@ -36,6 +46,21 @@ test('shared action row keeps manipulation left and progression right on narrow 
   expect(roundLayout.leftRight).toBeLessThanOrEqual(roundLayout.right);
   await expect(page.getByTestId('manual-reroll')).toBeDisabled();
   await expect(page.getByTestId('play-action')).toBeDisabled();
+
+  const emptySelection = await roundButtonGeometry(page);
+  await die(page, 0).click();
+  await expect(page.getByTestId('manual-reroll').locator('.reroll-action-main')).toHaveText('REROLL');
+  await expect(page.getByTestId('manual-reroll').locator('.reroll-action-resource')).toHaveText('1 DIE · 3 LEFT');
+  const oneSelected = await roundButtonGeometry(page);
+  for (const id of [1, 2, 3, 4]) await die(page, id).click();
+  await expect(page.getByTestId('manual-reroll').locator('.reroll-action-resource')).toHaveText('5 DICE · 3 LEFT');
+  const fiveSelected = await roundButtonGeometry(page);
+  for (const geometry of [oneSelected, fiveSelected]) {
+    expect(geometry.reroll.x).toBeCloseTo(emptySelection.reroll.x, 5);
+    expect(geometry.reroll.width).toBeCloseTo(emptySelection.reroll.width, 5);
+    expect(geometry.play.x).toBeCloseTo(emptySelection.play.x, 5);
+    expect(geometry.play.width).toBeCloseTo(emptySelection.play.width, 5);
+  }
 
   const shop = structuredClone(round);
   shop.phase = 'shop';
@@ -96,4 +121,3 @@ test('Shop reroll-all batches all five dice and preserves price escalation', asy
   await expect(page.getByTestId('stat-gold')).toContainText('98');
   await expect(page.getByTestId('shop-dice-controls')).toHaveCount(0);
 });
-

@@ -135,7 +135,11 @@ button { font: inherit; }
 .speed-demon-meter span { position: absolute; z-index: 3; right: 0; bottom: calc(100% + 7px); width: max-content; padding: 4px 8px; border: 1px solid var(--mantine-color-yellow-5); border-radius: var(--mantine-radius-sm); background: var(--mantine-color-dark-7); color: var(--mantine-color-yellow-3); font-size: .7rem; font-weight: 900; animation: speed-demon-reveal 180ms ease-out; }
 @keyframes speed-demon-reveal { from { opacity: 0; transform: scale(.75) translateY(4px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 .charge-controls { padding: 4px 6px; border: 1px solid transparent; border-radius: var(--mantine-radius-sm); }
-.charge-status { min-width: 142px; text-align: right; }
+.charge-dock-controls { width: min(100%, 620px); min-height: 28px; margin: 0 auto 4px; }
+.charge-status { min-width: 0; flex: 1 1 auto; display: flex; align-items: center; gap: 7px; overflow: hidden; white-space: nowrap; }
+.charge-status-main { flex: none; }
+.charge-guidance { min-width: 0; overflow: hidden; color: var(--mantine-color-yellow-4); font-size: .625rem; text-overflow: ellipsis; }
+.charge-action { flex: none; }
 .charge-controls.is-max { border-color: var(--mantine-color-yellow-5); background: color-mix(in srgb, var(--mantine-color-yellow-7) 14%, transparent); animation: charge-ready-pulse 650ms ease-out 1; }
 .charge-action.is-max { box-shadow: 0 0 0 2px color-mix(in srgb, var(--mantine-color-yellow-4) 48%, transparent), 0 0 16px rgba(250, 176, 5, .45); }
 @keyframes charge-ready-pulse {
@@ -628,11 +632,14 @@ button { font: inherit; }
     min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); align-items: center;
     gap: 3px 6px; padding: 0; justify-items: stretch;
   }
-  .active-gameplay .charge-controls { grid-column: 1 / -1; min-width: 0; margin: 0; flex-wrap: nowrap; }
+  .active-gameplay .charge-dock-controls { min-width: 0; min-height: 24px; margin-bottom: 2px; padding: 2px 4px; }
+  .active-gameplay .charge-status { gap: 5px; font-size: clamp(.58rem, 2.5vw, .75rem); }
+  .active-gameplay .charge-guidance { font-size: clamp(.46rem, 2vw, .625rem); }
   .active-gameplay .selection-preview { display: none; }
   .active-gameplay .round-action-layout { width: 100%; min-width: 0; }
   .active-gameplay .round-action-layout .mantine-Button-root { min-height: 40px; padding-inline: 9px; }
-  .active-gameplay .round-action-layout .run-action-left .mantine-Button-root { width: min(100%, 158px); }
+  .active-gameplay .round-action-layout .run-action-left,
+  .active-gameplay .round-action-layout .run-action-left .mantine-Button-root { width: 100%; }
   .active-gameplay .reroll-action { min-width: 0; }
   .active-gameplay .reroll-action-main { font-size: clamp(.66rem, 2.8vw, .78rem); }
   .active-gameplay .reroll-action-resource { font-size: clamp(.4rem, 1.75vw, .52rem); }
@@ -984,7 +991,6 @@ body, #root { overflow: hidden; }
   .shop-dice-reroll { padding-inline: 7px; font-size: clamp(.61rem, 2.6vw, .75rem); }
   .shop-action-dock .run-action-right .mantine-Button-root { padding-inline: 8px; font-size: clamp(.65rem, 2.7vw, .78rem); }
   .run-action-row .gameplay-actions { gap: 3px; }
-  .run-action-row .charge-controls { padding-block: 2px; }
   .dice-dock .dice-row { gap: 3px; }
   .die-slot { grid-template-rows: 18px auto 22px; }
   .die-flame-zone { height: 18px; }
@@ -1001,7 +1007,7 @@ body, #root { overflow: hidden; }
 }
 
 @media (max-width: 360px) {
-  .run-action-row .reroll-action { flex: 1.2 1 0; width: auto; }
+  .run-action-row .reroll-action { width: 100%; }
   .run-action-row .play-action { flex: .85 1 0; }
   .dice-dock .dice-row { gap: 2px; }
   .die-flame-cap { gap: 1px; padding-inline: 2px; font-size: .41rem; }

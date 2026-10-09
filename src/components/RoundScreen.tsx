@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { validateAction } from '../game/engine';
 import {
   activeFlameId, captureHandStart, composeXMult, handXMultContributions, hasChargeBonfire,
-  hasOwnedChargeFlame, hasOwnedFlame, isChargeFlame, isGuaranteedWinningPlay, speedDemonMultiplier,
+  hasOwnedFlame, isChargeFlame, isGuaranteedWinningPlay, speedDemonMultiplier,
 } from '../game/flames';
 import { hasPlayableHand, HANDS } from '../game/hands';
 import { finalizeScore, handScore } from '../game/scoring';
@@ -84,12 +84,8 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const rerollVisualResourceText = `${board.manualRerollsRemaining} LEFT${carePackageRerolls ? ` + ${carePackageRerolls}` : ''}`;
   const normalRerollFill = Math.max(0, Math.min(1, board.manualRerollsRemaining / CONFIG.manualRerollsPerRound));
   const deadBoard = !hasPlayableHand(encounterDice, unavailableHands, requiredDieIds);
-  const chargeAction: Action = { type: 'TOGGLE_CHARGE', hand: effectiveSelection.hand, dieIds: effectiveSelection.dieIds };
-  const canToggleCharge = validateAction(board, chargeAction) === null;
   const chargeDieIds = encounterDice.filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id);
   const chargeGloballyUnlocked = hasChargeBonfire(board);
-  const missingChargeDie = !chargeGloballyUnlocked && chargeDieIds.some(id => !effectiveSelection.dieIds.includes(id));
-  const chargeAtMax = board.chargeXMult >= board.maxCharge - 1e-9;
   const speedStrength = (speedDemonMultiplier(100, decisionMs) - 1) / 8;
   const speedReveal = event?.type === 'SPEED_DEMON_REVEALED' ? event : null;
   const scorecardRefreshing = event?.type === 'SCORECARD_REFRESHED';
@@ -154,20 +150,6 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     </Paper>
     <RunActionPortal><Paper className="gameplay-actions-panel" p="xs">
         <div className="gameplay-actions">
-          {hasOwnedChargeFlame(board) && <Group className={`charge-controls${chargeAtMax ? ' is-max' : ''}${board.chargeArmed ? ' is-armed' : ''}`} gap="xs" justify="flex-end" mb={4}>
-            <Stack gap={0} className="charge-status">
-              <Text size="xs" fw={800} data-testid="charge-status">{board.chargeArmed
-                ? `⚡ ×${formatPlayerNumber(board.chargeXMult)} ARMED`
-                : chargeAtMax ? `⚡ MAX CHARGE ×${formatPlayerNumber(board.maxCharge)}`
-                  : `CHARGE ×${formatPlayerNumber(board.chargeXMult)} / ×${formatPlayerNumber(board.maxCharge)}`}</Text>
-              {chargeAtMax && missingChargeDie && !board.chargeArmed
-                && <Text size="10px" fw={800} c="yellow" data-testid="charge-guidance">SELECT CHARGE DIE TO USE</Text>}
-            </Stack>
-            <Button className={`charge-action${chargeAtMax ? ' is-max' : ''}`} size="compact-xs" color={board.chargeArmed ? 'orange' : 'yellow'} variant={board.chargeArmed || chargeAtMax ? 'filled' : 'light'}
-              disabled={busy || !canToggleCharge} onClick={() => submit(chargeAction)}>
-              {board.chargeArmed ? 'DISARM' : 'ARM CHARGE'}
-            </Button>
-          </Group>}
           {awaitingWardenChoice && <Text size="xs" c="dimmed" className="selection-preview">
             {selectedWardenDieId === null ? 'Choose a Locked Die to Unlock' : `D${selectedWardenDieId + 1} will keep its current Face`}
           </Text>}
@@ -178,8 +160,10 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
                 data-normal-fill-percent={Math.round(normalRerollFill * 100)} onClick={() => submit(manualAction)}>
                 <span className="reroll-resource-fill" style={{ transform: `scaleX(${normalRerollFill})` }} aria-hidden="true" />
                 <span className="reroll-action-copy">
-                  <span className="reroll-action-main">{rerollMainText}</span>
-                  <span className="reroll-action-resource">{rerollVisualResourceText}</span>
+                  <span className="reroll-action-main">REROLL</span>
+                  <span className="reroll-action-resource">{selectedRerollDice > 0
+                    ? `${selectedRerollDice} ${selectedRerollDice === 1 ? 'DIE' : 'DICE'} · ${rerollVisualResourceText}`
+                    : rerollVisualResourceText}</span>
                 </span>
               </Button>
               {speedDemonOwned && <div className={`speed-demon-meter${speedReveal ? ' is-revealed' : ''}`} data-testid="speed-demon-meter"
