@@ -1,4 +1,4 @@
-import { bossRewardForRound, CONFIG, interestForGold, roundReward, targetForRound } from './config';
+import { bossRewardForRound, CONFIG, interestForGold, rawTargetForRound, roundReward, targetForRound } from './config';
 import { activeFace, rollPhysicalDie, scoringPips, weightedSourceFace } from './dice';
 import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, loneWolfPipsFactor, personalTrainerChance, stacks, tankMultiplierFactor, VINTAGE_BASE_SELL_CAP } from './enhancements';
 import {
@@ -1613,7 +1613,7 @@ export class Resolver {
     const bossType = this.state.bossSchedule[this.state.round]
       ?? (this.state.round > 60 ? bossTypeForRound(this.state.seed, this.state.round) : null);
     if (bossType) this.state.bossSchedule[this.state.round] = bossType;
-    if (bossType) this.state.target = targetForBoss(bossType, this.state.target);
+    if (bossType) this.state.target = targetForBoss(bossType, rawTargetForRound(this.state.round));
     this.state.boss = bossType ? createBossRuntime(this.state.seed, this.state.round, bossType, {
       handPlayCounts: this.state.handPlayCounts,
       playerDieIds: this.state.dice.filter(die => die.owner === 'player').map(die => die.id),

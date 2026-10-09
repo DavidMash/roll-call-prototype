@@ -392,7 +392,7 @@ describe('round boundaries and losing', () => {
     }
     const data = exportRun(game);
     expect(data.roundReached).toBe(5);
-    expect(data.rounds.map(round => round.target)).toEqual([100, 175, 200, 225, 375]);
+    expect(data.rounds.map(round => round.target)).toEqual([100, 175, 200, 200, 350]);
     expect(data.goldEarned).toBe(41);
     expect(data.goldSpent).toBe(0);
   });

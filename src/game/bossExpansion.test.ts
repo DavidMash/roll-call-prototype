@@ -6,7 +6,7 @@ import { handOptions, HAND_IDS, LOWER_HAND_IDS } from './hands';
 import { handScore } from './scoring';
 import { selectHand, toggleDie } from './selection';
 import { activeEncounterDice, BOSS_TYPES, bossSchedule, MINI_BOSS_TYPES, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands } from './bosses';
-import { targetForRound } from './config';
+import { rawTargetForRound, targetForRound } from './config';
 import type { BossType, GameState, RandomSource, Rank } from './types';
 
 const constant = (value = 0): RandomSource => ({ next: () => value });
@@ -166,13 +166,13 @@ describe('The Marathon', () => {
 
 describe('base target modifier boundary', () => {
   it('applies existing Boss modifiers only after the block target is determined', () => {
-    expect(targetForBoss('marathon', targetForRound(3))).toBe(600);
-    expect(targetForBoss('quickdraw', targetForRound(3))).toBe(65);
-    expect(targetForBoss('marathon', targetForRound(9))).toBe(2_925);
-    expect(targetForBoss('quickdraw', targetForRound(9))).toBe(325);
-    expect(targetForBoss('tightrope', targetForRound(9))).toBe(487.5);
+    expect(targetForBoss('marathon', rawTargetForRound(3))).toBe(600);
+    expect(targetForBoss('quickdraw', rawTargetForRound(3))).toBe(75);
+    expect(targetForBoss('marathon', rawTargetForRound(9))).toBe(2_650);
+    expect(targetForBoss('quickdraw', rawTargetForRound(9))).toBe(300);
+    expect(targetForBoss('tightrope', rawTargetForRound(9))).toBe(450);
     for (const boss of ['caller', 'warden', 'hexer', 'fly', 'snakeEyes', 'infected'] as const) {
-      expect(targetForBoss(boss, targetForRound(9))).toBe(975);
+      expect(targetForBoss(boss, rawTargetForRound(9))).toBe(875);
     }
   });
 });
@@ -180,7 +180,7 @@ describe('base target modifier boundary', () => {
 describe('Quickdraw', () => {
   it('uses one third target, spends one Lower shot, and leaves Upper hands available', () => {
     let state = bossRound('quickdraw');
-    expect(state.target).toBe(65);
+    expect(state.target).toBe(75);
     state.target = 1_000_000;
     expose(state, [2, 2, 3, 4, 5]);
     state = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.2)).state;

@@ -1,4 +1,4 @@
-import { CONFIG } from './config';
+import { CONFIG, prettyRoundTarget } from './config';
 import { hashSeed, SeededRng } from './rng';
 import { handOptions, handStats, HANDS, HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { usableManualRerolls } from './specialOffers';
@@ -170,12 +170,12 @@ export function flyHandForRound(seed: string, round: number): HandId {
   return LOWER_HAND_IDS[Math.floor(rng.next() * LOWER_HAND_IDS.length)];
 }
 
-export function targetForBoss(type: BossType, normalTarget: number): number {
-  if (type === 'marathon') return normalTarget * 3;
-  if (type === 'quickdraw') return Math.max(CONFIG.targetRounding,
-    Math.round(normalTarget / 3 / CONFIG.targetRounding) * CONFIG.targetRounding);
-  if (type === 'tightrope') return normalTarget * .5;
-  return normalTarget;
+export function targetForBoss(type: BossType, rawNormalTarget: number): number {
+  const modified = type === 'marathon' ? rawNormalTarget * 3
+    : type === 'quickdraw' ? Math.max(CONFIG.targetRounding, rawNormalTarget / 3)
+      : type === 'tightrope' ? rawNormalTarget * .5
+        : rawNormalTarget;
+  return prettyRoundTarget(modified);
 }
 
 export function wardenNaturalHands(activeDice: number): HandId[] {

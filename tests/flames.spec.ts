@@ -38,7 +38,7 @@ function automaticAction(game: GameState): Extract<Action, { type: 'PLAY' | 'MAN
 
 // Rarity consumes authoritative RNG, so this snapshot intentionally pins the
 // post-rarity seed instead of spending ~30 seconds rediscovering it per test.
-const flameSeed = () => 'flame-browser-61';
+const flameSeed = () => 'flame-browser-86';
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();

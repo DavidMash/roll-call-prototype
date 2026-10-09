@@ -40,7 +40,7 @@ describe('linear route and deterministic boss schedule', () => {
   it('reports the gameplay target for every encounter node, including target-changing bosses', () => {
     expect(encounterTarget({ id: 'round:2', type: 'normal_round', round: 2 })).toBe(175);
     expect(encounterTarget({ id: 'boss:3', type: 'boss_round', round: 3, boss: 'caller' })).toBe(200);
-    expect(encounterTarget({ id: 'boss:6', type: 'boss_round', round: 6, boss: 'marathon' })).toBe(1_350);
+    expect(encounterTarget({ id: 'boss:6', type: 'boss_round', round: 6, boss: 'marathon' })).toBe(1_250);
     expect(encounterTarget({ id: 'boss:6', type: 'boss_round', round: 6, boss: 'quickdraw' })).toBe(150);
     expect(encounterTarget({ id: 'shop:before-round:2', type: 'shop', round: 2 })).toBeNull();
   });
@@ -115,6 +115,20 @@ describe('The Caller', () => {
 });
 
 describe('The Warden', () => {
+  it('derives safeguards from the final rounded Goal', () => {
+    const state = newRun('warden-rounded-goal', constant(.2)).state;
+    state.phase = 'shop';
+    state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    state.round = 5;
+    state.currentNodeId = 'shop:before-round:6';
+    state.bossSchedule[6] = 'warden';
+    const encounter = dispatch(state, { type: 'NEXT_ROUND' }, constant(.55)).state;
+    expect(encounter.target).toBe(425);
+    expect(Number.isInteger(encounter.target)).toBe(true);
+    expect(encounter.boss?.type === 'warden' ? encounter.boss.unlockCosts : null)
+      .toEqual(wardenUnlockCosts(encounter.handLevels, [], encounter.target));
+  });
+
   it('rolls all five dice first and leaves all locked before the initial choice', () => {
     const state = bossRound('warden');
     expect(state.boss).toMatchObject({ type: 'warden', nextUnlockTarget: null, unlockTargets: [],
