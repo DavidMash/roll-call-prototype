@@ -26,9 +26,12 @@ button { font: inherit; }
   background: rgba(20, 26, 30, .96); box-shadow: 0 8px 28px rgba(0, 0, 0, .24);
   backdrop-filter: blur(12px);
 }
-.top-hud-row { min-height: 48px; padding: 5px 10px; }
+.top-hud-row {
+  min-height: 48px; display: grid !important; grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center; gap: 6px !important; padding: 5px 10px;
+}
 .game-title { flex: 0 0 auto; font-size: 1.15rem; font-weight: 850; letter-spacing: .12em; color: var(--mantine-color-gray-0); }
-.hud-stats { flex: 1 1 auto; justify-content: center; }
+.hud-stats { min-width: 0; width: 100%; overflow: hidden; justify-content: center; }
 .hud-stat { display: flex; align-items: baseline; gap: 5px; padding: 2px 7px; border-radius: 6px; font-size: .82rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .hud-stat-icon { color: var(--mantine-color-teal-4); font-size: .8rem; }
 [data-testid="stat-gold"] .hud-stat-icon { color: var(--mantine-color-yellow-5); }
@@ -36,10 +39,9 @@ button { font: inherit; }
 .hud-stage-value { display: inline-flex; gap: 6px; }
 .hud-stage-segment { display: inline-flex; gap: 1px; }
 .hud-stage-letter { color: var(--mantine-color-teal-4); }
-.hud-phase { padding: 3px 9px; border-radius: 999px; color: var(--mantine-color-teal-3); background: var(--mantine-color-teal-9); font-size: .67rem; font-weight: 800; letter-spacing: .08em; }
 .hud-actions { flex: 0 0 auto; }
 .hud-actions .mantine-SegmentedControl-label { padding-inline: 8px; font-size: .61rem; font-weight: 700; }
-.menu-trigger { flex: 0 0 auto; }
+.menu-trigger { flex: 0 0 auto; justify-self: end; }
 .hamburger-icon { width: 18px; display: grid; gap: 3px; }
 .hamburger-icon i { height: 2px; display: block; border-radius: 999px; background: currentColor; }
 .game-menu-drawer, .game-menu-header { background: var(--mantine-color-dark-8); }
@@ -297,7 +299,7 @@ button { font: inherit; }
 @keyframes score-in { from { opacity: .4; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (max-width: 900px) {
-  .top-hud-row { flex-wrap: nowrap !important; row-gap: 3px; }
+  .top-hud-row { row-gap: 3px; }
   .hud-stats { order: initial; flex-basis: auto; justify-content: space-evenly; }
   .gameplay-dock-content { align-items: stretch; flex-direction: column; gap: 5px; }
   .gameplay-dock .dice-row { flex-basis: auto; }
@@ -391,7 +393,6 @@ button { font: inherit; }
 .screen-theme::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background: radial-gradient(circle at 50% -15%, color-mix(in srgb, var(--screen-primary) 15%, transparent), transparent 48%); }
 .screen-theme .top-hud { box-shadow: inset 0 2px color-mix(in srgb, var(--screen-primary) 60%, transparent), 0 8px 28px rgba(0,0,0,.24); }
-.screen-theme .hud-phase { color: color-mix(in srgb, var(--screen-secondary) 82%, white); background: color-mix(in srgb, var(--screen-primary) 22%, #11171b); }
 .screen-theme .top-hud .mantine-Progress-section { background: var(--screen-primary); }
 .boss-panel, .boss-preview { border: 1px solid color-mix(in srgb, var(--screen-primary) 45%, transparent); background: color-mix(in srgb, var(--screen-primary) 8%, var(--mantine-color-dark-7)); }
 .boss-panel { position: relative; z-index: var(--layer-boss-status); }
@@ -557,7 +558,6 @@ button { font: inherit; }
   .active-gameplay .top-hud { position: relative; top: auto; flex: none; }
   .active-gameplay .top-hud-row { min-height: 0; row-gap: 2px; padding: 3px 5px; }
   .active-gameplay .hud-stats { min-width: 0; gap: 2px !important; }
-  .active-gameplay .hud-phase { min-width: 0; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-inline: 5px; }
   .active-gameplay .bonfire-strip { min-width: 0; flex-wrap: nowrap; gap: 2px !important; padding: 2px 4px; overflow: hidden; }
   .active-gameplay .bonfire-strip > * { min-width: 0; flex-shrink: 1; }
   .active-gameplay .bonfire-strip .mantine-Badge-root { max-width: 112px; height: 16px; padding-inline: 4px; overflow: hidden; text-overflow: ellipsis; }
@@ -669,7 +669,6 @@ button { font: inherit; }
 @media (max-width: 800px) and (max-height: 700px) {
   .active-gameplay .top-hud-row { padding-block: 2px; }
   .active-gameplay .game-title { display: none; }
-  .active-gameplay .top-hud-row { flex-wrap: nowrap !important; }
   .active-gameplay .hud-stats { order: initial; flex-basis: auto; }
   .active-gameplay .resolution { min-height: 36px; }
   .active-gameplay .resolution.active { min-height: 62px; }

@@ -295,7 +295,7 @@ test('scorecard keeps all fourteen categories visible with simplified actionable
   await expect(page.getByTestId('round-score-progress')).toHaveText('0 / 100');
   await expect(page.getByTestId('round-score-progress')).toHaveClass(/round-score-readout/);
   await expect(page.getByTestId('round-goal-progress')).toHaveAttribute('aria-valuetext', '0 of 100 points toward the Goal');
-  await expect(page.locator('.hud-phase')).toHaveText('ROUND');
+  await expect(page.locator('.hud-phase')).toHaveCount(0);
 
   const playable = page.locator('[data-state="playable"]').first();
   const playableTestId = await playable.getAttribute('data-testid');
@@ -423,6 +423,48 @@ test('compact HUD, Run Info and Help keep secondary information off the gameplay
   await expect(goldenHelp).toContainText('Gain +1 Gold');
   await expect(jackpotHelp.locator('.enhancement-jackpot')).toContainText(ENHANCEMENTS.jackpot.symbol);
   await expect(jackpotHelp).toContainText('Gain +3 Gold');
+});
+
+test('header omits redundant phase labels and always reserves the menu on narrow screens', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  const base = newRun('menu-safe-header').state;
+  base.round = 599_994;
+  base.gold = 987_654_321;
+  const fixtures: GameState[] = [
+    structuredClone(base),
+    Object.assign(structuredClone(base), {
+      phase: 'shop' as const,
+      shop: { kind: 'between_rounds' as const, offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 },
+    }),
+    Object.assign(structuredClone(base), {
+      phase: 'flameSelection' as const,
+      flameSelection: { offers: [{ id: 1, flame: 'ultimate' as const }], acquired: false },
+    }),
+    Object.assign(structuredClone(base), {
+      phase: 'specialOffer' as const,
+      specialOffer: { offers: [{ id: 1, type: 'carePackage' as const }], acquired: false },
+    }),
+  ];
+
+  for (const state of fixtures) {
+    await installRunState(page, state);
+    await ready(page);
+    await expect(page.locator('.hud-phase')).toHaveCount(0);
+    const menu = page.getByRole('button', { name: 'Open menu', exact: true });
+    await expect(menu).toBeInViewport();
+    const geometry = await page.locator('.top-hud').evaluate(header => {
+      const hud = header.getBoundingClientRect();
+      const trigger = header.querySelector<HTMLElement>('.menu-trigger')!.getBoundingClientRect();
+      return { hudLeft: hud.left, hudRight: hud.right, menuLeft: trigger.left, menuRight: trigger.right,
+        documentWidth: document.documentElement.scrollWidth, viewportWidth: window.innerWidth };
+    });
+    expect(geometry.menuLeft).toBeGreaterThanOrEqual(geometry.hudLeft);
+    expect(geometry.menuRight).toBeLessThanOrEqual(geometry.hudRight);
+    expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+    await menu.click();
+    await expect(page.getByRole('dialog', { name: 'Menu' })).toBeVisible();
+    await page.keyboard.press('Escape');
+  }
 });
 
 test('physical dice default to numerals and persist the Pips preference across gameplay, Shop, and Manage Die', async ({ page }) => {
