@@ -2,6 +2,7 @@ import { chapterNumberForRound, chapterRoundForRound } from './chapters';
 import { activeFlameId } from './flames';
 import { ENHANCEMENTS } from './enhancements';
 import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
+import { infernoMultiplier } from './scoring';
 import type {
   Enhancement, Flame, GoldSource, GoldSpendSource, HandId, Rarity, SpecialOfferType, GameState,
 } from './types';
@@ -68,6 +69,8 @@ export interface CanonicalRunMetrics {
   roundsCleared: number;
   finalGold: number;
   finalLives: number;
+  infernoLevel: number;
+  infernoMultiplier: number;
   finalHandLevels: Record<HandId, number>;
   scoreByHand: Counts<HandId>;
   highestClearedRoundScore: number;
@@ -154,6 +157,7 @@ function canonicalFromState(state: GameState | undefined, events: readonly RunHi
     finalBoss: state?.boss?.type ?? (finished?.kind === 'run_finished' ? finished.finalBoss : null),
     roundsCleared: cleared.length,
     finalGold: state?.gold ?? 0, finalLives: state?.lives ?? 0,
+    infernoLevel: state?.engulfmentLevel ?? 0, infernoMultiplier: infernoMultiplier(state?.engulfmentLevel ?? 0),
     finalHandLevels: structuredClone(state?.handLevels ?? (finished?.kind === 'run_finished' ? finished.finalHandLevels : {})) as Record<HandId, number>,
     scoreByHand,
     highestClearedRoundScore: Math.max(0, ...cleared.map(round => round.score)),

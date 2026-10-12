@@ -2,7 +2,7 @@ import { activeFace } from './dice';
 import { magneticPullCapable, stacks } from './enhancements';
 import { lastPlayDanger } from './bosses';
 import { LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from './hands';
-import { finalizeScore, handScore } from './scoring';
+import { finalizeScore, handScore, infernoMultiplier } from './scoring';
 import type { ActiveFlame, Board, Die, Flame, GameState, HandId, Rarity, XMultFactor } from './types';
 import { formatPlayerNumber } from './copy';
 import { wildfireFactor } from './hoodedFigure';
@@ -183,6 +183,7 @@ export const hasXMultFlame = (dice: Die[], bonfires: Flame[] = [], wildfires: im
 export interface HandStartSnapshot {
   score: number;
   target: number;
+  infernoMultiplier: number;
   gold: number;
   manualRerollsRemaining: number;
   previousPlays: number;
@@ -209,11 +210,12 @@ export interface HandStartSnapshot {
     golden: boolean; jackpot: boolean; vintage: boolean }[];
 }
 
-export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'gold' | 'manualRerollsRemaining' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackUpperHandsPlayed' | 'bonfires' | 'wildfires' | 'dice' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null): HandStartSnapshot {
+export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'engulfmentLevel' | 'gold' | 'manualRerollsRemaining' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackUpperHandsPlayed' | 'bonfires' | 'wildfires' | 'dice' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null): HandStartSnapshot {
   const selectedScore = handScore(state.dice, hand, selectedDieIds, state.handLevels[hand]);
   return {
     score: state.score,
     target: state.target,
+    infernoMultiplier: infernoMultiplier(state.engulfmentLevel),
     gold: state.gold,
     manualRerollsRemaining: state.manualRerollsRemaining,
     previousPlays: state.handPlayCounts[hand],
@@ -330,13 +332,13 @@ export function handXMultContributions(snapshot: HandStartSnapshot, hand: HandId
   const guaranteedFactors = contributions(snapshot, hand, snapshot.selectedDieIds, false);
   const xMult = composeXMult(guaranteedFactors);
   const guaranteed = snapshot.score + finalizeScore(snapshot.selectedBasePips, snapshot.selectedBaseMultiplier,
-    xMult * snapshot.bossFactor).finalScore >= snapshot.target;
+    xMult * snapshot.bossFactor, snapshot.infernoMultiplier).finalScore >= snapshot.target;
   return contributions(snapshot, hand, scoringDieIds, !guaranteed);
 }
 export function isGuaranteedWinningPlay(snapshot: HandStartSnapshot, hand: HandId): boolean {
   const xMult = composeXMult(contributions(snapshot, hand, snapshot.selectedDieIds, false));
   return snapshot.score + finalizeScore(snapshot.selectedBasePips, snapshot.selectedBaseMultiplier,
-    xMult * snapshot.bossFactor).finalScore >= snapshot.target;
+    xMult * snapshot.bossFactor, snapshot.infernoMultiplier).finalScore >= snapshot.target;
 }
 export const composeXMult = (factors: readonly (number | XMultFactor)[]) =>
   Number(factors.map(item => typeof item === 'number' ? item : item.value).sort((a, b) => a - b)

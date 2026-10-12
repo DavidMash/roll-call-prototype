@@ -31,7 +31,7 @@ function projectedCombinationScore(board: Board, hand: HandId, dieIds: number[],
   const base = handScore(dice, hand, dieIds, board.handLevels[hand]);
   const snapshot = captureHandStart(board, hand, dieIds, decisionMs);
   const xMult = composeXMult(handXMultContributions(snapshot, hand, board.handLevels[hand], dieIds));
-  return finalizeScore(base.pips, base.multiplier, xMult * snapshot.bossFactor).finalScore;
+  return finalizeScore(base.pips, base.multiplier, xMult * snapshot.bossFactor, snapshot.infernoMultiplier).finalScore;
 }
 
 /**

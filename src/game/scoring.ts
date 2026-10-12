@@ -4,6 +4,9 @@ import { loneWolfPipsFactor, stacks, tankMultiplierFactor } from './enhancements
 import { handStats } from './hands';
 import type { Die, Face, HandId, HandScoreAccumulator } from './types';
 
+export const INFERNO_BASE = 25;
+export const infernoMultiplier = (level: number): number => INFERNO_BASE ** Math.max(0, Math.floor(level));
+
 export interface HandScoreContribution {
   kind: 'base' | 'bonus' | 'loneWolf' | 'teamwork';
   role: 'selected' | 'hitchhiker';
@@ -31,10 +34,10 @@ export function ordinaryFaceContributions(participant: ScoringParticipant, scori
 export const resolvedOrdinaryPips = (participant: ScoringParticipant, scoringDice: number): number =>
   ordinaryFaceContributions(participant, scoringDice).reduce((sum, contribution) => sum + contribution.amount, 0);
 
-export function createHandAccumulator(hand: HandId, dieIds: number[], level = 1): HandScoreAccumulator {
+export function createHandAccumulator(hand: HandId, dieIds: number[], level = 1, infernoMultiplier = 1): HandScoreAccumulator {
   const stats = handStats(hand, level);
   return {
-    hand, handLevel: level, dieIds: [...dieIds].sort((a, b) => a - b),
+    hand, handLevel: level, infernoMultiplier, dieIds: [...dieIds].sort((a, b) => a - b),
     basePips: stats.basePips, baseMultiplier: stats.baseMultiplier,
     currentPips: stats.basePips, currentMultiplier: stats.baseMultiplier,
     xMultFactors: [], currentXMult: 1, bossFactor: 1,
@@ -42,8 +45,8 @@ export function createHandAccumulator(hand: HandId, dieIds: number[], level = 1)
   };
 }
 
-export function finalizeScore(pips: number, multiplier: number, xMult = 1) {
-  const rawScore = pips * multiplier * xMult;
+export function finalizeScore(pips: number, multiplier: number, xMult = 1, inferno = 1) {
+  const rawScore = inferno * pips * multiplier * xMult;
   return { rawScore, finalScore: Math.round(rawScore) };
 }
 
@@ -80,7 +83,8 @@ export function applyHandMultiplier(accumulator: HandScoreAccumulator, factor: n
 export function finalizeHandScore(accumulator: HandScoreAccumulator, bossFactor = 1) {
   if (accumulator.finalScore !== null) throw new Error('Hand score already finalized.');
   accumulator.bossFactor = bossFactor;
-  const { rawScore, finalScore } = finalizeScore(accumulator.currentPips, accumulator.currentMultiplier, accumulator.currentXMult * bossFactor);
+  const { rawScore, finalScore } = finalizeScore(accumulator.currentPips, accumulator.currentMultiplier,
+    accumulator.currentXMult * bossFactor, accumulator.infernoMultiplier);
   accumulator.rawScore = rawScore;
   accumulator.finalScore = finalScore;
   return { pips: accumulator.currentPips, multiplier: accumulator.currentMultiplier, xMult: accumulator.currentXMult, rawScore, score: finalScore };

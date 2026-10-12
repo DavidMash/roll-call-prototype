@@ -7,6 +7,7 @@ import type { GameEvent } from './types';
 export type ScoreMetric = 'pips' | 'mult' | 'xmult' | 'final' | null;
 
 export interface ScorePresentation {
+  inferno: number;
   pips: number;
   mult: number;
   xMult: number;
@@ -50,6 +51,7 @@ export function scorePresentation(event: GameEvent | null): ScorePresentation | 
       callout = `+${amount(accumulator.finalScore ?? event.amount)}`;
     }
     return {
+      inferno: accumulator.infernoMultiplier,
       pips: accumulator.currentPips,
       mult: accumulator.currentMultiplier,
       xMult: accumulator.currentXMult,
@@ -63,6 +65,7 @@ export function scorePresentation(event: GameEvent | null): ScorePresentation | 
   if (event.type !== 'STANDALONE_SCORE_CALCULATED') return null;
   const xMult = event.xMult ?? 1;
   return {
+    inferno: 1,
     pips: event.pips ?? 0,
     mult: event.multiplier ?? 0,
     xMult,
@@ -75,7 +78,8 @@ export function scorePresentation(event: GameEvent | null): ScorePresentation | 
 }
 
 export function scoreAnnouncement(score: ScorePresentation): string {
-  const parts = [`Pips ${formatPlayerNumber(score.pips)}`, `Mult ${formatPlayerNumber(score.mult)}`];
+  const parts = score.inferno > 1 ? [`Inferno ${formatPlayerNumber(score.inferno)}`] : [];
+  parts.push(`Pips ${formatPlayerNumber(score.pips)}`, `Mult ${formatPlayerNumber(score.mult)}`);
   if (score.showXMult) parts.push(`XMult ${formatPlayerNumber(score.xMult)}`);
   if (score.bossFactor !== 1) parts.push(`Boss modifier ${formatPlayerNumber(score.bossFactor)}`);
   if (score.finalScore !== null) parts.push(`Final score ${formatPlayerNumber(score.finalScore)}`);

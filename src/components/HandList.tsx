@@ -21,6 +21,7 @@ export interface HandSubmitPreview {
   multiplier: number;
   hasXMult: boolean;
   effectiveXMult: number;
+  infernoMultiplier: number;
   score: number;
 }
 
@@ -98,7 +99,8 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
         {showQuickPlay && submitPreview && <Button className="scorecard-quick-play" size="compact-xs"
           aria-label={`Play ${definition.name} for ${formatPlayerNumber(submitPreview.score)} points`} onClick={onSubmit}>
           <span className="quick-score-expression">
-            {formatScoreEquation(submitPreview.pips, submitPreview.multiplier, submitPreview.effectiveXMult, submitPreview.score)}
+            {formatScoreEquation(submitPreview.pips, submitPreview.multiplier, submitPreview.effectiveXMult,
+              submitPreview.score, submitPreview.infernoMultiplier)}
           </span>
           <SendIcon />
         </Button>}

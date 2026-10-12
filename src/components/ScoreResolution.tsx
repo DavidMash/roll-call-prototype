@@ -8,9 +8,9 @@ import { EnhancementIdentity, EnhancementSymbol } from './EnhancementIdentity';
 import type { ReactNode } from 'react';
 
 function ScoreBox({ label, value, color, active, tutorial }: {
-  label: 'PIPS' | 'MULT' | 'XMULT';
+  label: 'INFERNO' | 'PIPS' | 'MULT' | 'XMULT';
   value: number;
-  color: 'pips' | 'mult' | 'xmult';
+  color: 'inferno' | 'pips' | 'mult' | 'xmult';
   active: ScoreMetric;
   tutorial: string;
 }) {
@@ -20,7 +20,7 @@ function ScoreBox({ label, value, color, active, tutorial }: {
     data-tutorial={tutorial} data-testid={`score-box-${color}`}>
     <Text component="span" className="score-box-label">{label}</Text>
     <Text component="strong" className={`score-box-value${lengthClass}`}
-      data-testid={color === 'mult' ? 'hand-multiplier' : color === 'xmult' ? 'hand-xmult' : 'hand-pips'}>
+      data-testid={color === 'inferno' ? 'hand-inferno' : color === 'mult' ? 'hand-multiplier' : color === 'xmult' ? 'hand-xmult' : 'hand-pips'}>
       {formatted}
     </Text>
   </div>;
@@ -56,7 +56,11 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText }: {
       {busy && <Button size="compact-xs" variant="subtle" color="gray" onClick={onSkip}>Skip playback</Button>}
     </Group>
     {score ? <div className="score-resolution-stage" data-testid="hand-accumulator">
-      <div className={`score-formula${score.showXMult ? ' has-xmult' : ''}`} aria-hidden="true">
+      <div className={`score-formula${score.showXMult ? ' has-xmult' : ''}${score.inferno > 1 ? ' has-inferno' : ''}`} aria-hidden="true">
+        {score.inferno > 1 && <>
+          <ScoreBox label="INFERNO" value={score.inferno} color="inferno" active={score.activeMetric} tutorial="score-inferno" />
+          <span className="score-operator">×</span>
+        </>}
         <ScoreBox label="PIPS" value={score.pips} color="pips" active={score.activeMetric} tutorial="score-pips" />
         <span className="score-operator">×</span>
         <ScoreBox label="MULT" value={score.mult} color="mult" active={score.activeMetric} tutorial="score-mult" />

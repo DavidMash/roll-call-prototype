@@ -6,6 +6,7 @@ import { RUN_HISTORY_V2_RULESET, RUN_HISTORY_V2_SCHEMA_VERSION } from './runHist
 import { renderGroupedRunHistoryV2 } from './runHistoryV2Renderer';
 import { summarizeRunHistoryV2, type OfferImpressions } from './runHistoryV2Summary';
 import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
+import { infernoMultiplier } from './scoring';
 import type { GameState, Rarity } from './types';
 
 const number = (value: number) => formatPlayerNumber(value);
@@ -49,6 +50,7 @@ export function renderRunSummaryV2(state: GameState): string {
     `Highest cleared-Round score: ${number(experienced.highestClearedRoundScore)} experienced · ${number(canonical.highestClearedRoundScore)} canonical`,
     '',
     'FINAL CANONICAL BUILD',
+    `Inferno: Level ${number(canonical.infernoLevel)} · ×${number(canonical.infernoMultiplier)}`,
     `Hand levels: ${HAND_IDS.map(hand => `${HANDS[hand].name} ${number(canonical.finalHandLevels[hand] ?? 1)}`).join(' · ')}`,
     `Enhancements: ${build}`,
     `Embers: ${embers}`,
@@ -95,6 +97,8 @@ export function exportRunHistoryV2(state: GameState) {
     canonicalState: {
       phase: state.phase, round: state.round, attempt: state.roundAttemptNumber, score: state.score,
       target: state.target, gold: state.gold, lives: state.lives, currentNodeId: state.currentNodeId,
+      infernoLevel: state.engulfmentLevel, infernoMultiplier: infernoMultiplier(state.engulfmentLevel),
+      shopVisit: state.shop ? { id: state.shop.visitId, engulfmentAttemptUsed: state.shop.engulfmentAttemptUsed } : null,
       build: summary.canonical, consumedHands: [...state.consumed], specialOfferEffects: structuredClone(state.specialOfferEffects),
     },
     events: state.historyV2.map(event => ({ ...event, timelineStatus: timelines.status(event) })),

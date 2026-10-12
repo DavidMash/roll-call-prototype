@@ -29,17 +29,17 @@ export function createStats(seed: string): RunStats {
   };
 }
 export function boardSnapshot(state: GameState): Board {
-  const { phase, round, target, score, gold, lives, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, flameTutorial,
+  const { phase, round, target, score, gold, lives, engulfmentLevel, nextShopVisitId, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, flameTutorial,
     manualRerollsRemaining, specialOfferEffects, suppressedPostBossRewardRounds, bossSilenced, dice, bonfires, wildfires, bonfireContributions, bonfireRoundContributions, chargeAttribution, hoodedFigure, chargeXMult, maxCharge, decisionId, sixPackXMult, sixPackUpperHandsPlayed,
     chargeArmed, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, lifetimeNormalShopGoldSpent, consumed, scorecardCycleConsumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, fetchTarget, lastRoundPayout, roundSummary, shop, flameSelection, specialOffer } = state;
-  return structuredClone({ phase, round, target, score, gold, lives, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, flameTutorial,
+  return structuredClone({ phase, round, target, score, gold, lives, engulfmentLevel, nextShopVisitId, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, flameTutorial,
     manualRerollsRemaining, specialOfferEffects, suppressedPostBossRewardRounds, bossSilenced, dice, bonfires, wildfires, bonfireContributions, bonfireRoundContributions, chargeAttribution, hoodedFigure,
     chargeXMult, maxCharge, chargeArmed, decisionId, sixPackXMult, sixPackUpperHandsPlayed, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, lifetimeNormalShopGoldSpent, consumed, scorecardCycleConsumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, fetchTarget, lastRoundPayout, roundSummary, shop, flameSelection, specialOffer });
 }
 export function exportRun(state: GameState) {
-  return { schemaVersion: 18, scoringModel: 'rarity-fetch-vintage-v1', ...state.stats,
+  return { schemaVersion: 19, scoringModel: 'engulfment-inferno-v1', ...state.stats,
     actions: structuredClone(state.actionJournal),
     scoreByHand: structuredClone(state.scoreByHand),
     bonfires: [...state.bonfires], wildfires: structuredClone(state.wildfires), finalHandLevels: structuredClone(state.handLevels),

@@ -98,6 +98,7 @@ export interface XMultFactor {
 export interface HandScoreAccumulator {
   hand: HandId;
   handLevel: number;
+  infernoMultiplier: number;
   dieIds: number[];
   basePips: number;
   baseMultiplier: number;
@@ -115,6 +116,7 @@ export interface HandScoreRecord {
   round: number;
   hand: HandId;
   handLevel: number;
+  infernoMultiplier: number;
   dieIds: number[];
   basePips: number;
   baseMultiplier: number;
@@ -161,6 +163,10 @@ export interface HandTrainingOffer { kind: 'hand'; hand: HandId; purchases: numb
 export interface TeamTrainingOffer { kind: 'team'; purchases: number }
 export type TrainingOffer = HandTrainingOffer | TeamTrainingOffer;
 export interface Shop {
+  /** Monotonic identity for one semantic Shop visit, including Bust/Bad Dream returns. */
+  visitId?: number;
+  /** Engulfment is committed at most once during this visit. */
+  engulfmentAttemptUsed?: boolean;
   /** Lifecycle ownership; post-Boss Shops remain in the completed Chapter until NEXT_CHAPTER. */
   kind?: 'between_rounds' | 'post_boss';
   /** False only during the one-second progression lock for this concrete Shop entry. */
@@ -253,6 +259,8 @@ export interface HoodedFigureState {
   issuedChapters: number[];
   /** Chapters whose challenge has already produced a Wildfire. */
   rewardedChapters: number[];
+  /** Chapters whose unfinished quest was permanently forfeited by Engulfment. */
+  forfeitedChapters?: number[];
   /** Chapter-start challenge state used by Time Travel. */
   challengeCheckpoint: ActiveHoodedChallenge | null;
   /** Chapter-start contribution state used by Time Travel. */
@@ -298,6 +306,10 @@ export interface Board {
   score: number;
   gold: number;
   lives: number;
+  /** Permanent in-run prestige level. Its multiplier is always derived as 25^level. */
+  engulfmentLevel: number;
+  /** Allocates semantic Shop visit identities; included in build-state rollback snapshots. */
+  nextShopVisitId: number;
   roundAttemptNumber: number;
   bossSchedule: Partial<Record<number, BossType>>;
   chapterPlans: Partial<Record<number, ChapterPlan>>;
@@ -656,6 +668,10 @@ export interface GameState extends GameStateBase {
   roundCheckpoint: RollbackState | null;
   badDreamCheckpoint: BadDreamCheckpoint | null;
 }
+export type EngulfmentAssetRef =
+  | { kind: 'ember'; flame: Flame; dieId: number }
+  | { kind: 'bonfire'; flame: Flame }
+  | { kind: 'wildfire'; flame: Flame };
 export type Action =
   | { type: 'PLAY'; hand: HandId; dieIds: number[]; decisionMs?: number }
   | { type: 'MANUAL_REROLL'; dieIds: number[] }
@@ -667,6 +683,7 @@ export type Action =
   | { type: 'TRAIN_ALL_HANDS' }
   | { type: 'CHOOSE_FLAME'; offerId: number; dieId: number }
   | { type: 'STOKE_FLAME'; dieId: number; amount: number }
+  | { type: 'ATTEMPT_ENGULFMENT'; assets: EngulfmentAssetRef[] }
   | { type: 'CONTINUE_ROUND_SUMMARY' }
   | { type: 'CONTINUE_FLAME_SELECTION' }
   | { type: 'SKIP_FLAME_SELECTION' }

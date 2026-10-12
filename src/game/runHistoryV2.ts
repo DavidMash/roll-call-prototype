@@ -1,11 +1,11 @@
 import type {
-  BossType, ChallengeId, Enhancement, Flame, GoldSource, GoldSpendSource, HandId, HandPlaySource,
+  BossType, ChallengeId, Enhancement, EngulfmentAssetRef, Flame, GoldSource, GoldSpendSource, HandId, HandPlaySource,
   Rarity, Rank, RunNodeType, SpecialOfferType, WildfireResolved,
 } from './types';
 import type { RoundGoalBreakdown } from './goals';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 3 as const;
-export const RUN_HISTORY_V2_RULESET = 'rarity-fetch-vintage-chapter-goals-v2' as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 4 as const;
+export const RUN_HISTORY_V2_RULESET = 'engulfment-inferno-v1' as const;
 
 export interface RunHistoryV2Coverage {
   complete: boolean;
@@ -61,6 +61,8 @@ export interface XMultContribution {
   factor: number;
   dieId?: number;
   input?: number;
+  /** Counterfactual factors attributing a consumed shared Charge factor to its producing Flames. */
+  chargeSources?: { flame: Flame; factor: number }[];
 }
 
 export interface ProbabilityCheck {
@@ -147,6 +149,7 @@ export interface HandScoredEvent extends RunHistoryV2Envelope {
   scoringDice: (HistoryDieState & { role: 'selected' | 'hitchhiker' })[];
   consumed: boolean;
   score: {
+    infernoMultiplier?: number;
     basePips: number;
     finalPips: number;
     baseMult: number;
@@ -163,6 +166,43 @@ export interface HandScoredEvent extends RunHistoryV2Envelope {
   xMultContributions: XMultContribution[];
   checks: ProbabilityCheck[];
   sideEffects: HandSideEffect[];
+}
+
+export interface ShopVisitStartedEvent extends RunHistoryV2Envelope {
+  kind: 'shop_visit_started';
+  shopVisitId: number;
+  reason: 'normal' | 'bust' | 'bad_dream';
+  engulfmentAttemptUsed: false;
+}
+
+export interface EngulfmentOfferingTelemetry {
+  asset: EngulfmentAssetRef;
+  investment: number;
+  recentContribution: number;
+  contributionShare: number;
+  importance: number;
+  fuel: number;
+}
+
+export interface EngulfmentAttemptedEvent extends RunHistoryV2Envelope {
+  kind: 'engulfment_attempted';
+  shopVisitId: number;
+  attemptNumber: 1;
+  infernoLevelBefore: number;
+  infernoLevelAfter: number;
+  infernoMultiplierBefore: number;
+  infernoMultiplierAfter: number;
+  offerings: EngulfmentOfferingTelemetry[];
+  totalOfferedFuel: number;
+  requiredFuel: number;
+  success: boolean;
+  overpayment: number;
+  upper: { levelsBefore: { hand: HandId; level: number }[]; average: number; unifiedLevel: number };
+  lower: { levelsBefore: { hand: HandId; level: number }[]; average: number; unifiedLevel: number };
+  flamesSnuffed: EngulfmentAssetRef[];
+  questForfeited: boolean;
+  forfeitedQuestId?: ChallengeId;
+  returnedToShop: true;
 }
 
 export interface ShopOffersPresentedEvent extends RunHistoryV2Envelope {
@@ -212,7 +252,7 @@ export interface ChargeChangedEvent extends RunHistoryV2Envelope {
 export interface HoodedChallengeChangedEvent extends RunHistoryV2Envelope {
   kind: 'hooded_challenge_changed';
   challengeId?: ChallengeId;
-  change: 'issued' | 'progress_committed' | 'completed' | 'rolled_back' | 'time_travel_reset' | 'bad_dream_reset' | 'expired' | 'returned'
+  change: 'issued' | 'progress_committed' | 'completed' | 'forfeited' | 'rolled_back' | 'time_travel_reset' | 'bad_dream_reset' | 'expired' | 'returned'
     | 'recipient_selected' | 'sacrifice_selected' | 'wildfire_created' | 'walked_away';
   target?: number;
   attemptProgress?: number;
@@ -303,7 +343,8 @@ export interface MapTransitionV2Event extends RunHistoryV2Envelope {
 }
 
 export type RunHistoryV2Event = RunStartedEvent | ChapterStartedEvent | RoundAttemptStartedEvent | RollBatchEvent
-  | HandScoredEvent | ShopOffersPresentedEvent | ShopTransactionEvent | FlameChangedEvent | ChargeChangedEvent
+  | HandScoredEvent | ShopVisitStartedEvent | ShopOffersPresentedEvent | ShopTransactionEvent | FlameChangedEvent | ChargeChangedEvent
+  | EngulfmentAttemptedEvent
   | HoodedChallengeChangedEvent | BossStateChangedEvent | ScorecardRefreshedEvent | RoundAttemptFinishedEvent
   | CheckpointRestoredEvent | RunFinishedEvent | ErrorEvent | MapTransitionV2Event;
 

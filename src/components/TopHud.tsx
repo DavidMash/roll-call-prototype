@@ -9,6 +9,7 @@ import { formatPlayerNumber } from '../game/copy';
 import { activeSpecialOfferStatusItems } from '../game/specialOffers';
 import { chapterPosition } from '../game/chapters';
 import type { FlameDetailsTarget } from './FlameDetailsModal';
+import { infernoMultiplier, infernoRoman } from '../game/engulfment';
 
 function HudStat({ testId, icon, label, value }: { testId: string; icon: string; label: string; value: number }) {
   const formatted = formatPlayerNumber(value);
@@ -19,7 +20,7 @@ function HudStat({ testId, icon, label, value }: { testId: string; icon: string;
   </div>;
 }
 
-export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, openRunInfo, openHelp, openRestoreLives, openFlameDetails, returnToTitle, onMenuOpenChange }: {
+export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, openRunInfo, openHelp, openRestoreLives, openFlameDetails, openEngulfment, returnToTitle, onMenuOpenChange }: {
   board: Board;
   speed: PlaybackSpeed;
   setSpeed: (speed: PlaybackSpeed) => void;
@@ -29,6 +30,7 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
   openHelp: () => void;
   openRestoreLives: () => void;
   openFlameDetails: (target: FlameDetailsTarget) => void;
+  openEngulfment: () => void;
   returnToTitle: () => void;
   onMenuOpenChange?: (opened: boolean) => void;
 }) {
@@ -36,6 +38,7 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
   const hearts = Array.from({ length: CONFIG.maxLives }, (_, index) => index < board.lives ? '♥' : '♡').join(' ');
   const specialOfferStatuses = activeSpecialOfferStatusItems(board.specialOfferEffects);
   const chapter = chapterPosition(board.round);
+  const ownsEngulfmentKey = board.bonfires.length > 0 || board.wildfires.length > 0;
   function launch(action: () => void) {
     setDrawerOpen(false);
     onMenuOpenChange?.(false);
@@ -80,6 +83,14 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
       <Text size="xs" fw={700} c="orange">WILDFIRES</Text>{board.wildfires.map(item => <Badge component="button" type="button" key={item.flame}
         size="xs" color="orange" variant="filled" className="flame-detail-trigger" aria-label={`View ${FLAMES[item.flame].name} Wildfire details`}
         onClick={() => openFlameDetails({ flame: item.flame, kind: 'wildfire' })}>W {FLAMES[item.flame].shortName}</Badge>)}
+    </Group>}
+    {(board.engulfmentLevel > 0 || (board.phase === 'shop' && ownsEngulfmentKey)) && <Group gap="xs" px="xs" py={3}
+      className="inferno-strip" aria-label="Inferno status">
+      {board.engulfmentLevel > 0 && <Text size="xs" fw={900} c="red">INFERNO {infernoRoman(board.engulfmentLevel)} · ×{formatPlayerNumber(infernoMultiplier(board.engulfmentLevel))}</Text>}
+      {board.phase === 'shop' && ownsEngulfmentKey && <Button size="compact-xs" color="red" variant="light"
+        data-testid="attempt-inferno" disabled={board.shop?.engulfmentAttemptUsed === true} onClick={openEngulfment}>
+        {board.shop?.engulfmentAttemptUsed ? 'INFERNO ATTEMPT USED' : 'ATTEMPT INFERNO'}
+      </Button>}
     </Group>}
     {specialOfferStatuses.length > 0 && <Group gap={4} px="xs" py={3} wrap="nowrap" className="special-effects-strip" data-tutorial="special-offer-status"
       aria-label="Active Special Offers" data-testid="special-effects-status">

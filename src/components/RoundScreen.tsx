@@ -69,7 +69,8 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     const xMult = composeXMult(contributions);
     const bossFactor = snapshot.bossFactor;
     return { ...base, hasXMult: contributions.length > 0, effectiveXMult: Number((xMult * bossFactor).toFixed(12)),
-      score: finalizeScore(base.pips, base.multiplier, xMult * bossFactor).finalScore,
+      infernoMultiplier: snapshot.infernoMultiplier,
+      score: finalizeScore(base.pips, base.multiplier, xMult * bossFactor, snapshot.infernoMultiplier).finalScore,
       danger: lastPlayDanger(board, hand), guaranteedWin: isGuaranteedWinningPlay(snapshot, hand) };
   })() : null;
   const manualAction: Action = { type: 'MANUAL_REROLL', dieIds: effectiveSelection.dieIds };
@@ -92,8 +93,10 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const speedEquation = event?.flame === 'speedDemon' && event.handScore && event.type !== 'SPEED_DEMON_REVEALED'
     ? (() => {
       const effectiveXMult = event.handScore.currentXMult * event.handScore.bossFactor;
-      const score = finalizeScore(event.handScore.currentPips, event.handScore.currentMultiplier, effectiveXMult).finalScore;
-      return formatScoreEquation(event.handScore.currentPips, event.handScore.currentMultiplier, effectiveXMult, score);
+      const score = finalizeScore(event.handScore.currentPips, event.handScore.currentMultiplier, effectiveXMult,
+        event.handScore.infernoMultiplier).finalScore;
+      return formatScoreEquation(event.handScore.currentPips, event.handScore.currentMultiplier, effectiveXMult, score,
+        event.handScore.infernoMultiplier);
     })() : null;
   function submitPlay() {
     const action: Action = { type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds };
@@ -177,7 +180,8 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
                 onClick={() => submit({ type: 'UNLOCK_WARDEN_DIE', dieId: selectedWardenDieId! })}>UNLOCK DIE</Button>
               : <Button className="play-action" size="sm" aria-label={preview ? playActionLabel(preview.danger, preview.guaranteedWin) : 'PLAY'} disabled={busy || !valid}
                 data-testid="play-action" data-tutorial="play-action" onClick={submitPlay}>
-                {speedEquation ?? (preview ? `${formatScoreEquation(preview.pips, preview.multiplier, preview.effectiveXMult, preview.score)} • ${playActionLabel(preview.danger, preview.guaranteedWin)}` : 'PLAY')}
+                {speedEquation ?? (preview ? `${formatScoreEquation(preview.pips, preview.multiplier, preview.effectiveXMult,
+                  preview.score, preview.infernoMultiplier)} • ${playActionLabel(preview.danger, preview.guaranteedWin)}` : 'PLAY')}
               </Button>} />
         </div>
     </Paper></RunActionPortal>

@@ -88,7 +88,7 @@ describe('run persistence', () => {
 
     const loaded = loadPersistedRun(storage, null)!;
     expect(loaded.hoodedFigure).toEqual({ seen: false, previousChallengeId: null, active: null,
-      interaction: null, issuedChapters: [], rewardedChapters: [], challengeCheckpoint: null,
+      interaction: null, issuedChapters: [], rewardedChapters: [], forfeitedChapters: [], challengeCheckpoint: null,
       contributionCheckpoint: null });
     expect(loaded.wildfires).toEqual([]);
     expect(rankedRecipients(loaded)).toEqual(['fullOfGrace', 'hailMary', 'minigun']);
@@ -233,5 +233,32 @@ describe('run persistence', () => {
     expect(loaded?.badDreamCheckpoint).toEqual({ chapter: 5, hoodedChallenge: state.hoodedFigure.active });
     expect(loaded?.badDreamCheckpoint).not.toHaveProperty('board');
     expect(loaded?.chapterLifecycle[5]?.specialOfferConsumed).toBe(true);
+  });
+
+  it('normalizes pre-Engulfment saves to Inferno ×1 and a fresh stable Shop visit', () => {
+    const storage = new MemoryStorage();
+    let state = newRun('legacy-pre-engulfment').state;
+    state.dice[0].value = 1;
+    state = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }).state;
+    state.phase = 'shop';
+    state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    delete (state.stats.handScores[0] as Partial<typeof state.stats.handScores[number]>).infernoMultiplier;
+    const historicalHand = state.historyV2.find(event => event.kind === 'hand_scored');
+    if (historicalHand?.kind === 'hand_scored') delete historicalHand.score.infernoMultiplier;
+    delete (state as Partial<typeof state>).engulfmentLevel;
+    delete (state as Partial<typeof state>).nextShopVisitId;
+    delete state.hoodedFigure.forfeitedChapters;
+    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: 4, state }));
+
+    const loaded = loadPersistedRun(storage, null)!;
+    expect(loaded.engulfmentLevel).toBe(0);
+    expect(loaded.nextShopVisitId).toBe(2);
+    expect(loaded.shop).toMatchObject({ visitId: 1, engulfmentAttemptUsed: false });
+    expect(loaded.hoodedFigure.forfeitedChapters).toEqual([]);
+    expect(loaded.stats.handScores[0].infernoMultiplier).toBe(1);
+    expect(loaded.historyV2.find(event => event.kind === 'hand_scored')).toMatchObject({ score: { infernoMultiplier: 1 } });
+
+    savePersistedRun(storage, loaded);
+    expect(loadPersistedRun(storage, null)?.shop).toMatchObject({ visitId: 1, engulfmentAttemptUsed: false });
   });
 });

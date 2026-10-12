@@ -20,6 +20,7 @@ import { appendCriticalDiagnostic, appendDebugTrace, createDebugTrace, normalize
 import { isRollbackState } from './rollback';
 import { enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey, usableManualRerolls } from './specialOffers';
 import { rankedRecipients, rankedSacrifices, resolveWildfire } from './hoodedFigure';
+import { engulfmentAssetKey, engulfmentAvailable, ownedEngulfmentAssets } from './engulfment';
 import type { Action, Board, GameState, GameStateBase, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
 
 const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`${seed}:round:${round}:attempt:${attempt}`);
@@ -32,9 +33,12 @@ function normalizedTrainingOffer(offer: TrainingOffer | { hand: HandId; purchase
   return { kind: 'hand', hand: offer.hand, purchases: offer.purchased ? 1 : 0 };
 }
 
-function normalizeShop(shop: Shop): void {
+function normalizeShop(shop: Shop, state: Pick<Board, 'nextShopVisitId'>): void {
   shop.trainingOffers = shop.trainingOffers.map(offer => normalizedTrainingOffer(offer));
   shop.lifeRestores = Math.max(0, Math.floor(shop.lifeRestores ?? 0));
+  if (!Number.isInteger(shop.visitId) || (shop.visitId ?? 0) < 1) shop.visitId = state.nextShopVisitId++;
+  else state.nextShopVisitId = Math.max(state.nextShopVisitId, shop.visitId! + 1);
+  shop.engulfmentAttemptUsed = !!shop.engulfmentAttemptUsed;
 }
 
 function normalizeSpecialRuntime(state: Board): void {
@@ -58,9 +62,10 @@ function normalizeHoodedRuntime(state: Board): void {
   state.bonfireRoundContributions ??= {};
   state.chargeAttribution ??= {};
   state.hoodedFigure ??= { seen: false, previousChallengeId: null, active: null, interaction: null,
-    issuedChapters: [], rewardedChapters: [], challengeCheckpoint: null, contributionCheckpoint: null };
+    issuedChapters: [], rewardedChapters: [], forfeitedChapters: [], challengeCheckpoint: null, contributionCheckpoint: null };
   state.hoodedFigure.issuedChapters ??= state.hoodedFigure.active ? [state.hoodedFigure.active.issuedChapter] : [];
   state.hoodedFigure.rewardedChapters ??= [];
+  state.hoodedFigure.forfeitedChapters ??= [];
   if (!Object.hasOwn(state.hoodedFigure, 'challengeCheckpoint')) {
     const legacyActive = state.hoodedFigure.active;
     state.hoodedFigure.challengeCheckpoint = legacyActive ? {
@@ -106,12 +111,16 @@ function normalizeHandFamilyFlameRuntime(state: Pick<Board, 'dice' | 'bonfires' 
 
 export function normalizeGameState(state: GameState): GameState {
   const next = structuredClone(state);
+  next.engulfmentLevel = Math.max(0, Math.floor(next.engulfmentLevel ?? 0));
+  next.nextShopVisitId = Math.max(1, Math.floor(next.nextShopVisitId ?? 1));
   const legacyStats = next.stats as typeof next.stats & { actions?: Action[] };
   next.actionJournal ??= structuredClone(legacyStats.actions ?? []);
   delete legacyStats.actions;
   next.nextPlaybackEventId = Math.max(0, Math.floor(next.nextPlaybackEventId
     ?? (next.history.length ? Math.max(...next.history.map(record => record.id)) + 1 : 0)));
   next.historyV2 ??= [];
+  for (const event of next.historyV2) if (event.kind === 'hand_scored') event.score.infernoMultiplier ??= 1;
+  for (const score of next.stats.handScores) score.infernoMultiplier ??= 1;
   next.historyV2TimelineId = Math.max(0, Math.floor(next.historyV2TimelineId ?? 0));
   next.historyV2Coverage ??= next.historyV2.some(event => event.kind === 'run_started')
     ? { complete: true, firstRound: 1, firstActionId: 0, firstSeq: 0 }
@@ -164,7 +173,7 @@ export function normalizeGameState(state: GameState): GameState {
   next.bonfires = [...new Set(next.bonfires.map(id => (id as string) === 'charge' ? 'momentum' : id).filter(isFlame))];
   if (next.shop) {
     next.shop.offers = next.shop.offers.filter(offer => isEnhancement(offer.enhancement));
-    normalizeShop(next.shop);
+    normalizeShop(next.shop, next);
     if (!next.shop.kind && next.phase === 'shop' && !next.bust && isBigBossRound(next.round)) next.shop.kind = 'post_boss';
   }
   if (next.roundCheckpoint) {
@@ -173,6 +182,8 @@ export function normalizeGameState(state: GameState): GameState {
       board: boardSnapshot(legacy as GameState), rngState: legacy.rngState, nextOfferId: legacy.nextOfferId,
     };
     const checkpoint = next.roundCheckpoint.board;
+    checkpoint.engulfmentLevel = Math.max(0, Math.floor(checkpoint.engulfmentLevel ?? 0));
+    checkpoint.nextShopVisitId = Math.max(1, Math.floor(checkpoint.nextShopVisitId ?? 1));
     checkpoint.scorecardCycleConsumed ??= checkpoint.consumed.filter(hand =>
       checkpoint.bossSilenced || checkpoint.boss?.type !== 'neglected'
       || !checkpoint.boss.neglectedHands.includes(hand));
@@ -184,7 +195,7 @@ export function normalizeGameState(state: GameState): GameState {
     normalizeSpecialRuntime(checkpoint);
     normalizeHoodedRuntime(checkpoint);
     normalizeChapterLifecycle(checkpoint);
-    if (checkpoint.shop) normalizeShop(checkpoint.shop);
+    if (checkpoint.shop) normalizeShop(checkpoint.shop, checkpoint);
     for (const die of checkpoint.dice) {
       for (const face of die.faces) {
         const legacyMagnetic = face as typeof face & { magneticUsed?: boolean; magneticDestinationUsed?: boolean };
@@ -421,6 +432,16 @@ export function validateAction(state: Board, action: Action): string | null {
     return null;
   }
   if (state.phase !== 'shop' || !state.shop) return 'This action requires an open shop.';
+  if (action.type === 'ATTEMPT_ENGULFMENT') {
+    if (!engulfmentAvailable(state)) return state.shop.engulfmentAttemptUsed
+      ? 'The Inferno has already been attempted during this Shop visit.'
+      : 'A Bonfire or Wildfire is required to attempt Engulfment.';
+    const selectedKeys = action.assets.map(engulfmentAssetKey);
+    if (new Set(selectedKeys).size !== selectedKeys.length) return 'Each offered Flame may be selected only once.';
+    const ownedKeys = new Set(ownedEngulfmentAssets(state).map(engulfmentAssetKey));
+    if (selectedKeys.some(key => !ownedKeys.has(key))) return 'One or more selected Flames are no longer owned.';
+    return null;
+  }
   if (action.type === 'UNLOCK_SHOP_EXIT') {
     if (state.shop.exitUnlocked !== false) return 'Shop progression is already available.';
     return null;
@@ -494,15 +515,30 @@ function execute(state: GameState, run: (resolver: Resolver) => void, random?: R
   return { state: next, events: resolver.events };
 }
 
+function rejectedActionHasLegacyMigration(state: GameState, normalized: GameState): boolean {
+  const comparable = structuredClone(normalized);
+  if (state.shop && comparable.shop) {
+    const allocatedVisit = !Object.hasOwn(state.shop, 'visitId');
+    if (allocatedVisit) delete comparable.shop.visitId;
+    if (!Object.hasOwn(state.shop, 'engulfmentAttemptUsed')) delete comparable.shop.engulfmentAttemptUsed;
+    // Hand-built current-state fixtures and pre-feature callers may omit only
+    // the new Shop lifecycle fields. Those additions are not a reason for a
+    // rejected action to return a different object.
+    if (allocatedVisit && Object.hasOwn(state, 'nextShopVisitId'))
+      comparable.nextShopVisitId = state.nextShopVisitId;
+  }
+  return JSON.stringify(comparable) !== JSON.stringify(state);
+}
+
 export function newRun(seed: string, random?: RandomSource, options?: { debugTraceMode?: DebugTraceMode }): Resolution {
   const state: GameState = {
     phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: CONFIG.baseTarget,
-    score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, roundAttemptNumber: 1,
+    score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, engulfmentLevel: 0, nextShopVisitId: 1, roundAttemptNumber: 1,
     bossSchedule: {}, chapterPlans: {}, presentedChapters: [], chapterLifecycle: {}, boss: null, bossSilenced: false, currentNodeId: '',
     bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], wildfires: [],
     bonfireContributions: {}, bonfireRoundContributions: {}, chargeAttribution: {},
     hoodedFigure: { seen: false, previousChallengeId: null, active: null, interaction: null,
-      issuedChapters: [], rewardedChapters: [], challengeCheckpoint: null, contributionCheckpoint: null }, chargeXMult: 1, maxCharge: 1,
+      issuedChapters: [], rewardedChapters: [], forfeitedChapters: [], challengeCheckpoint: null, contributionCheckpoint: null }, chargeXMult: 1, maxCharge: 1,
     chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
     fetchTarget: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
@@ -518,9 +554,11 @@ export function newRun(seed: string, random?: RandomSource, options?: { debugTra
 
 export function dispatch(state: GameState, action: Action, random?: RandomSource, options?: ResolverOptions): Resolution {
   const normalized = normalizeGameState(state);
-  const normalizationChangedState = JSON.stringify(normalized) !== JSON.stringify(state);
   const error = validateAction(normalized, action);
-  if (error) return { state: normalizationChangedState ? normalized : state, events: [], error };
+  if (error) return {
+    state: rejectedActionHasLegacyMigration(state, normalized) ? normalized : state,
+    events: [], error,
+  };
   const chosenSpecialOffer = action.type === 'CHOOSE_SPECIAL_OFFER'
     ? normalized.specialOffer?.offers.find(offer => offer.id === action.offerId) : null;
   const rngStateOverride = random ? undefined : action.type === 'NEXT_ROUND' || action.type === 'NEXT_CHAPTER'
@@ -637,6 +675,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         resolver.openShop();
         break;
       }
+      case 'ATTEMPT_ENGULFMENT': resolver.attemptEngulfment(action.assets); break;
       case 'ADVANCE_HOODED_FIGURE': resolver.advanceHoodedFigure(); break;
       case 'SELECT_WILDFIRE_RECIPIENT': resolver.selectWildfireRecipient(action.flame); break;
       case 'SELECT_WILDFIRE_SACRIFICE': resolver.selectWildfireSacrifice(action.flame); break;
