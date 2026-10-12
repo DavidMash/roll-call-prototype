@@ -157,7 +157,7 @@ Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a f
 | Third Rail | Each gameplay die that rolls a 3 adds `0.5p` Charge |
 | Jump Start | Each manual Reroll spent adds `2p` Charge |
 | Power Surge | The single Ultimate-ranked hand triples current Charge |
-| Speed Demon | Actual unblocked decision time: full strength for 1 second, then smooth decay to ×1 at about 10 seconds; peak `1 + 8p` |
+| Speed Demon | Actual unblocked decision time: full strength for 1 second, then smooth decay to ×1 at about 10 seconds; peak `1 + 4p` (×5 maximum) |
 | Six Pack | Starts each Round at `S = 1 + 5p`; after `n` played Upper hands its factor is `1 + (S - 1)(1 - n/6)`, floored at ×1 |
 | Flux Capacitor | One Magnetic source activation that pulls `m` Magnetic faces multiplies current Charge by `1 + mp`, clamped to Max Charge |
 | Fat Cat | A scoring Golden or Jackpot face enables `1 + 4p`, max ×5 |

@@ -81,7 +81,6 @@ test('R3 normal order is Mini-Boss summary, Hooded return, Special Offer, then S
   await expect(page.getByRole('heading', { name: 'SPECIAL OFFER' })).toBeVisible();
   const ordinaryOffer = page.locator('.special-offer-card').filter({ hasNotText: 'Time Travel' }).first();
   await ordinaryOffer.getByRole('button', { name: 'CHOOSE' }).click();
-  await page.getByRole('button', { name: /CONTINUE/ }).click();
   await expect(page.getByText('SHOP', { exact: true }).first()).toBeVisible();
   const final = await persistedState(page);
   const opened = final.historyV2.findIndex(event => event.kind === 'shop_offers_presented' && event.pool === 'special_offer');
@@ -100,7 +99,6 @@ test('R3 Time Travel rewinds before any Hooded return and restores the Chapter c
 
   const timeTravel = page.locator('.special-offer-card').filter({ hasText: 'Time Travel' });
   await timeTravel.getByRole('button', { name: 'CHOOSE' }).click();
-  await page.getByRole('button', { name: /CONTINUE/ }).click();
   await expect(page.getByTestId('challenge-tracker')).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Hooded Figure encounter' })).toHaveCount(0);
 

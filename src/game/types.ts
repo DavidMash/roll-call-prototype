@@ -163,6 +163,8 @@ export type TrainingOffer = HandTrainingOffer | TeamTrainingOffer;
 export interface Shop {
   /** Lifecycle ownership; post-Boss Shops remain in the completed Chapter until NEXT_CHAPTER. */
   kind?: 'between_rounds' | 'post_boss';
+  /** False only during the one-second progression lock for this concrete Shop entry. */
+  exitUnlocked?: boolean;
   offers: Offer[];
   trainingOffers: TrainingOffer[];
   diceRerolls: number;
@@ -534,6 +536,7 @@ export type EventType =
   | 'SHOP_OPENED' | 'OFFER_PURCHASED' | 'TRAINING_PURCHASED' | 'OFFERS_REFRESHED' | 'GOLD_SPENT'
   | 'FLAME_SELECTION_OPENED' | 'FLAME_OFFERS_REFRESHED' | 'FLAME_ACQUIRED' | 'FLAME_REPLACED'
   | 'SPECIAL_OFFER_OPENED' | 'SPECIAL_OFFER_SELECTED' | 'SPECIAL_EFFECT_TRIGGERED'
+  | 'SPECIAL_OFFER_SKIPPED'
   | 'FLAME_SKIPPED' | 'FLAME_INVESTED' | 'BONFIRE_CREATED' | 'FLAME_TRIGGERED' | 'HAND_XMULT_CHANGED'
   | 'TARGET_PRACTICE_SELECTED' | 'CHARGE_CHANGED' | 'CHARGE_ARMED' | 'HOT_STREAK_CHANGED'
   | 'SPEED_DEMON_REVEALED' | 'SIX_PACK_CHANGED'
@@ -666,8 +669,10 @@ export type Action =
   | { type: 'STOKE_FLAME'; dieId: number; amount: number }
   | { type: 'CONTINUE_ROUND_SUMMARY' }
   | { type: 'CONTINUE_FLAME_SELECTION' }
+  | { type: 'SKIP_FLAME_SELECTION' }
   | { type: 'CHOOSE_SPECIAL_OFFER'; offerId: number }
   | { type: 'CONTINUE_SPECIAL_OFFER' }
+  | { type: 'SKIP_SPECIAL_OFFER' }
   | { type: 'ADVANCE_HOODED_FIGURE' }
   | { type: 'SELECT_WILDFIRE_RECIPIENT'; flame: Flame }
   | { type: 'SELECT_WILDFIRE_SACRIFICE'; flame: Flame }
@@ -679,6 +684,7 @@ export type Action =
   | { type: 'RETRY_ROUND' }
   | { type: 'REROLL_DICE' }
   | { type: 'REROLL_OFFERS' }
+  | { type: 'UNLOCK_SHOP_EXIT' }
   | { type: 'NEXT_CHAPTER' }
   | { type: 'NEXT_ROUND' };
 export interface Resolution { state: GameState; events: GameEvent[]; error?: string }

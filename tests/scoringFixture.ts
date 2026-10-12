@@ -29,7 +29,8 @@ export function scoringPlaybackRun() {
         action = game.specialOffer!.acquired ? { type: 'CONTINUE_SPECIAL_OFFER' }
           : { type: 'CHOOSE_SPECIAL_OFFER', offerId: offer.id };
       } else if (game.phase === 'shop') {
-        if (game.bust) action = { type: 'RETRY_ROUND' };
+        if (game.shop!.exitUnlocked === false) action = { type: 'UNLOCK_SHOP_EXIT' };
+        else if (game.bust) action = { type: 'RETRY_ROUND' };
         else {
         const offer = game.shop!.offers.find(item => !item.purchased && !purchased.has(item.enhancement)
           && ['bonus', 'hitchhiker'].includes(item.enhancement)

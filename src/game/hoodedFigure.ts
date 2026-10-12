@@ -231,7 +231,7 @@ export const transferMultiplier = (sacrificedAverage: number) => 1 + HOODED_FIGU
 export const roundHalf = (value: number) => Math.round(value * 2) / 2;
 
 export function bonfireMaximum(id: Flame): number {
-  if (id === 'targetPractice' || id === 'speedDemon' || id === 'hotStreak'
+  if (id === 'targetPractice' || id === 'hotStreak'
     || id === 'straightShooter' || id === 'doubleDown' || id === 'threesCompany' || id === 'boxSet') return 9;
   if (id === 'sixPack') return 6;
   return 5;

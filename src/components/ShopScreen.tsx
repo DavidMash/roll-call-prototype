@@ -10,7 +10,7 @@ import { formatPlayerNumber } from '../game/copy';
 import { enhancementOfferIsFree, trainingOfferIsFree } from '../game/specialOffers';
 import { chapterLabel, chapterRoundForRound } from '../game/chapters';
 import { RunActionLayout, RunActionPortal } from './RunActionRow';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
 
@@ -26,6 +26,13 @@ export function ShopScreen({ board, event, busy, selectedOffer, setSelectedOffer
   const retryRound = chapterRoundForRound(board.round);
   const rerollCost = diceRerollCost(shop.diceRerolls);
   const [showProgressNudge, setShowProgressNudge] = useState(false);
+  const exitLockStartedAt = useRef(Date.now());
+  useEffect(() => {
+    if (shop.exitUnlocked !== false || busy) return;
+    const remaining = Math.max(0, 1000 - (Date.now() - exitLockStartedAt.current));
+    const timer = window.setTimeout(() => submit({ type: 'UNLOCK_SHOP_EXIT' }), remaining);
+    return () => window.clearTimeout(timer);
+  }, [busy, shop.exitUnlocked, submit]);
   useEffect(() => {
     setShowProgressNudge(false);
     if (!tutorialProgressNudgeEligible) return;
@@ -63,7 +70,7 @@ export function ShopScreen({ board, event, busy, selectedOffer, setSelectedOffer
       left={<Button className="shop-dice-reroll" size="sm" variant="default" disabled={busy || board.gold < rerollCost}
         aria-label={`REROLL ALL DICE FOR ${formatPlayerNumber(rerollCost)} GOLD`} data-testid="shop-dice-reroll"
         onClick={() => submit({ type: 'REROLL_DICE' })}>REROLL ALL DICE FOR {formatPlayerNumber(rerollCost)} GOLD</Button>}
-      right={<Button size="sm" disabled={busy} aria-label={returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : nextChapter ? 'NEXT CHAPTER' : 'NEXT ROUND'}
+      right={<Button size="sm" disabled={busy || shop.exitUnlocked === false} aria-label={returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : nextChapter ? 'NEXT CHAPTER' : 'NEXT ROUND'}
         className={showProgressNudge ? 'tutorial-progression-nudge' : undefined}
         data-testid="shop-progression-action" data-tutorial-nudge={showProgressNudge || undefined}
         color={returnedFromBust ? 'red' : undefined} onClick={() => submit(returnedFromBust ? { type: 'RETRY_ROUND' } : nextChapter ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' })}>

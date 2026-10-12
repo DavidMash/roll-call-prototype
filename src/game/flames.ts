@@ -1,5 +1,5 @@
 import { activeFace } from './dice';
-import { stacks } from './enhancements';
+import { magneticPullCapable, stacks } from './enhancements';
 import { lastPlayDanger } from './bosses';
 import { LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from './hands';
 import { finalizeScore, handScore } from './scoring';
@@ -25,7 +25,7 @@ export const FLAMES: Record<Flame, FlameDefinition> = {
   thirdRail: { name: 'Third Rail', shortName: 'RAIL', rarity: 'uncommon', affectsXMult: true, description: 'Rolling 3s builds Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
   jumpStart: { name: 'Jump Start', shortName: 'JUMP', rarity: 'uncommon', affectsXMult: true, description: 'Rerolls build Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
   powerSurge: { name: 'Power Surge', shortName: 'SURGE', rarity: 'rare', affectsXMult: true, description: 'Playing your highest level hand triples your current Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
-  speedDemon: { name: 'Speed Demon', shortName: 'SPEED', rarity: 'rare', affectsXMult: true, description: 'Play quickly for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  speedDemon: { name: 'Speed Demon', shortName: 'SPEED', rarity: 'rare', affectsXMult: true, description: 'Play quickly for up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
   sixPack: { name: 'Six Pack', shortName: 'SIX', rarity: 'rare', affectsXMult: true, description: 'Starts at up to ×6 XMult. Reduces when an Upper hand is played.', bonfireDescription: GLOBAL_BONFIRE },
   fluxCapacitor: { name: 'Flux Capacitor', shortName: 'FLUX', rarity: 'rare', affectsXMult: true, description: 'Pulling Magnetic faces multiplies your XMult Charge.', bonfireDescription: 'Charge can now be used on any hand.' },
   fatCat: { name: 'Fat Cat', shortName: 'CAT', rarity: 'uncommon', affectsXMult: true, description: 'Hands with Golden or Jackpot gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
@@ -65,7 +65,7 @@ export const fluxCapacitorChargeMultiplier = (investedGold: number, pulledMagnet
 export const handFamilyFlameMultiplier = (investedGold: number) => 1 + 8 * flameProgress(investedGold);
 export const speedDemonMultiplier = (investedGold: number, decisionMs: number) => {
   const strength = decisionMs <= 1000 ? 1 : Math.max(0, Math.min(1, (10000 - decisionMs) / 9000));
-  return Number((1 + 8 * flameProgress(investedGold) * strength).toFixed(12));
+  return Number((1 + 4 * flameProgress(investedGold) * strength).toFixed(12));
 };
 export const sixPackStartingMultiplier = (investedGold: number) => 1 + 5 * flameProgress(investedGold);
 export const sixPackMultiplierAfterUpperHands = (startingFactor: number, upperHandsPlayed: number) =>
@@ -346,6 +346,20 @@ export const ownedFlameIds = (state: Pick<GameState, 'dice' | 'bonfires' | 'wild
   ...state.wildfires.map(wildfire => wildfire.flame),
   ...state.dice.map(die => activeFlameId(die.flame)).filter((id): id is Flame => id !== null),
 ]);
+const hasBuildEnhancement = (state: Pick<GameState, 'dice'>, enhancements: readonly Parameters<typeof stacks>[1][]) =>
+  state.dice.some(die => die.owner === 'player'
+    && die.faces.some(face => enhancements.some(enhancement => stacks(face, enhancement) > 0)));
+
+/** Build prerequisites required by actual Flame activation paths. Self-enabling Flames remain unrestricted. */
+export function flameEligible(state: Pick<GameState, 'dice' | 'bonfires' | 'wildfires'>, id: Flame): boolean {
+  if (id === 'fatCat') return hasBuildEnhancement(state, ['golden', 'jackpot']);
+  if (id === 'vineyard') return hasBuildEnhancement(state, ['vintage']);
+  if (id === 'fluxCapacitor') return magneticPullCapable(state.dice);
+  return true;
+}
+
+export const eligibleFlameIds = (state: Pick<GameState, 'dice' | 'bonfires' | 'wildfires'>): Flame[] =>
+  FLAME_IDS.filter(id => flameEligible(state, id));
 export const isHandFamilyFlame = (id: Flame | null | undefined): id is HandFamilyFlame =>
   id !== null && id !== undefined && Object.hasOwn(HAND_FAMILY_FLAMES, id);
 export function initialHandFamilyFlameStages(state: Pick<GameState, 'dice' | 'bonfires' | 'wildfires'>): Pick<Partial<Record<Flame, import('./types').HandFamilyFlameStage>>, HandFamilyFlame> {

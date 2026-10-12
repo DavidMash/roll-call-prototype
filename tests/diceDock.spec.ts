@@ -205,7 +205,7 @@ test('Special Offer and Flame Selection retain the same compact dock grammar', a
   state.phase = 'specialOffer';
   state.specialOffer = { offers: [{ id: 1, type: 'carePackage' }], acquired: false };
   await installRun(page, state);
-  await expect(page.getByTestId('run-action-row').getByRole('button')).toHaveCount(0);
+  await expect(page.getByTestId('run-action-row').getByRole('button', { name: 'SKIP REWARD', exact: true })).toBeVisible();
   expect(await page.getByTestId('run-action-row').evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(46);
   await expect(page.getByTestId('dice-dock').locator('.die-number')).toHaveText(faces);
   await expect(page.getByTestId('dice-dock').locator('.die-enhancement-strip')).toHaveCount(5);
@@ -220,6 +220,7 @@ test('Special Offer and Flame Selection retain the same compact dock grammar', a
   state.specialOffer = null;
   state.flameSelection = { offers: [{ id: 2, flame: 'ultimate' }], acquired: false };
   await installRun(page, state);
+  await expect(page.getByTestId('run-action-row').getByRole('button', { name: 'SKIP REWARD', exact: true })).toBeVisible();
   await expect(page.getByTestId('dice-dock').locator('.die-number')).toHaveText(faces);
   await expect(page.locator('[data-testid="dice-dock"]')).toHaveCount(1);
   expect(await page.evaluate(() => {

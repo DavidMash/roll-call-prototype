@@ -199,7 +199,7 @@ describe('contribution ranking and Wildfire formulas', () => {
     const projected = { flame: 'speedDemon', sacrificedFlame: 'vineyard', sacrificedAverage: 5,
       transferMultiplier: 6, resolved: resolveWildfire('speedDemon', 6) } as const;
     expect(wildfireFactor(projected, 1)).toBe(1);
-    expect(wildfireFactor(projected, 9)).toBe(54);
+    expect(wildfireFactor(projected, 5)).toBe(30);
   });
 
   it('scales every Charge family effect and Max Charge to half steps', () => {

@@ -36,10 +36,8 @@ describe('Chapter round presentation', () => {
     ensureChapterPlan(state, 2);
     state = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 101 }, constant()).state;
     expect(state.round).toBe(7);
-    const replay = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant());
-    expect(replay.state.round).toBe(7);
-    expect(replay.events.some(event => event.type === 'CHAPTER_STARTED')).toBe(false);
-    expect(replay.state.chapterLifecycle[2]?.specialOfferConsumed).toBe(true);
+    expect(state.phase).toBe('round');
+    expect(state.chapterLifecycle[2]?.specialOfferConsumed).toBe(true);
   });
 });
 
@@ -96,6 +94,7 @@ describe('Chapter encounter planning', () => {
     expect(state.currentNodeId).toBe('shop:after-round:6');
     expect(state.shop?.kind).toBe('post_boss');
 
+    state.shop!.exitUnlocked = true;
     const next = dispatch(state, { type: 'NEXT_CHAPTER' }, constant());
     expect(next.state.round).toBe(7);
     expect(next.events.slice(0, 2).map(event => event.type)).toEqual(['CHAPTER_STARTED', 'MAP_TRANSITION']);

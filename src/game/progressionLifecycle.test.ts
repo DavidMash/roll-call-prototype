@@ -249,7 +249,7 @@ describe('progression-only Bad Dream', () => {
     let state = chooseBadDream(challenge(5, 1));
     expect(state.badDreamCheckpoint).toEqual({ chapter: 5, hoodedChallenge: challenge(5, 1) });
     expect(state.badDreamCheckpoint).not.toHaveProperty('board');
-    state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
+    state = dispatch(state, { type: 'UNLOCK_SHOP_EXIT' }, constant()).state;
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant()).state;
     state.hoodedFigure.active!.committed.value = 2;
     state.hoodedFigure.active!.attempt.value = 2;
@@ -270,7 +270,7 @@ describe('progression-only Bad Dream', () => {
 
   it('preserves a Wildfire claimed after Bad Dream selection and never restores the old unfinished challenge', () => {
     let state = chooseBadDream(challenge(5, 1));
-    state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
+    state = dispatch(state, { type: 'UNLOCK_SHOP_EXIT' }, constant()).state;
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant()).state;
     state.hoodedFigure.active = null;
     state.hoodedFigure.rewardedChapters = [5];
@@ -309,7 +309,7 @@ describe('one-time Chapter Special Offer', () => {
     state.roundSummary = null;
     state.specialOffer = { offers: [{ id: 903, type: 'silence' }], acquired: false };
     let current = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 903 }, constant()).state;
-    current = dispatch(current, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
+    current = dispatch(current, { type: 'UNLOCK_SHOP_EXIT' }, constant()).state;
     current = dispatch(current, { type: 'NEXT_ROUND' }, constant()).state;
     current.target = 1_000_000;
     current.stats.rounds.at(-1)!.target = current.target;

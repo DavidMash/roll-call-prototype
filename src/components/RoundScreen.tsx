@@ -86,7 +86,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const deadBoard = !hasPlayableHand(encounterDice, unavailableHands, requiredDieIds);
   const chargeDieIds = encounterDice.filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id);
   const chargeGloballyUnlocked = hasChargeBonfire(board);
-  const speedStrength = (speedDemonMultiplier(100, decisionMs) - 1) / 8;
+  const speedStrength = (speedDemonMultiplier(100, decisionMs) - 1) / 4;
   const speedReveal = event?.type === 'SPEED_DEMON_REVEALED' ? event : null;
   const scorecardRefreshing = event?.type === 'SCORECARD_REFRESHED';
   const speedEquation = event?.flame === 'speedDemon' && event.handScore && event.type !== 'SPEED_DEMON_REVEALED'

@@ -65,11 +65,14 @@ test('filled scorecard reactivates Used rows and shows the exact accessible cele
 for (const speed of ['fast', 'instant'] as const) {
   test(`${speed} playback still presents the scorecard refresh moment`, async ({ page }) => {
     await install(page, cycleState(`scorecard-cycle-${speed}`), speed);
+    await page.clock.install();
+    await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000);
     await playFinalHand(page);
     const celebration = page.getByTestId('scorecard-refresh-celebration');
-    // Capture the short instant-playback announcement atomically before its timer removes it.
+    for (let step = 0; step < 100 && await celebration.count() === 0; step++) await page.clock.runFor(50);
     await expect(celebration).toHaveText('SCORECARD FILLEDALL HANDS REFRESHED');
-    await expect(celebration).toHaveCount(0, { timeout: 2_000 });
+    await page.clock.runFor(1000);
+    await expect(celebration).toHaveCount(0);
   });
 }
 

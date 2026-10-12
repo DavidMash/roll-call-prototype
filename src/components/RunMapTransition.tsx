@@ -147,6 +147,7 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
   const bossColor = SCREEN_THEMES[plan?.boss ?? 'round'].accent;
 
   return <Paper className={`run-map-transition ${event.boss ? 'boss-reveal' : ''} ${exiting ? 'map-exiting' : ''}`}
+    data-direction={event.direction ?? 'forward'}
     data-testid="run-map-transition" data-destination={destination} role="status" aria-live="polite"
     style={{ '--map-exit-duration': `${MAP_EXIT_MS}ms`, '--chapter-mini': miniBossColor,
       '--chapter-boss': bossColor } as React.CSSProperties}>

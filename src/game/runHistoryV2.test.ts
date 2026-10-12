@@ -238,7 +238,7 @@ describe('Run History V2 lifecycle, timeline, renderer, and summary', () => {
     dream.phase = 'specialOffer';
     dream.specialOffer = { offers: [{ id: 700, type: 'badDream' }], acquired: false };
     dream = dispatch(dream, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 700 }, constant()).state;
-    dream = dispatch(dream, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
+    dream = dispatch(dream, { type: 'UNLOCK_SHOP_EXIT' }, constant()).state;
     dream = dispatch(dream, { type: 'NEXT_ROUND' }, constant()).state;
     dream.lives = 1;
     dream = forceBust(dream);
@@ -329,8 +329,9 @@ describe('Run History V2 instrumentation safety and size', () => {
         : { type: 'CHOOSE_SPECIAL_OFFER', offerId: state.specialOffer!.offers[0].id };
       else if (state.phase === 'hoodedFigure') action = state.hoodedFigure.interaction?.stage === 'story'
         ? { type: 'ADVANCE_HOODED_FIGURE' } : { type: 'WALK_AWAY_WILDFIRE' };
-      else if (state.phase === 'shop') action = state.bust ? { type: 'RETRY_ROUND' }
-        : state.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' };
+      else if (state.phase === 'shop') action = state.shop?.exitUnlocked === false ? { type: 'UNLOCK_SHOP_EXIT' }
+        : state.bust ? { type: 'RETRY_ROUND' }
+          : state.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' };
       else if (state.phase === 'bust') action = { type: 'RETRY_ROUND' };
       else break;
       const result = dispatch(state, action);
@@ -358,10 +359,10 @@ describe('Run History V2 instrumentation safety and size', () => {
     expect(state.debugTrace.records).toHaveLength(DEBUG_TRACE_MAX_RECORDS);
     expect(state.debugTrace.droppedRecords).toBeGreaterThan(0);
     expect({ legacyEntries: state.history.length, v2Entries: state.historyV2.length, ...sizes }).toEqual({
-      legacyEntries: 0, v2Entries: 656, legacyHistory: 2, v2History: 321_846,
-      renderedV2: 32_518, normalExport: 38_391, debugTrace: 44_643,
-      runStats: 75_054, rollbackState: 5_274, actionJournal: 7_954,
-      persistedState: 383_660, fullState: 460_446,
+      legacyEntries: 0, v2Entries: 656, legacyHistory: 2, v2History: 321_923,
+      renderedV2: 32_521, normalExport: 38_392, debugTrace: 43_821,
+      runStats: 75_058, rollbackState: 5_293, actionJournal: 8_942,
+      persistedState: 384_743, fullState: 460_711,
     });
   }, 30_000);
 });

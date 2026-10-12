@@ -249,7 +249,7 @@ describe('tutorial guided interaction beats', () => {
 
     session.game.phase = 'shop';
     session.scenario.firstFlame = 'doubleDown';
-    session.scenario.completedBeatIds.push('flame-details');
+    session.scenario.completedBeatIds.push('flame-basics', 'flame-xmult', 'flame-ember', 'flame-details');
     expect(activeTutorialBeat(session, ui({ flameDetailsOpen: true }))).toMatchObject({
       id: 'flame-stoke',
       interactiveTargets: ['[data-tutorial="stoke"] button', '[data-tutorial="stoke"] input'],

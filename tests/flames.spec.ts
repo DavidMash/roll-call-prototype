@@ -63,8 +63,10 @@ function flameRewardState(seed: string) {
     if (game.phase === 'round') {
       game = dispatch(game, automaticAction(game)).state;
     } else if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
-    else if (game.phase === 'shop') game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' }
-      : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
+    else if (game.phase === 'shop') game = dispatch(game, game.shop?.exitUnlocked === false
+      ? { type: 'UNLOCK_SHOP_EXIT' }
+      : game.bust ? { type: 'RETRY_ROUND' }
+        : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
     else if (game.phase === 'specialOffer') {
       const offer = game.specialOffer!.offers.find(item => item.type !== 'timeTravel') ?? game.specialOffer!.offers[0];
       game = dispatch(game, game.specialOffer!.acquired
@@ -127,13 +129,10 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId: 0 }).state;
   await ready(page);
 
-  expect(game.phase).toBe('flameSelection');
-  await expect(page.getByTestId('active-flame-minigun')).toHaveAccessibleName('View Minigun Flame details, Ember at 0 of 100 Gold');
-  await page.screenshot({ path: test.info().outputPath('flame-selection-acquired-mobile.png'), fullPage: true });
-  await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
-  game = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
-  await ready(page);
   expect(game.phase).toBe('shop');
+  await expect(page.getByTestId('active-flame-minigun')).toHaveAccessibleName('View Minigun Flame details, Ember at 0 of 100 Gold');
+  await expect(page.getByRole('button', { name: /CONTINUE TO SHOP/i })).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath('flame-selection-claimed-shop-mobile.png'), fullPage: true });
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
   await expect(page.getByRole('button', { name: new RegExp(`^Die 1, face ${rewardFaces[0]},.*Ember ${FLAMES.minigun.name}`) })).toBeVisible();
   await expect(page.locator('.driver-popover')).toContainText('NEW EMBER');
@@ -166,6 +165,7 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: 'NEXT CHAPTER', exact: true }).click();
+  if (game.shop?.exitUnlocked === false) game = dispatch(game, { type: 'UNLOCK_SHOP_EXIT' }).state;
   game = dispatch(game, { type: 'NEXT_CHAPTER' }).state;
   await ready(page);
   const choice = bestHand(game, 0, true)!;
@@ -208,11 +208,6 @@ test('Flame Selection only acquires while Shop Manage Die supports arbitrary Sto
   await ready(page);
   const active = page.getByTestId(`active-flame-${offer.flame}`);
   await expect(active).toHaveAccessibleName(`View ${FLAMES[offer.flame].name} Flame details, Ember at 0 of 100 Gold`);
-  await expect(page.getByText(/Donate/i)).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Stoke/ })).toHaveCount(0);
-  await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
-  game = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
-  await ready(page);
   expect(game.phase).toBe('shop');
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
   await expect(page.locator('.driver-popover')).toContainText('NEW EMBER');
@@ -236,8 +231,11 @@ test('Flame Selection only acquires while Shop Manage Die supports arbitrary Sto
   // A separate deterministic run can use the same primary action without taking an offer.
   await page.evaluate(key => localStorage.removeItem(key), RUN_STORAGE_KEY);
   game = await reachReward(page, seed);
-  await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
-  game = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
+  await page.getByRole('button', { name: 'SKIP REWARD', exact: true }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Skip this reward?' });
+  await expect(confirmation).toContainText("You haven't claimed a reward. Are you sure you want to continue without one?");
+  await confirmation.getByRole('button', { name: 'SKIP REWARD', exact: true }).click();
+  game = dispatch(game, { type: 'SKIP_FLAME_SELECTION' }).state;
   await ready(page);
   expect(game.phase).toBe('shop');
   expect(game.historyV2).toContainEqual(expect.objectContaining({ kind: 'flame_changed', change: { type: 'skipped' } }));

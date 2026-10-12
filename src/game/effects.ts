@@ -2,7 +2,7 @@ import { bossRewardForRound, CONFIG, interestForGold, roundReward } from './conf
 import { activeFace, rollPhysicalDie, scoringPips, weightedSourceFace } from './dice';
 import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, loneWolfPipsFactor, personalTrainerChance, stacks, tankMultiplierFactor, VINTAGE_BASE_SELL_CAP } from './enhancements';
 import {
-  activeFlameId, activeFlameInvestment, captureHandStart, FLAMES, FLAME_IDS, handXMultContributions,
+  activeFlameId, activeFlameInvestment, captureHandStart, eligibleFlameIds, FLAMES, handXMultContributions,
   fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, hasChargeBonfire, HOT_STREAK_SEQUENCE, isChargeFlame,
   initialHandFamilyFlameStages, jumpStartChargeGain, momentumChargeGain, ownedFlameIds, recalculateMaxCharge,
   sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, thirdRailChargeGain,
@@ -1830,7 +1830,7 @@ export class Resolver {
   }
   freshFlameOffers(): void {
     const owned = ownedFlameIds(this.state);
-    const pool = FLAME_IDS.filter(id => !owned.has(id));
+    const pool = eligibleFlameIds(this.state).filter(id => !owned.has(id));
     const selected = rarityFirstSelection(pool, 3, id => FLAMES[id].rarity, OFFER_RARITY_WEIGHTS.flame, this.rng);
     this.state.flameSelection!.offers = selected.map(flame => ({ id: this.state.nextOfferId++, flame }));
     const offerSet = selected.map(id => ({ name: FLAMES[id].name, rarity: FLAMES[id].rarity }));
@@ -1876,7 +1876,8 @@ export class Resolver {
     this.state.boss = null; this.state.bossSilenced = false;
     this.state.phase = 'shop'; this.state.flameSelection = null; this.state.specialOffer = null; this.state.roundSummary = null;
     const postBoss = isBigBossRound(this.state.round);
-    this.state.shop = { kind: postBoss ? 'post_boss' : 'between_rounds', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
+    this.state.shop = { kind: postBoss ? 'post_boss' : 'between_rounds', exitUnlocked: false,
+      offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
       freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
     const upcomingRound = this.state.round + 1;
     const upcomingBoss = this.state.bossSchedule[upcomingRound];

@@ -235,7 +235,6 @@ test('the post-Boss Shop stays in the completed Chapter until NEXT CHAPTER start
 
   await page.goto(`/?seed=${state.seed}&speed=normal`);
   await installRun(page, state);
-  await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
 
   const map = page.getByTestId('run-map-transition');
   await expect(map).toBeVisible();

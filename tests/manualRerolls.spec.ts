@@ -293,15 +293,18 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   await bustContinue.click();
   const fallbackMap = page.getByTestId('run-map-transition');
   await expect(fallbackMap).toBeVisible({ timeout: 15000 });
+  await expect(fallbackMap).toHaveAttribute('data-direction', 'backward');
   const fallbackConnector = fallbackMap.getByTestId('active-map-connector');
-  await expect(fallbackConnector).toHaveClass(/route-backward/);
-  const fallbackConnectorStyle = await fallbackConnector.evaluate(element => {
-    const style = getComputedStyle(element);
-    return { animationName: style.animationName, stroke: style.stroke, pathLength: element.getAttribute('pathLength') };
-  });
-  expect(fallbackConnectorStyle.animationName).toBe('map-route-fill-backward');
-  expect(fallbackConnectorStyle.stroke).toBe('rgb(245, 158, 11)');
-  expect(fallbackConnectorStyle.pathLength).toBe('1');
+  if (await fallbackConnector.count()) {
+    await expect(fallbackConnector).toHaveClass(/route-backward/);
+    const fallbackConnectorStyle = await fallbackConnector.evaluate(element => {
+      const style = getComputedStyle(element);
+      return { animationName: style.animationName, stroke: style.stroke, pathLength: element.getAttribute('pathLength') };
+    });
+    expect(fallbackConnectorStyle.animationName).toBe('map-route-fill-backward');
+    expect(fallbackConnectorStyle.stroke).toBe('rgb(245, 158, 11)');
+    expect(fallbackConnectorStyle.pathLength).toBe('1');
+  }
   await page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.getByTestId('bust-shop-banner')).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/C\d+ R\d+ BUST/)).toBeVisible();

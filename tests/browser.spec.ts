@@ -47,6 +47,9 @@ function automaticAction(game: GameState): Action {
   return choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
     : { type: 'MANUAL_REROLL', dieIds: [activeEncounterDice(game)[0].id] };
 }
+function unlockShopExit(game: GameState): GameState {
+  return game.shop?.exitUnlocked === false ? dispatch(game, { type: 'UNLOCK_SHOP_EXIT' }).state : game;
+}
 async function ready(page: Page) {
   await page.locator('main').waitFor();
   await enterRun(page);
@@ -90,7 +93,6 @@ async function matchBoard(page: Page, game: GameState) {
 }
 async function progressSpecialOffer(page: Page, game: GameState): Promise<GameState> {
   if (game.specialOffer!.acquired) {
-    await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
     const next = dispatch(game, { type: 'CONTINUE_SPECIAL_OFFER' }).state;
     await matchBoard(page, next);
     return next;
@@ -165,7 +167,7 @@ function findTrainingSeed() {
     for (const offer of game.shop!.trainingOffers) {
       if (offer.kind !== 'hand') continue;
       const trained = dispatch(game, { type: 'TRAIN_HAND', hand: offer.hand }).state;
-      const next = dispatch(trained, { type: 'NEXT_ROUND' }).state;
+      const next = dispatch(unlockShopExit(trained), { type: 'NEXT_ROUND' }).state;
       const option = handOptions(next.dice, next.consumed).find(item => item.id === offer.hand && !item.consumed);
       if (option) {
         const scored = handScore(next.dice, offer.hand, option.combinations[0], 2);
@@ -216,7 +218,7 @@ function findCapacitySeed() {
       }
       if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
       if (game.phase !== 'shop' || game.bust) break;
-      if (round === 1) game = dispatch(game, { type: 'NEXT_ROUND' }).state;
+      if (round === 1) game = dispatch(unlockShopExit(game), { type: 'NEXT_ROUND' }).state;
     }
     if (game.phase !== 'shop' || game.bust || game.round !== 2) continue;
     const startingGold = game.gold;
@@ -240,8 +242,9 @@ function highInterestState() {
       } else if (game.phase === 'roundSummary') {
         game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
       } else if (game.phase === 'shop') {
-        game = dispatch(game, game.bust ? { type: 'RETRY_ROUND' }
-          : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
+        game = dispatch(game, game.shop?.exitUnlocked === false ? { type: 'UNLOCK_SHOP_EXIT' }
+          : game.bust ? { type: 'RETRY_ROUND' }
+            : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
       } else if (game.phase === 'flameSelection') {
         game = game.flameSelection!.acquired
           ? dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state
@@ -619,6 +622,7 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   await expect(page.getByTestId(`training-mult-${hand}`)).toHaveText(`×${level2.baseMultiplier} → ×${level3.baseMultiplier} Mult`);
 
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+  game = unlockShopExit(game);
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await matchBoard(page, game);
   const row = page.getByTestId(`scorecard-row-${hand}`);
@@ -800,6 +804,7 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const seed = findShopSeed('sticky');
   let game = await reachShop(page, seed);
+  game = unlockShopExit(game);
   await page.screenshot({ path: test.info().outputPath('shop-desktop.png'), fullPage: true });
   await expect(page.locator('.offer')).toHaveCount(3);
   const offer = game.shop!.offers.find(item => item.enhancement === 'sticky')!;
@@ -815,6 +820,7 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
   await matchBoard(page, game);
   await expect(page.getByRole('button', { name: 'REROLL ALL DICE FOR 4 GOLD', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+  game = unlockShopExit(game);
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await matchBoard(page, game);
   for (let step = 0; step < 220 && game.phase !== 'lost'; step++) {
@@ -829,11 +835,11 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
         : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' as const } : { type: 'NEXT_ROUND' as const };
       await page.getByRole('button', { name: game.bust ? `RETRY ROUND ${game.round}`
         : game.shop?.kind === 'post_boss' ? 'NEXT CHAPTER' : 'NEXT ROUND' }).click();
+      if (game.shop?.exitUnlocked === false) game = dispatch(game, { type: 'UNLOCK_SHOP_EXIT' }).state;
       game = dispatch(game, action).state;
       await matchBoard(page, game);
     } else if (game.phase === 'flameSelection') {
       if (game.flameSelection!.acquired) {
-        await page.getByRole('button', { name: 'CONTINUE TO SHOP', exact: false }).click();
         game = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
       } else {
         const offer = game.flameSelection!.offers[0];
@@ -876,7 +882,11 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
   await runInfo.getByRole('button', { name: 'COPY DEBUG TRACE' }).click();
   const debugData = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
   expect(debugData.exportType).toBe('roll_call_debug_trace');
-  expect(debugData.actionJournal).toEqual(game.actionJournal);
+  const withoutTimerUnlocks = (actions: Action[]) => actions.filter(action => action.type !== 'UNLOCK_SHOP_EXIT');
+  expect(withoutTimerUnlocks(debugData.actionJournal)).toEqual(withoutTimerUnlocks(game.actionJournal));
+  expect(debugData.actionJournal.filter((action: Action) => action.type === 'UNLOCK_SHOP_EXIT')).toHaveLength(
+    game.actionJournal.filter(action => action.type === 'UNLOCK_SHOP_EXIT').length,
+  );
   expect(debugData.trace).not.toHaveProperty('board');
   await runInfo.getByRole('button', { name: 'Restart same seed', exact: true }).click();
   await matchBoard(page, newRun(seed).state);
@@ -1005,6 +1015,7 @@ test('a fourth enhancement type opens Manage Die and preserves the offer through
   const fixture = findCapacitySeed();
   let game = await reachShop(page, fixture.seed);
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
+  game = unlockShopExit(game);
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await matchBoard(page, game);
   while (game.phase === 'round') game = await playBest(page, game);
@@ -1236,7 +1247,7 @@ test('purchased Jumping Bean visibly triggers and rerolls on the next initial ga
     const offer = candidate.shop!.offers.find(item => item.enhancement === 'jumpingBean');
     if (!offer) continue;
     candidate = dispatch(candidate, { type: 'BUY', offerId: offer.id, dieId: 0 }).state;
-    const next = dispatch(candidate, { type: 'NEXT_ROUND' });
+    const next = dispatch(unlockShopExit(candidate), { type: 'NEXT_ROUND' });
     if (next.events.some(event => event.enhancement === 'jumpingBean')) seed = candidate.seed;
   }
   expect(seed).not.toBeNull();
@@ -1246,6 +1257,7 @@ test('purchased Jumping Bean visibly triggers and rerolls on the next initial ga
   await page.getByRole('button', { name: /^Die 1,/ }).click();
   game = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 0 }).state;
   await matchBoard(page, game);
+  game = unlockShopExit(game);
   const next = dispatch(game, { type: 'NEXT_ROUND' });
   await page.clock.install({ time: new Date('2026-09-18T12:00:00Z') });
   await page.clock.pauseAt(new Date('2026-09-18T12:00:01Z'));

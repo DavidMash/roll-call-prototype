@@ -408,7 +408,7 @@ describe('Wildfire preview and persistence parameters', () => {
     expect(transferMultiplier(5)).toBe(6);
     const expectations: [Flame, ReturnType<typeof resolveWildfire>][] = [
       ['ultimate', { kind: 'xMult', baseMax: 5, max: 30 }],
-      ['speedDemon', { kind: 'xMult', baseMax: 9, max: 54 }],
+      ['speedDemon', { kind: 'xMult', baseMax: 5, max: 30 }],
       ['lowball', { kind: 'xMult', baseMax: 5, max: 30 }],
       ['momentum', { kind: 'charge', gain: 3, maxCharge: 30 }],
       ['thirdRail', { kind: 'charge', gain: 3, maxCharge: 30 }],
@@ -423,8 +423,8 @@ describe('Wildfire preview and persistence parameters', () => {
     }
     const variable = projectWildfire(state, 'speedDemon', 'vineyard');
     expect(wildfireFactor(variable, 1)).toBe(1);
-    expect(wildfireFactor(variable, 5)).toBe(27.5);
-    expect(wildfireFactor(variable, 9)).toBe(54);
+    expect(wildfireFactor(variable, 3)).toBe(15.5);
+    expect(wildfireFactor(variable, 5)).toBe(30);
     const lowball = projectWildfire(state, 'lowball', 'vineyard');
     expect(wildfireFactor(lowball, 1)).toBe(1);
     expect(wildfireFactor(lowball, 5)).toBe(30);

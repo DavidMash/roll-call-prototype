@@ -38,7 +38,7 @@ describe('canonical player-facing definitions', () => {
       thirdRail: 'Rolling 3s builds Charge.',
       jumpStart: 'Rerolls build Charge.',
       powerSurge: 'Playing your highest level hand triples your current Charge.',
-      speedDemon: 'Play quickly for up to ×9 XMult.',
+      speedDemon: 'Play quickly for up to ×5 XMult.',
       sixPack: 'Starts at up to ×6 XMult. Reduces when an Upper hand is played.',
       fluxCapacitor: 'Pulling Magnetic faces multiplies your XMult Charge.',
       fatCat: 'Hands with Golden or Jackpot gain up to ×5 XMult.',

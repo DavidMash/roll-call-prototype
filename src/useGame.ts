@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from '@mantine/hooks';
 import { CONFIG } from './game/config';
 import { dispatch, newRun } from './game/engine';
@@ -31,7 +31,9 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
   const [index, setIndex] = useState(0);
   const [summaryJump, setSummaryJump] = useState<ScoreSummaryJump | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const submitting = useRef(false);
   const busy = index < result.events.length;
+  useEffect(() => { submitting.current = false; }, [result]);
   useEffect(() => {
     if (!active || !busy) return;
     const currentEvent = result.events[index];
@@ -88,9 +90,11 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
     hasStoredRun,
     progress: { current: Math.min(index + 1, result.events.length), total: result.events.length },
     submit: (action: Action) => {
-      if (busy) return false;
+      if (busy || submitting.current) return false;
+      submitting.current = true;
       const next = dispatch(result.state, action);
       if (next.error) {
+        submitting.current = false;
         setError(next.error);
         return false;
       }

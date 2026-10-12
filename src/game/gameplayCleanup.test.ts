@@ -141,7 +141,7 @@ describe('Care Package resources and Time Travel boundaries', () => {
     let state = offerState('carePackage', 3);
     state = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 1 }, constant()).state;
     expect(state.specialOfferEffects.carePackageRerolls).toBe(3);
-    state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
+    state = dispatch(state, { type: 'UNLOCK_SHOP_EXIT' }, constant()).state;
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.2)).state;
     expect(state.specialOfferEffects.carePackageRerolls).toBe(3);
     state.manualRerollsRemaining = 0;
@@ -178,7 +178,6 @@ describe('Care Package resources and Time Travel boundaries', () => {
     state = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 1 }, constant()).state;
     expect(state.round).toBe(destination);
     expect(state.round).toBeGreaterThan(0);
-    state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant(.2)).state;
     expect(state).toMatchObject({ phase: 'round', round: destination, roundAttemptNumber: 1,
       currentNodeId: `round:${destination}`, gold: 47 });
     expect(state.shop).toBeNull();

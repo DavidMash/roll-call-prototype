@@ -7,6 +7,8 @@ import type { FlameDetailsTarget } from './FlameDetailsModal';
 import { RunActionPortal } from './RunActionRow';
 import { rarityClassName, rarityLabel } from '../game/rarity';
 import { RarityBadge } from './RarityBadge';
+import { RewardSkipConfirmation } from './RewardSkipConfirmation';
+import { useEffect, useRef } from 'react';
 
 export function FlameSelectionScreen({ board, event, busy, selectedOffer, setSelectedOffer, submit, skip, openFlameDetails }: {
   board: Board; event: GameEvent | null; busy: boolean;
@@ -14,6 +16,13 @@ export function FlameSelectionScreen({ board, event, busy, selectedOffer, setSel
   openFlameDetails: (target: FlameDetailsTarget) => void;
 }) {
   const reward = board.flameSelection!;
+  const resumedLegacyClaim = useRef(false);
+  useEffect(() => {
+    if (!busy && reward.acquired && !resumedLegacyClaim.current) {
+      resumedLegacyClaim.current = true;
+      submit({ type: 'CONTINUE_FLAME_SELECTION' });
+    }
+  }, [busy, reward.acquired, submit]);
   const selected = reward.acquired ? undefined : reward.offers.find(item => item.id === selectedOffer);
   return <Stack gap="xs" className="flame-selection-screen">
     <Group justify="space-between" className="shop-summary flame-selection-header phase-sticky-header">
@@ -51,7 +60,8 @@ export function FlameSelectionScreen({ board, event, busy, selectedOffer, setSel
       <Text fw={700} size="sm" tt="uppercase">Dice Dock</Text>
       <Text size="xs" c={selected ? 'orange' : 'dimmed'}>{selected ? `${FLAMES[selected.flame].name} selected — choose a die below` : 'Select a Flame, then assign it in the Dice Dock.'}</Text>
     </Paper>
-    <RunActionPortal><div className="run-action-primary shop-action-dock"><Button disabled={busy}
-      onClick={() => submit({ type: 'CONTINUE_FLAME_SELECTION' })}>CONTINUE TO SHOP →</Button></div></RunActionPortal>
+    {!reward.acquired && <RunActionPortal><div className="run-action-primary shop-action-dock">
+      <RewardSkipConfirmation disabled={busy} onConfirm={() => submit({ type: 'SKIP_FLAME_SELECTION' })} />
+    </div></RunActionPortal>}
   </Stack>;
 }

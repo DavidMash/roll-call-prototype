@@ -143,8 +143,7 @@ describe('investment, uniqueness, and reward lifecycle', () => {
   it('acquires a neutral ember, then permits arbitrary Shop stoking and converts at 100', () => {
     let state = dispatch(reward(), { type: 'CHOOSE_FLAME', offerId: 1, dieId: 0 }).state;
     expect(state.dice[0].flame).toEqual({ id: 'ultimate', investedGold: 0 });
-    expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 0, amount: 1 })).toContain('normal Shop');
-    state = dispatch(state, { type: 'CONTINUE_FLAME_SELECTION' }).state;
+    expect(state.phase).toBe('shop');
     state = dispatch(state, { type: 'STOKE_FLAME', dieId: 0, amount: 23 }).state;
     expect(state.dice[0].flame?.investedGold).toBe(23);
     expect(state.stats.flameStokes).toEqual([{ round: 1, dieId: 0, flame: 'ultimate', amount: 23,
@@ -191,7 +190,7 @@ describe('investment, uniqueness, and reward lifecycle', () => {
   });
   it('can skip acquisition and preserve reward faces into shop', () => {
     const state = reward(); const values = state.dice.map(die => die.value);
-    const result = dispatch(state, { type: 'CONTINUE_FLAME_SELECTION' }, constant(0));
+    const result = dispatch(state, { type: 'SKIP_FLAME_SELECTION' }, constant(0));
     expect(result.state.phase).toBe('shop'); expect(result.state.dice.map(die => die.value)).toEqual(values);
     expect(result.state.historyV2).toContainEqual(expect.objectContaining({ kind: 'flame_changed', change: { type: 'skipped' } }));
   });
@@ -215,7 +214,7 @@ describe('investment, uniqueness, and reward lifecycle', () => {
     state.bonfires = [...FLAME_IDS];
     new Resolver(state, constant(0.42)).freshFlameOffers();
     expect(state.flameSelection.offers).toEqual([]);
-    const continued = dispatch(state, { type: 'CONTINUE_FLAME_SELECTION' }, constant(0));
+    const continued = dispatch(state, { type: 'SKIP_FLAME_SELECTION' }, constant(0));
     expect(continued.error).toBeUndefined();
     expect(continued.state.phase).toBe('shop');
   });

@@ -19,7 +19,7 @@ import { rarityLabel } from './rarity';
 import { appendCriticalDiagnostic, appendDebugTrace, createDebugTrace, normalizeDebugTrace, type DebugTraceMode } from './debugTrace';
 import { isRollbackState } from './rollback';
 import { enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey, usableManualRerolls } from './specialOffers';
-import { rankedRecipients, rankedSacrifices } from './hoodedFigure';
+import { rankedRecipients, rankedSacrifices, resolveWildfire } from './hoodedFigure';
 import type { Action, Board, GameState, GameStateBase, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
 
 const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`${seed}:round:${round}:attempt:${attempt}`);
@@ -52,6 +52,8 @@ function normalizeSpecialRuntime(state: Board): void {
 function normalizeHoodedRuntime(state: Board): void {
   if (!state) return;
   state.wildfires ??= [];
+  for (const wildfire of state.wildfires) if (wildfire.flame === 'speedDemon')
+    wildfire.resolved = resolveWildfire('speedDemon', wildfire.transferMultiplier);
   state.bonfireContributions ??= {};
   state.bonfireRoundContributions ??= {};
   state.chargeAttribution ??= {};
@@ -342,8 +344,6 @@ export function validateAction(state: Board, action: Action): string | null {
   }
   if (action.type === 'CONTINUE_ROUND_SUMMARY') return state.phase === 'roundSummary' && !!state.roundSummary
     ? null : 'A completed encounter summary is required.';
-  if (action.type === 'RETRY_ROUND') return state.phase === 'shop' && !!state.shop && !!state.bust && state.lives > 0
-    ? null : 'A returned Bust Shop is required to retry the round.';
   if (action.type === 'MANUAL_REROLL') {
     if (state.phase !== 'round') return 'Manual rerolls can only be used during a gameplay round.';
     if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0) return 'Unlock a Warden die before taking another action.';
@@ -396,25 +396,40 @@ export function validateAction(state: Board, action: Action): string | null {
     if (activeFlameInvestment(die.flame) + action.amount > 100) return 'A Flame cannot hold more than 100 invested Gold.';
     return null;
   }
-  if (action.type === 'CHOOSE_FLAME' || action.type === 'CONTINUE_FLAME_SELECTION') {
+  if (action.type === 'CHOOSE_FLAME' || action.type === 'CONTINUE_FLAME_SELECTION' || action.type === 'SKIP_FLAME_SELECTION') {
     if (state.phase !== 'flameSelection' || !state.flameSelection) return 'This action requires an open Flame Selection.';
     if (action.type === 'CHOOSE_FLAME') {
       if (state.flameSelection.acquired) return 'Only one new Flame may be acquired per selection.';
       const offer = state.flameSelection.offers.find(item => item.id === action.offerId);
       if (!offer || !state.dice.some(die => die.id === action.dieId && die.owner === 'player')) return 'Choose an available Flame and a physical die.';
       if (hasOwnedFlame(state as GameState, offer.flame)) return 'That Flame type is already owned by this run.';
-    }
+    } else if (action.type === 'CONTINUE_FLAME_SELECTION' && !state.flameSelection.acquired)
+      return 'A Flame must be assigned before legacy continuation.';
+    else if (action.type === 'SKIP_FLAME_SELECTION' && state.flameSelection.acquired)
+      return 'The Flame reward has already been claimed.';
     return null;
   }
-  if (action.type === 'CHOOSE_SPECIAL_OFFER' || action.type === 'CONTINUE_SPECIAL_OFFER') {
+  if (action.type === 'CHOOSE_SPECIAL_OFFER' || action.type === 'CONTINUE_SPECIAL_OFFER' || action.type === 'SKIP_SPECIAL_OFFER') {
     if (state.phase !== 'specialOffer' || !state.specialOffer) return 'This action requires an open Special Offer.';
     if (action.type === 'CHOOSE_SPECIAL_OFFER') {
       if (state.specialOffer.acquired) return 'Only one Special Offer may be chosen.';
       if (!state.specialOffer.offers.some(offer => offer.id === action.offerId)) return 'Choose an available Special Offer.';
-    } else if (!state.specialOffer.acquired) return 'Choose one Special Offer before continuing.';
+    } else if (action.type === 'CONTINUE_SPECIAL_OFFER' && !state.specialOffer.acquired)
+      return 'Choose one Special Offer before continuing.';
+    else if (action.type === 'SKIP_SPECIAL_OFFER' && state.specialOffer.acquired)
+      return 'The Special Offer reward has already been claimed.';
     return null;
   }
   if (state.phase !== 'shop' || !state.shop) return 'This action requires an open shop.';
+  if (action.type === 'UNLOCK_SHOP_EXIT') {
+    if (state.shop.exitUnlocked !== false) return 'Shop progression is already available.';
+    return null;
+  }
+  if (state.shop.exitUnlocked === false
+    && (action.type === 'NEXT_CHAPTER' || action.type === 'NEXT_ROUND' || action.type === 'RETRY_ROUND'))
+    return 'Shop progression is available one second after entry.';
+  if (action.type === 'RETRY_ROUND' && (!state.bust || state.lives <= 0))
+    return 'A returned Bust Shop is required to retry the round.';
   if (action.type === 'NEXT_CHAPTER') {
     if (state.bust || state.shop.kind !== 'post_boss' || !isBigBossRound(state.round))
       return 'Next Chapter is only available from the final post-Boss Shop.';
@@ -506,10 +521,13 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
   const normalizationChangedState = JSON.stringify(normalized) !== JSON.stringify(state);
   const error = validateAction(normalized, action);
   if (error) return { state: normalizationChangedState ? normalized : state, events: [], error };
+  const chosenSpecialOffer = action.type === 'CHOOSE_SPECIAL_OFFER'
+    ? normalized.specialOffer?.offers.find(offer => offer.id === action.offerId) : null;
   const rngStateOverride = random ? undefined : action.type === 'NEXT_ROUND' || action.type === 'NEXT_CHAPTER'
     ? attemptSeed(normalized.seed, normalized.round + 1, 1)
     : action.type === 'RETRY_ROUND' ? attemptSeed(normalized.seed, normalized.round, normalized.roundAttemptNumber)
-      : action.type === 'CONTINUE_SPECIAL_OFFER' && normalized.specialOffer?.chosen?.type === 'timeTravel'
+      : (action.type === 'CONTINUE_SPECIAL_OFFER' && normalized.specialOffer?.chosen?.type === 'timeTravel')
+        || chosenSpecialOffer?.type === 'timeTravel'
         ? attemptSeed(normalized.seed, normalized.round, 1) : undefined;
   return execute(normalized, resolver => {
     const next = resolver.state;
@@ -574,6 +592,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         resolver.emit({ type: replaced ? 'FLAME_REPLACED' : 'FLAME_ACQUIRED', flame: offer.flame, rarity: FLAMES[offer.flame].rarity, dieIds: [die.id],
           message: replaced ? `D${die.id + 1} replaced ${FLAMES[replaced].name} with ${FLAMES[offer.flame].name} [${rarityLabel(FLAMES[offer.flame].rarity)}]; prior investment was lost`
             : `D${die.id + 1} acquired ${FLAMES[offer.flame].name} [${rarityLabel(FLAMES[offer.flame].rarity)}] as a 0-Gold ember` });
+        resolver.openShop();
         break;
       }
       case 'STOKE_FLAME': {
@@ -601,14 +620,23 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         break;
       }
       case 'CONTINUE_ROUND_SUMMARY': resolver.continueRoundSummary(); break;
-      case 'CONTINUE_FLAME_SELECTION':
-        if (!next.flameSelection!.acquired) {
-          resolver.emit({ type: 'FLAME_SKIPPED', message: `Skipped Flame acquisition for round ${formatPlayerNumber(next.round)}` });
-        }
+      case 'CONTINUE_FLAME_SELECTION': resolver.openShop(); break;
+      case 'SKIP_FLAME_SELECTION':
+        resolver.emit({ type: 'FLAME_SKIPPED', message: `Skipped Flame acquisition for round ${formatPlayerNumber(next.round)}` });
         resolver.openShop();
         break;
-      case 'CHOOSE_SPECIAL_OFFER': resolver.chooseSpecialOffer(action.offerId); break;
+      case 'CHOOSE_SPECIAL_OFFER':
+        resolver.chooseSpecialOffer(action.offerId);
+        resolver.continueSpecialOffer();
+        break;
       case 'CONTINUE_SPECIAL_OFFER': resolver.continueSpecialOffer(); break;
+      case 'SKIP_SPECIAL_OFFER': {
+        const chapter = chapterNumberForRound(next.round);
+        next.chapterLifecycle[chapter] = { specialOfferConsumed: true };
+        resolver.emit({ type: 'SPECIAL_OFFER_SKIPPED', message: `Skipped Special Offer for round ${formatPlayerNumber(next.round)}` });
+        resolver.openShop();
+        break;
+      }
       case 'ADVANCE_HOODED_FIGURE': resolver.advanceHoodedFigure(); break;
       case 'SELECT_WILDFIRE_RECIPIENT': resolver.selectWildfireRecipient(action.flame); break;
       case 'SELECT_WILDFIRE_SACRIFICE': resolver.selectWildfireSacrifice(action.flame); break;
@@ -628,6 +656,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         resolver.freshOffers('reroll');
         resolver.emit({ type: 'OFFERS_REFRESHED', message: 'Three fresh distinct enhancement offers' });
         break;
+      case 'UNLOCK_SHOP_EXIT': next.shop!.exitUnlocked = true; break;
       case 'TRAIN_HAND': {
         const offer = next.shop!.trainingOffers.find(item => item.kind === 'hand' && item.hand === action.hand)!;
         const fromLevel = next.handLevels[action.hand];

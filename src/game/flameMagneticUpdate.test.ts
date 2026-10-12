@@ -29,11 +29,11 @@ function magnetic(state: GameState, dieId: number, physicalFace: Rank): void {
 
 describe('Speed Demon', () => {
   it('has a one-second grace period, smooth decay, and linear investment scaling', () => {
-    expect(speedDemonMultiplier(100, 0)).toBe(9);
-    expect(speedDemonMultiplier(100, 1000)).toBe(9);
-    expect(speedDemonMultiplier(100, 5500)).toBe(5);
+    expect(speedDemonMultiplier(100, 0)).toBe(5);
+    expect(speedDemonMultiplier(100, 1000)).toBe(5);
+    expect(speedDemonMultiplier(100, 5500)).toBe(3);
     expect(speedDemonMultiplier(100, 10000)).toBe(1);
-    expect(speedDemonMultiplier(50, 0)).toBe(5);
+    expect(speedDemonMultiplier(50, 0)).toBe(3);
     expect(speedDemonMultiplier(0, 0)).toBe(1);
   });
 
@@ -55,10 +55,10 @@ describe('Speed Demon', () => {
     expect(handXMultContributions(preview, 'ones', 1, [0])).toEqual([]);
 
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0], decisionMs: 5500 }, constant(.8));
-    expect(result.state.stats.handScores[0].xMultFactors).toContainEqual(expect.objectContaining({ source: 'speedDemon', value: 5 }));
+    expect(result.state.stats.handScores[0].xMultFactors).toContainEqual(expect.objectContaining({ source: 'speedDemon', value: 3 }));
     const revealIndex = result.events.findIndex(event => event.type === 'SPEED_DEMON_REVEALED');
     const updateIndex = result.events.findIndex(event => event.type === 'HAND_XMULT_CHANGED' && event.flame === 'speedDemon');
-    expect(result.events[revealIndex]).toMatchObject({ decisionMs: 5500, xMult: 5 });
+    expect(result.events[revealIndex]).toMatchObject({ decisionMs: 5500, xMult: 3 });
     expect(revealIndex).toBeGreaterThan(-1);
     expect(updateIndex).toBeGreaterThan(revealIndex);
   });

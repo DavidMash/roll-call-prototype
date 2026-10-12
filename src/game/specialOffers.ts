@@ -77,8 +77,12 @@ export function restoreSpecialOfferEffectsAfterBust(
 }
 
 export function specialOfferEligible(state: Pick<GameState, 'dice' | 'specialOfferEffects'>, type: SpecialOfferType): boolean {
+  const hasEnhancement = (enhancement: Parameters<typeof stacks>[1]) => state.dice.some(die => die.owner === 'player'
+    && die.faces.some(face => stacks(face, enhancement) > 0));
   if (type === 'fireKeeper') return state.dice.some(die => die.owner === 'player' && die.flame !== null && die.flame.investedGold < 100);
-  if (type === 'orangeTheory') return state.dice.some(die => die.owner === 'player' && die.faces.some(face => stacks(face, 'workout') > 0));
+  if (type === 'cashBonus') return hasEnhancement('bonus');
+  if (type === 'orangeTheory') return hasEnhancement('workout');
+  if (type === 'powerball') return hasEnhancement('jackpot');
   if (type === 'sommelier') return state.dice.some(die => die.owner === 'player'
     && die.faces.some(face => stacks(face, 'vintage') > 0 && !face.vintageSommelierBoosted));
   if (type === 'semester') return state.specialOfferEffects.semesterShopsRemaining <= 0;

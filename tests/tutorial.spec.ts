@@ -391,8 +391,8 @@ test('first Flame assignment highlights and exposes every legal destination die 
   await expect(page.locator('[data-tutorial="dice-dock"] .die')).toHaveCount(5);
   expect(await page.locator('[data-tutorial="dice-dock"] .die').evaluateAll(dice => dice.every(die =>
     !die.hasAttribute('data-tutorial-gated') && die.classList.contains('tutorial-interactive')))).toBe(true);
-  await expect(page.getByRole('button', { name: /CONTINUE TO SHOP/ })).toHaveAttribute('aria-disabled', 'true');
-  await page.getByRole('button', { name: /CONTINUE TO SHOP/ }).evaluate((element: HTMLButtonElement) => element.click());
+  await expect(page.getByRole('button', { name: 'SKIP REWARD', exact: true })).toHaveAttribute('aria-disabled', 'true');
+  await page.getByRole('button', { name: 'SKIP REWARD', exact: true }).evaluate((element: HTMLButtonElement) => element.click());
   await expect(page.locator('.driver-popover-title')).toHaveText('ASSIGN YOUR FLAME');
   await page.locator('[data-tutorial="die-3"] .die').click();
   await expect(page.locator('.driver-popover-title')).toHaveText('FLAMES');

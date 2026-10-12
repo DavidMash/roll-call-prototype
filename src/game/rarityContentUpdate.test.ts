@@ -222,9 +222,8 @@ describe('Vintage, Sommelier, Cash Bonus, and Semester', () => {
   it('guarantees exactly one Team Training in the next three newly opened Shops', () => {
     let state = offerState('semester');
     state = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 1 }, constant(0)).state;
-    expect(state.specialOfferEffects.semesterShopsRemaining).toBe(3);
+    expect(state.specialOfferEffects.semesterShopsRemaining).toBe(2);
     expect(eligibleSpecialOfferTypes(state)).not.toContain('semester');
-    state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant(0)).state;
     expect(state.shop?.trainingOffers.filter(offer => offer.kind === 'team')).toHaveLength(1);
     expect(state.specialOfferEffects.semesterShopsRemaining).toBe(2);
     for (const remaining of [1, 0]) {
@@ -239,8 +238,8 @@ describe('Vintage, Sommelier, Cash Bonus, and Semester', () => {
   it('restoring the same Bust checkpoint does not consume another Semester Shop', () => {
     let state = offerState('semester');
     state = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 1 }, constant(0)).state;
-    state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant(0)).state;
     expect(state.specialOfferEffects.semesterShopsRemaining).toBe(2);
+    state = dispatch(state, { type: 'UNLOCK_SHOP_EXIT' }, constant(0)).state;
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.9)).state;
     state.manualRerollsRemaining = 0;
     state.consumed = [...HAND_IDS];

@@ -204,7 +204,7 @@ const candidates: Candidate[] = [
     (s, ui) => s.game.round === 6 && s.game.phase === 'flameSelection' && !s.game.flameSelection?.acquired && ui.selectedFlameOffer !== null,
     { highlightTargets: ['[data-testid^="flame-offer-"].selected', '[data-tutorial="dice-dock"] .die'], interactiveTargets: ['[data-tutorial="dice-dock"] .die'] }),
   info('flame-basics', 'FLAMES', ['Enhancements belong to faces. Flames belong to whole dice.', 'Flames can add XMult when their condition is met.'], '[data-tutorial="dice-dock"]',
-    s => s.game.round === 6 && s.game.phase === 'flameSelection' && !!s.game.flameSelection?.acquired, { side: 'top' }),
+    s => s.game.round === 6 && s.game.phase === 'shop' && !!s.scenario.firstFlame && !s.game.flameTutorial.completed, { side: 'top' }),
   info('flame-xmult', 'XMULT', ['XMult multiplies your score after Pips and Mult.', 'Pips × Mult × XMult'], flameBadge(),
     s => s.game.round === 6 && has(s, 'flame-basics'), { side: 'top' }),
   info('flame-ember', undefined, ["While it's an Ember, its effect only works when that die scores in the right hand."], flameBadge(),

@@ -411,9 +411,8 @@ describe('Flame Selection spending boundary and tutorial state', () => {
     state.shop = null;
     state = dispatch(state, { type: 'CHOOSE_FLAME', offerId: 1, dieId: 2 }).state;
     expect(state.flameTutorial).toEqual({ pendingDieId: 2, completed: false });
-    expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 2, amount: 1 })).toContain('normal Shop');
-    state = dispatch(state, { type: 'CONTINUE_FLAME_SELECTION' }, constant(0.2)).state;
     expect(state.phase).toBe('shop');
+    expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 2, amount: 1 })).toBeNull();
     expect(state.flameTutorial.pendingDieId).toBe(2);
     state = dispatch(state, { type: 'DISMISS_FLAME_TUTORIAL' }).state;
     expect(state.flameTutorial).toEqual({ pendingDieId: null, completed: true });
@@ -427,8 +426,8 @@ describe('Flame Selection spending boundary and tutorial state', () => {
     state.flameSelection = { offers: [{ id: 1, flame: 'ultimate' }], acquired: false };
     state.shop = null;
     state = dispatch(state, { type: 'CHOOSE_FLAME', offerId: 1, dieId: 2 }).state;
-    state = dispatch(state, { type: 'CONTINUE_FLAME_SELECTION' }, constant(0.2)).state;
     expect(state.flameTutorial).toEqual({ pendingDieId: 2, completed: false });
+    state = dispatch(state, { type: 'UNLOCK_SHOP_EXIT' }, constant(0.2)).state;
     state = dispatch(state, { type: 'NEXT_CHAPTER' }, constant(0.2)).state;
     expect(state.flameTutorial).toEqual({ pendingDieId: null, completed: true });
   });

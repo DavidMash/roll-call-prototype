@@ -384,6 +384,7 @@ describe('round boundaries and losing', () => {
       expect(progressed.events.some(event => event.type === 'MAP_TRANSITION')).toBe(true);
       const postReward = progressed.state;
       expect(postReward.phase).toBe('shop');
+      postReward.shop!.exitUnlocked = true;
       const next = dispatch(postReward, { type: 'NEXT_ROUND' }, constant());
       expect(next.state.phase).toBe('round');
       expect(next.state.round).toBe(round + 1);
@@ -576,6 +577,11 @@ describe('reproducibility and end-to-end domain flow', () => {
             : { type: 'CHOOSE_FLAME' as const, offerId: a.flameSelection!.offers[0].id, dieId: 0 };
           a = dispatch(a, action).state; b = dispatch(b, action).state;
         } else if (a.phase === 'shop') {
+        if (a.shop?.exitUnlocked === false) {
+          a = dispatch(a, { type: 'UNLOCK_SHOP_EXIT' }).state;
+          b = dispatch(b, { type: 'UNLOCK_SHOP_EXIT' }).state;
+          continue;
+        }
         const action = a.bust ? { type: 'RETRY_ROUND' as const }
           : a.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' as const } : { type: 'NEXT_ROUND' as const };
         a = dispatch(a, action).state; b = dispatch(b, action).state;
@@ -608,6 +614,7 @@ describe('reproducibility and end-to-end domain flow', () => {
             : dispatch(game, { type: 'CHOOSE_FLAME', offerId: game.flameSelection!.offers[0].id, dieId: seed % 5 }).state;
         } else if (game.phase === 'shop') {
           if (game.bust) { game = dispatch(game, { type: 'RETRY_ROUND' }).state; continue; }
+          if (game.shop?.exitUnlocked === false) { game = dispatch(game, { type: 'UNLOCK_SHOP_EXIT' }).state; continue; }
           clears++;
           for (const offer of game.shop!.offers) {
             const bought = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 0 });

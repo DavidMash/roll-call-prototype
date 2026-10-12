@@ -52,7 +52,7 @@ describe('post-Boss Chapter boundary', () => {
     savePersistedRun(storage, flame.state);
     const resumedFlame = loadPersistedRun(storage, summary.seed)!;
     expect(resumedFlame.flameSelection).toEqual(flame.state.flameSelection);
-    const shop = dispatch(resumedFlame, { type: 'CONTINUE_FLAME_SELECTION' }, constant());
+    const shop = dispatch(resumedFlame, { type: 'SKIP_FLAME_SELECTION' }, constant());
     expect(shop.state.phase).toBe('shop');
     expect(shop.events.filter(event => event.type === 'FLAME_SELECTION_OPENED')).toHaveLength(0);
     expect(shop.events.filter(event => event.type === 'SHOP_OPENED')).toHaveLength(1);
@@ -67,12 +67,14 @@ describe('post-Boss Chapter boundary', () => {
     expect(opened.events.map(event => event.type)).toEqual(['MAP_TRANSITION', 'SHOP_OPENED']);
     expect(opened.events.filter(event => event.type === 'SHOP_OPENED')).toHaveLength(1);
     expect(opened.state.historyV2.filter(event => event.kind === 'chapter_started' && event.chapter === 2)).toHaveLength(0);
-    expect(dispatch(opened.state, { type: 'NEXT_ROUND' }, constant()).error).toContain('Next Chapter');
+    expect(dispatch(opened.state, { type: 'NEXT_ROUND' }, constant()).error).toContain('one second');
+    const unlocked = dispatch(opened.state, { type: 'UNLOCK_SHOP_EXIT' }, constant()).state;
+    expect(dispatch(unlocked, { type: 'NEXT_ROUND' }, constant()).error).toContain('Next Chapter');
 
     const offers = structuredClone(opened.state.shop!.offers);
     const training = structuredClone(opened.state.shop!.trainingOffers);
     const nextOfferId = opened.state.nextOfferId;
-    const advanced = dispatch(opened.state, { type: 'NEXT_CHAPTER' }, constant());
+    const advanced = dispatch(unlocked, { type: 'NEXT_CHAPTER' }, constant());
     expect(advanced.state).toMatchObject({ phase: 'round', round: 7, currentNodeId: 'round:7' });
     expect(advanced.state.presentedChapters).toEqual([1, 2]);
     expect(advanced.state.chapterPlans[2]).toBeDefined();
@@ -126,7 +128,8 @@ describe('post-Boss Chapter boundary', () => {
     expect(resumed.shop?.offerRerolls).toBe(1);
     expect(resumed.stats.enhancementShopRerolls).toBe(1);
 
-    const advanced = dispatch(resumed, { type: 'NEXT_CHAPTER' }, constant()).state;
+    const unlocked = dispatch(resumed, { type: 'UNLOCK_SHOP_EXIT' }, constant()).state;
+    const advanced = dispatch(unlocked, { type: 'NEXT_CHAPTER' }, constant()).state;
     expect(savePersistedRun(storage, advanced)).toBe(true);
     const resumedChapter = loadPersistedRun(storage, advanced.seed)!;
     expect(resumedChapter).toMatchObject({ phase: 'round', round: 7, currentNodeId: 'round:7' });
@@ -155,7 +158,8 @@ describe('post-Boss Chapter boundary', () => {
     expect(migrated.shop).toEqual(shop);
     expect(migrated.historyV2.some(event => event.kind === 'chapter_started' && event.chapter === 2)).toBe(false);
 
-    const advanced = dispatch(migrated, { type: 'NEXT_CHAPTER' }, constant());
+    const unlocked = dispatch(migrated, { type: 'UNLOCK_SHOP_EXIT' }, constant()).state;
+    const advanced = dispatch(unlocked, { type: 'NEXT_CHAPTER' }, constant());
     expect(advanced.state.chapterPlans[2]).toEqual(plan);
     expect(advanced.state.historyV2.filter(event => event.kind === 'chapter_started' && event.chapter === 2)).toHaveLength(1);
   });

@@ -4,6 +4,8 @@ import { rarityClassName, rarityLabel } from '../game/rarity';
 import { RarityBadge } from './RarityBadge';
 import type { Action, Board } from '../game/types';
 import { RunActionPortal } from './RunActionRow';
+import { RewardSkipConfirmation } from './RewardSkipConfirmation';
+import { useEffect, useRef } from 'react';
 
 export function SpecialOfferScreen({ board, busy, submit }: {
   board: Board;
@@ -11,6 +13,13 @@ export function SpecialOfferScreen({ board, busy, submit }: {
   submit: (action: Action) => void;
 }) {
   const selection = board.specialOffer!;
+  const resumedLegacyClaim = useRef(false);
+  useEffect(() => {
+    if (!busy && selection.acquired && !resumedLegacyClaim.current) {
+      resumedLegacyClaim.current = true;
+      submit({ type: 'CONTINUE_SPECIAL_OFFER' });
+    }
+  }, [busy, selection.acquired, submit]);
   return <Stack gap="md" className="special-offer-screen">
     <Paper p="lg" className="special-offer-heading">
       <Group justify="space-between" align="flex-start">
@@ -19,7 +28,7 @@ export function SpecialOfferScreen({ board, busy, submit }: {
         <Badge color="teal" variant="light">CHOOSE 1</Badge>
       </Group>
     </Paper>
-    <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md" data-tutorial="special-offers">
+    <SimpleGrid cols={{ base: 1, sm: Math.max(1, Math.min(3, selection.offers.length)) }} spacing="md" data-tutorial="special-offers">
       {selection.offers.map(offer => {
         const chosen = selection.chosen?.id === offer.id;
         const rarity = SPECIAL_OFFERS[offer.type].rarity;
@@ -36,7 +45,8 @@ export function SpecialOfferScreen({ board, busy, submit }: {
         </Paper>;
       })}
     </SimpleGrid>
-    {selection.acquired && <RunActionPortal><div className="run-action-primary"><Button color="teal" disabled={busy}
-      onClick={() => submit({ type: 'CONTINUE_SPECIAL_OFFER' })}>CONTINUE →</Button></div></RunActionPortal>}
+    {!selection.acquired && <RunActionPortal><div className="run-action-primary">
+      <RewardSkipConfirmation disabled={busy} onConfirm={() => submit({ type: 'SKIP_SPECIAL_OFFER' })} />
+    </div></RunActionPortal>}
   </Stack>;
 }

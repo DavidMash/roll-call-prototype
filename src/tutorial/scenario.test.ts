@@ -8,7 +8,14 @@ import { curateTutorialOffers } from './curatedOffers';
 import { buildRound2Plan, reconcileTutorialBindings } from './tutorialBindings';
 
 function act(session: ReturnType<typeof newTutorialSession>['session'], action: Action) {
-  const next = dispatchTutorial(session, action);
+  let current = session;
+  if (current.game.phase === 'shop' && current.game.shop?.exitUnlocked === false
+    && (action.type === 'NEXT_ROUND' || action.type === 'NEXT_CHAPTER' || action.type === 'RETRY_ROUND')) {
+    const unlocked = dispatchTutorial(current, { type: 'UNLOCK_SHOP_EXIT' });
+    expect(unlocked.error).toBeUndefined();
+    current = unlocked.session;
+  }
+  const next = dispatchTutorial(current, action);
   expect(next.error).toBeUndefined();
   return next.session;
 }

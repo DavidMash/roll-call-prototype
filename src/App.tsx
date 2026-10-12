@@ -106,7 +106,7 @@ export default function App() {
   function submit(action: Action) {
     if (busy) return;
     if (!game.submit(action)) return;
-    if (!['BUY', 'SELL_ENHANCEMENT', 'STOKE_FLAME', 'RESTORE_LIFE', 'DISMISS_FLAME_TUTORIAL'].includes(action.type)) setSelectedOffer(null);
+    if (!['BUY', 'SELL_ENHANCEMENT', 'STOKE_FLAME', 'RESTORE_LIFE', 'DISMISS_FLAME_TUTORIAL', 'UNLOCK_SHOP_EXIT'].includes(action.type)) setSelectedOffer(null);
     setSelectedFlameOffer(null);
     if (action.type !== 'TOGGLE_CHARGE') setSelection(emptySelection());
   }

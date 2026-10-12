@@ -9,7 +9,7 @@ import { FlameSelectionScreen } from './FlameSelectionScreen';
 const constant: RandomSource = { next: () => 0.99 };
 
 describe('FlameSelectionScreen', () => {
-  it('shows the all-collected state and keeps Shop continuation available', () => {
+  it('shows the all-collected state and keeps confirmed reward skipping available', () => {
     const board = newRun('all-flames-collected', constant).state;
     board.phase = 'flameSelection';
     board.bonfires = [...FLAME_IDS];
@@ -19,7 +19,7 @@ describe('FlameSelectionScreen', () => {
       setSelectedOffer={() => {}} submit={() => {}} skip={() => {}} openFlameDetails={() => {}}
     /></MantineProvider>);
     expect(html).toContain('ALL FLAMES COLLECTED');
-    expect(html).toContain('CONTINUE TO SHOP');
+    expect(html).toContain('SKIP REWARD');
     expect(html).not.toContain('disabled=""');
   });
 });

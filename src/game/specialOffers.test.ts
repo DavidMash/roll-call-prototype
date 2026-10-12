@@ -29,9 +29,11 @@ function offerState(type: SpecialOfferType, hand?: HandId): GameState {
 const choose = (type: SpecialOfferType, hand?: HandId, random: RandomSource = constant()) =>
   dispatch(offerState(type, hand), { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }, random).state;
 
+const unlockShop = (state: GameState, random: RandomSource = constant()) => state.shop?.exitUnlocked === false
+  ? dispatch(state, { type: 'UNLOCK_SHOP_EXIT' }, random).state : state;
+
 function carePackageRound(random: RandomSource = constant(.4)): GameState {
-  let state = choose('carePackage');
-  state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, random).state;
+  const state = unlockShop(choose('carePackage'), random);
   return dispatch(state, { type: 'NEXT_ROUND' }, random).state;
 }
 
@@ -83,8 +85,6 @@ describe('alternating Special Offer progression', () => {
 describe('immediate and Shop Special Offers', () => {
   it('On The House makes only initial displayed purchases free once', () => {
     let state = choose('onTheHouse');
-    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('On The House · Next Shop');
-    state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
     expect(activeSpecialOfferStatusItems(state.specialOfferEffects)).toEqual([]);
     expect(state.shop?.freeEnhancementOfferIds).toHaveLength(3);
     expect(state.shop?.freeTrainingOfferKeys).toHaveLength(3);
@@ -117,7 +117,7 @@ describe('immediate and Shop Special Offers', () => {
     expect(state.handLevels.fullHouse).toBe(5);
     expect(state.stats.trainingPurchases).toEqual([]);
     expect(state.stats.trainingGoldSpent).toBe(0);
-    expect(state.specialOffer?.chosen?.hand).toBe('fullHouse');
+    expect(state.actionJournal.at(-1)).toEqual({ type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 });
   });
 
   it('Sommelier, Orange Theory, and Fire Keeper update every applicable held face deterministically', () => {
@@ -203,7 +203,7 @@ describe('temporary Special Offers', () => {
 
   it('keeps a dead board playable until the final Care Package Reroll is spent', () => {
     let state = choose('carePackage');
-    state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
+    state = unlockShop(state);
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.2)).state;
     state.target = 1_000_000;
     state.consumed = [...HAND_IDS];
@@ -273,7 +273,7 @@ describe('temporary Special Offers', () => {
 
   it('keeps Care Package spending permanent through a Tightrope Bust and retry', () => {
     let state = choose('carePackage');
-    state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant(.4)).state;
+    state = unlockShop(state, constant(.4));
     state.bossSchedule[state.round + 1] = 'tightrope';
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.4)).state;
     expect(state.boss?.type).toBe('tightrope');
@@ -326,6 +326,7 @@ describe('temporary Special Offers', () => {
     state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(.4)).state;
     expect(state.specialOfferEffects.carePackageRerolls).toBe(2);
     new Resolver(state, constant(.4)).openShop();
+    state = unlockShop(state, constant(.4));
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.4)).state;
     expect(state.manualRerollsRemaining).toBe(3);
     expect(state.specialOfferEffects.carePackageRerolls).toBe(2);
@@ -406,7 +407,7 @@ describe('temporary Special Offers', () => {
   it('Silence is consumed at Boss start and disables the mechanic while preserving its Goal', () => {
     let state = choose('silence');
     expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Silence · Next Boss');
-    state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
+    state = unlockShop(state);
     state.round = 8;
     state.bossSchedule[9] = 'hexer';
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.3)).state;
@@ -461,7 +462,6 @@ describe('replay and checkpoint Special Offers', () => {
     let state = choose('timeTravel');
     expect(state.round).toBe(1);
     expect(state.chapterLifecycle[1]?.specialOfferConsumed).toBe(true);
-    state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
     expect(state.phase).toBe('round');
     expect(state.round).toBe(1);
     expect(state.currentNodeId).toBe('round:1');
@@ -483,7 +483,7 @@ describe('replay and checkpoint Special Offers', () => {
       .toBe('Bad Dream · 3 Rounds');
     const checkpoint = structuredClone(state.badDreamCheckpoint!);
     expect(checkpoint).toEqual({ chapter: 1, hoodedChallenge: null });
-    state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
+    state = unlockShop(state);
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.4)).state;
     state.gold = 77;
     state.handLevels.ones = 9;

@@ -46,11 +46,15 @@ export function winningSlippyRun() {
         action = game.specialOffer!.acquired ? { type: 'CONTINUE_SPECIAL_OFFER' }
           : { type: 'CHOOSE_SPECIAL_OFFER', offerId: offer.id };
       } else if (game.phase === 'shop') {
+        if (game.shop!.exitUnlocked === false) {
+          action = { type: 'UNLOCK_SHOP_EXIT' };
+        } else {
         const offer = !game.bust ? game.shop!.offers.find(item => item.enhancement === 'slippy' && !item.purchased) : undefined;
         if (offer && !boughtSlippy) {
           action = { type: 'BUY', offerId: offer.id, dieId: 4 };
           boughtSlippy = true;
         } else action = game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' };
+        }
       } else {
         if (game.boss?.type === 'warden' && game.boss.pendingReinforcements > 0) {
           const activeDieIds = game.boss.activeDieIds;

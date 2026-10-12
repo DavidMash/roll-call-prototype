@@ -42,6 +42,11 @@ export function jackpotRun() {
       actions.push(buy);
       branch = dispatch(branch, buy).state;
       const next: Action = { type: 'NEXT_ROUND' };
+      if (branch.shop?.exitUnlocked === false) {
+        const unlock: Action = { type: 'UNLOCK_SHOP_EXIT' };
+        actions.push(unlock);
+        branch = dispatch(branch, unlock).state;
+      }
       actions.push(next);
       branch = dispatch(branch, next).state;
 
@@ -53,7 +58,8 @@ export function jackpotRun() {
           continue;
         }
         if (branch.phase === 'shop') {
-          const shopAction: Action = branch.bust ? { type: 'RETRY_ROUND' } : next;
+          const shopAction: Action = branch.shop?.exitUnlocked === false ? { type: 'UNLOCK_SHOP_EXIT' }
+            : branch.bust ? { type: 'RETRY_ROUND' } : next;
           actions.push(shopAction);
           branch = dispatch(branch, shopAction).state;
           continue;

@@ -306,6 +306,8 @@ describe('seeded Training offer generation', () => {
     a = dispatch(a, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
     b = dispatch(b, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
     const firstRngState = a.rngState;
+    a = dispatch(a, { type: 'UNLOCK_SHOP_EXIT' }).state;
+    b = dispatch(b, { type: 'UNLOCK_SHOP_EXIT' }).state;
     a = dispatch(a, { type: 'NEXT_ROUND' }).state;
     b = dispatch(b, { type: 'NEXT_ROUND' }).state;
     a.dice.forEach(die => { die.value = 6; });
