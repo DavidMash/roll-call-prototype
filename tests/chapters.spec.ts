@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { BOSSES } from '../src/game/bosses';
+import { BOSSES, bossTypeForRound } from '../src/game/bosses';
 import { newRun } from '../src/game/engine';
-import { targetForRound } from '../src/game/config';
+import { targetForRound } from '../src/game/goals';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import type { GameState } from '../src/game/types';
 import { enterRun } from './uiHelpers';
@@ -203,7 +203,8 @@ test('expanded current Round preserves a substantially large formatted target wi
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   const map = page.getByTestId('run-map-transition');
   await expect(map).toBeVisible({ timeout: 4_000 });
-  const expected = targetForRound(targetRound).toLocaleString('en-US', { maximumFractionDigits: 3 });
+  const expected = targetForRound(targetRound, null, round => bossTypeForRound(state.seed, round))
+    .toLocaleString('en-US', { maximumFractionDigits: 3 });
   const target = map.getByTestId('current-round-target');
   await expect(target).toContainText(`TARGET${expected}`);
   expect(await target.evaluate(element => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { targetForRound } from './config';
+import { targetForRound } from './goals';
 import { createDice } from './dice';
 import { ENHANCEMENTS } from './enhancements';
 import { combinationsForHand, defaultCombination, handOptions, HAND_IDS, isValidSelection } from './hands';
@@ -59,7 +59,7 @@ describe('hand detection', () => {
     expect(HAND_IDS).not.toContain('chance');
   });
   it('uses the centralized progression formula', () => {
-    expect(Array.from({ length: 6 }, (_, i) => targetForRound(i + 1))).toEqual([100, 175, 200, 200, 350, 425]);
+    expect(Array.from({ length: 6 }, (_, i) => targetForRound(i + 1))).toEqual([100, 150, 200, 250, 300, 400]);
     expect(ENHANCEMENTS.weighted.purchasePrice).toBe(3);
   });
 });

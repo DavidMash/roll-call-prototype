@@ -1,7 +1,7 @@
-import { BOSSES, bossTypeForRound, isBigBossRound, isBossRound, isMiniBossRound, targetForBoss } from './bosses';
-import { rawTargetForRound, targetForRound } from './config';
+import { BOSSES, bossTypeForRound, isBigBossRound, isBossRound, isMiniBossRound } from './bosses';
 import { formatPlayerNumber } from './copy';
 import { chapterEncounterRounds, chapterNumberForRound, chapterRoundForRound, firstRoundOfChapter } from './chapters';
+import { targetForRound, type BossForRound } from './goals';
 import type { BossType, ChapterPlan, RunNode } from './types';
 
 export const encounterNode = (round: number, boss?: BossType | null): RunNode => boss || isBossRound(round)
@@ -64,10 +64,9 @@ export function nodeLabel(node: RunNode): string {
   return 'SHOP';
 }
 
-export function encounterTarget(node: RunNode): number | null {
+export function encounterTarget(node: RunNode, bossForRound?: BossForRound): number | null {
   if (node.type !== 'normal_round' && node.type !== 'mini_boss_round' && node.type !== 'boss_round') return null;
-  const normalTarget = targetForRound(node.round);
-  return node.boss ? targetForBoss(node.boss, rawTargetForRound(node.round)) : normalTarget;
+  return targetForRound(node.round, node.boss ?? null, bossForRound);
 }
 
 export const nodeDescription = (node: RunNode) => node.boss ? BOSSES[node.boss].name : nodeLabel(node);

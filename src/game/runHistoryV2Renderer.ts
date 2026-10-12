@@ -72,7 +72,10 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
   switch (event.kind) {
     case 'run_started': return `RUN · ${event.seed} · schema ${event.schemaVersion} · ${event.ruleset}`;
     case 'chapter_started': return `CHAPTER ${number(event.chapter)} · ${event.miniBoss} / ${event.boss}`;
-    case 'round_attempt_started': return `ROUND ${number(event.round)} · Attempt ${number(event.attempt)} · Goal ${number(event.target.final)}${event.boss ? ` · ${event.boss}` : ''}`;
+    case 'round_attempt_started': {
+      const target = event.target as typeof event.target & { final?: number };
+      return `ROUND ${number(event.round)} · Attempt ${number(event.attempt)} · Goal ${number(target.finalGoal ?? target.final ?? 0)}${event.boss ? ` · ${event.boss}` : ''}`;
+    }
     case 'hand_scored': return renderHandScoredV2(event);
     case 'roll_batch': return `ROLL · ${event.reason} · ${event.results.map(result => `${die(result.dieId)} ${number(result.beforeFace)}→${number(result.afterFace)}`).join(' · ')}`;
     case 'shop_offers_presented': return `OFFERS · ${event.pool} · ${event.offers.map(offer => `${offer.contentId} [${offer.rarity}]`).join(', ')}`;

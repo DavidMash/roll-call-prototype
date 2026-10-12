@@ -2,9 +2,10 @@ import type {
   BossType, ChallengeId, Enhancement, Flame, GoldSource, GoldSpendSource, HandId, HandPlaySource,
   Rarity, Rank, RunNodeType, SpecialOfferType, WildfireResolved,
 } from './types';
+import type { RoundGoalBreakdown } from './goals';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 2 as const;
-export const RUN_HISTORY_V2_RULESET = 'rarity-fetch-vintage-v1' as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 3 as const;
+export const RUN_HISTORY_V2_RULESET = 'rarity-fetch-vintage-chapter-goals-v2' as const;
 
 export interface RunHistoryV2Coverage {
   complete: boolean;
@@ -103,7 +104,7 @@ export interface RoundAttemptStartedEvent extends RunHistoryV2Envelope {
   chapter: number;
   chapterRound: number;
   retry: boolean;
-  target: { normal: number; final: number };
+  target: Omit<RoundGoalBreakdown, 'chapter' | 'localRound'>;
   boss: BossType | null;
   lives: number;
   dice: HistoryDieState[];

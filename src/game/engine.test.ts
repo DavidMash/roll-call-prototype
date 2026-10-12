@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CONFIG, diceRerollCost, offerRerollCost, targetForRound } from './config';
+import { CONFIG, diceRerollCost, offerRerollCost } from './config';
+import { targetForRound } from './goals';
 import { activeFace, rollDie, rollWeights } from './dice';
 import { dispatch, newRun } from './engine';
 import { enhancementCost, ENHANCEMENT_IDS } from './enhancements';
@@ -352,7 +353,9 @@ describe('Jumping Bean', () => {
 describe('round boundaries and losing', () => {
   it('awards flat base, unused-reroll Gold, and capped interest before the shop', () => {
     let game = newRun('balance-flow', constant()).state;
+    enhance(game, 0, 'bonus', 1, 6);
     game.bossSchedule = {};
+    const clearingScore = 275;
     let earned = 0;
     for (let round = 1; round <= 4; round++) {
       const result = play(game, 'fiveKind', [0, 1, 2, 3, 4]);
@@ -366,8 +369,8 @@ describe('round boundaries and losing', () => {
       expect(result.state.stats.goldEarned).toBe(earned);
       expect(result.state.stats.goldSpent).toBe(0);
       expect(result.state.stats.rounds.at(-1)).toMatchObject({
-        round, target: targetForRound(round), firstCrossedScore: 225,
-        finalScore: 225, clearMargin: 225 - targetForRound(round), cleared: true,
+        round, target: targetForRound(round), firstCrossedScore: clearingScore,
+        finalScore: clearingScore, clearMargin: clearingScore - targetForRound(round), cleared: true,
       });
       expect(result.state.lastRoundPayout).toEqual({ baseGold: 5, unusedRerollGold: 3,
         interestGold: Math.min(10, Math.floor(held / 5)), bossRewardGold: bossReward,
@@ -392,7 +395,7 @@ describe('round boundaries and losing', () => {
     }
     const data = exportRun(game);
     expect(data.roundReached).toBe(5);
-    expect(data.rounds.map(round => round.target)).toEqual([100, 175, 200, 200, 350]);
+    expect(data.rounds.map(round => round.target)).toEqual([100, 150, 200, 250, 300]);
     expect(data.goldEarned).toBe(41);
     expect(data.goldSpent).toBe(0);
   });

@@ -187,7 +187,8 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
           if (!point) return null;
           const state = chapterMapNodeState(index, currentIndex);
           const displayNode = state === 'current' && event.boss ? { ...node, boss: event.boss } : node;
-          const target = displayNode.type === 'normal_round' ? encounterTarget(displayNode) : null;
+          const target = displayNode.type === 'normal_round' ? encounterTarget(displayNode, round =>
+            event.board.bossSchedule[round] ?? null) : null;
           const formattedTarget = target === null ? null : formatPlayerNumber(target);
           const progress = index / Math.max(1, nodes.length - 1);
           const miniWeight = Math.round((1 - Math.min(1, progress)) * 100);

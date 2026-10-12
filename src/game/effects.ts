@@ -1,4 +1,4 @@
-import { bossRewardForRound, CONFIG, interestForGold, rawTargetForRound, roundReward, targetForRound } from './config';
+import { bossRewardForRound, CONFIG, interestForGold, roundReward } from './config';
 import { activeFace, rollPhysicalDie, scoringPips, weightedSourceFace } from './dice';
 import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, loneWolfPipsFactor, personalTrainerChance, stacks, tankMultiplierFactor, VINTAGE_BASE_SELL_CAP } from './enhancements';
 import {
@@ -13,7 +13,8 @@ import { OFFER_RARITY_WEIGHTS, rarityFirstSelection, rarityLabel } from './rarit
 import { applyHandContribution, applyHandMultiplier, applyXMult, createHandAccumulator, finalizeHandScore, finalizeScore, ordinaryFaceContributions, resolvedOrdinaryPips, type HandScoreContribution, type ScoringParticipant } from './scoring';
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie,
-  isBigBossRound, isCursedDie, isMiniBossType, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
+  isBigBossRound, isCursedDie, isMiniBossType, requiredEncounterDieIds, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
+import { getRoundGoalBreakdown } from './goals';
 import { encounterNode, flameNodeAfter, postBossShopNodeAfter, shopNodeBefore, specialOfferNodeAfter, timeTravelDestinationRound } from './progression';
 import { formatPercentage, formatPlayerNumber } from './copy';
 import { chapterEncounterRounds, chapterNumberForRound, ensureChapterPlan } from './chapters';
@@ -1706,7 +1707,7 @@ export class Resolver {
     if (this.state.chargeXMult !== 1 || this.state.chargeArmed) this.state.stats.chargeResets++;
     this.state.phase = 'round'; this.state.score = 0; this.state.scoreByHand = {}; this.state.effectScore = 0;
     if (!retry) this.state.specialOfferEffects.bottledFairyTriggeredThisRound = false;
-    this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound; this.state.target = targetForRound(this.state.round);
+    this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound;
     this.state.consumed = []; this.state.scorecardCycleConsumed = []; this.state.targetPracticeHand = null; this.state.lastRoundPayout = null; this.state.roundSummary = null;
     this.state.chargeXMult = 1; this.state.chargeArmed = false; this.state.chargeAttribution = {}; this.state.hotStreakCharges = 0;
     if (chargeBeforeRoundReset !== 1 || chargeWasArmed) this.emitV2({ kind: 'charge_changed', operation: 'round_reset',
@@ -1718,7 +1719,11 @@ export class Resolver {
     const bossType = this.state.bossSchedule[this.state.round]
       ?? (this.state.round > 60 ? bossTypeForRound(this.state.seed, this.state.round) : null);
     if (bossType) this.state.bossSchedule[this.state.round] = bossType;
-    if (bossType) this.state.target = targetForBoss(bossType, rawTargetForRound(this.state.round));
+    const bossForGoalRound = (round: number) => this.state.bossSchedule[round]
+      ?? (round > 60 ? bossTypeForRound(this.state.seed, round) : null);
+    const targetBreakdown = getRoundGoalBreakdown(this.state.round, bossType ?? null, bossForGoalRound);
+    const { chapter: targetChapter, localRound: targetLocalRound, ...historyTargetBreakdown } = targetBreakdown;
+    this.state.target = targetBreakdown.finalGoal;
     this.state.boss = bossType ? createBossRuntime(this.state.seed, this.state.round, bossType, {
       handPlayCounts: this.state.handPlayCounts,
       playerDieIds: this.state.dice.filter(die => die.owner === 'player').map(die => die.id),
@@ -1766,8 +1771,8 @@ export class Resolver {
       manualRerollsGranted: this.state.manualRerollsRemaining, manualRerollChargesSpent: 0,
       manualRerollsRemainingAtClear: null, manualRerollActions: 0, deadBoardRescues: 0, scoreByHand: {}, effectScore: 0,
       goldBefore: this.state.gold, goldBySourceBefore: structuredClone(this.state.stats.goldBySource), payout: null });
-    const v2RoundStarted = this.emitV2({ kind: 'round_attempt_started', chapter: chapterNumberForRound(this.state.round),
-      chapterRound: chapterRoundForRound(this.state.round), retry, target: { normal: targetForRound(this.state.round), final: this.state.target },
+    const v2RoundStarted = this.emitV2({ kind: 'round_attempt_started', chapter: targetChapter,
+      chapterRound: targetLocalRound, retry, target: historyTargetBreakdown,
       boss: this.state.boss?.type ?? null, lives: this.state.lives,
       dice: activeEncounterDice(this.state).map(die => this.historyDie(die.id)) });
     if (this.state.boss) {

@@ -40,6 +40,26 @@ function forceBust(state: GameState): GameState {
   return dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant()).state;
 }
 
+describe('Run History V2 Goal diagnostics', () => {
+  it('records the complete authoritative target breakdown without duplicating the Chapter number', () => {
+    const state = newRun('goal-breakdown-history', constant()).state;
+    const started = state.historyV2.find(event => event.kind === 'round_attempt_started');
+    expect(started).toMatchObject({
+      kind: 'round_attempt_started', chapter: 1, chapterRound: 1,
+      target: {
+        chapterBase: 100, localMultiplier: 1,
+        neutralRawGoal: 100, bossModifier: 1, postBossRawGoal: 100,
+        coarseCandidate: 100, coarseDeviation: 0, coarseAccepted: true,
+        coarseCollision: false, finalGoal: 100,
+      },
+    });
+    if (started?.kind !== 'round_attempt_started') throw new Error('Missing Round-start history');
+    expect(started.target.fineFallback).toBeUndefined();
+    expect(started.target).not.toHaveProperty('chapter');
+    expect(started.target).not.toHaveProperty('localRound');
+  });
+});
+
 describe('Run History V2 hand scoring', () => {
   it('emits one complete simple hand event that reconciles with the authoritative score', () => {
     const state = game([2, 2, 3, 4, 5]);
@@ -338,10 +358,10 @@ describe('Run History V2 instrumentation safety and size', () => {
     expect(state.debugTrace.records).toHaveLength(DEBUG_TRACE_MAX_RECORDS);
     expect(state.debugTrace.droppedRecords).toBeGreaterThan(0);
     expect({ legacyEntries: state.history.length, v2Entries: state.historyV2.length, ...sizes }).toEqual({
-      legacyEntries: 0, v2Entries: 656, legacyHistory: 2, v2History: 307_119,
-      renderedV2: 32_503, normalExport: 38_362, debugTrace: 44_643,
+      legacyEntries: 0, v2Entries: 656, legacyHistory: 2, v2History: 321_846,
+      renderedV2: 32_518, normalExport: 38_391, debugTrace: 44_643,
       runStats: 75_054, rollbackState: 5_274, actionJournal: 7_954,
-      persistedState: 368_933, fullState: 445_719,
+      persistedState: 383_660, fullState: 460_446,
     });
   }, 30_000);
 });

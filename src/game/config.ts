@@ -1,9 +1,7 @@
 export const CONFIG = {
   diceCount: 5,
   baseTarget: 100,
-  baseBossTarget: 200,
   targetGrowth: 1.28,
-  targetBlockSize: 3,
   targetRounding: 5,
   startingGold: 0,
   maxLives: 3,
@@ -25,47 +23,6 @@ export const CONFIG = {
   tickMs: { normal: 350, fast: 90, instant: 0 },
   resolutionEventCap: 10000,
 } as const;
-
-export const TARGET_BLOCK_RATIOS = [1 / 2, 5 / 6, 1] as const;
-export const TARGET_BLOCK_GROWTH = CONFIG.targetGrowth ** CONFIG.targetBlockSize;
-
-export function targetRoundingIncrement(rawTarget: number): number {
-  const magnitude = Math.floor(Math.log10(Math.max(1, Math.abs(rawTarget))));
-  return magnitude < 3 ? 25 : 50 * 10 ** (magnitude - 3);
-}
-
-export function prettyRoundTarget(rawTarget: number): number {
-  const increment = targetRoundingIncrement(rawTarget);
-  return Math.round(rawTarget / increment) * increment;
-}
-
-/** Unmodified global-Round curve, before local shaping or final rounding. */
-export function baseTargetForRound(round: number): number {
-  const roundIndex = Math.max(0, Math.floor(round) - 1);
-  return CONFIG.baseTarget * CONFIG.targetGrowth ** roundIndex;
-}
-
-export function rawBossAnchorForBlock(block: number): number {
-  const blockIndex = Math.max(0, Math.floor(block));
-  const firstRound = blockIndex * CONFIG.targetBlockSize + 1;
-  return baseTargetForRound(firstRound) * (CONFIG.baseBossTarget / CONFIG.baseTarget);
-}
-
-export function bossAnchorForBlock(block: number): number {
-  return prettyRoundTarget(rawBossAnchorForBlock(block));
-}
-
-/** Existing local-Round shaping, deliberately left unrounded for Boss modifiers. */
-export function rawTargetForRound(round: number): number {
-  const roundIndex = Math.max(0, Math.floor(round) - 1);
-  const block = Math.floor(roundIndex / CONFIG.targetBlockSize);
-  const position = roundIndex % CONFIG.targetBlockSize;
-  return rawBossAnchorForBlock(block) * TARGET_BLOCK_RATIOS[position];
-}
-
-export function targetForRound(round: number): number {
-  return prettyRoundTarget(rawTargetForRound(round));
-}
 export const roundReward = (_round?: number) => CONFIG.roundRewardBase;
 export const bossRewardForRound = (round: number) => 9 + round / 3;
 export const interestForGold = (heldGold: number) => Math.min(CONFIG.interestCap,
