@@ -6,7 +6,7 @@ import type { Board } from '../game/types';
 export function ChallengeTracker({ board }: { board: Board }) {
   const [opened, setOpened] = useState(false);
   const challenge = board.hoodedFigure.active;
-  if (!challenge || challenge.issuedChapter !== Math.floor((board.round - 1) / 6) + 1 || ((board.round - 1) % 6) + 1 > 3) return null;
+  if (!challenge || challenge.issuedChapter !== Math.floor((board.round - 1) / 6) + 1) return null;
   const definition = CHALLENGES[challenge.id];
   const progress = displayedChallengeProgress(challenge);
   const percent = challenge.target > 0 ? Math.min(100, progress / challenge.target * 100) : 0;

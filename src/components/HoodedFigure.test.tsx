@@ -12,7 +12,7 @@ describe('Hooded Figure UI', () => {
     const board = newRun('challenge-ui', { next: () => .2 }).state;
     board.round = 25;
     board.hoodedFigure.active = {
-      id: 'theLongWay', issuedChapter: 5, target: 3,
+      id: 'theLongWay', issuedChapter: 5, target: 4,
       committed: { value: 1, keys: [], invalid: false, jackpotPaid: false },
       attempt: { value: 2, keys: [], invalid: false, jackpotPaid: false }, complete: false, dialogueLine: 'test',
     };
@@ -21,8 +21,23 @@ describe('Hooded Figure UI', () => {
     expect(html).toContain('role="progressbar"');
     expect(html).toContain('aria-valuenow="2"');
     expect(html).toContain('aria-label="About The Long Way challenge"');
-    expect(html).not.toContain('Manually play Large Straight 3 times');
+    expect(html).not.toContain('Manually play Large Straight 4 times');
     expect(html).not.toContain('Rounds Remaining');
+  });
+
+  it('keeps an active challenge tracker visible through Local R6 and hides it in the next Chapter', () => {
+    const board = newRun('challenge-ui-window', { next: () => .2 }).state;
+    board.hoodedFigure.active = {
+      id: 'theLongWay', issuedChapter: 5, target: 4,
+      committed: { value: 1, keys: [], invalid: false, jackpotPaid: false },
+      attempt: { value: 1, keys: [], invalid: false, jackpotPaid: false }, complete: false, dialogueLine: 'test',
+    };
+    for (const round of [25, 26, 27, 28, 29, 30]) {
+      board.round = round;
+      expect(wrap(<ChallengeTracker board={board} />)).toContain('data-testid="challenge-tracker"');
+    }
+    board.round = 31;
+    expect(wrap(<ChallengeTracker board={board} />)).not.toContain('data-testid="challenge-tracker"');
   });
 
   it('renders the cinematic as a modal story interaction', () => {

@@ -79,7 +79,18 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     case 'shop_transaction': return `SHOP · ${event.transaction.type} · ${'amount' in event.transaction ? number(event.transaction.amount) : ''}`.trim();
     case 'flame_changed': return `FLAME · ${event.change.type}${'flame' in event.change ? ` · ${FLAMES[event.change.flame].name}` : ''}`;
     case 'charge_changed': return `CHARGE · ${event.operation} · ×${number(event.before)}→×${number(event.after)}`;
-    case 'hooded_challenge_changed': return `HOODED FIGURE · ${event.change}${event.challengeId ? ` · ${event.challengeId}` : ''}`;
+    case 'hooded_challenge_changed': {
+      const progress = event.attemptProgress === undefined ? ''
+        : ` · attempt ${number(event.attemptProgress)}${event.target === undefined ? '' : `/${number(event.target)}`}`
+          + `${event.committedProgress === undefined ? '' : ` · committed ${number(event.committedProgress)}`}`
+          + `${event.invalid ? ' · invalid' : ''}`;
+      const rollback = event.rollback
+        ? ` · rollback ${number(event.rollback.attemptProgressBefore)}→${number(event.rollback.attemptProgressAfter)}`
+          + (event.rollback.invalidBefore !== event.rollback.invalidAfter
+            ? ` · invalid ${String(event.rollback.invalidBefore)}→${String(event.rollback.invalidAfter)}` : '')
+        : '';
+      return `HOODED FIGURE · ${event.change}${event.challengeId ? ` · ${event.challengeId}` : ''}${progress}${rollback}`;
+    }
     case 'boss_state_changed': return `BOSS · ${event.boss} · ${event.change}`;
     case 'scorecard_refreshed': return 'SCORECARD · refreshed';
     case 'round_attempt_finished': return `${event.outcome === 'cleared' ? 'CLEAR' : 'BUST'} · ${number(event.score)} / ${number(event.target)}`;

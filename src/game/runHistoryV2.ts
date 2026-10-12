@@ -211,9 +211,23 @@ export interface ChargeChangedEvent extends RunHistoryV2Envelope {
 export interface HoodedChallengeChangedEvent extends RunHistoryV2Envelope {
   kind: 'hooded_challenge_changed';
   challengeId?: ChallengeId;
-  change: 'issued' | 'completed' | 'rolled_back' | 'time_travel_reset' | 'bad_dream_reset' | 'expired' | 'returned'
+  change: 'issued' | 'progress_committed' | 'completed' | 'rolled_back' | 'time_travel_reset' | 'bad_dream_reset' | 'expired' | 'returned'
     | 'recipient_selected' | 'sacrifice_selected' | 'wildfire_created' | 'walked_away';
   target?: number;
+  attemptProgress?: number;
+  committedProgress?: number;
+  invalid?: boolean;
+  complete?: boolean;
+  rollback?: {
+    attemptProgressBefore: number;
+    attemptProgressAfter: number;
+    committedProgressBefore: number;
+    committedProgressAfter: number;
+    invalidBefore: boolean;
+    invalidAfter: boolean;
+    completeBefore: boolean;
+    completeAfter: boolean;
+  };
   recipientFlame?: Flame;
   sacrificedFlame?: Flame;
 }

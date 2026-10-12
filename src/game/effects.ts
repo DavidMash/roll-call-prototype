@@ -27,8 +27,8 @@ import {
 } from './specialOffers';
 import {
   beginChallengeRound, challengeText, CHALLENGES, completeChallengeRound, createActiveChallenge,
-  displayedChallengeProgress, HOODED_FIGURE_CONFIG, observeClearingJackpot,
-  observeMagneticPulls, observeManualHand, observeManualReroll, observeScoringEvent, projectWildfire,
+  HOODED_FIGURE_CONFIG, observeClearingJackpot,
+  observeEnhancementActivation, observeMagneticPulls, observeManualHand, observeManualReroll, observeScoringEvent, projectWildfire,
   rankedRecipients, rankedSacrifices, selectChallenge, weightedRoundFactor,
 } from './hoodedFigure';
 import type { ChargeFlame } from './flames';
@@ -40,6 +40,37 @@ import type {
 
 type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number };
 type RollContext = 'gameplay' | 'settle' | 'wardenSetup' | 'shop' | 'flameSelection';
+type HoodedChallengeState = NonNullable<GameState['hoodedFigure']['active']>;
+const hoodedProgressFields = (challenge: HoodedChallengeState) => ({
+  challengeId: challenge.id,
+  challengeTarget: challenge.target,
+  challengeAttemptProgress: challenge.attempt.value,
+  challengeCommittedProgress: challenge.committed.value,
+  challengeInvalid: challenge.attempt.invalid,
+  challengeComplete: challenge.complete,
+});
+const hoodedProgressChanged = (before: HoodedChallengeState, after: HoodedChallengeState) =>
+  before.complete !== after.complete
+  || before.attempt.value !== after.attempt.value
+  || before.attempt.invalid !== after.attempt.invalid
+  || before.attempt.jackpotPaid !== after.attempt.jackpotPaid
+  || before.attempt.keys.length !== after.attempt.keys.length
+  || before.attempt.keys.some(key => !after.attempt.keys.includes(key))
+  || before.committed.value !== after.committed.value
+  || before.committed.invalid !== after.committed.invalid
+  || before.committed.jackpotPaid !== after.committed.jackpotPaid
+  || before.committed.keys.length !== after.committed.keys.length
+  || before.committed.keys.some(key => !after.committed.keys.includes(key));
+const hoodedRollbackFields = (before: HoodedChallengeState, after: HoodedChallengeState) => ({
+  attemptProgressBefore: before.attempt.value,
+  attemptProgressAfter: after.attempt.value,
+  committedProgressBefore: before.committed.value,
+  committedProgressAfter: after.committed.value,
+  invalidBefore: before.attempt.invalid,
+  invalidAfter: after.attempt.invalid,
+  completeBefore: before.complete,
+  completeAfter: after.complete,
+});
 type V2HandDraft = {
   parentSeq?: number;
   hand: HandId;
@@ -289,18 +320,21 @@ export class Resolver {
         break;
       }
       case 'HOODED_CHALLENGE_ISSUED':
+      case 'HOODED_CHALLENGE_PROGRESS_COMMITTED':
       case 'HOODED_CHALLENGE_COMPLETED':
       case 'HOODED_CHALLENGE_ROLLED_BACK':
       case 'HOODED_CHALLENGE_TIME_TRAVEL_RESET':
       case 'HOODED_CHALLENGE_BAD_DREAM_RESET':
       case 'HOODED_CHALLENGE_EXPIRED':
       case 'HOODED_FIGURE_RETURNED': {
-        const changes = { HOODED_CHALLENGE_ISSUED: 'issued', HOODED_CHALLENGE_COMPLETED: 'completed',
+        const changes = { HOODED_CHALLENGE_ISSUED: 'issued', HOODED_CHALLENGE_PROGRESS_COMMITTED: 'progress_committed', HOODED_CHALLENGE_COMPLETED: 'completed',
           HOODED_CHALLENGE_ROLLED_BACK: 'rolled_back', HOODED_CHALLENGE_TIME_TRAVEL_RESET: 'time_travel_reset',
           HOODED_CHALLENGE_BAD_DREAM_RESET: 'bad_dream_reset', HOODED_CHALLENGE_EXPIRED: 'expired',
           HOODED_FIGURE_RETURNED: 'returned' } as const;
         this.emitV2({ kind: 'hooded_challenge_changed', challengeId: record.challengeId,
-          change: changes[record.type], target: record.challengeTarget });
+          change: changes[record.type], target: record.challengeTarget,
+          attemptProgress: record.challengeAttemptProgress, committedProgress: record.challengeCommittedProgress,
+          invalid: record.challengeInvalid, complete: record.challengeComplete, rollback: record.challengeRollback });
         break;
       }
       case 'WILDFIRE_SACRIFICE_SELECTED':
@@ -459,6 +493,7 @@ export class Resolver {
       message: `Warden unlock target ${this.format(boss.nextUnlockTarget)} reached · next reinforcement released` });
   }
   whenScored(dieId: number, snapshot: Face, hand: HandId, playSource: HandPlaySource, participation: 'selected' | 'hitchhiker'): void {
+    observeEnhancementActivation(this.state.hoodedFigure.active, snapshot);
     if (!this.state.bossSilenced && this.state.boss?.type === 'hexer' && dieId === this.state.boss.cursedDieId) {
       this.state.stats.hexerEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
         kind: playSource === 'jumpingBean' ? 'jumping_bean' : 'hand', face: snapshot.rank, hand });
@@ -1392,6 +1427,7 @@ export class Resolver {
         boss: this.state.boss?.type ?? null, livesBefore: failure.livesBefore, livesAfter: failure.livesAfter });
       const deathChapter = chapterNumberForRound(this.state.round);
       const currentChallenge = this.state.hoodedFigure.active;
+      const badDreamChallengeBefore = currentChallenge ? structuredClone(currentChallenge) : null;
       let badDreamRestoredChallenge: typeof currentChallenge = null;
       if (badDreamCheckpoint.chapter === deathChapter && currentChallenge && !currentChallenge.complete
         && badDreamCheckpoint.hoodedChallenge) {
@@ -1409,7 +1445,9 @@ export class Resolver {
       this.state.bust = null;
       this.nextTimeline('bad_dream', destination, 1, 'post_r3_shop');
       if (badDreamRestoredChallenge) this.emit({ type: 'HOODED_CHALLENGE_BAD_DREAM_RESET',
-        challengeId: badDreamRestoredChallenge.id, challengeTarget: badDreamRestoredChallenge.target,
+        ...hoodedProgressFields(badDreamRestoredChallenge),
+        challengeRollback: badDreamChallengeBefore?.id === badDreamRestoredChallenge.id
+          ? hoodedRollbackFields(badDreamChallengeBefore, badDreamRestoredChallenge) : undefined,
         message: `${CHALLENGES[badDreamRestoredChallenge.id].name} restored to its Bad Dream checkpoint` });
       this.openShop('backward');
       this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', message: 'Bad Dream returned the current build to the post-R3 Shop with 1 Life' });
@@ -1437,10 +1475,11 @@ export class Resolver {
     }
     this.emitV2({ kind: 'round_attempt_finished', outcome: 'bust', score: failure.score, target: failure.target,
       boss: this.state.boss?.type ?? null, livesBefore: failure.livesBefore, livesAfter: failure.livesAfter });
-    const rolledBackChallenge = this.state.hoodedFigure.active && (
-      this.state.hoodedFigure.active.complete
-      || displayedChallengeProgress(this.state.hoodedFigure.active) !== displayedChallengeProgress(checkpoint.board.hoodedFigure.active!)
-    ) ? { id: this.state.hoodedFigure.active.id, before: displayedChallengeProgress(this.state.hoodedFigure.active) } : null;
+    const currentChallenge = this.state.hoodedFigure.active;
+    const checkpointChallenge = checkpoint.board.hoodedFigure.active;
+    const rolledBackChallenge = currentChallenge && checkpointChallenge
+      && currentChallenge.id === checkpointChallenge.id && hoodedProgressChanged(currentChallenge, checkpointChallenge)
+      ? { before: structuredClone(currentChallenge), after: structuredClone(checkpointChallenge) } : null;
     restoreRollbackState(this.state, checkpoint);
     this.state.specialOfferEffects = restoreSpecialOfferEffectsAfterBust(
       this.state.specialOfferEffects,
@@ -1455,8 +1494,11 @@ export class Resolver {
       freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
     this.state.shop.lifeRestores ??= 0;
     this.nextTimeline('bust', this.state.round, failure.livesAfter > 0 ? failure.attempt + 1 : failure.attempt);
-    if (rolledBackChallenge) this.emit({ type: 'HOODED_CHALLENGE_ROLLED_BACK', challengeId: rolledBackChallenge.id,
-      amount: rolledBackChallenge.before, message: `${CHALLENGES[rolledBackChallenge.id].name} attempt progress rolled back after Bust` });
+    if (rolledBackChallenge) this.emit({ type: 'HOODED_CHALLENGE_ROLLED_BACK',
+      ...hoodedProgressFields(rolledBackChallenge.after),
+      challengeRollback: hoodedRollbackFields(rolledBackChallenge.before, rolledBackChallenge.after),
+      amount: rolledBackChallenge.before.attempt.value,
+      message: `${CHALLENGES[rolledBackChallenge.after.id].name} attempt progress rolled back after Bust` });
     this.state.lives = failure.livesAfter;
     this.state.roundAttemptNumber = failure.livesAfter > 0 ? failure.attempt + 1 : failure.attempt;
     this.state.bust = failure;
@@ -1551,7 +1593,7 @@ export class Resolver {
       this.state.hoodedFigure.interaction = { kind: 'return', stage: 'story', lineIndex: 0,
         lines: ['The hooded figure approaches again.', '"You\'ve done well. Let\'s make a Wildfire."', 'Choose a Bonfire to upgrade.'],
         recipient: null, sacrifice: null };
-      this.emit({ type: 'HOODED_FIGURE_RETURNED', challengeId: active.id,
+      this.emit({ type: 'HOODED_FIGURE_RETURNED', ...hoodedProgressFields(active),
         message: `Hooded Figure returned after ${CHALLENGES[active.id].name}` });
       return true;
     }
@@ -1562,7 +1604,7 @@ export class Resolver {
     const active = this.state.hoodedFigure.active;
     const sameChapter = active?.issuedChapter === chapterNumberForRound(this.state.round);
     if (sameChapter && !active.complete && chapterRoundForRound(this.state.round) === 6) {
-      this.emit({ type: 'HOODED_CHALLENGE_EXPIRED', challengeId: active.id, challengeTarget: active.target,
+      this.emit({ type: 'HOODED_CHALLENGE_EXPIRED', ...hoodedProgressFields(active),
         message: `${CHALLENGES[active.id].name} expired after the Chapter's final Round` });
       this.state.hoodedFigure.active = null;
       this.state.hoodedFigure.contributionCheckpoint = null;
@@ -1713,7 +1755,7 @@ export class Resolver {
       this.state.shop = null;
       this.state.phase = 'hoodedFigure';
       const active = this.state.hoodedFigure.active!;
-      this.emit({ type: 'HOODED_CHALLENGE_ISSUED', challengeId: active.id, challengeTarget: active.target,
+      this.emit({ type: 'HOODED_CHALLENGE_ISSUED', ...hoodedProgressFields(active),
         message: `Hooded Figure issued ${CHALLENGES[active.id].name} (target ${this.format(active.target)})` });
       return;
     }
@@ -1963,6 +2005,7 @@ export class Resolver {
     if (timeTravel) {
       const active = this.state.hoodedFigure.active;
       if (active && !active.complete && active.issuedChapter === chapterNumberForRound(this.state.round)) {
+        const beforeReset = structuredClone(active);
         const checkpoint = this.state.hoodedFigure.challengeCheckpoint;
         if (checkpoint?.id === active.id && checkpoint.issuedChapter === active.issuedChapter)
           this.state.hoodedFigure.active = structuredClone(checkpoint);
@@ -1975,7 +2018,8 @@ export class Resolver {
         if (this.state.hoodedFigure.contributionCheckpoint)
           this.state.bonfireContributions = structuredClone(this.state.hoodedFigure.contributionCheckpoint);
         const reset = this.state.hoodedFigure.active!;
-        this.emit({ type: 'HOODED_CHALLENGE_TIME_TRAVEL_RESET', challengeId: reset.id,
+        this.emit({ type: 'HOODED_CHALLENGE_TIME_TRAVEL_RESET', ...hoodedProgressFields(reset),
+          challengeRollback: hoodedRollbackFields(beforeReset, reset),
           message: `${CHALLENGES[reset.id].name} reset to its Chapter-start progress by Time Travel; Bonfire contribution history rewound` });
       }
       this.state.roundAttemptNumber = 1;
@@ -1999,10 +2043,17 @@ export class Resolver {
     const current = this.state.stats.rounds.at(-1)!;
     current.finalScore = this.state.score;
     if (this.state.score >= this.state.target) {
+      const challengeBefore = this.state.hoodedFigure.active ? structuredClone(this.state.hoodedFigure.active) : null;
       const completedNow = completeChallengeRound(this.state.hoodedFigure.active, this.state.score, this.state.target);
-      if (completedNow && this.state.hoodedFigure.active) this.emit({ type: 'HOODED_CHALLENGE_COMPLETED',
-        challengeId: this.state.hoodedFigure.active.id, challengeTarget: this.state.hoodedFigure.active.target,
-        message: `${CHALLENGES[this.state.hoodedFigure.active.id].name} completed` });
+      const challengeAfter = this.state.hoodedFigure.active;
+      if (completedNow && challengeAfter) this.emit({ type: 'HOODED_CHALLENGE_COMPLETED',
+        ...hoodedProgressFields(challengeAfter), message: `${CHALLENGES[challengeAfter.id].name} completed` });
+      else if (challengeBefore && challengeAfter && (
+        challengeBefore.committed.value !== challengeAfter.committed.value
+        || challengeBefore.committed.keys.length !== challengeAfter.committed.keys.length
+        || challengeBefore.committed.keys.some(key => !challengeAfter.committed.keys.includes(key))
+      )) this.emit({ type: 'HOODED_CHALLENGE_PROGRESS_COMMITTED', ...hoodedProgressFields(challengeAfter),
+        message: `${CHALLENGES[challengeAfter.id].name} progress committed after the cleared Round` });
       for (const bonfire of this.state.bonfires) {
         const roundFactor = weightedRoundFactor(this.state.bonfireRoundContributions[bonfire]?.observations ?? []);
         const history = this.state.bonfireContributions[bonfire] ??= { roundCount: 0, factorSum: 0 };

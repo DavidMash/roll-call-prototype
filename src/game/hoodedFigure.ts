@@ -1,21 +1,22 @@
 import { activeFace } from './dice';
 import { magneticPullCapable, stacks } from './enhancements';
 import { FLAMES, isChargeFlame } from './flames';
-import { LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
+import { HAND_IDS, isValidSelection, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { randomIndex } from './rng';
 import type {
   ActiveHoodedChallenge, Board, BonfireContribution, ChallengeId, ChallengeProgress,
-  Flame, GameState, HandId, MiniBossType, RandomSource, Wildfire, WildfireResolved,
+  Die, Enhancement, Face, Flame, GameState, HandId, MiniBossType, RandomSource, Rank, Wildfire, WildfireResolved,
 } from './types';
 
 export const HOODED_FIGURE_CONFIG = {
   minimumChapter: 5,
   minimumOrdinaryBonfires: 4,
   sacrificePremium: 1.25,
-  beanSaladPerFace: 6,
-  vintagePerFace: 4,
-  magneticPerFace: 3,
-  workoutPerStack: 3,
+  beanSaladPerFace: 10,
+  vintagePerFace: 6,
+  magneticPerFace: 5,
+  magneticMaximum: 25,
+  workoutPerStack: 5,
 } as const;
 
 export type ChallengeScope = 'chapter' | 'round';
@@ -30,38 +31,62 @@ export interface ChallengeDefinition {
   target: (state: Pick<GameState, 'dice'>) => number;
 }
 
-const physicalFacesWith = (state: Pick<GameState, 'dice'>, enhancement: import('./types').Enhancement) =>
+const physicalFacesWith = (state: Pick<GameState, 'dice'>, enhancement: Enhancement) =>
   state.dice.filter(die => die.owner === 'player').flatMap(die => die.faces)
     .filter(face => stacks(face, enhancement) > 0).length;
-const totalStacks = (state: Pick<GameState, 'dice'>, enhancement: import('./types').Enhancement) =>
+const totalStacks = (state: Pick<GameState, 'dice'>, enhancement: Enhancement) =>
   state.dice.filter(die => die.owner === 'player').flatMap(die => die.faces)
     .reduce((sum, face) => sum + stacks(face, enhancement), 0);
-const distinctEnhancements = (state: Pick<GameState, 'dice'>) => new Set(state.dice
-  .filter(die => die.owner === 'player').flatMap(die => die.faces)
-  .flatMap(face => Object.entries(face.enhancements).filter(([, count]) => (count ?? 0) > 0).map(([id]) => id))).size;
+const activeEnhancementTypes = (face: Face) => Object.entries(face.enhancements)
+  .filter(([, count]) => !face.infected && (count ?? 0) > 0).map(([id]) => id);
+
+/**
+ * A bounded search over the owned five-die build. It chooses a physical face for each member of a
+ * non-empty die subset, then delegates the scoring legality check (including wild faces) to hands.ts.
+ */
+export function fullyLoadedEligible(state: Pick<GameState, 'dice'>): boolean {
+  const playerDice = state.dice.filter(die => die.owner === 'player');
+  for (let mask = 1; mask < 2 ** playerDice.length; mask++) {
+    const selected = playerDice.filter((_die, index) => mask & (1 << index));
+    const search = (index: number, configured: Die[], types: Set<string>): boolean => {
+      if (index === selected.length) {
+        const ids = configured.map(die => die.id);
+        return types.size >= 3 && HAND_IDS.some(hand => isValidSelection(configured, hand, ids));
+      }
+      const die = selected[index];
+      return die.faces.some((face, faceIndex) => {
+        const nextTypes = new Set(types);
+        for (const type of activeEnhancementTypes(face)) nextTypes.add(type);
+        return search(index + 1, [...configured, { ...die, value: (faceIndex + 1) as Rank }], nextTypes);
+      });
+    };
+    if (search(0, [], new Set())) return true;
+  }
+  return false;
+}
 const always = () => true;
 const fixed = (target: number) => () => target;
 
 export const CHALLENGES: Record<ChallengeId, ChallengeDefinition> = {
   fiveAlive: { id: 'fiveAlive', name: 'Five Alive', short: 'play 3 Five of a Kinds', full: 'Manually play Five of a Kind 3 times during this Chapter.', scope: 'chapter', baseTarget: 3, eligible: always, target: fixed(3) },
-  theLongWay: { id: 'theLongWay', name: 'The Long Way', short: 'play 3 Large Straights', full: 'Manually play Large Straight 3 times during this Chapter.', scope: 'chapter', baseTarget: 3, eligible: always, target: fixed(3) },
+  theLongWay: { id: 'theLongWay', name: 'The Long Way', short: 'play 4 Large Straights', full: 'Manually play Large Straight 4 times during this Chapter.', scope: 'chapter', baseTarget: 4, eligible: always, target: fixed(4) },
   upperClass: { id: 'upperClass', name: 'Upper Class', short: 'play all 6 Upper hands in one Round', full: 'In one successfully cleared Round, manually play Ones, Twos, Threes, Fours, Fives, and Sixes.', scope: 'round', baseTarget: 6, eligible: always, target: fixed(6) },
   lowerClass: { id: 'lowerClass', name: 'Lower Class', short: 'play every Lower hand', full: 'During this Chapter, manually play Pair, Two Pair, Three of a Kind, Full House, Four of a Kind, Five of a Kind, Small Straight, and Large Straight.', scope: 'chapter', baseTarget: 8, eligible: always, target: fixed(8) },
   varietyPack: { id: 'varietyPack', name: 'Variety Pack', short: 'play 5 different Lower hands in one Round', full: 'Manually play five distinct Lower-hand types during one successfully cleared Round.', scope: 'round', baseTarget: 5, eligible: always, target: fixed(5) },
   closeCall: { id: 'closeCall', name: 'Close Call', short: 'clear a Round within 10% of its Goal', full: 'Successfully clear a challenge Round with a final score from 100% through 110% of its Goal.', scope: 'round', baseTarget: 1, eligible: always, target: fixed(1) },
-  noTakebacks: { id: 'noTakebacks', name: 'No Takebacks', short: 'clear a Round without using a Reroll', full: 'Clear one Round without using any player-initiated manual Reroll.', scope: 'round', baseTarget: 1, eligible: (_state, miniBoss) => miniBoss !== 'tightrope', target: fixed(1) },
-  upperManagement: { id: 'upperManagement', name: 'Upper Management', short: 'clear a Round using only Upper hands', full: 'Clear one Round where every manually selected scorecard hand is an Upper hand. Free plays do not spoil this.', scope: 'round', baseTarget: 1, eligible: always, target: fixed(1) },
+  noTakebacks: { id: 'noTakebacks', name: 'No Takebacks', short: 'clear 2 Rounds without using a manual Reroll', full: 'Clear two distinct Rounds during this Chapter without using any player-initiated manual Reroll.', scope: 'chapter', baseTarget: 2, eligible: (_state, miniBoss) => miniBoss !== 'tightrope', target: fixed(2) },
+  upperManagement: { id: 'upperManagement', name: 'Upper Management', short: 'play 3 different Upper hands and no Lower hands', full: 'Clear one Round after manually playing at least three distinct Upper hands and no Lower hands. Free plays do not count and do not spoil this.', scope: 'round', baseTarget: 3, eligible: always, target: fixed(3) },
   rollCall: { id: 'rollCall', name: 'Roll Call', short: 'score every face from 1 through 6 in one Round', full: 'During one successfully cleared Round, every printed die value from 1 through 6 must participate in a genuine scoring event.', scope: 'round', baseTarget: 6, eligible: always, target: fixed(6) },
   lowProfile: { id: 'lowProfile', name: 'Low Profile', short: 'clear a Round without scoring a 5 or 6', full: 'Clear one Round without any genuine scoring event containing a printed 5 or 6.', scope: 'round', baseTarget: 1, eligible: always, target: fixed(1) },
-  oppositesAttract: { id: 'oppositesAttract', name: 'Opposites Attract', short: 'score 4 hands containing both a 1 and a 6', full: 'During this Chapter, have four genuine scoring events that each contain both a printed 1 and a printed 6.', scope: 'chapter', baseTarget: 4, eligible: always, target: fixed(4) },
+  oppositesAttract: { id: 'oppositesAttract', name: 'Opposites Attract', short: 'score 6 events containing both a 1 and a 6', full: 'During this Chapter, have six genuine scoring events that each contain both a printed 1 and a printed 6.', scope: 'chapter', baseTarget: 6, eligible: always, target: fixed(6) },
   beanSalad: { id: 'beanSalad', name: 'Bean Salad', short: 'trigger Jumping Bean {N} times', full: 'Trigger Jumping Bean {N} times during this Chapter.', scope: 'chapter', baseTarget: 0, eligible: state => physicalFacesWith(state, 'jumpingBean') >= 1, target: state => HOODED_FIGURE_CONFIG.beanSaladPerFace * physicalFacesWith(state, 'jumpingBean') },
-  bonusRound: { id: 'bonusRound', name: 'Bonus Round', short: 'activate Bonus {N} times in one Round', full: 'During one successfully cleared Round, activate a Bonus-bearing physical face {N} times.', scope: 'round', baseTarget: 0, eligible: state => physicalFacesWith(state, 'bonus') >= 3, target: state => physicalFacesWith(state, 'bonus') },
-  goldRush: { id: 'goldRush', name: 'Gold Rush', short: 'activate Golden {N} times in one Round', full: 'During one successfully cleared Round, activate a Golden-bearing physical face {N} times.', scope: 'round', baseTarget: 0, eligible: state => physicalFacesWith(state, 'golden') >= 3, target: state => physicalFacesWith(state, 'golden') },
+  bonusRound: { id: 'bonusRound', name: 'Bonus Round', short: 'activate Bonus {N} times in one Round', full: 'During one successfully cleared Round, activate Bonus {N} times.', scope: 'round', baseTarget: 0, eligible: state => physicalFacesWith(state, 'bonus') >= 3, target: state => Math.ceil(1.5 * physicalFacesWith(state, 'bonus')) },
+  goldRush: { id: 'goldRush', name: 'Gold Rush', short: 'activate Golden {N} times in one Round', full: 'During one successfully cleared Round, activate Golden {N} times.', scope: 'round', baseTarget: 0, eligible: state => physicalFacesWith(state, 'golden') >= 3, target: state => Math.ceil(1.5 * physicalFacesWith(state, 'golden')) },
   agedToPerfection: { id: 'agedToPerfection', name: 'Aged to Perfection', short: 'score Vintage {N} times', full: 'Score Vintage-bearing physical faces {N} times during this Chapter.', scope: 'chapter', baseTarget: 0, eligible: state => physicalFacesWith(state, 'vintage') >= 1, target: state => HOODED_FIGURE_CONFIG.vintagePerFace * physicalFacesWith(state, 'vintage') },
-  magneticPersonality: { id: 'magneticPersonality', name: 'Magnetic Personality', short: 'pull {N} faces with Magnetic', full: 'Accumulate {N} destination-face pulls caused by Magnetic during this Chapter.', scope: 'chapter', baseTarget: 0, eligible: state => magneticPullCapable(state.dice), target: state => HOODED_FIGURE_CONFIG.magneticPerFace * physicalFacesWith(state, 'magnetic') },
+  magneticPersonality: { id: 'magneticPersonality', name: 'Magnetic Personality', short: 'pull {N} faces with Magnetic', full: 'Accumulate {N} destination-face pulls caused by Magnetic during this Chapter.', scope: 'chapter', baseTarget: 0, eligible: state => physicalFacesWith(state, 'magnetic') >= 2 && magneticPullCapable(state.dice), target: state => Math.min(HOODED_FIGURE_CONFIG.magneticMaximum, HOODED_FIGURE_CONFIG.magneticPerFace * physicalFacesWith(state, 'magnetic')) },
   jackpot: { id: 'jackpot', name: 'Jackpot!', short: 'trigger Jackpot in 2 different Rounds', full: 'Jackpot must genuinely pay on the clearing hand of two different successfully completed challenge Rounds.', scope: 'chapter', baseTarget: 2, eligible: state => physicalFacesWith(state, 'jackpot') >= 1, target: fixed(2) },
   getYourRepsIn: { id: 'getYourRepsIn', name: 'Get Your Reps In', short: 'activate {N} Workout stacks', full: 'Accumulate {N} actual Workout-stack activations during this Chapter.', scope: 'chapter', baseTarget: 0, eligible: state => totalStacks(state, 'workout') >= 3, target: state => HOODED_FIGURE_CONFIG.workoutPerStack * totalStacks(state, 'workout') },
-  fullyLoaded: { id: 'fullyLoaded', name: 'Fully Loaded', short: 'score 3 hands using at least 3 Enhancement types', full: 'Have three genuine scoring events where scoring dice collectively contain at least three distinct Enhancement types.', scope: 'chapter', baseTarget: 3, eligible: state => distinctEnhancements(state) >= 3, target: fixed(3) },
+  fullyLoaded: { id: 'fullyLoaded', name: 'Fully Loaded', short: 'score 3 hands using at least 3 Enhancement types', full: 'Have three genuine scoring events where scoring dice collectively contain at least three distinct active Enhancement types.', scope: 'chapter', baseTarget: 3, eligible: state => fullyLoadedEligible(state), target: fixed(3) },
 };
 export const CHALLENGE_IDS = Object.keys(CHALLENGES) as ChallengeId[];
 
@@ -97,6 +122,7 @@ export function beginChallengeRound(challenge: ActiveHoodedChallenge): void {
   if (challenge.complete) return;
   challenge.attempt = CHALLENGES[challenge.id].scope === 'chapter'
     ? cloneProgress(challenge.committed) : emptyChallengeProgress();
+  challenge.attempt.invalid = false;
   challenge.attempt.jackpotPaid = false;
 }
 
@@ -113,7 +139,10 @@ export function observeManualHand(challenge: ActiveHoodedChallenge | null, hand:
   else if (challenge.id === 'upperClass' && UPPER_HAND_IDS.includes(hand)) addKey(progress, hand);
   else if (challenge.id === 'lowerClass' && LOWER_HAND_IDS.includes(hand)) addKey(progress, hand);
   else if (challenge.id === 'varietyPack' && LOWER_HAND_IDS.includes(hand)) addKey(progress, hand);
-  else if (challenge.id === 'upperManagement' && !UPPER_HAND_IDS.includes(hand)) progress.invalid = true;
+  else if (challenge.id === 'upperManagement') {
+    if (UPPER_HAND_IDS.includes(hand)) addKey(progress, hand);
+    else progress.invalid = true;
+  }
 }
 
 export interface ChallengeScoringFace {
@@ -132,16 +161,20 @@ export function observeScoringEvent(challenge: ActiveHoodedChallenge | null, fac
   else if (challenge.id === 'lowProfile' && (printed.has(5) || printed.has(6))) progress.invalid = true;
   else if (challenge.id === 'oppositesAttract' && printed.has(1) && printed.has(6)) progress.value++;
   else if (challenge.id === 'beanSalad' && playSource === 'jumpingBean') progress.value++;
-  else if (challenge.id === 'bonusRound') progress.value += faces.filter(face => face.enhancementsActive !== false && (face.enhancements.bonus ?? 0) > 0).length;
-  else if (challenge.id === 'goldRush') progress.value += faces.filter(face => face.enhancementsActive !== false && (face.enhancements.golden ?? 0) > 0).length;
-  else if (challenge.id === 'agedToPerfection') progress.value += faces.filter(face => face.enhancementsActive !== false && (face.enhancements.vintage ?? 0) > 0).length;
-  else if (challenge.id === 'getYourRepsIn') progress.value += faces.reduce((sum, face) => sum
-    + (face.enhancementsActive === false ? 0 : face.enhancements.workout ?? 0), 0);
   else if (challenge.id === 'fullyLoaded') {
     const types = new Set(faces.flatMap(face => Object.entries(face.enhancements)
-      .filter(([, count]) => (count ?? 0) > 0).map(([id]) => id)));
+      .filter(([, count]) => face.enhancementsActive !== false && (count ?? 0) > 0).map(([id]) => id)));
     if (types.size >= 3) progress.value++;
   }
+}
+
+/** Records only real Enhancement executions. Double Time reaches this path again through its effect replay. */
+export function observeEnhancementActivation(challenge: ActiveHoodedChallenge | null, face: Face): void {
+  if (!challenge || challenge.complete) return;
+  if (challenge.id === 'bonusRound' && stacks(face, 'bonus')) challenge.attempt.value++;
+  else if (challenge.id === 'goldRush' && stacks(face, 'golden')) challenge.attempt.value++;
+  else if (challenge.id === 'agedToPerfection' && stacks(face, 'vintage')) challenge.attempt.value++;
+  else if (challenge.id === 'getYourRepsIn') challenge.attempt.value += stacks(face, 'workout');
 }
 
 export function observeManualReroll(challenge: ActiveHoodedChallenge | null): void {
@@ -163,12 +196,15 @@ export function completeChallengeRound(challenge: ActiveHoodedChallenge | null, 
   const definition = CHALLENGES[challenge.id];
   const attempt = challenge.attempt;
   if (challenge.id === 'closeCall' && finalScore >= goal && finalScore * 10 <= goal * 11) attempt.value = 1;
-  if (challenge.id === 'noTakebacks' && !attempt.invalid) attempt.value = 1;
-  if (challenge.id === 'upperManagement' && !attempt.invalid) attempt.value = 1;
+  if (challenge.id === 'noTakebacks' && !attempt.invalid) attempt.value = challenge.committed.value + 1;
   if (challenge.id === 'lowProfile' && !attempt.invalid) attempt.value = 1;
   if (challenge.id === 'jackpot' && attempt.jackpotPaid) attempt.value = challenge.committed.value + 1;
-  const satisfied = attempt.value >= challenge.target;
-  if (definition.scope === 'chapter' || satisfied) challenge.committed = cloneProgress(attempt);
+  const valid = !['noTakebacks', 'upperManagement', 'lowProfile'].includes(challenge.id) || !attempt.invalid;
+  const satisfied = valid && attempt.value >= challenge.target;
+  if (definition.scope === 'chapter' || satisfied) {
+    challenge.committed = cloneProgress(attempt);
+    if (challenge.id === 'noTakebacks') challenge.committed.invalid = false;
+  }
   challenge.complete = satisfied;
   return satisfied;
 }
@@ -247,5 +283,6 @@ export function wildfirePreview(wildfire: Wildfire): string[] {
 
 export function currentScoringFaces(state: Pick<GameState, 'dice'>, dieIds: number[]): ChallengeScoringFace[] {
   return dieIds.map(id => state.dice.find(die => die.id === id)).filter((die): die is NonNullable<typeof die> => !!die)
-    .map(die => ({ printed: die.value, enhancements: { ...activeFace(die).enhancements } }));
+    .map(die => ({ printed: die.value, enhancements: { ...activeFace(die).enhancements },
+      enhancementsActive: !activeFace(die).infected }));
 }

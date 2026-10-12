@@ -118,7 +118,7 @@ describe('Run History V2 Pass 3 ownership', () => {
 
   it('records Hooded attempt rollback on the new canonical timeline', () => {
     const state = newRun('hooded-rollback-pass3', { next: () => 0 }).state;
-    state.hoodedFigure.active = { id: 'theLongWay', issuedChapter: 1, target: 3,
+    state.hoodedFigure.active = { id: 'theLongWay', issuedChapter: 1, target: 4,
       committed: { value: 0, keys: [], invalid: false, jackpotPaid: false },
       attempt: { value: 0, keys: [], invalid: false, jackpotPaid: false }, complete: false, dialogueLine: 'test' };
     state.roundCheckpoint = captureRollbackState(state);

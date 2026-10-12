@@ -5,7 +5,7 @@ import { finalizeScore } from './scoring';
 import { HAND_IDS } from './hands';
 import {
   beginChallengeRound, CHALLENGE_IDS, CHALLENGES, completeChallengeRound, createActiveChallenge,
-  observeClearingJackpot, observeMagneticPulls, observeManualHand, observeManualReroll,
+  observeClearingJackpot, observeEnhancementActivation, observeMagneticPulls, observeManualHand, observeManualReroll,
   observeScoringEvent, projectWildfire, rankedRecipients, rankedSacrifices, resolveWildfire,
   transferMultiplier, wildfireFactor, wildfirePreview,
 } from './hoodedFigure';
@@ -42,11 +42,12 @@ describe('all 19 challenge specifications', () => {
 
   it('counts Five Alive and The Long Way only for manual plays across the Chapter', () => {
     for (const [id, hand] of [['fiveAlive', 'fiveKind'], ['theLongWay', 'largeStraight']] as const) {
-      const active = challenge(id, 3);
+      const active = challenge(id, id === 'theLongWay' ? 4 : 3);
       observeScoringEvent(active, [{ printed: 1, enhancements: {} }], 'jumpingBean');
       observeManualHand(active, hand); observeManualHand(active, hand);
       expect(completeChallengeRound(active, 100, 100)).toBe(false);
       beginChallengeRound(active); observeManualHand(active, hand);
+      if (id === 'theLongWay') observeManualHand(active, hand);
       expect(completeChallengeRound(active, 100, 100)).toBe(true);
     }
   });
@@ -84,13 +85,15 @@ describe('all 19 challenge specifications', () => {
 
   it('applies clear-condition rules only to player choices and genuine scoring participants', () => {
     const noTakebacks = challenge('noTakebacks');
+    expect(completeChallengeRound(noTakebacks, 100, 100)).toBe(false);
+    beginChallengeRound(noTakebacks);
     expect(completeChallengeRound(noTakebacks, 100, 100)).toBe(true);
     const rerolled = challenge('noTakebacks'); observeManualReroll(rerolled);
     expect(completeChallengeRound(rerolled, 100, 100)).toBe(false);
 
     const upper = challenge('upperManagement');
     observeScoringEvent(upper, [{ printed: 2, enhancements: {} }], 'jumpingBean');
-    observeManualHand(upper, 'ones');
+    observeManualHand(upper, 'ones'); observeManualHand(upper, 'twos'); observeManualHand(upper, 'threes');
     expect(completeChallengeRound(upper, 100, 100)).toBe(true);
     const lowerSpoils = challenge('upperManagement'); observeManualHand(lowerSpoils, 'pair');
     expect(completeChallengeRound(lowerSpoils, 100, 100)).toBe(false);
@@ -108,17 +111,17 @@ describe('all 19 challenge specifications', () => {
     observeScoringEvent(split, [1, 2, 3].map(printed => ({ printed, enhancements: {} })), 'manual');
     expect(completeChallengeRound(split, 100, 100)).toBe(false);
     beginChallengeRound(split);
-    observeScoringEvent(split, [4, 5, 6].map(printed => ({ printed, enhancements: {} })), 'jumpingBean');
+    observeScoringEvent(split, [4, 5, 6].map(printed => ({ printed, enhancements: {} })), 'manual');
     expect(completeChallengeRound(split, 100, 100)).toBe(false);
     beginChallengeRound(split);
-    observeScoringEvent(split, [1, 2, 3, 4, 5, 6].map(printed => ({ printed, enhancements: {} })), 'jumpingBean');
+    observeScoringEvent(split, [1, 2, 3, 4, 5, 6].map(printed => ({ printed, enhancements: {} })), 'manual');
     expect(completeChallengeRound(split, 100, 100)).toBe(true);
   });
 
   it('counts each Opposites Attract scoring event, including free plays', () => {
-    const active = challenge('oppositesAttract', 4);
-    for (const source of ['manual', 'jumpingBean', 'manual', 'jumpingBean'] as const)
-      observeScoringEvent(active, [{ printed: 1, enhancements: {} }, { printed: 6, enhancements: {} }], source);
+    const active = challenge('oppositesAttract', 6);
+    for (let index = 0; index < 6; index++)
+      observeScoringEvent(active, [{ printed: 1, enhancements: {} }, { printed: 6, enhancements: {} }], 'manual');
     expect(completeChallengeRound(active, 100, 100)).toBe(true);
   });
 
@@ -132,8 +135,8 @@ describe('all 19 challenge specifications', () => {
     state.dice[0].faces[3].enhancements.jumpingBean = 1;
     state.dice[0].faces[4].enhancements.vintage = 1;
     state.dice[0].faces[5].enhancements.workout = 3;
-    const expected = { beanSalad: 6, bonusRound: 3, goldRush: 3, agedToPerfection: 4,
-      magneticPersonality: 9, getYourRepsIn: 9 } as const;
+    const expected = { beanSalad: 10, bonusRound: 5, goldRush: 5, agedToPerfection: 6,
+      magneticPersonality: 15, getYourRepsIn: 15 } as const;
     for (const id of Object.keys(expected) as (keyof typeof expected)[]) {
       const active = createActiveChallenge(CHALLENGES[id], state, 5, 'audit');
       expect(active.target).toBe(expected[id]);
@@ -143,10 +146,8 @@ describe('all 19 challenge specifications', () => {
       expect(active.target).toBe(expected[id]);
       beginChallengeRound(active);
       if (id === 'magneticPersonality') observeMagneticPulls(active, 1);
-      else observeScoringEvent(active, [{ printed: 1, enhancements: {
-        [id === 'beanSalad' ? 'jumpingBean' : id === 'bonusRound' ? 'bonus' : id === 'goldRush' ? 'golden'
-          : id === 'agedToPerfection' ? 'vintage' : 'workout']: 1,
-      } }], id === 'beanSalad' ? 'jumpingBean' : 'manual');
+      else if (id === 'beanSalad') observeScoringEvent(active, [{ printed: 1, enhancements: { jumpingBean: 1 } }], 'jumpingBean');
+      else observeEnhancementActivation(active, state.dice[4].faces[0]);
       expect(active.attempt.value).toBe(1);
     }
   });
@@ -155,12 +156,16 @@ describe('all 19 challenge specifications', () => {
     for (const id of ['bonusRound', 'goldRush', 'agedToPerfection'] as const) {
       const enhancement = id === 'bonusRound' ? 'bonus' : id === 'goldRush' ? 'golden' : 'vintage';
       const active = challenge(id, 2);
-      observeScoringEvent(active, [{ printed: 2, enhancements: { [enhancement]: 5 } }], 'manual');
-      observeScoringEvent(active, [{ printed: 2, enhancements: { [enhancement]: 5 } }], 'jumpingBean');
+      const state = game(`activation-${id}`);
+      state.dice[0].faces[0].enhancements[enhancement] = 5;
+      observeEnhancementActivation(active, state.dice[0].faces[0]);
+      observeEnhancementActivation(active, state.dice[0].faces[0]);
       expect(active.attempt.value).toBe(2);
     }
     const workout = challenge('getYourRepsIn', 3);
-    observeScoringEvent(workout, [{ printed: 2, enhancements: { workout: 3 } }], 'manual');
+    const state = game('workout-activation');
+    state.dice[0].faces[0].enhancements.workout = 3;
+    observeEnhancementActivation(workout, state.dice[0].faces[0]);
     expect(workout.attempt.value).toBe(3);
   });
 
@@ -342,12 +347,12 @@ describe('Charge source-attribution audit', () => {
     state.round = 25; state.presentedChapters = [1, 2, 3, 4, 5]; state.phase = 'specialOffer';
     state.specialOffer = { offers: [{ id: 1, type: 'timeTravel' }], acquired: true, chosen: { id: 1, type: 'timeTravel' } };
     state.hoodedFigure.active = {
-      id: 'theLongWay', issuedChapter: 5, target: 3,
+      id: 'theLongWay', issuedChapter: 5, target: 4,
       committed: { value: 2, keys: [], invalid: false, jackpotPaid: false },
       attempt: { value: 2, keys: [], invalid: false, jackpotPaid: false }, complete: false, dialogueLine: 'audit',
     };
     state.hoodedFigure.challengeCheckpoint = {
-      id: 'theLongWay', issuedChapter: 5, target: 3,
+      id: 'theLongWay', issuedChapter: 5, target: 4,
       committed: { value: 0, keys: [], invalid: false, jackpotPaid: false },
       attempt: { value: 0, keys: [], invalid: false, jackpotPaid: false }, complete: false, dialogueLine: 'audit',
     };
@@ -481,7 +486,7 @@ describe('challenge interaction timing', () => {
     state.round = 27; state.phase = 'specialOffer';
     state.specialOffer = { offers: [{ id: 1, type: 'greatFairy' }], acquired: true,
       chosen: { id: 1, type: 'greatFairy' } };
-    state.hoodedFigure.active = challenge('theLongWay', 3);
+    state.hoodedFigure.active = challenge('theLongWay', 4);
     const continued = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant(.2));
     expect(continued.state.phase).toBe('shop');
     expect(continued.state.hoodedFigure.interaction).toBeNull();

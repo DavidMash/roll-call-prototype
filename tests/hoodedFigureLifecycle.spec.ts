@@ -23,16 +23,16 @@ function r3SummaryState(seed: string): GameState {
   state.hoodedFigure = {
     seen: true, previousChallengeId: 'theLongWay',
     active: {
-      id: 'theLongWay', issuedChapter: 5, target: 3,
-      committed: { value: 3, keys: [], invalid: false, jackpotPaid: false },
-      attempt: { value: 3, keys: [], invalid: false, jackpotPaid: false },
+      id: 'theLongWay', issuedChapter: 5, target: 4,
+      committed: { value: 4, keys: [], invalid: false, jackpotPaid: false },
+      attempt: { value: 4, keys: [], invalid: false, jackpotPaid: false },
       complete: true, dialogueLine: 'audit',
     },
     interaction: null,
     issuedChapters: [5],
     rewardedChapters: [],
     challengeCheckpoint: {
-      id: 'theLongWay', issuedChapter: 5, target: 3,
+      id: 'theLongWay', issuedChapter: 5, target: 4,
       committed: { value: 0, keys: [], invalid: false, jackpotPaid: false },
       attempt: { value: 0, keys: [], invalid: false, jackpotPaid: false },
       complete: false, dialogueLine: 'audit',
@@ -106,7 +106,7 @@ test('R3 Time Travel rewinds before any Hooded return and restores the Chapter c
 
   await page.getByRole('button', { name: 'About The Long Way challenge' }).click();
   const details = page.getByRole('dialog', { name: 'The Long Way', exact: true });
-  await expect(details).toContainText('0 / 3');
+  await expect(details).toContainText('0 / 4');
   await expect(details).toContainText('6 Rounds Remaining');
 
   const rewound = await persistedState(page);

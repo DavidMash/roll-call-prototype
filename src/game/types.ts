@@ -545,7 +545,7 @@ export type EventType =
   | 'BOSS_HAND_CHANGED' | 'BOSS_FACE_CHANGED'
   | 'RUN_LOST' | 'RESOLUTION_ERROR' | 'MANUAL_REROLL_STARTED' | 'DEAD_BOARD' | 'DEAD_BOARD_RESCUED'
   | 'TUTORIAL_SAFEGUARD'
-  | 'HOODED_CHALLENGE_ISSUED' | 'HOODED_CHALLENGE_COMPLETED' | 'HOODED_CHALLENGE_ROLLED_BACK'
+  | 'HOODED_CHALLENGE_ISSUED' | 'HOODED_CHALLENGE_PROGRESS_COMMITTED' | 'HOODED_CHALLENGE_COMPLETED' | 'HOODED_CHALLENGE_ROLLED_BACK'
   | 'HOODED_CHALLENGE_TIME_TRAVEL_RESET' | 'HOODED_CHALLENGE_BAD_DREAM_RESET' | 'HOODED_CHALLENGE_EXPIRED'
   | 'HOODED_FIGURE_RETURNED' | 'WILDFIRE_CANDIDATES'
   | 'WILDFIRE_SACRIFICE_SELECTED' | 'WILDFIRE_WALKED_AWAY' | 'WILDFIRE_CREATED';
@@ -601,6 +601,20 @@ export interface EventRecord {
   handScore?: HandScoreAccumulator;
   challengeId?: ChallengeId;
   challengeTarget?: number;
+  challengeAttemptProgress?: number;
+  challengeCommittedProgress?: number;
+  challengeInvalid?: boolean;
+  challengeComplete?: boolean;
+  challengeRollback?: {
+    attemptProgressBefore: number;
+    attemptProgressAfter: number;
+    committedProgressBefore: number;
+    committedProgressAfter: number;
+    invalidBefore: boolean;
+    invalidAfter: boolean;
+    completeBefore: boolean;
+    completeAfter: boolean;
+  };
   recipientFlame?: Flame;
   sacrificedFlame?: Flame;
   contributionAverage?: number;

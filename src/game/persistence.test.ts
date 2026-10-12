@@ -63,7 +63,7 @@ describe('run persistence', () => {
     state.hoodedFigure.seen = true;
     state.hoodedFigure.previousChallengeId = 'beanSalad';
     state.hoodedFigure.active = {
-      id: 'theLongWay', issuedChapter: 5, target: 3,
+      id: 'theLongWay', issuedChapter: 5, target: 4,
       committed: { value: 1, keys: [], invalid: false, jackpotPaid: false },
       attempt: { value: 2, keys: [], invalid: false, jackpotPaid: false }, complete: false, dialogueLine: 'persisted',
     };

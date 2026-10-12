@@ -10,7 +10,7 @@ const constant = (value = .2): RandomSource => ({ next: () => value });
 
 function challenge(chapter = 5, value = 0, complete = false): ActiveHoodedChallenge {
   return {
-    id: 'theLongWay', issuedChapter: chapter, target: 3,
+    id: 'theLongWay', issuedChapter: chapter, target: 4,
     committed: { value, keys: [], invalid: false, jackpotPaid: false },
     attempt: { value, keys: [], invalid: false, jackpotPaid: false },
     complete, dialogueLine: 'lifecycle fixture',
@@ -172,7 +172,7 @@ describe('whole-Chapter Hooded lifecycle', () => {
 
   it.each([[3, 'specialOffer'], [6, 'flameSelection']] as const)(
     'resumes the R%s reward flow only after the Hooded return resolves', (localRound, expectedPhase) => {
-      let state = dispatch(chapterFiveSummary(localRound, challenge(5, 3, true)),
+      let state = dispatch(chapterFiveSummary(localRound, challenge(5, 4, true)),
         { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
       expect(state.phase).toBe('hoodedFigure');
       state = dispatch(state, { type: 'WALK_AWAY_WILDFIRE' }, constant()).state;
@@ -212,7 +212,7 @@ describe('progression-only Time Travel', () => {
   });
 
   it('preserves completed-unrewarded and completed-rewarded challenge outcomes without duplicate rewards', () => {
-    let completed = timeTravelState(challenge(5, 3, true));
+    let completed = timeTravelState(challenge(5, 4, true));
     completed = dispatch(completed, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 900 }, constant()).state;
     completed = dispatch(completed, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
     expect(completed.hoodedFigure.active?.complete).toBe(true);
