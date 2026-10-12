@@ -11,7 +11,6 @@ import {
   usableManualRerolls,
 } from './specialOffers';
 import { SCREEN_THEMES } from './screenThemes';
-import { captureRollbackState } from './rollback';
 import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
 import type { GameState, HandId, RandomSource, RoundSummary, SpecialOfferType } from './types';
 
@@ -424,7 +423,7 @@ describe('temporary Special Offers', () => {
     state.specialOfferEffects.taxEvasionRounds = 3;
     state.specialOfferEffects.bottledFairyRounds = 3;
     state.specialOfferEffects.badDreamRounds = 3;
-    state.badDreamCheckpoint = captureRollbackState(state);
+    state.badDreamCheckpoint = { chapter: 1, hoodedChallenge: null };
     for (let index = 0; index < 3; index++) {
       state.phase = 'round';
       state.roundSummary = null;
@@ -458,10 +457,10 @@ describe('replay and checkpoint Special Offers', () => {
     expect(retry.specialOfferEffects.carePackageRerolls).toBe(0);
   });
 
-  it('Time Travel replays the completed block and suppresses the repeated Mini-Boss post-reward', () => {
+  it('Time Travel replays the completed block while the Chapter Special Offer remains consumed', () => {
     let state = choose('timeTravel');
     expect(state.round).toBe(1);
-    expect(state.suppressedPostBossRewardRounds).toEqual([3]);
+    expect(state.chapterLifecycle[1]?.specialOfferConsumed).toBe(true);
     state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
     expect(state.phase).toBe('round');
     expect(state.round).toBe(1);
@@ -472,35 +471,44 @@ describe('replay and checkpoint Special Offers', () => {
     state.roundSummary = summary(3);
     state = dispatch(state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
     expect(state.phase).toBe('shop');
-    expect(state.suppressedPostBossRewardRounds).toEqual([]);
+    expect(state.chapterLifecycle[1]?.specialOfferConsumed).toBe(true);
+    expect(state.specialOffer).toBeNull();
   });
 
-  it('Bad Dream restores its exact seeded checkpoint once with 1 Life', () => {
+  it('Bad Dream relocates the current build to the post-R3 Shop once with 1 Life', () => {
     let state = offerState('badDream');
     state.specialOfferEffects.carePackageRerolls = 2;
     state = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }, constant()).state;
     expect(activeSpecialOfferStatusItems(state.specialOfferEffects).find(status => status.type === 'badDream')?.label)
       .toBe('Bad Dream · 3 Rounds');
     const checkpoint = structuredClone(state.badDreamCheckpoint!);
-    expect(checkpoint.board.phase).toBe('specialOffer');
+    expect(checkpoint).toEqual({ chapter: 1, hoodedChallenge: null });
     state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.4)).state;
+    state.gold = 77;
+    state.handLevels.ones = 9;
+    state.dice[0].faces[0].enhancements.vintage = 1;
+    state.dice[0].faces[0].vintageSellValue = 18;
+    state.dice[0].flame = { id: 'ultimate', investedGold: 61 };
     state.lives = 1;
     state.target = 1_000_000;
     state.consumed = [...HAND_IDS];
     state.manualRerollsRemaining = 1;
     state.specialOfferEffects.carePackageRerolls = 0;
     state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(.4)).state;
-    expect(state.phase).toBe('specialOffer');
+    expect(state.phase).toBe('shop');
+    expect(state.round).toBe(3);
+    expect(state.currentNodeId).toBe('shop:before-round:4');
     expect(state.lives).toBe(1);
-    expect(state.rngState).toBe(checkpoint.rngState);
-    expect(state.handLevels).toEqual(checkpoint.board.handLevels);
-    expect(state.gold).toBe(checkpoint.board.gold);
+    expect(state.gold).toBe(77);
+    expect(state.handLevels.ones).toBe(9);
+    expect(state.dice[0].faces[0]).toMatchObject({ enhancements: { vintage: 1 }, vintageSellValue: 18 });
+    expect(state.dice[0].flame).toEqual({ id: 'ultimate', investedGold: 61 });
     expect(state.badDreamCheckpoint).toBeNull();
     expect(state.specialOfferEffects.badDreamRounds).toBe(0);
-    expect(state.specialOfferEffects.carePackageRerolls).toBe(2);
-    expect(activeSpecialOfferStatusItems(state.specialOfferEffects).map(status => status.type)).toEqual(['carePackage']);
-    expect(state.specialOffer?.chosen?.type).toBe('badDream');
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
+    expect(state.chapterLifecycle[1]?.specialOfferConsumed).toBe(true);
+    expect(state.specialOffer).toBeNull();
     const timelines = classifyRunHistoryV2Timelines(state.historyV2, state.historyV2Coverage);
     expect(timelines.ranges.at(-1)?.reason).toBe('bad_dream');
     expect(state.historyV2.some(event => event.kind === 'round_attempt_finished' && timelines.status(event) === 'abandoned')).toBe(true);
@@ -521,6 +529,7 @@ describe('replay and checkpoint Special Offers', () => {
 
   it('keeps the canonical player-facing descriptions exact', () => {
     expect(SPECIAL_OFFERS.onTheHouse.description).toBe('The next Shop’s initial displayed purchases are free.');
-    expect(SPECIAL_OFFERS.badDream.description).toBe('If your run ends in the next 3 Rounds, return here with 1 Life.');
+    expect(SPECIAL_OFFERS.timeTravel.description).toBe('Replay this Chapter from Round 1 with your current build.');
+    expect(SPECIAL_OFFERS.badDream.description).toBe('If your run ends in the next 3 Rounds, return to the post-R3 Shop with your current build and 1 Life.');
   });
 });

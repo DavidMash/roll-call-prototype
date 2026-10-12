@@ -66,10 +66,10 @@ for (const speed of ['fast', 'instant'] as const) {
   test(`${speed} playback still presents the scorecard refresh moment`, async ({ page }) => {
     await install(page, cycleState(`scorecard-cycle-${speed}`), speed);
     await playFinalHand(page);
-    await expect(page.getByTestId('scorecard-refresh-celebration')).toBeVisible();
-    await expect(page.getByTestId('scorecard-refresh-celebration')).toContainText('SCORECARD FILLED');
-    await expect(page.getByTestId('scorecard-refresh-celebration')).toContainText('ALL HANDS REFRESHED');
-    await expect(page.getByTestId('scorecard-refresh-celebration')).toHaveCount(0, { timeout: 2_000 });
+    const celebration = page.getByTestId('scorecard-refresh-celebration');
+    // Capture the short instant-playback announcement atomically before its timer removes it.
+    await expect(celebration).toHaveText('SCORECARD FILLEDALL HANDS REFRESHED');
+    await expect(celebration).toHaveCount(0, { timeout: 2_000 });
   });
 }
 

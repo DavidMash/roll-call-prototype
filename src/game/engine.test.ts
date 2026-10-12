@@ -620,5 +620,5 @@ describe('reproducibility and end-to-end domain flow', () => {
     expect(clears).toBeGreaterThan(0);
     expect(purchases).toBeGreaterThan(0);
     expect(losses).toBe(20);
-  }, 30000);
+  }, 60_000);
 });

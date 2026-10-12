@@ -793,7 +793,8 @@ test('mobile Shop shell keeps its HUD, incoming encounter, controls, action, and
 });
 
 test('full seeded run: select/play, clear, buy onto a face, reroll dice, next round, lose and export', async ({ page, context }) => {
-  test.setTimeout(120_000);
+  // Bad Dream can intentionally replay the second half of a Chapter before this full-run fixture loses.
+  test.setTimeout(240_000);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);

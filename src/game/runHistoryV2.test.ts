@@ -225,7 +225,8 @@ describe('Run History V2 lifecycle, timeline, renderer, and summary', () => {
     expect(dream.historyV2.some(event => event.kind === 'checkpoint_restored' && event.reason === 'bad_dream')).toBe(true);
     expect(summarizeRunHistoryV2(dream.historyV2, dream).timelines.abandonedRanges)
       .toContainEqual(expect.objectContaining({ reason: 'bad_dream' }));
-    expect(dream.phase).toBe('specialOffer');
+    expect(dream.phase).toBe('shop');
+    expect(dream.currentNodeId).toBe('shop:before-round:4');
 
     let travel = game();
     travel.round = 9; travel.phase = 'specialOffer'; travel.presentedChapters = [1, 2];
@@ -339,8 +340,8 @@ describe('Run History V2 instrumentation safety and size', () => {
     expect({ legacyEntries: state.history.length, v2Entries: state.historyV2.length, ...sizes }).toEqual({
       legacyEntries: 0, v2Entries: 656, legacyHistory: 2, v2History: 307_119,
       renderedV2: 32_503, normalExport: 38_362, debugTrace: 44_643,
-      runStats: 75_054, rollbackState: 4_843, actionJournal: 7_954,
-      persistedState: 368_071, fullState: 444_857,
+      runStats: 75_054, rollbackState: 5_274, actionJournal: 7_954,
+      persistedState: 368_933, fullState: 445_719,
     });
   }, 30_000);
 });

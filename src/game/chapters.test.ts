@@ -39,7 +39,7 @@ describe('Chapter round presentation', () => {
     const replay = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant());
     expect(replay.state.round).toBe(7);
     expect(replay.events.some(event => event.type === 'CHAPTER_STARTED')).toBe(false);
-    expect(replay.state.suppressedPostBossRewardRounds).toContain(9);
+    expect(replay.state.chapterLifecycle[2]?.specialOfferConsumed).toBe(true);
   });
 });
 

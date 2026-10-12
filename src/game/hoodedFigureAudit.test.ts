@@ -40,7 +40,7 @@ describe('all 19 challenge specifications', () => {
     ]);
   });
 
-  it('counts Five Alive and The Long Way only for manual plays across R1-R3', () => {
+  it('counts Five Alive and The Long Way only for manual plays across the Chapter', () => {
     for (const [id, hand] of [['fiveAlive', 'fiveKind'], ['theLongWay', 'largeStraight']] as const) {
       const active = challenge(id, 3);
       observeScoringEvent(active, [{ printed: 1, enhancements: {} }], 'jumpingBean');
@@ -51,7 +51,7 @@ describe('all 19 challenge specifications', () => {
     }
   });
 
-  it('requires all six Upper hands in one Round and all eight Lower hands across R1-R3', () => {
+  it('requires all six Upper hands in one Round and all eight Lower hands across the Chapter', () => {
     const upper = challenge('upperClass', 6);
     for (const hand of ['ones', 'twos', 'threes', 'fours', 'fives'] as const) observeManualHand(upper, hand);
     expect(completeChallengeRound(upper, 100, 100)).toBe(false);
@@ -343,8 +343,13 @@ describe('Charge source-attribution audit', () => {
     state.specialOffer = { offers: [{ id: 1, type: 'timeTravel' }], acquired: true, chosen: { id: 1, type: 'timeTravel' } };
     state.hoodedFigure.active = {
       id: 'theLongWay', issuedChapter: 5, target: 3,
-      committed: { value: 3, keys: [], invalid: false, jackpotPaid: false },
-      attempt: { value: 3, keys: [], invalid: false, jackpotPaid: false }, complete: true, dialogueLine: 'audit',
+      committed: { value: 2, keys: [], invalid: false, jackpotPaid: false },
+      attempt: { value: 2, keys: [], invalid: false, jackpotPaid: false }, complete: false, dialogueLine: 'audit',
+    };
+    state.hoodedFigure.challengeCheckpoint = {
+      id: 'theLongWay', issuedChapter: 5, target: 3,
+      committed: { value: 0, keys: [], invalid: false, jackpotPaid: false },
+      attempt: { value: 0, keys: [], invalid: false, jackpotPaid: false }, complete: false, dialogueLine: 'audit',
     };
     state.hoodedFigure.contributionCheckpoint = { momentum: { roundCount: 2, factorSum: 3 } };
     state.bonfireContributions = { momentum: { roundCount: 5, factorSum: 12 }, powerSurge: { roundCount: 3, factorSum: 8 } };
@@ -354,15 +359,14 @@ describe('Charge source-attribution audit', () => {
   });
 });
 
-describe('exactly-five ordinary Bonfire interaction', () => {
+describe('exactly-four ordinary Bonfire interaction', () => {
   const setup = () => {
-    const state = game('exactly-five');
+    const state = game('exactly-four');
     state.phase = 'hoodedFigure';
-    state.bonfires = ['ultimate', 'minigun', 'hailMary', 'fullOfGrace', 'vineyard'];
+    state.bonfires = ['ultimate', 'minigun', 'hailMary', 'fullOfGrace'];
     state.bonfireContributions = {
       ultimate: { roundCount: 1, factorSum: 1 }, minigun: { roundCount: 1, factorSum: 2 },
       hailMary: { roundCount: 1, factorSum: 3 }, fullOfGrace: { roundCount: 1, factorSum: 4 },
-      vineyard: { roundCount: 1, factorSum: 5 },
     };
     state.hoodedFigure.interaction = { kind: 'return', stage: 'recipient', lines: [], lineIndex: 0,
       recipient: null, sacrifice: null };
@@ -373,10 +377,10 @@ describe('exactly-five ordinary Bonfire interaction', () => {
     let state = setup();
     expect(rankedRecipients(state)).toEqual(['ultimate', 'minigun', 'hailMary']);
     state = dispatch(state, { type: 'SELECT_WILDFIRE_RECIPIENT', flame: 'ultimate' }, constant(.2)).state;
-    expect(rankedSacrifices(state, 'ultimate')).toEqual(['vineyard', 'fullOfGrace', 'hailMary']);
+    expect(rankedSacrifices(state, 'ultimate')).toEqual(['fullOfGrace', 'hailMary', 'minigun']);
     state = dispatch(state, { type: 'BACK_WILDFIRE' }, constant(.2)).state;
     state = dispatch(state, { type: 'SELECT_WILDFIRE_RECIPIENT', flame: 'hailMary' }, constant(.2)).state;
-    expect(rankedSacrifices(state, 'hailMary')).toEqual(['vineyard', 'fullOfGrace', 'minigun']);
+    expect(rankedSacrifices(state, 'hailMary')).toEqual(['fullOfGrace', 'minigun', 'ultimate']);
   });
 
   it('excludes Wildfires from both pools and breaks contribution ties deterministically', () => {
@@ -472,7 +476,7 @@ describe('challenge interaction timing', () => {
     expect(cleared.state.hoodedFigure.interaction).toBeNull();
   });
 
-  it('opens no Hooded Figure interaction after a failed R3 challenge', () => {
+  it('keeps an unfinished challenge active after R3 without opening a return interaction', () => {
     const state = game('silent-r3-failure');
     state.round = 27; state.phase = 'specialOffer';
     state.specialOffer = { offers: [{ id: 1, type: 'greatFairy' }], acquired: true,
@@ -481,7 +485,8 @@ describe('challenge interaction timing', () => {
     const continued = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant(.2));
     expect(continued.state.phase).toBe('shop');
     expect(continued.state.hoodedFigure.interaction).toBeNull();
-    expect(continued.state.hoodedFigure.active).toBeNull();
+    expect(continued.state.hoodedFigure.active?.id).toBe('theLongWay');
+    expect(continued.state.hoodedFigure.active?.complete).toBe(false);
     expect(continued.events.some(event => event.type === 'HOODED_FIGURE_RETURNED')).toBe(false);
   });
 });

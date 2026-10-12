@@ -37,6 +37,8 @@ export function classifyRunHistoryV2Timelines(events: readonly RunHistoryV2Event
       canonicalRound: event.canonicalRound, canonicalAttempt: event.canonicalAttempt }));
   const abandonedSeqs = new Set<number>();
   for (const range of ranges) for (let seq = range.fromSeq; seq <= range.throughSeq; seq++) abandonedSeqs.add(seq);
+  for (const restore of ordered.filter((event): event is CheckpointRestoredEvent => event.kind === 'checkpoint_restored'))
+    for (const seq of restore.retainedSeqs ?? []) abandonedSeqs.delete(seq);
   const timelineIds = [...new Set(ordered.map(event => event.timelineId))].sort((a, b) => a - b);
   const firstKnownCanonicalSeq = coverage.complete ? Number.NEGATIVE_INFINITY
     : ordered.find(event => event.kind === 'checkpoint_restored')?.seq ?? Number.POSITIVE_INFINITY;

@@ -29,6 +29,14 @@ function r3SummaryState(seed: string): GameState {
       complete: true, dialogueLine: 'audit',
     },
     interaction: null,
+    issuedChapters: [5],
+    rewardedChapters: [],
+    challengeCheckpoint: {
+      id: 'theLongWay', issuedChapter: 5, target: 3,
+      committed: { value: 0, keys: [], invalid: false, jackpotPaid: false },
+      attempt: { value: 0, keys: [], invalid: false, jackpotPaid: false },
+      complete: false, dialogueLine: 'audit',
+    },
     contributionCheckpoint: { ultimate: { roundCount: 1, factorSum: 2 } },
   };
   return state;
@@ -37,6 +45,9 @@ function r3SummaryState(seed: string): GameState {
 function stateOfferingTimeTravel(): GameState {
   for (let index = 0; index < 500; index++) {
     const state = r3SummaryState(`hooded-time-travel-${index}`);
+    state.hoodedFigure.active!.committed.value = 2;
+    state.hoodedFigure.active!.attempt.value = 2;
+    state.hoodedFigure.active!.complete = false;
     const opened = dispatch(state, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
     if (opened.specialOffer?.offers.some(offer => offer.type === 'timeTravel')) return state;
   }
@@ -52,32 +63,32 @@ async function persistedState(page: Page): Promise<GameState> {
   return page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state as GameState, RUN_STORAGE_KEY);
 }
 
-test('R3 normal order is Mini-Boss summary, Special Offer, Hooded return, then Shop', async ({ page }) => {
+test('R3 normal order is Mini-Boss summary, Hooded return, Special Offer, then Shop', async ({ page }) => {
   await loadGame(page, r3SummaryState('hooded-normal-order'));
   await expect(page.getByRole('heading', { name: 'MINI-BOSS DEFEATED' })).toBeVisible();
 
   await page.getByRole('button', { name: /CONTINUE/ }).click();
-  await expect(page.getByRole('heading', { name: 'SPECIAL OFFER' })).toBeVisible();
-  await expect(page.getByRole('dialog', { name: 'Hooded Figure encounter' })).toHaveCount(0);
-  const ordinaryOffer = page.locator('.special-offer-card').filter({ hasNotText: 'Time Travel' }).first();
-  await ordinaryOffer.getByRole('button', { name: 'CHOOSE' }).click();
-  await page.getByRole('button', { name: /CONTINUE/ }).click();
-
   const story = page.getByRole('dialog', { name: 'Hooded Figure encounter' });
   await expect(story).toContainText('The hooded figure approaches again.');
   const stateAtReturn = await persistedState(page);
-  const opened = stateAtReturn.historyV2.findIndex(event => event.kind === 'shop_offers_presented' && event.pool === 'special_offer');
-  const selected = stateAtReturn.historyV2.findIndex(event => event.kind === 'shop_transaction'
-    && event.transaction.type === 'special_offer_selected');
   const returned = stateAtReturn.historyV2.findIndex(event => event.kind === 'hooded_challenge_changed' && event.change === 'returned');
-  expect(opened).toBeLessThan(selected);
-  expect(selected).toBeLessThan(returned);
+  expect(returned).toBeGreaterThan(-1);
 
   await story.click(); await story.click(); await story.click();
   await expect(page.getByRole('dialog', { name: 'Create a Wildfire' })).toBeVisible();
   await page.getByRole('button', { name: 'Walk away' }).click();
   await page.getByRole('dialog', { name: 'Hooded Figure encounter' }).click();
+  await expect(page.getByRole('heading', { name: 'SPECIAL OFFER' })).toBeVisible();
+  const ordinaryOffer = page.locator('.special-offer-card').filter({ hasNotText: 'Time Travel' }).first();
+  await ordinaryOffer.getByRole('button', { name: 'CHOOSE' }).click();
+  await page.getByRole('button', { name: /CONTINUE/ }).click();
   await expect(page.getByText('SHOP', { exact: true }).first()).toBeVisible();
+  const final = await persistedState(page);
+  const opened = final.historyV2.findIndex(event => event.kind === 'shop_offers_presented' && event.pool === 'special_offer');
+  const selected = final.historyV2.findIndex(event => event.kind === 'shop_transaction'
+    && event.transaction.type === 'special_offer_selected');
+  expect(returned).toBeLessThan(opened);
+  expect(opened).toBeLessThan(selected);
 });
 
 test('R3 Time Travel rewinds before any Hooded return and restores the Chapter checkpoint', async ({ page }) => {
@@ -96,7 +107,7 @@ test('R3 Time Travel rewinds before any Hooded return and restores the Chapter c
   await page.getByRole('button', { name: 'About The Long Way challenge' }).click();
   const details = page.getByRole('dialog', { name: 'The Long Way', exact: true });
   await expect(details).toContainText('0 / 3');
-  await expect(details).toContainText('3 Rounds Remaining');
+  await expect(details).toContainText('6 Rounds Remaining');
 
   const rewound = await persistedState(page);
   expect(rewound.round).toBe(25);

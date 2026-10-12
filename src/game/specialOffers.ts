@@ -15,7 +15,7 @@ export const SPECIAL_OFFERS: Record<SpecialOfferType, SpecialOfferDefinition> = 
   onTheHouse: { name: 'On The House', description: 'The next Shop’s initial displayed purchases are free.', rarity: 'uncommon' },
   greatFairy: { name: 'Great Fairy', description: 'Restore all Lives. If already full, gain 15 Gold.', rarity: 'common' },
   focus: { name: 'Focus: [HAND]', description: 'Train [HAND] 4 times for free.', rarity: 'common' },
-  timeTravel: { name: 'Time Travel', description: 'Go back 3 Rounds with your current build.', rarity: 'rare' },
+  timeTravel: { name: 'Time Travel', description: 'Replay this Chapter from Round 1 with your current build.', rarity: 'rare' },
   carePackage: { name: 'Care Package', description: 'Gain 3 extra manual Rerolls that carry over until used.', rarity: 'common' },
   silence: { name: 'Silence', description: 'Disable the next Boss effect.', rarity: 'rare' },
   sommelier: { name: 'Sommelier', description: 'Double the current sell value of all held Vintage faces.', rarity: 'rare' },
@@ -25,7 +25,7 @@ export const SPECIAL_OFFERS: Record<SpecialOfferType, SpecialOfferDefinition> = 
   orangeTheory: { name: 'Orange Theory', description: 'All Workout faces gain +5 Pips per Workout stack immediately.', rarity: 'common' },
   powerball: { name: 'Powerball', description: 'The first Jackpot triggered in the next 3 Rounds pays 50 Gold.', rarity: 'common' },
   bottledFairy: { name: 'Bottled Fairy', description: 'For the next 3 Rounds, your manual Rerolls refill once per Round if you would Bust.', rarity: 'uncommon' },
-  badDream: { name: 'Bad Dream', description: 'If your run ends in the next 3 Rounds, return here with 1 Life.', rarity: 'rare' },
+  badDream: { name: 'Bad Dream', description: 'If your run ends in the next 3 Rounds, return to the post-R3 Shop with your current build and 1 Life.', rarity: 'rare' },
   semester: { name: 'Semester', description: 'Team Training is guaranteed in your next 3 Shops.', rarity: 'uncommon' },
 };
 

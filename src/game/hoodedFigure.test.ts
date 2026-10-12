@@ -262,8 +262,9 @@ describe('Time Travel integration', () => {
     game.phase = 'specialOffer';
     game.specialOffer = { offers: [{ id: 1, type: 'timeTravel' }], acquired: true, chosen: { id: 1, type: 'timeTravel' } };
     const challenge = active(game, 'theLongWay', 3);
-    challenge.committed.value = 3; challenge.attempt.value = 3; challenge.complete = true;
+    challenge.committed.value = 2; challenge.attempt.value = 2;
     game.hoodedFigure.active = challenge;
+    game.hoodedFigure.challengeCheckpoint = active(game, 'theLongWay', 3);
     game.hoodedFigure.contributionCheckpoint = { ultimate: { roundCount: 1, factorSum: 2 } };
     game.bonfireContributions = { ultimate: { roundCount: 4, factorSum: 12 } };
     const result = dispatch(game, { type: 'CONTINUE_SPECIAL_OFFER' }, constant(.2));
@@ -278,13 +279,13 @@ describe('Time Travel integration', () => {
 });
 
 describe('encounter and checkpoint lifecycle', () => {
-  it('issues once at a genuinely new Chapter 5 with exactly five ordinary Bonfires', () => {
+  it('issues once at a genuinely new Chapter 5 with exactly four ordinary Bonfires', () => {
     const game = state();
     game.round = 24;
     game.presentedChapters = [1, 2, 3, 4];
     game.phase = 'shop';
     game.shop = { kind: 'post_boss', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
-    game.bonfires = ['ultimate', 'minigun', 'hailMary', 'fullOfGrace', 'vineyard'];
+    game.bonfires = ['ultimate', 'minigun', 'hailMary', 'fullOfGrace'];
     const result = dispatch(game, { type: 'NEXT_CHAPTER' }, constant(.2));
     expect(result.state.phase).toBe('hoodedFigure');
     expect(result.state.hoodedFigure.seen).toBe(true);
@@ -292,11 +293,11 @@ describe('encounter and checkpoint lifecycle', () => {
     expect(result.events.filter(event => event.type === 'HOODED_CHALLENGE_ISSUED')).toHaveLength(1);
   });
 
-  it('does not count a Wildfire toward the five ordinary Bonfires threshold', () => {
+  it('does not count a Wildfire toward the four ordinary Bonfires threshold', () => {
     const game = state();
     game.round = 24; game.presentedChapters = [1, 2, 3, 4]; game.phase = 'shop';
     game.shop = { kind: 'post_boss', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
-    game.bonfires = ['ultimate', 'minigun', 'hailMary', 'fullOfGrace'];
+    game.bonfires = ['ultimate', 'minigun', 'hailMary'];
     game.wildfires = [{ flame: 'vineyard', sacrificedFlame: 'fatCat', sacrificedAverage: 2,
       transferMultiplier: 2.25, resolved: { kind: 'xMult', baseMax: 5, max: 11 } }];
     const result = dispatch(game, { type: 'NEXT_CHAPTER' }, constant(.2));

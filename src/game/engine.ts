@@ -55,7 +55,30 @@ function normalizeHoodedRuntime(state: Board): void {
   state.bonfireContributions ??= {};
   state.bonfireRoundContributions ??= {};
   state.chargeAttribution ??= {};
-  state.hoodedFigure ??= { seen: false, previousChallengeId: null, active: null, interaction: null, contributionCheckpoint: null };
+  state.hoodedFigure ??= { seen: false, previousChallengeId: null, active: null, interaction: null,
+    issuedChapters: [], rewardedChapters: [], challengeCheckpoint: null, contributionCheckpoint: null };
+  state.hoodedFigure.issuedChapters ??= state.hoodedFigure.active ? [state.hoodedFigure.active.issuedChapter] : [];
+  state.hoodedFigure.rewardedChapters ??= [];
+  if (!Object.hasOwn(state.hoodedFigure, 'challengeCheckpoint')) {
+    const legacyActive = state.hoodedFigure.active;
+    state.hoodedFigure.challengeCheckpoint = legacyActive ? {
+      ...structuredClone(legacyActive),
+      committed: { value: 0, keys: [], invalid: false, jackpotPaid: false },
+      attempt: { value: 0, keys: [], invalid: false, jackpotPaid: false },
+      complete: false,
+    } : null;
+  }
+}
+
+function normalizeChapterLifecycle(state: Board): void {
+  state.chapterLifecycle ??= {};
+  for (const round of state.suppressedPostBossRewardRounds ?? []) {
+    const chapter = chapterNumberForRound(round);
+    state.chapterLifecycle[chapter] = { specialOfferConsumed: true };
+  }
+  state.suppressedPostBossRewardRounds = [];
+  for (const lifecycle of Object.values(state.chapterLifecycle)) if (lifecycle)
+    lifecycle.specialOfferConsumed = !!lifecycle.specialOfferConsumed;
 }
 
 function normalizeSixPackRuntime(state: Pick<Board, 'dice' | 'bonfires' | 'wildfires' | 'sixPackXMult' | 'sixPackUpperHandsPlayed'>): void {
@@ -98,6 +121,7 @@ export function normalizeGameState(state: GameState): GameState {
     next.bossSilenced || next.boss?.type !== 'neglected' || !next.boss.neglectedHands.includes(hand));
   normalizeSpecialRuntime(next);
   normalizeHoodedRuntime(next);
+  normalizeChapterLifecycle(next);
   const legacy = next as GameState & { flameReward?: GameState['flameSelection'] };
   if (!next.flameSelection && legacy.flameReward) next.flameSelection = legacy.flameReward;
   delete legacy.flameReward;
@@ -157,6 +181,7 @@ export function normalizeGameState(state: GameState): GameState {
     ensureChapterPlan({ ...checkpoint, seed: next.seed }, chapterNumberForRound(checkpoint.round));
     normalizeSpecialRuntime(checkpoint);
     normalizeHoodedRuntime(checkpoint);
+    normalizeChapterLifecycle(checkpoint);
     if (checkpoint.shop) normalizeShop(checkpoint.shop);
     for (const die of checkpoint.dice) {
       for (const face of die.faces) {
@@ -197,21 +222,12 @@ export function normalizeGameState(state: GameState): GameState {
   next.chapterPlans ??= {};
   next.presentedChapters ??= Array.from({ length: chapterNumberForRound(next.round) }, (_, index) => index + 1);
   ensureChapterPlan(next, chapterNumberForRound(next.round));
-  if (next.badDreamCheckpoint) {
-    const legacy = next.badDreamCheckpoint as unknown as GameStateBase;
-    if (!isRollbackState(next.badDreamCheckpoint)) next.badDreamCheckpoint = {
-      board: boardSnapshot(legacy as GameState), rngState: legacy.rngState, nextOfferId: legacy.nextOfferId,
+  if (next.badDreamCheckpoint && isRollbackState(next.badDreamCheckpoint as unknown)) {
+    const legacy = next.badDreamCheckpoint as unknown as import('./types').RollbackState;
+    next.badDreamCheckpoint = {
+      chapter: chapterNumberForRound(legacy.board.round),
+      hoodedChallenge: structuredClone(legacy.board.hoodedFigure?.active ?? null),
     };
-    const checkpoint = next.badDreamCheckpoint.board;
-    normalizeHoodedRuntime(checkpoint);
-    checkpoint.scorecardCycleConsumed ??= checkpoint.consumed.filter(hand =>
-      checkpoint.bossSilenced || checkpoint.boss?.type !== 'neglected'
-      || !checkpoint.boss.neglectedHands.includes(hand));
-    checkpoint.chapterPlans ??= structuredClone(next.chapterPlans);
-    checkpoint.presentedChapters ??= Array.from(
-      { length: chapterNumberForRound(checkpoint.round) }, (_, index) => index + 1,
-    );
-    ensureChapterPlan({ ...checkpoint, seed: next.seed }, chapterNumberForRound(checkpoint.round));
   }
   next.boss ??= null;
   if (next.boss?.type === 'warden') next.boss.unlockCosts ??= [];
@@ -467,10 +483,11 @@ export function newRun(seed: string, random?: RandomSource, options?: { debugTra
   const state: GameState = {
     phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: CONFIG.baseTarget,
     score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, roundAttemptNumber: 1,
-    bossSchedule: {}, chapterPlans: {}, presentedChapters: [], boss: null, bossSilenced: false, currentNodeId: '',
+    bossSchedule: {}, chapterPlans: {}, presentedChapters: [], chapterLifecycle: {}, boss: null, bossSilenced: false, currentNodeId: '',
     bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], wildfires: [],
     bonfireContributions: {}, bonfireRoundContributions: {}, chargeAttribution: {},
-    hoodedFigure: { seen: false, previousChallengeId: null, active: null, interaction: null, contributionCheckpoint: null }, chargeXMult: 1, maxCharge: 1,
+    hoodedFigure: { seen: false, previousChallengeId: null, active: null, interaction: null,
+      issuedChapters: [], rewardedChapters: [], challengeCheckpoint: null, contributionCheckpoint: null }, chargeXMult: 1, maxCharge: 1,
     chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
     fetchTarget: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,

@@ -109,7 +109,8 @@ test('local route transition auto-continues after its visible themed three-secon
   expect(nodeBox!.x).toBeGreaterThanOrEqual(trackBox!.x);
   expect(nodeBox!.x + nodeBox!.width).toBeLessThanOrEqual(trackBox!.x + trackBox!.width);
   await expect(map).toBeVisible();
-  await expect(continueButton.locator('.map-continue-countdown')).toHaveText('2');
+  // Rendering and geometry assertions can straddle the next one-second tick on loaded CI workers.
+  await expect(continueButton.locator('.map-continue-countdown')).toHaveText(/^[12]$/);
   const updatedButtonWidth = await continueButton.evaluate(element => (element as HTMLElement).offsetWidth);
   const updatedBadgeWidth = await continueButton.locator('.map-continue-countdown').evaluate(element => (element as HTMLElement).offsetWidth);
   expect(updatedButtonWidth).toBe(initialButtonWidth);

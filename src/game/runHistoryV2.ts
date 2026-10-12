@@ -211,7 +211,7 @@ export interface ChargeChangedEvent extends RunHistoryV2Envelope {
 export interface HoodedChallengeChangedEvent extends RunHistoryV2Envelope {
   kind: 'hooded_challenge_changed';
   challengeId?: ChallengeId;
-  change: 'issued' | 'completed' | 'rolled_back' | 'time_travel_reset' | 'returned'
+  change: 'issued' | 'completed' | 'rolled_back' | 'time_travel_reset' | 'bad_dream_reset' | 'expired' | 'returned'
     | 'recipient_selected' | 'sacrifice_selected' | 'wildfire_created' | 'walked_away';
   target?: number;
   recipientFlame?: Flame;
@@ -251,6 +251,15 @@ export interface CheckpointRestoredEvent extends RunHistoryV2Envelope {
   abandonedThroughSeq: number;
   canonicalRound: number;
   canonicalAttempt: number;
+  /** Persistent build/economy events retained across a progression-only relocation. */
+  retainedSeqs?: number[];
+  relocation?: 'chapter_start' | 'post_r3_shop';
+  /** Declares that relocation changed progression only; the live build remains authoritative. */
+  preservedState?: 'current_build';
+  /** Canonical copies of persistent side effects from otherwise rewound hand events. */
+  retainedHandSideEffects?: { sourceSeq: number; sideEffects: HandSideEffect[] }[];
+  /** Persistent Care Package spending from otherwise rewound roll events. */
+  retainedCarePackageSpends?: { sourceSeq: number; charges: number }[];
 }
 
 export interface RunFinishedEvent extends RunHistoryV2Envelope {

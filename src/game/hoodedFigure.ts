@@ -10,7 +10,7 @@ import type {
 
 export const HOODED_FIGURE_CONFIG = {
   minimumChapter: 5,
-  minimumOrdinaryBonfires: 5,
+  minimumOrdinaryBonfires: 4,
   sacrificePremium: 1.25,
   beanSaladPerFace: 6,
   vintagePerFace: 4,
@@ -43,24 +43,24 @@ const always = () => true;
 const fixed = (target: number) => () => target;
 
 export const CHALLENGES: Record<ChallengeId, ChallengeDefinition> = {
-  fiveAlive: { id: 'fiveAlive', name: 'Five Alive', short: 'play 3 Five of a Kinds', full: 'Manually play Five of a Kind 3 times across R1–R3.', scope: 'chapter', baseTarget: 3, eligible: always, target: fixed(3) },
-  theLongWay: { id: 'theLongWay', name: 'The Long Way', short: 'play 3 Large Straights', full: 'Manually play Large Straight 3 times across R1–R3.', scope: 'chapter', baseTarget: 3, eligible: always, target: fixed(3) },
+  fiveAlive: { id: 'fiveAlive', name: 'Five Alive', short: 'play 3 Five of a Kinds', full: 'Manually play Five of a Kind 3 times during this Chapter.', scope: 'chapter', baseTarget: 3, eligible: always, target: fixed(3) },
+  theLongWay: { id: 'theLongWay', name: 'The Long Way', short: 'play 3 Large Straights', full: 'Manually play Large Straight 3 times during this Chapter.', scope: 'chapter', baseTarget: 3, eligible: always, target: fixed(3) },
   upperClass: { id: 'upperClass', name: 'Upper Class', short: 'play all 6 Upper hands in one Round', full: 'In one successfully cleared Round, manually play Ones, Twos, Threes, Fours, Fives, and Sixes.', scope: 'round', baseTarget: 6, eligible: always, target: fixed(6) },
-  lowerClass: { id: 'lowerClass', name: 'Lower Class', short: 'play every Lower hand', full: 'Across R1–R3, manually play Pair, Two Pair, Three of a Kind, Full House, Four of a Kind, Five of a Kind, Small Straight, and Large Straight.', scope: 'chapter', baseTarget: 8, eligible: always, target: fixed(8) },
+  lowerClass: { id: 'lowerClass', name: 'Lower Class', short: 'play every Lower hand', full: 'During this Chapter, manually play Pair, Two Pair, Three of a Kind, Full House, Four of a Kind, Five of a Kind, Small Straight, and Large Straight.', scope: 'chapter', baseTarget: 8, eligible: always, target: fixed(8) },
   varietyPack: { id: 'varietyPack', name: 'Variety Pack', short: 'play 5 different Lower hands in one Round', full: 'Manually play five distinct Lower-hand types during one successfully cleared Round.', scope: 'round', baseTarget: 5, eligible: always, target: fixed(5) },
   closeCall: { id: 'closeCall', name: 'Close Call', short: 'clear a Round within 10% of its Goal', full: 'Successfully clear a challenge Round with a final score from 100% through 110% of its Goal.', scope: 'round', baseTarget: 1, eligible: always, target: fixed(1) },
   noTakebacks: { id: 'noTakebacks', name: 'No Takebacks', short: 'clear a Round without using a Reroll', full: 'Clear one Round without using any player-initiated manual Reroll.', scope: 'round', baseTarget: 1, eligible: (_state, miniBoss) => miniBoss !== 'tightrope', target: fixed(1) },
   upperManagement: { id: 'upperManagement', name: 'Upper Management', short: 'clear a Round using only Upper hands', full: 'Clear one Round where every manually selected scorecard hand is an Upper hand. Free plays do not spoil this.', scope: 'round', baseTarget: 1, eligible: always, target: fixed(1) },
   rollCall: { id: 'rollCall', name: 'Roll Call', short: 'score every face from 1 through 6 in one Round', full: 'During one successfully cleared Round, every printed die value from 1 through 6 must participate in a genuine scoring event.', scope: 'round', baseTarget: 6, eligible: always, target: fixed(6) },
   lowProfile: { id: 'lowProfile', name: 'Low Profile', short: 'clear a Round without scoring a 5 or 6', full: 'Clear one Round without any genuine scoring event containing a printed 5 or 6.', scope: 'round', baseTarget: 1, eligible: always, target: fixed(1) },
-  oppositesAttract: { id: 'oppositesAttract', name: 'Opposites Attract', short: 'score 4 hands containing both a 1 and a 6', full: 'Across R1–R3, have four genuine scoring events that each contain both a printed 1 and a printed 6.', scope: 'chapter', baseTarget: 4, eligible: always, target: fixed(4) },
-  beanSalad: { id: 'beanSalad', name: 'Bean Salad', short: 'trigger Jumping Bean {N} times', full: 'Trigger Jumping Bean {N} times across R1–R3.', scope: 'chapter', baseTarget: 0, eligible: state => physicalFacesWith(state, 'jumpingBean') >= 1, target: state => HOODED_FIGURE_CONFIG.beanSaladPerFace * physicalFacesWith(state, 'jumpingBean') },
+  oppositesAttract: { id: 'oppositesAttract', name: 'Opposites Attract', short: 'score 4 hands containing both a 1 and a 6', full: 'During this Chapter, have four genuine scoring events that each contain both a printed 1 and a printed 6.', scope: 'chapter', baseTarget: 4, eligible: always, target: fixed(4) },
+  beanSalad: { id: 'beanSalad', name: 'Bean Salad', short: 'trigger Jumping Bean {N} times', full: 'Trigger Jumping Bean {N} times during this Chapter.', scope: 'chapter', baseTarget: 0, eligible: state => physicalFacesWith(state, 'jumpingBean') >= 1, target: state => HOODED_FIGURE_CONFIG.beanSaladPerFace * physicalFacesWith(state, 'jumpingBean') },
   bonusRound: { id: 'bonusRound', name: 'Bonus Round', short: 'activate Bonus {N} times in one Round', full: 'During one successfully cleared Round, activate a Bonus-bearing physical face {N} times.', scope: 'round', baseTarget: 0, eligible: state => physicalFacesWith(state, 'bonus') >= 3, target: state => physicalFacesWith(state, 'bonus') },
   goldRush: { id: 'goldRush', name: 'Gold Rush', short: 'activate Golden {N} times in one Round', full: 'During one successfully cleared Round, activate a Golden-bearing physical face {N} times.', scope: 'round', baseTarget: 0, eligible: state => physicalFacesWith(state, 'golden') >= 3, target: state => physicalFacesWith(state, 'golden') },
-  agedToPerfection: { id: 'agedToPerfection', name: 'Aged to Perfection', short: 'score Vintage {N} times', full: 'Score Vintage-bearing physical faces {N} times across R1–R3.', scope: 'chapter', baseTarget: 0, eligible: state => physicalFacesWith(state, 'vintage') >= 1, target: state => HOODED_FIGURE_CONFIG.vintagePerFace * physicalFacesWith(state, 'vintage') },
-  magneticPersonality: { id: 'magneticPersonality', name: 'Magnetic Personality', short: 'pull {N} faces with Magnetic', full: 'Accumulate {N} destination-face pulls caused by Magnetic across R1–R3.', scope: 'chapter', baseTarget: 0, eligible: state => magneticPullCapable(state.dice), target: state => HOODED_FIGURE_CONFIG.magneticPerFace * physicalFacesWith(state, 'magnetic') },
+  agedToPerfection: { id: 'agedToPerfection', name: 'Aged to Perfection', short: 'score Vintage {N} times', full: 'Score Vintage-bearing physical faces {N} times during this Chapter.', scope: 'chapter', baseTarget: 0, eligible: state => physicalFacesWith(state, 'vintage') >= 1, target: state => HOODED_FIGURE_CONFIG.vintagePerFace * physicalFacesWith(state, 'vintage') },
+  magneticPersonality: { id: 'magneticPersonality', name: 'Magnetic Personality', short: 'pull {N} faces with Magnetic', full: 'Accumulate {N} destination-face pulls caused by Magnetic during this Chapter.', scope: 'chapter', baseTarget: 0, eligible: state => magneticPullCapable(state.dice), target: state => HOODED_FIGURE_CONFIG.magneticPerFace * physicalFacesWith(state, 'magnetic') },
   jackpot: { id: 'jackpot', name: 'Jackpot!', short: 'trigger Jackpot in 2 different Rounds', full: 'Jackpot must genuinely pay on the clearing hand of two different successfully completed challenge Rounds.', scope: 'chapter', baseTarget: 2, eligible: state => physicalFacesWith(state, 'jackpot') >= 1, target: fixed(2) },
-  getYourRepsIn: { id: 'getYourRepsIn', name: 'Get Your Reps In', short: 'activate {N} Workout stacks', full: 'Accumulate {N} actual Workout-stack activations across R1–R3.', scope: 'chapter', baseTarget: 0, eligible: state => totalStacks(state, 'workout') >= 3, target: state => HOODED_FIGURE_CONFIG.workoutPerStack * totalStacks(state, 'workout') },
+  getYourRepsIn: { id: 'getYourRepsIn', name: 'Get Your Reps In', short: 'activate {N} Workout stacks', full: 'Accumulate {N} actual Workout-stack activations during this Chapter.', scope: 'chapter', baseTarget: 0, eligible: state => totalStacks(state, 'workout') >= 3, target: state => HOODED_FIGURE_CONFIG.workoutPerStack * totalStacks(state, 'workout') },
   fullyLoaded: { id: 'fullyLoaded', name: 'Fully Loaded', short: 'score 3 hands using at least 3 Enhancement types', full: 'Have three genuine scoring events where scoring dice collectively contain at least three distinct Enhancement types.', scope: 'chapter', baseTarget: 3, eligible: state => distinctEnhancements(state) >= 3, target: fixed(3) },
 };
 export const CHALLENGE_IDS = Object.keys(CHALLENGES) as ChallengeId[];
@@ -174,7 +174,7 @@ export function completeChallengeRound(challenge: ActiveHoodedChallenge | null, 
 }
 
 export function challengeRoundsRemaining(board: Pick<Board, 'round'>): number {
-  return Math.max(1, 4 - (((board.round - 1) % 6) + 1));
+  return Math.max(1, 7 - (((board.round - 1) % 6) + 1));
 }
 
 export function contributionAverage(entry: BonfireContribution | undefined): number {

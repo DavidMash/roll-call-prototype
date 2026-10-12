@@ -178,6 +178,10 @@ export type SpecialOfferType = 'onTheHouse' | 'greatFairy' | 'focus' | 'timeTrav
   | 'powerball' | 'bottledFairy' | 'badDream' | 'semester';
 export interface SpecialOffer { id: number; type: SpecialOfferType; hand?: HandId }
 export interface SpecialOfferSelection { offers: SpecialOffer[]; acquired: boolean; chosen?: SpecialOffer }
+export interface ChapterLifecycleState {
+  /** The post-R3 reward for this Chapter has already been selected. */
+  specialOfferConsumed: boolean;
+}
 export interface SpecialOfferEffects {
   onTheHouse: boolean;
   carePackageRerolls: number;
@@ -243,8 +247,19 @@ export interface HoodedFigureState {
   previousChallengeId: ChallengeId | null;
   active: ActiveHoodedChallenge | null;
   interaction: HoodedInteraction | null;
+  /** Chapters that have already issued their one permitted challenge. */
+  issuedChapters: number[];
+  /** Chapters whose challenge has already produced a Wildfire. */
+  rewardedChapters: number[];
+  /** Chapter-start challenge state used by Time Travel. */
+  challengeCheckpoint: ActiveHoodedChallenge | null;
   /** Chapter-start contribution state used by Time Travel. */
   contributionCheckpoint: Partial<Record<Flame, BonfireContribution>> | null;
+}
+export interface BadDreamCheckpoint {
+  chapter: number;
+  /** Only challenge state is checkpointed; the current build is never stored here. */
+  hoodedChallenge: ActiveHoodedChallenge | null;
 }
 export interface RoundPayout {
   baseGold: number;
@@ -285,6 +300,7 @@ export interface Board {
   bossSchedule: Partial<Record<number, BossType>>;
   chapterPlans: Partial<Record<number, ChapterPlan>>;
   presentedChapters: number[];
+  chapterLifecycle: Partial<Record<number, ChapterLifecycleState>>;
   boss: BossRuntimeState | null;
   bossSilenced: boolean;
   currentNodeId: string;
@@ -292,6 +308,7 @@ export interface Board {
   flameTutorial: { pendingDieId: number | null; completed: boolean };
   manualRerollsRemaining: number;
   specialOfferEffects: SpecialOfferEffects;
+  /** Legacy save-migration input; current runs use chapterLifecycle. */
   suppressedPostBossRewardRounds: number[];
   dice: Die[];
   bonfires: Flame[];
@@ -529,7 +546,8 @@ export type EventType =
   | 'RUN_LOST' | 'RESOLUTION_ERROR' | 'MANUAL_REROLL_STARTED' | 'DEAD_BOARD' | 'DEAD_BOARD_RESCUED'
   | 'TUTORIAL_SAFEGUARD'
   | 'HOODED_CHALLENGE_ISSUED' | 'HOODED_CHALLENGE_COMPLETED' | 'HOODED_CHALLENGE_ROLLED_BACK'
-  | 'HOODED_CHALLENGE_TIME_TRAVEL_RESET' | 'HOODED_FIGURE_RETURNED' | 'WILDFIRE_CANDIDATES'
+  | 'HOODED_CHALLENGE_TIME_TRAVEL_RESET' | 'HOODED_CHALLENGE_BAD_DREAM_RESET' | 'HOODED_CHALLENGE_EXPIRED'
+  | 'HOODED_FIGURE_RETURNED' | 'WILDFIRE_CANDIDATES'
   | 'WILDFIRE_SACRIFICE_SELECTED' | 'WILDFIRE_WALKED_AWAY' | 'WILDFIRE_CREATED';
 export interface EventRecord {
   id: number;
@@ -619,7 +637,7 @@ export interface RollbackState {
 }
 export interface GameState extends GameStateBase {
   roundCheckpoint: RollbackState | null;
-  badDreamCheckpoint: RollbackState | null;
+  badDreamCheckpoint: BadDreamCheckpoint | null;
 }
 export type Action =
   | { type: 'PLAY'; hand: HandId; dieIds: number[]; decisionMs?: number }

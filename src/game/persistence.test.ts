@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { dispatch, newRun } from './engine';
 import { projectWildfire, rankedRecipients } from './hoodedFigure';
 import { compactGameStateForPersistence, isResumableRun, loadPersistedRun, RUN_STORAGE_KEY, RUN_STORAGE_VERSION, savePersistedRun } from './persistence';
+import { captureRollbackState } from './rollback';
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -87,7 +88,8 @@ describe('run persistence', () => {
 
     const loaded = loadPersistedRun(storage, null)!;
     expect(loaded.hoodedFigure).toEqual({ seen: false, previousChallengeId: null, active: null,
-      interaction: null, contributionCheckpoint: null });
+      interaction: null, issuedChapters: [], rewardedChapters: [], challengeCheckpoint: null,
+      contributionCheckpoint: null });
     expect(loaded.wildfires).toEqual([]);
     expect(rankedRecipients(loaded)).toEqual(['fullOfGrace', 'hailMary', 'minigun']);
     const projection = projectWildfire(loaded, 'fullOfGrace', 'ultimate');
@@ -211,5 +213,25 @@ describe('run persistence', () => {
     expect(loaded?.historyV2Coverage).toMatchObject({ complete: false, firstRound: 1, firstActionId: 0 });
     expect(loaded?.debugTrace.mode).toBe('bounded');
     expect(loaded?.roundCheckpoint?.board).toBeDefined();
+  });
+
+  it('migrates broad Bad Dream checkpoints to challenge-only data and legacy replay suppression to Chapter state', () => {
+    const storage = new MemoryStorage();
+    const state = newRun('legacy-bad-dream-checkpoint').state;
+    state.round = 27;
+    state.hoodedFigure.active = {
+      id: 'theLongWay', issuedChapter: 5, target: 3,
+      committed: { value: 1, keys: [], invalid: false, jackpotPaid: false },
+      attempt: { value: 1, keys: [], invalid: false, jackpotPaid: false }, complete: false, dialogueLine: 'legacy',
+    };
+    state.badDreamCheckpoint = captureRollbackState(state) as unknown as typeof state.badDreamCheckpoint;
+    state.suppressedPostBossRewardRounds = [27];
+    delete (state as Partial<typeof state>).chapterLifecycle;
+    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: 3, state }));
+
+    const loaded = loadPersistedRun(storage, null);
+    expect(loaded?.badDreamCheckpoint).toEqual({ chapter: 5, hoodedChallenge: state.hoodedFigure.active });
+    expect(loaded?.badDreamCheckpoint).not.toHaveProperty('board');
+    expect(loaded?.chapterLifecycle[5]?.specialOfferConsumed).toBe(true);
   });
 });

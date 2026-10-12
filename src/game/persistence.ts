@@ -2,11 +2,12 @@ import { createDebugTrace } from './debugTrace';
 import { newRun, normalizeGameState } from './engine';
 import { isRollbackState } from './rollback';
 import { boardSnapshot, createStats } from './telemetry';
-import type { Action, GameState, GameStateBase, RollbackState } from './types';
+import { chapterNumberForRound } from './chapters';
+import type { Action, BadDreamCheckpoint, GameState, GameStateBase, RollbackState } from './types';
 
 export const RUN_STORAGE_KEY = 'roll-call:active-run';
-export const RUN_STORAGE_VERSION = 3;
-const SUPPORTED_STORAGE_VERSIONS = new Set([2, RUN_STORAGE_VERSION]);
+export const RUN_STORAGE_VERSION = 4;
+const SUPPORTED_STORAGE_VERSIONS = new Set([2, 3, RUN_STORAGE_VERSION]);
 
 type RunStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
@@ -28,8 +29,9 @@ function hasTemplateShape(value: unknown, template: unknown): boolean {
     return isRecord(value) && Object.entries(template).every(([key, child]) =>
       (['maxCharge', 'decisionId', 'sixPackXMult', 'sixPackUpperHandsPlayed', 'handFamilyFlameStages', 'bossSilenced',
         'specialOfferEffects', 'suppressedPostBossRewardRounds', 'specialOffer', 'badDreamCheckpoint',
-        'freeEnhancementOfferIds', 'freeTrainingOfferKeys', 'chapterPlans', 'presentedChapters', 'scorecardCycleConsumed',
+        'freeEnhancementOfferIds', 'freeTrainingOfferKeys', 'chapterPlans', 'presentedChapters', 'chapterLifecycle', 'scorecardCycleConsumed',
         'wildfires', 'bonfireContributions', 'bonfireRoundContributions', 'chargeAttribution', 'hoodedFigure',
+        'issuedChapters', 'rewardedChapters', 'challengeCheckpoint',
         'historyV2', 'historyV2TimelineId', 'historyV2Coverage', 'debugTrace', 'actionJournal',
         'nextPlaybackEventId'].includes(key) && !Object.hasOwn(value, key))
       || (Object.hasOwn(value, key) && hasTemplateShape(value[key], child)));
@@ -44,6 +46,22 @@ function legacyRollbackState(value: unknown): RollbackState | null {
   return { board: boardSnapshot(legacy as GameState), rngState: legacy.rngState, nextOfferId: legacy.nextOfferId };
 }
 
+function badDreamCheckpoint(value: unknown): BadDreamCheckpoint | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.chapter === 'number' && ('hoodedChallenge' in value))
+    return value as unknown as BadDreamCheckpoint;
+  const legacy = legacyRollbackState(value);
+  return legacy ? {
+    chapter: chapterNumberForRound(legacy.board.round),
+    hoodedChallenge: structuredClone(legacy.board.hoodedFigure?.active ?? null),
+  } : null;
+}
+
+function isBadDreamCheckpoint(value: unknown): value is BadDreamCheckpoint {
+  return isRecord(value) && Number.isInteger(value.chapter) && (value.chapter as number) > 0
+    && (value.hoodedChallenge === null || isRecord(value.hoodedChallenge));
+}
+
 /** Converts Pass 1/2 and pre-V2 state shape without interpreting legacy prose. */
 function migratePersistedState(value: unknown): unknown {
   if (!isRecord(value)) return value;
@@ -54,7 +72,7 @@ function migratePersistedState(value: unknown): unknown {
     ? next.history.reduce((max, item) => isRecord(item) && typeof item.id === 'number' ? Math.max(max, item.id + 1) : max, 0)
     : 0;
   if (next.roundCheckpoint != null) next.roundCheckpoint = legacyRollbackState(next.roundCheckpoint);
-  if (next.badDreamCheckpoint != null) next.badDreamCheckpoint = legacyRollbackState(next.badDreamCheckpoint);
+  if (next.badDreamCheckpoint != null) next.badDreamCheckpoint = badDreamCheckpoint(next.badDreamCheckpoint);
   return next;
 }
 
@@ -68,7 +86,7 @@ function isGameState(value: unknown): value is GameState {
   if (!hasTemplateShape(value, baseTemplate)) return false;
   if (value.roundCheckpoint !== null && (!isRecord(value.roundCheckpoint) || !isRollbackState(value.roundCheckpoint))) return false;
   if (value.badDreamCheckpoint !== undefined && value.badDreamCheckpoint !== null
-    && (!isRecord(value.badDreamCheckpoint) || !isRollbackState(value.badDreamCheckpoint))) return false;
+    && !isBadDreamCheckpoint(value.badDreamCheckpoint)) return false;
   return true;
 }
 

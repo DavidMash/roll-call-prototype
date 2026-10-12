@@ -186,7 +186,7 @@ describe('Care Package resources and Time Travel boundaries', () => {
     expect(state.dice[0].flame).toEqual({ id: 'ultimate', investedGold: 40 });
     expect(state.specialOfferEffects.carePackageRerolls).toBe(2);
     expect(state.stats.mapTransitions.at(-1)).toMatchObject({ toNode: `round:${destination}`, direction: 'backward' });
-    expect(state.suppressedPostBossRewardRounds).toContain(round);
+    expect(state.chapterLifecycle[Math.floor((round - 1) / 6) + 1]?.specialOfferConsumed).toBe(true);
     if (round === 3) {
       expose(state, [2, 2, 3, 4, 5]);
       state.target = 1;

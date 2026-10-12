@@ -14,9 +14,9 @@ import { applyHandContribution, applyHandMultiplier, applyXMult, createHandAccum
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie,
   isBigBossRound, isCursedDie, isMiniBossType, requiredEncounterDieIds, targetForBoss, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
-import { encounterNode, flameNodeAfter, postBossRewardForRound, postBossShopNodeAfter, shopNodeBefore, specialOfferNodeAfter, timeTravelDestinationRound } from './progression';
+import { encounterNode, flameNodeAfter, postBossShopNodeAfter, shopNodeBefore, specialOfferNodeAfter, timeTravelDestinationRound } from './progression';
 import { formatPercentage, formatPlayerNumber } from './copy';
-import { chapterNumberForRound, ensureChapterPlan } from './chapters';
+import { chapterEncounterRounds, chapterNumberForRound, ensureChapterPlan } from './chapters';
 import { chapterRoundForRound } from './chapters';
 import { RUN_HISTORY_V2_RULESET, RUN_HISTORY_V2_SCHEMA_VERSION } from './runHistoryV2';
 import { appendCriticalDiagnostic, appendDebugTrace } from './debugTrace';
@@ -124,7 +124,8 @@ export class Resolver {
     return 'external';
   }
 
-  private nextTimeline(reason: 'bust' | 'bad_dream' | 'time_travel', canonicalRound: number, canonicalAttempt: number): void {
+  private nextTimeline(reason: 'bust' | 'bad_dream' | 'time_travel', canonicalRound: number, canonicalAttempt: number,
+    relocation?: 'chapter_start' | 'post_r3_shop'): void {
     const fromTimelineId = this.state.historyV2TimelineId;
     const abandonedThroughSeq = Math.max(-1, this.state.historyV2.length - 1);
     const sameTimeline = this.state.historyV2.filter(event => event.timelineId === fromTimelineId);
@@ -135,9 +136,22 @@ export class Resolver {
     const abandonedFromSeq = reason === 'bad_dream' && badDreamSelection ? badDreamSelection.seq + 1
       : reason === 'time_travel' && timeTravelStart ? timeTravelStart.seq
         : latestAttempt?.seq ?? sameTimeline[0]?.seq ?? abandonedThroughSeq;
+    const retainedSeqs = reason === 'bust' ? [] : sameTimeline.filter(event => event.seq >= abandonedFromSeq
+      && event.seq <= abandonedThroughSeq && (event.kind === 'shop_transaction' || event.kind === 'flame_changed'))
+      .map(event => event.seq);
+    const rewoundEvents = sameTimeline.filter(event => event.seq >= abandonedFromSeq && event.seq <= abandonedThroughSeq);
+    const retainedHandSideEffects = reason === 'bust' ? [] : rewoundEvents.flatMap(event => event.kind === 'hand_scored'
+      ? [{ sourceSeq: event.seq, sideEffects: event.sideEffects.filter(effect =>
+        ['workout', 'personal_trainer', 'gold', 'vintage_growth', 'enhancement'].includes(effect.type)) }]
+      : []).filter(item => item.sideEffects.length > 0);
+    const retainedCarePackageSpends = reason === 'bust' ? [] : rewoundEvents.flatMap(event =>
+      event.kind === 'roll_batch' && (event.spend?.carePackageCharges ?? 0) > 0
+        ? [{ sourceSeq: event.seq, charges: event.spend!.carePackageCharges }] : []);
     this.state.historyV2TimelineId++;
     this.emitV2({ kind: 'checkpoint_restored', reason, fromTimelineId, toTimelineId: this.state.historyV2TimelineId,
-      abandonedFromSeq, abandonedThroughSeq, canonicalRound, canonicalAttempt });
+      abandonedFromSeq, abandonedThroughSeq, canonicalRound, canonicalAttempt, retainedSeqs, relocation,
+      ...(reason === 'bust' ? {} : { preservedState: 'current_build' as const, retainedHandSideEffects,
+        retainedCarePackageSpends }) });
     appendCriticalDiagnostic(this.state.debugTrace, { round: this.state.round, attempt: this.state.roundAttemptNumber,
       actionId: this.state.actionJournal.length }, { kind: 'checkpoint_restore', reason, fromTimelineId,
       toTimelineId: this.state.historyV2TimelineId });
@@ -278,9 +292,12 @@ export class Resolver {
       case 'HOODED_CHALLENGE_COMPLETED':
       case 'HOODED_CHALLENGE_ROLLED_BACK':
       case 'HOODED_CHALLENGE_TIME_TRAVEL_RESET':
+      case 'HOODED_CHALLENGE_BAD_DREAM_RESET':
+      case 'HOODED_CHALLENGE_EXPIRED':
       case 'HOODED_FIGURE_RETURNED': {
         const changes = { HOODED_CHALLENGE_ISSUED: 'issued', HOODED_CHALLENGE_COMPLETED: 'completed',
           HOODED_CHALLENGE_ROLLED_BACK: 'rolled_back', HOODED_CHALLENGE_TIME_TRAVEL_RESET: 'time_travel_reset',
+          HOODED_CHALLENGE_BAD_DREAM_RESET: 'bad_dream_reset', HOODED_CHALLENGE_EXPIRED: 'expired',
           HOODED_FIGURE_RETURNED: 'returned' } as const;
         this.emitV2({ kind: 'hooded_challenge_changed', challengeId: record.challengeId,
           change: changes[record.type], target: record.challengeTarget });
@@ -1373,15 +1390,29 @@ export class Resolver {
     if (failure.livesAfter === 0 && this.state.specialOfferEffects.badDreamRounds > 0 && badDreamCheckpoint) {
       this.emitV2({ kind: 'round_attempt_finished', outcome: 'bust', score: failure.score, target: failure.target,
         boss: this.state.boss?.type ?? null, livesBefore: failure.livesBefore, livesAfter: failure.livesAfter });
-      restoreRollbackState(this.state, badDreamCheckpoint);
+      const deathChapter = chapterNumberForRound(this.state.round);
+      const currentChallenge = this.state.hoodedFigure.active;
+      let badDreamRestoredChallenge: typeof currentChallenge = null;
+      if (badDreamCheckpoint.chapter === deathChapter && currentChallenge && !currentChallenge.complete
+        && badDreamCheckpoint.hoodedChallenge) {
+        this.state.hoodedFigure.active = structuredClone(badDreamCheckpoint.hoodedChallenge);
+        this.state.hoodedFigure.interaction = null;
+        badDreamRestoredChallenge = this.state.hoodedFigure.active;
+      }
+      const destination = chapterEncounterRounds(deathChapter).miniBossRound;
+      this.state.round = destination;
+      this.state.roundAttemptNumber = 1;
       this.state.roundCheckpoint = null;
       this.state.badDreamCheckpoint = null;
       this.state.specialOfferEffects.badDreamRounds = 0;
       this.state.lives = 1;
-      this.rngStateAfterResolution = this.state.rngState;
       this.state.bust = null;
-      this.nextTimeline('bad_dream', this.state.round, this.state.roundAttemptNumber);
-      this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', message: 'Bad Dream returned the run to its checkpoint with 1 Life' });
+      this.nextTimeline('bad_dream', destination, 1, 'post_r3_shop');
+      if (badDreamRestoredChallenge) this.emit({ type: 'HOODED_CHALLENGE_BAD_DREAM_RESET',
+        challengeId: badDreamRestoredChallenge.id, challengeTarget: badDreamRestoredChallenge.target,
+        message: `${CHALLENGES[badDreamRestoredChallenge.id].name} restored to its Bad Dream checkpoint` });
+      this.openShop('backward');
+      this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', message: 'Bad Dream returned the current build to the post-R3 Shop with 1 Life' });
       return;
     }
     if (failure.livesAfter === 0 && this.options.tutorialFinalLifeSafeguard) {
@@ -1466,7 +1497,8 @@ export class Resolver {
   private prepareHoodedEncounter(genuinelyNewChapter: boolean): boolean {
     const chapter = chapterNumberForRound(this.state.round);
     if (!genuinelyNewChapter || chapterRoundForRound(this.state.round) !== 1
-      || chapter < HOODED_FIGURE_CONFIG.minimumChapter || this.state.bonfires.length < HOODED_FIGURE_CONFIG.minimumOrdinaryBonfires) return false;
+      || chapter < HOODED_FIGURE_CONFIG.minimumChapter || this.state.bonfires.length < HOODED_FIGURE_CONFIG.minimumOrdinaryBonfires
+      || this.state.hoodedFigure.issuedChapters.includes(chapter)) return false;
     const plan = ensureChapterPlan(this.state, chapter);
     const challenge = selectChallenge(this.state, plan.miniBoss, this.state.hoodedFigure.previousChallengeId, this.rng);
     if (!challenge) return false;
@@ -1488,43 +1520,71 @@ export class Resolver {
       'A hooded figure approaches...',
       '"I have powers that may assist you on your journey."',
       dialogueLine,
-      `"If you can ${challengeText(active, 'short')} before defeating this land's mini-boss, I may be of service."`,
+      `"If you can ${challengeText(active, 'short')} before defeating this land's Boss, I may be of service."`,
       'The figure vanishes.',
     ] : [
       'The hooded figure approaches again.',
       dialogueLine,
-      `"${challengeText(active, 'short')} before defeating this land's mini-boss, then meet with me${this.state.wildfires.length ? ' again' : ''}."`,
+      `"${challengeText(active, 'short')} before defeating this land's Boss, then meet with me${this.state.wildfires.length ? ' again' : ''}."`,
       'The figure vanishes.',
     ];
     this.state.hoodedFigure = {
+      ...this.state.hoodedFigure,
       seen: true,
       previousChallengeId: challenge.id,
       active,
       interaction: { kind: 'opening', stage: 'story', lines, lineIndex: 0, recipient: null, sacrifice: null },
+      issuedChapters: [...this.state.hoodedFigure.issuedChapters, chapter],
+      challengeCheckpoint: structuredClone(active),
       contributionCheckpoint: structuredClone(this.state.bonfireContributions),
     };
     beginChallengeRound(active);
     return true;
   }
 
-  private finishMiniBossRewardFlow(): void {
+  private openHoodedReturn(): boolean {
     const active = this.state.hoodedFigure.active;
     const sameChapter = active?.issuedChapter === chapterNumberForRound(this.state.round);
     if (sameChapter && active.complete) {
       this.state.phase = 'hoodedFigure';
-      this.state.shop = null; this.state.specialOffer = null; this.state.roundSummary = null;
+      this.state.shop = null; this.state.specialOffer = null;
       this.state.hoodedFigure.interaction = { kind: 'return', stage: 'story', lineIndex: 0,
         lines: ['The hooded figure approaches again.', '"You\'ve done well. Let\'s make a Wildfire."', 'Choose a Bonfire to upgrade.'],
         recipient: null, sacrifice: null };
       this.emit({ type: 'HOODED_FIGURE_RETURNED', challengeId: active.id,
         message: `Hooded Figure returned after ${CHALLENGES[active.id].name}` });
-      return;
+      return true;
     }
-    if (sameChapter) {
+    return false;
+  }
+
+  private expireHoodedChallengeAfterChapter(): void {
+    const active = this.state.hoodedFigure.active;
+    const sameChapter = active?.issuedChapter === chapterNumberForRound(this.state.round);
+    if (sameChapter && !active.complete && chapterRoundForRound(this.state.round) === 6) {
+      this.emit({ type: 'HOODED_CHALLENGE_EXPIRED', challengeId: active.id, challengeTarget: active.target,
+        message: `${CHALLENGES[active.id].name} expired after the Chapter's final Round` });
       this.state.hoodedFigure.active = null;
       this.state.hoodedFigure.contributionCheckpoint = null;
     }
-    this.openShop();
+  }
+
+  private continueAfterHoodedReturn(): void {
+    const localRound = chapterRoundForRound(this.state.round);
+    const bossReward = this.state.roundSummary?.encounterType === 'boss';
+    if (!bossReward) this.openShop();
+    else if (localRound === 3) {
+      const lifecycle = this.state.chapterLifecycle[chapterNumberForRound(this.state.round)];
+      if (lifecycle?.specialOfferConsumed) this.openShop();
+      else this.openSpecialOffer();
+    } else if (localRound === 6) this.openFlameSelection();
+    else this.openShop();
+  }
+
+  private continuePostRoundSummaryFlow(): void {
+    if (this.openHoodedReturn()) return;
+    this.expireHoodedChallengeAfterChapter();
+    this.continueAfterHoodedReturn();
   }
 
   advanceHoodedFigure(): void {
@@ -1536,7 +1596,7 @@ export class Resolver {
         this.state.shop = structuredClone(this.state.roundCheckpoint?.board.shop ?? null);
         this.startRound(false);
       }
-      else this.openShop();
+      else this.continueAfterHoodedReturn();
       return;
     }
     interaction.stage = 'recipient';
@@ -1573,6 +1633,7 @@ export class Resolver {
   confirmWildfire(): void {
     const interaction = this.state.hoodedFigure.interaction!;
     const recipient = interaction.recipient!; const sacrifice = interaction.sacrifice!;
+    const rewardedChapter = this.state.hoodedFigure.active?.issuedChapter;
     const wildfire = projectWildfire(this.state, recipient, sacrifice);
     if (!this.state.bonfires.includes(recipient) || !this.state.bonfires.includes(sacrifice) || recipient === sacrifice)
       throw new Error('Wildfire conversion candidates are no longer valid.');
@@ -1580,6 +1641,8 @@ export class Resolver {
     delete this.state.bonfireContributions[recipient]; delete this.state.bonfireContributions[sacrifice];
     delete this.state.bonfireRoundContributions[recipient]; delete this.state.bonfireRoundContributions[sacrifice];
     this.state.wildfires.push(wildfire);
+    if (rewardedChapter !== undefined && !this.state.hoodedFigure.rewardedChapters.includes(rewardedChapter))
+      this.state.hoodedFigure.rewardedChapters.push(rewardedChapter);
     this.state.hoodedFigure.active = null;
     this.state.hoodedFigure.interaction = { kind: 'opening', stage: 'story', lines: ['The figure vanishes.'], lineIndex: 0, recipient: null, sacrifice: null };
     this.state.hoodedFigure.contributionCheckpoint = null;
@@ -1801,6 +1864,11 @@ export class Resolver {
     this.emit({ type: 'FLAME_SELECTION_OPENED', message: 'Flame Selection — choose and assign one new Flame, or skip' });
   }
   openSpecialOffer(): void {
+    const chapter = chapterNumberForRound(this.state.round);
+    if (this.state.chapterLifecycle[chapter]?.specialOfferConsumed) {
+      this.openShop();
+      return;
+    }
     this.restoreMagicianDie();
     cleanupTemporaryBossFaces(this.state.dice);
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
@@ -1816,6 +1884,8 @@ export class Resolver {
     const offer = selection.offers.find(item => item.id === offerId)!;
     selection.acquired = true;
     selection.chosen = structuredClone(offer);
+    const chapter = chapterNumberForRound(this.state.round);
+    this.state.chapterLifecycle[chapter] = { specialOfferConsumed: true };
     let captureBadDream = false;
     let timeTravelDestination: number | null = null;
     switch (offer.type) {
@@ -1829,9 +1899,6 @@ export class Resolver {
         this.state.handLevels[offer.hand] += 4;
         break;
       case 'timeTravel': {
-        const repeatedBossRound = this.state.round;
-        if (!this.state.suppressedPostBossRewardRounds.includes(repeatedBossRound))
-          this.state.suppressedPostBossRewardRounds.push(repeatedBossRound);
         timeTravelDestination = timeTravelDestinationRound(this.state.round);
         break;
       }
@@ -1881,43 +1948,45 @@ export class Resolver {
     this.emit({ type: 'SPECIAL_OFFER_SELECTED', hand: offer.hand, rarity,
       message: `${specialOfferName(offer)} [${rarityLabel(rarity)}] selected — ${specialOfferDescription(offer)}` });
     if (timeTravelDestination !== null) {
-      this.nextTimeline('time_travel', timeTravelDestination, 1);
+      this.nextTimeline('time_travel', timeTravelDestination, 1, 'chapter_start');
       this.state.round = timeTravelDestination;
     }
     if (captureBadDream) {
-      this.state.badDreamCheckpoint = captureRollbackState(this.state);
+      this.state.badDreamCheckpoint = {
+        chapter,
+        hoodedChallenge: structuredClone(this.state.hoodedFigure.active),
+      };
     }
   }
   continueSpecialOffer(): void {
     const timeTravel = this.state.specialOffer?.chosen?.type === 'timeTravel';
     if (timeTravel) {
       const active = this.state.hoodedFigure.active;
-      if (active && active.issuedChapter === chapterNumberForRound(this.state.round)) {
-        active.committed = { value: 0, keys: [], invalid: false, jackpotPaid: false };
-        active.attempt = { value: 0, keys: [], invalid: false, jackpotPaid: false };
-        active.complete = false;
+      if (active && !active.complete && active.issuedChapter === chapterNumberForRound(this.state.round)) {
+        const checkpoint = this.state.hoodedFigure.challengeCheckpoint;
+        if (checkpoint?.id === active.id && checkpoint.issuedChapter === active.issuedChapter)
+          this.state.hoodedFigure.active = structuredClone(checkpoint);
+        else {
+          active.committed = { value: 0, keys: [], invalid: false, jackpotPaid: false };
+          active.attempt = { value: 0, keys: [], invalid: false, jackpotPaid: false };
+          active.complete = false;
+        }
+        this.state.hoodedFigure.interaction = null;
         if (this.state.hoodedFigure.contributionCheckpoint)
           this.state.bonfireContributions = structuredClone(this.state.hoodedFigure.contributionCheckpoint);
-        this.emit({ type: 'HOODED_CHALLENGE_TIME_TRAVEL_RESET', challengeId: active.id,
-          message: `${CHALLENGES[active.id].name} reset to zero by Time Travel; Bonfire contribution history rewound` });
+        const reset = this.state.hoodedFigure.active!;
+        this.emit({ type: 'HOODED_CHALLENGE_TIME_TRAVEL_RESET', challengeId: reset.id,
+          message: `${CHALLENGES[reset.id].name} reset to its Chapter-start progress by Time Travel; Bonfire contribution history rewound` });
       }
       this.state.roundAttemptNumber = 1;
       this.startRound(false, 'backward');
     }
-    else this.finishMiniBossRewardFlow();
+    else this.openShop();
   }
   continueRoundSummary(): void {
     const summary = this.state.roundSummary;
     if (!summary) throw new Error('Round Summary is not available.');
-    if (summary.encounterType === 'boss') {
-      const suppressed = this.state.suppressedPostBossRewardRounds.includes(summary.round);
-      if (suppressed) {
-        this.state.suppressedPostBossRewardRounds = this.state.suppressedPostBossRewardRounds.filter(round => round !== summary.round);
-        this.finishMiniBossRewardFlow();
-      } else if (postBossRewardForRound(summary.round) === 'flame') this.openFlameSelection();
-      else this.openSpecialOffer();
-    }
-    else this.openShop();
+    this.continuePostRoundSummaryFlow();
   }
   private completeSpecialOfferRound(): void {
     const effects = this.state.specialOfferEffects;
