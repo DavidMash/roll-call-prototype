@@ -100,6 +100,7 @@ test('Shop uses the same face and Flame modals for authoritative Sell and Stoke 
   state.phase = 'shop';
   state.gold = 20;
   state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  await page.setViewportSize({ width: 320, height: 700 });
   await installRun(page, state);
   const slot = page.getByTestId('flame-die-0');
 
@@ -110,8 +111,41 @@ test('Shop uses the same face and Flame modals for authoritative Sell and Stoke 
   await expect(compactFace.getByTestId(`manage-face-enhancements-${focusedFace}`).locator('.enhancement-icon')).toHaveCount(3);
   await expect(compactFace).toHaveAccessibleName(/Bonus, 2 stacks.*Personal Trainer, 3 stacks.*Vintage, 1 stack/);
   await expect(compactFace.locator('.enhancement-identity-name')).toHaveCount(0);
+  const sellButtons = faceModal.locator('.enhancement-sell-button');
+  await expect(sellButtons).toHaveCount(3);
+  await expect(sellButtons.nth(0).locator('.enhancement-sell-button-label')).toHaveText('Sell');
+  await expect(sellButtons.nth(0).locator('.enhancement-sell-button-value')).toHaveText('2 Gold');
+  await expect(sellButtons.nth(1).locator('.enhancement-sell-button-value')).toHaveText('12 Gold');
+  await expect(sellButtons.nth(2).locator('.enhancement-sell-button-value')).toHaveText('9 Gold');
+  expect(await faceModal.locator('.face-detail-item').evaluateAll(items => items.every(item => {
+    const copy = item.querySelector<HTMLElement>('.face-detail-item-copy')!;
+    const button = item.querySelector<HTMLElement>('.enhancement-sell-button')!;
+    const label = button.querySelector<HTMLElement>('.enhancement-sell-button-label')!;
+    const value = button.querySelector<HTMLElement>('.enhancement-sell-button-value')!;
+    const buttonBox = button.getBoundingClientRect();
+    const itemBox = item.getBoundingClientRect();
+    const fullyInside = (node: HTMLElement) => {
+      const box = node.getBoundingClientRect();
+      return box.left >= buttonBox.left - 1 && box.right <= buttonBox.right + 1
+        && box.top >= buttonBox.top - 1 && box.bottom <= buttonBox.bottom + 1;
+    };
+    return getComputedStyle(copy).minWidth === '0px'
+      && getComputedStyle(button).flexShrink === '0'
+      && getComputedStyle(button).overflow !== 'hidden'
+      && buttonBox.width >= 70
+      && buttonBox.height >= 44
+      && buttonBox.right <= itemBox.right + 1
+      && fullyInside(label)
+      && fullyInside(value);
+  }))).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await faceModal.getByRole('button', { name: /Sell Vintage from D1 face .* for 9 Gold/ }).click();
-  await page.getByRole('dialog', { name: /SELL VINTAGE\s*\?/ }).getByRole('button', { name: 'SELL', exact: true }).click();
+  const saleConfirmation = page.getByRole('dialog', { name: /SELL VINTAGE\s*\?/ });
+  const confirmSale = saleConfirmation.getByRole('button', { name: 'Confirm sale of Vintage for 9 Gold', exact: true });
+  await expect(confirmSale.locator('.enhancement-sell-button-label')).toHaveText('Sell');
+  await expect(confirmSale.locator('.enhancement-sell-button-value')).toHaveText('9 Gold');
+  await confirmSale.click();
+  await expect(page.getByTestId('stat-gold')).toContainText('29');
   await expect(faceModal).not.toContainText('Current sell value: 9 Gold');
   await faceModal.getByRole('button', { name: 'Close' }).click();
   await expect(slot.locator('.enhancement-vintage')).toHaveCount(0);

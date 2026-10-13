@@ -1004,7 +1004,7 @@ test('stackable enhancement purchases show a single readable count badge', async
   await manager.getByRole('button', { name: `Sell Sticky from D1 face ${face} for 2 Gold`, exact: true }).click();
   const confirmation = page.getByRole('dialog', { name: /SELL STICKY\s*\?/ });
   await expect(confirmation).toContainText('+2 GOLD');
-  await confirmation.getByRole('button', { name: 'SELL', exact: true }).click();
+  await confirmation.getByRole('button', { name: 'Confirm sale of Sticky for 2 Gold', exact: true }).click();
   game = dispatch(game, { type: 'SELL_ENHANCEMENT', dieId: 0, face, enhancement: 'sticky' }).state;
   await manager.getByRole('button', { name: 'Close', exact: true }).click();
   await matchBoard(page, game);
@@ -1054,7 +1054,7 @@ test('a fourth enhancement type opens Manage Die and preserves the offer through
   const proceeds = ENHANCEMENTS[removed].baseSellPrice;
   await manager.getByRole('button', { name: `Sell ${ENHANCEMENTS[removed].name} from D1 face ${face} for ${proceeds} Gold`, exact: true }).click();
   await page.getByRole('dialog', { name: new RegExp(`SELL ${ENHANCEMENTS[removed].name.toUpperCase()}\\s*\\?`) })
-    .getByRole('button', { name: 'SELL', exact: true }).click();
+    .getByRole('button', { name: `Confirm sale of ${ENHANCEMENTS[removed].name} for ${proceeds} Gold`, exact: true }).click();
   game = dispatch(game, { type: 'SELL_ENHANCEMENT', dieId: 0, face, enhancement: removed }).state;
   const apply = manager.getByRole('button', { name: `Apply ${ENHANCEMENTS[pending.enhancement].name}`, exact: true });
   await expect(apply).toBeEnabled();

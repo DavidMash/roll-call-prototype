@@ -7,9 +7,10 @@ import type { DiceDisplay } from '../uiSettings';
 import { formatPercentage, formatPlayerNumber } from '../game/copy';
 import { PipFace } from './PipFace';
 import { enhancementAccessibleName, EnhancementIdentity, EnhancementSymbol } from './EnhancementIdentity';
+import { EnhancementSellButton } from './EnhancementSellButton';
 
 export interface FaceDetailsTarget { dieId: number; face: Rank }
-interface SaleTarget { enhancement: Enhancement; stacks: number; proceeds: number }
+interface SaleTarget { enhancement: Enhancement; stacks: number }
 
 export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, setSelectedOffer, busy, actionsEnabled, onClose, submit }: {
   board: Board;
@@ -40,8 +41,9 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
   const offerCostAvailable = !!(offer && shop && (enhancementOfferIsFree(shop, offer.id) || board.gold >= enhancementCost(offer.enhancement)));
   const canApply = actionsEnabled && isExposed && !!offer && !offerError && offerCostAvailable;
   const shopActions = board.phase === 'shop' && actionsEnabled;
+  const saleProceeds = saleTarget ? enhancementSellValue(face, saleTarget.enhancement) : null;
   function requestSale(enhancement: Enhancement) {
-    setSaleTarget({ enhancement, stacks: face.enhancements[enhancement]!, proceeds: enhancementSellValue(face, enhancement) });
+    setSaleTarget({ enhancement, stacks: face.enhancements[enhancement]! });
   }
   function confirmSale() {
     if (!saleTarget) return;
@@ -92,19 +94,20 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
         <Stack gap="xs" className="face-detail-list">
           {ids.map(id => {
             const stacks = face.enhancements[id]!;
-            const dynamic = id === 'vintage' ? `Current sell value: ${formatPlayerNumber(enhancementSellValue(face, id))} Gold${face.vintageSommelierBoosted ? ' · Sommelier ×2' : ''}`
+            const sellValue = enhancementSellValue(face, id);
+            const dynamic = id === 'vintage' ? `Current sell value: ${formatPlayerNumber(sellValue)} Gold${face.vintageSommelierBoosted ? ' · Sommelier ×2' : ''}`
               : id === 'workout' && face.workoutPips > 0 ? `Current added Pips: ${formatPlayerNumber(face.workoutPips)}`
                 : id === 'magnetic' && face.magneticSourceUsed ? 'Pull used this Round'
                   : id === 'personalTrainer' ? `Base training chance: ${formatPercentage(diminishingHalfChance(stacks))} before hand-level adjustment`
                     : id === 'doubleTime' ? `Score-twice chance: ${formatPercentage(diminishingHalfChance(stacks))}`
                       : id === 'tank' ? `Mult factor per scoring activation: ×${formatPlayerNumber(tankMultiplierFactor(stacks))}` : null;
             return <Paper key={id} withBorder p="sm" className="face-detail-item">
-              <Group justify="space-between" align="flex-start" wrap="nowrap">
-                <Group align="flex-start" wrap="nowrap"><div><Text fw={800}><EnhancementIdentity enhancement={id} stacks={stacks} /></Text>
-                    <Text size="sm" c="dimmed">{ENHANCEMENTS[id].description}</Text>{dynamic && <Text size="xs" c="teal" mt={3}>{dynamic}</Text>}</div></Group>
-                {shopActions && <Button size="compact-sm" variant="light" color="red" disabled={busy}
-                  aria-label={`Sell ${ENHANCEMENTS[id].name} from D${die.id + 1} face ${focusedFace} for ${enhancementSellValue(face, id)} Gold`}
-                  onClick={() => requestSale(id)}>Sell</Button>}
+              <Group className="face-detail-item-layout" justify="space-between" align="flex-start" wrap="nowrap">
+                <div className="face-detail-item-copy"><Text fw={800}><EnhancementIdentity enhancement={id} stacks={stacks} /></Text>
+                  <Text size="sm" c="dimmed">{ENHANCEMENTS[id].description}</Text>{dynamic && <Text size="xs" c="teal" mt={3}>{dynamic}</Text>}</div>
+                {shopActions && <EnhancementSellButton value={sellValue} disabled={busy}
+                  ariaLabel={`Sell ${ENHANCEMENTS[id].name} from D${die.id + 1} face ${focusedFace} for ${sellValue} Gold`}
+                  onClick={() => requestSale(id)} />}
               </Group>
             </Paper>;
           })}
@@ -117,9 +120,11 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
     </Modal>
     <Modal opened={saleTarget !== null} onClose={() => setSaleTarget(null)}
       title={saleTarget ? <span>SELL <EnhancementIdentity enhancement={saleTarget.enhancement} uppercase />?</span> : 'SELL ENHANCEMENT?'} centered transitionProps={{ duration: 0 }}>
-      {saleTarget && <><Text fw={900} size="xl">+{formatPlayerNumber(saleTarget.proceeds)} GOLD</Text>
+      {saleTarget && saleProceeds !== null && <><Text fw={900} size="xl">+{formatPlayerNumber(saleProceeds)} GOLD</Text>
         <Text size="sm" c="dimmed">All {formatPlayerNumber(saleTarget.stacks)} stack{saleTarget.stacks === 1 ? '' : 's'} will be removed from Face {focusedFace}.</Text>
-        <Group justify="flex-end" mt="lg"><Button variant="default" onClick={() => setSaleTarget(null)}>CANCEL</Button><Button color="red" onClick={confirmSale}>SELL</Button></Group></>}
+        <Group justify="flex-end" mt="lg"><Button variant="default" onClick={() => setSaleTarget(null)}>CANCEL</Button>
+          <EnhancementSellButton value={saleProceeds} variant="filled"
+            ariaLabel={`Confirm sale of ${ENHANCEMENTS[saleTarget.enhancement].name} for ${saleProceeds} Gold`} onClick={confirmSale} /></Group></>}
     </Modal>
   </>;
 }
