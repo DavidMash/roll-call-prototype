@@ -48,7 +48,8 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
         const stats = handStats(hand, board.handLevels[hand]);
         const used = board.consumed.includes(hand);
         const cooldown = !board.bossSilenced && board.boss?.type === 'marathon' ? board.boss.cooldowns[hand] ?? 0 : 0;
-        const neglected = !board.bossSilenced && board.boss?.type === 'neglected' && board.boss.neglectedHands.includes(hand);
+        const neglected = !board.bossSilenced && board.boss?.type === 'neglected' && !board.boss.restored
+          && board.boss.neglectedHands.includes(hand);
         const quickdrawLocked = !board.bossSilenced && board.boss?.type === 'quickdraw' && board.boss.lowerShotUsed && LOWER_HAND_IDS.includes(hand);
         const playable = boardHandAvailable(board, hand);
         const selected = selection.hand === hand;

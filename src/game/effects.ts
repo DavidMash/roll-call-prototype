@@ -214,7 +214,8 @@ export class Resolver {
         this.v2Hand.sideEffects.push({ type: 'flame_activation', flame: record.flame,
           origin: this.flameOrigin(record.flame, record.dieIds?.[0] ?? null), dieId: record.dieIds?.[0] });
       else if ((record.type === 'BOSS_HAND_CHANGED' || record.type === 'BOSS_FACE_CHANGED' || record.type === 'CALLER_CHANGED') && record.boss)
-        this.v2Hand.sideEffects.push({ type: 'boss_state', boss: record.boss, change: record.type, amount: record.amount });
+        this.v2Hand.sideEffects.push({ type: 'boss_state', boss: record.boss, change: record.type, amount: record.amount,
+          hand: record.hand, hands: record.hands, dieIds: record.dieIds, state: record.bossState });
       return true;
     }
     if (this.v2Roll) {
@@ -378,7 +379,8 @@ export class Resolver {
           change: record.type === 'BOSS_STARTED' ? 'started' : record.type === 'BOSS_CLEARED' ? 'cleared'
             : record.type === 'WARDEN_UNLOCK_TARGET' ? 'warden_target' : record.type === 'WARDEN_REINFORCEMENT' ? 'warden_unlock'
               : record.type === 'BOSS_FACE_CHANGED' ? 'face' : 'state',
-          hand: record.hand, dieIds: record.dieIds ?? [], amount: record.amount });
+          hand: record.hand, hands: record.hands, dieIds: record.dieIds ?? [], amount: record.amount,
+          state: record.bossState });
         break;
       case 'SCORECARD_REFRESHED':
         this.emitV2({ kind: 'scorecard_refreshed', refreshedHands: [...HAND_IDS] });
@@ -966,7 +968,7 @@ export class Resolver {
     if (this.state.boss?.type === 'marathon') return false;
     const cycle = new Set(this.state.scorecardCycleConsumed);
     if (!HAND_IDS.every(hand => cycle.has(hand))) return false;
-    const encounterLocks = !this.state.bossSilenced && this.state.boss?.type === 'neglected'
+    const encounterLocks = !this.state.bossSilenced && this.state.boss?.type === 'neglected' && !this.state.boss.restored
       ? this.state.boss.neglectedHands : [];
     this.state.consumed = [...encounterLocks];
     this.state.scorecardCycleConsumed = [];
@@ -1058,19 +1060,31 @@ export class Resolver {
     recalculateMaxCharge(this.state);
   }
 
-  private addJugglerReroll(rerolls: Set<number>, scoringDieIds: number[]): void {
-    if (this.state.bossSilenced || this.state.boss?.type !== 'juggler') return;
-    const candidates = activeEncounterDice(this.state)
-      .filter(die => !scoringDieIds.includes(die.id) && !rerolls.has(die.id))
-      .sort((a, b) => a.id - b.id);
-    if (!candidates.length) return;
-    const die = candidates[randomIndex(this.rng, candidates.length)];
-    rerolls.add(die.id);
-    this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'juggler', dieIds: [die.id],
-      message: `The Juggler added D${die.id + 1} to the post-hand reroll` });
+  private jugglerRerolls(hand: HandId): number[] | null {
+    if (this.state.bossSilenced || this.state.boss?.type !== 'juggler' || !UPPER_HAND_IDS.includes(hand)) return null;
+    const dieIds = this.state.dice.filter(die => die.owner === 'player').map(die => die.id).sort((a, b) => a - b);
+    this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'juggler', hand, dieIds, bossState: 'triggered',
+      message: `The Juggler rerolls all dice after ${HANDS[hand].name}` });
+    return dieIds;
   }
 
-  private postHandRerolls(shapeParticipants: { id: number; face: Face }[], scoringDieIds: number[], includeJuggler: boolean): Set<number> {
+  private advanceNeglected(): void {
+    if (this.state.bossSilenced || this.state.boss?.type !== 'neglected' || this.state.boss.restored) return;
+    const boss = this.state.boss;
+    boss.handsPlayed = Math.min(6, boss.handsPlayed + 1);
+    if (boss.handsPlayed < 6) {
+      this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'neglected', hands: [...boss.neglectedHands],
+        amount: boss.handsPlayed, bossState: 'restricted',
+        message: `The Neglected remains active (${this.format(boss.handsPlayed)} / 6 hands played)` });
+      return;
+    }
+    boss.restored = true;
+    this.state.consumed = this.state.consumed.filter(hand => !boss.neglectedHands.includes(hand));
+    this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'neglected', hands: [...boss.neglectedHands], amount: boss.handsPlayed,
+      bossState: 'restored', message: `The Neglected restored ${boss.neglectedHands.map(hand => HANDS[hand].name).join(' and ')}` });
+  }
+
+  private postHandRerolls(shapeParticipants: { id: number; face: Face }[]): Set<number> {
     const normalRerolls: number[] = [];
     for (const { id, face } of shapeParticipants) {
       const sticky = stacks(face, 'sticky');
@@ -1086,7 +1100,6 @@ export class Resolver {
       this.trigger('slippy', die.id, activeFace(die), 'joined post-hand reroll');
       rerolls.add(die.id);
     }
-    if (includeJuggler) this.addJugglerReroll(rerolls, scoringDieIds);
     return rerolls;
   }
 
@@ -1343,22 +1356,24 @@ export class Resolver {
     this.v2RecentHand = handEvent.kind === 'hand_scored' ? handEvent : null;
     this.v2Hand = null;
     this.v2ParentSeq = handEvent.seq;
+    this.advanceNeglected();
+    const jugglerRerolls = this.jugglerRerolls(hand);
     if (winning) {
-      if (!freeBean) {
-        const settleRerolls = this.postHandRerolls(shapeParticipants, scoringIds, false);
-        this.rollBatch([...settleRerolls], 'Winning hand settle reroll', 'settle', false, 'winning_settle');
+      if (!freeBean || jugglerRerolls) {
+        const settleRerolls = jugglerRerolls ?? [...this.postHandRerolls(shapeParticipants)];
+        this.rollBatch(settleRerolls, jugglerRerolls ? 'The Juggler reroll' : 'Winning hand settle reroll',
+          'settle', false, jugglerRerolls ? 'juggler' : 'winning_settle');
         this.evaluate();
       }
       return { winning, beanRecordIndex };
     }
     if (freeBean) {
-      const rerolls = new Set<number>();
-      this.addJugglerReroll(rerolls, ids);
-      this.rollBatch([...rerolls], 'The Juggler reroll', 'gameplay', false, 'juggler');
+      if (jugglerRerolls) this.rollBatch(jugglerRerolls, 'The Juggler reroll', 'gameplay', false, 'juggler');
       return { winning, beanRecordIndex };
     }
-    const rerolls = this.postHandRerolls(shapeParticipants, scoringIds, true);
-    this.rollBatch([...rerolls], 'Post-hand reroll', 'gameplay', false, 'post_hand');
+    const rerolls = jugglerRerolls ?? [...this.postHandRerolls(shapeParticipants)];
+    this.rollBatch(rerolls, jugglerRerolls ? 'The Juggler reroll' : 'Post-hand reroll',
+      'gameplay', false, jugglerRerolls ? 'juggler' : 'post_hand');
     this.drain();
     if (this.state.score < this.state.target) this.refreshScorecardIfFilled();
     this.evaluate();
@@ -1831,7 +1846,8 @@ export class Resolver {
       if (!this.state.bossSilenced && boss.type === 'magician') this.emit({ type: 'BOSS_HAND_CHANGED', boss: boss.type,
         message: `The Magician calls ${boss.calledHands.map(hand => HANDS[hand].name).join(', ')}; D${boss.missingDieId + 1} disappeared` });
       if (!this.state.bossSilenced && boss.type === 'neglected') this.emit({ type: 'BOSS_HAND_CHANGED', boss: boss.type,
-        message: `The Neglected disabled ${boss.neglectedHands.map(hand => HANDS[hand].name).join(' and ')}` });
+        hands: [...boss.neglectedHands], amount: 0, bossState: 'restricted',
+        message: `The Neglected disabled ${boss.neglectedHands.map(hand => HANDS[hand].name).join(' and ')} until 6 hands have been played` });
     }
     if (!this.state.boss) this.emit({ type: retry ? 'ROUND_RETRY_STARTED' : 'ROUND_STARTED',
       message: `Round ${this.format(this.state.round)} — Attempt ${this.format(this.state.roundAttemptNumber)} — goal ${this.format(this.state.target)}; Charge reset to ×1` });

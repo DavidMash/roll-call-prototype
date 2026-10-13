@@ -72,7 +72,12 @@ export interface SnakeEyesBossState { type: 'snakeEyes'; mutatedFaces: { dieId: 
 export interface InfectedBossState { type: 'infected'; infectedFaces: { dieId: number; physicalFace: Rank }[] }
 export interface JugglerBossState { type: 'juggler' }
 export interface CapitalReturnBossState { type: 'capitalReturn' }
-export interface NeglectedBossState { type: 'neglected'; neglectedHands: HandId[] }
+export interface NeglectedBossState {
+  type: 'neglected';
+  neglectedHands: HandId[];
+  handsPlayed: number;
+  restored: boolean;
+}
 export interface ClockmakerBossState { type: 'clockmaker' }
 export interface TightropeBossState { type: 'tightrope' }
 export interface CrawlerBossState { type: 'crawler' }
@@ -579,6 +584,8 @@ export interface EventRecord {
   enhancement?: Enhancement;
   flame?: Flame;
   boss?: BossType;
+  hands?: HandId[];
+  bossState?: string;
   fromNode?: string | null;
   toNode?: string;
   nodeType?: RunNodeType;

@@ -59,9 +59,9 @@ describe('canonical player-facing definitions', () => {
 
   it('keeps boss descriptions centralized and exact', () => {
     expect(Object.fromEntries(Object.entries(BOSSES).map(([id, item]) => [id, item.shortRule]))).toEqual({
-      juggler: 'After every hand, one random extra die rerolls.',
+      juggler: 'All dice reroll when an Upper hand is played.',
       capitalReturn: 'Lose 1 Gold whenever you play a Lower hand.',
-      neglected: 'Your 2 least-played hands are unavailable.',
+      neglected: 'Two of your least played hands are unavailable until 6 hands have been played.',
       clockmaker: 'Every roll gets Bumped up one face.',
       tightrope: 'Start with 0 Rerolls. Goal is halved.',
       crawler: 'After every hand, only one scoring die rerolls.',

@@ -107,7 +107,7 @@ describe('encounter-aware combinations', () => {
     expect(legalHandCombinations(warden, 'pair')).toEqual([[0, 1]]);
 
     const neglected = game([4, 4, 1, 2, 3]);
-    neglected.boss = { type: 'neglected', neglectedHands: ['pair', 'ones'] };
+    neglected.boss = { type: 'neglected', neglectedHands: ['pair', 'ones'], handsPlayed: 0, restored: false };
     expect(boardHandAvailable(neglected, 'pair')).toBe(false);
 
     const marathon = game([4, 4, 1, 2, 3]);

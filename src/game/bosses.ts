@@ -15,7 +15,7 @@ export interface BossDefinition {
 export const BOSSES: Record<BossType, BossDefinition> = {
   juggler: {
     name: 'THE JUGGLER',
-    shortRule: 'After every hand, one random extra die rerolls.',
+    shortRule: 'All dice reroll when an Upper hand is played.',
     primary: '#2ED68F',
     secondary: '#86EFAC',
   },
@@ -27,7 +27,7 @@ export const BOSSES: Record<BossType, BossDefinition> = {
   },
   neglected: {
     name: 'THE NEGLECTED',
-    shortRule: 'Your 2 least-played hands are unavailable.',
+    shortRule: 'Two of your least played hands are unavailable until 6 hands have been played.',
     primary: '#64748B',
     secondary: '#CBD5E1',
   },
@@ -272,7 +272,12 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
     case 'neglected': {
       const counts = context.handPlayCounts ?? Object.fromEntries(HAND_IDS.map(hand => [hand, 0])) as Record<HandId, number>;
       const order = new Map(HAND_IDS.map((hand, index) => [hand, index]));
-      return { type, neglectedHands: [...HAND_IDS].sort((a, b) => counts[a] - counts[b] || order.get(a)! - order.get(b)!).slice(0, 2) };
+      return {
+        type,
+        neglectedHands: [...HAND_IDS].sort((a, b) => counts[a] - counts[b] || order.get(a)! - order.get(b)!).slice(0, 2),
+        handsPlayed: 0,
+        restored: false,
+      };
     }
     case 'clockmaker': return { type };
     case 'tightrope': return { type };
@@ -366,7 +371,8 @@ export function unavailableEncounterHands(state: Pick<Board, 'boss' | 'consumed'
   if (state.boss?.type === 'quickdraw' && state.boss.lowerShotUsed) {
     for (const hand of LOWER_HAND_IDS) unavailable.add(hand);
   }
-  if (state.boss?.type === 'neglected') for (const hand of state.boss.neglectedHands) unavailable.add(hand);
+  if (state.boss?.type === 'neglected' && !state.boss.restored)
+    for (const hand of state.boss.neglectedHands) unavailable.add(hand);
   return [...unavailable];
 }
 

@@ -25,9 +25,10 @@ export function BossPanel({ board }: { board: Board }) {
       case 'fly': return boss.caught ? 'Caught' : `Catch: ${boss.flyHand ? HANDS[boss.flyHand].name : 'Lower hand'}`;
       case 'snakeEyes': return 'Scored faces become 1s';
       case 'infected': return `${formatPlayerNumber(boss.infectedFaces.length)} infected face${boss.infectedFaces.length === 1 ? '' : 's'}`;
-      case 'juggler': return '1 extra die rerolls';
+      case 'juggler': return 'Upper hand rerolls all dice';
       case 'capitalReturn': return 'Lower hands cost 1 Gold';
-      case 'neglected': return '2 hands unavailable';
+      case 'neglected': return boss.restored ? 'Neglected hands restored'
+        : `${formatPlayerNumber(boss.handsPlayed)} of 6 hands played`;
       case 'clockmaker': return 'Every roll Bumps';
       case 'tightrope': return '0 Rerolls · half Goal';
       case 'crawler': return 'Only 1 scoring die rerolls';
@@ -42,6 +43,9 @@ export function BossPanel({ board }: { board: Board }) {
       case 'warden': return `${formatPlayerNumber(boss.activeDieIds.length)} of 5 dice unlocked${boss.nextUnlockTarget === null ? '.' : `. Next unlock at ${formatExactScore(boss.nextUnlockTarget)} score.`}`;
       case 'fly': return boss.caught ? 'The Fly has been caught.' : `Current catch hand: ${boss.flyHand ? HANDS[boss.flyHand].name : 'none'}.`;
       case 'magician': return `${formatPlayerNumber(boss.completedHands.length)} of ${formatPlayerNumber(boss.calledHands.length)} calls completed.`;
+      case 'neglected': return boss.restored
+        ? `Restored: ${boss.neglectedHands.map(hand => HANDS[hand].name).join(' and ')}.`
+        : `Unavailable: ${boss.neglectedHands.map(hand => HANDS[hand].name).join(' and ')}. ${formatPlayerNumber(boss.handsPlayed)} of 6 hands played.`;
       case 'marathon': return `${Object.keys(boss.cooldowns).length} hand${Object.keys(boss.cooldowns).length === 1 ? '' : 's'} currently cooling down.`;
       case 'quickdraw': return boss.lowerShotUsed ? `Lower shot used${boss.playedLowerHand ? ` on ${HANDS[boss.playedLowerHand].name}` : ''}.` : 'Your one Lower-hand shot is still available.';
       default: return compactStatus;

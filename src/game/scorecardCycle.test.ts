@@ -127,7 +127,7 @@ describe('authoritative scorecard cycles', () => {
 
   it('does not let Neglected restrictions complete a partial scorecard', () => {
     const state = finalHandState();
-    state.boss = { type: 'neglected', neglectedHands: ['ones', 'twos'] };
+    state.boss = { type: 'neglected', neglectedHands: ['ones', 'twos'], handsPlayed: 0, restored: false };
     state.dice[0].value = 3;
     state.consumed = HAND_IDS.filter(hand => hand !== 'threes');
     state.scorecardCycleConsumed = HAND_IDS.filter(hand => !(['ones', 'twos', 'threes'] as HandId[]).includes(hand));
@@ -136,7 +136,7 @@ describe('authoritative scorecard cycles', () => {
     expect(result.events.some(event => event.type === 'SCORECARD_REFRESHED')).toBe(false);
     expect(result.state.scorecardCycleConsumed).toHaveLength(HAND_IDS.length - 2);
     expect(new Set(result.state.consumed)).toEqual(new Set(HAND_IDS));
-    expect(result.state.boss).toEqual(state.boss);
+    expect(result.state.boss).toEqual({ ...state.boss, handsPlayed: 1 });
   });
 
   it('disables scorecard refresh during Marathon without altering cooldown behavior', () => {
@@ -159,7 +159,7 @@ describe('authoritative scorecard cycles', () => {
       .toEqual(HAND_IDS.filter(hand => hand !== 'ones'));
 
     const neglected = finalHandState() as unknown as Omit<GameState, 'scorecardCycleConsumed'> & { scorecardCycleConsumed?: HandId[] };
-    neglected.boss = { type: 'neglected', neglectedHands: ['ones', 'twos'] };
+    neglected.boss = { type: 'neglected', neglectedHands: ['ones', 'twos'], handsPlayed: 0, restored: false };
     neglected.consumed = ['ones', 'twos', 'threes'];
     delete neglected.scorecardCycleConsumed;
     expect(normalizeGameState(neglected as GameState).scorecardCycleConsumed).toEqual(['threes']);

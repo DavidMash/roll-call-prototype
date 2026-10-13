@@ -86,7 +86,8 @@ export type HandSideEffect =
   | { type: 'charge'; operation: 'gain' | 'consume_reset' | 'arm' | 'disarm'; before: number; after: number; source?: Flame }
   | { type: 'flame_activation'; flame: Flame; origin: FlameOrigin; dieId?: number; factor?: number }
   | { type: 'enhancement'; enhancement: Enhancement; dieIds: number[]; amount?: number }
-  | { type: 'boss_state'; boss: BossType; change: string; amount?: number | ExactScore };
+  | { type: 'boss_state'; boss: BossType; change: string; amount?: number | ExactScore;
+    hand?: HandId; hands?: HandId[]; dieIds?: number[]; state?: string };
 
 export interface RunStartedEvent extends RunHistoryV2Envelope {
   kind: 'run_started';
@@ -287,8 +288,10 @@ export interface BossStateChangedEvent extends RunHistoryV2Envelope {
   boss: BossType;
   change: 'started' | 'cleared' | 'state' | 'warden_target' | 'warden_unlock' | 'face';
   hand?: HandId;
+  hands?: HandId[];
   dieIds: number[];
   amount?: number | ExactScore;
+  state?: string;
 }
 
 export interface ScorecardRefreshedEvent extends RunHistoryV2Envelope {

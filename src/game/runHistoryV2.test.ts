@@ -361,10 +361,10 @@ describe('Run History V2 instrumentation safety and size', () => {
     expect(state.debugTrace.records).toHaveLength(DEBUG_TRACE_MAX_RECORDS);
     expect(state.debugTrace.droppedRecords).toBeGreaterThan(0);
     expect({ legacyEntries: state.history.length, v2Entries: state.historyV2.length, ...sizes }).toEqual({
-      legacyEntries: 0, v2Entries: 715, legacyHistory: 2, v2History: 342_776,
-      renderedV2: 35_628, normalExport: 41_512, debugTrace: 43_961,
+      legacyEntries: 0, v2Entries: 716, legacyHistory: 2, v2History: 343_239,
+      renderedV2: 35_655, normalExport: 41_539, debugTrace: 43_961,
       runStats: 77_468, rollbackState: 5_471, actionJournal: 8_942,
-      persistedState: 406_645, fullState: 484_433,
+      persistedState: 407_108, fullState: 484_896,
     });
   }, 30_000);
 });

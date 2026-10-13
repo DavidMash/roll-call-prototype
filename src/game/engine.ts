@@ -171,6 +171,14 @@ function normalizeSpecialRuntime(state: Board): void {
   state.specialOffer ??= null;
 }
 
+function normalizeBossRuntime(state: Board): void {
+  if (state.boss?.type !== 'neglected') return;
+  const legacy = state.boss as typeof state.boss & { handsPlayed?: number; restored?: boolean };
+  legacy.handsPlayed = Math.max(0, Math.min(6,
+    Math.floor(typeof legacy.handsPlayed === 'number' && Number.isFinite(legacy.handsPlayed) ? legacy.handsPlayed : 0)));
+  legacy.restored = legacy.restored === true;
+}
+
 function normalizeHoodedRuntime(state: Board): void {
   if (!state) return;
   state.wildfires ??= [];
@@ -252,8 +260,9 @@ export function normalizeGameState(state: GameState): GameState {
       firstActionId: next.historyV2[0]?.actionId ?? next.actionJournal.length,
       firstSeq: next.historyV2[0]?.seq ?? 0 };
   next.debugTrace = normalizeDebugTrace(next.debugTrace);
+  normalizeBossRuntime(next);
   next.scorecardCycleConsumed ??= next.consumed.filter(hand =>
-    next.bossSilenced || next.boss?.type !== 'neglected' || !next.boss.neglectedHands.includes(hand));
+    next.bossSilenced || next.boss?.type !== 'neglected' || next.boss.restored || !next.boss.neglectedHands.includes(hand));
   normalizeSpecialRuntime(next);
   normalizeHoodedRuntime(next);
   normalizeChapterLifecycle(next);
@@ -315,9 +324,10 @@ export function normalizeGameState(state: GameState): GameState {
     checkpoint.nextShopVisitId = Math.max(1, Math.floor(checkpoint.nextShopVisitId ?? 1));
     checkpoint.nextFlameInstanceId = Math.max(1, Math.floor(checkpoint.nextFlameInstanceId ?? next.nextFlameInstanceId));
     checkpoint.flameInstanceIds ??= structuredClone(next.flameInstanceIds);
+    normalizeBossRuntime(checkpoint);
     checkpoint.scorecardCycleConsumed ??= checkpoint.consumed.filter(hand =>
       checkpoint.bossSilenced || checkpoint.boss?.type !== 'neglected'
-      || !checkpoint.boss.neglectedHands.includes(hand));
+      || checkpoint.boss.restored || !checkpoint.boss.neglectedHands.includes(hand));
     checkpoint.chapterPlans ??= structuredClone(next.chapterPlans ?? {});
     checkpoint.presentedChapters ??= Array.from(
       { length: chapterNumberForRound(checkpoint.round) }, (_, index) => index + 1,
