@@ -18,7 +18,7 @@ const originLabel: Record<FlameOrigin, string> = {
 
 function xMultLabel(contribution: XMultContribution): string {
   if (contribution.sourceId === 'charge') return `Charge ×${number(contribution.factor)}${contribution.chargeSources?.length
-    ? ` [${contribution.chargeSources.map(source => `${FLAMES[source.flame].name} ×${number(source.factor)}`).join(', ')}]` : ''}`;
+    ? ` [${contribution.chargeSources.map(source => `${FLAMES[source.flame].name}${source.instanceId === undefined ? '' : ` #${number(source.instanceId)}`} ×${number(source.factor)}`).join(', ')}]` : ''}`;
   const source = contribution.sourceId in FLAMES
     ? FLAMES[contribution.sourceId as keyof typeof FLAMES].name
     : String(contribution.sourceId);
@@ -79,12 +79,12 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     }
     case 'hand_scored': return renderHandScoredV2(event);
     case 'roll_batch': return `ROLL · ${event.reason} · ${event.results.map(result => `${die(result.dieId)} ${number(result.beforeFace)}→${number(result.afterFace)}`).join(' · ')}`;
-    case 'shop_visit_started': return `SHOP VISIT ${number(event.shopVisitId)} · ${event.reason} · Engulfment available`;
+    case 'shop_visit_started': return `SHOP VISIT ${number(event.shopVisitId)} · ${event.reason} · Engulfment attempt unused`;
     case 'shop_offers_presented': return `OFFERS · ${event.pool} · ${event.offers.map(offer => `${offer.contentId} [${offer.rarity}]`).join(', ')}`;
     case 'shop_transaction': return `SHOP · ${event.transaction.type} · ${'amount' in event.transaction ? number(event.transaction.amount) : ''}`.trim();
     case 'flame_changed': return `FLAME · ${event.change.type}${'flame' in event.change ? ` · ${FLAMES[event.change.flame].name}` : ''}`;
     case 'charge_changed': return `CHARGE · ${event.operation} · ×${number(event.before)}→×${number(event.after)}`;
-    case 'engulfment_attempted': return `ENGULFMENT · Shop ${number(event.shopVisitId)} · ${event.success ? 'SUCCESS' : 'OFFERING REJECTED'} · Inferno ×${number(event.infernoMultiplierBefore)}→×${number(event.infernoMultiplierAfter)}`;
+    case 'engulfment_attempted': return `ENGULFMENT · Shop ${number(event.shopVisitId)} · ${event.success ? 'SUCCESS' : 'OFFERING REJECTED'} · effective ×${number(event.offeringMultiplier)} / ×${number(event.requiredMultiplier)} · Inferno ×${number(event.infernoMultiplierBefore)}→×${number(event.infernoMultiplierAfter)}`;
     case 'hooded_challenge_changed': {
       const progress = event.attemptProgress === undefined ? ''
         : ` · attempt ${number(event.attemptProgress)}${event.target === undefined ? '' : `/${number(event.target)}`}`

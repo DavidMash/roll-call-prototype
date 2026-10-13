@@ -6,8 +6,8 @@ import { chapterNumberForRound } from './chapters';
 import type { Action, BadDreamCheckpoint, GameState, GameStateBase, RollbackState } from './types';
 
 export const RUN_STORAGE_KEY = 'roll-call:active-run';
-export const RUN_STORAGE_VERSION = 5;
-const SUPPORTED_STORAGE_VERSIONS = new Set([2, 3, 4, RUN_STORAGE_VERSION]);
+export const RUN_STORAGE_VERSION = 6;
+const SUPPORTED_STORAGE_VERSIONS = new Set([2, 3, 4, 5, RUN_STORAGE_VERSION]);
 
 type RunStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
@@ -28,7 +28,7 @@ function hasTemplateShape(value: unknown, template: unknown): boolean {
   if (isRecord(template)) {
     return isRecord(value) && Object.entries(template).every(([key, child]) =>
       (['maxCharge', 'decisionId', 'sixPackXMult', 'sixPackUpperHandsPlayed', 'handFamilyFlameStages', 'bossSilenced',
-        'engulfmentLevel', 'nextShopVisitId', 'visitId', 'engulfmentAttemptUsed',
+        'engulfmentLevel', 'nextShopVisitId', 'nextFlameInstanceId', 'flameInstanceIds', 'visitId', 'engulfmentAttemptUsed',
         'specialOfferEffects', 'suppressedPostBossRewardRounds', 'specialOffer', 'badDreamCheckpoint',
         'freeEnhancementOfferIds', 'freeTrainingOfferKeys', 'chapterPlans', 'presentedChapters', 'chapterLifecycle', 'scorecardCycleConsumed',
         'wildfires', 'bonfireContributions', 'bonfireRoundContributions', 'chargeAttribution', 'hoodedFigure',

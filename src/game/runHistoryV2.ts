@@ -1,11 +1,11 @@
 import type {
-  BossType, ChallengeId, Enhancement, EngulfmentAssetRef, Flame, GoldSource, GoldSpendSource, HandId, HandPlaySource,
+  BossType, ChallengeId, Enhancement, EngulfmentAssetRef, Flame, FlameInstanceId, GoldSource, GoldSpendSource, HandId, HandPlaySource,
   Rarity, Rank, RunNodeType, SpecialOfferType, WildfireResolved,
 } from './types';
 import type { RoundGoalBreakdown } from './goals';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 4 as const;
-export const RUN_HISTORY_V2_RULESET = 'engulfment-inferno-v1' as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 5 as const;
+export const RUN_HISTORY_V2_RULESET = 'engulfment-contribution-v2' as const;
 
 export interface RunHistoryV2Coverage {
   complete: boolean;
@@ -36,6 +36,7 @@ export interface HistoryDieState {
   pips: number;
   enhancements: Partial<Record<Enhancement, number>>;
   flame: Flame | null;
+  flameInstanceId?: FlameInstanceId;
 }
 
 export interface PipsContribution {
@@ -59,10 +60,12 @@ export interface XMultContribution {
   sourceId: Flame | 'charge' | BossType | SpecialOfferType | 'other';
   origin: FlameOrigin;
   factor: number;
+  sourceInstanceId?: FlameInstanceId;
   dieId?: number;
   input?: number;
   /** Counterfactual factors attributing a consumed shared Charge factor to its producing Flames. */
-  chargeSources?: { flame: Flame; factor: number }[];
+  chargeSources?: { flame: Flame; instanceId?: FlameInstanceId; origin?: Exclude<FlameOrigin, 'charge' | 'boss' | 'special_offer' | 'external'>;
+    attributed?: number; factor: number }[];
 }
 
 export interface ProbabilityCheck {
@@ -177,11 +180,14 @@ export interface ShopVisitStartedEvent extends RunHistoryV2Envelope {
 
 export interface EngulfmentOfferingTelemetry {
   asset: EngulfmentAssetRef;
-  investment: number;
-  recentContribution: number;
-  contributionShare: number;
-  importance: number;
-  fuel: number;
+}
+
+export interface EngulfmentEvidenceRoundTelemetry {
+  round: number;
+  attempt: number;
+  timelineId: number;
+  handCount: number;
+  multiplier: number;
 }
 
 export interface EngulfmentAttemptedEvent extends RunHistoryV2Envelope {
@@ -193,10 +199,11 @@ export interface EngulfmentAttemptedEvent extends RunHistoryV2Envelope {
   infernoMultiplierBefore: number;
   infernoMultiplierAfter: number;
   offerings: EngulfmentOfferingTelemetry[];
-  totalOfferedFuel: number;
-  requiredFuel: number;
+  evidenceRounds: EngulfmentEvidenceRoundTelemetry[];
+  offeringMultiplier: number;
+  requiredMultiplier: number;
   success: boolean;
-  overpayment: number;
+  overqualification: number;
   upper: { levelsBefore: { hand: HandId; level: number }[]; average: number; unifiedLevel: number };
   lower: { levelsBefore: { hand: HandId; level: number }[]; average: number; unifiedLevel: number };
   flamesSnuffed: EngulfmentAssetRef[];
@@ -228,11 +235,12 @@ export interface ShopTransactionEvent extends RunHistoryV2Envelope {
 }
 
 export type FlameChange =
-  | { type: 'acquired' | 'replaced'; flame: Flame; dieId: number; replaced?: Flame; rarity: Rarity }
+  | { type: 'acquired' | 'replaced'; flame: Flame; instanceId?: FlameInstanceId; dieId: number; replaced?: Flame; rarity: Rarity }
   | { type: 'skipped' }
-  | { type: 'stoked'; flame: Flame; dieId: number; amount: number; from: number; to: number }
-  | { type: 'bonfire_created'; flame: Flame; dieId: number }
-  | { type: 'wildfire_created'; flame: Flame; sacrificedFlame: Flame; contributionAverage: number; transferMultiplier: number; resolved: WildfireResolved }
+  | { type: 'stoked'; flame: Flame; instanceId?: FlameInstanceId; dieId: number; amount: number; from: number; to: number }
+  | { type: 'bonfire_created'; flame: Flame; instanceId?: FlameInstanceId; dieId: number }
+  | { type: 'wildfire_created'; flame: Flame; instanceId?: FlameInstanceId; sacrificedFlame: Flame; sacrificedInstanceId?: FlameInstanceId;
+    contributionAverage: number; transferMultiplier: number; resolved: WildfireResolved }
   | { type: 'activated'; flame: Flame; origin: FlameOrigin; dieId?: number; factor?: number };
 
 export interface FlameChangedEvent extends RunHistoryV2Envelope {

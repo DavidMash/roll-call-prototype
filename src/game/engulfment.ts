@@ -1,23 +1,34 @@
-import { activeFlameId } from './flames';
 import { chapterNumberForRound } from './chapters';
+import { activeFlameId, currentFlameInstanceId } from './flames';
 import { LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { canonicalRunHistoryV2Events } from './runHistoryV2Timeline';
-import { infernoMultiplier, INFERNO_BASE } from './scoring';
-import type { EngulfmentOfferingTelemetry, HandScoredEvent } from './runHistoryV2';
-import type { Board, EngulfmentAssetRef, Flame, GameState, HandId, HandLevels } from './types';
+import { finalizeScore, infernoMultiplier, INFERNO_BASE, scoreWeightedMultiplier } from './scoring';
+import type { EngulfmentEvidenceRoundTelemetry, EngulfmentOfferingTelemetry, HandScoredEvent } from './runHistoryV2';
+import type { Board, EngulfmentAssetRef, GameState, HandId, HandLevels } from './types';
 
-export const ENGULFMENT_REQUIRED_FUEL = 100;
+export const ENGULFMENT_EVIDENCE_ROUNDS = 6;
+export const ENGULFMENT_REQUIRED_MULTIPLIER = 20;
 export { infernoMultiplier, INFERNO_BASE };
 
 export const engulfmentAssetKey = (asset: EngulfmentAssetRef): string => asset.kind === 'ember'
-  ? `ember:${asset.dieId}:${asset.flame}` : `${asset.kind}:${asset.flame}`;
+  ? `ember:${asset.instanceId}:${asset.flame}:${asset.dieId}`
+  : `${asset.kind}:${asset.instanceId}:${asset.flame}`;
 
-export function ownedEngulfmentAssets(state: Pick<Board, 'dice' | 'bonfires' | 'wildfires'>): EngulfmentAssetRef[] {
+export function ownedEngulfmentAssets(state: Pick<Board, 'dice' | 'bonfires' | 'wildfires' | 'flameInstanceIds'>): EngulfmentAssetRef[] {
   return [
-    ...state.dice.filter(die => die.owner === 'player' && activeFlameId(die.flame) !== null)
-      .map(die => ({ kind: 'ember' as const, flame: activeFlameId(die.flame)!, dieId: die.id })),
-    ...state.bonfires.map(flame => ({ kind: 'bonfire' as const, flame })),
-    ...state.wildfires.map(item => ({ kind: 'wildfire' as const, flame: item.flame })),
+    ...state.dice.filter(die => die.owner === 'player' && activeFlameId(die.flame) !== null).flatMap(die => {
+      const flame = activeFlameId(die.flame)!;
+      const instanceId = currentFlameInstanceId(state, flame);
+      return instanceId === null ? [] : [{ kind: 'ember' as const, flame, instanceId, dieId: die.id }];
+    }),
+    ...state.bonfires.flatMap(flame => {
+      const instanceId = currentFlameInstanceId(state, flame);
+      return instanceId === null ? [] : [{ kind: 'bonfire' as const, flame, instanceId }];
+    }),
+    ...state.wildfires.flatMap(item => {
+      const instanceId = currentFlameInstanceId(state, item.flame);
+      return instanceId === null ? [] : [{ kind: 'wildfire' as const, flame: item.flame, instanceId }];
+    }),
   ];
 }
 
@@ -30,70 +41,82 @@ export const engulfmentHasQuestWarning = (state: Pick<Board, 'round' | 'hoodedFi
   return !!quest && !quest.complete && quest.issuedChapter === chapterNumberForRound(state.round);
 };
 
-export function engulfmentImportance(contribution: number, totalContribution: number): number {
-  if (totalContribution <= 0 || contribution <= 0) return 0;
-  return Math.min(1, Math.max(0, (contribution / totalContribution) / 0.35));
-}
-
-export function engulfmentFuel(kind: EngulfmentAssetRef['kind'], investment: number, importance: number): number {
-  const normalizedImportance = Math.min(1, Math.max(0, importance));
-  if (kind === 'ember') return Math.round(20 * Math.min(1, Math.max(0, investment / 100)) + 10 * normalizedImportance);
-  if (kind === 'bonfire') return Math.round(35 + 25 * normalizedImportance);
-  return Math.round(70 + 40 * normalizedImportance);
-}
-
-export const engulfmentSucceeds = (totalFuel: number): boolean => totalFuel >= ENGULFMENT_REQUIRED_FUEL;
+export const engulfmentSucceeds = (offeringMultiplier: number): boolean =>
+  offeringMultiplier >= ENGULFMENT_REQUIRED_MULTIPLIER;
 
 function attemptKey(event: { timelineId: number; round: number; attempt: number }): string {
   return `${event.timelineId}:${event.round}:${event.attempt}`;
 }
 
-function counterfactualContribution(event: HandScoredEvent, factor: number): number {
-  if (!Number.isFinite(factor) || factor <= 1) return 0;
-  return Math.max(0, event.score.awarded - Math.round(event.score.raw / factor));
+/** Resolved local factor supplied by all selected Flame instances together. */
+export function selectedOfferingFactor(event: HandScoredEvent, selectedInstanceIds: ReadonlySet<number>): number {
+  let factor = 1;
+  for (const contribution of event.xMultContributions) {
+    if (contribution.sourceId === 'charge') {
+      const selectedAttributed = (contribution.chargeSources ?? []).reduce((sum, source) =>
+        source.instanceId !== undefined && selectedInstanceIds.has(source.instanceId)
+          ? sum + Math.max(0, source.attributed ?? 0) : sum, 0);
+      if (selectedAttributed > 0) {
+        const charge = Math.max(1, contribution.factor);
+        factor *= charge / Math.max(1, charge - selectedAttributed);
+      }
+    } else if (contribution.sourceInstanceId !== undefined && selectedInstanceIds.has(contribution.sourceInstanceId)) {
+      factor *= Math.max(1, contribution.factor);
+    }
+  }
+  return Number(Math.max(1, factor).toFixed(12));
+}
+
+export function offeringHandObservation(event: HandScoredEvent, selectedInstanceIds: ReadonlySet<number>): { factor: number; weight: number } {
+  const resolvedFactor = selectedOfferingFactor(event, selectedInstanceIds);
+  const counterfactualScore = resolvedFactor > 1
+    ? finalizeScore(event.score.finalPips, event.score.finalMult,
+      (event.score.finalXMult / resolvedFactor) * event.score.bossFactor, event.score.infernoMultiplier ?? 1).finalScore
+    : event.score.awarded;
+  const factor = counterfactualScore > 0
+    ? Math.max(1, event.score.awarded / counterfactualScore) : 1;
+  return { factor, weight: Math.max(0, counterfactualScore) };
+}
+
+export interface EngulfmentOfferingEvaluation {
+  offerings: EngulfmentOfferingTelemetry[];
+  evidenceRounds: EngulfmentEvidenceRoundTelemetry[];
+  offeringMultiplier: number;
 }
 
 /**
- * Extends the Hooded/Wildfire score-without-factor semantics over the last six
- * canonical cleared rounds. Shared Charge is split through its frozen producer
- * attribution, so generation matters only when that Charge later scores.
+ * Evaluates the selected Flame instances jointly over the six most recent
+ * canonical clears: score-weighted within each Round, then equal-weighted
+ * across Rounds.
  */
-export function recentFlameContributions(state: Pick<GameState, 'historyV2' | 'historyV2Coverage' | 'dice' | 'bonfires' | 'wildfires'>): Partial<Record<Flame, number>> {
+export function evaluateEngulfmentOffering(
+  state: Pick<GameState, 'historyV2' | 'historyV2Coverage'>,
+  assets: readonly EngulfmentAssetRef[],
+): EngulfmentOfferingEvaluation {
   const canonical = canonicalRunHistoryV2Events(state.historyV2, state.historyV2Coverage);
-  const cleared = canonical.filter(event => event.kind === 'round_attempt_finished' && event.outcome === 'cleared').slice(-6);
-  const retainedAttempts = new Set(cleared.map(attemptKey));
-  const owned = new Set(ownedEngulfmentAssets(state).map(asset => asset.flame));
-  const contributions: Partial<Record<Flame, number>> = {};
-  for (const event of canonical) {
-    if (event.kind !== 'hand_scored' || !retainedAttempts.has(attemptKey(event))) continue;
-    for (const item of event.xMultContributions) {
-      if (item.sourceId === 'charge') {
-        for (const source of item.chargeSources ?? []) if (owned.has(source.flame))
-          contributions[source.flame] = (contributions[source.flame] ?? 0) + counterfactualContribution(event, source.factor);
-      } else if (item.sourceId in contributions || owned.has(item.sourceId as Flame)) {
-        const flame = item.sourceId as Flame;
-        if (owned.has(flame)) contributions[flame] = (contributions[flame] ?? 0) + counterfactualContribution(event, item.factor);
-      }
-    }
+  const clears = canonical.filter(event => event.kind === 'round_attempt_finished' && event.outcome === 'cleared')
+    .slice(-ENGULFMENT_EVIDENCE_ROUNDS);
+  const selectedInstanceIds = new Set(assets.map(asset => asset.instanceId));
+  const handsByAttempt = new Map<string, HandScoredEvent[]>();
+  for (const event of canonical) if (event.kind === 'hand_scored') {
+    const key = attemptKey(event);
+    const hands = handsByAttempt.get(key) ?? [];
+    hands.push(event);
+    handsByAttempt.set(key, hands);
   }
-  return contributions;
-}
-
-export function valueEngulfmentOffering(state: Pick<GameState, 'historyV2' | 'historyV2Coverage' | 'dice' | 'bonfires' | 'wildfires'>,
-  assets: readonly EngulfmentAssetRef[]): EngulfmentOfferingTelemetry[] {
-  const contributionByFlame = recentFlameContributions(state);
-  const ownedFlames = new Set(ownedEngulfmentAssets(state).map(asset => asset.flame));
-  const totalContribution = [...ownedFlames].reduce((sum, flame) => sum + (contributionByFlame[flame] ?? 0), 0);
-  return assets.map(asset => {
-    const contribution = contributionByFlame[asset.flame] ?? 0;
-    const contributionShare = totalContribution > 0 ? contribution / totalContribution : 0;
-    const importance = engulfmentImportance(contribution, totalContribution);
-    const investment = asset.kind === 'ember'
-      ? state.dice.find(die => die.id === asset.dieId && activeFlameId(die.flame) === asset.flame)?.flame?.investedGold ?? 0
-      : 100;
-    return { asset: structuredClone(asset), investment, recentContribution: contribution,
-      contributionShare, importance, fuel: engulfmentFuel(asset.kind, investment, importance) };
+  const evidenceRounds = clears.map(clear => {
+    const hands = handsByAttempt.get(attemptKey(clear)) ?? [];
+    const multiplier = scoreWeightedMultiplier(hands.map(hand => offeringHandObservation(hand, selectedInstanceIds)));
+    return { round: clear.round, attempt: clear.attempt, timelineId: clear.timelineId,
+      handCount: hands.length, multiplier: Number(multiplier.toFixed(12)) };
   });
+  const offeringMultiplier = evidenceRounds.length
+    ? evidenceRounds.reduce((sum, round) => sum + round.multiplier, 0) / evidenceRounds.length : 1;
+  return {
+    offerings: assets.map(asset => ({ asset: structuredClone(asset) })),
+    evidenceRounds,
+    offeringMultiplier: Number(offeringMultiplier.toFixed(12)),
+  };
 }
 
 export interface HandLevelNormalization {
@@ -119,17 +142,14 @@ export interface EngulfmentAnimationProfile {
   durationMs: number;
 }
 
-export function engulfmentAnimationProfile(totalFuel: number): EngulfmentAnimationProfile {
-  const fuel = Math.max(0, totalFuel);
-  const success = engulfmentSucceeds(fuel);
-  const strength = fuel < 45 ? 'very_weak' : fuel < 90 ? 'moderate' : fuel < 100 ? 'near'
-    : fuel < 120 ? 'bare' : fuel < 175 ? 'strong' : 'massive';
-  return {
-    success,
-    strength,
-    peakPercent: success ? 100 : Math.min(99, fuel),
-    durationMs: Math.round(Math.min(4000, Math.max(850, 4600 - fuel * 22))),
-  };
+export function engulfmentAnimationProfile(offeringMultiplier: number): EngulfmentAnimationProfile {
+  const progress = Math.max(0, offeringMultiplier) / ENGULFMENT_REQUIRED_MULTIPLIER;
+  const success = progress >= 1;
+  const strength = progress < .45 ? 'very_weak' : progress < .9 ? 'moderate' : progress < 1 ? 'near'
+    : progress < 1.2 ? 'bare' : progress < 1.75 ? 'strong' : 'massive';
+  const durationMs = strength === 'near' ? 4000 : strength === 'bare' ? 3800
+    : strength === 'moderate' ? 2700 : strength === 'very_weak' ? 2100 : strength === 'strong' ? 2300 : 1400;
+  return { success, strength, peakPercent: success ? 100 : Math.min(99, progress * 100), durationMs };
 }
 
 export function infernoRoman(level: number): string {

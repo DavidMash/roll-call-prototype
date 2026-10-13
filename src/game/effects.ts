@@ -2,9 +2,10 @@ import { bossRewardForRound, CONFIG, interestForGold, roundReward } from './conf
 import { activeFace, rollPhysicalDie, scoringPips, weightedSourceFace } from './dice';
 import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, loneWolfPipsFactor, personalTrainerChance, stacks, tankMultiplierFactor, VINTAGE_BASE_SELL_CAP } from './enhancements';
 import {
-  activeFlameId, activeFlameInvestment, captureHandStart, eligibleFlameIds, FLAMES, handXMultContributions,
+  activeFlameId, activeFlameInvestment, captureHandStart, currentFlameInstanceId, eligibleFlameIds, FLAMES, handXMultContributions,
   fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, hasChargeBonfire, HOT_STREAK_SEQUENCE, isChargeFlame,
-  initialHandFamilyFlameStages, jumpStartChargeGain, momentumChargeGain, ownedFlameIds, recalculateMaxCharge,
+  initialHandFamilyFlameStages, jumpStartChargeGain, momentumChargeGain, normalizeFlameInstanceRuntime, ownedFlameIds, recalculateMaxCharge,
+  removeFlameInstance,
   sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, thirdRailChargeGain,
 } from './flames';
 import { hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
@@ -21,8 +22,8 @@ import { chapterEncounterRounds, chapterNumberForRound, ensureChapterPlan } from
 import { chapterRoundForRound } from './chapters';
 import { RUN_HISTORY_V2_RULESET, RUN_HISTORY_V2_SCHEMA_VERSION } from './runHistoryV2';
 import {
-  ENGULFMENT_REQUIRED_FUEL, engulfmentSucceeds, engulfmentTrainingNormalization, infernoMultiplier,
-  valueEngulfmentOffering,
+  ENGULFMENT_REQUIRED_MULTIPLIER, engulfmentSucceeds, engulfmentTrainingNormalization, evaluateEngulfmentOffering,
+  infernoMultiplier,
 } from './engulfment';
 import { appendCriticalDiagnostic, appendDebugTrace } from './debugTrace';
 import { captureRollbackState, restoreRollbackState } from './rollback';
@@ -118,6 +119,7 @@ export class Resolver {
   constructor(readonly state: GameState, readonly rng: RandomSource, readonly options: ResolverOptions = {}) {
     state.historyV2 ??= [];
     state.historyV2TimelineId = Math.max(0, Math.floor(state.historyV2TimelineId ?? 0));
+    normalizeFlameInstanceRuntime(state);
     this.v2LastCharge = state.chargeXMult;
     recalculateMaxCharge(state);
   }
@@ -125,8 +127,11 @@ export class Resolver {
   private historyDie(dieId: number, faceSnapshot?: Face): HistoryDieState {
     const die = this.state.dice.find(item => item.id === dieId)!;
     const face = faceSnapshot ?? activeFace(die);
+    const flame = activeFlameId(die.flame);
+    const flameInstanceId = flame ? currentFlameInstanceId(this.state, flame) : null;
     return { dieId, owner: die.owner, physicalFace: die.value, face: face.rank, pips: scoringPips(face),
-      enhancements: { ...face.enhancements }, flame: activeFlameId(die.flame) };
+      enhancements: { ...face.enhancements }, flame,
+      ...(flameInstanceId === null ? {} : { flameInstanceId }) };
   }
 
   emitV2(input: RunHistoryV2EventInput): RunHistoryV2Event {
@@ -290,6 +295,7 @@ export class Resolver {
         const acquisition = this.state.stats.flameAcquisitions.at(-1);
         if (record.flame && record.rarity && record.dieIds?.[0] !== undefined) this.emitV2({ kind: 'flame_changed',
           change: { type: record.type === 'FLAME_ACQUIRED' ? 'acquired' : 'replaced', flame: record.flame,
+            instanceId: currentFlameInstanceId(this.state, record.flame) ?? undefined,
             dieId: record.dieIds[0], rarity: record.rarity, ...(acquisition?.replaced ? { replaced: acquisition.replaced } : {}) } });
         break;
       }
@@ -297,17 +303,21 @@ export class Resolver {
       case 'FLAME_INVESTED': {
         const stoke = this.state.stats.flameStokes.at(-1);
         if (stoke) this.emitV2({ kind: 'flame_changed', change: { type: 'stoked', flame: stoke.flame,
+          instanceId: currentFlameInstanceId(this.state, stoke.flame) ?? undefined,
           dieId: stoke.dieId, amount: stoke.amount, from: stoke.from, to: stoke.total } });
         break;
       }
       case 'BONFIRE_CREATED':
         if (record.flame && record.dieIds?.[0] !== undefined) this.emitV2({ kind: 'flame_changed',
-          change: { type: 'bonfire_created', flame: record.flame, dieId: record.dieIds[0] } });
+          change: { type: 'bonfire_created', flame: record.flame,
+            instanceId: currentFlameInstanceId(this.state, record.flame) ?? undefined, dieId: record.dieIds[0] } });
         break;
       case 'WILDFIRE_CREATED':
         if (record.recipientFlame && record.sacrificedFlame && record.contributionAverage !== undefined
           && record.transferMultiplier !== undefined && record.wildfireResolved) this.emitV2({ kind: 'flame_changed', change: {
-            type: 'wildfire_created', flame: record.recipientFlame, sacrificedFlame: record.sacrificedFlame,
+            type: 'wildfire_created', flame: record.recipientFlame,
+            instanceId: record.recipientInstanceId ?? currentFlameInstanceId(this.state, record.recipientFlame) ?? undefined,
+            sacrificedFlame: record.sacrificedFlame, sacrificedInstanceId: record.sacrificedInstanceId,
             contributionAverage: record.contributionAverage, transferMultiplier: record.transferMultiplier, resolved: record.wildfireResolved } });
         break;
       case 'FLAME_TRIGGERED':
@@ -1198,8 +1208,14 @@ export class Resolver {
       const chargeSources = factor.source === 'charge' ? Object.entries(chargeAttributionAtHandStart)
         .filter((entry): entry is [Flame, number] => (entry[1] ?? 0) > 0)
         .map(([flame, attributed]) => ({ flame,
+          instanceId: currentFlameInstanceId(this.state, flame) ?? undefined,
+          origin: this.state.bonfires.includes(flame) ? 'bonfire' as const
+            : this.state.wildfires.some(item => item.flame === flame) ? 'wildfire' as const : 'ember' as const,
+          attributed,
           factor: handStart.chargeXMult / Math.max(1, handStart.chargeXMult - attributed) })) : undefined;
+      const sourceInstanceId = factor.source === 'charge' ? null : currentFlameInstanceId(this.state, factor.source);
       this.v2Hand.xMultContributions.push({ sourceId: factor.source, origin, factor: factor.value,
+        ...(sourceInstanceId === null ? {} : { sourceInstanceId }),
         ...(factor.dieId === null ? {} : { dieId: factor.dieId }), ...(factor.input === undefined ? {} : { input: factor.input }),
         ...(chargeSources?.length ? { chargeSources } : {}) });
       if (factor.source === 'speedDemon') this.emit({ type: 'SPEED_DEMON_REVEALED', flame: 'speedDemon', hand,
@@ -1695,19 +1711,23 @@ export class Resolver {
     const recipient = interaction.recipient!; const sacrifice = interaction.sacrifice!;
     const rewardedChapter = this.state.hoodedFigure.active?.issuedChapter;
     const wildfire = projectWildfire(this.state, recipient, sacrifice);
+    const recipientInstanceId = currentFlameInstanceId(this.state, recipient) ?? undefined;
+    const sacrificedInstanceId = currentFlameInstanceId(this.state, sacrifice) ?? undefined;
     if (!this.state.bonfires.includes(recipient) || !this.state.bonfires.includes(sacrifice) || recipient === sacrifice)
       throw new Error('Wildfire conversion candidates are no longer valid.');
     this.state.bonfires = this.state.bonfires.filter(id => id !== recipient && id !== sacrifice);
     delete this.state.bonfireContributions[recipient]; delete this.state.bonfireContributions[sacrifice];
     delete this.state.bonfireRoundContributions[recipient]; delete this.state.bonfireRoundContributions[sacrifice];
     this.state.wildfires.push(wildfire);
+    removeFlameInstance(this.state, sacrifice);
     if (rewardedChapter !== undefined && !this.state.hoodedFigure.rewardedChapters.includes(rewardedChapter))
       this.state.hoodedFigure.rewardedChapters.push(rewardedChapter);
     this.state.hoodedFigure.active = null;
     this.state.hoodedFigure.interaction = { kind: 'opening', stage: 'story', lines: ['The figure vanishes.'], lineIndex: 0, recipient: null, sacrifice: null };
     this.state.hoodedFigure.contributionCheckpoint = null;
     recalculateMaxCharge(this.state);
-    this.emit({ type: 'WILDFIRE_CREATED', recipientFlame: recipient, sacrificedFlame: sacrifice,
+    this.emit({ type: 'WILDFIRE_CREATED', recipientFlame: recipient, recipientInstanceId,
+      sacrificedFlame: sacrifice, sacrificedInstanceId,
       contributionAverage: wildfire.sacrificedAverage, transferMultiplier: wildfire.transferMultiplier,
       wildfireResolved: wildfire.resolved, message: `${FLAMES[recipient].name} became a Wildfire; ${FLAMES[sacrifice].name} was sacrificed. The figure vanishes.` });
   }
@@ -1888,9 +1908,8 @@ export class Resolver {
   }
   attemptEngulfment(assets: EngulfmentAssetRef[]): void {
     const shop = this.state.shop!;
-    const offerings = valueEngulfmentOffering(this.state, assets);
-    const totalOfferedFuel = offerings.reduce((sum, offering) => sum + offering.fuel, 0);
-    const success = engulfmentSucceeds(totalOfferedFuel);
+    const evaluation = evaluateEngulfmentOffering(this.state, assets);
+    const success = engulfmentSucceeds(evaluation.offeringMultiplier);
     const infernoLevelBefore = this.state.engulfmentLevel;
     const infernoMultiplierBefore = infernoMultiplier(infernoLevelBefore);
     const normalization = engulfmentTrainingNormalization(this.state.handLevels);
@@ -1911,6 +1930,7 @@ export class Resolver {
         delete this.state.bonfireContributions[asset.flame];
         delete this.state.bonfireRoundContributions[asset.flame];
         delete this.state.chargeAttribution[asset.flame];
+        removeFlameInstance(this.state, asset.flame);
       }
       this.state.engulfmentLevel++;
       for (const item of normalization.upper.levelsBefore) this.state.handLevels[item.hand] = normalization.upper.unifiedLevel;
@@ -1938,8 +1958,9 @@ export class Resolver {
     this.emitV2({ kind: 'engulfment_attempted', shopVisitId: shop.visitId!, attemptNumber: 1,
       infernoLevelBefore, infernoLevelAfter: this.state.engulfmentLevel,
       infernoMultiplierBefore, infernoMultiplierAfter: infernoMultiplier(this.state.engulfmentLevel),
-      offerings, totalOfferedFuel, requiredFuel: ENGULFMENT_REQUIRED_FUEL, success,
-      overpayment: success ? totalOfferedFuel - ENGULFMENT_REQUIRED_FUEL : 0,
+      offerings: evaluation.offerings, evidenceRounds: evaluation.evidenceRounds,
+      offeringMultiplier: evaluation.offeringMultiplier, requiredMultiplier: ENGULFMENT_REQUIRED_MULTIPLIER, success,
+      overqualification: success ? evaluation.offeringMultiplier - ENGULFMENT_REQUIRED_MULTIPLIER : 0,
       upper: normalization.upper, lower: normalization.lower,
       flamesSnuffed: success ? structuredClone(assets) : [], questForfeited: !!forfeitedQuest,
       ...(forfeitedQuest ? { forfeitedQuestId: forfeitedQuest.id } : {}), returnedToShop: true });

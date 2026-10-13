@@ -50,6 +50,13 @@ export function finalizeScore(pips: number, multiplier: number, xMult = 1, infer
   return { rawScore, finalScore: Math.round(rawScore) };
 }
 
+/** Score-weighted effective multiplier shared by Wildfire and Engulfment attribution. */
+export function scoreWeightedMultiplier(observations: readonly { factor: number; weight: number }[]): number {
+  const totalWeight = observations.reduce((sum, item) => sum + Math.max(0, item.weight), 0);
+  return totalWeight > 0 ? observations.reduce((sum, item) =>
+    sum + Math.max(0, item.weight) * Math.max(1, item.factor), 0) / totalWeight : 1;
+}
+
 // Capture all scoring faces before Workout changes any physical face.
 export function handContributions(dice: Die[], selectedIds: number[], hitchhikerIds: number[] = []): HandScoreContribution[] {
   const selected = new Set(selectedIds);

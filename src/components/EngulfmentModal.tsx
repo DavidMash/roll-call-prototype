@@ -28,12 +28,12 @@ export function EngulfmentModal({ state, opened, result, onClose, submit }: {
   const [selected, setSelected] = useState<string[]>([]);
   const [stage, setStage] = useState<Stage>('select');
   const [committedVisitId, setCommittedVisitId] = useState<number | null>(null);
-  const assets = useMemo(() => ownedEngulfmentAssets(state), [state.dice, state.bonfires, state.wildfires]);
+  const assets = useMemo(() => ownedEngulfmentAssets(state), [state.dice, state.bonfires, state.wildfires, state.flameInstanceIds]);
   const assetByKey = new Map(assets.map(asset => [engulfmentAssetKey(asset), asset]));
   const selectedAssets = selected.flatMap(key => assetByKey.get(key) ?? []);
   const hasUnfinishedQuest = engulfmentHasQuestWarning(state);
   const committedResult = result?.shopVisitId === committedVisitId ? result : null;
-  const profile = committedResult ? engulfmentAnimationProfile(committedResult.totalOfferedFuel) : null;
+  const profile = committedResult ? engulfmentAnimationProfile(committedResult.offeringMultiplier) : null;
 
   useEffect(() => {
     if (!opened) { setSelected([]); setStage('select'); setCommittedVisitId(null); }
@@ -72,7 +72,8 @@ export function EngulfmentModal({ state, opened, result, onClose, submit }: {
     withCloseButton={stage === 'select' || stage === 'warning'} centered size="lg" title={title}
     classNames={{ content: `engulfment-modal${stage === 'result' && committedResult?.success ? ' is-success' : ''}` }}>
     {stage === 'select' && <Stack gap="md">
-      <Text>Select Flames to offer to the Inferno.</Text>
+      <Text>Select one or more Flames to offer to the Inferno.</Text>
+      <Text>The Inferno prefers Flames that have proven to be vital to your run.</Text>
       <Paper p="sm" className="engulfment-success-terms">
         <Text size="xs" fw={900} tt="uppercase">Upon success:</Text>
         <Text fw={900}>Inferno ×{formatPlayerNumber(current)} → ×{formatPlayerNumber(next)}</Text>
@@ -94,7 +95,7 @@ export function EngulfmentModal({ state, opened, result, onClose, submit }: {
       </div>
       <Text size="sm" c="dimmed">An insufficient offering costs nothing, but you only get one attempt this Shop.</Text>
       <Group justify="space-between"><Button variant="default" onClick={onClose}>BACK</Button>
-        <Button color="red" onClick={attempt}>ATTEMPT ENGULFMENT</Button></Group>
+        <Button color="red" disabled={selectedAssets.length === 0} onClick={attempt}>ATTEMPT ENGULFMENT</Button></Group>
     </Stack>}
     {stage === 'warning' && <Stack gap="lg">
       <Text>Your active quest will be forfeited if this Engulfment is successful.</Text>

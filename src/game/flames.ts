@@ -3,7 +3,7 @@ import { magneticPullCapable, stacks } from './enhancements';
 import { lastPlayDanger } from './bosses';
 import { LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from './hands';
 import { finalizeScore, handScore, infernoMultiplier } from './scoring';
-import type { ActiveFlame, Board, Die, Flame, GameState, HandId, Rarity, XMultFactor } from './types';
+import type { ActiveFlame, Board, Die, Flame, FlameInstanceId, GameState, HandId, Rarity, XMultFactor } from './types';
 import { formatPlayerNumber } from './copy';
 import { wildfireFactor } from './hoodedFigure';
 
@@ -150,6 +150,53 @@ export const activeFlameId = (flame: ActiveFlame | null | unknown): Flame | null
 export const activeFlameInvestment = (flame: ActiveFlame | null | unknown) =>
   typeof flame === 'object' && flame !== null && 'investedGold' in flame && Number.isFinite((flame as ActiveFlame).investedGold)
     ? Math.max(0, Math.min(100, (flame as ActiveFlame).investedGold)) : 0;
+
+type FlameInstanceRuntime = Pick<Board, 'dice' | 'bonfires' | 'wildfires' | 'boss' | 'flameInstanceIds' | 'nextFlameInstanceId'>;
+
+export function normalizeFlameInstanceRuntime(state: FlameInstanceRuntime): void {
+  state.flameInstanceIds ??= {};
+  state.nextFlameInstanceId = Math.max(1, Math.floor(state.nextFlameInstanceId ?? 1));
+  const owned = new Set<Flame>([
+    ...state.dice.map(die => activeFlameId(die.flame)).filter((id): id is Flame => id !== null),
+    ...state.bonfires,
+    ...state.wildfires.map(item => item.flame),
+    ...(state.boss?.type === 'magician' && activeFlameId(state.boss.hiddenFlame)
+      ? [activeFlameId(state.boss.hiddenFlame)!] : []),
+  ]);
+  const normalized: Partial<Record<Flame, FlameInstanceId>> = {};
+  const used = new Set<number>();
+  for (const flame of [...owned].sort()) {
+    const candidate = state.flameInstanceIds[flame];
+    if (Number.isInteger(candidate) && candidate! > 0 && !used.has(candidate!)) {
+      normalized[flame] = candidate;
+      used.add(candidate!);
+    }
+  }
+  for (const flame of [...owned].sort()) {
+    if (normalized[flame] !== undefined) continue;
+    while (used.has(state.nextFlameInstanceId)) state.nextFlameInstanceId++;
+    normalized[flame] = state.nextFlameInstanceId++;
+    used.add(normalized[flame]!);
+  }
+  state.flameInstanceIds = normalized;
+  if (used.size) state.nextFlameInstanceId = Math.max(state.nextFlameInstanceId, Math.max(...used) + 1);
+}
+
+export function currentFlameInstanceId(state: Pick<Board, 'flameInstanceIds'>, flame: Flame): FlameInstanceId | null {
+  const value = state.flameInstanceIds[flame];
+  return Number.isInteger(value) && value! > 0 ? value! : null;
+}
+
+export function assignFlameInstance(state: Pick<Board, 'flameInstanceIds' | 'nextFlameInstanceId'>, flame: Flame): FlameInstanceId {
+  const instanceId = Math.max(1, Math.floor(state.nextFlameInstanceId));
+  state.nextFlameInstanceId = instanceId + 1;
+  state.flameInstanceIds[flame] = instanceId;
+  return instanceId;
+}
+
+export function removeFlameInstance(state: Pick<Board, 'flameInstanceIds'>, flame: Flame): void {
+  delete state.flameInstanceIds[flame];
+}
 export const hasOwnedFlame = (state: Pick<GameState, 'dice' | 'bonfires' | 'wildfires'>, id: Flame) =>
   state.bonfires.includes(id) || state.wildfires.some(wildfire => wildfire.flame === id)
   || state.dice.some(die => activeFlameId(die.flame) === id);

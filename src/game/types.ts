@@ -25,6 +25,7 @@ export type Flame =
   | 'fatCat' | 'vineyard' | 'fetch' | 'targetPractice'
   | 'hotStreak' | 'lowball' | 'straightShooter' | 'doubleDown'
   | 'threesCompany' | 'boxSet' | 'missingPair' | 'oneShort';
+export type FlameInstanceId = number;
 export type HandId =
   | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes'
   | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
@@ -310,6 +311,8 @@ export interface Board {
   engulfmentLevel: number;
   /** Allocates semantic Shop visit identities; included in build-state rollback snapshots. */
   nextShopVisitId: number;
+  /** Allocates stable identities for individual Flame lifecycles. */
+  nextFlameInstanceId: number;
   roundAttemptNumber: number;
   bossSchedule: Partial<Record<number, BossType>>;
   chapterPlans: Partial<Record<number, ChapterPlan>>;
@@ -327,6 +330,8 @@ export interface Board {
   dice: Die[];
   bonfires: Flame[];
   wildfires: Wildfire[];
+  /** Current owned instance for each Flame type, preserved across Ember/Bonfire/Wildfire progression. */
+  flameInstanceIds: Partial<Record<Flame, FlameInstanceId>>;
   bonfireContributions: Partial<Record<Flame, BonfireContribution>>;
   bonfireRoundContributions: Partial<Record<Flame, BonfireRoundContribution>>;
   chargeAttribution: Partial<Record<Flame, number>>;
@@ -631,7 +636,9 @@ export interface EventRecord {
     completeAfter: boolean;
   };
   recipientFlame?: Flame;
+  recipientInstanceId?: FlameInstanceId;
   sacrificedFlame?: Flame;
+  sacrificedInstanceId?: FlameInstanceId;
   contributionAverage?: number;
   transferMultiplier?: number;
   wildfireResolved?: WildfireResolved;
@@ -669,9 +676,9 @@ export interface GameState extends GameStateBase {
   badDreamCheckpoint: BadDreamCheckpoint | null;
 }
 export type EngulfmentAssetRef =
-  | { kind: 'ember'; flame: Flame; dieId: number }
-  | { kind: 'bonfire'; flame: Flame }
-  | { kind: 'wildfire'; flame: Flame };
+  | { kind: 'ember'; flame: Flame; instanceId: FlameInstanceId; dieId: number }
+  | { kind: 'bonfire'; flame: Flame; instanceId: FlameInstanceId }
+  | { kind: 'wildfire'; flame: Flame; instanceId: FlameInstanceId };
 export type Action =
   | { type: 'PLAY'; hand: HandId; dieIds: number[]; decisionMs?: number }
   | { type: 'MANUAL_REROLL'; dieIds: number[] }

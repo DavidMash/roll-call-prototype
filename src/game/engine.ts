@@ -4,9 +4,9 @@ import { Resolver } from './effects';
 import type { ResolverOptions } from './effects';
 import { enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, placementError, stacks, VINTAGE_BASE_SELL_CAP } from './enhancements';
 import {
-  activeFlameId, activeFlameInvestment, flameEffectText, FLAMES, hasChargeBonfire, hasOwnedChargeFlame,
+  activeFlameId, activeFlameInvestment, assignFlameInstance, flameEffectText, FLAMES, hasChargeBonfire, hasOwnedChargeFlame,
   HAND_FAMILY_FLAME_IDS, hasOwnedFlame, isChargeFlame, isFlame, ownedFlameIds, recalculateMaxCharge,
-  sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier,
+  normalizeFlameInstanceRuntime, removeFlameInstance, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier,
 } from './flames';
 import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, isValidSelection } from './hands';
 import { hashSeed, SeededRng } from './rng';
@@ -113,6 +113,8 @@ export function normalizeGameState(state: GameState): GameState {
   const next = structuredClone(state);
   next.engulfmentLevel = Math.max(0, Math.floor(next.engulfmentLevel ?? 0));
   next.nextShopVisitId = Math.max(1, Math.floor(next.nextShopVisitId ?? 1));
+  next.nextFlameInstanceId = Math.max(1, Math.floor(next.nextFlameInstanceId ?? 1));
+  next.flameInstanceIds ??= {};
   const legacyStats = next.stats as typeof next.stats & { actions?: Action[] };
   next.actionJournal ??= structuredClone(legacyStats.actions ?? []);
   delete legacyStats.actions;
@@ -171,6 +173,7 @@ export function normalizeGameState(state: GameState): GameState {
     die.flame = id ? { id, investedGold: activeFlameInvestment(die.flame) } : null;
   }
   next.bonfires = [...new Set(next.bonfires.map(id => (id as string) === 'charge' ? 'momentum' : id).filter(isFlame))];
+  normalizeFlameInstanceRuntime(next);
   if (next.shop) {
     next.shop.offers = next.shop.offers.filter(offer => isEnhancement(offer.enhancement));
     normalizeShop(next.shop, next);
@@ -184,6 +187,8 @@ export function normalizeGameState(state: GameState): GameState {
     const checkpoint = next.roundCheckpoint.board;
     checkpoint.engulfmentLevel = Math.max(0, Math.floor(checkpoint.engulfmentLevel ?? 0));
     checkpoint.nextShopVisitId = Math.max(1, Math.floor(checkpoint.nextShopVisitId ?? 1));
+    checkpoint.nextFlameInstanceId = Math.max(1, Math.floor(checkpoint.nextFlameInstanceId ?? next.nextFlameInstanceId));
+    checkpoint.flameInstanceIds ??= structuredClone(next.flameInstanceIds);
     checkpoint.scorecardCycleConsumed ??= checkpoint.consumed.filter(hand =>
       checkpoint.bossSilenced || checkpoint.boss?.type !== 'neglected'
       || !checkpoint.boss.neglectedHands.includes(hand));
@@ -220,6 +225,7 @@ export function normalizeGameState(state: GameState): GameState {
     }
     checkpoint.bonfires = [...new Set(checkpoint.bonfires
       .map(id => (id as string) === 'charge' ? 'momentum' : id).filter(isFlame))];
+    normalizeFlameInstanceRuntime(checkpoint);
     recalculateMaxCharge(checkpoint);
     checkpoint.decisionId = Math.max(0, Math.floor(checkpoint.decisionId ?? 0));
     normalizeSixPackRuntime(checkpoint);
@@ -436,6 +442,7 @@ export function validateAction(state: Board, action: Action): string | null {
     if (!engulfmentAvailable(state)) return state.shop.engulfmentAttemptUsed
       ? 'The Inferno has already been attempted during this Shop visit.'
       : 'A Bonfire or Wildfire is required to attempt Engulfment.';
+    if (action.assets.length === 0) return 'Select one or more Flames to offer.';
     const selectedKeys = action.assets.map(engulfmentAssetKey);
     if (new Set(selectedKeys).size !== selectedKeys.length) return 'Each offered Flame may be selected only once.';
     const ownedKeys = new Set(ownedEngulfmentAssets(state).map(engulfmentAssetKey));
@@ -533,9 +540,10 @@ function rejectedActionHasLegacyMigration(state: GameState, normalized: GameStat
 export function newRun(seed: string, random?: RandomSource, options?: { debugTraceMode?: DebugTraceMode }): Resolution {
   const state: GameState = {
     phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: CONFIG.baseTarget,
-    score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, engulfmentLevel: 0, nextShopVisitId: 1, roundAttemptNumber: 1,
+    score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, engulfmentLevel: 0, nextShopVisitId: 1,
+    nextFlameInstanceId: 1, roundAttemptNumber: 1,
     bossSchedule: {}, chapterPlans: {}, presentedChapters: [], chapterLifecycle: {}, boss: null, bossSilenced: false, currentNodeId: '',
-    bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], wildfires: [],
+    bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], wildfires: [], flameInstanceIds: {},
     bonfireContributions: {}, bonfireRoundContributions: {}, chargeAttribution: {},
     hoodedFigure: { seen: false, previousChallengeId: null, active: null, interaction: null,
       issuedChapters: [], rewardedChapters: [], forfeitedChapters: [], challengeCheckpoint: null, contributionCheckpoint: null }, chargeXMult: 1, maxCharge: 1,
@@ -619,7 +627,9 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const die = next.dice[action.dieId];
         const replaced = activeFlameId(die.flame);
         const firstFlame = ownedFlameIds(next).size === 0;
+        if (replaced) removeFlameInstance(next, replaced);
         die.flame = { id: offer.flame, investedGold: 0 };
+        assignFlameInstance(next, offer.flame);
         if (replaced === 'fetch') next.fetchTarget = null;
         if (offer.flame === 'fetch') resolver.setFetchTarget(die.id, null);
         normalizeHandFamilyFlameRuntime(next);

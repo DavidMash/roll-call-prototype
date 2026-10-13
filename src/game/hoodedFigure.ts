@@ -3,6 +3,7 @@ import { magneticPullCapable, stacks } from './enhancements';
 import { FLAMES, isChargeFlame } from './flames';
 import { HAND_IDS, isValidSelection, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { randomIndex } from './rng';
+import { scoreWeightedMultiplier } from './scoring';
 import type {
   ActiveHoodedChallenge, Board, BonfireContribution, ChallengeId, ChallengeProgress,
   Die, Enhancement, Face, Flame, GameState, HandId, MiniBossType, RandomSource, Rank, Wildfire, WildfireResolved,
@@ -217,8 +218,7 @@ export function contributionAverage(entry: BonfireContribution | undefined): num
   return entry && entry.roundCount > 0 ? entry.factorSum / entry.roundCount : 1;
 }
 export function weightedRoundFactor(observations: readonly { factor: number; weight: number }[]): number {
-  const totalWeight = observations.reduce((sum, item) => sum + Math.max(0, item.weight), 0);
-  return totalWeight > 0 ? observations.reduce((sum, item) => sum + Math.max(0, item.weight) * Math.max(1, item.factor), 0) / totalWeight : 1;
+  return scoreWeightedMultiplier(observations);
 }
 export function rankedRecipients(state: Pick<GameState, 'bonfires' | 'bonfireContributions'>): Flame[] {
   return [...state.bonfires].sort((a, b) => contributionAverage(state.bonfireContributions[a]) - contributionAverage(state.bonfireContributions[b]) || a.localeCompare(b)).slice(0, 3);
