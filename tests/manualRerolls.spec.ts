@@ -51,7 +51,11 @@ function deadBoardRun(rescue: boolean) {
       while (attempt.phase === 'round') {
         const choices = handOptions(attempt.dice, attempt.consumed).filter(hand => !hand.consumed)
           .flatMap(hand => hand.combinations.map(dieIds => ({ type: 'PLAY' as const, hand: hand.id, dieIds })))
-          .sort((a, b) => handScore(attempt.dice, a.hand, a.dieIds).score - handScore(attempt.dice, b.hand, b.dieIds).score);
+          .sort((a, b) => {
+            const aScore = handScore(attempt.dice, a.hand, a.dieIds).score;
+            const bScore = handScore(attempt.dice, b.hand, b.dieIds).score;
+            return aScore > bScore ? 1 : aScore < bScore ? -1 : 0;
+          });
         const action = choices.find(choice => attempt.score + handScore(attempt.dice, choice.hand, choice.dieIds).score < attempt.target);
         if (!action) break;
         attemptActions.push(action);
@@ -81,7 +85,11 @@ function deadBoardRun(rescue: boolean) {
       while (game.phase === 'round') {
         const best = handOptions(game.dice, game.consumed).filter(hand => !hand.consumed)
           .flatMap(hand => hand.combinations.map(dieIds => ({ type: 'PLAY' as const, hand: hand.id, dieIds })))
-          .sort((a, b) => handScore(game.dice, b.hand, b.dieIds).score - handScore(game.dice, a.hand, a.dieIds).score)[0];
+          .sort((a, b) => {
+            const aScore = handScore(game.dice, a.hand, a.dieIds).score;
+            const bScore = handScore(game.dice, b.hand, b.dieIds).score;
+            return bScore > aScore ? 1 : bScore < aScore ? -1 : 0;
+          })[0];
         const action: Action = best ?? { type: 'MANUAL_REROLL', dieIds: [0] };
         prefix.push(action);
         game = dispatch(game, action).state;
@@ -101,7 +109,7 @@ function deadBoardRun(rescue: boolean) {
   throw new Error('No suitable deterministic dead-board run found');
 }
 async function installRun(page: Page, state: GameState) {
-  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved })),
+  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
   await page.reload();
   await ready(page);
@@ -212,7 +220,7 @@ test('Reroll control separates selected dice from Care Package resources respons
 
 test('dead-board UI and engine stay usable while only Care Package Rerolls remain', async ({ page }) => {
   let game = newRun('care-package-dead-board-ui').state;
-  game.target = 999;
+  game.target = 999n;
   game.consumed = [...HAND_IDS];
   game.manualRerollsRemaining = 0;
   game.specialOfferEffects.carePackageRerolls = 3;
@@ -238,7 +246,7 @@ test('Bust UI and retry keep a depleted Care Package reserve depleted', async ({
   let game = newRun('care-package-bust-checkpoint-ui').state;
   game.specialOfferEffects.carePackageRerolls = 3;
   game.roundCheckpoint!.board.specialOfferEffects.carePackageRerolls = 3;
-  game.target = 1_000_000;
+  game.target = 1_000_000n;
   game.consumed = [...HAND_IDS];
   game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0, 1, 2] }).state;
   game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0, 1, 2] }).state;

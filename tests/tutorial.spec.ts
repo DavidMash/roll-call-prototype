@@ -40,7 +40,7 @@ function shopOneSession() {
 }
 
 async function resumeSession(page: import('@playwright/test').Page, session: TutorialSession) {
-  await page.evaluate(([key, saved]) => localStorage.setItem(key, JSON.stringify({ version: 1, session: saved })),
+  await page.evaluate(([key, saved]) => localStorage.setItem(key, JSON.stringify({ version: 1, session: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
     [TUTORIAL_RUN_STORAGE_KEY, session] as const);
   await page.reload();
   await page.getByRole('button', { name: 'CONTINUE TUTORIAL', exact: true }).click();
@@ -52,8 +52,8 @@ function chapterTwoSession(flame: Flame) {
   const values: Rank[] = flame === 'straightShooter' ? [1, 2, 3, 4, 6] : [6, 6, 2, 4, 5];
   session.game.round = 7;
   session.game.phase = 'round';
-  session.game.score = 0;
-  session.game.target = 1000;
+  session.game.score = 0n;
+  session.game.target = 1000n;
   session.game.consumed = [];
   session.game.boss = null;
   session.game.dice.forEach((die, index) => {
@@ -440,7 +440,7 @@ test('Tutorial Shop progression nudge waits for five neutral seconds and stops a
     session.game.shop!.kind = kind;
     session.scenario.completedBeatIds.push('chapter-2');
     if (round > 12) session.scenario.completedBeatIds.push('curriculum-complete');
-    await page.evaluate(([key, saved]) => localStorage.setItem(key, JSON.stringify({ version: 1, session: saved })),
+    await page.evaluate(([key, saved]) => localStorage.setItem(key, JSON.stringify({ version: 1, session: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
       [TUTORIAL_RUN_STORAGE_KEY, session] as const);
     await page.reload();
     await page.getByRole('button', { name: 'CONTINUE TUTORIAL', exact: true }).click();
@@ -476,7 +476,7 @@ test('Shop progression nudge is not used in a normal run', async ({ page }) => {
   await page.clock.install();
   const session = shopOneSession();
   session.game.round = 2;
-  await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state })),
+  await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, session.game] as const);
   await page.reload();
   await page.getByRole('button', { name: /^Continue Chapter 1 Round 2,/ }).click();

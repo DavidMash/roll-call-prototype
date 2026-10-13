@@ -1,17 +1,18 @@
 import { ENHANCEMENTS } from './enhancements';
 import { FLAMES } from './flames';
 import { HANDS, HAND_IDS } from './hands';
-import { formatPlayerNumber } from './copy';
+import { formatExactScore, formatPlayerNumber } from './copy';
 import { RUN_HISTORY_V2_RULESET, RUN_HISTORY_V2_SCHEMA_VERSION } from './runHistoryV2';
 import { renderGroupedRunHistoryV2 } from './runHistoryV2Renderer';
 import { summarizeRunHistoryV2, type OfferImpressions } from './runHistoryV2Summary';
 import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
 import { infernoMultiplier } from './scoring';
 import type { GameState, Rarity } from './types';
+import { toExactJsonValue } from './scoreMath';
 
-const number = (value: number) => formatPlayerNumber(value);
-const entries = (record: Record<string, number> | Partial<Record<string, number>>) => Object.entries(record)
-  .filter(([, value]) => value !== 0).map(([key, value]) => `${key} ${number(value ?? 0)}`).join(' · ') || 'None';
+const number = (value: number | bigint) => typeof value === 'bigint' ? formatExactScore(value) : formatPlayerNumber(value);
+const entries = (record: Record<string, number | bigint> | Partial<Record<string, number | bigint>>) => Object.entries(record)
+  .filter(([, value]) => value !== 0 && value !== 0n).map(([key, value]) => `${key} ${number(value ?? 0)}`).join(' · ') || 'None';
 const percent = (value: number) => `${number(value * 100)}%`;
 
 function offerLine(label: string, offers: OfferImpressions): string {
@@ -86,7 +87,7 @@ export function createRunHistoryTextV2(state: GameState): string {
 export function exportRunHistoryV2(state: GameState) {
   const summary = summarizeRunHistoryV2(state.historyV2, state);
   const timelines = classifyRunHistoryV2Timelines(state.historyV2, state.historyV2Coverage);
-  return {
+  return toExactJsonValue({
     exportType: 'roll_call_run_history_v2',
     schemaVersion: RUN_HISTORY_V2_SCHEMA_VERSION,
     ruleset: RUN_HISTORY_V2_RULESET,
@@ -102,11 +103,11 @@ export function exportRunHistoryV2(state: GameState) {
       build: summary.canonical, consumedHands: [...state.consumed], specialOfferEffects: structuredClone(state.specialOfferEffects),
     },
     events: state.historyV2.map(event => ({ ...event, timelineStatus: timelines.status(event) })),
-  };
+  });
 }
 
 export function exportDebugTrace(state: GameState) {
-  return {
+  return toExactJsonValue({
     exportType: 'roll_call_debug_trace',
     debugTraceSchemaVersion: state.debugTrace.schemaVersion,
     historySchemaVersion: RUN_HISTORY_V2_SCHEMA_VERSION,
@@ -119,5 +120,5 @@ export function exportDebugTrace(state: GameState) {
       nextSeq: state.debugTrace.nextSeq, droppedRecords: state.debugTrace.droppedRecords,
       bufferBytes: state.debugTrace.bufferBytes, records: state.debugTrace.records,
       criticalDiagnostics: state.debugTrace.critical },
-  };
+  });
 }

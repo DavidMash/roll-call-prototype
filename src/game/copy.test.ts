@@ -21,6 +21,6 @@ describe('shared player-facing number formatting', () => {
 
   it('uses the same rules for percentages and score equations', () => {
     expect(formatPercentage(0.079137)).toBe('7.914%');
-    expect(formatScoreEquation(1234.5, 2.6667, 4.5, 14814)).toBe('1,234.5 × 2.667 × 4.5 = 14,814');
+    expect(formatScoreEquation(1234.5, 2.6667, 4.5, 14814n)).toBe('1,234.5 × 2.667 × 4.5 = 14,814');
   });
 });

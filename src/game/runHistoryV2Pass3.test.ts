@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stringifyExactJson } from './scoreMath';
 import { appendCriticalDiagnostic, appendDebugTrace } from './debugTrace';
 import { dispatch, newRun } from './engine';
 import { HAND_IDS } from './hands';
@@ -27,7 +28,7 @@ describe('Run History V2 Pass 3 ownership', () => {
     const traceBefore = state.debugTrace.records.length;
     expect(Object.keys(rollback).sort()).toEqual(['board', 'nextOfferId', 'rngState']);
     for (const excluded of ['history', 'historyV2', 'stats', 'debugTrace', 'actionJournal', 'roundCheckpoint',
-      'badDreamCheckpoint', 'events']) expect(JSON.stringify(rollback)).not.toContain(`"${excluded}"`);
+      'badDreamCheckpoint', 'events']) expect(stringifyExactJson(rollback)).not.toContain(`"${excluded}"`);
 
     const historyBefore = state.historyV2.length;
     state.gold = 99;
@@ -35,7 +36,7 @@ describe('Run History V2 Pass 3 ownership', () => {
     state.actionJournal.push({ type: 'MANUAL_REROLL', dieIds: [0] });
     state.stats.manualRerollActions++;
     appendDebugTrace(state.debugTrace, { round: 1, attempt: 1, actionId: 1 },
-      { kind: 'scoring_step', hand: 'ones', stage: 'final', before: 0, after: 0, source: 'manual' });
+      { kind: 'scoring_step', hand: 'ones', stage: 'final', before: 0n, after: 0n, source: 'manual' });
     restoreRollbackState(state, rollback);
 
     expect(state.gold).toBe(rollback.board.gold);
@@ -78,7 +79,7 @@ describe('Run History V2 Pass 3 ownership', () => {
 
   it('keeps experienced hand history through Bust while canonical metrics exclude it', () => {
     const state = newRun('pass3-bust', { next: () => 0 }).state;
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.stats.rounds[0].target = state.target;
     state.dice.forEach((die, index) => { die.value = ([1, 2, 2, 4, 5] as Rank[])[index]; });
     state.consumed = HAND_IDS.filter(hand => hand !== 'ones');
@@ -98,13 +99,13 @@ describe('Run History V2 Pass 3 ownership', () => {
     let state = newRun('rollback-heavy-pass3', { next: () => 0 }).state;
     const checkpointSizes: number[] = [];
     for (let attempt = 0; attempt < 2; attempt++) {
-      state.target = 1_000_000;
+      state.target = 1_000_000n;
       state.stats.rounds.at(-1)!.target = state.target;
       state.dice.forEach((die, index) => { die.value = ([1, 2, 2, 4, 5] as Rank[])[index]; });
       state.consumed = HAND_IDS.filter(hand => hand !== 'ones');
       state.manualRerollsRemaining = 0;
       state = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, { next: () => 0 }).state;
-      checkpointSizes.push(Buffer.byteLength(JSON.stringify(state.roundCheckpoint)));
+      checkpointSizes.push(Buffer.byteLength(stringifyExactJson(state.roundCheckpoint)));
       if (attempt === 0) state = dispatch(state, { type: 'RETRY_ROUND' }, { next: () => 0 }).state;
     }
     const classified = classifyRunHistoryV2Timelines(state.historyV2, state.historyV2Coverage);
@@ -113,7 +114,7 @@ describe('Run History V2 Pass 3 ownership', () => {
     expect(classified.canonicalEvents().some(event => event.kind === 'hand_scored')).toBe(false);
     expect(Math.max(...checkpointSizes)).toBeLessThan(10_000);
     expect(Math.max(...checkpointSizes) - Math.min(...checkpointSizes)).toBeLessThan(500);
-    expect(Buffer.byteLength(JSON.stringify(compactGameStateForPersistence(state)))).toBeLessThan(100_000);
+    expect(Buffer.byteLength(stringifyExactJson(compactGameStateForPersistence(state)))).toBeLessThan(100_000);
   });
 
   it('records Hooded attempt rollback on the new canonical timeline', () => {
@@ -123,7 +124,7 @@ describe('Run History V2 Pass 3 ownership', () => {
       attempt: { value: 0, keys: [], invalid: false, jackpotPaid: false }, complete: false, dialogueLine: 'test' };
     state.roundCheckpoint = captureRollbackState(state);
     state.hoodedFigure.active.attempt.value = 2;
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.stats.rounds[0].target = state.target;
     state.dice.forEach((die, index) => { die.value = ([1, 2, 2, 4, 5] as Rank[])[index]; });
     state.consumed = HAND_IDS.filter(hand => hand !== 'ones');
@@ -173,7 +174,7 @@ describe('Run History V2 Pass 3 ownership', () => {
     delete oldShape.historyV2;
     delete oldShape.historyV2Coverage;
     delete oldShape.historyV2TimelineId;
-    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: 2, state: legacy }));
+    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: 2, state: legacy }));
     const loaded = loadPersistedRun(storage, null)!;
     expect(loaded.historyV2Coverage.complete).toBe(false);
     expect(loaded.roundCheckpoint).toHaveProperty('board');

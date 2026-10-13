@@ -7,6 +7,7 @@ import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
 import type { ActiveHoodedChallenge, GameState, RandomSource, Rank, RoundSummary } from './types';
 
 const constant = (value = .2): RandomSource => ({ next: () => value });
+const HUGE_EXACT_SCORE = 59_604_644_775_390_625n;
 
 function challenge(chapter = 5, value = 0, complete = false): ActiveHoodedChallenge {
   return {
@@ -20,7 +21,7 @@ function challenge(chapter = 5, value = 0, complete = false): ActiveHoodedChalle
 function summary(round: number): RoundSummary {
   return {
     round, encounterType: round % 3 === 0 ? 'boss' : 'normal', bossType: round % 3 === 0 ? 'juggler' : null,
-    score: 100, target: 100, goldBefore: 10, goldAfter: 15, totalGoldEarned: 5,
+    score: 100n, target: 100n, goldBefore: 10, goldAfter: 15, totalGoldEarned: 5,
     sources: { baseRewardGold: 5, unusedRerollGold: 0, interestGold: 0, bossRewardGold: 0,
       goldenGold: 0, jackpotGold: 0, otherGold: 0 },
   };
@@ -77,7 +78,7 @@ function chooseBadDream(active: ActiveHoodedChallenge | null): GameState {
 
 function bustCurrentRound(state: GameState): GameState {
   state.lives = 1;
-  state.target = 1_000_000;
+  state.target = 1_000_000n;
   state.stats.rounds.at(-1)!.target = state.target;
   state.manualRerollsRemaining = 0;
   state.consumed = HAND_IDS.filter(hand => hand !== 'ones');
@@ -134,9 +135,9 @@ describe('whole-Chapter Hooded lifecycle', () => {
     const state = newRun(`challenge-completion-r${localRound}`, constant()).state;
     state.round = 24 + localRound;
     state.presentedChapters = [1, 2, 3, 4, 5];
-    state.target = 1;
+    state.target = 1n;
     state.stats.rounds.at(-1)!.round = state.round;
-    state.stats.rounds.at(-1)!.target = 1;
+    state.stats.rounds.at(-1)!.target = 1n;
     state.hoodedFigure.active = {
       id: 'noTakebacks', issuedChapter: 5, target: 1,
       committed: { value: 0, keys: [], invalid: false, jackpotPaid: false },
@@ -196,6 +197,7 @@ describe('whole-Chapter Hooded lifecycle', () => {
 describe('progression-only Time Travel', () => {
   it('preserves the current build and economy while resetting unfinished challenge progress to Chapter start', () => {
     let state = timeTravelState();
+    state.stats.scoreBySource.hand = HUGE_EXACT_SCORE;
     state = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 900 }, constant()).state;
     state = dispatch(state, { type: 'CONTINUE_SPECIAL_OFFER' }, constant()).state;
     expect(state).toMatchObject({ round: 25, phase: 'round', gold: 87, lives: 2 });
@@ -209,6 +211,7 @@ describe('progression-only Time Travel', () => {
     expect(state.bonfireContributions).toEqual({ minigun: { roundCount: 4, factorSum: 7 } });
     expect(state.chapterPlans[5]).toEqual({ chapterNumber: 5, miniBoss: 'juggler', boss: 'hexer' });
     expect(state.chapterLifecycle[5]?.specialOfferConsumed).toBe(true);
+    expect(state.stats.scoreBySource.hand).toBe(HUGE_EXACT_SCORE);
   });
 
   it('preserves completed-unrewarded and completed-rewarded challenge outcomes without duplicate rewards', () => {
@@ -258,6 +261,7 @@ describe('progression-only Bad Dream', () => {
     state.dice[0].faces[0].enhancements.vintage = 1;
     state.dice[0].faces[0].vintageSellValue = 22;
     state.dice[0].flame = { id: 'ultimate', investedGold: 74 };
+    state.stats.scoreBySource.hand = HUGE_EXACT_SCORE;
     state = bustCurrentRound(state);
     expect(state).toMatchObject({ phase: 'shop', round: 27, lives: 1, gold: 73 });
     expect(state.handLevels.ones).toBe(11);
@@ -266,6 +270,7 @@ describe('progression-only Bad Dream', () => {
     expect(state.hoodedFigure.active?.committed.value).toBe(1);
     expect(state.chapterLifecycle[5]?.specialOfferConsumed).toBe(true);
     expect(state.badDreamCheckpoint).toBeNull();
+    expect(state.stats.scoreBySource.hand).toBe(HUGE_EXACT_SCORE + state.stats.handScores.at(-1)!.score);
   });
 
   it('preserves a Wildfire claimed after Bad Dream selection and never restores the old unfinished challenge', () => {
@@ -311,7 +316,7 @@ describe('one-time Chapter Special Offer', () => {
     let current = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 903 }, constant()).state;
     current = dispatch(current, { type: 'UNLOCK_SHOP_EXIT' }, constant()).state;
     current = dispatch(current, { type: 'NEXT_ROUND' }, constant()).state;
-    current.target = 1_000_000;
+    current.target = 1_000_000n;
     current.stats.rounds.at(-1)!.target = current.target;
     current.manualRerollsRemaining = 0;
     current.consumed = HAND_IDS.filter(hand => hand !== 'ones');

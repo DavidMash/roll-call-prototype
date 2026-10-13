@@ -10,8 +10,8 @@ const constant = (value = .99): RandomSource => ({ next: () => value });
 
 function clearState(gold: number): GameState {
   const state = newRun('summary', constant()).state;
-  state.target = 1;
-  state.stats.rounds[0].target = 1;
+  state.target = 1n;
+  state.stats.rounds[0].target = 1n;
   state.gold = gold;
   state.stats.rounds[0].goldBefore = gold;
   state.stats.rounds[0].goldBySourceBefore = structuredClone(state.stats.goldBySource);
@@ -66,7 +66,7 @@ describe('authoritative Round Summary', () => {
     expect(continued.state.phase).toBe('shop');
 
     const bust = newRun('summary-bust', constant()).state;
-    bust.target = 1_000_000;
+    bust.target = 1_000_000n;
     bust.consumed = [...HAND_IDS];
     bust.manualRerollsRemaining = 0;
     bust.boss = { type: 'caller', calledHand: 'ones', playsRemaining: 1, satisfied: false, satisfyingSource: null };

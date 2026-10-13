@@ -2,6 +2,7 @@ import { Die } from './Die';
 import type { CSSProperties } from 'react';
 import type { Die as PhysicalDie, Flame, GameEvent, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
+import type { ExactScore } from '../game/scoreMath';
 
 interface Props {
   dice: PhysicalDie[];
@@ -15,7 +16,7 @@ interface Props {
   actionableIneligibleIds?: number[];
   lockedIds?: number[];
   lockedReasons?: Record<number, string>;
-  lockedUntilByDieId?: Record<number, number>;
+  lockedUntilByDieId?: Record<number, ExactScore>;
   wardenLockedIds?: number[];
   wardenSelectableIds?: number[];
   wardenChoiceMode?: boolean;

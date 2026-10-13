@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stringifyExactJson } from './scoreMath';
 import { dispatch, newRun } from './engine';
 import { Resolver } from './effects';
 import type { Enhancement, GameState, RandomSource, Rank } from './types';
@@ -8,7 +9,7 @@ const constant = (value = 0): RandomSource => ({ next: () => value });
 function game(values: Rank[] = [4, 4, 4, 2, 6]): GameState {
   const state = newRun('history-v2-characterization', constant()).state;
   state.dice.forEach((die, index) => { die.value = values[index]; });
-  state.target = 1_000_000;
+  state.target = 1_000_000n;
   state.stats.rounds[0].target = state.target;
   return state;
 }
@@ -128,7 +129,7 @@ describe('Run History V2 characterization', () => {
     enhance(state, 2, 'golden');
     state.bonfires = ['ultimate'];
     const result = dispatch(state, { type: 'PLAY', hand: 'threeKind', dieIds: [0, 1, 2] }, constant(.4));
-    const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value));
+    const bytes = (value: unknown) => Buffer.byteLength(stringifyExactJson(value));
     expect({
       historyEntries: result.state.history.length,
       legacyHistoryBytes: bytes(result.state.history),
@@ -137,7 +138,7 @@ describe('Run History V2 characterization', () => {
       {
         "historyEntries": 0,
         "legacyHistoryBytes": 2,
-        "runStatsBytes": 2651,
+        "runStatsBytes": 2673,
       }
     `);
   });

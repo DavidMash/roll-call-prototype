@@ -137,8 +137,8 @@ describe('tutorial scenario', () => {
     session.scenario.round2Plan = plan;
     session.game.round = 2;
     session.game.phase = 'round';
-    session.game.target = 999_999;
-    session.game.score = 0;
+    session.game.target = 999_999n;
+    session.game.score = 0n;
     session.game.consumed = [];
     plan.opening.forEach(({ dieId, rank }) => { session.game.dice[dieId].value = rank; });
 
@@ -154,7 +154,7 @@ describe('tutorial scenario', () => {
     const fresh = newTutorialSession().session;
     const prepare = (state: GameState) => {
       state.round = 5;
-      state.target = 10_000;
+      state.target = 10_000n;
       state.lives = 1;
       state.manualRerollsRemaining = 0;
       state.consumed = ['twos', 'threes', 'fours', 'fives', 'sixes', 'pair', 'twoPair', 'threeKind', 'fullHouse', 'fourKind', 'fiveKind', 'smallStraight', 'largeStraight'];
@@ -182,13 +182,13 @@ describe('tutorial scenario', () => {
   it('releases Warden dice and suppresses only the current tutorial encounter', () => {
     const { session } = newTutorialSession();
     session.game.round = 12;
-    session.game.target = 100_000;
+    session.game.target = 100_000n;
     session.game.lives = 1;
     session.game.manualRerollsRemaining = 0;
     session.game.dice.forEach(die => { die.value = 1; });
     session.game.consumed = ['twos', 'threes', 'fours', 'fives', 'sixes', 'pair', 'twoPair', 'threeKind', 'fullHouse', 'fourKind', 'fiveKind', 'smallStraight', 'largeStraight'];
     session.game.boss = { type: 'warden', activeDieIds: [0], startingDieId: 0, nextUnlockTarget: null,
-      unlockCosts: [20, 40, 60, 80], unlockTargets: [], pendingReinforcements: 0 };
+      unlockCosts: [20n, 40n, 60n, 80n], unlockTargets: [], pendingReinforcements: 0 };
     const current = session.game.stats.rounds.at(-1)!;
     current.round = 12;
     current.target = session.game.target;

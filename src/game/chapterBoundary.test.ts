@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stringifyExactJson } from './scoreMath';
 import { dispatch, newRun } from './engine';
 import { loadPersistedRun, RUN_STORAGE_KEY, RUN_STORAGE_VERSION, savePersistedRun } from './persistence';
 import type { GameState, RandomSource } from './types';
@@ -36,7 +37,7 @@ describe('post-Boss Chapter boundary', () => {
     summary.flameSelection = null;
     summary.gold = 29;
     summary.roundSummary = {
-      round: 6, encounterType: 'boss', bossType: 'caller', score: 500, target: 450,
+      round: 6, encounterType: 'boss', bossType: 'caller', score: 500n, target: 450n,
       goldBefore: 10, goldAfter: 29, totalGoldEarned: 19,
       sources: { baseRewardGold: 5, unusedRerollGold: 3, interestGold: 1, bossRewardGold: 10,
         goldenGold: 0, jackpotGold: 0, otherGold: 0 },
@@ -149,7 +150,7 @@ describe('post-Boss Chapter boundary', () => {
       chapterMiniBoss: plan.miniBoss, chapterBoss: plan.boss, message: 'Chapter 2 entered' });
     const shop = structuredClone(current.shop);
     const storage = memoryStorage();
-    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION, state: current }));
+    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: RUN_STORAGE_VERSION, state: current }));
 
     const migrated = loadPersistedRun(storage, current.seed)!;
     expect(migrated.currentNodeId).toBe('shop:after-round:6');

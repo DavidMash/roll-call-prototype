@@ -19,7 +19,7 @@ function shopBeforeMini(type: MiniBossType): GameState {
 }
 
 async function install(page: Page, state: GameState) {
-  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved })),
+  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
   await page.reload();
   await expect(page.locator('main')).toBeVisible();
@@ -133,8 +133,8 @@ test('Magician presents all calls while the missing die is absent', async ({ pag
 
 test('Mini-Boss summary labels its reward and continues to Special Offer', async ({ page }) => {
   let state = dispatch(shopBeforeMini('capitalReturn'), { type: 'NEXT_ROUND' }, constant()).state;
-  state.target = 1;
-  state.stats.rounds.at(-1)!.target = 1;
+  state.target = 1n;
+  state.stats.rounds.at(-1)!.target = 1n;
   state.dice[0].value = 6;
   state = dispatch(state, { type: 'PLAY', hand: 'sixes', dieIds: [0] }, constant()).state;
   await page.goto(`/?seed=${state.seed}&speed=instant`);

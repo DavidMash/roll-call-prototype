@@ -1,7 +1,7 @@
 import { Badge, Button, Group, Modal, ScrollArea, SimpleGrid, Table, Tabs, Text, Textarea, TextInput } from '@mantine/core';
 import { Fragment, useMemo, useState } from 'react';
 import { chapterNumberForRound, chapterRoundForRound } from '../game/chapters';
-import { formatPlayerNumber, formatScoreProgress } from '../game/copy';
+import { formatExactScore, formatPlayerNumber, formatScoreProgress } from '../game/copy';
 import { scoringPips } from '../game/dice';
 import { enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS } from '../game/enhancements';
 import { activeFlameId, FLAMES } from '../game/flames';
@@ -69,8 +69,8 @@ export function RunInfoModal({ state, busy, opened, onClose, seedInput, setSeedI
           <Text size="sm" mt="sm"><strong>Probability:</strong> Sticky {state.stats.probabilityProcs.sticky.successes}/{state.stats.probabilityProcs.sticky.checks} · Hitchhiker {state.stats.probabilityProcs.hitchhiker.successes}/{state.stats.probabilityProcs.hitchhiker.checks} · Double Time {state.stats.probabilityProcs.doubleTime.successes}/{state.stats.probabilityProcs.doubleTime.checks} · Trainer {state.stats.personalTrainerSuccesses}/{state.stats.personalTrainerAttempts}</Text>
           <Table.ScrollContainer minWidth={760} mt="md"><Table striped><Table.Thead><Table.Tr><Table.Th>Round</Table.Th><Table.Th>Attempt</Table.Th><Table.Th>Goal</Table.Th><Table.Th>Final</Table.Th><Table.Th>Margin</Table.Th><Table.Th>Reward</Table.Th></Table.Tr></Table.Thead>
             <Table.Tbody>{state.stats.rounds.map((round, index) => <Table.Tr key={`${round.round}:${round.attempt}:${index}`}>
-              <Table.Td>{round.round}</Table.Td><Table.Td>{round.attempt}</Table.Td><Table.Td>{formatPlayerNumber(round.target)}</Table.Td>
-              <Table.Td>{formatPlayerNumber(round.finalScore)}</Table.Td><Table.Td>{round.clearMargin === null ? '—' : formatPlayerNumber(round.clearMargin)}</Table.Td>
+              <Table.Td>{round.round}</Table.Td><Table.Td>{round.attempt}</Table.Td><Table.Td>{formatExactScore(round.target)}</Table.Td>
+              <Table.Td>{formatExactScore(round.finalScore)}</Table.Td><Table.Td>{round.clearMargin === null ? '—' : formatExactScore(round.clearMargin)}</Table.Td>
               <Table.Td>{round.payout ? formatPlayerNumber(round.payout.totalRoundRewardGold) : '—'}</Table.Td>
             </Table.Tr>)}</Table.Tbody>
           </Table></Table.ScrollContainer>

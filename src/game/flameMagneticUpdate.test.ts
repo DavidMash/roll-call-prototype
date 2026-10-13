@@ -14,7 +14,7 @@ const constant = (value = .99): RandomSource => ({ next: () => value });
 function game(values: Rank[] = [1, 2, 3, 4, 5]): GameState {
   const state = newRun('flame-magnetic-update', constant(.8)).state;
   values.forEach((value, index) => { state.dice[index].value = value; });
-  state.target = 1_000_000;
+  state.target = 1_000_000n;
   state.stats.rounds[0].target = state.target;
   return state;
 }

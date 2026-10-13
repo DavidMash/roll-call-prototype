@@ -38,7 +38,7 @@ function carePackageRound(random: RandomSource = constant(.4)): GameState {
 }
 
 function summary(round: number): RoundSummary {
-  return { round, encounterType: 'boss', bossType: 'juggler', score: 1, target: 1, goldBefore: 0, goldAfter: 0,
+  return { round, encounterType: 'boss', bossType: 'juggler', score: 1n, target: 1n, goldBefore: 0, goldAfter: 0,
     totalGoldEarned: 0, sources: { baseRewardGold: 0, unusedRerollGold: 0, interestGold: 0,
       bossRewardGold: 0, goldenGold: 0, jackpotGold: 0, otherGold: 0 } };
 }
@@ -205,7 +205,7 @@ describe('temporary Special Offers', () => {
     let state = choose('carePackage');
     state = unlockShop(state);
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.2)).state;
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.consumed = [...HAND_IDS];
     state.manualRerollsRemaining = 0;
 
@@ -234,7 +234,7 @@ describe('temporary Special Offers', () => {
 
   it('does not refund six spent Rerolls through the Bust checkpoint', () => {
     let state = carePackageRound();
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.consumed = [...HAND_IDS];
 
     let result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0, 1, 2] }, constant(.4));
@@ -278,7 +278,7 @@ describe('temporary Special Offers', () => {
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.4)).state;
     expect(state.boss?.type).toBe('tightrope');
     expect(state.manualRerollsRemaining).toBe(0);
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.consumed = [...HAND_IDS];
 
     state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(.4)).state;
@@ -306,7 +306,7 @@ describe('temporary Special Offers', () => {
   it.each(['crawler', 'juggler'] as const)('uses Care Package Bust eligibility during the %s encounter', boss => {
     const state = choose('carePackage');
     state.phase = 'round';
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.consumed = [...HAND_IDS];
     state.manualRerollsRemaining = 0;
     state.boss = boss === 'crawler'
@@ -385,7 +385,7 @@ describe('temporary Special Offers', () => {
   it('Bottled Fairy refills once per Round only after reserve Rerolls are exhausted', () => {
     const state = choose('bottledFairy');
     state.phase = 'round';
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.consumed = [...HAND_IDS];
     state.manualRerollsRemaining = 0;
     state.specialOfferEffects.carePackageRerolls = 1;
@@ -440,7 +440,7 @@ describe('temporary Special Offers', () => {
 describe('replay and checkpoint Special Offers', () => {
   it('persists the depleted Care Package reserve after Bust and reload', () => {
     let state = carePackageRound();
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.consumed = [...HAND_IDS];
     state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0, 1, 2] }, constant(.4)).state;
     state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0, 1, 2] }, constant(.4)).state;
@@ -491,7 +491,7 @@ describe('replay and checkpoint Special Offers', () => {
     state.dice[0].faces[0].vintageSellValue = 18;
     state.dice[0].flame = { id: 'ultimate', investedGold: 61 };
     state.lives = 1;
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.consumed = [...HAND_IDS];
     state.manualRerollsRemaining = 1;
     state.specialOfferEffects.carePackageRerolls = 0;

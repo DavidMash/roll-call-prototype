@@ -10,7 +10,7 @@ import type { GameState, Rank } from './types';
 
 function game(values: Rank[]): GameState {
   const state = newRun('board-selection', { next: () => 0 }).state;
-  state.target = 1_000_000;
+  state.target = 1_000_000n;
   state.stats.rounds[0].target = state.target;
   state.dice.forEach((die, index) => { die.value = values[index]; });
   return state;

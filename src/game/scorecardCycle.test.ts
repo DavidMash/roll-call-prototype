@@ -11,9 +11,9 @@ const constant = (value = 0) => ({ next: () => value });
 function finalHandState(): GameState {
   const state = newRun('scorecard-cycle', constant()).state;
   const priorHands = HAND_IDS.filter(hand => hand !== 'ones');
-  state.target = 1_000_000;
+  state.target = 1_000_000n;
   state.stats.rounds[0].target = state.target;
-  state.score = 73;
+  state.score = 73n;
   state.gold = 19;
   state.lives = 2;
   state.manualRerollsRemaining = 2;
@@ -40,7 +40,7 @@ describe('authoritative scorecard cycles', () => {
     expect(refresh?.message).toBe('Scorecard filled · all hands refreshed');
     expect(result.state.phase).toBe('round');
     expect(result.state.round).toBe(state.round);
-    expect(result.state.score).toBe(81);
+    expect(result.state.score).toBe(BigInt(81n));
     expect(result.state.score).toBeGreaterThan(state.score);
     expect(result.state.gold).toBe(19);
     expect(result.state.lives).toBe(2);
@@ -66,7 +66,7 @@ describe('authoritative scorecard cycles', () => {
 
   it('does not refresh when the final hand clears the Round', () => {
     const state = finalHandState();
-    state.target = 80;
+    state.target = 80n;
     state.stats.rounds[0].target = state.target;
     const result = playFinalHand(state);
 
@@ -89,7 +89,7 @@ describe('authoritative scorecard cycles', () => {
 
     expect(second.events.filter(event => event.type === 'SCORECARD_REFRESHED')).toHaveLength(1);
     expect(second.state.historyV2.filter(event => event.kind === 'scorecard_refreshed')).toHaveLength(2);
-    expect(second.state.score).toBe(first.state.score + 8);
+    expect(second.state.score).toBe(BigInt(first.state.score + 8n));
     expect(second.state.consumed).toEqual([]);
   });
 
@@ -108,7 +108,7 @@ describe('authoritative scorecard cycles', () => {
     ['Caller', { type: 'caller', calledHand: 'twos', playsRemaining: 2, satisfied: false,
       satisfyingSource: null, callsCompleted: 0, callsMissed: 0, manualHandsPlayed: 1, callDeadline: 3 }],
     ['Warden', { type: 'warden', activeDieIds: [0, 1, 2, 3, 4], startingDieId: 0,
-      nextUnlockTarget: null, unlockCosts: [], unlockTargets: [20, 40], pendingReinforcements: 0 }],
+      nextUnlockTarget: null, unlockCosts: [], unlockTargets: [20n, 40n], pendingReinforcements: 0 }],
     ['Quickdraw', { type: 'quickdraw', lowerShotUsed: false, playedLowerHand: null }],
     ['Fly', { type: 'fly', flyHand: 'pair', caught: false, moves: 2 }],
   ])('preserves %s state while refreshing only ordinary Used hands', (_name, boss) => {

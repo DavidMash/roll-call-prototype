@@ -3,7 +3,8 @@ import { useReducedMotion } from '@mantine/hooks';
 import { useEffect, useRef, useState } from 'react';
 import { BOSSES } from '../game/bosses';
 import { chapterNumberForRound, chapterRoundForRound } from '../game/chapters';
-import { formatPlayerNumber } from '../game/copy';
+import { formatExactScore, formatPlayerNumber } from '../game/copy';
+import type { ExactScore } from '../game/scoreMath';
 import { encounterTarget, nodeLabel, routeWindow } from '../game/progression';
 import { SCREEN_THEMES } from '../game/screenThemes';
 import type { GameEvent, RunNode } from '../game/types';
@@ -23,7 +24,7 @@ export function chapterMapNodeState(index: number, currentIndex: number): MapNod
   return 'upcoming';
 }
 
-export const formatMapTarget = (target: number): string => `TARGET ${formatPlayerNumber(target)}`;
+export const formatMapTarget = (target: ExactScore): string => `TARGET ${formatExactScore(target)}`;
 
 export interface ChapterMapPoint {
   x: number;
@@ -190,7 +191,7 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
           const displayNode = state === 'current' && event.boss ? { ...node, boss: event.boss } : node;
           const target = displayNode.type === 'normal_round' ? encounterTarget(displayNode, round =>
             event.board.bossSchedule[round] ?? null) : null;
-          const formattedTarget = target === null ? null : formatPlayerNumber(target);
+          const formattedTarget = target === null ? null : formatExactScore(target);
           const progress = index / Math.max(1, nodes.length - 1);
           const miniWeight = Math.round((1 - Math.min(1, progress)) * 100);
           const arcColor = `color-mix(in srgb, ${miniBossColor} ${miniWeight}%, ${bossColor})`;

@@ -3,7 +3,8 @@ import { handStats, HANDS, HAND_IDS, LOWER_HAND_IDS, ultimateHands, UPPER_HAND_I
 import { activeFlameId, handFamilyFlameTargets } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
-import { EMPTY_TEXT, formatPlayerNumber, formatScoreEquation } from '../game/copy';
+import { EMPTY_TEXT, formatExactScore, formatPlayerNumber, formatScoreEquation } from '../game/copy';
+import type { ExactScore } from '../game/scoreMath';
 import { boardHandAvailable, legalHandCombinations } from '../game/selection';
 
 const MOBILE_HAND_NAMES: Partial<Record<HandId, string>> = {
@@ -21,8 +22,8 @@ export interface HandSubmitPreview {
   multiplier: number;
   hasXMult: boolean;
   effectiveXMult: number;
-  infernoMultiplier: number;
-  score: number;
+  infernoMultiplier: ExactScore;
+  score: ExactScore;
 }
 
 function SendIcon() {
@@ -58,7 +59,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
         const magicianCompleted = magicianCalled && board.boss?.type === 'magician' && board.boss.completedHands.includes(hand);
         const score = board.scoreByHand[hand];
         const state = used ? 'consumed' : selected ? 'selected' : playable ? 'playable' : 'unavailable';
-        const scoreLabel = score === undefined ? EMPTY_TEXT.score : `${formatPlayerNumber(score)} points`;
+        const scoreLabel = score === undefined ? EMPTY_TEXT.score : `${formatExactScore(score)} points`;
         const showQuickPlay = selected && canSubmit;
         return <div key={hand} className={`scorecard-row-shell ${showQuickPlay ? 'has-quick-play' : ''}`} data-tutorial={`hand-${hand}`}>
         <Button variant={selected ? 'light' : 'subtle'} color={selected ? 'teal' : 'gray'}
@@ -89,7 +90,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
             </span>}
           </span>
           <span className="scorecard-row-result">
-            <span data-testid={`scorecard-score-${hand}`}>{score === undefined ? '—' : formatPlayerNumber(score)}</span>
+            <span data-testid={`scorecard-score-${hand}`}>{score === undefined ? '—' : formatExactScore(score)}</span>
             {cooldown > 0 ? <Badge className="scorecard-state-badge" size="xs" color="orange" variant="light" title={`Cooldown ${cooldown}`}><span className="wide-label">COOLDOWN </span><span className="compact-label">CD </span>{cooldown}</Badge>
               : quickdrawLocked ? <Badge size="xs" color="yellow" variant="light">LOCKED</Badge>
               : neglected ? <Badge size="xs" color="gray" variant="light">NEGLECTED</Badge>
@@ -97,7 +98,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
           </span>
         </Button>
         {showQuickPlay && submitPreview && <Button className="scorecard-quick-play" size="compact-xs"
-          aria-label={`Play ${definition.name} for ${formatPlayerNumber(submitPreview.score)} points`} onClick={onSubmit}>
+          aria-label={`Play ${definition.name} for ${formatExactScore(submitPreview.score)} points`} onClick={onSubmit}>
           <span className="quick-score-expression">
             {formatScoreEquation(submitPreview.pips, submitPreview.multiplier, submitPreview.effectiveXMult,
               submitPreview.score, submitPreview.infernoMultiplier)}

@@ -21,7 +21,125 @@ import { isRollbackState } from './rollback';
 import { enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey, usableManualRerolls } from './specialOffers';
 import { rankedRecipients, rankedSacrifices, resolveWildfire } from './hoodedFigure';
 import { engulfmentAssetKey, engulfmentAvailable, ownedEngulfmentAssets } from './engulfment';
+import { Decimal, exactInferno, scoreFromUnknown, type ExactScore } from './scoreMath';
+import { targetForRound } from './goals';
 import type { Action, Board, GameState, GameStateBase, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
+
+const exact = (value: unknown, fallback: ExactScore = 0n): ExactScore => value === undefined || value === null
+  ? fallback : scoreFromUnknown(value);
+const exactDecimal = (value: unknown): string => typeof value === 'string' ? new Decimal(value).toFixed()
+  : new Decimal(String(value ?? 0)).toFixed();
+const exactHistoricalInferno = (value: unknown): ExactScore => {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    const level = Math.round(Math.log(value) / Math.log(25));
+    if (Number.isSafeInteger(level) && level >= 0 && 25 ** level === value) return exactInferno(level);
+  }
+  return exact(value, 1n);
+};
+
+function normalizeBoardScores(board: Board): void {
+  board.score = exact(board.score);
+  board.target = exact(board.target, BigInt(CONFIG.baseTarget));
+  board.effectScore = exact(board.effectScore);
+  board.scoreByHand = Object.fromEntries(Object.entries(board.scoreByHand ?? {}).map(([hand, score]) => [hand, exact(score)]));
+  if (board.roundSummary) {
+    board.roundSummary.score = exact(board.roundSummary.score);
+    board.roundSummary.target = exact(board.roundSummary.target);
+  }
+  if (board.bust) {
+    board.bust.score = exact(board.bust.score);
+    board.bust.target = exact(board.bust.target);
+    board.bust.shortfall = exact(board.bust.shortfall);
+  }
+  if (board.boss?.type === 'warden') {
+    board.boss.nextUnlockTarget = board.boss.nextUnlockTarget === null ? null : exact(board.boss.nextUnlockTarget);
+    board.boss.unlockCosts = (board.boss.unlockCosts ?? []).map(value => exact(value));
+    board.boss.unlockTargets = (board.boss.unlockTargets ?? []).map(value => exact(value));
+  }
+  for (const contribution of Object.values(board.bonfireRoundContributions ?? {}))
+    if (contribution) contribution.observations = contribution.observations.map(item => ({ ...item, weight: exact(item.weight) }));
+}
+
+function normalizeHistoricalScores(state: GameState): void {
+  state.historyV2 ??= [];
+  state.stats.rounds ??= [];
+  state.stats.scoreBySource ??= { hand: 0n, jumpingBean: 0n, hitchhiker: 0n, boss: 0n };
+  state.stats.handScores ??= [];
+  state.stats.standaloneScores ??= [];
+  state.stats.jumpingBeanFreePlays ??= [];
+  state.stats.busts ??= [];
+  state.stats.bossEncounters ??= [];
+  state.stats.wardenEvents ??= [];
+  for (const round of state.stats.rounds) {
+    round.target = exact(round.target);
+    round.firstCrossedScore = round.firstCrossedScore === null ? null : exact(round.firstCrossedScore);
+    round.finalScore = exact(round.finalScore);
+    round.clearMargin = round.clearMargin === null ? null : exact(round.clearMargin);
+    round.scoreByHand = Object.fromEntries(Object.entries(round.scoreByHand ?? {}).map(([hand, score]) => [hand, exact(score)]));
+    round.effectScore = exact(round.effectScore);
+  }
+  state.stats.scoreBySource = Object.fromEntries(Object.entries(state.stats.scoreBySource)
+    .map(([source, score]) => [source, exact(score)])) as typeof state.stats.scoreBySource;
+  for (const score of state.stats.handScores) {
+    score.infernoMultiplier = exactHistoricalInferno(score.infernoMultiplier);
+    score.rawScore = exactDecimal(score.rawScore);
+    score.score = exact(score.score);
+  }
+  for (const score of state.stats.standaloneScores) {
+    score.rawScore = exactDecimal(score.rawScore);
+    score.score = exact(score.score);
+  }
+  for (const play of state.stats.jumpingBeanFreePlays) play.score = exact(play.score);
+  for (const bust of state.stats.busts) {
+    bust.score = exact(bust.score); bust.target = exact(bust.target); bust.shortfall = exact(bust.shortfall);
+  }
+  for (const encounter of state.stats.bossEncounters)
+    if (encounter.wardenUnlockTargets) encounter.wardenUnlockTargets = encounter.wardenUnlockTargets.map(value => exact(value));
+  for (const event of state.stats.wardenEvents) if (event.threshold !== undefined) event.threshold = exact(event.threshold);
+  if (state.stats.loss) state.stats.loss.score = exact(state.stats.loss.score);
+
+  for (const event of state.historyV2) {
+    if (event.kind === 'round_attempt_started') {
+      event.target.chapterBase = exactDecimal(event.target.chapterBase);
+      event.target.neutralRawGoal = exactDecimal(event.target.neutralRawGoal);
+      event.target.postBossRawGoal = exactDecimal(event.target.postBossRawGoal);
+      event.target.coarseCandidate = exact(event.target.coarseCandidate);
+      event.target.fineFallback = event.target.fineFallback === undefined ? undefined : exact(event.target.fineFallback);
+      event.target.finalGoal = exact(event.target.finalGoal);
+    } else if (event.kind === 'hand_scored') {
+      event.score.infernoMultiplier = exactHistoricalInferno(event.score.infernoMultiplier);
+      event.score.raw = exactDecimal(event.score.raw);
+      event.score.awarded = exact(event.score.awarded);
+      event.score.rounding.delta = exactDecimal(event.score.rounding.delta);
+      event.roundScore.before = exact(event.roundScore.before);
+      event.roundScore.afterAward = exact(event.roundScore.afterAward);
+      event.roundScore.after = exact(event.roundScore.after);
+    } else if (event.kind === 'round_attempt_finished' || event.kind === 'run_finished') {
+      event.score = exact(event.score); event.target = exact(event.target);
+    } else if (event.kind === 'engulfment_attempted') {
+      event.infernoMultiplierBefore = exactInferno(event.infernoLevelBefore);
+      event.infernoMultiplierAfter = exactInferno(event.infernoLevelAfter);
+    } else if (event.kind === 'boss_state_changed' && (event.change === 'warden_target' || event.change === 'warden_unlock')
+      && event.amount !== undefined) event.amount = exact(event.amount);
+  }
+  const exactAmountEvents = new Set([
+    'HAND_SCORE_FINALIZED', 'STANDALONE_SCORE_CALCULATED', 'SCORE_ROUNDING_AUDIT',
+    'SCORE_ADDED', 'ROUND_BUST', 'WARDEN_UNLOCK_TARGET',
+  ]);
+  for (const event of state.history ?? []) {
+    if (event.rawScore !== undefined) event.rawScore = exactDecimal(event.rawScore);
+    if (event.amount !== undefined && exactAmountEvents.has(event.type)) event.amount = exact(event.amount);
+    if (event.handScore) {
+      event.handScore.infernoMultiplier = exactHistoricalInferno(event.handScore.infernoMultiplier);
+      event.handScore.rawScore = event.handScore.rawScore === null ? null : exactDecimal(event.handScore.rawScore);
+      event.handScore.finalScore = event.handScore.finalScore === null ? null : exact(event.handScore.finalScore);
+    }
+    if (event.roundSummary) {
+      event.roundSummary.score = exact(event.roundSummary.score);
+      event.roundSummary.target = exact(event.roundSummary.target);
+    }
+  }
+}
 
 const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`${seed}:round:${round}:attempt:${attempt}`);
 
@@ -111,6 +229,10 @@ function normalizeHandFamilyFlameRuntime(state: Pick<Board, 'dice' | 'bonfires' 
 
 export function normalizeGameState(state: GameState): GameState {
   const next = structuredClone(state);
+  if (typeof next.target === 'number' && !Number.isSafeInteger(next.target))
+    next.target = targetForRound(next.round, next.boss?.type ?? next.bossSchedule?.[next.round] ?? null);
+  normalizeBoardScores(next);
+  normalizeHistoricalScores(next);
   next.engulfmentLevel = Math.max(0, Math.floor(next.engulfmentLevel ?? 0));
   next.nextShopVisitId = Math.max(1, Math.floor(next.nextShopVisitId ?? 1));
   next.nextFlameInstanceId = Math.max(1, Math.floor(next.nextFlameInstanceId ?? 1));
@@ -121,8 +243,8 @@ export function normalizeGameState(state: GameState): GameState {
   next.nextPlaybackEventId = Math.max(0, Math.floor(next.nextPlaybackEventId
     ?? (next.history.length ? Math.max(...next.history.map(record => record.id)) + 1 : 0)));
   next.historyV2 ??= [];
-  for (const event of next.historyV2) if (event.kind === 'hand_scored') event.score.infernoMultiplier ??= 1;
-  for (const score of next.stats.handScores) score.infernoMultiplier ??= 1;
+  for (const event of next.historyV2) if (event.kind === 'hand_scored') event.score.infernoMultiplier ??= 1n;
+  for (const score of next.stats.handScores) score.infernoMultiplier ??= 1n;
   next.historyV2TimelineId = Math.max(0, Math.floor(next.historyV2TimelineId ?? 0));
   next.historyV2Coverage ??= next.historyV2.some(event => event.kind === 'run_started')
     ? { complete: true, firstRound: 1, firstActionId: 0, firstSeq: 0 }
@@ -185,6 +307,10 @@ export function normalizeGameState(state: GameState): GameState {
       board: boardSnapshot(legacy as GameState), rngState: legacy.rngState, nextOfferId: legacy.nextOfferId,
     };
     const checkpoint = next.roundCheckpoint.board;
+    if (typeof checkpoint.target === 'number' && !Number.isSafeInteger(checkpoint.target))
+      checkpoint.target = targetForRound(checkpoint.round,
+        checkpoint.boss?.type ?? checkpoint.bossSchedule?.[checkpoint.round] ?? null);
+    normalizeBoardScores(checkpoint);
     checkpoint.engulfmentLevel = Math.max(0, Math.floor(checkpoint.engulfmentLevel ?? 0));
     checkpoint.nextShopVisitId = Math.max(1, Math.floor(checkpoint.nextShopVisitId ?? 1));
     checkpoint.nextFlameInstanceId = Math.max(1, Math.floor(checkpoint.nextFlameInstanceId ?? next.nextFlameInstanceId));
@@ -291,7 +417,7 @@ export function normalizeGameState(state: GameState): GameState {
   next.stats.callerEvents ??= [];
   next.stats.wardenEvents ??= [];
   next.stats.hexerEvents ??= [];
-  next.stats.scoreBySource.boss ??= 0;
+  next.stats.scoreBySource.boss ??= 0n;
   next.stats.busts ??= [];
   next.stats.busts = next.stats.busts.map(bust => ({ ...bust,
     checkpointRestored: bust.checkpointRestored ?? true,
@@ -534,13 +660,14 @@ function rejectedActionHasLegacyMigration(state: GameState, normalized: GameStat
     if (allocatedVisit && Object.hasOwn(state, 'nextShopVisitId'))
       comparable.nextShopVisitId = state.nextShopVisitId;
   }
-  return JSON.stringify(comparable) !== JSON.stringify(state);
+  const exactJson = (value: unknown) => JSON.stringify(value, (_key, item) => typeof item === 'bigint' ? item.toString() : item);
+  return exactJson(comparable) !== exactJson(state);
 }
 
 export function newRun(seed: string, random?: RandomSource, options?: { debugTraceMode?: DebugTraceMode }): Resolution {
   const state: GameState = {
-    phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: CONFIG.baseTarget,
-    score: 0, gold: CONFIG.startingGold, lives: CONFIG.maxLives, engulfmentLevel: 0, nextShopVisitId: 1,
+    phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: BigInt(CONFIG.baseTarget),
+    score: 0n, gold: CONFIG.startingGold, lives: CONFIG.maxLives, engulfmentLevel: 0, nextShopVisitId: 1,
     nextFlameInstanceId: 1, roundAttemptNumber: 1,
     bossSchedule: {}, chapterPlans: {}, presentedChapters: [], chapterLifecycle: {}, boss: null, bossSilenced: false, currentNodeId: '',
     bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], wildfires: [], flameInstanceIds: {},
@@ -550,7 +677,7 @@ export function newRun(seed: string, random?: RandomSource, options?: { debugTra
     chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
     fetchTarget: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
-    scoreByHand: {}, effectScore: 0, lastRoundPayout: null, roundSummary: null, flameSelection: null, specialOffer: null,
+    scoreByHand: {}, effectScore: 0n, lastRoundPayout: null, roundSummary: null, flameSelection: null, specialOffer: null,
     manualRerollsRemaining: CONFIG.manualRerollsPerRound, specialOfferEffects: initialSpecialOfferEffects(), suppressedPostBossRewardRounds: [],
     nextOfferId: 0, nextPlaybackEventId: 0, stats: createStats(seed), actionJournal: [], history: [], historyV2: [], historyV2TimelineId: 0,
     historyV2Coverage: { complete: true, firstRound: 1, firstActionId: 0, firstSeq: 0 },

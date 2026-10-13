@@ -112,7 +112,7 @@ describe('Shop entry progression lock', () => {
   it('starts a fresh lock for normal and post-Boss Shops and preserves a locked Shop through save/load', () => {
     const ordinary = newRun('shop-lock-normal', constant()).state;
     ordinary.phase = 'roundSummary';
-    ordinary.roundSummary = { round: 1, encounterType: 'normal', bossType: null, score: 100, target: 100,
+    ordinary.roundSummary = { round: 1, encounterType: 'normal', bossType: null, score: 100n, target: 100n,
       goldBefore: 0, goldAfter: 8, totalGoldEarned: 8, sources: { baseRewardGold: 5, unusedRerollGold: 3,
         interestGold: 0, bossRewardGold: 0, goldenGold: 0, jackpotGold: 0, otherGold: 0 } };
     const opened = dispatch(ordinary, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;

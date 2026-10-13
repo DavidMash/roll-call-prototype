@@ -20,7 +20,7 @@ describe('tutorial contextual lessons', () => {
     session.game.round = 19;
     session.game.phase = 'roundSummary';
     session.game.roundSummary = {
-      round: 19, encounterType: 'normal', bossType: null, score: 500, target: 400,
+      round: 19, encounterType: 'normal', bossType: null, score: 500n, target: 400n,
       goldBefore: 10, goldAfter: 17, totalGoldEarned: 7,
       sources: { baseRewardGold: 5, unusedRerollGold: 0, interestGold: 2, bossRewardGold: 0, goldenGold: 0, jackpotGold: 0, otherGold: 0 },
     };
@@ -58,7 +58,7 @@ describe('tutorial contextual lessons', () => {
     const { session } = newTutorialSession();
     session.game.round = 19;
     session.game.phase = 'shop';
-    session.game.bust = { round: 19, attempt: 1, score: 10, target: 100, shortfall: 90,
+    session.game.bust = { round: 19, attempt: 1, score: 10n, target: 100n, shortfall: 90n,
       livesBefore: 3, livesAfter: 2 };
     session.scenario.completedBeatIds.push('curriculum-complete');
     session.scenario.seenLessonIds.push('bust');

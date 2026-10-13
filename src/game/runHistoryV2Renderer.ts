@@ -1,12 +1,12 @@
 import { ENHANCEMENTS } from './enhancements';
 import { FLAMES } from './flames';
 import { HANDS } from './hands';
-import { formatPlayerNumber } from './copy';
+import { formatExactScore, formatPlayerNumber } from './copy';
 import type { FlameOrigin, HandScoredEvent, RunHistoryV2Coverage, RunHistoryV2Event, XMultContribution } from './runHistoryV2';
 import { chapterNumberForRound, chapterRoundForRound } from './chapters';
 import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
 
-const number = (value: number) => formatPlayerNumber(value);
+const number = (value: number | bigint) => typeof value === 'bigint' ? formatExactScore(value) : formatPlayerNumber(value);
 const die = (id: number) => `D${id + 1}`;
 const label = (value: string) => value.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
   .replace(/\b\w/g, character => character.toUpperCase());

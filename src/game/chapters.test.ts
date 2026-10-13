@@ -74,7 +74,7 @@ describe('Chapter encounter planning', () => {
 
     initial.state.phase = 'shop';
     initial.state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
-    initial.state.bust = { round: 1, attempt: 1, score: 0, target: 100, shortfall: 100, livesBefore: 3, livesAfter: 2 };
+    initial.state.bust = { round: 1, attempt: 1, score: 0n, target: 100n, shortfall: 100n, livesBefore: 3, livesAfter: 2 };
     initial.state.roundAttemptNumber = 2;
     const retry = dispatch(initial.state, { type: 'RETRY_ROUND' }, constant());
     expect(retry.events.some(event => event.type === 'CHAPTER_STARTED')).toBe(false);

@@ -5,6 +5,7 @@ import {
 import { handOptions, HAND_IDS, isValidSelection, sameDice } from './hands';
 import { finalizeScore, handScore } from './scoring';
 import type { Board, Die, HandId } from './types';
+import { scoreCompare, type ExactScore } from './scoreMath';
 
 export interface Selection { dieIds: number[]; hand: HandId | null; intent?: 'hand' | 'manual' }
 export const emptySelection = (): Selection => ({ dieIds: [], hand: null });
@@ -26,7 +27,7 @@ export function requiredSelectionDieIds(board: Board): number[] {
   return [...new Set(required)].sort((a, b) => a - b);
 }
 
-function projectedCombinationScore(board: Board, hand: HandId, dieIds: number[], decisionMs = 0): number {
+function projectedCombinationScore(board: Board, hand: HandId, dieIds: number[], decisionMs = 0): ExactScore {
   const dice = activeEncounterDice(board);
   const base = handScore(dice, hand, dieIds, board.handLevels[hand]);
   const snapshot = captureHandStart(board, hand, dieIds, decisionMs);
@@ -53,8 +54,8 @@ export function legalHandCombinations(
     const aPreferred = preferred.size > 0 && [...preferred].every(id => a.includes(id));
     const bPreferred = preferred.size > 0 && [...preferred].every(id => b.includes(id));
     if (aPreferred !== bPreferred) return aPreferred ? -1 : 1;
-    const scoreDifference = projectedCombinationScore(board, hand, b, decisionMs)
-      - projectedCombinationScore(board, hand, a, decisionMs);
+    const scoreDifference = scoreCompare(projectedCombinationScore(board, hand, b, decisionMs),
+      projectedCombinationScore(board, hand, a, decisionMs));
     return scoreDifference || compareIds(a, b);
   });
 }

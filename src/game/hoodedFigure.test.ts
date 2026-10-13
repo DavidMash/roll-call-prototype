@@ -95,10 +95,10 @@ describe('challenge progress semantics', () => {
     const game = state();
     const rollCall = active(game, 'rollCall', 6);
     observeScoringEvent(rollCall, [1, 2, 3, 4, 5, 6].map(printed => ({ printed, enhancements: {} })), 'manual');
-    expect(completeChallengeRound(rollCall, 100, 100)).toBe(true);
+    expect(completeChallengeRound(rollCall, 100n, 100n)).toBe(true);
     const lowProfile = active(game, 'lowProfile', 1);
     observeScoringEvent(lowProfile, [{ printed: 6, enhancements: {} }], 'jumpingBean');
-    expect(completeChallengeRound(lowProfile, 100, 100)).toBe(false);
+    expect(completeChallengeRound(lowProfile, 100n, 100n)).toBe(false);
   });
 
   it('resets one-Round attempts but retains committed across-Chapter progress', () => {
@@ -109,7 +109,7 @@ describe('challenge progress semantics', () => {
     expect(single.attempt.value).toBe(0);
     const across = active(game, 'theLongWay', 4);
     observeManualHand(across, 'largeStraight');
-    completeChallengeRound(across, 100, 100);
+    completeChallengeRound(across, 100n, 100n);
     beginChallengeRound(across);
     expect(across.attempt.value).toBe(1);
   });
@@ -118,7 +118,7 @@ describe('challenge progress semantics', () => {
     const game = state();
     const challenge = active(game, 'noTakebacks', 1);
     observeManualReroll(challenge);
-    expect(completeChallengeRound(challenge, 100, 100)).toBe(false);
+    expect(completeChallengeRound(challenge, 100n, 100n)).toBe(false);
   });
 
   it('counts Enhancement face activations and stacks with the specified models', () => {
@@ -143,46 +143,46 @@ describe('challenge progress semantics', () => {
     const lower = active(game, 'lowerClass', 8);
     for (const hand of ['pair', 'twoPair', 'threeKind', 'fullHouse', 'fourKind', 'fiveKind', 'smallStraight', 'largeStraight'] as const)
       observeManualHand(lower, hand);
-    expect(completeChallengeRound(lower, 100, 100)).toBe(true);
+    expect(completeChallengeRound(lower, 100n, 100n)).toBe(true);
 
     const close = active(game, 'closeCall', 1);
-    expect(completeChallengeRound(close, 111, 100)).toBe(false);
+    expect(completeChallengeRound(close, 111n, 100n)).toBe(false);
     beginChallengeRound(close);
-    expect(completeChallengeRound(close, 110, 100)).toBe(true);
+    expect(completeChallengeRound(close, 110n, 100n)).toBe(true);
 
     const upperOnly = active(game, 'upperManagement', 3);
     observeScoringEvent(upperOnly, [{ printed: 2, enhancements: {} }], 'jumpingBean');
     observeManualHand(upperOnly, 'ones'); observeManualHand(upperOnly, 'twos'); observeManualHand(upperOnly, 'threes');
-    expect(completeChallengeRound(upperOnly, 100, 100)).toBe(true);
+    expect(completeChallengeRound(upperOnly, 100n, 100n)).toBe(true);
 
     const opposites = active(game, 'oppositesAttract', 2);
     observeScoringEvent(opposites, [{ printed: 1, enhancements: {} }, { printed: 6, enhancements: {} }], 'manual');
     observeScoringEvent(opposites, [{ printed: 1, enhancements: {} }, { printed: 6, enhancements: {} }], 'manual');
-    expect(completeChallengeRound(opposites, 100, 100)).toBe(true);
+    expect(completeChallengeRound(opposites, 100n, 100n)).toBe(true);
 
     const loaded = active(game, 'fullyLoaded', 1);
     observeScoringEvent(loaded, [{ printed: 2, enhancements: { bonus: 1, golden: 1 } },
       { printed: 3, enhancements: { vintage: 1 } }], 'manual');
-    expect(completeChallengeRound(loaded, 100, 100)).toBe(true);
+    expect(completeChallengeRound(loaded, 100n, 100n)).toBe(true);
   });
 
   it('counts Jackpot only once per successfully cleared Round and Magnetic by destinations pulled', () => {
     const game = state();
     const jackpot = active(game, 'jackpot', 2);
     observeClearingJackpot(jackpot, true); observeClearingJackpot(jackpot, true);
-    expect(completeChallengeRound(jackpot, 100, 100)).toBe(false);
+    expect(completeChallengeRound(jackpot, 100n, 100n)).toBe(false);
     beginChallengeRound(jackpot);
     observeClearingJackpot(jackpot, true);
-    expect(completeChallengeRound(jackpot, 100, 100)).toBe(true);
+    expect(completeChallengeRound(jackpot, 100n, 100n)).toBe(true);
     const magnetic = active(game, 'magneticPersonality', 4);
     observeMagneticPulls(magnetic, 3); observeMagneticPulls(magnetic, 1);
-    expect(completeChallengeRound(magnetic, 100, 100)).toBe(true);
+    expect(completeChallengeRound(magnetic, 100n, 100n)).toBe(true);
   });
 });
 
 describe('contribution ranking and Wildfire formulas', () => {
   it('calculates score-weighted Round factors and defaults no-history to neutral', () => {
-    expect(weightedRoundFactor([{ factor: 5, weight: 100 }, { factor: 1, weight: 300 }])).toBe(2);
+    expect(weightedRoundFactor([{ factor: 5, weight: 100n }, { factor: 1, weight: 300n }])).toBe(2);
     const game = state();
     game.bonfires = ['ultimate', 'minigun', 'hailMary', 'fullOfGrace', 'vineyard'];
     game.bonfireContributions = {
@@ -229,7 +229,7 @@ describe('contribution ranking and Wildfire formulas', () => {
 
   it('uses persisted Wildfire strength in authoritative scoring and Charge generation', () => {
     const xmult = state();
-    xmult.target = 999999;
+    xmult.target = 999999n;
     xmult.handLevels.ones = 10;
     xmult.dice.forEach(die => { die.value = 1; });
     xmult.wildfires = [{ flame: 'ultimate', sacrificedFlame: 'vineyard', sacrificedAverage: 7,
@@ -238,7 +238,7 @@ describe('contribution ranking and Wildfire formulas', () => {
     expect(scored.state.stats.handScores.at(-1)?.xMultFactors).toContainEqual(expect.objectContaining({ source: 'ultimate', value: 43 }));
 
     const charge = state();
-    charge.target = 999999; charge.dice[0].value = 1;
+    charge.target = 999999n; charge.dice[0].value = 1;
     charge.wildfires = [{ flame: 'momentum', sacrificedFlame: 'vineyard', sacrificedAverage: 5,
       transferMultiplier: 6, resolved: { kind: 'charge', gain: 3, maxCharge: 30 } }];
     const charged = dispatch(charge, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(0));
@@ -251,7 +251,7 @@ describe('contribution ranking and Wildfire formulas', () => {
     game.bonfires = ['ultimate'];
     game.handLevels.ones = 10;
     game.bonfireRoundContributions = { ultimate: { observations: [] } };
-    game.target = 1; game.stats.rounds.at(-1)!.target = 1;
+    game.target = 1n; game.stats.rounds.at(-1)!.target = 1n;
     game.dice[0].value = 1;
     const result = dispatch(game, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(0));
     expect(result.state.bonfireContributions.ultimate?.roundCount).toBe(1);
@@ -321,7 +321,7 @@ describe('encounter and checkpoint lifecycle', () => {
     game.hoodedFigure.active!.attempt.value = 4;
     game.hoodedFigure.active!.complete = true;
     game.dice.forEach((die, index) => { die.value = ([1, 2, 2, 4, 5] as Rank[])[index]; });
-    game.score = 0; game.manualRerollsRemaining = 0; game.consumed = HAND_IDS.filter(hand => hand !== 'ones');
+    game.score = 0n; game.manualRerollsRemaining = 0; game.consumed = HAND_IDS.filter(hand => hand !== 'ones');
     const busted = dispatch(game, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(0));
     expect(busted.state.phase).toBe('shop');
     expect(busted.state.hoodedFigure.active?.complete).toBe(false);

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { BOSSES, isMiniBossType } from '../game/bosses';
 import { HANDS } from '../game/hands';
 import type { Board } from '../game/types';
-import { formatPlayerNumber } from '../game/copy';
+import { formatExactScore, formatPlayerNumber } from '../game/copy';
 import { chapterLabel } from '../game/chapters';
 import { InfoCircleIcon } from './InfoPopover';
 
@@ -39,7 +39,7 @@ export function BossPanel({ board }: { board: Board }) {
     if (board.bossSilenced) return 'This encounter rule is currently silenced.';
     switch (boss.type) {
       case 'caller': return `Current call: ${HANDS[boss.calledHand].name}. ${formatPlayerNumber(boss.playsRemaining)} play${boss.playsRemaining === 1 ? '' : 's'} remaining.`;
-      case 'warden': return `${formatPlayerNumber(boss.activeDieIds.length)} of 5 dice unlocked${boss.nextUnlockTarget === null ? '.' : `. Next unlock at ${formatPlayerNumber(boss.nextUnlockTarget)} score.`}`;
+      case 'warden': return `${formatPlayerNumber(boss.activeDieIds.length)} of 5 dice unlocked${boss.nextUnlockTarget === null ? '.' : `. Next unlock at ${formatExactScore(boss.nextUnlockTarget)} score.`}`;
       case 'fly': return boss.caught ? 'The Fly has been caught.' : `Current catch hand: ${boss.flyHand ? HANDS[boss.flyHand].name : 'none'}.`;
       case 'magician': return `${formatPlayerNumber(boss.completedHands.length)} of ${formatPlayerNumber(boss.calledHands.length)} calls completed.`;
       case 'marathon': return `${Object.keys(boss.cooldowns).length} hand${Object.keys(boss.cooldowns).length === 1 ? '' : 's'} currently cooling down.`;

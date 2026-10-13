@@ -5,11 +5,12 @@ import type { Board } from '../game/types';
 import { FLAMES } from '../game/flames';
 import type { PlaybackSpeed } from '../useGame';
 import type { DiceDisplay } from '../uiSettings';
-import { formatPlayerNumber } from '../game/copy';
+import { formatExactScore, formatPlayerNumber } from '../game/copy';
 import { activeSpecialOfferStatusItems } from '../game/specialOffers';
 import { chapterPosition } from '../game/chapters';
 import type { FlameDetailsTarget } from './FlameDetailsModal';
 import { infernoMultiplier, infernoRoman } from '../game/engulfment';
+import { exactRatioNumber } from '../game/scoreMath';
 
 function HudStat({ testId, icon, label, value }: { testId: string; icon: string; label: string; value: number }) {
   const formatted = formatPlayerNumber(value);
@@ -72,8 +73,8 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
       </ActionIcon>
     </Group>
     {board.phase === 'round' && <Progress data-testid="round-goal-progress"
-      value={Math.min(100, board.score / board.target * 100)} size={4} radius={0}
-      aria-label="Round Goal progress" aria-valuetext={`${formatPlayerNumber(board.score)} of ${formatPlayerNumber(board.target)} points toward the Goal`} />}
+      value={board.target > 0n ? Math.min(100, exactRatioNumber(board.score, board.target) * 100) : 0} size={4} radius={0}
+      aria-label="Round Goal progress" aria-valuetext={`${formatExactScore(board.score)} of ${formatExactScore(board.target)} points toward the Goal`} />}
     {board.bonfires.length > 0 && <Group gap={4} px="xs" py={3} className="bonfire-strip" data-tutorial="bonfires" aria-label="Active Bonfires">
       <Text size="xs" fw={700} c="orange">BONFIRES</Text>{board.bonfires.map(id => <Badge component="button" type="button" key={id}
         size="xs" color="red" variant="light" className="flame-detail-trigger" aria-label={`View ${FLAMES[id].name} Flame details`}
@@ -86,7 +87,7 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
     </Group>}
     {(board.engulfmentLevel > 0 || (board.phase === 'shop' && ownsEngulfmentKey)) && <Group gap="xs" px="xs" py={3}
       className="inferno-strip" aria-label="Inferno status">
-      {board.engulfmentLevel > 0 && <Text size="xs" fw={900} c="red">INFERNO {infernoRoman(board.engulfmentLevel)} · ×{formatPlayerNumber(infernoMultiplier(board.engulfmentLevel))}</Text>}
+      {board.engulfmentLevel > 0 && <Text size="xs" fw={900} c="red">INFERNO {infernoRoman(board.engulfmentLevel)} · ×{formatExactScore(infernoMultiplier(board.engulfmentLevel))}</Text>}
       {board.phase === 'shop' && ownsEngulfmentKey && <Button size="compact-xs" color="red" variant="light"
         data-testid="attempt-inferno" disabled={board.shop?.engulfmentAttemptUsed === true} onClick={openEngulfment}>
         {board.shop?.engulfmentAttemptUsed ? 'INFERNO ATTEMPT USED' : 'ATTEMPT INFERNO'}

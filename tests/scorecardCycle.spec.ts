@@ -9,9 +9,9 @@ import { enterRun } from './uiHelpers';
 
 function cycleState(seed: string): GameState {
   const state = newRun(seed, { next: () => 0 }).state;
-  state.target = 1_000_000;
+  state.target = 1_000_000n;
   state.stats.rounds[0].target = state.target;
-  state.score = 73;
+  state.score = 73n;
   state.gold = 19;
   state.manualRerollsRemaining = 2;
   state.targetPracticeHand = 'ones';
@@ -24,7 +24,7 @@ function cycleState(seed: string): GameState {
 
 async function install(page: Page, state: GameState, speed: 'normal' | 'fast' | 'instant') {
   await page.goto(`/?seed=${state.seed}&speed=${speed}`);
-  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved })),
+  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
   await page.reload();
   await enterRun(page);

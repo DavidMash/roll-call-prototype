@@ -1,5 +1,6 @@
 import { activeFlameId } from './flames';
 import type { Board, GameState, RunStats } from './types';
+import { toExactJsonValue } from './scoreMath';
 
 export function createStats(seed: string): RunStats {
   return {
@@ -23,7 +24,7 @@ export function createStats(seed: string): RunStats {
       hitchhiker: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
       personalTrainer: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
       doubleTime: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
-    }, scoreBySource: { hand: 0, jumpingBean: 0, hitchhiker: 0, boss: 0 },
+    }, scoreBySource: { hand: 0n, jumpingBean: 0n, hitchhiker: 0n, boss: 0n },
     handScores: [], jumpingBeanFreePlays: [], standaloneScores: [], handBonusPips: 0, hitchhikerPipsContributed: 0,
     loss: null, resolutionError: null,
   };
@@ -39,10 +40,10 @@ export function boardSnapshot(state: GameState): Board {
     handLevels, handPlayCounts, targetPracticeHand, fetchTarget, lastRoundPayout, roundSummary, shop, flameSelection, specialOffer });
 }
 export function exportRun(state: GameState) {
-  return { schemaVersion: 20, scoringModel: 'engulfment-contribution-v2', ...state.stats,
+  return toExactJsonValue({ schemaVersion: 21, scoringModel: 'exact-score-domain-v1', ...state.stats,
     actions: structuredClone(state.actionJournal),
     scoreByHand: structuredClone(state.scoreByHand),
     bonfires: [...state.bonfires], wildfires: structuredClone(state.wildfires), finalHandLevels: structuredClone(state.handLevels),
     finalFlames: state.dice.filter(die => die.owner === 'player').map(die => ({ dieId: die.id, flame: activeFlameId(die.flame), investedGold: die.flame?.investedGold ?? 0 })),
-    rngState: state.rngState, board: boardSnapshot(state) };
+    rngState: state.rngState, board: boardSnapshot(state) });
 }

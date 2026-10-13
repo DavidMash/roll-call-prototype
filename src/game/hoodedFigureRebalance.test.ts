@@ -28,7 +28,7 @@ function addFaces(state: GameState, enhancement: Enhancement, count: number, sta
 
 function scoringState(id: ChallengeId, enhancement: Enhancement, stacks = 1): GameState {
   const state = fresh(`double-time-${id}`);
-  state.target = 1_000_000;
+  state.target = 1_000_000n;
   state.stats.rounds[0].target = state.target;
   state.dice.forEach((die, index) => { die.value = ([4, 4, 4, 2, 6] as Rank[])[index]; });
   activeFace(state.dice[0]).enhancements[enhancement] = stacks;
@@ -171,17 +171,17 @@ describe('rebalanced completion conditions', () => {
   it('completes No Takebacks only after two distinct cleared Rounds and resets Round invalidity', () => {
     const state = fresh('two-no-takebacks');
     const active = challenge(state, 'noTakebacks', 2);
-    expect(completeChallengeRound(active, 100, 100)).toBe(false);
+    expect(completeChallengeRound(active, 100n, 100n)).toBe(false);
     expect(active.committed.value).toBe(1);
     beginChallengeRound(active);
-    expect(completeChallengeRound(active, 100, 100)).toBe(true);
+    expect(completeChallengeRound(active, 100n, 100n)).toBe(true);
 
     const invalid = challenge(state, 'noTakebacks', 2);
     observeManualReroll(invalid);
-    expect(completeChallengeRound(invalid, 100, 100)).toBe(false);
+    expect(completeChallengeRound(invalid, 100n, 100n)).toBe(false);
     beginChallengeRound(invalid);
     expect(invalid.attempt.invalid).toBe(false);
-    expect(completeChallengeRound(invalid, 100, 100)).toBe(false);
+    expect(completeChallengeRound(invalid, 100n, 100n)).toBe(false);
     expect(invalid.committed.value).toBe(1);
   });
 
@@ -195,7 +195,7 @@ describe('rebalanced completion conditions', () => {
 
     state = fresh('automatic-no-takebacks');
     challenge(state, 'noTakebacks', 2);
-    state.target = 1_000_000; state.stats.rounds[0].target = state.target;
+    state.target = 1_000_000n; state.stats.rounds[0].target = state.target;
     state.dice.forEach((die, index) => { die.value = ([1, 2, 3, 4, 6] as Rank[])[index]; });
     state = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.2)).state;
     expect(state.hoodedFigure.active?.attempt.invalid).toBe(false);
@@ -205,15 +205,15 @@ describe('rebalanced completion conditions', () => {
     const state = fresh('upper-management-three');
     const active = challenge(state, 'upperManagement', 3);
     observeManualHand(active, 'ones'); observeManualHand(active, 'ones'); observeManualHand(active, 'twos');
-    expect(completeChallengeRound(active, 100, 100)).toBe(false);
+    expect(completeChallengeRound(active, 100n, 100n)).toBe(false);
     beginChallengeRound(active);
     observeManualHand(active, 'ones'); observeManualHand(active, 'twos'); observeManualHand(active, 'threes');
-    expect(completeChallengeRound(active, 100, 100)).toBe(true);
+    expect(completeChallengeRound(active, 100n, 100n)).toBe(true);
 
     const spoiled = challenge(state, 'upperManagement', 3);
     observeManualHand(spoiled, 'ones'); observeManualHand(spoiled, 'twos'); observeManualHand(spoiled, 'threes');
     observeManualHand(spoiled, 'pair');
-    expect(completeChallengeRound(spoiled, 100, 100)).toBe(false);
+    expect(completeChallengeRound(spoiled, 100n, 100n)).toBe(false);
   });
 });
 
@@ -249,7 +249,7 @@ describe('real Enhancement activation observation', () => {
       .state.hoodedFigure.active?.attempt.value).toBe(0);
 
     const opposites = fresh('double-time-unrelated');
-    opposites.target = 1_000_000; opposites.stats.rounds[0].target = opposites.target;
+    opposites.target = 1_000_000n; opposites.stats.rounds[0].target = opposites.target;
     opposites.dice.forEach((die, index) => { die.value = ([1, 2, 3, 4, 6] as Rank[])[index]; });
     activeFace(opposites.dice[0]).enhancements.doubleTime = 1;
     activeFace(opposites.dice[4]).enhancements.hitchhiker = 3;
@@ -261,7 +261,7 @@ describe('real Enhancement activation observation', () => {
 
   it('uses genuine one-die Jumping Bean and successful Hitchhiker runtime participants', () => {
     const bean = fresh('real-jumping-bean');
-    bean.target = 1_000_000; bean.stats.rounds[0].target = bean.target;
+    bean.target = 1_000_000n; bean.stats.rounds[0].target = bean.target;
     bean.dice[0].faces[0].enhancements.jumpingBean = 1;
     bean.dice[0].faces[0].enhancements.sticky = 3;
     challenge(bean, 'beanSalad', 10);
@@ -273,7 +273,7 @@ describe('real Enhancement activation observation', () => {
     expect(bean.stats.jumpingBeanFreePlays[0].dieId).toBe(0);
 
     const hitchhiker = fresh('real-hitchhiker');
-    hitchhiker.target = 1_000_000; hitchhiker.stats.rounds[0].target = hitchhiker.target;
+    hitchhiker.target = 1_000_000n; hitchhiker.stats.rounds[0].target = hitchhiker.target;
     hitchhiker.dice.forEach((die, index) => { die.value = ([1, 2, 3, 4, 6] as Rank[])[index]; });
     activeFace(hitchhiker.dice[4]).enhancements.hitchhiker = 3;
     challenge(hitchhiker, 'oppositesAttract', 6);
@@ -286,7 +286,7 @@ describe('real Enhancement activation observation', () => {
 describe('rollback observability', () => {
   it('records committed challenge progress on a successful non-completing clear', () => {
     const state = fresh('committed-progress-history');
-    state.target = 1; state.stats.rounds[0].target = 1;
+    state.target = 1n; state.stats.rounds[0].target = 1n;
     state.dice.forEach((die, index) => { die.value = ([1, 2, 3, 4, 6] as Rank[])[index]; });
     challenge(state, 'noTakebacks', 2);
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.99));
@@ -301,7 +301,7 @@ describe('rollback observability', () => {
     const active = challenge(state, 'noTakebacks', 2);
     state.roundCheckpoint = captureRollbackState(state);
     active.attempt.invalid = true;
-    state.target = 1_000_000; state.stats.rounds[0].target = state.target;
+    state.target = 1_000_000n; state.stats.rounds[0].target = state.target;
     state.manualRerollsRemaining = 0;
     state.consumed = HAND_IDS.filter(hand => hand !== 'ones');
     state.dice.forEach((die, index) => { die.value = ([1, 2, 2, 4, 5] as Rank[])[index]; });

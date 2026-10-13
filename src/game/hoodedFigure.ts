@@ -8,6 +8,7 @@ import type {
   ActiveHoodedChallenge, Board, BonfireContribution, ChallengeId, ChallengeProgress,
   Die, Enhancement, Face, Flame, GameState, HandId, MiniBossType, RandomSource, Rank, Wildfire, WildfireResolved,
 } from './types';
+import type { ExactScore } from './scoreMath';
 
 export const HOODED_FIGURE_CONFIG = {
   minimumChapter: 5,
@@ -192,11 +193,11 @@ export function displayedChallengeProgress(challenge: ActiveHoodedChallenge): nu
   return challenge.complete ? challenge.target : Math.min(challenge.target, challenge.attempt.value);
 }
 
-export function completeChallengeRound(challenge: ActiveHoodedChallenge | null, finalScore: number, goal: number): boolean {
+export function completeChallengeRound(challenge: ActiveHoodedChallenge | null, finalScore: ExactScore, goal: ExactScore): boolean {
   if (!challenge || challenge.complete) return false;
   const definition = CHALLENGES[challenge.id];
   const attempt = challenge.attempt;
-  if (challenge.id === 'closeCall' && finalScore >= goal && finalScore * 10 <= goal * 11) attempt.value = 1;
+  if (challenge.id === 'closeCall' && finalScore >= goal && finalScore * 10n <= goal * 11n) attempt.value = 1;
   if (challenge.id === 'noTakebacks' && !attempt.invalid) attempt.value = challenge.committed.value + 1;
   if (challenge.id === 'lowProfile' && !attempt.invalid) attempt.value = 1;
   if (challenge.id === 'jackpot' && attempt.jackpotPaid) attempt.value = challenge.committed.value + 1;
@@ -217,7 +218,7 @@ export function challengeRoundsRemaining(board: Pick<Board, 'round'>): number {
 export function contributionAverage(entry: BonfireContribution | undefined): number {
   return entry && entry.roundCount > 0 ? entry.factorSum / entry.roundCount : 1;
 }
-export function weightedRoundFactor(observations: readonly { factor: number; weight: number }[]): number {
+export function weightedRoundFactor(observations: readonly { factor: number; weight: ExactScore }[]): number {
   return scoreWeightedMultiplier(observations);
 }
 export function rankedRecipients(state: Pick<GameState, 'bonfires' | 'bonfireContributions'>): Flame[] {

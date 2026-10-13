@@ -15,7 +15,7 @@ const sequence = (...values: number[]): RandomSource => {
 
 function scoringState(values: Rank[] = [4, 4, 4, 2, 6]): GameState {
   const state = newRun('enhancement-balance-update', constant(.99)).state;
-  state.target = 1_000_000;
+  state.target = 1_000_000n;
   state.stats.rounds[0].target = state.target;
   state.dice.forEach((die, index) => { die.value = values[index]; });
   return state;
@@ -33,7 +33,7 @@ describe('Teamwork', () => {
     const state = scoringState();
     enhance(state, 0, 'teamwork');
     const result = playThreeKind(state);
-    expect(result.state.stats.handScores[0]).toMatchObject({ pips: 30, score: 75 });
+    expect(result.state.stats.handScores[0]).toMatchObject({ pips: 30, score: 75n });
     expect(result.events.find(event => event.enhancement === 'teamwork' && event.type === 'HAND_PIPS_CHANGED'))
       .toMatchObject({ amount: 8, handScore: { currentPips: 30 } });
   });
@@ -43,7 +43,7 @@ describe('Teamwork', () => {
     enhance(state, 0, 'teamwork');
     enhance(state, 1, 'teamwork');
     const result = playThreeKind(state);
-    expect(result.state.stats.handScores[0]).toMatchObject({ pips: 38, score: 95 });
+    expect(result.state.stats.handScores[0]).toMatchObject({ pips: 38, score: 95n });
     expect(result.events.filter(event => event.enhancement === 'teamwork' && event.type === 'HAND_PIPS_CHANGED')
       .map(event => event.amount)).toEqual([8, 8]);
     expect(result.state.stats.triggers.teamwork).toBe(2);
@@ -73,7 +73,7 @@ describe('Teamwork', () => {
     const free = scoringState([1, 2, 3, 4, 5]);
     enhance(free, 0, 'teamwork');
     new Resolver(free, constant(.99)).play('ones', [0], 'jumpingBean');
-    expect(free.stats.handScores[0]).toMatchObject({ pips: 8, score: 8, playSource: 'jumpingBean' });
+    expect(free.stats.handScores[0]).toMatchObject({ pips: 8, score: 8n, playSource: 'jumpingBean' });
     expect(free.stats.triggers.teamwork).toBe(1);
   });
 
@@ -82,7 +82,7 @@ describe('Teamwork', () => {
     enhance(state, 0, 'teamwork');
     enhance(state, 0, 'doubleTime');
     const result = playThreeKind(state, constant(0));
-    expect(result.state.stats.handScores[0]).toMatchObject({ pips: 42, score: 105 });
+    expect(result.state.stats.handScores[0]).toMatchObject({ pips: 42, score: 105n });
     expect(result.events.filter(event => event.enhancement === 'teamwork' && event.type === 'HAND_PIPS_CHANGED')
       .map(event => event.amount)).toEqual([8, 8]);
     expect(result.state.stats.probabilityProcs.doubleTime.checks).toBe(1);
@@ -147,13 +147,13 @@ describe('Double Time', () => {
     const failure = scoringState();
     enhance(failure, 0, 'doubleTime');
     const failed = playThreeKind(failure, constant(.99));
-    expect(failed.state.stats.handScores[0]).toMatchObject({ pips: 22, score: 55 });
+    expect(failed.state.stats.handScores[0]).toMatchObject({ pips: 22, score: 55n });
     expect(failed.state.stats.probabilityProcs.doubleTime).toMatchObject({ checks: 1, successes: 0, failures: 1 });
 
     const success = scoringState();
     enhance(success, 0, 'doubleTime', 3);
     const succeeded = playThreeKind(success, constant(0));
-    expect(succeeded.state.stats.handScores[0]).toMatchObject({ pips: 26, score: 65 });
+    expect(succeeded.state.stats.handScores[0]).toMatchObject({ pips: 26, score: 65n });
     expect(succeeded.state.stats.probabilityProcs.doubleTime).toMatchObject({ checks: 1, successes: 1, failures: 0 });
     expect(succeeded.events.filter(event => event.type === 'HAND_PIPS_CHANGED' && event.dieIds?.[0] === 0 && !event.enhancement)).toHaveLength(2);
 
@@ -182,8 +182,8 @@ describe('Double Time', () => {
     expect(result.state.historyV2.filter(event => event.kind === 'hand_scored' && event.hand === 'threeKind')).toHaveLength(1);
 
     const winning = scoringState();
-    winning.target = 1;
-    winning.stats.rounds[0].target = 1;
+    winning.target = 1n;
+    winning.stats.rounds[0].target = 1n;
     enhance(winning, 0, 'doubleTime');
     enhance(winning, 0, 'jackpot');
     const cleared = playThreeKind(winning, constant(0));
@@ -279,7 +279,7 @@ describe('Tank', () => {
     const combinedResult = playThreeKind(combined, constant(0));
     expect(combinedResult.state.stats.handScores[0]).toMatchObject({ multiplier: 33.75, xMult: 1 });
     expect(combinedResult.state.stats.handScores[0].score)
-      .toBe(Math.round(combinedResult.state.stats.handScores[0].pips * 33.75));
+      .toBe(BigInt(Math.round(combinedResult.state.stats.handScores[0].pips * 33.75)));
   });
 
   it('includes deterministic Teamwork, Lone Wolf, and Tank effects in score previews', () => {
@@ -288,6 +288,6 @@ describe('Tank', () => {
     enhance(state, 0, 'loneWolf');
     enhance(state, 0, 'tank');
     const preview = handScore(state.dice, 'threeKind', [0, 1, 2], 6);
-    expect(preview).toMatchObject({ pips: 53, multiplier: 15, rawScore: 795, score: 795 });
+    expect(preview).toMatchObject({ pips: 53, multiplier: 15, rawScore: '795', score: 795n });
   });
 });

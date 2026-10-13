@@ -7,9 +7,11 @@ import type {
   Enhancement, Flame, GoldSource, GoldSpendSource, HandId, Rarity, SpecialOfferType, GameState,
 } from './types';
 import type { RunHistoryV2Coverage, RunHistoryV2Event } from './runHistoryV2';
+import { exactRatioNumber, scoreMax, type ExactScore } from './scoreMath';
 
 type Counts<Key extends string> = Partial<Record<Key, number>>;
-type LargestHand = null | { round: number; attempt: number; hand: HandId; score: number; timelineId: number; abandoned: boolean };
+type ScoreCounts<Key extends string> = Partial<Record<Key, ExactScore>>;
+type LargestHand = null | { round: number; attempt: number; hand: HandId; score: ExactScore; timelineId: number; abandoned: boolean };
 
 export interface OfferImpressions {
   total: number;
@@ -35,10 +37,10 @@ export interface ExperiencedRunMetrics {
   livesRestored: number;
   largestHand: LargestHand;
   largestCanonicalTimelineHand: LargestHand;
-  highestRoundScore: number;
-  highestClearedRoundScore: number;
+  highestRoundScore: ExactScore;
+  highestClearedRoundScore: ExactScore;
   handUsage: Counts<HandId>;
-  scoreByHand: Counts<HandId>;
+  scoreByHand: ScoreCounts<HandId>;
   highestHandLevels: Counts<HandId>;
   goldEarnedBySource: Counts<GoldSource>;
   goldSpentByCategory: Counts<GoldSpendSource>;
@@ -70,10 +72,10 @@ export interface CanonicalRunMetrics {
   finalGold: number;
   finalLives: number;
   infernoLevel: number;
-  infernoMultiplier: number;
+  infernoMultiplier: ExactScore;
   finalHandLevels: Record<HandId, number>;
-  scoreByHand: Counts<HandId>;
-  highestClearedRoundScore: number;
+  scoreByHand: ScoreCounts<HandId>;
+  highestClearedRoundScore: ExactScore;
   goldEarnedBySource: Record<GoldSource, number>;
   goldSpentByCategory: Record<GoldSpendSource, number>;
   retainedEnhancements: { dieId: number; side: number; rank: number; enhancements: Partial<Record<Enhancement, number>> }[];
@@ -98,6 +100,9 @@ export interface RunHistoryV2Summary {
 const add = <Key extends string>(record: Counts<Key>, key: Key, amount: number) => {
   record[key] = (record[key] ?? 0) + amount;
 };
+const addScore = <Key extends string>(record: ScoreCounts<Key>, key: Key, amount: ExactScore) => {
+  record[key] = (record[key] ?? 0n) + amount;
+};
 const emptyOffers = (): OfferImpressions => ({ total: 0, byRarity: {}, bySource: {} });
 const percentile = (values: number[], position: number): number | null => {
   if (!values.length) return null;
@@ -108,7 +113,7 @@ const percentile = (values: number[], position: number): number | null => {
 function initialExperienced(): ExperiencedRunMetrics {
   return {
     roundsCleared: 0, attempts: 0, busts: 0, bustsByChapter: {}, livesLost: 0, livesRestored: 0,
-    largestHand: null, largestCanonicalTimelineHand: null, highestRoundScore: 0, highestClearedRoundScore: 0,
+    largestHand: null, largestCanonicalTimelineHand: null, highestRoundScore: 0n, highestClearedRoundScore: 0n,
     handUsage: {}, scoreByHand: {}, highestHandLevels: {}, goldEarnedBySource: {}, goldSpentByCategory: {},
     offerImpressions: { enhancement: emptyOffers(), flame: emptyOffers(), special_offer: emptyOffers() },
     enhancementPurchasesByRarity: {}, trainingPurchases: 0, trainingGoldSpent: 0,
@@ -127,7 +132,7 @@ function canonicalFromState(state: GameState | undefined, events: readonly RunHi
   const finalRound = state?.round ?? finished?.round ?? events.at(-1)?.round ?? 1;
   const cleared = canonical.filter((event): event is Extract<RunHistoryV2Event, { kind: 'round_attempt_finished' }> =>
     event.kind === 'round_attempt_finished' && event.outcome === 'cleared');
-  const scoreByHand: Counts<HandId> = {};
+  const scoreByHand: ScoreCounts<HandId> = {};
   const earned: Record<GoldSource, number> = { golden: 0, jackpot: 0, enhancementSale: 0, roundBase: 0,
     unusedRerolls: 0, interest: 0, bossReward: 0, specialOffer: 0, cashBonus: 0 };
   const spent: Record<GoldSpendSource, number> = { enhancement: 0, shopDiceReroll: 0, enhancementReroll: 0,
@@ -137,7 +142,7 @@ function canonicalFromState(state: GameState | undefined, events: readonly RunHi
   let individualTraining = 0;
   let teamTraining = 0;
   for (const event of canonical) {
-    if (event.kind === 'hand_scored') add(scoreByHand, event.hand, event.score.awarded);
+    if (event.kind === 'hand_scored') addScore(scoreByHand, event.hand, event.score.awarded);
     if (event.kind !== 'shop_transaction') continue;
     const transaction = event.transaction;
     if (transaction.type === 'gold_earned') earned[transaction.source] += transaction.amount;
@@ -160,7 +165,7 @@ function canonicalFromState(state: GameState | undefined, events: readonly RunHi
     infernoLevel: state?.engulfmentLevel ?? 0, infernoMultiplier: infernoMultiplier(state?.engulfmentLevel ?? 0),
     finalHandLevels: structuredClone(state?.handLevels ?? (finished?.kind === 'run_finished' ? finished.finalHandLevels : {})) as Record<HandId, number>,
     scoreByHand,
-    highestClearedRoundScore: Math.max(0, ...cleared.map(round => round.score)),
+    highestClearedRoundScore: cleared.reduce((highest, round) => round.score > highest ? round.score : highest, 0n),
     goldEarnedBySource: earned,
     goldSpentByCategory: spent,
     retainedEnhancements: state?.dice.filter(die => die.owner === 'player').flatMap(die => die.faces.flatMap((face, index) =>
@@ -187,21 +192,21 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
   const experienced = initialExperienced();
   const classification = classifyRunHistoryV2Timelines(events, coverage);
   const start = events.find(event => event.kind === 'run_started');
-  const handMaxByAttempt = new Map<string, number>();
+  const handMaxByAttempt = new Map<string, ExactScore>();
   for (const event of events) {
     const abandoned = !classification.isCanonical(event);
     const attemptKey = `${event.timelineId}:${event.round}:${event.attempt}`;
     switch (event.kind) {
       case 'round_attempt_started': experienced.attempts++; break;
       case 'hand_scored': {
-        add(experienced.handUsage, event.hand, 1); add(experienced.scoreByHand, event.hand, event.score.awarded);
+        add(experienced.handUsage, event.hand, 1); addScore(experienced.scoreByHand, event.hand, event.score.awarded);
         experienced.highestHandLevels[event.hand] = Math.max(experienced.highestHandLevels[event.hand] ?? 0, event.level);
         const candidate: NonNullable<LargestHand> = { round: event.round, attempt: event.attempt, hand: event.hand,
           score: event.score.awarded, timelineId: event.timelineId, abandoned };
         if (!experienced.largestHand || candidate.score > experienced.largestHand.score) experienced.largestHand = candidate;
         if (!abandoned && (!experienced.largestCanonicalTimelineHand || candidate.score > experienced.largestCanonicalTimelineHand.score))
           experienced.largestCanonicalTimelineHand = candidate;
-        handMaxByAttempt.set(attemptKey, Math.max(handMaxByAttempt.get(attemptKey) ?? 0, event.score.awarded));
+        handMaxByAttempt.set(attemptKey, scoreMax(handMaxByAttempt.get(attemptKey) ?? 0n, event.score.awarded));
         for (const check of event.checks) {
           const totals = experienced.probabilityChecks[check.source] ??= { checks: 0, successes: 0 };
           totals.checks++; if (check.succeeded) totals.successes++;
@@ -221,13 +226,13 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
         break;
       }
       case 'round_attempt_finished': {
-        experienced.highestRoundScore = Math.max(experienced.highestRoundScore, event.score);
+        experienced.highestRoundScore = scoreMax(experienced.highestRoundScore, event.score);
         if (event.outcome === 'cleared') {
           experienced.roundsCleared++;
-          experienced.highestClearedRoundScore = Math.max(experienced.highestClearedRoundScore, event.score);
-          const largest = handMaxByAttempt.get(attemptKey) ?? 0;
-          if (event.score > 0) {
-            const share = largest / event.score;
+          experienced.highestClearedRoundScore = scoreMax(experienced.highestClearedRoundScore, event.score);
+          const largest = handMaxByAttempt.get(attemptKey) ?? 0n;
+          if (event.score > 0n) {
+            const share = exactRatioNumber(largest, event.score);
             const shares = (experienced.largestHandShare as LargestHandShareSummary & { values?: number[] }).values ??= [];
             shares.push(share);
           }

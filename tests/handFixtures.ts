@@ -23,7 +23,11 @@ export function pairSelectionRun(hand: 'pair' | 'twoPair') {
 function choices(game: GameState) {
   return handOptions(activeEncounterDice(game), unavailableEncounterHands(game), requiredEncounterDieIds(game)).filter(option => !option.consumed)
     .flatMap(option => option.combinations.map(dieIds => ({ type: 'PLAY' as const, hand: option.id, dieIds })))
-    .sort((a, b) => handScore(game.dice, b.hand, b.dieIds).score - handScore(game.dice, a.hand, a.dieIds).score);
+    .sort((a, b) => {
+      const aScore = handScore(game.dice, a.hand, a.dieIds).score;
+      const bScore = handScore(game.dice, b.hand, b.dieIds).score;
+      return bScore > aScore ? 1 : bScore < aScore ? -1 : 0;
+    });
 }
 
 export function winningSlippyRun() {

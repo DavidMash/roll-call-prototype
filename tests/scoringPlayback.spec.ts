@@ -63,7 +63,7 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
     if (event.handScore) {
       await expect(page.getByTestId('hand-pips')).toHaveText(String(event.handScore.currentPips));
       await expect(page.getByTestId('hand-multiplier')).toHaveText(String(event.handScore.currentMultiplier));
-      if (event.type !== 'SCORE_ADDED') expect(event.board.score).toBe(game.score);
+      if (event.type !== 'SCORE_ADDED') expect(event.board.score).toBe(BigInt(game.score));
       if (event.type === 'HAND_STARTED') {
         expect(event.handScore.basePips).toBe(started.handScore!.basePips);
         await expect(page.getByTestId('hand-pips')).toHaveText(String(started.handScore!.basePips));

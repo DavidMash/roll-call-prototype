@@ -13,7 +13,7 @@ const constant = (value = 0): RandomSource => ({ next: () => value });
 function game(values: Rank[] = [1, 2, 3, 4, 5]): GameState {
   const state = newRun('balance-update', constant(.8)).state;
   values.forEach((value, index) => { state.dice[index].value = value; });
-  state.target = 1_000_000;
+  state.target = 1_000_000n;
   state.stats.rounds[0].target = state.target;
   return state;
 }
@@ -25,11 +25,11 @@ function consumeExcept(state: GameState, hand: HandId): void {
 describe('focused balance update', () => {
   it('clears The Warden immediately with locked dice and a pending reinforcement', () => {
     const state = game([1, 2, 3, 4, 5]);
-    state.target = 1;
-    state.stats.rounds[0].target = 1;
+    state.target = 1n;
+    state.stats.rounds[0].target = 1n;
     state.boss = {
-      type: 'warden', activeDieIds: [0], startingDieId: 0, nextUnlockTarget: 1,
-      unlockCosts: [1, 1, 1, 1], unlockTargets: [1], pendingReinforcements: 0,
+      type: 'warden', activeDieIds: [0], startingDieId: 0, nextUnlockTarget: 1n,
+      unlockCosts: [1n, 1n, 1n, 1n], unlockTargets: [1n], pendingReinforcements: 0,
     };
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.8));
     expect(result.state.phase).toBe('roundSummary');
@@ -107,7 +107,7 @@ describe('focused balance update', () => {
     state.specialOfferEffects.carePackageRerolls = 0;
 
     state.bonfires = ['fullOfGrace'];
-    state.score = state.target - 1;
+    state.score = state.target - 1n;
     const snapshot = captureHandStart(state, 'ones', [0]);
     expect(handXMultContributions(snapshot, 'ones', 1, [0])).toEqual([]);
     expect(playActionLabel(snapshot.lastPlayDanger, true)).toBe('PLAY');

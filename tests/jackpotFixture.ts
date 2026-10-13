@@ -10,7 +10,7 @@ function plays(game: GameState) {
       action: { type: 'PLAY' as const, hand: option.id, dieIds },
       score: handScore(game.dice, option.id, dieIds).score,
     })))
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score > a.score ? 1 : b.score < a.score ? -1 : 0);
 }
 
 // Discover a fully legal seeded route: buy Jackpot, later score its showing face

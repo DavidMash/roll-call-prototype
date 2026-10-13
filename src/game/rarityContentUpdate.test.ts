@@ -17,7 +17,7 @@ const sequence = (...values: number[]): RandomSource => {
 };
 function scoringState(values: Rank[] = [4, 4, 4, 2, 6]): GameState {
   const state = newRun('rarity-content-update', constant(.9)).state;
-  state.target = 100000;
+  state.target = 100000n;
   state.stats.rounds[0].target = state.target;
   state.dice.forEach((die, index) => { die.value = values[index]; });
   return state;

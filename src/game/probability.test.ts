@@ -11,7 +11,7 @@ function sequence(...values: number[]): RandomSource {
 function board(values: Rank[] = [1, 2, 3, 4, 5]): GameState {
   const game = newRun('sticky-probability', constant(0.99)).state;
   game.dice.forEach((die, index) => { die.value = values[index]; });
-  game.target = 100000;
+  game.target = 100000n;
   game.stats.rounds[0].target = game.target;
   return game;
 }

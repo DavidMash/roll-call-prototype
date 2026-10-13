@@ -56,7 +56,7 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
   const flameOffer = board.phase === 'flameSelection' && !board.flameSelection?.acquired
     ? board.flameSelection?.offers.find(item => item.id === selectedFlameOffer) : undefined;
   const lockedUntilByDieId = wardenBoss?.nextUnlockTarget === null || wardenBoss?.nextUnlockTarget === undefined
-    ? undefined : Object.fromEntries(wardenLockedIds.map(id => [id, wardenBoss.nextUnlockTarget!])) as Record<number, number>;
+    ? undefined : Object.fromEntries(wardenLockedIds.map(id => [id, wardenBoss.nextUnlockTarget!]));
   const chargeAction: Action = { type: 'TOGGLE_CHARGE', hand: effectiveSelection.hand, dieIds: effectiveSelection.dieIds };
   const canToggleCharge = validateAction(board, chargeAction) === null;
   const chargeDieIds = board.phase === 'round' ? activeEncounterDice(board)

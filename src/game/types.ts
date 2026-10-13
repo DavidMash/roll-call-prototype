@@ -1,5 +1,6 @@
 import type { RollReason, RunHistoryV2Coverage, RunHistoryV2Event } from './runHistoryV2';
 import type { DebugTraceState } from './debugTrace';
+import type { ExactDecimal, ExactScore } from './scoreMath';
 
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type Rarity = 'common' | 'uncommon' | 'rare';
@@ -58,9 +59,9 @@ export interface WardenBossState {
   type: 'warden';
   activeDieIds: number[];
   startingDieId: number | null;
-  nextUnlockTarget: number | null;
-  unlockCosts: number[];
-  unlockTargets: number[];
+  nextUnlockTarget: ExactScore | null;
+  unlockCosts: ExactScore[];
+  unlockTargets: ExactScore[];
   pendingReinforcements: number;
 }
 export interface HexerBossState { type: 'hexer'; cursedDieId: number }
@@ -99,7 +100,7 @@ export interface XMultFactor {
 export interface HandScoreAccumulator {
   hand: HandId;
   handLevel: number;
-  infernoMultiplier: number;
+  infernoMultiplier: ExactScore;
   dieIds: number[];
   basePips: number;
   baseMultiplier: number;
@@ -110,14 +111,14 @@ export interface HandScoreAccumulator {
   bossFactor: number;
   bonusPips: number;
   hitchhikerPips: number;
-  rawScore: number | null;
-  finalScore: number | null;
+  rawScore: ExactDecimal | null;
+  finalScore: ExactScore | null;
 }
 export interface HandScoreRecord {
   round: number;
   hand: HandId;
   handLevel: number;
-  infernoMultiplier: number;
+  infernoMultiplier: ExactScore;
   dieIds: number[];
   basePips: number;
   baseMultiplier: number;
@@ -126,8 +127,8 @@ export interface HandScoreRecord {
   xMult: number;
   bossFactor: number;
   xMultFactors: XMultFactor[];
-  rawScore: number;
-  score: number;
+  rawScore: ExactDecimal;
+  score: ExactScore;
   bonusPips: number;
   hitchhikerPips: number;
   playSource: HandPlaySource;
@@ -155,8 +156,8 @@ export interface StandaloneScoreRecord {
   multiplier: number;
   xMult: number;
   xMultFactors: XMultFactor[];
-  rawScore: number;
-  score: number;
+  rawScore: ExactDecimal;
+  score: ExactScore;
 }
 export interface Die { id: number; value: Rank; faces: Face[]; flame: ActiveFlame | null; owner: 'player' | 'boss' }
 export interface Offer { id: number; enhancement: Enhancement; purchased: boolean }
@@ -230,7 +231,7 @@ export interface BonfireContribution {
   factorSum: number;
 }
 export interface BonfireRoundContribution {
-  observations: { factor: number; weight: number }[];
+  observations: { factor: number; weight: ExactScore }[];
 }
 export type WildfireResolved =
   | { kind: 'xMult'; baseMax: number; max: number }
@@ -293,8 +294,8 @@ export interface RoundSummary {
   round: number;
   encounterType: 'normal' | 'boss';
   bossType: BossType | null;
-  score: number;
-  target: number;
+  score: ExactScore;
+  target: ExactScore;
   goldBefore: number;
   goldAfter: number;
   totalGoldEarned: number;
@@ -303,8 +304,8 @@ export interface RoundSummary {
 export interface Board {
   phase: Phase;
   round: number;
-  target: number;
-  score: number;
+  target: ExactScore;
+  score: ExactScore;
   gold: number;
   lives: number;
   /** Permanent in-run prestige level. Its multiplier is always derived as 25^level. */
@@ -349,8 +350,8 @@ export interface Board {
   consumed: HandId[];
   /** Hands normally consumed since the current Round's last scorecard refresh. */
   scorecardCycleConsumed: HandId[];
-  scoreByHand: Partial<Record<HandId, number>>;
-  effectScore: number;
+  scoreByHand: Partial<Record<HandId, ExactScore>>;
+  effectScore: ExactScore;
   handLevels: HandLevels;
   handPlayCounts: Record<HandId, number>;
   targetPracticeHand: HandId | null;
@@ -364,10 +365,10 @@ export interface Board {
 export interface RoundStats {
   round: number;
   attempt: number;
-  target: number;
-  firstCrossedScore: number | null;
-  finalScore: number;
-  clearMargin: number | null;
+  target: ExactScore;
+  firstCrossedScore: ExactScore | null;
+  finalScore: ExactScore;
+  clearMargin: ExactScore | null;
   cleared: boolean;
   lastHand: HandId | null;
   lastAction: 'PLAY' | 'MANUAL_REROLL' | 'JUMPING_BEAN' | null;
@@ -376,8 +377,8 @@ export interface RoundStats {
   manualRerollsRemainingAtClear: number | null;
   manualRerollActions: number;
   deadBoardRescues: number;
-  scoreByHand: Partial<Record<HandId, number>>;
-  effectScore: number;
+  scoreByHand: Partial<Record<HandId, ExactScore>>;
+  effectScore: ExactScore;
   goldBefore: number;
   goldBySourceBefore: Record<GoldSource, number>;
   payout: RoundPayout | null;
@@ -400,7 +401,7 @@ export interface EnhancementSale {
   vintageSellValue?: number;
 }
 export interface BustRecord {
-  round: number; attempt: number; score: number; target: number; shortfall: number;
+  round: number; attempt: number; score: ExactScore; target: ExactScore; shortfall: ExactScore;
   livesBefore: number; livesAfter: number; checkpointRestored: boolean; returnedToShop: boolean;
   retryStarted: boolean; runEndedNoLives: boolean;
 }
@@ -423,7 +424,7 @@ export interface BossEncounterRecord {
   callerManualPlays?: number;
   callerSatisfied?: boolean;
   callerSatisfyingSource?: HandPlaySource | null;
-  wardenUnlockTargets?: number[];
+  wardenUnlockTargets?: ExactScore[];
   wardenStartingDieId?: number | null;
   wardenActiveDiceAtEnd?: number;
 }
@@ -433,7 +434,7 @@ export interface CallerEventRecord {
 }
 export interface WardenEventRecord {
   round: number; attempt: number; kind: 'starting_die' | 'target' | 'reinforcement';
-  threshold?: number; dieId?: number; activeDice: number;
+  threshold?: ExactScore; dieId?: number; activeDice: number;
 }
 export interface HexerEventRecord {
   round: number; attempt: number;
@@ -475,7 +476,7 @@ export interface JumpingBeanPlayRecord {
   handLevel: number;
   basePips: number;
   baseMultiplier: number;
-  score: number;
+  score: ExactScore;
   xMultFactors: XMultFactor[];
   previousPlayCount: number;
   handPlayCountAfter: number;
@@ -533,14 +534,14 @@ export interface RunStats {
   goldSpentBySource: Record<GoldSpendSource, number>;
   triggers: Partial<Record<Enhancement, number>>;
   probabilityProcs: Record<'sticky' | 'hitchhiker' | 'personalTrainer' | 'doubleTime', ProbabilityProcStats>;
-  scoreBySource: Record<ScoreSource, number>;
+  scoreBySource: Record<ScoreSource, ExactScore>;
   handScores: HandScoreRecord[];
   jumpingBeanFreePlays: JumpingBeanPlayRecord[];
   standaloneScores: StandaloneScoreRecord[];
   handBonusPips: number;
   hitchhikerPipsContributed: number;
   loss: null | { round: number; afterHand: HandId | null; afterAction: 'PLAY' | 'MANUAL_REROLL' | 'JUMPING_BEAN' | null;
-    score: number; values: Rank[]; consumed: HandId[]; manualRerollsRemaining: number };
+    score: ExactScore; values: Rank[]; consumed: HandId[]; manualRerollsRemaining: number };
   resolutionError: string | null;
 }
 export type EventType =
@@ -592,8 +593,8 @@ export interface EventRecord {
   multiplier?: number;
   xMult?: number;
   xMultFactor?: XMultFactor;
-  rawScore?: number;
-  amount?: number;
+  rawScore?: ExactDecimal;
+  amount?: number | ExactScore;
   source?: ScoreSource;
   goldSource?: GoldSource;
   goldSpendSource?: GoldSpendSource;
@@ -647,9 +648,9 @@ export interface GameEvent extends EventRecord { board: Board }
 export interface BustSummary {
   round: number;
   attempt: number;
-  score: number;
-  target: number;
-  shortfall: number;
+  score: ExactScore;
+  target: ExactScore;
+  shortfall: ExactScore;
   livesBefore: number;
   livesAfter: number;
 }

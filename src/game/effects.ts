@@ -17,7 +17,7 @@ import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTempora
   isBigBossRound, isCursedDie, isMiniBossType, requiredEncounterDieIds, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
 import { getRoundGoalBreakdown } from './goals';
 import { encounterNode, flameNodeAfter, postBossShopNodeAfter, shopNodeBefore, specialOfferNodeAfter, timeTravelDestinationRound } from './progression';
-import { formatPercentage, formatPlayerNumber } from './copy';
+import { formatExactDecimal, formatExactScore, formatPercentage, formatPlayerNumber } from './copy';
 import { chapterEncounterRounds, chapterNumberForRound, ensureChapterPlan } from './chapters';
 import { chapterRoundForRound } from './chapters';
 import { RUN_HISTORY_V2_RULESET, RUN_HISTORY_V2_SCHEMA_VERSION } from './runHistoryV2';
@@ -43,6 +43,7 @@ import type {
   FlameOrigin, HandSideEffect, HistoryDieState, MultContribution, PipsContribution,
   ProbabilityCheck, RollEffect, RollReason, RunHistoryV2Event, RunHistoryV2EventInput, XMultContribution,
 } from './runHistoryV2';
+import { Decimal, roundPositiveScoreHalf, type ExactScore } from './scoreMath';
 
 type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number };
 type RollContext = 'gameplay' | 'settle' | 'wardenSetup' | 'shop' | 'flameSelection';
@@ -84,7 +85,7 @@ type V2HandDraft = {
   playSource: HandPlaySource;
   selectedDice: number[];
   consumed: boolean;
-  roundScoreBefore: number;
+  roundScoreBefore: ExactScore;
   pipsContributions: PipsContribution[];
   multContributions: MultContribution[];
   xMultContributions: XMultContribution[];
@@ -207,7 +208,7 @@ export class Resolver {
         const operation = after === 1 && this.v2LastCharge > 1 ? 'consume_reset' : 'gain';
         this.v2Hand.sideEffects.push({ type: 'charge', operation, before: this.v2LastCharge, after, source: record.flame });
         this.v2LastCharge = after;
-      } else if (record.type === 'GOLD_ADDED' && record.goldSource && record.amount !== undefined)
+      } else if (record.type === 'GOLD_ADDED' && record.goldSource && typeof record.amount === 'number')
         this.v2Hand.sideEffects.push({ type: 'gold', source: record.goldSource, amount: record.amount, dieId: record.dieIds?.[0] });
       else if (record.type === 'FLAME_TRIGGERED' && record.flame && record.xMult === undefined)
         this.v2Hand.sideEffects.push({ type: 'flame_activation', flame: record.flame,
@@ -244,7 +245,7 @@ export class Resolver {
         break;
       case 'GOLD_ADDED':
         if (record.goldSource && ['roundBase', 'unusedRerolls', 'interest', 'bossReward'].includes(record.goldSource)) break;
-        if (record.goldSource && record.amount !== undefined) this.emitV2({ kind: 'shop_transaction',
+        if (record.goldSource && typeof record.amount === 'number') this.emitV2({ kind: 'shop_transaction',
           transaction: { type: 'gold_earned', source: record.goldSource, amount: record.amount } });
         break;
       case 'ROUND_SUMMARY_SHOWN':
@@ -257,7 +258,7 @@ export class Resolver {
             + record.roundSummary.sources.interestGold + record.roundSummary.sources.bossRewardGold } });
         break;
       case 'GOLD_SPENT':
-        if (record.goldSpendSource && record.amount !== undefined) this.emitV2({ kind: 'shop_transaction',
+        if (record.goldSpendSource && typeof record.amount === 'number') this.emitV2({ kind: 'shop_transaction',
           transaction: { type: 'gold_spent', source: record.goldSpendSource, amount: record.amount } });
         break;
       case 'OFFER_PURCHASED': {
@@ -268,7 +269,7 @@ export class Resolver {
         break;
       }
       case 'ENHANCEMENT_SOLD':
-        if (record.enhancement && record.dieIds?.[0] !== undefined && record.face && record.amount !== undefined)
+        if (record.enhancement && record.dieIds?.[0] !== undefined && record.face && typeof record.amount === 'number')
           this.emitV2({ kind: 'shop_transaction', transaction: { type: 'enhancement_sold', enhancement: record.enhancement,
             dieId: record.dieIds[0], face: record.face, proceeds: record.amount } });
         break;
@@ -394,7 +395,10 @@ export class Resolver {
     }
   }
 
-  format(value: number): string { return formatPlayerNumber(value); }
+  format(value: number | ExactScore | string): string {
+    return typeof value === 'bigint' ? formatExactScore(value)
+      : typeof value === 'string' ? formatExactDecimal(value) : formatPlayerNumber(value);
+  }
   emit(event: Omit<EventRecord, 'id' | 'round'>): void {
     if (this.events.length >= CONFIG.resolutionEventCap) throw new Error(`Resolution exceeded ${CONFIG.resolutionEventCap} events. Check for an infinite ability chain.`);
     const record = { ...event, ...(this.handAccumulator ? { handScore: structuredClone(this.handAccumulator) } : {}),
@@ -481,12 +485,11 @@ export class Resolver {
     }
     this.emit({ type: 'GOLD_SPENT', amount, message, goldSpendSource });
   }
-  addScore(amount: number, source: Exclude<ScoreSource, 'hitchhiker'>, message: string, dieIds: number[], hand?: HandId): void {
-    if (!Number.isInteger(amount) || !Number.isInteger(this.state.score)) throw new Error(`Score awards and round score must be integers (award ${amount}, current ${this.state.score}).`);
+  addScore(amount: ExactScore, source: Exclude<ScoreSource, 'hitchhiker'>, message: string, dieIds: number[], hand?: HandId): void {
     this.state.score += amount;
     this.state.stats.scoreBySource[source] += amount;
     if (hand) {
-      this.state.scoreByHand[hand] = (this.state.scoreByHand[hand] ?? 0) + amount;
+      this.state.scoreByHand[hand] = (this.state.scoreByHand[hand] ?? 0n) + amount;
       this.state.stats.rounds.at(-1)!.scoreByHand[hand] = this.state.scoreByHand[hand];
     } else {
       this.state.effectScore += amount;
@@ -936,7 +939,7 @@ export class Resolver {
       return;
     }
     const before = this.state.score;
-    const after = Math.round(before / 2);
+    const after = roundPositiveScoreHalf(before);
     const penalty = after - before;
     if (penalty) this.addScore(penalty, 'boss', `The Caller missed call: ${this.format(before)} → ${this.format(after)}`, [], undefined);
     else this.emit({ type: 'CALLER_CHANGED', boss: 'caller', amount: 0, message: 'The Caller missed call; round score remains 0' });
@@ -1128,7 +1131,7 @@ export class Resolver {
       boss.unlockCosts = wardenUnlockCosts(this.state.handLevels, this.state.consumed, this.state.target);
     }
     boss.nextUnlockTarget = boss.activeDieIds.length < CONFIG.diceCount
-      ? boss.unlockCosts.slice(0, boss.activeDieIds.length).reduce((sum, cost) => sum + cost, 0)
+      ? boss.unlockCosts.slice(0, boss.activeDieIds.length).reduce((sum, cost) => sum + cost, 0n)
       : null;
     if (boss.nextUnlockTarget !== null) boss.unlockTargets.push(boss.nextUnlockTarget);
     this.state.stats.wardenEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
@@ -1333,7 +1336,7 @@ export class Resolver {
       score: { infernoMultiplier: currentInfernoMultiplier, basePips: this.state.stats.handScores.at(-1)!.basePips,
         finalPips: pips, baseMult: this.state.stats.handScores.at(-1)!.baseMultiplier,
         finalMult: multiplier, finalXMult: xMult, bossFactor, raw: rawScore, awarded: score,
-        rounding: { mode: 'nearest_integer', delta: score - rawScore } },
+        rounding: { mode: 'nearest_integer', delta: new Decimal(score.toString()).minus(rawScore).toFixed() } },
       roundScore: { before: draft.roundScoreBefore, afterAward: roundScoreAfterAward, after: this.state.score },
       pipsContributions: draft.pipsContributions, multContributions: draft.multContributions,
       xMultContributions: draft.xMultContributions, checks: draft.checks, sideEffects: draft.sideEffects });
@@ -1440,7 +1443,7 @@ export class Resolver {
     const current = this.state.stats.rounds.at(-1)!;
     const failure = {
       round: this.state.round, attempt: this.state.roundAttemptNumber, score: this.state.score, target: this.state.target,
-      shortfall: Math.max(0, this.state.target - this.state.score), livesBefore: this.state.lives,
+      shortfall: this.state.target > this.state.score ? this.state.target - this.state.score : 0n, livesBefore: this.state.lives,
       livesAfter: Math.max(0, this.state.lives - 1),
     };
     const failureValues = this.state.dice.map(die => activeFace(die).rank);
@@ -1742,7 +1745,7 @@ export class Resolver {
     const chargeBeforeRoundReset = this.state.chargeXMult;
     const chargeWasArmed = this.state.chargeArmed;
     if (this.state.chargeXMult !== 1 || this.state.chargeArmed) this.state.stats.chargeResets++;
-    this.state.phase = 'round'; this.state.score = 0; this.state.scoreByHand = {}; this.state.effectScore = 0;
+    this.state.phase = 'round'; this.state.score = 0n; this.state.scoreByHand = {}; this.state.effectScore = 0n;
     if (!retry) this.state.specialOfferEffects.bottledFairyTriggeredThisRound = false;
     this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound;
     this.state.consumed = []; this.state.scorecardCycleConsumed = []; this.state.targetPracticeHand = null; this.state.lastRoundPayout = null; this.state.roundSummary = null;
@@ -1804,9 +1807,9 @@ export class Resolver {
     this.state.shop = null;
     this.mapTransition(encounterNode(this.state.round, bossType), direction);
     this.state.stats.rounds.push({ round: this.state.round, attempt: this.state.roundAttemptNumber, target: this.state.target, firstCrossedScore: null,
-      finalScore: 0, clearMargin: null, cleared: false, lastHand: null, lastAction: null,
+      finalScore: 0n, clearMargin: null, cleared: false, lastHand: null, lastAction: null,
       manualRerollsGranted: this.state.manualRerollsRemaining, manualRerollChargesSpent: 0,
-      manualRerollsRemainingAtClear: null, manualRerollActions: 0, deadBoardRescues: 0, scoreByHand: {}, effectScore: 0,
+      manualRerollsRemainingAtClear: null, manualRerollActions: 0, deadBoardRescues: 0, scoreByHand: {}, effectScore: 0n,
       goldBefore: this.state.gold, goldBySourceBefore: structuredClone(this.state.stats.goldBySource), payout: null });
     const v2RoundStarted = this.emitV2({ kind: 'round_attempt_started', chapter: targetChapter,
       chapterRound: targetLocalRound, retry, target: historyTargetBreakdown,

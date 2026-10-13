@@ -4,7 +4,7 @@ import type { GameState } from '../src/game/types';
 
 export async function installRunState(page: Page, state: GameState, speed: 'normal' | 'fast' | 'instant' = 'instant') {
   await page.goto('/');
-  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved })),
+  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
   await page.goto(`/?seed=${encodeURIComponent(state.seed)}&speed=${speed}`);
 }

@@ -3,6 +3,7 @@ import { activeFlameId, currentFlameInstanceId } from './flames';
 import { LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { canonicalRunHistoryV2Events } from './runHistoryV2Timeline';
 import { finalizeScore, infernoMultiplier, INFERNO_BASE, scoreWeightedMultiplier } from './scoring';
+import { exactRatioNumber, type ExactScore } from './scoreMath';
 import type { EngulfmentEvidenceRoundTelemetry, EngulfmentOfferingTelemetry, HandScoredEvent } from './runHistoryV2';
 import type { Board, EngulfmentAssetRef, GameState, HandId, HandLevels } from './types';
 
@@ -67,15 +68,15 @@ export function selectedOfferingFactor(event: HandScoredEvent, selectedInstanceI
   return Number(Math.max(1, factor).toFixed(12));
 }
 
-export function offeringHandObservation(event: HandScoredEvent, selectedInstanceIds: ReadonlySet<number>): { factor: number; weight: number } {
+export function offeringHandObservation(event: HandScoredEvent, selectedInstanceIds: ReadonlySet<number>): { factor: number; weight: ExactScore } {
   const resolvedFactor = selectedOfferingFactor(event, selectedInstanceIds);
   const counterfactualScore = resolvedFactor > 1
     ? finalizeScore(event.score.finalPips, event.score.finalMult,
-      (event.score.finalXMult / resolvedFactor) * event.score.bossFactor, event.score.infernoMultiplier ?? 1).finalScore
+      (event.score.finalXMult / resolvedFactor) * event.score.bossFactor, event.score.infernoMultiplier ?? 1n).finalScore
     : event.score.awarded;
-  const factor = counterfactualScore > 0
-    ? Math.max(1, event.score.awarded / counterfactualScore) : 1;
-  return { factor, weight: Math.max(0, counterfactualScore) };
+  const factor = counterfactualScore > 0n
+    ? Math.max(1, exactRatioNumber(event.score.awarded, counterfactualScore)) : 1;
+  return { factor, weight: counterfactualScore > 0n ? counterfactualScore : 0n };
 }
 
 export interface EngulfmentOfferingEvaluation {

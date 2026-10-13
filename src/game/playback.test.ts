@@ -6,7 +6,7 @@ import { playbackBoard, rollBatchPresentation, SCORECARD_REFRESH_HOLD_MS, scoreS
 describe('score summary playback checkpoint', () => {
   it('lands Instant and Skip on the final authoritative hand boxes before the batch ends', () => {
     const state = newRun('score-summary-jump').state;
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.dice[0].value = 1;
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] });
     const jump = scoreSummaryJump(result.events, 0)!;
@@ -22,7 +22,7 @@ describe('score summary playback checkpoint', () => {
 
   it('keeps the scorecard refresh after the final score in Instant playback', () => {
     const state = newRun('scorecard-refresh-playback').state;
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.consumed = HAND_IDS.filter(hand => hand !== 'ones');
     state.scorecardCycleConsumed = [...state.consumed];
     state.dice[0].value = 1;
@@ -66,17 +66,17 @@ describe('simultaneous roll batch presentation', () => {
 
     expect(batch.dieIds).toEqual([0, 1]);
     expect(result.events.filter(event => event.type === 'BUMP_ROLL').map(event => event.dieIds)).toEqual([[0], [1]]);
-    expect(presented.score).toBe(result.events[bumpIndex].board.score);
+    expect(presented.score).toBe(BigInt(result.events[bumpIndex].board.score));
     expect(presented.dice.slice(0, 2).map(die => die.value))
       .toEqual(result.events[batch.settleIndex].board.dice.slice(0, 2).map(die => die.value));
   });
 
   it('uses the shared batch presentation for initial, post-hand, winning-settle, and Shop rolls', () => {
     const postHandState = newRun('simultaneous-post-hand').state;
-    postHandState.target = 1_000_000;
+    postHandState.target = 1_000_000n;
     postHandState.dice.forEach((die, index) => { die.value = index < 4 ? 1 : 2; });
     const winningState = structuredClone(postHandState);
-    winningState.target = 1;
+    winningState.target = 1n;
     const shopState = newRun('simultaneous-shop').state;
     shopState.phase = 'shop';
     shopState.gold = 100;

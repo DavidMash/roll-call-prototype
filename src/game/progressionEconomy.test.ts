@@ -14,7 +14,7 @@ const sequence = (...values: number[]): RandomSource => { let index = 0; return 
 function compactCheckpoint(state: GameState): RollbackState { return captureRollbackState(state); }
 function forceBust(state: GameState, rng: RandomSource = constant()): ReturnType<typeof dispatch> {
   state.dice.forEach((die, index) => { die.value = ([1, 2, 2, 4, 5] as Rank[])[index]; });
-  state.score = 0;
+  state.score = 0n;
   state.manualRerollsRemaining = 0;
   state.consumed = HAND_IDS.filter(hand => hand !== 'ones');
   return dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, rng);
@@ -27,8 +27,8 @@ function shop(seed = 'economy-shop'): GameState {
   return state;
 }
 function clearIntoShop(state: GameState): GameState {
-  state.target = 1;
-  state.stats.rounds.at(-1)!.target = 1;
+  state.target = 1n;
+  state.stats.rounds.at(-1)!.target = 1n;
   state.dice[0].value = 1;
   const summary = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant()).state;
   return dispatch(summary, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
@@ -43,7 +43,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     const attemptOneDice = state.dice.map(die => die.value);
 
     state = forceBust(state).state;
-    expect(state).toMatchObject({ phase: 'shop', lives: 2, round, target, score: 0, roundAttemptNumber: 2 });
+    expect(state).toMatchObject({ phase: 'shop', lives: 2, round, target, score: 0n, roundAttemptNumber: 2 });
     expect(state.bust).toMatchObject({ attempt: 1, livesBefore: 3, livesAfter: 2 });
     state = dispatch(state, { type: 'RETRY_ROUND' }).state;
     expect(state).toMatchObject({ phase: 'round', lives: 2, round, target, roundAttemptNumber: 2, manualRerollsRemaining: 3 });
@@ -98,7 +98,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
 
     const attempt = dispatch(state, { type: 'NEXT_ROUND' }, constant(0.2)).state;
     const result = forceBust(attempt);
-    expect(result.state).toMatchObject({ phase: 'shop', round: 2, roundAttemptNumber: 2, lives: 2, gold: 37, score: 0 });
+    expect(result.state).toMatchObject({ phase: 'shop', round: 2, roundAttemptNumber: 2, lives: 2, gold: 37, score: 0n });
     expect(result.state.shop).toEqual(expectedShop);
     expect(result.state.dice).toEqual(expectedDice);
     expect(result.state.handLevels.ones).toBe(2);
@@ -173,7 +173,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     const result = forceBust(state, constant(0));
     expect(result.events.some(event => event.type === 'VINTAGE_GROWN')).toBe(true);
     expect(result.events.some(event => event.type === 'WORKOUT_INCREMENTED')).toBe(true);
-    expect(result.state).toMatchObject({ phase: 'shop', gold: 10, score: 0, manualRerollsRemaining: 3 });
+    expect(result.state).toMatchObject({ phase: 'shop', gold: 10, score: 0n, manualRerollsRemaining: 3 });
     expect(result.state.dice[0].faces[0]).toMatchObject({ workoutPips: 0, vintageSellValue: 0 });
     expect(result.state.handLevels.ones).toBe(1);
     expect(result.state.handPlayCounts.ones).toBe(0);
@@ -193,15 +193,15 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
   it('does not pay clear rewards or Boss Reward on Bust, then can pay normally after a retry clear', () => {
     let state = newRun('bust-payout', constant(0.2)).state;
     state.round = 3;
-    state.target = 50;
+    state.target = 50n;
     state.stats.rounds.at(-1)!.round = 3;
-    state.stats.rounds.at(-1)!.target = 50;
+    state.stats.rounds.at(-1)!.target = 50n;
     state.roundCheckpoint = compactCheckpoint(state);
     const busted = forceBust(state).state;
     expect(busted.stats.goldBySource).toMatchObject({ roundBase: 0, unusedRerolls: 0, interest: 0, bossReward: 0 });
     state = dispatch(busted, { type: 'RETRY_ROUND' }, constant(0.2)).state;
-    state.target = 1;
-    state.stats.rounds.at(-1)!.target = 1;
+    state.target = 1n;
+    state.stats.rounds.at(-1)!.target = 1n;
     const cursedId = state.boss?.type === 'hexer' ? state.boss.cursedDieId : null;
     const choice = cursedId !== null
       ? state.dice.find(die => die.id === cursedId)!
@@ -333,7 +333,7 @@ describe('enhancement selling and Vintage', () => {
 
   it('grows Vintage once for selected, successful Hitchhiker, and Jumping Bean scoring participation', () => {
     const normal = newRun('vintage-normal', constant(0.2)).state;
-    normal.target = 100000;
+    normal.target = 100000n;
     normal.dice[0].value = 1;
     normal.dice[0].faces[0].enhancements.vintage = 1;
     normal.dice[0].faces[0].vintageSellValue = 0;
@@ -346,7 +346,7 @@ describe('enhancement selling and Vintage', () => {
     expect(normalResult.state.stats.vintageGrowth.at(-1)).toMatchObject({ from: 3, to: 6 });
 
     const hitch = newRun('vintage-hitch', constant(0.2)).state;
-    hitch.target = 100000;
+    hitch.target = 100000n;
     hitch.dice[0].value = 1;
     hitch.dice[4].value = 6;
     hitch.dice[4].faces[5].enhancements.hitchhiker = 1;
@@ -357,7 +357,7 @@ describe('enhancement selling and Vintage', () => {
     expect(hitchResult.state.stats.vintageGrowth.at(-1)?.participation).toBe('hitchhiker');
 
     const bean = newRun('vintage-bean', constant(0.2)).state;
-    bean.target = 100000;
+    bean.target = 100000n;
     bean.dice[0].faces[5].enhancements.jumpingBean = 1;
     bean.dice[0].faces[5].enhancements.vintage = 1;
     bean.dice[0].faces[5].vintageSellValue = 0;
@@ -368,7 +368,7 @@ describe('enhancement selling and Vintage', () => {
 
   it('does not grow Vintage for display, failed Hitchhiker, Shop rolls, or Flame Selection rolls', () => {
     const state = newRun('vintage-no-growth', constant(0.2)).state;
-    state.target = 100000;
+    state.target = 100000n;
     state.dice[4].value = 6;
     const face = state.dice[4].faces[5];
     face.enhancements.hitchhiker = 1;

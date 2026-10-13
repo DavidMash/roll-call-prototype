@@ -9,7 +9,7 @@ const constant = (value = .8): RandomSource => ({ next: () => value });
 
 function game(values: Rank[] = [1, 2, 3, 4, 5]): GameState {
   const state = newRun('hand-family-flames', constant()).state;
-  state.target = 1_000_000;
+  state.target = 1_000_000n;
   state.stats.rounds[0].target = state.target;
   setValues(state, values);
   return state;

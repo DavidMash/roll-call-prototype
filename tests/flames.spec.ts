@@ -20,7 +20,8 @@ function bestHand(game: GameState, requiredDie?: number, requireHistory = false)
         score: handScore(dice, option.id, dieIds, game.handLevels[option.id]).score })))
     .filter(choice => !requireHistory || game.handPlayCounts[choice.hand] > 0)
     .filter(choice => game.boss?.type !== 'hexer' || choice.dieIds.includes(game.boss.cursedDieId))
-    .sort((a, b) => (callerHand ? Number(b.hand === callerHand) - Number(a.hand === callerHand) : 0) || b.score - a.score)[0];
+    .sort((a, b) => (callerHand ? Number(b.hand === callerHand) - Number(a.hand === callerHand) : 0)
+      || (b.score > a.score ? 1 : b.score < a.score ? -1 : 0))[0];
 }
 function automaticAction(game: GameState): Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'UNLOCK_WARDEN_DIE' }> {
   if (game.boss?.type === 'warden' && game.boss.pendingReinforcements > 0) {
@@ -251,7 +252,7 @@ test('arming and canceling Charge preserves the selected hand and dice', async (
 
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto('/');
-  await page.evaluate(({ key, version, state }) => localStorage.setItem(key, JSON.stringify({ version, state })), {
+  await page.evaluate(({ key, version, state }) => localStorage.setItem(key, JSON.stringify({ version, state }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)), {
     key: RUN_STORAGE_KEY,
     version: RUN_STORAGE_VERSION,
     state: game,
@@ -316,11 +317,11 @@ test('Speed Demon meter pauses in modals, stays out of preview, and reveals the 
   const game = newRun(seed).state;
   game.dice.forEach(die => { die.value = 1; });
   game.dice[0].flame = { id: 'speedDemon', investedGold: 100 };
-  game.target = 1_000_000;
+  game.target = 1_000_000n;
   game.stats.rounds[0].target = game.target;
 
   await page.goto('/');
-  await page.evaluate(({ key, version, state }) => localStorage.setItem(key, JSON.stringify({ version, state })), {
+  await page.evaluate(({ key, version, state }) => localStorage.setItem(key, JSON.stringify({ version, state }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)), {
     key: RUN_STORAGE_KEY,
     version: RUN_STORAGE_VERSION,
     state: game,

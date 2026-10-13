@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   engulfmentAnimationProfile, engulfmentAssetKey, engulfmentHasQuestWarning, infernoMultiplier, infernoRoman, ownedEngulfmentAssets,
 } from '../game/engulfment';
-import { formatPlayerNumber } from '../game/copy';
+import { formatExactScore, formatPlayerNumber } from '../game/copy';
 import { FLAMES } from '../game/flames';
 import type { EngulfmentAttemptedEvent } from '../game/runHistoryV2';
 import type { Action, EngulfmentAssetRef, GameState } from '../game/types';
@@ -76,7 +76,7 @@ export function EngulfmentModal({ state, opened, result, onClose, submit }: {
       <Text>The Inferno prefers Flames that have proven to be vital to your run.</Text>
       <Paper p="sm" className="engulfment-success-terms">
         <Text size="xs" fw={900} tt="uppercase">Upon success:</Text>
-        <Text fw={900}>Inferno ×{formatPlayerNumber(current)} → ×{formatPlayerNumber(next)}</Text>
+        <Text fw={900}>Inferno ×{formatExactScore(current)} → ×{formatExactScore(next)}</Text>
         <Text size="sm">Upper and Lower hands will be unified.</Text>
         <Text size="sm">Offered Flames will be snuffed out.</Text>
       </Paper>
@@ -111,7 +111,7 @@ export function EngulfmentModal({ state, opened, result, onClose, submit }: {
     </Stack>}
     {stage === 'result' && committedResult && (committedResult.success ? <Stack gap="md" align="center" className="engulfment-result-success">
       <Title order={2}>INFERNO {infernoRoman(committedResult.infernoLevelAfter)}</Title>
-      <Text className="engulfment-new-multiplier">×{formatPlayerNumber(committedResult.infernoMultiplierAfter)}</Text>
+      <Text className="engulfment-new-multiplier">×{formatExactScore(committedResult.infernoMultiplierAfter)}</Text>
       <div className="snuffed-flames" aria-label="Snuffed Flames">{committedResult.flamesSnuffed.map(asset => <Badge
         className="snuffed-flame" key={engulfmentAssetKey(asset)} color="dark" variant="filled">{FLAMES[asset.flame].name} · SNUFFED</Badge>)}</div>
       <Text>Upper hands unified → Lv.{formatPlayerNumber(committedResult.upper.unifiedLevel)}</Text>

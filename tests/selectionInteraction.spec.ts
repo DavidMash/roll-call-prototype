@@ -8,7 +8,7 @@ import { enterRun } from './uiHelpers';
 
 function selectionState(seed: string, values: Rank[]): GameState {
   const state = newRun(seed, { next: () => 0 }).state;
-  state.target = 1_000_000;
+  state.target = 1_000_000n;
   state.stats.rounds[0].target = state.target;
   state.dice.forEach((die, index) => { die.value = values[index]; });
   return state;
@@ -16,7 +16,7 @@ function selectionState(seed: string, values: Rank[]): GameState {
 
 async function install(page: Page, state: GameState) {
   await page.goto(`/?seed=${state.seed}&speed=instant`);
-  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved })),
+  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
   await page.reload();
   await enterRun(page);

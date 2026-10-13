@@ -3,6 +3,7 @@ import { formatPlayerNumber } from './copy';
 import { chapterEncounterRounds, chapterNumberForRound, chapterRoundForRound, firstRoundOfChapter } from './chapters';
 import { targetForRound, type BossForRound } from './goals';
 import type { BossType, ChapterPlan, RunNode } from './types';
+import type { ExactScore } from './scoreMath';
 
 export const encounterNode = (round: number, boss?: BossType | null): RunNode => boss || isBossRound(round)
   ? { id: `boss:${round}`, type: isMiniBossRound(round) ? 'mini_boss_round' : 'boss_round', round, boss: boss ?? undefined }
@@ -64,7 +65,7 @@ export function nodeLabel(node: RunNode): string {
   return 'SHOP';
 }
 
-export function encounterTarget(node: RunNode, bossForRound?: BossForRound): number | null {
+export function encounterTarget(node: RunNode, bossForRound?: BossForRound): ExactScore | null {
   if (node.type !== 'normal_round' && node.type !== 'mini_boss_round' && node.type !== 'boss_round') return null;
   return targetForRound(node.round, node.boss ?? null, bossForRound);
 }

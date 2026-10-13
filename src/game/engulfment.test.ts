@@ -38,18 +38,18 @@ function direct(flame: Flame, instanceId: number, factor: number,
 function scored(seq: number, round: number, counterfactual: number, contributions: XMultContribution[],
   playSource: HandScoredEvent['playSource'] = 'manual', attempt = 1, timelineId = 0): HandScoredEvent {
   const finalXMult = contributions.reduce((product, item) => product * item.factor, 1);
-  const awarded = Math.round(counterfactual * finalXMult);
+  const awarded = BigInt(Math.round(counterfactual * finalXMult));
   return { seq, kind: 'hand_scored', round, attempt, actionId: seq, timelineId,
     hand: 'ones', level: 1, playSource, selectedDice: [0], scoringDice: [], consumed: playSource === 'manual',
-    score: { infernoMultiplier: 1, basePips: counterfactual, finalPips: counterfactual, baseMult: 1, finalMult: 1,
-      finalXMult, bossFactor: 1, raw: awarded, awarded, rounding: { mode: 'nearest_integer', delta: 0 } },
-    roundScore: { before: 0, afterAward: awarded, after: awarded }, pipsContributions: [], multContributions: [],
+    score: { infernoMultiplier: 1n, basePips: counterfactual, finalPips: counterfactual, baseMult: 1, finalMult: 1,
+      finalXMult, bossFactor: 1, raw: awarded.toString(), awarded, rounding: { mode: 'nearest_integer', delta: '0' } },
+    roundScore: { before: 0n, afterAward: awarded, after: awarded }, pipsContributions: [], multContributions: [],
     xMultContributions: contributions, checks: [], sideEffects: [] };
 }
 
 function cleared(seq: number, round: number, attempt = 1, timelineId = 0): RunHistoryV2Event {
   return { seq, kind: 'round_attempt_finished', round, attempt, actionId: seq, timelineId,
-    outcome: 'cleared', score: 1, target: 1, boss: null, livesBefore: 3, livesAfter: 3 };
+    outcome: 'cleared', score: 1n, target: 1n, boss: null, livesBefore: 3, livesAfter: 3 };
 }
 
 function setRounds(state: GameState, hands: HandScoredEvent[][]): void {
@@ -63,6 +63,22 @@ function setRounds(state: GameState, hands: HandScoredEvent[][]): void {
 }
 
 describe('Engulfment score weighting and group counterfactual', () => {
+  it('keeps counterfactual weighting exact above MAX_SAFE_INTEGER at the ×20 threshold', () => {
+    const state = shopState('huge-counterfactual');
+    const offered = asset(state, 'ultimate');
+    const inferno = infernoMultiplier(12);
+    const hand = scored(0, 1, 1, [direct('ultimate', offered.instanceId, 20)]);
+    hand.score.infernoMultiplier = inferno;
+    hand.score.raw = (inferno * 20n).toString();
+    hand.score.awarded = inferno * 20n;
+    hand.roundScore = { before: 0n, afterAward: inferno * 20n, after: inferno * 20n };
+    setRounds(state, [[hand]]);
+    const evaluation = evaluateEngulfmentOffering(state, [offered]);
+    expect(offeringHandObservation(hand, new Set([offered.instanceId]))).toEqual({ factor: 20, weight: inferno });
+    expect(evaluation.offeringMultiplier).toBe(20);
+    expect(engulfmentSucceeds(evaluation.offeringMultiplier)).toBe(true);
+  });
+
   it('weights a 1,000,000-point hand about 100× more than a 10,000-point hand', () => {
     const state = shopState('large-hand');
     const offered = asset(state, 'ultimate');
@@ -105,7 +121,7 @@ describe('Engulfment score weighting and group counterfactual', () => {
       direct('ultimate', a.instanceId, 5), direct('minigun', b.instanceId, 5), direct('hailMary', retained.instanceId, 10),
     ]);
     expect(selectedOfferingFactor(hand, new Set([a.instanceId, b.instanceId]))).toBe(25);
-    expect(offeringHandObservation(hand, new Set([a.instanceId, b.instanceId]))).toEqual({ factor: 25, weight: 1000 });
+    expect(offeringHandObservation(hand, new Set([a.instanceId, b.instanceId]))).toEqual({ factor: 25, weight: 1000n });
 
     setRounds(state, [[hand, scored(1, 1, 100, [])]]);
     const group = evaluateEngulfmentOffering(state, [a, b]).offeringMultiplier;
@@ -152,7 +168,7 @@ describe('Flame instance lifecycle and status neutrality', () => {
     const state = newRun('ember-history', constant).state;
     state.dice[0].flame = { id: 'minigun', investedGold: 50 };
     state.dice[0].value = 1;
-    state.target = 999_999_999;
+    state.target = 999_999_999n;
     const resolver = new Resolver(state, constant);
     const instanceId = state.flameInstanceIds.minigun!;
     resolver.play('ones', [0]);
@@ -291,7 +307,7 @@ describe('Charge group attribution', () => {
     state.chargeXMult = 4.5;
     state.chargeArmed = true;
     state.chargeAttribution = { momentum: .5, powerSurge: 3 };
-    state.target = 999_999_999;
+    state.target = 999_999_999n;
     state.dice.forEach((die, index) => { die.value = (index + 1) as 1 | 2 | 3 | 4 | 5; });
     const resolver = new Resolver(state, constant);
     const momentumId = state.flameInstanceIds.momentum!;
@@ -342,14 +358,14 @@ describe('Engulfment threshold, lifecycle, and consequences', () => {
       attempt: { value: 2, keys: [], invalid: false, jackpotPaid: false }, complete: false, dialogueLine: 'test' };
     const result = dispatch(state, { type: 'ATTEMPT_ENGULFMENT', assets: [offered] }, constant).state;
     expect(result.engulfmentLevel).toBe(1);
-    expect(infernoMultiplier(result.engulfmentLevel)).toBe(25);
+    expect(infernoMultiplier(result.engulfmentLevel)).toBe(25n);
     expect(result.bonfires).toEqual(['minigun']);
     expect(result.flameInstanceIds.ultimate).toBeUndefined();
     expect(UPPER_HAND_IDS.map(hand => result.handLevels[hand])).toEqual([12, 12, 12, 12, 12, 12]);
     expect(LOWER_HAND_IDS.map(hand => result.handLevels[hand])).toEqual([5, 5, 5, 5, 5, 5, 5, 5]);
     expect(result.hoodedFigure.active).toBeNull();
     expect(result.historyV2.at(-1)).toMatchObject({ kind: 'engulfment_attempted', success: true,
-      offeringMultiplier: 20, requiredMultiplier: 20, infernoMultiplierBefore: 1, infernoMultiplierAfter: 25 });
+      offeringMultiplier: 20, requiredMultiplier: 20, infernoMultiplierBefore: 1n, infernoMultiplierAfter: 25n });
   });
 
   it('includes training bought earlier in the same Shop in the frozen averages', () => {
@@ -419,8 +435,8 @@ describe('Engulfment threshold, lifecycle, and consequences', () => {
     state.specialOfferEffects.badDreamRounds = 1;
     state.badDreamCheckpoint = { chapter: 1, hoodedChallenge: null };
     state.lives = 1;
-    state.score = 0;
-    state.target = 1_000_000;
+    state.score = 0n;
+    state.target = 1_000_000n;
     state.consumed = [...HAND_IDS];
     state.manualRerollsRemaining = 0;
     new Resolver(state, constant).evaluate();
@@ -442,8 +458,8 @@ describe('Engulfment threshold, lifecycle, and consequences', () => {
     const unified = structuredClone(state.handLevels);
     state.consumed = [...HAND_IDS];
     state.manualRerollsRemaining = 0;
-    state.score = 0;
-    state.target = 1_000_000;
+    state.score = 0n;
+    state.target = 1_000_000n;
     new Resolver(state, constant).evaluate();
     expect(state.phase).toBe('shop');
     expect(state.engulfmentLevel).toBe(1);
@@ -523,7 +539,7 @@ describe('Inferno scoring regression', () => {
   function scoreAt(level: number, doubleTime = false) {
     const state = newRun(`inferno-score-${level}-${doubleTime}`, constant).state;
     state.engulfmentLevel = level;
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.dice[0].value = 1;
     if (doubleTime) state.dice[0].faces[0].enhancements.doubleTime = 1;
     return dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, doubleTime ? { next: () => 0 } : constant).state;
@@ -533,38 +549,38 @@ describe('Inferno scoring regression', () => {
     const base = scoreAt(0);
     const one = scoreAt(1);
     const two = scoreAt(2);
-    expect(one.score).toBe(base.score * 25);
-    expect(two.score).toBe(base.score * 625);
-    expect(one.stats.handScores[0].infernoMultiplier).toBe(25);
-    expect(two.historyV2.find(event => event.kind === 'hand_scored')).toMatchObject({ score: { infernoMultiplier: 625 } });
-    expect(infernoMultiplier(2)).toBe(625);
+    expect(one.score).toBe(BigInt(base.score * 25n));
+    expect(two.score).toBe(BigInt(base.score * 625n));
+    expect(one.stats.handScores[0].infernoMultiplier).toBe(BigInt(25n));
+    expect(two.historyV2.find(event => event.kind === 'hand_scored')).toMatchObject({ score: { infernoMultiplier: 625n } });
+    expect(infernoMultiplier(2)).toBe(625n);
   });
 
   it('flows through Jumping Bean, Hitchhiker, and Double Time without multiplying economy or build values', () => {
     const bean = newRun('inferno-bean', constant).state;
     bean.engulfmentLevel = 1;
-    bean.target = 1_000_000;
+    bean.target = 1_000_000n;
     bean.dice[0].value = 1;
     new Resolver(bean, constant).play('ones', [0], 'jumpingBean');
-    expect(bean.stats.handScores.at(-1)).toMatchObject({ playSource: 'jumpingBean', infernoMultiplier: 25 });
+    expect(bean.stats.handScores.at(-1)).toMatchObject({ playSource: 'jumpingBean', infernoMultiplier: 25n });
 
-    expect(scoreAt(1, true).score).toBe(scoreAt(0, true).score * 25);
+    expect(scoreAt(1, true).score).toBe(BigInt(scoreAt(0, true).score * 25n));
     const hitchhikerAt = (level: number) => {
       const state = newRun(`inferno-hitchhiker-${level}`, constant).state;
       state.engulfmentLevel = level;
-      state.target = 1_000_000;
+      state.target = 1_000_000n;
       state.dice[0].value = 1;
       state.dice[1].value = 2;
       state.dice[1].faces[1].enhancements.hitchhiker = 1;
       return dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, { next: () => 0 }).state;
     };
-    expect(hitchhikerAt(1).score).toBe(hitchhikerAt(0).score * 25);
+    expect(hitchhikerAt(1).score).toBe(BigInt(hitchhikerAt(0).score * 25n));
 
     const economyAt = (level: number) => {
       const state = newRun(`inferno-economy-${level}`, constant).state;
       state.engulfmentLevel = level;
-      state.target = 1;
-      state.stats.rounds[0].target = 1;
+      state.target = 1n;
+      state.stats.rounds[0].target = 1n;
       state.dice[0].value = 1;
       state.dice[0].faces[0].enhancements = { golden: 1, jackpot: 1, vintage: 1 };
       state.dice[1].flame = { id: 'momentum', investedGold: 40 };
@@ -585,7 +601,7 @@ describe('Inferno scoring regression', () => {
     const againstFly = (level: number) => {
       const state = newRun(`inferno-fly-${level}`, constant).state;
       state.engulfmentLevel = level;
-      state.target = 1_000_000;
+      state.target = 1_000_000n;
       state.dice[0].value = 1;
       state.boss = { type: 'fly', flyHand: 'pair', caught: false, moves: 0 };
       return dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant).state.stats.handScores[0];
@@ -594,6 +610,6 @@ describe('Inferno scoring regression', () => {
     const inferno = againstFly(1);
     expect(base.bossFactor).toBe(.5);
     expect(inferno.bossFactor).toBe(.5);
-    expect(inferno.score).toBe(base.score * 25);
+    expect(inferno.score).toBe(BigInt(base.score * 25n));
   });
 });

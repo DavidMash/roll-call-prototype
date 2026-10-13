@@ -1,24 +1,26 @@
-import { formatPlayerNumber } from './copy';
+import { formatExactScore, formatPlayerNumber } from './copy';
 import { ENHANCEMENTS } from './enhancements';
 import { FLAMES } from './flames';
 import { HANDS } from './hands';
 import type { GameEvent } from './types';
+import type { ExactScore } from './scoreMath';
 
 export type ScoreMetric = 'pips' | 'mult' | 'xmult' | 'final' | null;
 
 export interface ScorePresentation {
-  inferno: number;
+  inferno: ExactScore;
   pips: number;
   mult: number;
   xMult: number;
   bossFactor: number;
-  finalScore: number | null;
+  finalScore: ExactScore | null;
   showXMult: boolean;
   activeMetric: ScoreMetric;
   callout: string;
 }
 
-const amount = (value: number | undefined) => formatPlayerNumber(value ?? 0);
+const amount = (value: number | ExactScore | undefined) => typeof value === 'bigint'
+  ? formatExactScore(value) : formatPlayerNumber(value ?? 0);
 
 export function scorePresentation(event: GameEvent | null): ScorePresentation | null {
   if (!event) return null;
@@ -65,12 +67,12 @@ export function scorePresentation(event: GameEvent | null): ScorePresentation | 
   if (event.type !== 'STANDALONE_SCORE_CALCULATED') return null;
   const xMult = event.xMult ?? 1;
   return {
-    inferno: 1,
+    inferno: 1n,
     pips: event.pips ?? 0,
     mult: event.multiplier ?? 0,
     xMult,
     bossFactor: 1,
-    finalScore: event.amount ?? null,
+    finalScore: typeof event.amount === 'bigint' ? event.amount : event.amount === undefined ? null : BigInt(event.amount),
     showXMult: Math.abs(xMult - 1) > 1e-9,
     activeMetric: 'final',
     callout: `+${amount(event.amount)}`,
@@ -78,10 +80,10 @@ export function scorePresentation(event: GameEvent | null): ScorePresentation | 
 }
 
 export function scoreAnnouncement(score: ScorePresentation): string {
-  const parts = score.inferno > 1 ? [`Inferno ${formatPlayerNumber(score.inferno)}`] : [];
+  const parts = score.inferno > 1n ? [`Inferno ${formatExactScore(score.inferno)}`] : [];
   parts.push(`Pips ${formatPlayerNumber(score.pips)}`, `Mult ${formatPlayerNumber(score.mult)}`);
   if (score.showXMult) parts.push(`XMult ${formatPlayerNumber(score.xMult)}`);
   if (score.bossFactor !== 1) parts.push(`Boss modifier ${formatPlayerNumber(score.bossFactor)}`);
-  if (score.finalScore !== null) parts.push(`Final score ${formatPlayerNumber(score.finalScore)}`);
+  if (score.finalScore !== null) parts.push(`Final score ${formatExactScore(score.finalScore)}`);
   return parts.join('. ');
 }

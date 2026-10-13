@@ -1,7 +1,7 @@
 import { Button, Group, Paper, Stack, Text, Title } from '@mantine/core';
 import { CONFIG } from '../game/config';
 import type { Board } from '../game/types';
-import { formatPlayerNumber, formatScoreProgress } from '../game/copy';
+import { formatExactScore, formatScoreProgress } from '../game/copy';
 import { fullChapterLabels } from '../game/chapters';
 import { RunActionPortal } from './RunActionRow';
 
@@ -17,7 +17,7 @@ export function BustScreen({ board, onContinue, restartSame, newRun }: {
       <Text fw={900} className="summary-chapter">{labels.chapter}</Text>
       <Title order={2}>{labels.round} BUST</Title>
       <Text fw={800} mt="sm">{formatScoreProgress(bust.score, bust.target)}</Text>
-      <Text c="red" fw={800}>{formatPlayerNumber(bust.shortfall)} SHORT</Text>
+      <Text c="red" fw={800}>{formatExactScore(bust.shortfall)} SHORT</Text>
       <Group justify="center" gap="xs" mt="md"><Text size="xl" c="red">{hearts(bust.livesBefore)}</Text><Text>→</Text><Text size="xl" c="red">{hearts(bust.livesAfter)}</Text></Group>
       {bust.livesAfter > 0 ? <>
         <Text fw={800} mt="xs">1 Life Lost</Text>

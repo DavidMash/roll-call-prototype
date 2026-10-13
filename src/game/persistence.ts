@@ -3,11 +3,12 @@ import { newRun, normalizeGameState } from './engine';
 import { isRollbackState } from './rollback';
 import { boardSnapshot, createStats } from './telemetry';
 import { chapterNumberForRound } from './chapters';
+import { stringifyExactJson } from './scoreMath';
 import type { Action, BadDreamCheckpoint, GameState, GameStateBase, RollbackState } from './types';
 
 export const RUN_STORAGE_KEY = 'roll-call:active-run';
-export const RUN_STORAGE_VERSION = 6;
-const SUPPORTED_STORAGE_VERSIONS = new Set([2, 3, 4, 5, RUN_STORAGE_VERSION]);
+export const RUN_STORAGE_VERSION = 7;
+const SUPPORTED_STORAGE_VERSIONS = new Set([2, 3, 4, 5, 6, RUN_STORAGE_VERSION]);
 
 type RunStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
@@ -130,10 +131,10 @@ export function loadPersistedRun(storage: RunStorage | null, requestedSeed: stri
     if (!raw) return null;
     const saved: unknown = JSON.parse(raw);
     if (!isRecord(saved) || typeof saved.version !== 'number' || !SUPPORTED_STORAGE_VERSIONS.has(saved.version)) return null;
-    const migrated = migratePersistedState(saved.state);
+    const migrated = normalizeGameState(migratePersistedState(saved.state) as GameState);
     if (!isGameState(migrated)) return null;
     if (requestedSeed !== null && migrated.seed !== requestedSeed) return null;
-    return normalizeGameState(migrated);
+    return migrated;
   } catch {
     return null;
   }
@@ -147,7 +148,7 @@ export function savePersistedRun(storage: RunStorage | null, state: GameState): 
   if (!storage) return false;
   const saved: PersistedRun = { version: RUN_STORAGE_VERSION, state: compactGameStateForPersistence(state) };
   try {
-    storage.setItem(RUN_STORAGE_KEY, JSON.stringify(saved));
+    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson(saved));
     return true;
   } catch {
     return false;

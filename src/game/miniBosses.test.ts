@@ -65,8 +65,8 @@ describe('six-Round encounter cadence', () => {
 
   it('pays and labels the normal Boss Gold reward before opening a Special Offer', () => {
     let state = miniBossRound('capitalReturn');
-    state.target = 1;
-    state.stats.rounds.at(-1)!.target = 1;
+    state.target = 1n;
+    state.stats.rounds.at(-1)!.target = 1n;
     state.dice[0].value = 6;
     const clear = dispatch(state, { type: 'PLAY', hand: 'sixes', dieIds: [0] }, constant(.2));
     expect(clear.state.lastRoundPayout?.bossRewardGold).toBe(10);
@@ -84,7 +84,7 @@ describe('six-Round encounter cadence', () => {
 describe('Mini-Boss mechanics', () => {
   it('The Juggler adds one non-scoring gameplay reroll and skips it after a clear', () => {
     let state = miniBossRound('juggler');
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     expose(state, [1, 2, 3, 4, 5]);
     state.dice[1].faces[0].enhancements.jumpingBean = 1;
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(0));
@@ -94,13 +94,13 @@ describe('Mini-Boss mechanics', () => {
     expect(result.events.some(event => event.type === 'JUMPING_BEAN_FREE_PLAY' && event.dieIds?.[0] === 1)).toBe(true);
 
     state = miniBossRound('juggler');
-    state.target = 1;
+    state.target = 1n;
     state.dice[0].value = 1;
     const winning = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(0));
     expect(winning.events.some(event => event.type === 'BOSS_HAND_CHANGED' && event.boss === 'juggler')).toBe(false);
 
     state = miniBossRound('juggler');
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     expose(state, [2, 2, 2, 2, 2]);
     const noExtra = dispatch(state, { type: 'PLAY', hand: 'fiveKind', dieIds: [0, 1, 2, 3, 4] }, constant(0));
     expect(noExtra.events.some(event => event.type === 'BOSS_HAND_CHANGED' && event.boss === 'juggler')).toBe(false);
@@ -108,7 +108,7 @@ describe('Mini-Boss mechanics', () => {
 
   it('Capital Return charges once per Lower hand without taking Gold below zero', () => {
     let state = miniBossRound('capitalReturn');
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.gold = 1;
     expose(state, [2, 2]);
     state = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.2)).state;
@@ -136,7 +136,7 @@ describe('Mini-Boss mechanics', () => {
 
   it('The Clockmaker supplies one Bump only to dice that genuinely roll', () => {
     const state = miniBossRound('clockmaker');
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     expose(state, [1, 2, 3, 4, 5]);
     state.dice[0].faces[0].enhancements.bump = 1;
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.2));
@@ -153,10 +153,10 @@ describe('Mini-Boss mechanics', () => {
       game.specialOfferEffects.bottledFairyRounds = 3;
       game.dice[0].flame = { id: 'hailMary', investedGold: 100 };
     });
-    expect(state.target).toBe(100);
+    expect(state.target).toBe(BigInt(100n));
     expect(state.manualRerollsRemaining).toBe(0);
     expect(validateAction(state, { type: 'MANUAL_REROLL', dieIds: [0, 1] })).toBeNull();
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.dice[0].value = 1;
     state = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.2)).state;
     expect(state.stats.handScores.at(-1)?.xMult).toBe(5);
@@ -170,7 +170,7 @@ describe('Mini-Boss mechanics', () => {
 
   it('The Crawler limits ordinary scoring rerolls but still allows Sticky and Slippy behavior', () => {
     let state = miniBossRound('crawler');
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     expose(state, [2, 2, 3, 4, 5]);
     activeFace(state.dice[4]).enhancements.slippy = 1;
     let result = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0));
@@ -179,7 +179,7 @@ describe('Mini-Boss mechanics', () => {
     expect(result.events.some(event => event.enhancement === 'slippy')).toBe(true);
 
     state = miniBossRound('crawler');
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     expose(state, [2, 2]);
     activeFace(state.dice[0]).enhancements.sticky = 1;
     result = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0));
@@ -188,7 +188,7 @@ describe('Mini-Boss mechanics', () => {
     expect(result.events.some(event => event.enhancement === 'sticky')).toBe(true);
 
     state = miniBossRound('crawler');
-    state.target = 1;
+    state.target = 1n;
     expose(state, [2, 2]);
     result = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0));
     expect(result.events.some(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Post-hand'))).toBe(false);
@@ -206,7 +206,7 @@ describe('Mini-Boss mechanics', () => {
     expect(activeEncounterDice(state)).toHaveLength(4);
     expect(state.dice[state.boss.missingDieId].flame).toBeNull();
     expect(state.maxCharge).toBe(1);
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     const calls = [...state.boss.calledHands].reverse();
     const resolver = new Resolver(state, constant(.2));
     calls.forEach((hand, index) => {
@@ -232,7 +232,7 @@ describe('Mini-Boss mechanics', () => {
       game.dice[preview.missingDieId].flame = { id: 'momentum', investedGold: 50 };
     });
     expect(state.roundCheckpoint?.board.dice[preview.missingDieId].flame).toMatchObject({ id: 'momentum', investedGold: 50 });
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.consumed = [...HAND_IDS];
     state.manualRerollsRemaining = 0;
     new Resolver(state, constant(.2)).evaluate();
@@ -248,7 +248,7 @@ describe('Mini-Boss mechanics', () => {
   it('The Mugger reveals its hidden Lower hand, steals at most 5 Gold once, then remains spent', () => {
     const state = miniBossRound('mugger');
     if (state.boss?.type !== 'mugger') throw new Error('Mugger fixture failed.');
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.gold = 3;
     const hidden = state.boss.hiddenHand;
     expect(LOWER_HAND_IDS).toContain(hidden);

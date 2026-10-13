@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { toExactJsonValue } from './scoreMath';
 import { appendCriticalDiagnostic, appendDebugTrace, createDebugTrace, DEBUG_TRACE_MAX_BYTES, DEBUG_TRACE_MAX_RECORDS } from './debugTrace';
 import { dispatch, newRun } from './engine';
 import { createRunHistoryTextV2, exportDebugTrace, exportRunHistoryV2 } from './runHistoryV2Export';
@@ -13,7 +14,7 @@ const constant = (value = 0): RandomSource => ({ next: () => value });
 describe('Run History V2 experienced and canonical semantics', () => {
   it('classifies abandoned Bust activity while retaining it in experienced metrics', () => {
     let state = newRun('pass2-bust', constant()).state;
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.stats.rounds[0].target = state.target;
     state.manualRerollsRemaining = 0;
     state.gold = 999;
@@ -61,9 +62,9 @@ describe('Run History V2 experienced and canonical semantics', () => {
       ...state.historyV2,
       { seq: state.historyV2.length, kind: 'hand_scored', round: 4, attempt: 1, actionId: 2, timelineId: 0,
         hand: 'ones', level: 1, playSource: 'manual', selectedDice: [0], scoringDice: [], consumed: true,
-        score: { basePips: 1, finalPips: 1, baseMult: 1, finalMult: 1, finalXMult: 1, bossFactor: 1,
-          raw: 1, awarded: 1, rounding: { mode: 'nearest_integer', delta: 0 } },
-        roundScore: { before: 0, afterAward: 1, after: 1 }, pipsContributions: [], multContributions: [],
+        score: { infernoMultiplier: 1n, basePips: 1, finalPips: 1, baseMult: 1, finalMult: 1, finalXMult: 1, bossFactor: 1,
+          raw: '1', awarded: 1n, rounding: { mode: 'nearest_integer', delta: '0' } },
+        roundScore: { before: 0n, afterAward: 1n, after: 1n }, pipsContributions: [], multContributions: [],
         xMultContributions: [], checks: [], sideEffects: [] },
       { seq: state.historyV2.length + 1, kind: 'checkpoint_restored', round: 2, attempt: 1, actionId: 3,
         timelineId: 1, reason: 'bad_dream', fromTimelineId: 0, toTimelineId: 1,
@@ -124,7 +125,7 @@ describe('bounded Debug Trace and exports', () => {
     const state = dispatch(newRun('exports', constant()).state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant()).state;
     const runData = exportRunHistoryV2(state);
     const debugData = exportDebugTrace(state);
-    expect(runData.events.map(({ timelineStatus: _status, ...event }) => event)).toEqual(state.historyV2);
+    expect(runData.events.map(({ timelineStatus: _status, ...event }) => event)).toEqual(toExactJsonValue(state.historyV2));
     expect(runData.events.every(event => event.timelineStatus === 'canonical')).toBe(true);
     expect(runData.summary.canonical.finalGold).toBe(state.gold);
     expect(debugData.actionJournal).toEqual(state.actionJournal);

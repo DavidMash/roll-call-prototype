@@ -46,7 +46,7 @@ describe('The Caller continuous calls', () => {
   it('starts a new available call immediately after an early answer', () => {
     let state = bossRound('caller');
     if (state.boss?.type !== 'caller') throw new Error('Caller fixture failed');
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.boss.calledHand = 'ones';
     state.dice[0].value = 1;
     state = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.3)).state;
@@ -60,12 +60,12 @@ describe('The Caller continuous calls', () => {
     let state = bossRound('caller');
     if (state.boss?.type !== 'caller') throw new Error('Caller fixture failed');
     state.boss.calledHand = 'fullHouse';
-    state.target = 20;
+    state.target = 20n;
     for (const [index, hand] of (['ones', 'twos', 'threes'] as const).entries()) {
       state.dice[0].value = (index + 1) as Rank;
       state = dispatch(state, { type: 'PLAY', hand, dieIds: [0] }, constant(.2)).state;
     }
-    expect(state.score).toBe(27);
+    expect(state.score).toBe(BigInt(27n));
     expect(state.phase).toBe('roundSummary');
     expect(state.boss).toMatchObject({ type: 'caller', playsRemaining: 0, callsMissed: 1 });
   });
@@ -74,7 +74,7 @@ describe('The Caller continuous calls', () => {
     let state = bossRound('caller');
     if (state.boss?.type !== 'caller') throw new Error('Caller fixture failed');
     state.boss.calledHand = 'fullHouse';
-    state.target = 100;
+    state.target = 100n;
     state.dice[0].value = 1;
     state = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.2)).state;
     state.dice[0].value = 2;
@@ -82,14 +82,14 @@ describe('The Caller continuous calls', () => {
     expose(state, [6, 6, 6, 6, 6]);
     state = dispatch(state, { type: 'PLAY', hand: 'fiveKind', dieIds: [0, 1, 2, 3, 4] }, constant(.2)).state;
     expect(state.score).toBeGreaterThanOrEqual(100);
-    expect(state.score).toBe(242);
+    expect(state.score).toBe(BigInt(242n));
     expect(state.phase).toBe('roundSummary');
   });
 
   it('lets a matching Bean answer without consuming a manual opportunity', () => {
     const state = bossRound('caller');
     if (state.boss?.type !== 'caller') throw new Error('Caller fixture failed');
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.boss.calledHand = 'ones';
     state.dice[0].value = 6;
     state.dice[0].faces[5].enhancements.bump = 1;
@@ -133,8 +133,8 @@ describe('The Hexer selection contract', () => {
 describe('The Marathon', () => {
   it('triples the target and reactivates a hand after exactly seven subsequent manual plays', () => {
     let state = bossRound('marathon');
-    expect(state.target).toBe(targetForRound(3) * 3);
-    state.target = 1_000_000;
+    expect(state.target).toBe(BigInt(targetForRound(3) * 3n));
+    state.target = 1_000_000n;
     const plays: { hand: typeof HAND_IDS[number]; values: Rank[]; ids: number[] }[] = [
       { hand: 'ones', values: [1], ids: [0] }, { hand: 'twos', values: [2], ids: [0] },
       { hand: 'threes', values: [3], ids: [0] }, { hand: 'fours', values: [4], ids: [0] },
@@ -156,7 +156,7 @@ describe('The Marathon', () => {
   it('does not advance cooldowns for Jumping Bean free plays', () => {
     const state = bossRound('marathon');
     if (state.boss?.type !== 'marathon') throw new Error('Marathon fixture failed');
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.boss.cooldowns.fullHouse = 4;
     state.dice[0].value = 1;
     new Resolver(state, constant(.2)).play('ones', [0], 'jumpingBean');
@@ -166,13 +166,13 @@ describe('The Marathon', () => {
 
 describe('base target modifier boundary', () => {
   it('applies existing Boss modifiers after the Chapter/local-Round raw Goal', () => {
-    expect(getRoundGoalBreakdown(3, 'marathon').finalGoal).toBe(600);
-    expect(getRoundGoalBreakdown(3, 'quickdraw').finalGoal).toBe(70);
-    expect(getRoundGoalBreakdown(9, 'marathon').finalGoal).toBe(2_600);
-    expect(getRoundGoalBreakdown(9, 'quickdraw').finalGoal).toBe(300);
-    expect(getRoundGoalBreakdown(9, 'tightrope').finalGoal).toBe(450);
+    expect(getRoundGoalBreakdown(3, 'marathon').finalGoal).toBe(BigInt(600n));
+    expect(getRoundGoalBreakdown(3, 'quickdraw').finalGoal).toBe(BigInt(70n));
+    expect(getRoundGoalBreakdown(9, 'marathon').finalGoal).toBe(BigInt(2_600n));
+    expect(getRoundGoalBreakdown(9, 'quickdraw').finalGoal).toBe(BigInt(300n));
+    expect(getRoundGoalBreakdown(9, 'tightrope').finalGoal).toBe(BigInt(450n));
     for (const boss of ['caller', 'warden', 'hexer', 'fly', 'snakeEyes', 'infected'] as const) {
-      expect(getRoundGoalBreakdown(9, boss).finalGoal).toBe(900);
+      expect(getRoundGoalBreakdown(9, boss).finalGoal).toBe(BigInt(900n));
     }
   });
 });
@@ -180,8 +180,8 @@ describe('base target modifier boundary', () => {
 describe('Quickdraw', () => {
   it('uses one third target, spends one Lower shot, and leaves Upper hands available', () => {
     let state = bossRound('quickdraw');
-    expect(state.target).toBe(70);
-    state.target = 1_000_000;
+    expect(state.target).toBe(BigInt(70n));
+    state.target = 1_000_000n;
     expose(state, [2, 2, 3, 4, 5]);
     state = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.2)).state;
     expect(state.boss).toMatchObject({ type: 'quickdraw', lowerShotUsed: true, playedLowerHand: 'pair' });
@@ -193,7 +193,7 @@ describe('Quickdraw', () => {
   it('does not require the Lower shot to clear', () => {
     const state = bossRound('quickdraw');
     if (state.boss?.type !== 'quickdraw') throw new Error('Quickdraw fixture failed');
-    state.score = state.target - 1;
+    state.score = state.target - 1n;
     state.dice[0].value = 1;
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.2)).state;
     expect(result.phase).toBe('roundSummary');
@@ -205,27 +205,27 @@ describe('The Fly', () => {
   it('halves misses, moves away from the previous row, and scores catch and later hands fully', () => {
     let state = bossRound('fly');
     if (state.boss?.type !== 'fly') throw new Error('Fly fixture failed');
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.boss.flyHand = 'pair';
     state.dice[0].value = 1;
     state = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(0)).state;
-    expect(state.score).toBe(4);
+    expect(state.score).toBe(BigInt(4n));
     if (state.boss?.type !== 'fly') throw new Error('Fly fixture failed');
     expect(state.boss.flyHand).not.toBe('pair');
     state.boss.flyHand = 'pair';
     expose(state, [2, 2, 4, 5, 6]);
     state = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.2)).state;
-    expect(state.score).toBe(22);
+    expect(state.score).toBe(BigInt(22n));
     expect(state.boss).toMatchObject({ type: 'fly', caught: true, flyHand: null });
     state.dice[0].value = 2;
     state = dispatch(state, { type: 'PLAY', hand: 'twos', dieIds: [0] }, constant(.2)).state;
-    expect(state.score).toBe(31);
+    expect(state.score).toBe(BigInt(31n));
   });
 
   it('moves after a Jumping Bean free play without consuming its hand', () => {
     const state = bossRound('fly');
     if (state.boss?.type !== 'fly') throw new Error('Fly fixture failed');
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.boss.flyHand = 'pair';
     state.dice[0].value = 1;
     new Resolver(state, constant(0)).play('ones', [0], 'jumpingBean');
@@ -258,7 +258,7 @@ describe('Snake Eyes', () => {
 
   it('turns every scored Face into 1 after scoring and keeps Enhancements attached', () => {
     let state = bossRound('snakeEyes');
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     expose(state, [6, 6, 6, 6, 6]);
     state.dice[0].faces[5].enhancements.bonus = 1;
     const result = dispatch(state, { type: 'PLAY', hand: 'fiveKind', dieIds: [0, 1, 2, 3, 4] }, constant(0));
@@ -274,7 +274,7 @@ describe('Snake Eyes', () => {
 
   it('includes successful Hitchhiker and Jumping Bean free-play Faces', () => {
     const hitchState = bossRound('snakeEyes');
-    hitchState.target = 1_000_000;
+    hitchState.target = 1_000_000n;
     expose(hitchState, [4, 4, 5, 2, 6]);
     activeFace(hitchState.dice[2]).enhancements.hitchhiker = 1;
     const hitched = dispatch(hitchState, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0)).state;
@@ -283,7 +283,7 @@ describe('Snake Eyes', () => {
     expect(hitched.dice[2].faces[4].snakeEyed).toBe(true);
 
     const beanState = bossRound('snakeEyes');
-    beanState.target = 1_000_000;
+    beanState.target = 1_000_000n;
     beanState.dice[0].value = 2;
     activeFace(beanState.dice[0]).enhancements.jumpingBean = 1;
     new Resolver(beanState, constant(0)).play('twos', [0], 'jumpingBean');
@@ -292,7 +292,7 @@ describe('Snake Eyes', () => {
 
   it('skips natural 1s and already-mutated faces and rollback restores permanent values', () => {
     const state = bossRound('snakeEyes');
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     expose(state, [1, 2, 1, 5, 6]);
     state.dice[1].faces[1].snakeEyed = true;
     state.dice[1].faces[1].rank = 1;
@@ -328,11 +328,11 @@ describe('The Infected', () => {
   it('infects every scored Face after scoring without reducing the current hand', () => {
     const state = bossRound('infected');
     clearInfection(state);
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     expose(state, [4, 4, 4, 2, 6]);
     const cleanScore = handScore(state.dice, 'threeKind', [0, 1, 2]).score;
     const result = dispatch(state, { type: 'PLAY', hand: 'threeKind', dieIds: [0, 1, 2] }, constant(.2));
-    expect(result.state.stats.handScores.at(-1)?.score).toBe(cleanScore);
+    expect(result.state.stats.handScores.at(-1)?.score).toBe(BigInt(cleanScore));
     expect(result.state.dice.slice(0, 3).every(die => die.faces[3].infected)).toBe(true);
     expect(result.state.dice.slice(3).every(die => !die.faces.some(face => face.infected))).toBe(true);
     const scoreIndex = result.events.findIndex(event => event.type === 'HAND_SCORE_FINALIZED');
@@ -384,7 +384,7 @@ describe('The Infected', () => {
     expect(scoringPips(clean)).toBe(14);
     expect(handScore(state.dice, 'pair', [0, 1]).pips).toBe(23);
 
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     const result = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.2)).state;
     expect(result.gold).toBe(1);
     expect(result.dice[0].faces[3].workoutPips).toBe(0);
@@ -397,7 +397,7 @@ describe('The Infected', () => {
     state.dice[0].value = 1;
     activeFace(state.dice[0]).infected = true;
     state.dice[0].flame = { id: 'minigun', investedGold: 100 };
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.2)).state;
     expect(result.stats.handScores.at(-1)?.xMult).toBe(5);
   });
@@ -405,7 +405,7 @@ describe('The Infected', () => {
   it('infects successful Hitchhiker and Jumping Bean free-play Faces', () => {
     const hitchState = bossRound('infected');
     clearInfection(hitchState);
-    hitchState.target = 1_000_000;
+    hitchState.target = 1_000_000n;
     expose(hitchState, [4, 4, 5, 2, 6]);
     activeFace(hitchState.dice[2]).enhancements.hitchhiker = 1;
     const hitched = dispatch(hitchState, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0)).state;
@@ -415,7 +415,7 @@ describe('The Infected', () => {
 
     const beanState = bossRound('infected');
     clearInfection(beanState);
-    beanState.target = 1_000_000;
+    beanState.target = 1_000_000n;
     beanState.dice[0].value = 2;
     activeFace(beanState.dice[0]).enhancements.jumpingBean = 1;
     new Resolver(beanState, constant(0)).play('twos', [0], 'jumpingBean');

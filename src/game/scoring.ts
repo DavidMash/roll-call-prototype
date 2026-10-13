@@ -2,10 +2,11 @@ import { CONFIG } from './config';
 import { activeFace, baseScoringPips, scoringPips } from './dice';
 import { loneWolfPipsFactor, stacks, tankMultiplierFactor } from './enhancements';
 import { handStats } from './hands';
+import { exactInferno, exactWeightedFactorAverage, finalizeExactScore, type ExactScore } from './scoreMath';
 import type { Die, Face, HandId, HandScoreAccumulator } from './types';
 
 export const INFERNO_BASE = 25;
-export const infernoMultiplier = (level: number): number => INFERNO_BASE ** Math.max(0, Math.floor(level));
+export const infernoMultiplier = (level: number): ExactScore => exactInferno(Math.max(0, Math.floor(level)));
 
 export interface HandScoreContribution {
   kind: 'base' | 'bonus' | 'loneWolf' | 'teamwork';
@@ -34,7 +35,7 @@ export function ordinaryFaceContributions(participant: ScoringParticipant, scori
 export const resolvedOrdinaryPips = (participant: ScoringParticipant, scoringDice: number): number =>
   ordinaryFaceContributions(participant, scoringDice).reduce((sum, contribution) => sum + contribution.amount, 0);
 
-export function createHandAccumulator(hand: HandId, dieIds: number[], level = 1, infernoMultiplier = 1): HandScoreAccumulator {
+export function createHandAccumulator(hand: HandId, dieIds: number[], level = 1, infernoMultiplier: ExactScore = 1n): HandScoreAccumulator {
   const stats = handStats(hand, level);
   return {
     hand, handLevel: level, infernoMultiplier, dieIds: [...dieIds].sort((a, b) => a - b),
@@ -45,16 +46,13 @@ export function createHandAccumulator(hand: HandId, dieIds: number[], level = 1,
   };
 }
 
-export function finalizeScore(pips: number, multiplier: number, xMult = 1, inferno = 1) {
-  const rawScore = inferno * pips * multiplier * xMult;
-  return { rawScore, finalScore: Math.round(rawScore) };
+export function finalizeScore(pips: number, multiplier: number, xMult = 1, inferno: ExactScore = 1n) {
+  return finalizeExactScore(inferno, pips, multiplier, xMult);
 }
 
 /** Score-weighted effective multiplier shared by Wildfire and Engulfment attribution. */
-export function scoreWeightedMultiplier(observations: readonly { factor: number; weight: number }[]): number {
-  const totalWeight = observations.reduce((sum, item) => sum + Math.max(0, item.weight), 0);
-  return totalWeight > 0 ? observations.reduce((sum, item) =>
-    sum + Math.max(0, item.weight) * Math.max(1, item.factor), 0) / totalWeight : 1;
+export function scoreWeightedMultiplier(observations: readonly { factor: number; weight: ExactScore }[]): number {
+  return exactWeightedFactorAverage(observations.map(item => ({ ...item, weight: item.weight < 0n ? 0n : item.weight })));
 }
 
 // Capture all scoring faces before Workout changes any physical face.

@@ -9,7 +9,7 @@ const constant = (value: number): RandomSource => ({ next: () => value });
 function state(values: Rank[] = [4, 4, 4, 2, 6]): GameState {
   const game = newRun('hitchhiker-v2', constant(0.99)).state;
   game.dice.forEach((die, index) => { die.value = values[index]; });
-  game.target = 100000;
+  game.target = 100000n;
   game.stats.rounds[0].target = game.target;
   return game;
 }
@@ -34,12 +34,12 @@ describe('revised Hitchhiker', () => {
     enhance(success, 4, 'hitchhiker');
     const a = play(structuredClone(success), constant(0));
     const b = play(structuredClone(success), constant(0));
-    expect(a.state.score).toBe(70); // (10 base + 12 selected + 6 Hitchhiker) ×2.5
-    expect(b.state.score).toBe(a.state.score);
+    expect(a.state.score).toBe(BigInt(70n)); // (10 base + 12 selected + 6 Hitchhiker) ×2.5
+    expect(b.state.score).toBe(BigInt(a.state.score));
     expect(a.state.stats.hitchhikerPipsContributed).toBe(6);
     expect(a.events.some(event => event.enhancement === 'hitchhiker')).toBe(true);
     const failed = play(success, constant(0.99));
-    expect(failed.state.score).toBe(55);
+    expect(failed.state.score).toBe(BigInt(55n));
     expect(failed.events.some(event => event.enhancement === 'hitchhiker')).toBe(false);
   });
 
@@ -54,7 +54,7 @@ describe('revised Hitchhiker', () => {
     const game = state();
     for (const enhancement of ['hitchhiker', 'bonus', 'golden', 'workout'] as Enhancement[]) enhance(game, 4, enhancement);
     const result = play(game, constant(0));
-    expect(result.state.stats.handScores[0]).toMatchObject({ pips: 38, multiplier: 2.5, xMult: 1, score: 95, hitchhikerPips: 16 });
+    expect(result.state.stats.handScores[0]).toMatchObject({ pips: 38, multiplier: 2.5, xMult: 1, score: 95n, hitchhikerPips: 16 });
     expect(result.state.gold).toBe(1);
     expect(result.state.dice[4].faces[5].workoutPips).toBe(1);
     expect(result.state.consumed).toContain('threeKind');
@@ -74,16 +74,16 @@ describe('revised Hitchhiker', () => {
 
   it('successful scoring Hitchhiker can Jackpot, while a failed one cannot', () => {
     const success = state();
-    success.target = 1;
-    success.stats.rounds[0].target = 1;
+    success.target = 1n;
+    success.stats.rounds[0].target = 1n;
     enhance(success, 4, 'hitchhiker');
     enhance(success, 4, 'jackpot');
     const joined = play(success, constant(0));
     expect(joined.state.stats.goldBySource.jackpot).toBe(3);
 
     const failure = state();
-    failure.target = 1;
-    failure.stats.rounds[0].target = 1;
+    failure.target = 1n;
+    failure.stats.rounds[0].target = 1n;
     enhance(failure, 4, 'hitchhiker');
     enhance(failure, 4, 'jackpot');
     const held = play(failure, constant(0.99));

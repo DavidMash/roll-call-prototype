@@ -3,8 +3,9 @@ import type {
   Rarity, Rank, RunNodeType, SpecialOfferType, WildfireResolved,
 } from './types';
 import type { RoundGoalBreakdown } from './goals';
+import type { ExactDecimal, ExactScore } from './scoreMath';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 5 as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 6 as const;
 export const RUN_HISTORY_V2_RULESET = 'engulfment-contribution-v2' as const;
 
 export interface RunHistoryV2Coverage {
@@ -85,7 +86,7 @@ export type HandSideEffect =
   | { type: 'charge'; operation: 'gain' | 'consume_reset' | 'arm' | 'disarm'; before: number; after: number; source?: Flame }
   | { type: 'flame_activation'; flame: Flame; origin: FlameOrigin; dieId?: number; factor?: number }
   | { type: 'enhancement'; enhancement: Enhancement; dieIds: number[]; amount?: number }
-  | { type: 'boss_state'; boss: BossType; change: string; amount?: number };
+  | { type: 'boss_state'; boss: BossType; change: string; amount?: number | ExactScore };
 
 export interface RunStartedEvent extends RunHistoryV2Envelope {
   kind: 'run_started';
@@ -152,18 +153,18 @@ export interface HandScoredEvent extends RunHistoryV2Envelope {
   scoringDice: (HistoryDieState & { role: 'selected' | 'hitchhiker' })[];
   consumed: boolean;
   score: {
-    infernoMultiplier?: number;
+    infernoMultiplier?: ExactScore;
     basePips: number;
     finalPips: number;
     baseMult: number;
     finalMult: number;
     finalXMult: number;
     bossFactor: number;
-    raw: number;
-    awarded: number;
-    rounding: { mode: 'nearest_integer'; delta: number };
+    raw: ExactDecimal;
+    awarded: ExactScore;
+    rounding: { mode: 'nearest_integer'; delta: ExactDecimal };
   };
-  roundScore: { before: number; afterAward: number; after: number };
+  roundScore: { before: ExactScore; afterAward: ExactScore; after: ExactScore };
   pipsContributions: PipsContribution[];
   multContributions: MultContribution[];
   xMultContributions: XMultContribution[];
@@ -196,8 +197,8 @@ export interface EngulfmentAttemptedEvent extends RunHistoryV2Envelope {
   attemptNumber: 1;
   infernoLevelBefore: number;
   infernoLevelAfter: number;
-  infernoMultiplierBefore: number;
-  infernoMultiplierAfter: number;
+  infernoMultiplierBefore: ExactScore;
+  infernoMultiplierAfter: ExactScore;
   offerings: EngulfmentOfferingTelemetry[];
   evidenceRounds: EngulfmentEvidenceRoundTelemetry[];
   offeringMultiplier: number;
@@ -287,7 +288,7 @@ export interface BossStateChangedEvent extends RunHistoryV2Envelope {
   change: 'started' | 'cleared' | 'state' | 'warden_target' | 'warden_unlock' | 'face';
   hand?: HandId;
   dieIds: number[];
-  amount?: number;
+  amount?: number | ExactScore;
 }
 
 export interface ScorecardRefreshedEvent extends RunHistoryV2Envelope {
@@ -298,8 +299,8 @@ export interface ScorecardRefreshedEvent extends RunHistoryV2Envelope {
 export interface RoundAttemptFinishedEvent extends RunHistoryV2Envelope {
   kind: 'round_attempt_finished';
   outcome: 'cleared' | 'bust';
-  score: number;
-  target: number;
+  score: ExactScore;
+  target: ExactScore;
   boss: BossType | null;
   livesBefore: number;
   livesAfter: number;
@@ -331,8 +332,8 @@ export interface RunFinishedEvent extends RunHistoryV2Envelope {
   finalChapter: number;
   finalRound: number;
   finalBoss: BossType | null;
-  score: number;
-  target: number;
+  score: ExactScore;
+  target: ExactScore;
   finalHandLevels: Record<HandId, number>;
 }
 

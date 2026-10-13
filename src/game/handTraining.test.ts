@@ -40,7 +40,7 @@ function trainingOfferKey(offer: TrainingOffer): string {
 
 function forceBust(state: GameState): GameState {
   state.dice.forEach((die, index) => { die.value = ([1, 2, 2, 4, 5] as Rank[])[index]; });
-  state.score = 0;
+  state.score = 0n;
   state.manualRerollsRemaining = 0;
   state.consumed = HAND_IDS.filter(hand => hand !== 'ones');
   return dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant()).state;
@@ -132,15 +132,15 @@ describe('derived hand levels', () => {
     const values: Rank[] = [4, 4, 2, 3, 6];
     game.dice.forEach((die, index) => { die.value = values[index]; });
     game.handLevels.pair = 3;
-    expect(handScore(game.dice, 'pair', [0, 1], 3)).toEqual({ pips: 22, multiplier: 3, rawScore: 66, score: 66 });
+    expect(handScore(game.dice, 'pair', [0, 1], 3)).toEqual({ pips: 22, multiplier: 3, rawScore: '66', score: 66n });
 
     activeFace(game.dice[0]).enhancements.bonus = 1;
     activeFace(game.dice[4]).enhancements.hitchhiker = 1;
     const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0));
-    expect(result.state.score).toBe(114);
+    expect(result.state.score).toBe(BigInt(114n));
     expect(result.state.stats.handScores[0]).toMatchObject({
       hand: 'pair', handLevel: 3, basePips: 14, baseMultiplier: 3,
-      pips: 38, multiplier: 3, rawScore: 114, score: 114, bonusPips: 10, hitchhikerPips: 6,
+      pips: 38, multiplier: 3, rawScore: '114', score: 114n, bonusPips: 10, hitchhikerPips: 6,
     });
     expect(result.events.find(event => event.type === 'HAND_STARTED')?.handScore).toMatchObject({
       handLevel: 3, basePips: 14, baseMultiplier: 3, currentPips: 14, currentMultiplier: 3,

@@ -38,10 +38,10 @@ describe('linear route and deterministic boss schedule', () => {
   });
 
   it('reports the gameplay target for every encounter node, including target-changing bosses', () => {
-    expect(encounterTarget({ id: 'round:2', type: 'normal_round', round: 2 })).toBe(150);
-    expect(encounterTarget({ id: 'boss:3', type: 'boss_round', round: 3, boss: 'caller' })).toBe(200);
-    expect(encounterTarget({ id: 'boss:6', type: 'boss_round', round: 6, boss: 'marathon' })).toBe(1_200);
-    expect(encounterTarget({ id: 'boss:6', type: 'boss_round', round: 6, boss: 'quickdraw' })).toBe(125);
+    expect(encounterTarget({ id: 'round:2', type: 'normal_round', round: 2 })).toBe(150n);
+    expect(encounterTarget({ id: 'boss:3', type: 'boss_round', round: 3, boss: 'caller' })).toBe(200n);
+    expect(encounterTarget({ id: 'boss:6', type: 'boss_round', round: 6, boss: 'marathon' })).toBe(1_200n);
+    expect(encounterTarget({ id: 'boss:6', type: 'boss_round', round: 6, boss: 'quickdraw' })).toBe(125n);
     expect(encounterTarget({ id: 'shop:before-round:2', type: 'shop', round: 2 })).toBeNull();
   });
 
@@ -88,14 +88,14 @@ describe('The Caller', () => {
     if (state.boss?.type !== 'caller') throw new Error('Caller fixture failed');
     const deterministicCall = state.boss.calledHand;
     state.boss.calledHand = 'fullHouse';
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     for (const [index, hand] of (['ones', 'twos', 'threes'] as const).entries()) {
       state.dice[0].value = (index + 1) as 1 | 2 | 3;
       const result = dispatch(state, { type: 'PLAY', hand, dieIds: [0] }, constant(.2));
       state = result.state;
     }
     expect(state.phase).toBe('round');
-    expect(state.score).toBe(14);
+    expect(state.score).toBe(BigInt(14n));
     expect(state.boss).toMatchObject({ type: 'caller', playsRemaining: 3, callsMissed: 1 });
     state.consumed = [...HAND_IDS];
     state.manualRerollsRemaining = 0;
@@ -123,8 +123,8 @@ describe('The Warden', () => {
     state.currentNodeId = 'shop:before-round:6';
     state.bossSchedule[6] = 'warden';
     const encounter = dispatch(state, { type: 'NEXT_ROUND' }, constant(.55)).state;
-    expect(encounter.target).toBe(400);
-    expect(Number.isInteger(encounter.target)).toBe(true);
+    expect(encounter.target).toBe(BigInt(400n));
+    expect(typeof encounter.target).toBe('bigint');
     expect(encounter.boss?.type === 'warden' ? encounter.boss.unlockCosts : null)
       .toEqual(wardenUnlockCosts(encounter.handLevels, [], encounter.target));
   });
@@ -144,47 +144,47 @@ describe('The Warden', () => {
     expect(wardenIdealNaturalPips('twoPair', 4)).toBe(22);
     expect(wardenIdealNaturalPips('fullHouse', 5)).toBe(28);
     expect(wardenIdealNaturalPips('largeStraight', 5)).toBe(20);
-    expect(wardenBaselineCapacity(levels, [], 1)).toBe(63);
+    expect(wardenBaselineCapacity(levels, [], 1)).toBe(63n);
     levels.pair = 2;
-    expect(wardenBaselineCapacity(levels, [], 2)).toBe(136);
+    expect(wardenBaselineCapacity(levels, [], 2)).toBe(136n);
   });
 
   it('caps the first unlock at the two weakest Upper baselines and half the Pair baseline', () => {
     const pairCapped = initialHandLevels();
     for (const hand of UPPER_HAND_IDS) pairCapped[hand] = 2;
-    expect(wardenUnlockCost(pairCapped, [], 1)).toBe(15);
+    expect(wardenUnlockCost(pairCapped, [], 1)).toBe(15n);
     expect(wardenUnlockCost(pairCapped, [], 1)).toBeLessThanOrEqual(
-      wardenBaselineHandScore(pairCapped, 'pair', 2) * 0.5,
+      wardenBaselineHandScore(pairCapped, 'pair', 2) / 2n,
     );
 
     const upperCapped = initialHandLevels();
     upperCapped.pair = 2;
     const weakestUpperTotal = UPPER_HAND_IDS
       .map(hand => wardenBaselineHandScore(upperCapped, hand, 1))
-      .sort((a, b) => a - b)
+      .sort((a, b) => a < b ? -1 : a > b ? 1 : 0)
       .slice(0, 2)
-      .reduce((sum, score) => sum + score, 0);
-    expect(weakestUpperTotal).toBe(17);
-    expect(wardenUnlockCost(upperCapped, [], 1)).toBe(15);
+      .reduce((sum, score) => sum + score, 0n);
+    expect(weakestUpperTotal).toBe(17n);
+    expect(wardenUnlockCost(upperCapped, [], 1)).toBe(15n);
   });
 
   it('clamps the second unlock to twice the first cost and the Pair baseline', () => {
     const levels = initialHandLevels();
-    expect(wardenUnlockCost(levels, UPPER_HAND_IDS, 2, 15)).toBe(30);
+    expect(wardenUnlockCost(levels, UPPER_HAND_IDS, 2, 15n)).toBe(30n);
 
     levels.pair = 2;
-    expect(wardenBaselineHandScore(levels, 'pair', 2)).toBe(52);
-    expect(wardenUnlockCost(levels, [], 2, 15)).toBe(50);
+    expect(wardenBaselineHandScore(levels, 'pair', 2)).toBe(52n);
+    expect(wardenUnlockCost(levels, [], 2, 15n)).toBe(50n);
   });
 
   it('keeps unscaled costs when the final unlock is already at or below half the Goal', () => {
-    expect(wardenUnlockCosts(initialHandLevels(), [], 1_000)).toEqual([15, 30, 105, 255]);
+    expect(wardenUnlockCosts(initialHandLevels(), [], 1_000n)).toEqual([15n, 30n, 105n, 255n]);
   });
 
   it('scales all costs proportionally and rounds the final unlock to exactly half the Goal', () => {
-    const costs = wardenUnlockCosts(initialHandLevels(), [], 500);
-    expect(costs).toEqual([10, 20, 65, 155]);
-    expect(costs.reduce((sum, cost) => sum + cost, 0)).toBe(250);
+    const costs = wardenUnlockCosts(initialHandLevels(), [], 500n);
+    expect(costs).toEqual([10n, 20n, 65n, 155n]);
+    expect(costs.reduce((sum, cost) => sum + cost, 0n)).toBe(250n);
   });
 
   it('only includes unused hands that are naturally possible at the active-die count', () => {
@@ -194,7 +194,7 @@ describe('The Warden', () => {
     expect(wardenNaturalHands(4)).toEqual([...UPPER_HAND_IDS, 'pair', 'twoPair', 'threeKind', 'smallStraight', 'fourKind']);
     expect(wardenNaturalHands(5)).toEqual(HAND_IDS);
     const levels = initialHandLevels();
-    expect(wardenBaselineCapacity(levels, ['sixes', 'pair'], 2)).toBe(65);
+    expect(wardenBaselineCapacity(levels, ['sixes', 'pair'], 2)).toBe(65n);
   });
 
   it('lets the player choose any first die and unlocks it without rerolling or triggering roll effects', () => {
@@ -209,9 +209,9 @@ describe('The Warden', () => {
     state.chargeXMult = 5;
     const result = dispatch(state, { type: 'UNLOCK_WARDEN_DIE', dieId: 4 }, constant(0));
     expect(result.state.boss).toMatchObject({ type: 'warden', startingDieId: 4, activeDieIds: [4],
-      unlockCosts: [5, 10, 25, 60], nextUnlockTarget: 5, unlockTargets: [5], pendingReinforcements: 0 });
+      unlockCosts: [5n, 10n, 25n, 60n], nextUnlockTarget: 5n, unlockTargets: [5n], pendingReinforcements: 0 });
     expect(result.state.dice[4].value).toBe(face);
-    expect(result.state.boss?.type === 'warden' && result.state.boss.nextUnlockTarget).toBe(5);
+    expect(result.state.boss?.type === 'warden' && result.state.boss.nextUnlockTarget).toBe(5n);
     expect(result.events.some(event => event.type === 'DIE_ROLLED' || event.type === 'JUMPING_BEAN_FREE_PLAY' || event.type === 'CHARGE_CHANGED')).toBe(false);
     expect(result.state.stats.wardenEvents.at(-1)).toMatchObject({ kind: 'starting_die', dieId: 4, activeDice: 1 });
   });
@@ -220,17 +220,17 @@ describe('The Warden', () => {
     let state = bossRound('warden');
     state = dispatch(state, { type: 'UNLOCK_WARDEN_DIE', dieId: 3 }, constant()).state;
     if (state.boss?.type !== 'warden') throw new Error('Warden fixture failed');
-    expect(state.boss.nextUnlockTarget).toBe(5);
-    state.score = 4;
+    expect(state.boss.nextUnlockTarget).toBe(5n);
+    state.score = 4n;
     state.consumed = ['ones'];
     state.handLevels.twos = 99;
-    expect(state.boss.nextUnlockTarget).toBe(5);
+    expect(state.boss.nextUnlockTarget).toBe(5n);
     state.handLevels.twos = 1;
     const resolver = new Resolver(state, constant(.2));
-    resolver.addScore(1, 'hand', 'test target crossing', [3], 'ones');
+    resolver.addScore(1n, 'hand', 'test target crossing', [3], 'ones');
     if (state.boss?.type !== 'warden') throw new Error('Warden fixture failed');
-    expect(state.boss).toMatchObject({ activeDieIds: [3], nextUnlockTarget: 5, pendingReinforcements: 1 });
-    expect(state.boss.nextUnlockTarget).toBe(5);
+    expect(state.boss).toMatchObject({ activeDieIds: [3], nextUnlockTarget: 5n, pendingReinforcements: 1 });
+    expect(state.boss.nextUnlockTarget).toBe(5n);
     expect(validateAction(state, { type: 'PLAY', hand: 'ones', dieIds: [3] })).toContain('Unlock');
     const lockedFace = state.dice[1].value;
     const unlock = dispatch(state, { type: 'UNLOCK_WARDEN_DIE', dieId: 1 }, constant(0));
@@ -239,8 +239,8 @@ describe('The Warden', () => {
     expect(state.boss.activeDieIds).toEqual([3, 1]);
     expect(state.dice[1].value).toBe(lockedFace);
     expect(unlock.events.some(event => event.type === 'DIE_ROLLED')).toBe(false);
-    expect(state.boss.nextUnlockTarget).toBe(15);
-    expect(state.boss.unlockTargets).toEqual([5, 15]);
+    expect(state.boss.nextUnlockTarget).toBe(15n);
+    expect(state.boss.unlockTargets).toEqual([5n, 15n]);
   });
 
   it('keeps locked dice out of scoring, rerolls, Jumping Bean, and attached Flames while Bonfires stay global', () => {
@@ -343,7 +343,7 @@ describe('The Hexer', () => {
     cursed.value = 2;
     expect(validateAction(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] })).toContain('Cursed Die');
     expect(validateAction(state, { type: 'PLAY', hand: 'pair', dieIds: [0, cursed.id] })).toBeNull();
-    state.target = 1;
+    state.target = 1n;
     state = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, cursed.id] }, constant(.2)).state;
     expect(state.phase).toBe('roundSummary');
     expect(state.lastRoundPayout).toMatchObject({ baseGold: 5, unusedRerollGold: 3, interestGold: 0, bossRewardGold: 10, totalRoundRewardGold: 18 });
@@ -365,7 +365,7 @@ describe('The Hexer', () => {
 
     new Resolver(state, constant(.2)).evaluate();
     expect(state.phase).toBe('shop');
-    expect(state.bust).toMatchObject({ round: 3, score: 0, livesAfter: 2 });
+    expect(state.bust).toMatchObject({ round: 3, score: 0n, livesAfter: 2 });
     expect(state.lives).toBe(2);
     expect(state.boss).toBeNull();
   });
@@ -389,7 +389,7 @@ describe('The Hexer', () => {
     cursed = state.dice.find(die => die.owner === 'boss')!;
     expect(cursed.value).toBe(7);
 
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     state.dice[0].value = 4;
     state.dice[1].value = 5;
     state.dice[2].value = 6;

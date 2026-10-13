@@ -16,7 +16,7 @@ const game = (seed = 'hooded-audit') => newRun(seed, constant(.2)).state;
 const setValues = (state: GameState, values: Rank[]) => values.forEach((value, index) => { state.dice[index].value = value; });
 
 function playWithoutClearing(state: GameState, hand: Parameters<Resolver['play']>[0], ids: number[], source: 'manual' | 'jumpingBean' = 'manual') {
-  state.target = 999_999_999;
+  state.target = 999_999_999n;
   state.stats.rounds.at(-1)!.target = state.target;
   const resolver = new Resolver(state, constant(.2));
   resolver.play(hand, ids, source);
@@ -45,84 +45,84 @@ describe('all 19 challenge specifications', () => {
       const active = challenge(id, id === 'theLongWay' ? 4 : 3);
       observeScoringEvent(active, [{ printed: 1, enhancements: {} }], 'jumpingBean');
       observeManualHand(active, hand); observeManualHand(active, hand);
-      expect(completeChallengeRound(active, 100, 100)).toBe(false);
+      expect(completeChallengeRound(active, 100n, 100n)).toBe(false);
       beginChallengeRound(active); observeManualHand(active, hand);
       if (id === 'theLongWay') observeManualHand(active, hand);
-      expect(completeChallengeRound(active, 100, 100)).toBe(true);
+      expect(completeChallengeRound(active, 100n, 100n)).toBe(true);
     }
   });
 
   it('requires all six Upper hands in one Round and all eight Lower hands across the Chapter', () => {
     const upper = challenge('upperClass', 6);
     for (const hand of ['ones', 'twos', 'threes', 'fours', 'fives'] as const) observeManualHand(upper, hand);
-    expect(completeChallengeRound(upper, 100, 100)).toBe(false);
+    expect(completeChallengeRound(upper, 100n, 100n)).toBe(false);
     beginChallengeRound(upper);
     expect(upper.attempt.value).toBe(0);
     for (const hand of ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'] as const) observeManualHand(upper, hand);
-    expect(completeChallengeRound(upper, 100, 100)).toBe(true);
+    expect(completeChallengeRound(upper, 100n, 100n)).toBe(true);
 
     const lower = challenge('lowerClass', 8);
     for (const hand of ['pair', 'twoPair', 'threeKind', 'fullHouse'] as const) observeManualHand(lower, hand);
-    expect(completeChallengeRound(lower, 100, 100)).toBe(false);
+    expect(completeChallengeRound(lower, 100n, 100n)).toBe(false);
     beginChallengeRound(lower);
     for (const hand of ['fourKind', 'fiveKind', 'smallStraight', 'largeStraight'] as const) observeManualHand(lower, hand);
-    expect(completeChallengeRound(lower, 100, 100)).toBe(true);
+    expect(completeChallengeRound(lower, 100n, 100n)).toBe(true);
   });
 
   it('requires five distinct manual Lower hands for Variety Pack in one Round', () => {
     const active = challenge('varietyPack', 5);
     for (const hand of ['pair', 'pair', 'twoPair', 'threeKind', 'fullHouse'] as const) observeManualHand(active, hand);
-    expect(completeChallengeRound(active, 100, 100)).toBe(false);
+    expect(completeChallengeRound(active, 100n, 100n)).toBe(false);
     beginChallengeRound(active);
     for (const hand of ['pair', 'twoPair', 'threeKind', 'fullHouse', 'fourKind'] as const) observeManualHand(active, hand);
-    expect(completeChallengeRound(active, 100, 100)).toBe(true);
+    expect(completeChallengeRound(active, 100n, 100n)).toBe(true);
   });
 
   it('accepts Close Call at exactly 100%-110% and rejects both outside boundaries', () => {
     for (const [score, expected] of [[99, false], [100, true], [110, true], [111, false]] as const)
-      expect(completeChallengeRound(challenge('closeCall'), score, 100)).toBe(expected);
+      expect(completeChallengeRound(challenge('closeCall'), BigInt(score), 100n)).toBe(expected);
   });
 
   it('applies clear-condition rules only to player choices and genuine scoring participants', () => {
     const noTakebacks = challenge('noTakebacks');
-    expect(completeChallengeRound(noTakebacks, 100, 100)).toBe(false);
+    expect(completeChallengeRound(noTakebacks, 100n, 100n)).toBe(false);
     beginChallengeRound(noTakebacks);
-    expect(completeChallengeRound(noTakebacks, 100, 100)).toBe(true);
+    expect(completeChallengeRound(noTakebacks, 100n, 100n)).toBe(true);
     const rerolled = challenge('noTakebacks'); observeManualReroll(rerolled);
-    expect(completeChallengeRound(rerolled, 100, 100)).toBe(false);
+    expect(completeChallengeRound(rerolled, 100n, 100n)).toBe(false);
 
     const upper = challenge('upperManagement');
     observeScoringEvent(upper, [{ printed: 2, enhancements: {} }], 'jumpingBean');
     observeManualHand(upper, 'ones'); observeManualHand(upper, 'twos'); observeManualHand(upper, 'threes');
-    expect(completeChallengeRound(upper, 100, 100)).toBe(true);
+    expect(completeChallengeRound(upper, 100n, 100n)).toBe(true);
     const lowerSpoils = challenge('upperManagement'); observeManualHand(lowerSpoils, 'pair');
-    expect(completeChallengeRound(lowerSpoils, 100, 100)).toBe(false);
+    expect(completeChallengeRound(lowerSpoils, 100n, 100n)).toBe(false);
 
     const low = challenge('lowProfile');
     observeScoringEvent(low, [{ printed: 5, enhancements: {} }], 'jumpingBean');
-    expect(completeChallengeRound(low, 100, 100)).toBe(false);
+    expect(completeChallengeRound(low, 100n, 100n)).toBe(false);
     const hitchhiker = challenge('lowProfile');
     observeScoringEvent(hitchhiker, [{ printed: 1, enhancements: {} }, { printed: 6, enhancements: {} }], 'manual');
-    expect(completeChallengeRound(hitchhiker, 100, 100)).toBe(false);
+    expect(completeChallengeRound(hitchhiker, 100n, 100n)).toBe(false);
   });
 
   it('keeps Roll Call in one Round and counts printed free-play/Hitchhiker participants', () => {
     const split = challenge('rollCall', 6);
     observeScoringEvent(split, [1, 2, 3].map(printed => ({ printed, enhancements: {} })), 'manual');
-    expect(completeChallengeRound(split, 100, 100)).toBe(false);
+    expect(completeChallengeRound(split, 100n, 100n)).toBe(false);
     beginChallengeRound(split);
     observeScoringEvent(split, [4, 5, 6].map(printed => ({ printed, enhancements: {} })), 'manual');
-    expect(completeChallengeRound(split, 100, 100)).toBe(false);
+    expect(completeChallengeRound(split, 100n, 100n)).toBe(false);
     beginChallengeRound(split);
     observeScoringEvent(split, [1, 2, 3, 4, 5, 6].map(printed => ({ printed, enhancements: {} })), 'manual');
-    expect(completeChallengeRound(split, 100, 100)).toBe(true);
+    expect(completeChallengeRound(split, 100n, 100n)).toBe(true);
   });
 
   it('counts each Opposites Attract scoring event, including free plays', () => {
     const active = challenge('oppositesAttract', 6);
     for (let index = 0; index < 6; index++)
       observeScoringEvent(active, [{ printed: 1, enhancements: {} }, { printed: 6, enhancements: {} }], 'manual');
-    expect(completeChallengeRound(active, 100, 100)).toBe(true);
+    expect(completeChallengeRound(active, 100n, 100n)).toBe(true);
   });
 
   it('locks all six scaled targets while allowing later acquisitions to contribute', () => {
@@ -172,12 +172,12 @@ describe('all 19 challenge specifications', () => {
   it('counts Jackpot once per distinct cleared Round and actual Magnetic destinations pulled', () => {
     const jackpot = challenge('jackpot', 2);
     observeClearingJackpot(jackpot, true); observeClearingJackpot(jackpot, true);
-    expect(completeChallengeRound(jackpot, 100, 100)).toBe(false);
+    expect(completeChallengeRound(jackpot, 100n, 100n)).toBe(false);
     beginChallengeRound(jackpot); observeClearingJackpot(jackpot, true);
-    expect(completeChallengeRound(jackpot, 100, 100)).toBe(true);
+    expect(completeChallengeRound(jackpot, 100n, 100n)).toBe(true);
     const magnetic = challenge('magneticPersonality', 3);
     observeMagneticPulls(magnetic, 2); observeMagneticPulls(magnetic, 1);
-    expect(completeChallengeRound(magnetic, 100, 100)).toBe(true);
+    expect(completeChallengeRound(magnetic, 100n, 100n)).toBe(true);
   });
 
   it('requires three distinct Enhancement types on each Fully Loaded scoring event', () => {
@@ -186,7 +186,7 @@ describe('all 19 challenge specifications', () => {
     expect(active.attempt.value).toBe(0);
     for (const source of ['manual', 'jumpingBean', 'manual'] as const)
       observeScoringEvent(active, [{ printed: 1, enhancements: { bonus: 1, golden: 1, vintage: 1 } }], source);
-    expect(completeChallengeRound(active, 100, 100)).toBe(true);
+    expect(completeChallengeRound(active, 100n, 100n)).toBe(true);
   });
 });
 
@@ -228,8 +228,8 @@ describe('Bonfire scoring-event counterfactual audit', () => {
     expect(fixed.factor).toBe(5);
     expect(lowball.weight).toBe(finalizeScore(score.pips, score.multiplier, 5).finalScore);
     expect(fixed.weight).toBe(finalizeScore(score.pips, score.multiplier, 2).finalScore);
-    expect(Number.isInteger(lowball.weight)).toBe(true);
-    expect(Number.isInteger(fixed.weight)).toBe(true);
+    expect(typeof lowball.weight).toBe('bigint');
+    expect(typeof fixed.weight).toBe('bigint');
   });
 
   it('includes Jumping Bean free-play scoring in active and inactive Bonfire observations', () => {
@@ -247,7 +247,7 @@ describe('Bonfire scoring-event counterfactual audit', () => {
     const state = game('one-round-observation');
     state.bonfires = ['vineyard'];
     state.bonfireRoundContributions = { vineyard: { observations: [] } };
-    state.target = 1; state.stats.rounds.at(-1)!.target = 1;
+    state.target = 1n; state.stats.rounds.at(-1)!.target = 1n;
     setValues(state, [1, 2, 3, 4, 6]);
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.2));
     expect(result.state.bonfireContributions.vineyard).toEqual({ roundCount: 1, factorSum: 1 });
@@ -473,7 +473,7 @@ describe('challenge interaction timing', () => {
   it('marks success without interrupting the clearing hand or Round Summary', () => {
     const state = game('non-interrupting-success');
     state.hoodedFigure.active = challenge('lowProfile');
-    state.target = 1; state.stats.rounds.at(-1)!.target = 1;
+    state.target = 1n; state.stats.rounds.at(-1)!.target = 1n;
     setValues(state, [1, 2, 3, 4, 4]);
     const cleared = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.2));
     expect(cleared.state.hoodedFigure.active?.complete).toBe(true);

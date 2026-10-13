@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stringifyExactJson } from './scoreMath';
 import { activeFace } from './dice';
 import { dispatch, newRun, validateAction } from './engine';
 import { HAND_IDS, handOptions } from './hands';
@@ -17,7 +18,7 @@ const sequence = (...values: number[]): RandomSource => { let index = 0; return 
 function game(values: Rank[] = [1, 2, 3, 4, 5], seed = 'history-v2'): GameState {
   const state = newRun(seed, constant()).state;
   state.dice.forEach((die, index) => { die.value = values[index]; });
-  state.target = 1_000_000;
+  state.target = 1_000_000n;
   state.stats.rounds[0].target = state.target;
   return state;
 }
@@ -33,7 +34,7 @@ const rollEvents = (state: GameState) => state.historyV2.filter((event): event i
 
 function forceBust(state: GameState): GameState {
   state.dice.forEach((die, index) => { die.value = ([1, 2, 2, 4, 5] as Rank[])[index]; });
-  state.target = 1_000_000;
+  state.target = 1_000_000n;
   state.stats.rounds.at(-1)!.target = state.target;
   state.manualRerollsRemaining = 0;
   state.consumed = HAND_IDS.filter(hand => hand !== 'ones');
@@ -47,10 +48,10 @@ describe('Run History V2 Goal diagnostics', () => {
     expect(started).toMatchObject({
       kind: 'round_attempt_started', chapter: 1, chapterRound: 1,
       target: {
-        chapterBase: 100, localMultiplier: 1,
-        neutralRawGoal: 100, bossModifier: 1, postBossRawGoal: 100,
-        coarseCandidate: 100, coarseDeviation: 0, coarseAccepted: true,
-        coarseCollision: false, finalGoal: 100,
+        chapterBase: '100', localMultiplier: 1,
+        neutralRawGoal: '100', bossModifier: 1, postBossRawGoal: '100',
+        coarseCandidate: 100n, coarseDeviation: 0, coarseAccepted: true,
+        coarseCollision: false, finalGoal: 100n,
       },
     });
     if (started?.kind !== 'round_attempt_started') throw new Error('Missing Round-start history');
@@ -72,7 +73,7 @@ describe('Run History V2 hand scoring', () => {
       score: { basePips: legacy.basePips, finalPips: legacy.pips, baseMult: legacy.baseMultiplier,
         finalMult: legacy.multiplier, finalXMult: legacy.xMult, bossFactor: legacy.bossFactor,
         raw: legacy.rawScore, awarded: legacy.score, rounding: { mode: 'nearest_integer' } },
-      roundScore: { before: 0, afterAward: legacy.score, after: legacy.score },
+      roundScore: { before: 0n, afterAward: legacy.score, after: legacy.score },
     });
     expect(event.selectedDice).toEqual([0, 1]);
     expect(event.scoringDice.map(die => die.dieId)).toEqual([0, 1]);
@@ -176,8 +177,8 @@ describe('Run History V2 roll batches', () => {
     expect(played.events.some(event => event.type === 'DIE_ROLLED')).toBe(true);
 
     const warden = game();
-    warden.boss = { type: 'warden', activeDieIds: [0], startingDieId: 0, nextUnlockTarget: 5,
-      unlockCosts: [5, 10, 25, 60], unlockTargets: [5], pendingReinforcements: 1 };
+    warden.boss = { type: 'warden', activeDieIds: [0], startingDieId: 0, nextUnlockTarget: 5n,
+      unlockCosts: [5n, 10n, 25n, 60n], unlockTargets: [5n], pendingReinforcements: 1 };
     const unlocked = dispatch(warden, { type: 'UNLOCK_WARDEN_DIE', dieId: 1 }, constant());
     expect(unlocked.state.historyV2.some(event => event.kind === 'boss_state_changed'
       && event.boss === 'warden' && event.change === 'warden_unlock' && event.dieIds.includes(1))).toBe(true);
@@ -260,7 +261,7 @@ describe('Run History V2 lifecycle, timeline, renderer, and summary', () => {
 
   it('derives representative high-value metrics and reconciles scoring/economy with RunStats', () => {
     const state = game([2, 2, 3, 4, 5]);
-    state.target = 1; state.stats.rounds[0].target = 1;
+    state.target = 1n; state.stats.rounds[0].target = 1n;
     enhance(state, 0, 'golden');
     const cleared = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant()).state;
     const shop = dispatch(cleared, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
@@ -308,7 +309,7 @@ describe('Run History V2 instrumentation safety and size', () => {
     while (state.round <= 60 && state.phase !== 'lost' && state.phase !== 'error' && steps < 3_000) {
       let action: Parameters<typeof dispatch>[1];
       if (state.phase === 'round') {
-        state.target = 1; state.stats.rounds.at(-1)!.target = 1;
+        state.target = 1n; state.stats.rounds.at(-1)!.target = 1n;
         if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0) {
           const activeDieIds = state.boss.activeDieIds;
           const locked = state.dice.find(die => !activeDieIds.includes(die.id))!;
@@ -316,7 +317,8 @@ describe('Run History V2 instrumentation safety and size', () => {
         } else {
           const choices = handOptions(state.dice, state.consumed).filter(option => !option.consumed)
             .flatMap(option => option.combinations.map(dieIds => ({ hand: option.id, dieIds,
-              score: handScore(state.dice, option.id, dieIds).score }))).sort((a, b) => b.score - a.score);
+              score: handScore(state.dice, option.id, dieIds).score }))).sort((a, b) =>
+                b.score > a.score ? 1 : b.score < a.score ? -1 : 0);
           action = choices.map(choice => ({ type: 'PLAY' as const, hand: choice.hand, dieIds: choice.dieIds }))
             .find(candidate => validateAction(state, candidate) === null) ?? { type: 'MANUAL_REROLL', dieIds: [0] };
         }
@@ -339,7 +341,7 @@ describe('Run History V2 instrumentation safety and size', () => {
       state = result.state; steps++;
       if (state.round === 60 && state.phase !== 'round') break;
     }
-    const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value));
+    const bytes = (value: unknown) => Buffer.byteLength(stringifyExactJson(value));
     const sizes = {
       legacyHistory: bytes(state.history),
       v2History: bytes(state.historyV2),
@@ -359,10 +361,10 @@ describe('Run History V2 instrumentation safety and size', () => {
     expect(state.debugTrace.records).toHaveLength(DEBUG_TRACE_MAX_RECORDS);
     expect(state.debugTrace.droppedRecords).toBeGreaterThan(0);
     expect({ legacyEntries: state.history.length, v2Entries: state.historyV2.length, ...sizes }).toEqual({
-      legacyEntries: 0, v2Entries: 715, legacyHistory: 2, v2History: 334_506,
-      renderedV2: 35_628, normalExport: 41_512, debugTrace: 43_821,
-      runStats: 76_378, rollbackState: 5_465, actionJournal: 8_942,
-      persistedState: 397_627, fullState: 474_915,
+      legacyEntries: 0, v2Entries: 715, legacyHistory: 2, v2History: 342_776,
+      renderedV2: 35_628, normalExport: 41_512, debugTrace: 43_961,
+      runStats: 77_468, rollbackState: 5_471, actionJournal: 8_942,
+      persistedState: 406_645, fullState: 484_433,
     });
   }, 30_000);
 });

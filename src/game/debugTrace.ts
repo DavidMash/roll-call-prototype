@@ -1,3 +1,5 @@
+import { scoreFromUnknown, stringifyExactJson, type ExactScore } from './scoreMath';
+
 export const DEBUG_TRACE_MAX_RECORDS = 256;
 export const DEBUG_TRACE_MAX_BYTES = 64 * 1024;
 export const DEBUG_TRACE_SCHEMA_VERSION = 1 as const;
@@ -15,7 +17,8 @@ export type DebugTraceRecord = DebugTraceEnvelope & (
   | { kind: 'resolution'; rngBefore: number; rngAfter: number; playbackEvents: number }
   | { kind: 'probability_check'; source: string; chance: number; stacks: number; succeeded: boolean; dieIds: number[] }
   | { kind: 'roll_batch'; reason: string; dieIds: number[]; results: { dieId: number; before: number; after: number }[] }
-  | { kind: 'scoring_step'; hand: string; stage: 'pips' | 'mult' | 'xmult' | 'final'; before: number; after: number; source: string }
+  | { kind: 'scoring_step'; hand: string; stage: 'pips' | 'mult' | 'xmult'; before: number; after: number; source: string }
+  | { kind: 'scoring_step'; hand: string; stage: 'final'; before: ExactScore; after: ExactScore; source: string }
 );
 
 export type CriticalDiagnostic = DebugTraceEnvelope & (
@@ -43,7 +46,7 @@ type DebugInput = DebugTraceRecord extends infer Record
 type CriticalInput = CriticalDiagnostic extends infer Record
   ? Record extends CriticalDiagnostic ? Omit<Record, keyof DebugTraceEnvelope> : never : never;
 
-const serializedBytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
+const serializedBytes = (value: unknown) => new TextEncoder().encode(stringifyExactJson(value)).byteLength;
 
 export function createDebugTrace(mode: DebugTraceMode = 'bounded'): DebugTraceState {
   return { schemaVersion: DEBUG_TRACE_SCHEMA_VERSION, mode, nextSeq: 0, firstAvailableSeq: 0,
@@ -97,6 +100,9 @@ export function appendCriticalDiagnostic(trace: DebugTraceState, context: TraceC
 
 export function normalizeDebugTrace(value: DebugTraceState | undefined): DebugTraceState {
   if (!value) return createDebugTrace();
+  const records = Array.isArray(value.records) ? value.records.map(record => record.kind === 'scoring_step' && record.stage === 'final'
+    ? { ...record, before: scoreFromUnknown(record.before), after: scoreFromUnknown(record.after) }
+    : record) as DebugTraceRecord[] : [];
   return {
     schemaVersion: DEBUG_TRACE_SCHEMA_VERSION,
     mode: value.mode === 'full' ? 'full' : 'bounded',
@@ -104,7 +110,7 @@ export function normalizeDebugTrace(value: DebugTraceState | undefined): DebugTr
     firstAvailableSeq: Math.max(0, value.firstAvailableSeq ?? 0),
     droppedRecords: Math.max(0, value.droppedRecords ?? 0),
     bufferBytes: Math.max(0, value.bufferBytes ?? 0),
-    records: Array.isArray(value.records) ? value.records : [],
+    records,
     critical: Array.isArray(value.critical) ? value.critical : [],
   };
 }

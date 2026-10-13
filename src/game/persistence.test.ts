@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stringifyExactJson } from './scoreMath';
 import { dispatch, newRun } from './engine';
 import { projectWildfire, rankedRecipients } from './hoodedFigure';
 import { compactGameStateForPersistence, isResumableRun, loadPersistedRun, RUN_STORAGE_KEY, RUN_STORAGE_VERSION, savePersistedRun } from './persistence';
@@ -84,7 +85,7 @@ describe('run persistence', () => {
     if (!state.roundCheckpoint) throw new Error('Expected initial round checkpoint');
     for (const key of ['wildfires', 'bonfireContributions', 'bonfireRoundContributions', 'chargeAttribution', 'hoodedFigure'] as const)
       delete (state.roundCheckpoint.board as unknown as Record<string, unknown>)[key];
-    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION, state }));
+    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: RUN_STORAGE_VERSION, state }));
 
     const loaded = loadPersistedRun(storage, null)!;
     expect(loaded.hoodedFigure).toEqual({ seen: false, previousChallengeId: null, active: null,
@@ -124,10 +125,10 @@ describe('run persistence', () => {
     storage.setItem(RUN_STORAGE_KEY, '{not-json');
     expect(loadPersistedRun(storage, null)).toBeNull();
 
-    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION + 1, state: newRun('old').state }));
+    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: RUN_STORAGE_VERSION + 1, state: newRun('old').state }));
     expect(loadPersistedRun(storage, null)).toBeNull();
 
-    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION, state: { seed: 'partial', phase: 'round' } }));
+    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: RUN_STORAGE_VERSION, state: { seed: 'partial', phase: 'round' } }));
     expect(loadPersistedRun(storage, null)).toBeNull();
   });
 
@@ -138,7 +139,7 @@ describe('run persistence', () => {
     delete (state.stats.probabilityProcs as Partial<typeof state.stats.probabilityProcs>).doubleTime;
     state.dice[0].flame = { id: 'personalTrainer', investedGold: 75 } as unknown as typeof state.dice[0]['flame'];
     state.bonfires = ['personalTrainer' as unknown as typeof state.bonfires[number]];
-    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION, state }));
+    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: RUN_STORAGE_VERSION, state }));
 
     const loaded = loadPersistedRun(storage, null);
     expect(loaded?.dice[0].flame).toBeNull();
@@ -155,7 +156,7 @@ describe('run persistence', () => {
     state.roundCheckpoint.board.dice[0].flame = { id: 'charge', investedGold: 50 } as unknown as typeof state.dice[0]['flame'];
     delete (state as Partial<typeof state>).maxCharge;
     delete (state.roundCheckpoint.board as Partial<typeof state.roundCheckpoint.board>).maxCharge;
-    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION, state }));
+    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: RUN_STORAGE_VERSION, state }));
 
     const loaded = loadPersistedRun(storage, null);
     expect(loaded?.dice[0].flame).toEqual({ id: 'momentum', investedGold: 50 });
@@ -174,7 +175,7 @@ describe('run persistence', () => {
     state.roundCheckpoint.board.dice[0].flame = { id: 'sixPack', investedGold: 100 };
     state.roundCheckpoint.board.sixPackXMult = 5.166666666667;
     delete (state.roundCheckpoint.board as Partial<typeof state.roundCheckpoint.board>).sixPackUpperHandsPlayed;
-    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION, state }));
+    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: RUN_STORAGE_VERSION, state }));
 
     const loaded = loadPersistedRun(storage, null);
     expect(loaded?.sixPackUpperHandsPlayed).toBe(2);
@@ -205,7 +206,7 @@ describe('run persistence', () => {
     delete legacyCheckpoint.roundCheckpoint;
     delete legacyCheckpoint.badDreamCheckpoint;
     state.roundCheckpoint = legacyCheckpoint as unknown as typeof state.roundCheckpoint;
-    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: 2, state }));
+    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: 2, state }));
 
     const loaded = loadPersistedRun(storage, null);
     expect(loaded?.historyV2).toEqual([]);
@@ -227,7 +228,7 @@ describe('run persistence', () => {
     state.badDreamCheckpoint = captureRollbackState(state) as unknown as typeof state.badDreamCheckpoint;
     state.suppressedPostBossRewardRounds = [27];
     delete (state as Partial<typeof state>).chapterLifecycle;
-    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: 3, state }));
+    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: 3, state }));
 
     const loaded = loadPersistedRun(storage, null);
     expect(loaded?.badDreamCheckpoint).toEqual({ chapter: 5, hoodedChallenge: state.hoodedFigure.active });
@@ -248,15 +249,15 @@ describe('run persistence', () => {
     delete (state as Partial<typeof state>).engulfmentLevel;
     delete (state as Partial<typeof state>).nextShopVisitId;
     delete state.hoodedFigure.forfeitedChapters;
-    storage.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: 4, state }));
+    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: 4, state }));
 
     const loaded = loadPersistedRun(storage, null)!;
     expect(loaded.engulfmentLevel).toBe(0);
     expect(loaded.nextShopVisitId).toBe(2);
     expect(loaded.shop).toMatchObject({ visitId: 1, engulfmentAttemptUsed: false });
     expect(loaded.hoodedFigure.forfeitedChapters).toEqual([]);
-    expect(loaded.stats.handScores[0].infernoMultiplier).toBe(1);
-    expect(loaded.historyV2.find(event => event.kind === 'hand_scored')).toMatchObject({ score: { infernoMultiplier: 1 } });
+    expect(loaded.stats.handScores[0].infernoMultiplier).toBe(BigInt(1n));
+    expect(loaded.historyV2.find(event => event.kind === 'hand_scored')).toMatchObject({ score: { infernoMultiplier: 1n } });
 
     savePersistedRun(storage, loaded);
     expect(loadPersistedRun(storage, null)?.shop).toMatchObject({ visitId: 1, engulfmentAttemptUsed: false });

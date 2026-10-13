@@ -15,7 +15,7 @@ function sequence(...values: number[]): RandomSource {
 function board(values: Rank[] = [1, 2, 3, 4, 5]): GameState {
   const game = newRun('manual-test', constant()).state;
   game.dice.forEach((die, index) => { die.value = values[index]; });
-  game.target = 1000000;
+  game.target = 1000000n;
   game.stats.rounds[0].target = game.target;
   return game;
 }
@@ -146,7 +146,7 @@ describe('manual roll effects and hand independence', () => {
     enhance(game, 4, 'slippy');
     enhance(game, 4, 'hitchhiker');
     const result = reroll(game, [0]);
-    expect(result.state.score).toBe(0);
+    expect(result.state.score).toBe(BigInt(0n));
     expect(result.state.gold).toBe(0);
     expect(result.state.consumed).toEqual([]);
     expect(Object.values(result.state.handPlayCounts).every(count => count === 0)).toBe(true);
@@ -180,7 +180,7 @@ describe('manual roll effects and hand independence', () => {
     for (const enhancement of ['magnetic', 'jumpingBean', 'sticky', 'bonus', 'golden', 'workout'] as Enhancement[]) enhance(game, 0, enhancement, 6);
     const result = reroll(game, [0], sequence(0.99, 0, 0));
     expect(result.state.dice[0].value).toBe(6);
-    expect(result.state.score).toBe(23);
+    expect(result.state.score).toBe(BigInt(23n));
     expect(result.state.gold).toBe(1);
     expect(result.state.dice[0].faces[5].workoutPips).toBe(1);
     expect(result.events.filter(event => event.type === 'ABILITY_TRIGGERED' && ['weighted', 'magnetic', 'jumpingBean'].includes(event.enhancement ?? '')).map(event => event.enhancement))
@@ -190,13 +190,13 @@ describe('manual roll effects and hand independence', () => {
   });
   it('Bean face effects resolve and its follow-up is skipped on clearance', () => {
     const game = board();
-    game.target = 5;
+    game.target = 5n;
     for (const enhancement of ['jumpingBean', 'golden', 'workout'] as Enhancement[]) enhance(game, 0, enhancement, 6);
     const result = reroll(game, [0], sequence(0.99, 0.99, 0));
     expect(result.state.phase).toBe('roundSummary');
-    expect(result.state.score).toBe(13);
+    expect(result.state.score).toBe(BigInt(13n));
     expect(result.state.gold).toBe(8);
-    expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: 13, finalScore: 13,
+    expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: 13n, finalScore: 13n,
       manualRerollChargesSpent: 1, manualRerollsRemainingAtClear: 2 });
     const clearIndex = result.events.findIndex(event => event.type === 'ROUND_CLEARED');
     expect(result.events.slice(0, clearIndex).filter(event => event.type === 'DIE_ROLLED').map(event => event.face)).toEqual([6]);
@@ -233,7 +233,7 @@ describe('loss, rescue and shop separation', () => {
     const game = board([1, 2, 2, 4, 5]);
     game.manualRerollsRemaining = 0;
     game.consumed = ['twos', 'threes', 'fours', 'fives', 'sixes', 'pair', 'twoPair'];
-    game.target = 1;
+    game.target = 1n;
     const result = dispatch(game, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant());
     expect(result.state.phase).toBe('roundSummary');
     expect(result.state.stats.loss).toBeNull();
@@ -266,15 +266,15 @@ describe('loss, rescue and shop separation', () => {
   it('the final dead-board charge can clear through a Bean chain with no playable categories', () => {
     const game = deadBoard(1);
     game.consumed = [...HAND_IDS];
-    game.target = 5;
+    game.target = 5n;
     enhance(game, 0, 'jumpingBean', 6);
     const result = reroll(game, [0], sequence(0.99, 0.99, 0));
     expect(result.state.phase).toBe('roundSummary');
-    expect(result.state.score).toBe(13);
+    expect(result.state.score).toBe(BigInt(13n));
     expect(result.state.manualRerollsRemaining).toBe(0);
     expect(result.state.stats.loss).toBeNull();
     expect(result.state.stats.deadBoardRescues).toBe(1);
-    expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: 13, finalScore: 13, manualRerollsRemainingAtClear: 0 });
+    expect(result.state.stats.rounds[0]).toMatchObject({ firstCrossedScore: 13n, finalScore: 13n, manualRerollsRemainingAtClear: 0 });
   });
   it('shop dice rerolls remain gold-paid and do not spend or reset the manual budget', () => {
     const game = board();

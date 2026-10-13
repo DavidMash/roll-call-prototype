@@ -5,7 +5,8 @@ import { activeFlameId, activeFlameInvestment, FLAMES } from '../game/flames';
 import type { Die as PhysicalDie, Enhancement, Flame, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
 import { PipFace } from './PipFace';
-import { formatPlayerNumber } from '../game/copy';
+import { formatExactScore, formatPlayerNumber } from '../game/copy';
+import type { ExactScore } from '../game/scoreMath';
 import { EnhancementSymbol } from './EnhancementIdentity';
 
 interface Props {
@@ -21,7 +22,7 @@ interface Props {
   detailsDisabled?: boolean;
   wardenLocked?: boolean;
   wardenSelectable?: boolean;
-  unlockAt?: number;
+  unlockAt?: ExactScore;
   eligible?: boolean;
   ineligibleReason?: string;
   lockedReason?: string;
@@ -57,7 +58,7 @@ export function Die({ die, display, selected, highlighted, rolling, resolving = 
     + `${isFetchTarget ? ', Fetch target' : ''}`
     + `${enhancementSummary ? `, ${enhancementSummary}` : ''}`;
   const accessibilityLabel = wardenLocked
-    ? `${dieDetails}, locked${unlockAt === undefined ? '' : ` until ${formatPlayerNumber(unlockAt)} points`}${wardenSelectable ? ', selectable to unlock' : ''}`
+    ? `${dieDetails}, locked${unlockAt === undefined ? '' : ` until ${formatExactScore(unlockAt)} points`}${wardenSelectable ? ', selectable to unlock' : ''}`
     : `${dieDetails}${lockedReason ? `, required: ${lockedReason}` : ineligibleReason ? `, unavailable: ${ineligibleReason}` : ''}`;
   const triggered = ability || flameAbility;
 
@@ -76,8 +77,8 @@ export function Die({ die, display, selected, highlighted, rolling, resolving = 
     <Paper component="button" type="button" withBorder
       className={`die ${die.owner === 'boss' ? 'cursed-die' : ''} ${face.snakeEyed ? 'snake-eyed-face' : ''} ${face.infected ? 'infected-face' : ''} ${face.magneticSourceUsed ? 'magnetic-used' : ''} ${selected ? 'selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${resolving ? 'resolving' : ''} ${triggered ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''} ${wardenLocked ? 'warden-locked' : ''}`}
       disabled={interactionDisabled} aria-disabled={interactionDisabled} aria-pressed={selected}
-      title={wardenLocked ? `${dieLabel} locked${unlockAt === undefined ? '' : ` until ${formatPlayerNumber(unlockAt)} points`}${wardenSelectable ? ' · choose to unlock' : ''}` : lockedReason ?? ineligibleReason}
-      aria-label={accessibilityLabel} data-locked-until={unlockAt} data-resolving={resolving || undefined}
+      title={wardenLocked ? `${dieLabel} locked${unlockAt === undefined ? '' : ` until ${formatExactScore(unlockAt)} points`}${wardenSelectable ? ' · choose to unlock' : ''}` : lockedReason ?? ineligibleReason}
+      aria-label={accessibilityLabel} data-locked-until={unlockAt?.toString()} data-resolving={resolving || undefined}
       onClick={() => { if (!interactionDisabled) onClick(); }}
       onDragOver={event => { if (!interactionDisabled && onDropOffer) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }}
       onDrop={event => {
@@ -87,7 +88,7 @@ export function Die({ die, display, selected, highlighted, rolling, resolving = 
         if (raw !== '' && Number.isInteger(Number(raw))) onDropOffer(Number(raw));
       }}>
       <Text size="xs" c="dimmed" className="die-id">{die.owner === 'boss' ? 'CURSED' : `D${die.id + 1}`}</Text>
-      {wardenLocked && <div className="die-lock-overlay" aria-hidden="true"><span>🔒</span><span>{unlockAt === undefined ? 'SELECT' : `${formatPlayerNumber(unlockAt)} PTS`}</span></div>}
+      {wardenLocked && <div className="die-lock-overlay" aria-hidden="true"><span>🔒</span><span>{unlockAt === undefined ? 'SELECT' : `${formatExactScore(unlockAt)} PTS`}</span></div>}
       {face.snakeEyed && <span className="boss-face-badge" aria-hidden="true" title="Snake Eyes">S</span>}
       {face.infected && <span className="boss-face-badge infected" aria-hidden="true" title="Infected">!</span>}
       {face.magneticSourceUsed && <span className="die-state-dot" aria-hidden="true" title="Magnetic pull used">●</span>}

@@ -17,7 +17,7 @@ const upperByRank: Record<Rank, HandId> = {
 function baseState(): GameState {
   const game = newRun('focused-update', constant(0.2)).state;
   game.dice.forEach((die, index) => { die.value = (index + 1) as Rank; });
-  game.target = 1_000_000;
+  game.target = 1_000_000n;
   game.stats.rounds[0].target = game.target;
   return game;
 }
@@ -131,10 +131,10 @@ describe('Jumping Bean free Upper-hand domain path', () => {
   it.each([1, 2, 3, 4, 5, 6] as Rank[])('maps face %s to its one-die Upper free play', rank => {
     const hand = upperByRank[rank];
     const result = deterministicBean(rank);
-    expect(result.state.scoreByHand).toEqual({ [hand]: 7 + rank });
-    expect(result.state.score).toBe(7 + rank);
-    expect(result.state.effectScore).toBe(0);
-    expect(result.state.stats.scoreBySource.jumpingBean).toBe(7 + rank);
+    expect(result.state.scoreByHand).toEqual({ [hand]: BigInt(7 + rank) });
+    expect(result.state.score).toBe(BigInt(7 + rank));
+    expect(result.state.effectScore).toBe(BigInt(0n));
+    expect(result.state.stats.scoreBySource.jumpingBean).toBe(BigInt(7 + rank));
     expect(result.state.stats.standaloneScores).toEqual([]);
     expect(result.state.stats.handScores[0]).toMatchObject({ hand, dieIds: [0], basePips: 7,
       baseMultiplier: 1, multiplier: 1, playSource: 'jumpingBean', consumedHand: false });
@@ -144,7 +144,7 @@ describe('Jumping Bean free Upper-hand domain path', () => {
   it('works after normal availability is consumed and leaves it consumed without adding another entry', () => {
     const result = deterministicBean(4, game => { game.consumed = ['fours']; });
     expect(result.error).toBeUndefined();
-    expect(result.state.scoreByHand.fours).toBe(11);
+    expect(result.state.scoreByHand.fours).toBe(11n);
     expect(result.state.consumed).toEqual(['fours']);
     expect(result.events.find(event => event.type === 'JUMPING_BEAN_FREE_PLAY')).toMatchObject({
       hand: 'fours', dieIds: [0], playSource: 'jumpingBean', handConsumed: false,
@@ -188,7 +188,7 @@ describe('Jumping Bean effects and Flames', () => {
       add(game, 0, 'golden', 3, 20);
       add(game, 0, 'workout', 3, 2);
     });
-    expect(result.state.stats.handScores[0]).toMatchObject({ pips: 30, score: 30, bonusPips: 20 });
+    expect(result.state.stats.handScores[0]).toMatchObject({ pips: 30, score: 30n, bonusPips: 20 });
     expect(result.state.stats.goldBySource.golden).toBe(3);
     expect(result.state.dice[0].faces[2].workoutPips).toBe(2);
     expect(stacks(result.state.dice[0].faces[2], 'golden')).toBe(3);
@@ -201,7 +201,7 @@ describe('Jumping Bean effects and Flames', () => {
     add(game, 0, 'golden', 6, 3);
     add(game, 0, 'sticky', 6);
     const result = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }, sequence(0.99, 0.99, 0.99, 0));
-    expect(result.state.scoreByHand.sixes).toBe(26);
+    expect(result.state.scoreByHand.sixes).toBe(26n);
     expect(result.state.stats.goldBySource.golden).toBe(6);
     expect(result.state.stats.triggers.golden).toBe(2);
   });
@@ -221,14 +221,14 @@ describe('Jumping Bean effects and Flames', () => {
       if (testCase.trained) game.handLevels[upperByRank[testCase.rank]] = 2;
     });
     expect(result.state.stats.handScores[0].xMult).toBe(testCase.expected);
-    expect(result.state.stats.handScores[0].score).toBe(testCase.expectedScore ?? (7 + testCase.rank) * testCase.expected);
+    expect(result.state.stats.handScores[0].score).toBe(BigInt(testCase.expectedScore ?? (7 + testCase.rank) * testCase.expected));
   });
 
   it('allows Personal Trainer after finalization', () => {
     const trainer = deterministicBean(5, game => {
       add(game, 0, 'personalTrainer', 5);
     }, constant(0));
-    expect(trainer.state.stats.handScores[0]).toMatchObject({ handLevel: 1, score: 12 });
+    expect(trainer.state.stats.handScores[0]).toMatchObject({ handLevel: 1, score: 12n });
     expect(trainer.state.handLevels.fives).toBe(2);
     expect(trainer.state.handPlayCounts.fives).toBe(1);
     expect(trainer.state.stats.jumpingBeanFreePlays[0].personalTrainerSucceeded).toBe(true);
@@ -276,7 +276,7 @@ describe('Jumping Bean movement and deterministic chains', () => {
     add(game, 0, 'jumpingBean', 5);
     add(game, 0, 'bump', 5);
     const result = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }, sequence(0.7));
-    expect(result.state.scoreByHand.fives).toBe(12);
+    expect(result.state.scoreByHand.fives).toBe(12n);
     expect(result.state.dice[0].value).toBe(6);
     expect(result.state.stats.bumpControlledRolls).toBe(1);
     expect(result.state.stats.jumpingBeanFreePlays[0].followupRerolled).toBe(true);
@@ -292,7 +292,7 @@ describe('Jumping Bean movement and deterministic chains', () => {
     add(game, 0, 'sticky', 6);
     const result = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(0));
     expect(result.state.stats.magneticAttractions).toBe(1);
-    expect(result.state.scoreByHand.sixes).toBe(13);
+    expect(result.state.scoreByHand.sixes).toBe(13n);
     expect(result.state.dice[0].value).toBe(6);
   });
 
@@ -307,7 +307,7 @@ describe('Jumping Bean movement and deterministic chains', () => {
     const first = dispatch(game, action, sequence(...rngValues));
     const second = dispatch(game, action, sequence(...rngValues));
     expect(first).toEqual(second);
-    expect(first.state.scoreByHand).toEqual({ fives: 12, sixes: 13 });
+    expect(first.state.scoreByHand).toEqual({ fives: 12n, sixes: 13n });
     expect(first.state.handPlayCounts).toMatchObject({ fives: 1, sixes: 1 });
     expect(first.state.stats.jumpingBeanFreePlays).toHaveLength(2);
   });

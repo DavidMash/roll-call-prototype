@@ -32,7 +32,8 @@ function bestHand(game: GameState) {
     .flatMap(option => option.combinations.map(dieIds => ({ hand: option.id, dieIds,
       score: handScore(dice, option.id, dieIds, game.handLevels[option.id]).score })))
     .filter(choice => game.boss?.type !== 'hexer' || choice.dieIds.includes(game.boss.cursedDieId))
-    .sort((a, b) => (callerHand ? Number(b.hand === callerHand) - Number(a.hand === callerHand) : 0) || b.score - a.score)[0];
+    .sort((a, b) => (callerHand ? Number(b.hand === callerHand) - Number(a.hand === callerHand) : 0)
+      || (b.score > a.score ? 1 : b.score < a.score ? -1 : 0))[0];
 }
 function automaticAction(game: GameState): Action {
   if (game.boss?.type === 'warden' && game.boss.pendingReinforcements > 0) {
@@ -352,24 +353,24 @@ test('Play action distinguishes possible, definite, and guaranteed final chances
   const unplayable = HAND_IDS.find(hand => !options.some(option => option.id === hand));
   expect(unplayable).toBeDefined();
   state.manualRerollsRemaining = 0;
-  state.target = 500;
+  state.target = 500n;
 
   await page.goto('/?seed=last-play-language&speed=instant');
-  async function load(consumed: typeof HAND_IDS, score: number) {
+  async function load(consumed: typeof HAND_IDS, score: bigint) {
     state.consumed = [...consumed];
     state.score = score;
-    await page.evaluate(([key, version, stored]) => localStorage.setItem(key, JSON.stringify({ version, state: stored })),
+    await page.evaluate(([key, version, stored]) => localStorage.setItem(key, JSON.stringify({ version, state: stored }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
       [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
     await page.reload();
     await ready(page);
     await page.getByTestId(`scorecard-row-${selected.id}`).click();
   }
 
-  await load(HAND_IDS.filter(hand => hand !== selected.id && hand !== unplayable), 0);
+  await load(HAND_IDS.filter(hand => hand !== selected.id && hand !== unplayable), 0n);
   await expect(page.getByRole('button', { name: 'LAST PLAY?', exact: true })).toContainText('• LAST PLAY?');
 
   const finalConsumed = HAND_IDS.filter(hand => hand !== selected.id);
-  await load(finalConsumed, 0);
+  await load(finalConsumed, 0n);
   await expect(page.getByRole('button', { name: 'LAST PLAY.', exact: true })).toContainText('• LAST PLAY.');
 
   const preview = handScore(state.dice, selected.id, selected.combinations[0], state.handLevels[selected.id]);
@@ -663,8 +664,8 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   await page.clock.runFor(500);
   await ready(page);
   game = result.state;
-  expect(Number.isInteger(game.score)).toBe(true);
-  expect(Object.values(game.scoreByHand).every(Number.isInteger)).toBe(true);
+  expect(typeof game.score).toBe('bigint');
+  expect(Object.values(game.scoreByHand).every(score => typeof score === 'bigint')).toBe(true);
   await expect(page.getByTestId(`scorecard-score-${hand}`)).toHaveText(String(scored.score));
   await expect(page.getByTestId('round-score-progress')).toHaveText(`${scored.score} / ${game.target}`);
 });
@@ -714,7 +715,7 @@ test('mobile Shop shell keeps its HUD, incoming encounter, controls, action, and
   await page.setViewportSize({ width: 390, height: 844 });
   const game = await reachShop(page, findShopSeed());
   game.round = 2;
-  await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state })),
+  await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, game] as const);
   await page.reload();
   await enterRun(page);
@@ -1131,7 +1132,7 @@ for (const direction of ['hand-first', 'dice-first'] as const) {
     await matchBoard(page, game); // Selection alone never scores or rolls.
     await page.getByRole('button', { name: 'PLAY', exact: true }).click();
     await matchBoard(page, next.state);
-    expect(next.state.score).toBe(11);
+    expect(next.state.score).toBe(BigInt(11n));
     expect(next.state.dice[preserved].value).toBe(4);
     expect(next.state.dice[played].value).toBe(3);
     expect(next.events.filter(event => event.type === 'DIE_ROLLED').map(event => event.dieIds)).toEqual([[played]]);
@@ -1293,7 +1294,7 @@ test('purchased Jumping Bean visibly triggers and rerolls on the next initial ga
   await expect(page.getByTestId(`scorecard-row-${freePlay.hand}`)).not.toHaveAttribute('data-state', 'consumed');
   await expect(page.getByTestId('round-score-progress')).toHaveText(`${next.state.score} / ${next.state.target}`);
   expect(next.state.stats.scoreBySource.jumpingBean).toBeGreaterThan(0);
-  expect(next.state.effectScore).toBe(0);
+  expect(next.state.effectScore).toBe(BigInt(0n));
   expect(next.events.filter(event => event.type === 'DIE_ROLLED' && event.dieIds?.includes(0)).length).toBeGreaterThan(1);
 });
 

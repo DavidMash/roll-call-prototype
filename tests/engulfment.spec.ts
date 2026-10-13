@@ -29,13 +29,13 @@ test('deterministic Engulfment fixture covers rejection, Bust refresh, success, 
   state.historyV2 = [
     { seq: 0, kind: 'hand_scored', round: 1, attempt: 1, actionId: 0, timelineId: 0,
       hand: 'ones', level: 1, playSource: 'manual', selectedDice: [0], scoringDice: [], consumed: true,
-      score: { infernoMultiplier: 1, basePips: 100, finalPips: 100, baseMult: 1, finalMult: 1,
-        finalXMult: 20, bossFactor: 1, raw: 2000, awarded: 2000, rounding: { mode: 'nearest_integer', delta: 0 } },
-      roundScore: { before: 0, afterAward: 2000, after: 2000 }, pipsContributions: [], multContributions: [],
+      score: { infernoMultiplier: 1n, basePips: 100, finalPips: 100, baseMult: 1, finalMult: 1,
+        finalXMult: 20, bossFactor: 1, raw: '2000', awarded: 2000n, rounding: { mode: 'nearest_integer', delta: '0' } },
+      roundScore: { before: 0n, afterAward: 2000n, after: 2000n }, pipsContributions: [], multContributions: [],
       xMultContributions: [{ sourceId: 'hailMary', sourceInstanceId: hailMaryInstance, origin: 'bonfire', factor: 20 }],
       checks: [], sideEffects: [] },
     { seq: 1, kind: 'round_attempt_finished', round: 1, attempt: 1, actionId: 1, timelineId: 0,
-      outcome: 'cleared', score: 2000, target: 1, boss: null, livesBefore: 3, livesAfter: 3 },
+      outcome: 'cleared', score: 2000n, target: 1n, boss: null, livesBefore: 3, livesAfter: 3 },
   ];
   UPPER_HAND_IDS.forEach((hand, index) => { state.handLevels[hand] = [13, 12, 14, 13, 10, 12][index]; });
   LOWER_HAND_IDS.forEach((hand, index) => { state.handLevels[hand] = index + 1; });
@@ -80,7 +80,7 @@ test('deterministic Engulfment fixture covers rejection, Bust refresh, success, 
   failed.phase = 'round'; failed.shop = null; failed.bust = null;
   const bustResolver = new Resolver(failed, constant);
   bustResolver.startRound();
-  failed.consumed = [...HAND_IDS]; failed.manualRerollsRemaining = 0; failed.score = 0; failed.target = 1_000_000;
+  failed.consumed = [...HAND_IDS]; failed.manualRerollsRemaining = 0; failed.score = 0n; failed.target = 1_000_000n;
   bustResolver.evaluate();
   expect(failed.phase).toBe('shop');
   await load(page, failed);
@@ -112,14 +112,14 @@ test('deterministic Engulfment fixture covers rejection, Bust refresh, success, 
   success = await storedState(page);
   success.shop!.exitUnlocked = true;
   const round = dispatch(success, { type: success.bust ? 'RETRY_ROUND' : 'NEXT_ROUND' }, constant).state;
-  round.target = 1_000_000;
+  round.target = 1_000_000n;
   round.dice.forEach(die => { die.value = 1; });
   await load(page, round);
   await page.getByTestId('scorecard-row-ones').click();
   await expect(page.getByTestId('play-action')).toContainText(/^25 ×/);
   await page.getByTestId('play-action').click();
   await expect.poll(async () => (await storedState(page)).historyV2.filter(event => event.kind === 'hand_scored').at(-1)?.score.infernoMultiplier)
-    .toBe(25);
+    .toBe('25');
   await page.reload();
   await enterRun(page);
   expect((await storedState(page)).engulfmentLevel).toBe(1);

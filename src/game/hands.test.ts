@@ -19,7 +19,7 @@ describe('hand detection', () => {
     const dice = board([rank, rank, rank, rank, rank]);
     expect(combinationsForHand(dice, hand)).toHaveLength(31);
     expect(defaultCombination(dice, hand)).toEqual([0, 1, 2, 3, 4]);
-    expect(handScore(dice, hand, [0, 1, 2, 3, 4]).score).toBe(7 + rank * 5);
+    expect(handScore(dice, hand, [0, 1, 2, 3, 4]).score).toBe(BigInt(7 + rank * 5));
   });
   it('upper hands allow every non-empty matching physical subset', () => {
     const dice = board([2, 2, 2, 5, 6]);
@@ -29,7 +29,7 @@ describe('hand detection', () => {
     expect(isValidSelection(dice, 'twos', [0, 1, 2])).toBe(true);
     expect(isValidSelection(dice, 'twos', [])).toBe(false);
     expect(combinationsForHand(dice, 'ones')).toEqual([]);
-    expect(handScore(dice, 'twos', [0, 1, 2]).score).toBe(13);
+    expect(handScore(dice, 'twos', [0, 1, 2]).score).toBe(BigInt(13n));
   });
   it('rejects mixed upper selections, duplicate physical IDs and nonmatching wild faces', () => {
     const dice = board([4, 4, 2, 3, 5], [[2, 'mirror'], [2, 'missingLink']]);
@@ -47,7 +47,7 @@ describe('hand detection', () => {
     const dice = board(values);
     const ids = defaultCombination(dice, hand)!;
     expect(ids).not.toBeNull();
-    expect(handScore(dice, hand, ids).score).toBe(score);
+    expect(handScore(dice, hand, ids).score).toBe(BigInt(score));
   });
   it.each<[HandId, Rank[]]>([
     ['threeKind', [1, 1, 2, 2, 3]], ['fullHouse', [2, 2, 2, 2, 2]],
@@ -59,7 +59,7 @@ describe('hand detection', () => {
     expect(HAND_IDS).not.toContain('chance');
   });
   it('uses the centralized progression formula', () => {
-    expect(Array.from({ length: 6 }, (_, i) => targetForRound(i + 1))).toEqual([100, 150, 200, 250, 300, 400]);
+    expect(Array.from({ length: 6 }, (_, i) => targetForRound(i + 1))).toEqual([100n, 150n, 200n, 250n, 300n, 400n]);
     expect(ENHANCEMENTS.weighted.purchasePrice).toBe(3);
   });
 });
@@ -146,7 +146,7 @@ describe('Missing Link', () => {
   it('fills one gap, retaining real scoring pips', () => {
     const dice = board([1, 2, 3, 6, 6], [[3, 'missingLink']]);
     expect(isValidSelection(dice, 'smallStraight', [0, 1, 2, 3])).toBe(true);
-    expect(handScore(dice, 'smallStraight', [0, 1, 2, 3]).score).toBe(55);
+    expect(handScore(dice, 'smallStraight', [0, 1, 2, 3]).score).toBe(BigInt(55n));
   });
   it('fills multiple distinct gaps and permits a natural wild rank', () => {
     const dice = board([1, 2, 6, 6, 5], [[2, 'missingLink'], [3, 'missingLink']]);
@@ -174,7 +174,7 @@ describe('Mirror', () => {
     const dice = board(values, wildIds.map(id => [id, 'mirror']));
     const ids = defaultCombination(dice, hand)!;
     expect(ids).not.toBeNull();
-    expect(handScore(dice, hand, ids).score).toBe(score);
+    expect(handScore(dice, hand, ids).score).toBe(BigInt(score));
   });
   it('full house requires two distinct ranks and respects the 3/2 capacities', () => {
     expect(combinationsForHand(board([2, 2, 2, 2, 6], [[4, 'mirror']]), 'fullHouse')).toEqual([]);

@@ -47,6 +47,6 @@ describe('current Round target copy', () => {
     [1_600_000, 'TARGET 1,600,000'],
     [987_654_321_000, 'TARGET 987,654,321,000'],
   ])('formats %s in full without abbreviation', (target, expected) => {
-    expect(formatMapTarget(target)).toBe(expected);
+    expect(formatMapTarget(BigInt(target))).toBe(expected);
   });
 });

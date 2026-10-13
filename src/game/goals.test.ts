@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_BOSS_TYPES, applyBossGoalModifier, bossGoalModifier } from './bosses';
+import { ALL_BOSS_TYPES, bossGoalModifier } from './bosses';
 import { chapterPosition } from './chapters';
 import { CONFIG } from './config';
+import { Decimal } from './scoreMath';
 import {
   beautifyGoal, getChapterBaseGoal, getRawRoundGoal, getRoundGoalBreakdown, goalRoundingIncrement,
   LOCAL_ROUND_GOAL_MULTIPLIERS, MAX_COARSE_GOAL_DEVIATION, prettyRoundGoal, targetForRound,
 } from './goals';
 
 const EXPECTED_CHAPTERS = [
-  [100, 150, 200, 250, 300, 400],
-  [450, 700, 900, 1_100, 1_300, 1_800],
-  [2_000, 3_000, 4_000, 5_000, 6_000, 8_000],
-  [9_000, 13_000, 17_000, 20_000, 26_000, 34_000],
-  [40_000, 60_000, 70_000, 90_000, 110_000, 150_000],
+  [100n, 150n, 200n, 250n, 300n, 400n],
+  [450n, 700n, 900n, 1_100n, 1_300n, 1_800n],
+  [2_000n, 3_000n, 4_000n, 5_000n, 6_000n, 8_000n],
+  [9_000n, 13_000n, 17_000n, 20_000n, 26_000n, 34_000n],
+  [40_000n, 60_000n, 70_000n, 90_000n, 110_000n, 150_000n],
 ] as const;
 
 describe('Chapter Goal curve', () => {
@@ -31,13 +32,13 @@ describe('Chapter Goal curve', () => {
   it('starts at exactly 100 and grows each Chapter by 1.28^6 without accumulated rounding', () => {
     expect(CONFIG.baseTarget).toBe(100);
     expect(CONFIG.targetGrowth).toBe(1.28);
-    expect(getChapterBaseGoal(1)).toBe(100);
+    expect(getChapterBaseGoal(1)).toBe('100');
     expect(CONFIG.targetGrowth ** 6).toBeCloseTo(4.398046511104, 12);
     for (let chapter = 2; chapter <= 40; chapter++) {
-      expect(getChapterBaseGoal(chapter) / getChapterBaseGoal(chapter - 1))
+      expect(new Decimal(getChapterBaseGoal(chapter)).div(getChapterBaseGoal(chapter - 1)).toNumber())
         .toBeCloseTo(CONFIG.targetGrowth ** 6, 12);
-      expect(getChapterBaseGoal(chapter))
-        .toBeCloseTo(100 * Math.pow(1.28, 6 * (chapter - 1)), 8);
+      expect(new Decimal(getChapterBaseGoal(chapter))
+        .div(String(100 * Math.pow(1.28, 6 * (chapter - 1)))).toNumber()).toBeCloseTo(1, 12);
     }
   });
 
@@ -45,7 +46,7 @@ describe('Chapter Goal curve', () => {
     expect(LOCAL_ROUND_GOAL_MULTIPLIERS).toEqual([1, 1.5, 2, 2.5, 3, 4]);
     for (let localRound = 1; localRound <= 6; localRound++) {
       expect(getRawRoundGoal(localRound))
-        .toBe(getChapterBaseGoal(1) * LOCAL_ROUND_GOAL_MULTIPLIERS[localRound - 1]);
+        .toBe(new Decimal(getChapterBaseGoal(1)).times(LOCAL_ROUND_GOAL_MULTIPLIERS[localRound - 1]).toFixed());
     }
   });
 
@@ -66,9 +67,8 @@ describe('Chapter Goal curve', () => {
       expect.closeTo(-4.632568359375, 10),
     ];
     for (let chapter = 1; chapter <= 10; chapter++) {
-      const chapterBase = getChapterBaseGoal(chapter);
       const differences = LOCAL_ROUND_GOAL_MULTIPLIERS.map((multiplier, index) =>
-        ((chapterBase * multiplier) / (chapterBase * oldMultipliers[index]) - 1) * 100);
+        new Decimal(multiplier).div(oldMultipliers[index]).minus(1).times(100).toNumber());
       expect(differences).toEqual(expectedDifferences);
     }
   });
@@ -77,7 +77,7 @@ describe('Chapter Goal curve', () => {
 describe('Goal beautification', () => {
   it('accepts coarse rounding at and below 7.5 percent', () => {
     const exactThresholdRaw = 1_000 / (1 - MAX_COARSE_GOAL_DEVIATION);
-    expect(beautifyGoal(659.7)).toMatchObject({ coarseCandidate: 700, coarseAccepted: true, finalGoal: 700 });
+    expect(beautifyGoal(659.7)).toMatchObject({ coarseCandidate: 700n, coarseAccepted: true, finalGoal: 700n });
     expect(beautifyGoal(exactThresholdRaw).coarseDeviation).toBeCloseTo(0.075, 12);
     expect(beautifyGoal(exactThresholdRaw).coarseAccepted).toBe(true);
   });
@@ -86,31 +86,31 @@ describe('Goal beautification', () => {
     expect(beautifyGoal(1_000 / 0.9249).coarseAccepted).toBe(false);
     expect([1_099.5, 1_319.4, 1_759.2, 12_760, 25_521, 149_658]
       .map(raw => beautifyGoal(raw).finalGoal))
-      .toEqual([1_100, 1_300, 1_800, 13_000, 26_000, 150_000]);
+      .toEqual([1_100n, 1_300n, 1_800n, 13_000n, 26_000n, 150_000n]);
     expect([999, 1_000, 9_999, 10_000, 99_999, 100_000, 999_999, 1_000_000, 9_999_999,
       10_000_000, 99_999_999, 100_000_000, 999_999_999, 1_000_000_000, 9_999_999_999,
       10_000_000_000, 1_000_000_000_000].map(goalRoundingIncrement))
-      .toEqual([25, 50, 50, 500, 500, 5_000, 5_000, 50_000, 50_000,
-        500_000, 500_000, 5_000_000, 5_000_000, 50_000_000, 50_000_000,
-        500_000_000, 50_000_000_000]);
+      .toEqual([25n, 50n, 50n, 500n, 500n, 5_000n, 5_000n, 50_000n, 50_000n,
+        500_000n, 500_000n, 5_000_000n, 5_000_000n, 50_000_000n, 50_000_000n,
+        500_000_000n, 50_000_000_000n]);
     expect([487.5, 1_792, 41_754, 972_786, 4_695_452, 22_664_052, 528_029_013,
       1_234_000_000_000].map(prettyRoundGoal))
-      .toEqual([500, 1_800, 42_000, 970_000, 4_700_000, 23_000_000, 530_000_000,
-        1_200_000_000_000]);
+      .toEqual([500n, 1_800n, 42_000n, 970_000n, 4_700_000n, 23_000_000n, 530_000_000n,
+        1_200_000_000_000n]);
   });
 
   it('uses deterministic lookahead to reject coarse collisions on both adjacent Rounds', () => {
     const round36 = getRoundGoalBreakdown(36);
     const round37 = getRoundGoalBreakdown(37);
-    expect(round36).toMatchObject({ coarseCandidate: 700_000, coarseAccepted: false,
-      coarseCollision: true, fineFallback: 660_000, finalGoal: 660_000 });
-    expect(round37).toMatchObject({ coarseCandidate: 700_000, coarseAccepted: false,
-      coarseCollision: true, fineFallback: 720_000, finalGoal: 720_000 });
+    expect(round36).toMatchObject({ coarseCandidate: 700_000n, coarseAccepted: false,
+      coarseCollision: true, fineFallback: 660_000n, finalGoal: 660_000n });
+    expect(round37).toMatchObject({ coarseCandidate: 700_000n, coarseAccepted: false,
+      coarseCollision: true, fineFallback: 720_000n, finalGoal: 720_000n });
     expect(getRoundGoalBreakdown(36)).toEqual(round36);
     expect(getRoundGoalBreakdown(37)).toEqual(round37);
-    expect(targetForRound(37, null, round => round === 36 ? 'marathon' : null)).toBe(700_000);
+    expect(targetForRound(37, null, round => round === 36 ? 'marathon' : null)).toBe(700_000n);
     expect(beautifyGoal(101, [102])).toMatchObject({ coarseAccepted: false,
-      coarseCollision: true, fineFallback: 100, finalGoal: 100 });
+      coarseCollision: true, fineFallback: 100n, finalGoal: 100n });
   });
 });
 
@@ -125,16 +125,16 @@ describe('Boss Goal modifiers', () => {
 
   it('applies Boss modification to the new raw Goal before beautification', () => {
     const marathon = getRoundGoalBreakdown(6, 'marathon');
-    expect(marathon).toMatchObject({ neutralRawGoal: 400, bossModifier: 3, postBossRawGoal: 1_200,
-      coarseAccepted: false, fineFallback: 1_200, finalGoal: 1_200 });
+    expect(marathon).toMatchObject({ neutralRawGoal: '400', bossModifier: 3, postBossRawGoal: '1200',
+      coarseAccepted: false, fineFallback: 1_200n, finalGoal: 1_200n });
     const quickdraw = getRoundGoalBreakdown(6, 'quickdraw');
-    expect(quickdraw.neutralRawGoal).toBe(400);
+    expect(quickdraw.neutralRawGoal).toBe('400');
     expect(quickdraw.bossModifier).toBe(1 / 3);
-    expect(quickdraw.postBossRawGoal).toBeCloseTo(400 / 3, 12);
-    expect(quickdraw.finalGoal).toBe(125);
+    expect(new Decimal(quickdraw.postBossRawGoal).toNumber()).toBeCloseTo(400 / 3, 12);
+    expect(quickdraw.finalGoal).toBe(BigInt(125n));
     const tightrope = getRoundGoalBreakdown(3, 'tightrope');
-    expect(tightrope).toMatchObject({ neutralRawGoal: 200, bossModifier: 0.5,
-      postBossRawGoal: 100, finalGoal: 100 });
+    expect(tightrope).toMatchObject({ neutralRawGoal: '200', bossModifier: 0.5,
+      postBossRawGoal: '100', finalGoal: 100n });
   });
 
   it('gives neutral Bosses the normal R3/R6 target and retains meaningful special behavior', () => {
@@ -145,11 +145,41 @@ describe('Boss Goal modifiers', () => {
     expect(targetForRound(6, 'marathon')).toBeGreaterThan(targetForRound(6));
     expect(targetForRound(6, 'quickdraw')).toBeLessThan(targetForRound(6));
     expect(targetForRound(3, 'tightrope')).toBeLessThan(targetForRound(3));
-    expect(applyBossGoalModifier('quickdraw', 3)).toBe(CONFIG.targetRounding);
+    expect(getRoundGoalBreakdown(6, 'quickdraw').postBossRawGoal).toBe('133.33333333333333333333333333333333333333333333333333333333333333333333333333333');
   });
 });
 
 describe('long-run Goal stability', () => {
+  it('keeps representative deep Chapter Goals as deterministic exact integers', () => {
+    const samples = [21, 22, 23, 32, 100, 500].map(chapter => {
+      const round = (chapter - 1) * 6 + 1;
+      const breakdown = getRoundGoalBreakdown(round);
+      return { chapter, chapterBase: breakdown.chapterBase, neutralRawGoal: breakdown.neutralRawGoal,
+        finalGoal: breakdown.finalGoal.toString() };
+    });
+    expect(samples.map(({ chapter, finalGoal }) => ({ chapter, finalGoal }))).toEqual([
+      { chapter: 21, finalGoal: '730000000000000' },
+      { chapter: 22, finalGoal: '3200000000000000' },
+      { chapter: 23, finalGoal: '14000000000000000' },
+      { chapter: 32, finalGoal: '9000000000000000000000' },
+      { chapter: 100, finalGoal: '500000000000000000000000000000000000000000000000000000000000000000' },
+      { chapter: 500, finalGoal: `1${'0'.repeat(323)}` },
+    ]);
+    expect(samples.every(sample => /^\d+(?:\.\d+)?$/.test(sample.chapterBase) && /^\d+$/.test(sample.finalGoal))).toBe(true);
+  });
+
+  it('preserves huge beautification collision and Boss-modifier behavior', () => {
+    const zeros = '0'.repeat(40);
+    const collision = beautifyGoal(`101${zeros}`, [`102${zeros}`]);
+    expect(collision.coarseCollision).toBe(true);
+    expect(collision.coarseAccepted).toBe(false);
+    expect(collision.finalGoal % goalRoundingIncrement(`101${zeros}`)).toBe(0n);
+    const round = (100 - 1) * 6 + 6;
+    expect(getRoundGoalBreakdown(round, 'marathon').finalGoal).toBeGreaterThan(getRoundGoalBreakdown(round).finalGoal);
+    expect(getRoundGoalBreakdown(round, 'quickdraw').finalGoal).toBeLessThan(getRoundGoalBreakdown(round).finalGoal);
+    expect(getRoundGoalBreakdown(round, 'tightrope').finalGoal).toBeLessThan(getRoundGoalBreakdown(round).finalGoal);
+  });
+
   it('is positive, finite, integral, and deterministic through late supported Chapters', () => {
     for (const chapter of [1, 10, 25, 50, 100]) {
       for (let localRound = 1; localRound <= 6; localRound++) {
@@ -157,11 +187,9 @@ describe('long-run Goal stability', () => {
         const first = getRoundGoalBreakdown(round);
         const second = getRoundGoalBreakdown(round);
         expect(second).toEqual(first);
-        expect(Number.isFinite(first.neutralRawGoal)).toBe(true);
-        expect(Number.isFinite(first.finalGoal)).toBe(true);
-        expect(first.neutralRawGoal).toBeGreaterThan(0);
-        expect(first.finalGoal).toBeGreaterThan(0);
-        expect(Number.isInteger(first.finalGoal)).toBe(true);
+        expect(new Decimal(first.neutralRawGoal).isFinite()).toBe(true);
+        expect(new Decimal(first.neutralRawGoal).gt(0)).toBe(true);
+        expect(first.finalGoal).toBeGreaterThan(0n);
       }
     }
   });
@@ -169,9 +197,8 @@ describe('long-run Goal stability', () => {
   it('continues magnitude-scaled fine rounding beyond billions', () => {
     for (const raw of [1.49658e9, 1.49658e12, 1.49658e20, 1.49658e40]) {
       const rounded = prettyRoundGoal(raw);
-      expect(Number.isFinite(rounded)).toBe(true);
-      expect(rounded).toBeGreaterThan(0);
-      expect(rounded / goalRoundingIncrement(raw)).toBeCloseTo(Math.round(raw / goalRoundingIncrement(raw)), 8);
+      expect(rounded).toBeGreaterThan(0n);
+      expect(rounded % goalRoundingIncrement(raw)).toBe(0n);
     }
   });
 });

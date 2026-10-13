@@ -9,13 +9,13 @@ function sequence(...values: number[]): RandomSource {
   let index = 0;
   return { next: () => values[index++] ?? 0.99 };
 }
-function board(values: Rank[] = [4, 4, 2, 5, 6], score = 26, target = 50): GameState {
+function board(values: Rank[] = [4, 4, 2, 5, 6], score: number | bigint = 26n, target: number | bigint = 50n): GameState {
   const game = newRun('jackpot-unit', constant()).state;
   game.dice.forEach((die, index) => { die.value = values[index]; });
-  game.score = score;
-  game.target = target;
-  game.stats.rounds[0].target = target;
-  game.stats.rounds[0].finalScore = score;
+  game.score = BigInt(score);
+  game.target = BigInt(target);
+  game.stats.rounds[0].target = BigInt(target);
+  game.stats.rounds[0].finalScore = BigInt(score);
   return game;
 }
 function enhance(game: GameState, dieId: number, enhancement: Enhancement, count = 1, rank?: Rank) {
@@ -73,7 +73,7 @@ describe('round-clearing scoring Jackpot', () => {
     enhance(success, 4, 'hitchhiker');
     enhance(success, 4, 'jackpot', 2);
     const joined = playPair(success, constant(0));
-    expect(joined.state.score).toBe(50);
+    expect(joined.state.score).toBe(BigInt(50n));
     expect(joined.state.stats.goldBySource.jackpot).toBe(6);
 
     const failure = board();
@@ -88,7 +88,7 @@ describe('round-clearing scoring Jackpot', () => {
     enhance(game, 0, 'jackpot', 2, 6);
     const result = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }, sequence(0.99));
     expect(result.state.phase).toBe('roundSummary');
-    expect(result.state.score).toBe(13);
+    expect(result.state.score).toBe(BigInt(13n));
     expect(result.state.stats.goldBySource.jackpot).toBe(6);
     expect(result.state.stats.jumpingBeanFreePlays[0]).toMatchObject({ hand: 'sixes', roundCleared: true, jackpotPayout: 6 });
     expect(result.events.filter(event => event.message.startsWith('Jumping Bean reroll'))).toHaveLength(0);

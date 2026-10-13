@@ -9,7 +9,7 @@ import type { GameState } from '../src/game/types';
 
 async function installRun(page: Page, state: GameState, speed: 'normal' | 'instant' = 'instant') {
   await page.goto(`/?seed=${state.seed}&speed=${speed}`);
-  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved })),
+  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'ROLL CALL', exact: true })).toBeVisible();

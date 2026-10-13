@@ -57,8 +57,13 @@ export function scoringPlaybackRun() {
         const choices = handOptions(dice, unavailableEncounterHands(game)).filter(option => !option.consumed)
           .flatMap(option => option.combinations.map(dieIds => ({ type: 'PLAY' as const, hand: option.id, dieIds })))
           .filter(choice => game.boss?.type !== 'hexer' || choice.dieIds.includes(game.boss.cursedDieId))
-          .sort((a, b) => (callerHand ? Number(b.hand === callerHand) - Number(a.hand === callerHand) : 0)
-            || handScore(dice, b.hand, b.dieIds).score - handScore(dice, a.hand, a.dieIds).score);
+          .sort((a, b) => {
+            const callerPreference = callerHand ? Number(b.hand === callerHand) - Number(a.hand === callerHand) : 0;
+            if (callerPreference) return callerPreference;
+            const aScore = handScore(dice, a.hand, a.dieIds).score;
+            const bScore = handScore(dice, b.hand, b.dieIds).score;
+            return bScore > aScore ? 1 : bScore < aScore ? -1 : 0;
+          });
         const scoringAction = choices.find(choice =>
           choice.dieIds.some(id => stacks(activeFace(game.dice[id]), 'bonus'))
           && dice.some(die => !choice.dieIds.includes(die.id) && stacks(activeFace(die), 'hitchhiker')));

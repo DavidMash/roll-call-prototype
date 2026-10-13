@@ -6,6 +6,7 @@ import { finalizeScore, handScore, infernoMultiplier } from './scoring';
 import type { ActiveFlame, Board, Die, Flame, FlameInstanceId, GameState, HandId, Rarity, XMultFactor } from './types';
 import { formatPlayerNumber } from './copy';
 import { wildfireFactor } from './hoodedFigure';
+import type { ExactScore } from './scoreMath';
 
 export interface FlameDefinition {
   name: string;
@@ -228,9 +229,9 @@ export const hasXMultFlame = (dice: Die[], bonfires: Flame[] = [], wildfires: im
   });
 
 export interface HandStartSnapshot {
-  score: number;
-  target: number;
-  infernoMultiplier: number;
+  score: ExactScore;
+  target: ExactScore;
+  infernoMultiplier: ExactScore;
   gold: number;
   manualRerollsRemaining: number;
   previousPlays: number;

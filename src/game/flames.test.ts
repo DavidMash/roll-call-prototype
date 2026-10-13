@@ -12,7 +12,7 @@ const constant = (value = 0.99): RandomSource => ({ next: () => value });
 function game(values: Rank[] = [4, 4, 4, 2, 6]): GameState {
   const state = newRun('new-flames', constant()).state;
   state.dice.forEach((die, index) => { die.value = values[index]; });
-  state.target = 100000; state.stats.rounds[0].target = state.target;
+  state.target = 100000n; state.stats.rounds[0].target = state.target;
   return state;
 }
 function flame(state: GameState, dieId: number, id: Flame, investedGold = 100) { state.dice[dieId].flame = { id, investedGold }; }

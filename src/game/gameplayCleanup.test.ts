@@ -15,14 +15,14 @@ function expose(state: GameState, values: Rank[]): void {
 function winningRound(): ReturnType<typeof dispatch> {
   const state = newRun('persistent-winning-faces', constant(.2)).state;
   expose(state, [2, 2, 3, 4, 5]);
-  state.target = 1;
-  state.stats.rounds.at(-1)!.target = 1;
+  state.target = 1n;
+  state.stats.rounds.at(-1)!.target = 1n;
   state.dice[0].faces[5].enhancements.jumpingBean = 1;
   return dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.99));
 }
 
 function bossSummary(round: number, bossType: RoundSummary['bossType']): RoundSummary {
-  return { round, encounterType: 'boss', bossType, score: 1, target: 1, goldBefore: 0, goldAfter: 0,
+  return { round, encounterType: 'boss', bossType, score: 1n, target: 1n, goldBefore: 0, goldAfter: 0,
     totalGoldEarned: 0, sources: { baseRewardGold: 0, unusedRerollGold: 0, interestGold: 0,
       bossRewardGold: 0, goldenGold: 0, jackpotGold: 0, otherGold: 0 } };
 }
@@ -62,7 +62,7 @@ describe('persistent physical faces', () => {
     const shop = dispatch(result.state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant(0));
     expect(shop.state.phase).toBe('shop');
     expect(shop.state.dice.map(die => die.value)).toEqual(finalFaces);
-    expect(shop.state.score).toBe(score);
+    expect(shop.state.score).toBe(BigInt(score));
     expect(shop.events.some(event => event.type === 'DICE_REROLL_STARTED')).toBe(false);
     expect(shop.events.some(event => event.message.includes('Free shop roll'))).toBe(false);
   });
@@ -109,7 +109,7 @@ describe('Clockmaker roll pipeline', () => {
 
   it('changes post-hand and manual rolling dice only, and actual Bump does not double-stack', () => {
     let state = clockmakerEncounter();
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     expose(state, [2, 2, 3, 4, 5]);
     activeFace(state.dice[4]).enhancements.slippy = 1;
     let result = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.99));
@@ -126,7 +126,7 @@ describe('Clockmaker roll pipeline', () => {
 
   it('applies to Jumping Bean follow-up rolls without a separate Clockmaker face-change pass', () => {
     const state = clockmakerEncounter();
-    state.target = 1_000_000;
+    state.target = 1_000_000n;
     expose(state, [1, 3, 4, 5, 6]);
     state.dice[0].faces[1].enhancements.jumpingBean = 1;
     const result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(.99));
@@ -158,8 +158,8 @@ describe('Care Package resources and Time Travel boundaries', () => {
 
     const payout = newRun('care-package-payout', constant(.2)).state;
     expose(payout, [2, 2, 3, 4, 5]);
-    payout.target = 1;
-    payout.stats.rounds.at(-1)!.target = 1;
+    payout.target = 1n;
+    payout.stats.rounds.at(-1)!.target = 1n;
     payout.manualRerollsRemaining = 0;
     payout.specialOfferEffects.carePackageRerolls = 3;
     const cleared = dispatch(payout, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.2)).state;
@@ -188,8 +188,8 @@ describe('Care Package resources and Time Travel boundaries', () => {
     expect(state.chapterLifecycle[Math.floor((round - 1) / 6) + 1]?.specialOfferConsumed).toBe(true);
     if (round === 3) {
       expose(state, [2, 2, 3, 4, 5]);
-      state.target = 1;
-      state.stats.rounds.at(-1)!.target = 1;
+      state.target = 1n;
+      state.stats.rounds.at(-1)!.target = 1n;
       state = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.2)).state;
       expect(state.phase).toBe('roundSummary');
       state = dispatch(state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant(.2)).state;

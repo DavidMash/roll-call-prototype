@@ -12,7 +12,7 @@ function r3SummaryState(seed: string): GameState {
   state.boss = null;
   state.roundSummary = {
     round: 27, encounterType: 'boss', bossType: 'juggler',
-    score: 1_000, target: 1_000, goldBefore: 10, goldAfter: 15, totalGoldEarned: 5,
+    score: 1_000n, target: 1_000n, goldBefore: 10, goldAfter: 15, totalGoldEarned: 5,
     sources: { baseRewardGold: 5, unusedRerollGold: 0, interestGold: 0, bossRewardGold: 0,
       goldenGold: 0, jackpotGold: 0, otherGold: 0 },
   };
