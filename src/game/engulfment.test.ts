@@ -4,10 +4,11 @@ import { Resolver } from './effects';
 import {
   classifyInfernoTrend, classifyInfernoWeakness, createInfernoEvaluation, ENGULFMENT_REQUIRED_MULTIPLIER,
   engulfmentTrainingNormalization, evaluateEngulfmentOffering, infernoEvaluationDuration, infernoMultiplier,
-  ownedEngulfmentAssets, selectInfernoFeedback,
+  INFERNO_SUSPENSION_MESSAGE, maximumPossibleEngulfmentReadiness, ownedEngulfmentAssets, selectInfernoFeedback,
 } from './engulfment';
 import { HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { captureRollbackState } from './rollback';
+import { loadPersistedRun, savePersistedRun } from './persistence';
 import type { Rank } from './types';
 import type { GameState } from './types';
 import type { HandScoredEvent, RoundAttemptFinishedEvent, XMultContribution } from './runHistoryV2';
@@ -196,6 +197,108 @@ describe('automatic Inferno evaluation', () => {
     expect(state.handLevels).toEqual(beforeLevels);
   });
 
+  it('uses the authoritative non-additive upper bound to distinguish possible and impossible collections', () => {
+    const possible = newRun('possible-collection').state;
+    possible.dice[0].flame = { id: 'vineyard', investedGold: 0 };
+    possible.dice[1].flame = { id: 'fatCat', investedGold: 0 };
+    possible.flameInstanceIds = { vineyard: 1, fatCat: 2 };
+    const possibleEvaluation = createInfernoEvaluation(possible)!;
+    expect(maximumPossibleEngulfmentReadiness(possible)).toBe(25);
+    expect(possibleEvaluation).toMatchObject({ success: false, maximumPossibleReadiness: 25,
+      currentCollectionTheoreticallySufficient: true, suspendAfterContinue: false });
+    expect(possibleEvaluation.feedbackMessage).not.toBe(INFERNO_SUSPENSION_MESSAGE);
+
+    const impossible = newRun('impossible-collection').state;
+    impossible.dice[0].flame = { id: 'vineyard', investedGold: 0 };
+    impossible.flameInstanceIds = { vineyard: 1 };
+    const impossibleEvaluation = createInfernoEvaluation(impossible)!;
+    expect(maximumPossibleEngulfmentReadiness(impossible)).toBe(5);
+    expect(impossibleEvaluation).toMatchObject({ success: false, maximumPossibleReadiness: 5,
+      currentCollectionTheoreticallySufficient: false, suspendAfterContinue: true,
+      feedbackMessage: INFERNO_SUSPENSION_MESSAGE });
+
+    const mutuallyExclusive = newRun('mutually-exclusive-collection').state;
+    mutuallyExclusive.dice[0].flame = { id: 'missingPair', investedGold: 0 };
+    mutuallyExclusive.dice[1].flame = { id: 'oneShort', investedGold: 0 };
+    mutuallyExclusive.flameInstanceIds = { missingPair: 1, oneShort: 2 };
+    expect(maximumPossibleEngulfmentReadiness(mutuallyExclusive)).toBe(5);
+
+    const successful = createInfernoEvaluation(offeringState())!;
+    expect(successful.success).toBe(true);
+    expect(successful.suspendAfterContinue).toBe(false);
+  });
+
+  it('suspends only after CONTINUE and remains dormant until a new Flame instance is acquired', () => {
+    const state = newRun('suspension-lifecycle').state;
+    state.dice[0].flame = { id: 'vineyard', investedGold: 0 };
+    state.flameInstanceIds = { vineyard: 1 };
+    state.score = state.target;
+    const resolver = new Resolver(state, { next: () => .25 });
+    resolver.evaluate();
+    expect(state.infernoEvaluation?.feedbackMessage).toBe(INFERNO_SUSPENSION_MESSAGE);
+    expect(state.infernoEvaluationSuspendedUntilNewFlame).toBe(false);
+    resolver.continueRoundSummary();
+    expect(state.phase).toBe('inferno');
+    resolver.continueInfernoEvaluation();
+    expect(state.infernoEvaluationSuspendedUntilNewFlame).toBe(true);
+    expect(state.historyV2.at(-1)).toMatchObject({ kind: 'shop_offers_presented' });
+    expect(state.historyV2.some(event => event.kind === 'inferno_suspension_changed'
+      && event.suspended && event.reason === 'collection_insufficient')).toBe(true);
+
+    state.phase = 'round';
+    state.shop = null;
+    state.score = state.target;
+    resolver.evaluate();
+    expect(state.infernoEvaluation).toBeNull();
+
+    state.phase = 'flameSelection';
+    state.flameSelection = { acquired: false, offers: [{ id: 77, flame: 'lowball' }] };
+    const acquired = dispatch(state, { type: 'CHOOSE_FLAME', offerId: 77, dieId: 1 }).state;
+    expect(acquired.infernoEvaluationSuspendedUntilNewFlame).toBe(false);
+    expect(acquired.infernoEvaluation).toBeNull();
+    expect(acquired.historyV2.some(event => event.kind === 'inferno_suspension_changed'
+      && !event.suspended && event.reason === 'new_flame_acquired' && event.flame === 'lowball')).toBe(true);
+
+    acquired.phase = 'round';
+    acquired.shop = null;
+    acquired.score = acquired.target;
+    new Resolver(acquired, { next: () => .25 }).evaluate();
+    expect(acquired.infernoEvaluation).not.toBeNull();
+  });
+
+  it('does not reactivate suspension for stoking, Bonfire conversion, save/load, or Bust rollback', () => {
+    let state = newRun('suspension-persistence').state;
+    state.phase = 'shop';
+    state.shop = { visitId: 1, kind: 'between_rounds', exitUnlocked: true, offers: [], trainingOffers: [],
+      diceRerolls: 0, offerRerolls: 0, lifeRestores: 0, freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
+    state.gold = 10;
+    state.dice[0].flame = { id: 'vineyard', investedGold: 98 };
+    state.flameInstanceIds = { vineyard: 1 };
+    state.infernoEvaluationSuspendedUntilNewFlame = true;
+    state = dispatch(state, { type: 'STOKE_FLAME', dieId: 0, amount: 1 }).state;
+    expect(state.infernoEvaluationSuspendedUntilNewFlame).toBe(true);
+    state = dispatch(state, { type: 'STOKE_FLAME', dieId: 0, amount: 1 }).state;
+    expect(state.bonfires).toContain('vineyard');
+    expect(state.infernoEvaluationSuspendedUntilNewFlame).toBe(true);
+
+    let raw: string | null = null;
+    const storage = { getItem: () => raw, setItem: (_key: string, value: string) => { raw = value; } };
+    expect(savePersistedRun(storage, state)).toBe(true);
+    const loaded = loadPersistedRun(storage, state.seed)!;
+    expect(loaded.infernoEvaluationSuspendedUntilNewFlame).toBe(true);
+
+    loaded.phase = 'round';
+    loaded.shop = null;
+    loaded.roundCheckpoint = captureRollbackState(loaded);
+    loaded.target = 1_000_000n;
+    loaded.stats.rounds[0].target = loaded.target;
+    loaded.dice.forEach((die, index) => { die.value = ([1, 2, 2, 3, 4] as Rank[])[index]; });
+    loaded.consumed = HAND_IDS.filter(hand => hand !== 'ones');
+    loaded.manualRerollsRemaining = 0;
+    const busted = dispatch(loaded, { type: 'PLAY', hand: 'ones', dieIds: [0] }, { next: () => .25 }).state;
+    expect(busted.infernoEvaluationSuspendedUntilNewFlame).toBe(true);
+  });
+
   it('classifies quantity, investment, utilization, and close weaknesses', () => {
     const state = offeringState();
     const assets = ownedEngulfmentAssets(state);
@@ -252,10 +355,12 @@ describe('automatic Inferno evaluation', () => {
     }
   });
 
-  it('scales failed playback down while retaining extra weight for success', () => {
-    expect(infernoEvaluationDuration(5, 'normal')).toBeGreaterThan(infernoEvaluationDuration(5, 'fast'));
-    expect(infernoEvaluationDuration(5, 'fast')).toBeGreaterThan(infernoEvaluationDuration(5, 'instant'));
-    expect(infernoEvaluationDuration(25, 'instant')).toBeGreaterThan(infernoEvaluationDuration(5, 'instant'));
+  it('uses one fixed ceremony duration independent of gameplay playback speed', () => {
+    for (const _speed of ['normal', 'fast', 'instant'] as const) {
+      expect(infernoEvaluationDuration(5)).toBe(2100);
+      expect(infernoEvaluationDuration(25)).toBe(2300);
+    }
+    expect(infernoEvaluationDuration(25)).toBeGreaterThan(infernoEvaluationDuration(5));
   });
 
   it('does not evaluate a Bust and preserves prior Inferno build state through rollback', () => {

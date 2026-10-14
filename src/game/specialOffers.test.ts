@@ -463,6 +463,7 @@ describe('replay and checkpoint Special Offers', () => {
     state.engulfmentLevel = 2;
     state.handLevels.ones = 8;
     state.bonfires = ['lowball'];
+    state.infernoEvaluationSuspendedUntilNewFlame = true;
     state = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }, constant()).state;
     expect(state.round).toBe(1);
     expect(state.chapterLifecycle[1]?.specialOfferConsumed).toBe(true);
@@ -472,6 +473,7 @@ describe('replay and checkpoint Special Offers', () => {
     expect(state.engulfmentLevel).toBe(2);
     expect(state.handLevels.ones).toBe(8);
     expect(state.bonfires).toEqual(['lowball']);
+    expect(state.infernoEvaluationSuspendedUntilNewFlame).toBe(true);
     state.round = 3;
     state.phase = 'roundSummary';
     state.shop = null;
@@ -486,6 +488,7 @@ describe('replay and checkpoint Special Offers', () => {
     let state = offerState('badDream');
     state.specialOfferEffects.carePackageRerolls = 2;
     state = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }, constant()).state;
+    state.infernoEvaluationSuspendedUntilNewFlame = true;
     expect(activeSpecialOfferStatusItems(state.specialOfferEffects).find(status => status.type === 'badDream')?.label)
       .toBe('Bad Dream · 3 Rounds');
     const checkpoint = structuredClone(state.badDreamCheckpoint!);
@@ -515,6 +518,7 @@ describe('replay and checkpoint Special Offers', () => {
     expect(state.dice[0].flame).toEqual({ id: 'ultimate', investedGold: 61 });
     expect(state.engulfmentLevel).toBe(3);
     expect(state.bonfires).toEqual(['lowball']);
+    expect(state.infernoEvaluationSuspendedUntilNewFlame).toBe(true);
     expect(state.badDreamCheckpoint).toBeNull();
     expect(state.specialOfferEffects.badDreamRounds).toBe(0);
     expect(state.specialOfferEffects.carePackageRerolls).toBe(0);

@@ -220,6 +220,13 @@ export function normalizeGameState(state: GameState): GameState {
   next.infernoProgress.recentMessageIds = (next.infernoProgress.recentMessageIds ?? []).slice(-3);
   next.infernoProgress.recentAction ??= 'none';
   next.infernoEvaluation ??= null;
+  next.infernoEvaluationSuspendedUntilNewFlame = !!next.infernoEvaluationSuspendedUntilNewFlame;
+  next.bustPresentationDice ??= null;
+  if (next.infernoEvaluation) {
+    next.infernoEvaluation.maximumPossibleReadiness ??= next.infernoEvaluation.threshold;
+    next.infernoEvaluation.currentCollectionTheoreticallySufficient ??= true;
+    next.infernoEvaluation.suspendAfterContinue ??= false;
+  }
   next.nextShopVisitId = Math.max(1, Math.floor(next.nextShopVisitId ?? 1));
   next.nextFlameInstanceId = Math.max(1, Math.floor(next.nextFlameInstanceId ?? 1));
   next.flameInstanceIds ??= {};
@@ -307,6 +314,8 @@ export function normalizeGameState(state: GameState): GameState {
     checkpoint.engulfmentLevel = Math.max(0, Math.floor(checkpoint.engulfmentLevel ?? 0));
     checkpoint.infernoProgress ??= structuredClone(next.infernoProgress);
     checkpoint.infernoEvaluation ??= null;
+    checkpoint.infernoEvaluationSuspendedUntilNewFlame = !!checkpoint.infernoEvaluationSuspendedUntilNewFlame;
+    checkpoint.bustPresentationDice ??= null;
     checkpoint.nextShopVisitId = Math.max(1, Math.floor(checkpoint.nextShopVisitId ?? 1));
     checkpoint.nextFlameInstanceId = Math.max(1, Math.floor(checkpoint.nextFlameInstanceId ?? next.nextFlameInstanceId));
     checkpoint.flameInstanceIds ??= structuredClone(next.flameInstanceIds);
@@ -638,9 +647,9 @@ export function newRun(seed: string, random?: RandomSource, options?: { debugTra
     score: 0n, gold: CONFIG.startingGold, lives: CONFIG.maxLives, engulfmentLevel: 0, nextShopVisitId: 1,
     nextFlameInstanceId: 1, roundAttemptNumber: 1,
     bossSchedule: {}, chapterPlans: {}, presentedChapters: [], chapterLifecycle: {}, boss: null, bossSilenced: false, currentNodeId: '',
-    bust: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], flameInstanceIds: {},
+    bust: null, bustPresentationDice: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], flameInstanceIds: {},
     chargeAttribution: {}, infernoProgress: { evaluationIndex: 0, previousReadiness: null, recentMessageIds: [], recentAction: 'none' },
-    infernoEvaluation: null, chargeXMult: 1, maxCharge: 1,
+    infernoEvaluation: null, infernoEvaluationSuspendedUntilNewFlame: false, chargeXMult: 1, maxCharge: 1,
     chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
     fetchTarget: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
@@ -727,7 +736,12 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const firstFlame = ownedFlameIds(next).size === 0;
         if (replaced) removeFlameInstance(next, replaced);
         die.flame = { id: offer.flame, investedGold: 0 };
-        assignFlameInstance(next, offer.flame);
+        const instanceId = assignFlameInstance(next, offer.flame);
+        if (next.infernoEvaluationSuspendedUntilNewFlame) {
+          next.infernoEvaluationSuspendedUntilNewFlame = false;
+          resolver.emitV2({ kind: 'inferno_suspension_changed', suspended: false,
+            reason: 'new_flame_acquired', flame: offer.flame, instanceId });
+        }
         next.infernoProgress.recentAction = 'flame_acquired';
         if (replaced === 'fetch') next.fetchTarget = null;
         if (offer.flame === 'fetch') resolver.setFetchTarget(die.id, null);

@@ -258,6 +258,10 @@ export interface InfernoEvaluationState {
   effectiveValue: number;
   threshold: number;
   readiness: number;
+  /** Diagnostic upper bound expressed in the evaluator's multiplier units. */
+  maximumPossibleReadiness: number;
+  currentCollectionTheoreticallySufficient: boolean;
+  suspendAfterContinue: boolean;
   previousReadiness: number | null;
   trend: InfernoTrend;
   weakness: InfernoWeakness;
@@ -328,6 +332,8 @@ export interface Board {
   bossSilenced: boolean;
   currentNodeId: string;
   bust: BustSummary | null;
+  /** Playback-only terminal dice. Never used as authoritative gameplay state. */
+  bustPresentationDice: Die[] | null;
   flameTutorial: { pendingDieId: number | null; completed: boolean };
   manualRerollsRemaining: number;
   specialOfferEffects: SpecialOfferEffects;
@@ -340,6 +346,7 @@ export interface Board {
   chargeAttribution: Partial<Record<Flame, number>>;
   infernoProgress: InfernoProgressState;
   infernoEvaluation: InfernoEvaluationState | null;
+  infernoEvaluationSuspendedUntilNewFlame: boolean;
   chargeXMult: number;
   maxCharge: number;
   chargeArmed: boolean;
@@ -620,6 +627,8 @@ export interface EventRecord {
   jackpotGold?: number;
   probability?: { enhancement: 'boomerang' | 'holiday' | 'hitchhiker' | 'personalTrainer' | 'doubleTime' | 'sticky'; stacks: number; chance: number; succeeded: boolean };
   decisionMs?: number;
+  terminalDice?: { dieId: number; physicalFace: Rank; face: Rank; pips: number }[];
+  bustPresentationUsedFrozenDice?: boolean;
   handScore?: HandScoreAccumulator;
 }
 export interface GameEvent extends EventRecord { board: Board }

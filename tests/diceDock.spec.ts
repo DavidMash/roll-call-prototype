@@ -152,7 +152,7 @@ test('Shop uses the same face and Flame modals for authoritative Sell and Stoke 
 
   await slot.getByRole('button', { name: 'View Straight Shooter Flame details, Ember at 35 of 100 Gold' }).click();
   const flameModal = page.getByRole('dialog', { name: 'Straight Shooter' });
-  await flameModal.getByLabel('Stoke amount for Straight Shooter').fill('2');
+  for (let step = 0; step < 2; step++) await flameModal.getByRole('button', { name: 'Increase investment' }).click();
   await flameModal.getByRole('button', { name: 'STOKE 2 GOLD' }).click();
   await expect(flameModal).toContainText('Investment: 37 / 100 Gold');
   await expect(slot.getByRole('button', { name: 'View Straight Shooter Flame details, Ember at 37 of 100 Gold' })).toBeVisible();

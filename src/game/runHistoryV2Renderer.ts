@@ -91,6 +91,7 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     case 'charge_changed': return `CHARGE · ${event.operation} · ×${number(event.before)}→×${number(event.after)}`;
     case 'engulfment_attempted': return `LEGACY ENGULFMENT · Shop ${number(event.shopVisitId)} · ${event.success ? 'SUCCESS' : 'OFFERING REJECTED'}`;
     case 'inferno_evaluated': return `INFERNO EVALUATION · ${event.evaluation.success ? 'ENGULFMENT' : 'NOT YET'} · effective ×${number(event.evaluation.effectiveValue)} / ×${number(event.evaluation.threshold)} · ${event.evaluation.flames.length} Flame${event.evaluation.flames.length === 1 ? '' : 's'}`;
+    case 'inferno_suspension_changed': return `INFERNO · ${event.suspended ? 'SUSPENDED' : 'REACTIVATED'} · ${event.reason}`;
     case 'hooded_challenge_changed': {
       const progress = event.attemptProgress === undefined ? ''
         : ` · attempt ${number(event.attemptProgress)}${event.target === undefined ? '' : `/${number(event.target)}`}`

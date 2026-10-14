@@ -1,4 +1,4 @@
-import { Badge, Button, Group, Modal, Progress, Stack, Text, TextInput } from '@mantine/core';
+import { Badge, Button, Group, Modal, Progress, Stack, Text } from '@mantine/core';
 import { useEffect, useState } from 'react';
 import { activeFlameId, activeFlameInvestment, flameDetailsPresentation, flameEffectText, FLAMES } from '../game/flames';
 import type { Action, Board, Flame } from '../game/types';
@@ -35,7 +35,9 @@ export function FlameDetailsModal({ board, target, busy, actionsEnabled, onClose
   const afterInvestment = invested + amount;
   const afterBoard = { ...board, gold: board.gold - amount };
   const afterDetails = flameDetailsPresentation(flameId, afterInvestment, afterBoard);
-  function setAmount(value: number) { setStokeAmount(Math.max(0, Math.min(Math.floor(value || 0), maxStoke))); }
+  function clampAmount(value: number) { return Math.max(0, Math.min(Math.floor(value || 0), maxStoke)); }
+  function setAmount(value: number) { setStokeAmount(clampAmount(value)); }
+  function stepAmount(delta: -1 | 1) { setStokeAmount(current => clampAmount(current + delta)); }
   function stoke() {
     if (!die || !canStoke || amount < 1) return;
     const createsBonfire = invested + amount === 100;
@@ -74,10 +76,18 @@ export function FlameDetailsModal({ board, target, busy, actionsEnabled, onClose
           {afterDetails.maxChargeContribution !== null && <Text size="sm" fw={700}>+{formatPlayerNumber(afterDetails.maxChargeContribution)} Max Charge</Text>}
           <Text size="sm" fw={700}>{afterInvestment === 100 ? definition.bonfireDescription : flameEffectText(flameId, afterInvestment, afterBoard)}</Text></div>}
         <Group gap="xs" wrap="wrap" className="stoke-controls">
-          {[1, 5, 10].map(value => <Button key={value} variant="default" disabled={busy || maxStoke < 1} onClick={() => setAmount(amount + value)}>+{value}</Button>)}
+          <div className="stoke-stepper">
+            <output className="stoke-stepper-value" aria-label={`Stoke amount for ${definition.name}`} role="spinbutton"
+              aria-readonly="true" aria-valuemin={0} aria-valuemax={maxStoke} aria-valuenow={amount}
+              aria-live="polite">{formatPlayerNumber(amount)}</output>
+            <div className="stoke-stepper-buttons">
+              <button type="button" aria-label="Increase investment" disabled={busy || amount >= maxStoke}
+                onClick={() => stepAmount(1)}>▲</button>
+              <button type="button" aria-label="Decrease investment" disabled={busy || amount <= 0}
+                onClick={() => stepAmount(-1)}>▼</button>
+            </div>
+          </div>
           <Button variant="default" disabled={busy || maxStoke < 1} onClick={() => setAmount(maxStoke)}>Max</Button>
-          <TextInput type="number" aria-label={`Stoke amount for ${definition.name}`} value={amount}
-            onChange={event => setAmount(Number(event.currentTarget.value))} min={0} max={maxStoke} className="stoke-input" />
         </Group>
         <Button color="orange" size="md" fullWidth disabled={busy || amount < 1} onClick={stoke}>STOKE {formatPlayerNumber(amount)} GOLD</Button>
       </Stack>}

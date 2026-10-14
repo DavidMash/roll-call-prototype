@@ -281,7 +281,24 @@ button { font: inherit; }
 .ember-name-compact, .ember-empty-compact { display: none; }
 .stoke-effects { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .stoke-preview { grid-column: span 2; border: 1px solid rgba(18,184,134,.28); background: rgba(18,184,134,.08); }
-.stoke-input { width: 92px; }
+.stoke-stepper {
+  align-items: stretch; background: rgba(9,12,20,.72); border: 1px solid rgba(255,183,77,.55);
+  border-radius: 8px; display: grid; grid-template-columns: minmax(5rem,1fr) 2.75rem;
+  min-height: 3.25rem; min-width: 9rem; overflow: hidden; user-select: none;
+}
+.stoke-stepper-value {
+  align-items: center; display: flex; font-size: 1.25rem; font-variant-numeric: tabular-nums;
+  font-weight: 850; justify-content: center; padding: 0 .75rem;
+}
+.stoke-stepper-buttons { display: grid; grid-template-rows: 1fr 1fr; }
+.stoke-stepper-buttons button {
+  align-items: center; background: rgba(255,152,0,.14); border: 0;
+  border-left: 1px solid rgba(255,183,77,.38); color: inherit; cursor: pointer; display: flex;
+  font-size: .8rem; justify-content: center; min-height: 1.625rem; min-width: 2.75rem; padding: 0;
+}
+.stoke-stepper-buttons button + button { border-top: 1px solid rgba(255,183,77,.38); }
+.stoke-stepper-buttons button:focus-visible { outline: 2px solid #ffb74d; outline-offset: -3px; }
+.stoke-stepper-buttons button:disabled { cursor: not-allowed; opacity: .4; }
 
 .modal-stat, .help-item { padding: 8px 10px; border-radius: 7px; background: var(--mantine-color-dark-7); }
 .modal-stat { min-width: 0; }
@@ -385,7 +402,9 @@ button { font: inherit; }
   .section-heading { align-items: flex-start; }
   .flame-selection-header { align-items: flex-start; }
   .stoke-controls .mantine-Button-root { flex: 1 1 54px; }
-  .stoke-input { flex: 1 1 100%; width: 100%; }
+  .stoke-controls { align-items: stretch; width: 100%; }
+  .stoke-stepper { flex: 1 1 10rem; }
+  .stoke-stepper-buttons button { min-width: 3rem; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 

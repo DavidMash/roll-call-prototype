@@ -107,6 +107,32 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     expect(result.state.stats.busts.at(-1)).toMatchObject({ round: 2, attempt: 1, checkpointRestored: true, returnedToShop: true });
   });
 
+  it('freezes the exact terminal dice for Bust playback, including temporary face state', () => {
+    const shopState = shop('bust-terminal-dice');
+    shopState.dice.forEach((die, index) => { die.value = (index + 1) as Rank; });
+    const restoredDice = structuredClone(shopState.dice);
+    const attempt = dispatch(shopState, { type: 'NEXT_ROUND' }, constant(0.2)).state;
+    attempt.dice[2].value = 2;
+    activeFace(attempt.dice[2]).shifterBaseRank = activeFace(attempt.dice[2]).rank;
+    activeFace(attempt.dice[2]).rank = 6;
+
+    const result = forceBust(attempt, constant(0.6));
+    const bustIndex = result.events.findIndex(event => event.type === 'ROUND_BUST');
+    const bustEvent = result.events[bustIndex];
+    expect(bustEvent.bustPresentationUsedFrozenDice).toBe(true);
+    expect(bustEvent.board.bustPresentationDice).not.toBeNull();
+    expect(bustEvent.board.bustPresentationDice!.map(die => die.value))
+      .toEqual(bustEvent.terminalDice!.map(die => die.physicalFace));
+    const shifted = bustEvent.board.bustPresentationDice!.find(die => die.id === 2)!;
+    expect(activeFace(shifted)).toMatchObject({ rank: 6, shifterBaseRank: 2 });
+    expect(result.events.slice(bustIndex + 1).some(event => event.type === 'DICE_REROLL_STARTED')).toBe(false);
+    expect(result.events.some(event => event.rollReason === 'winning_settle')).toBe(false);
+    expect(result.state.bustPresentationDice).toBeNull();
+    expect(result.state.dice).toEqual(restoredDice);
+    expect(result.events[bustIndex + 1].board.bustPresentationDice).toBeNull();
+    expect(result.events[bustIndex + 1].board.dice).toEqual(restoredDice);
+  });
+
   it('captures post-Bust purchases as the next attempt checkpoint', () => {
     let state = shop('bust-purchase-checkpoint');
     state.gold = 20;

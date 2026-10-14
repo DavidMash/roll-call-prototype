@@ -312,6 +312,14 @@ export interface InfernoEvaluatedEvent extends RunHistoryV2Envelope {
   enhancementProgression?: { capacityBefore: number; capacityAfter: number; unlocked: Enhancement[] };
 }
 
+export interface InfernoSuspensionChangedEvent extends RunHistoryV2Envelope {
+  kind: 'inferno_suspension_changed';
+  suspended: boolean;
+  reason: 'collection_insufficient' | 'new_flame_acquired';
+  flame?: Flame;
+  instanceId?: FlameInstanceId;
+}
+
 export interface ScorecardRefreshedEvent extends RunHistoryV2Envelope {
   kind: 'scorecard_refreshed';
   refreshedHands: HandId[];
@@ -374,7 +382,7 @@ export interface MapTransitionV2Event extends RunHistoryV2Envelope {
 
 export type RunHistoryV2Event = RunStartedEvent | ChapterStartedEvent | RoundAttemptStartedEvent | RollBatchEvent
   | HandScoredEvent | ShopVisitStartedEvent | ShopOffersPresentedEvent | ShopTransactionEvent | FlameChangedEvent | ChargeChangedEvent
-  | EngulfmentAttemptedEvent | InfernoEvaluatedEvent
+  | EngulfmentAttemptedEvent | InfernoEvaluatedEvent | InfernoSuspensionChangedEvent
   | HoodedChallengeChangedEvent | BossStateChangedEvent | ScorecardRefreshedEvent | RoundAttemptFinishedEvent
   | CheckpointRestoredEvent | RunFinishedEvent | ErrorEvent | MapTransitionV2Event;
 

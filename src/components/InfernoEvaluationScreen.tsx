@@ -4,34 +4,27 @@ import { engulfmentAnimationProfile, engulfmentAssetKey, infernoEvaluationDurati
 import { formatExactScore, formatPlayerNumber } from '../game/copy';
 import { FLAMES } from '../game/flames';
 import { ENHANCEMENTS, enhancementsUnlockedAt, maxEnhancementTypesPerFace } from '../game/enhancements';
-import type { PlaybackSpeed } from '../useGame';
 import type { Action, Board } from '../game/types';
 
-export function InfernoEvaluationScreen({ board, speed, submit }: {
+export const INFERNO_RESULT_REVEAL_PAUSE_MS = 180;
+
+export function InfernoEvaluationScreen({ board, submit }: {
   board: Board;
-  speed: PlaybackSpeed;
   submit: (action: Action) => void;
 }) {
   const evaluation = board.infernoEvaluation!;
   const [stage, setStage] = useState<'meter' | 'result'>('meter');
   const profile = useMemo(() => engulfmentAnimationProfile(evaluation.effectiveValue), [evaluation.effectiveValue]);
-  const durationMs = infernoEvaluationDuration(evaluation.effectiveValue, speed);
+  const durationMs = infernoEvaluationDuration(evaluation.effectiveValue);
   const oldCapacity = maxEnhancementTypesPerFace(evaluation.infernoLevelBefore);
   const newCapacity = maxEnhancementTypesPerFace(evaluation.infernoLevelAfter);
   const unlocked = enhancementsUnlockedAt(evaluation.infernoLevelAfter);
 
   useEffect(() => {
     setStage('meter');
-    const timer = window.setTimeout(() => setStage('result'), durationMs + (speed === 'normal' ? 180 : 20));
+    const timer = window.setTimeout(() => setStage('result'), durationMs + INFERNO_RESULT_REVEAL_PAUSE_MS);
     return () => window.clearTimeout(timer);
-  }, [durationMs, evaluation.evaluationIndex, speed]);
-
-  useEffect(() => {
-    if (stage !== 'result' || evaluation.success) return;
-    const delay = speed === 'normal' ? 1400 : speed === 'fast' ? 350 : 80;
-    const timer = window.setTimeout(() => submit({ type: 'CONTINUE_INFERNO_EVALUATION' }), delay);
-    return () => window.clearTimeout(timer);
-  }, [evaluation.success, speed, stage, submit]);
+  }, [durationMs, evaluation.evaluationIndex]);
 
   if (stage === 'meter') return <Stack gap="lg" align="center"
     className={`inferno-evaluation-screen inferno-ritual strength-${profile.strength}`}
@@ -47,7 +40,7 @@ export function InfernoEvaluationScreen({ board, speed, submit }: {
     className="inferno-evaluation-screen inferno-failure" data-testid="inferno-feedback">
     <Title order={2}>THE INFERNO WAITS</Title>
     <Text fw={850} ta="center">{evaluation.feedbackMessage}</Text>
-    <Button variant="subtle" color="gray" onClick={() => submit({ type: 'CONTINUE_INFERNO_EVALUATION' })}>CONTINUE</Button>
+    <Button size="md" color="orange" onClick={() => submit({ type: 'CONTINUE_INFERNO_EVALUATION' })}>CONTINUE</Button>
   </Stack>;
 
   return <Stack gap="md" align="center" justify="center"

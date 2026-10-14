@@ -299,7 +299,15 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   const expectedShop = structuredClone(game.roundCheckpoint?.board.shop);
   expect(expectedShop).toBeTruthy();
   expectedShop!.visitId = (expectedShop!.visitId ?? 0) + 1;
-  game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
+  const bustResult = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] });
+  const bustEventIndex = bustResult.events.findIndex(event => event.type === 'ROUND_BUST');
+  const terminalDice = bustResult.events[bustEventIndex].board.bustPresentationDice!;
+  expect(terminalDice).not.toBeNull();
+  expect(bustResult.events.slice(bustEventIndex + 1).some(event => event.type === 'DICE_REROLL_STARTED')).toBe(false);
+  for (const die of terminalDice.filter(item => item.owner === 'player')) {
+    await expect(page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1}, face ${die.value},`) })).toBeVisible();
+  }
+  game = bustResult.state;
   await bustContinue.click();
   const fallbackMap = page.getByTestId('run-map-transition');
   await expect(fallbackMap).toBeVisible({ timeout: 15000 });

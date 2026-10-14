@@ -36,7 +36,8 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
   const [replacementDieId, setReplacementDieId] = useState<number | null>(null);
   const wardenBoss = board.phase === 'round' && !board.bossSilenced && board.boss?.type === 'warden' ? board.boss : null;
   const wardenDice = wardenBoss ? board.dice.filter(die => die.owner === 'player').sort((a, b) => a.id - b.id) : null;
-  const dice = board.phase === 'round' ? wardenDice ?? activeEncounterDice(board) : board.dice.filter(die => die.owner === 'player');
+  const dice = board.bustPresentationDice ? board.dice
+    : board.phase === 'round' ? wardenDice ?? activeEncounterDice(board) : board.dice.filter(die => die.owner === 'player');
   const wardenLockedIds = wardenBoss && wardenDice ? wardenDice.filter(die => !wardenBoss.activeDieIds.includes(die.id)).map(die => die.id) : [];
   const awaitingWardenChoice = !!wardenBoss && wardenBoss.pendingReinforcements > 0;
   const selectedWardenDieId = awaitingWardenChoice && selection.dieIds.length === 1 && wardenLockedIds.includes(selection.dieIds[0])

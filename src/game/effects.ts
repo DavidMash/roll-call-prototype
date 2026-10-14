@@ -1491,7 +1491,10 @@ export class Resolver {
       shortfall: this.state.target > this.state.score ? this.state.target - this.state.score : 0n, livesBefore: this.state.lives,
       livesAfter: Math.max(0, this.state.lives - 1),
     };
-    const failureValues = this.state.dice.map(die => activeFace(die).rank);
+    const terminalDice = structuredClone(this.state.dice);
+    const terminalDiceTelemetry = terminalDice.map(die => ({ dieId: die.id, physicalFace: die.value,
+      face: activeFace(die).rank, pips: scoringPips(activeFace(die)) }));
+    const failureValues = terminalDice.map(die => activeFace(die).rank);
     const failureConsumed = [...this.state.consumed];
     const failureLastHand = current.lastHand;
     const failureLastAction = current.lastAction;
@@ -1555,13 +1558,16 @@ export class Resolver {
     this.state.lives = failure.livesAfter;
     this.state.roundAttemptNumber = failure.livesAfter > 0 ? failure.attempt + 1 : failure.attempt;
     this.state.bust = failure;
+    this.state.bustPresentationDice = terminalDice;
     this.state.stats.busts.push({ ...failure, checkpointRestored: true, returnedToShop: failure.livesAfter > 0,
       retryStarted: false, runEndedNoLives: failure.livesAfter === 0 });
     this.state.phase = failure.livesAfter > 0 ? 'bust' : 'lost';
     if (failure.livesAfter === 0) { this.state.shop = null; this.state.roundCheckpoint = null; }
     this.emit({ type: 'ROUND_BUST', amount: failure.shortfall, boss: failedBoss?.type,
+      terminalDice: terminalDiceTelemetry, bustPresentationUsedFrozenDice: true,
       message: `BUST · Round ${this.format(failure.round)} attempt ${this.format(failure.attempt)} · ${this.format(failure.score)} / ${this.format(failure.target)} · ${this.format(failure.shortfall)} short · lives ${this.format(failure.livesBefore)} → ${this.format(failure.livesAfter)}` });
     if (failure.livesAfter > 0) {
+      this.state.bustPresentationDice = null;
       this.state.phase = 'shop';
       this.state.shop!.visitId = this.state.nextShopVisitId++;
       this.state.currentNodeId = failedNodeId;
@@ -1774,12 +1780,16 @@ export class Resolver {
       message: `Target Practice: ${HANDS[this.state.targetPracticeHand].name}` });
   }
   private performInfernoEvaluation(): void {
+    if (this.state.infernoEvaluationSuspendedUntilNewFlame) {
+      this.state.infernoEvaluation = null;
+      return;
+    }
     const evaluation = createInfernoEvaluation(this.state);
     if (!evaluation) { this.state.infernoEvaluation = null; return; }
     this.state.infernoProgress.evaluationIndex = evaluation.evaluationIndex;
     this.state.infernoProgress.previousReadiness = evaluation.readiness;
     this.state.infernoProgress.recentAction = 'none';
-    if (evaluation.feedbackMessageId) this.state.infernoProgress.recentMessageIds = [
+    if (evaluation.feedbackMessageId && !evaluation.suspendAfterContinue) this.state.infernoProgress.recentMessageIds = [
       ...this.state.infernoProgress.recentMessageIds.filter(id => id !== evaluation.feedbackMessageId),
       evaluation.feedbackMessageId,
     ].slice(-3);
@@ -1965,6 +1975,10 @@ export class Resolver {
   }
   continueInfernoEvaluation(): void {
     if (!this.state.infernoEvaluation) throw new Error('Inferno evaluation is not available.');
+    if (this.state.infernoEvaluation.suspendAfterContinue) {
+      this.state.infernoEvaluationSuspendedUntilNewFlame = true;
+      this.emitV2({ kind: 'inferno_suspension_changed', suspended: true, reason: 'collection_insufficient' });
+    }
     this.state.infernoEvaluation = null;
     this.continuePostRoundFlow();
   }

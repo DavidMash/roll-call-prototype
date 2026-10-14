@@ -93,7 +93,7 @@ async function matchBoard(page: Page, game: GameState) {
       `${game.score.toLocaleString('en-US')} of ${game.target.toLocaleString('en-US')} points toward the Goal`,
     );
   }
-  const visibleDice = game.phase === 'round' ? activeEncounterDice(game) : game.dice;
+  const visibleDice = game.bustPresentationDice ?? (game.phase === 'round' ? activeEncounterDice(game) : game.dice);
   for (const die of visibleDice) await expect(page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`}, face ${activeFace(die).rank},`) })).toBeVisible();
 }
 async function progressSpecialOffer(page: Page, game: GameState): Promise<GameState> {

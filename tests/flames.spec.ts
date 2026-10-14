@@ -86,6 +86,41 @@ async function reachReward(page: Page, seed: string) {
   return game;
 }
 
+test('Flame investment stepper is non-editable, accessible, and clamps to affordable capacity on mobile', async ({ page }) => {
+  const state = newRun('flame-stepper-mobile').state;
+  state.phase = 'shop';
+  state.shop = { visitId: 1, kind: 'between_rounds', exitUnlocked: true, offers: [], trainingOffers: [],
+    diceRerolls: 0, offerRerolls: 0, lifeRestores: 0, freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
+  state.gold = 1;
+  state.dice[0].flame = { id: 'vineyard', investedGold: 98 };
+  state.flameInstanceIds = { vineyard: 1 };
+  state.flameTutorial = { pendingDieId: null, completed: true };
+  await installRunState(page, state);
+  await enterRun(page);
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.getByTestId('active-flame-vineyard').click();
+  const dialog = page.getByRole('dialog', { name: FLAMES.vineyard.name });
+  const stepper = dialog.getByRole('spinbutton', { name: `Stoke amount for ${FLAMES.vineyard.name}` });
+  const increase = dialog.getByRole('button', { name: 'Increase investment' });
+  const decrease = dialog.getByRole('button', { name: 'Decrease investment' });
+  await expect(stepper).toHaveAttribute('aria-valuemin', '0');
+  await expect(stepper).toHaveAttribute('aria-valuemax', '1');
+  await expect(stepper).toHaveAttribute('aria-valuenow', '0');
+  await expect(stepper.locator('input, textarea')).toHaveCount(0);
+  await expect(decrease).toBeDisabled();
+  await increase.click();
+  await expect(stepper).toHaveAttribute('aria-valuenow', '1');
+  await expect(increase).toBeDisabled();
+  await decrease.click();
+  await expect(stepper).toHaveAttribute('aria-valuenow', '0');
+  await expect(decrease).toBeDisabled();
+  await increase.click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await dialog.getByRole('button', { name: 'STOKE 1 GOLD', exact: true }).click();
+  await expect(dialog).toContainText('99 / 100');
+  await expect(page.getByTestId('stat-gold').getByText('0', { exact: true })).toBeVisible();
+});
+
 test('Flame Selection has fixed offers, preserves faces, reveals XMult, and previews Minigun', async ({ page }) => {
   test.setTimeout(120_000);
   const seed = flameSeed();
@@ -152,7 +187,11 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   await ready(page);
   await expect(page.locator('.driver-popover')).toHaveCount(0);
   const shopStoke = page.getByRole('dialog', { name: FLAMES.minigun.name });
-  await shopStoke.getByLabel(`Stoke amount for ${FLAMES.minigun.name}`).fill('2');
+  const amountControl = shopStoke.getByRole('spinbutton', { name: `Stoke amount for ${FLAMES.minigun.name}` });
+  await expect(amountControl).toHaveAttribute('aria-readonly', 'true');
+  await expect(amountControl.locator('input')).toHaveCount(0);
+  for (let step = 0; step < 2; step++) await shopStoke.getByRole('button', { name: 'Increase investment' }).click();
+  await expect(amountControl).toHaveAttribute('aria-valuenow', '2');
   await expect(shopStoke.getByText(/AFTER STOKE · 2\/100/)).toBeVisible();
   await shopStoke.getByRole('button', { name: 'STOKE 2 GOLD', exact: true }).click();
   game = dispatch(game, { type: 'STOKE_FLAME', dieId: 0, amount: 2 }).state;
@@ -221,7 +260,15 @@ test('Flame Selection only acquires while Shop Manage Die supports arbitrary Sto
   await expect(stoke).toContainText('BONFIRE AT 100');
   await expect(stoke).not.toContainText('Full strength');
   await expect(stoke).not.toContainText('At Bonfire');
-  await stoke.getByLabel(`Stoke amount for ${FLAMES[offer.flame].name}`).fill('7');
+  const amountControl = stoke.getByRole('spinbutton', { name: `Stoke amount for ${FLAMES[offer.flame].name}` });
+  await expect(amountControl.locator('input')).toHaveCount(0);
+  for (let step = 0; step < 7; step++) await stoke.getByRole('button', { name: 'Increase investment' }).click();
+  await expect(amountControl).toHaveAttribute('aria-valuenow', '7');
+  await stoke.getByRole('button', { name: 'Decrease investment' }).click();
+  await expect(amountControl).toHaveAttribute('aria-valuenow', '6');
+  await stoke.getByRole('button', { name: 'Increase investment' }).click();
+  await page.setViewportSize({ width: 320, height: 700 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await stoke.getByRole('button', { name: 'STOKE 7 GOLD', exact: true }).click();
   game = dispatch(game, { type: 'STOKE_FLAME', dieId: 0, amount: 7 }).state;
   await ready(page);

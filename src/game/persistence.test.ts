@@ -18,6 +18,7 @@ describe('run persistence', () => {
       evaluationIndex: 4, previousReadiness: .75,
       recentMessageIds: ['close-01', 'close-02'], recentAction: 'flame_invested',
     };
+    state.infernoEvaluationSuspendedUntilNewFlame = true;
     expect(savePersistedRun(storage, state)).toBe(true);
     expect(loadPersistedRun(storage, state.seed)).toEqual(compactGameStateForPersistence(state));
   });

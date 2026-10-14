@@ -1,12 +1,16 @@
 import { chapterNumberForRound } from './chapters';
-import { activeFlameId, activeFlameInvestment, currentFlameInstanceId } from './flames';
-import { LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
+import {
+  activeFlameId, activeFlameInvestment, currentFlameInstanceId, handFamilyFlameMultiplier,
+  HOT_STREAK_SEQUENCE, hotStreakMultiplier, isChargeFlame, lowballMultiplier, maxChargeContribution,
+  sixPackStartingMultiplier, speedDemonMultiplier, standardFlameMultiplier, targetPracticeMultiplier,
+} from './flames';
+import { HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { canonicalRunHistoryV2Events } from './runHistoryV2Timeline';
 import { finalizeScore, infernoMultiplier, INFERNO_BASE, scoreWeightedMultiplier } from './scoring';
 import { exactRatioNumber, type ExactScore } from './scoreMath';
 import type { EngulfmentEvidenceRoundTelemetry, EngulfmentOfferingTelemetry, HandScoredEvent } from './runHistoryV2';
 import type {
-  Board, EngulfmentAssetRef, GameState, HandId, HandLevels, InfernoEvaluationState, InfernoRecentAction,
+  Board, EngulfmentAssetRef, Flame, GameState, HandId, HandLevels, InfernoEvaluationState, InfernoRecentAction,
   InfernoTrend, InfernoWeakness,
 } from './types';
 
@@ -14,6 +18,7 @@ export const ENGULFMENT_EVIDENCE_ROUNDS = 6;
 export const ENGULFMENT_REQUIRED_MULTIPLIER = 20;
 export const INFERNO_TREND_DEAD_ZONE = 0.05;
 export const INFERNO_CLOSE_READINESS = 0.8;
+export const INFERNO_SUSPENSION_MESSAGE = 'The Inferno will return when you have more Flames to offer.';
 export { infernoMultiplier, INFERNO_BASE };
 
 export const engulfmentAssetKey = (asset: EngulfmentAssetRef): string => asset.kind === 'ember'
@@ -42,7 +47,8 @@ function attemptKey(event: { timelineId: number; round: number; attempt: number 
 }
 
 /** Resolved local factor supplied by all selected Flame instances together. */
-export function selectedOfferingFactor(event: HandScoredEvent, selectedInstanceIds: ReadonlySet<number>): number {
+export function selectedOfferingFactor(event: Pick<HandScoredEvent, 'xMultContributions'>,
+  selectedInstanceIds: ReadonlySet<number>): number {
   let factor = 1;
   for (const contribution of event.xMultContributions) {
     if (contribution.sourceId === 'charge') {
@@ -110,6 +116,77 @@ export function evaluateEngulfmentOffering(
     evidenceRounds,
     offeringMultiplier: Number(offeringMultiplier.toFixed(12)),
   };
+}
+
+const HAND_FAMILY_PAYOFFS: Partial<Record<Flame, HandId>> = {
+  straightShooter: 'largeStraight', doubleDown: 'twoPair', threesCompany: 'fullHouse', boxSet: 'fiveKind',
+};
+
+function minimumLegalAverageForLowball(hand: HandId): number {
+  if (hand === 'ones' || hand === 'pair' || hand === 'threeKind' || hand === 'fourKind' || hand === 'fiveKind') return 1;
+  if (hand === 'twos') return 2;
+  if (hand === 'threes') return 3;
+  if (hand === 'fours') return 4;
+  if (hand === 'fives') return 5;
+  if (hand === 'sixes') return 6;
+  if (hand === 'twoPair') return 1.5;
+  if (hand === 'fullHouse') return 1.4;
+  if (hand === 'smallStraight') return 2.5;
+  return 3; // Large Straight.
+}
+
+/**
+ * A perfect legal activation for one fully-developed Flame on a given hand.
+ * Values come from the same formula functions used by live Flame resolution.
+ */
+function maximumFlameFactorOnHand(flame: Flame, hand: HandId): number {
+  if (isChargeFlame(flame)) return 1;
+  if (flame === 'minigun' && !UPPER_HAND_IDS.includes(hand)) return 1;
+  if (flame === 'hotStreak' && !HOT_STREAK_SEQUENCE.includes(hand)) return 1;
+  if (flame === 'missingPair' && hand !== 'pair' && hand !== 'threeKind') return 1;
+  if (flame === 'oneShort' && hand !== 'smallStraight' && hand !== 'fourKind') return 1;
+  if (HAND_FAMILY_PAYOFFS[flame] && HAND_FAMILY_PAYOFFS[flame] !== hand) return 1;
+  if (flame === 'targetPractice') return targetPracticeMultiplier(100);
+  if (flame === 'hotStreak') return hotStreakMultiplier(100, HOT_STREAK_SEQUENCE.length);
+  if (flame === 'speedDemon') return speedDemonMultiplier(100, 0);
+  if (flame === 'sixPack') return sixPackStartingMultiplier(100);
+  if (flame === 'lowball') return lowballMultiplier(100, minimumLegalAverageForLowball(hand));
+  if (HAND_FAMILY_PAYOFFS[flame]) return handFamilyFlameMultiplier(100);
+  return standardFlameMultiplier(100);
+}
+
+/**
+ * Diagnostic upper bound for this exact set of Flame instance IDs. Each Ember
+ * is treated as its reachable 100-Gold Bonfire, every legal condition is
+ * optimally satisfied, and the resulting simultaneous factors are composed by
+ * selectedOfferingFactor -- the contribution-v2 evaluator's non-additive
+ * attribution rule. The best legal hand is the collection's ceiling.
+ */
+export function maximumPossibleEngulfmentReadiness(
+  state: Pick<Board, 'dice' | 'bonfires' | 'flameInstanceIds'>,
+  assets: readonly EngulfmentAssetRef[] = ownedEngulfmentAssets(state),
+): number {
+  if (!assets.length) return 0;
+  const selectedIds = new Set(assets.map(asset => asset.instanceId));
+  const chargeAssets = assets.filter(asset => isChargeFlame(asset.flame));
+  const chargeFactor = chargeAssets.length * maxChargeContribution(100);
+  const best = HAND_IDS.reduce((maximum, hand) => {
+    const xMultContributions: HandScoredEvent['xMultContributions'] = assets.flatMap(asset => {
+      if (isChargeFlame(asset.flame)) return [];
+      const factor = maximumFlameFactorOnHand(asset.flame, hand);
+      return factor <= 1 ? [] : [{ sourceId: asset.flame, origin: 'bonfire' as const,
+        factor, sourceInstanceId: asset.instanceId }];
+    });
+    if (chargeAssets.length) {
+      const attributed = (chargeFactor - 1) / chargeAssets.length;
+      xMultContributions.push({ sourceId: 'charge', origin: 'charge', factor: chargeFactor,
+        chargeSources: chargeAssets.map(asset => ({ flame: asset.flame, instanceId: asset.instanceId,
+          origin: 'bonfire', attributed, factor: chargeFactor })) });
+    }
+    const factor = selectedOfferingFactor({ xMultContributions }, selectedIds);
+    return Math.max(maximum, factor);
+  }, 1);
+  return Number(best.toFixed(12));
 }
 
 export interface HandLevelNormalization {
@@ -254,6 +331,8 @@ export function createInfernoEvaluation(state: GameState): InfernoEvaluationStat
   const strongestFirst = diagnostics.slice().sort((left, right) =>
     right.hiddenStrength - left.hiddenStrength || left.asset.instanceId - right.asset.instanceId).map(item => item.asset);
   const success = engulfmentSucceeds(full.offeringMultiplier);
+  const maximumPossibleReadiness = maximumPossibleEngulfmentReadiness(state, assets);
+  const currentCollectionTheoreticallySufficient = engulfmentSucceeds(maximumPossibleReadiness);
   const prefixEvaluations: InfernoEvaluationState['prefixEvaluations'] = [];
   let flamesSnuffed: EngulfmentAssetRef[] = [];
   let selectedEffectiveValue: number | null = null;
@@ -271,14 +350,18 @@ export function createInfernoEvaluation(state: GameState): InfernoEvaluationStat
   }
   if (success && !flamesSnuffed.length) throw new Error('A successful Inferno evaluation has no successful strongest-first prefix.');
   const snuffedIds = new Set(flamesSnuffed.map(asset => asset.instanceId));
-  const feedback = success ? null : selectInfernoFeedback(state.seed, evaluationIndex, weakness, trend, recentAction,
-    state.infernoProgress.recentMessageIds);
+  const suspendAfterContinue = !success && !currentCollectionTheoreticallySufficient;
+  const feedback = success ? null : suspendAfterContinue
+    ? { id: 'inferno-suspended', text: INFERNO_SUSPENSION_MESSAGE }
+    : selectInfernoFeedback(state.seed, evaluationIndex, weakness, trend, recentAction,
+      state.infernoProgress.recentMessageIds);
   const normalization = engulfmentTrainingNormalization(state.handLevels);
   const infernoLevelBefore = state.engulfmentLevel;
   return {
     evaluationIndex, round: state.round, chapter: chapterNumberForRound(state.round), flames: diagnostics,
     evidenceRounds: full.evidenceRounds, effectiveValue: full.offeringMultiplier,
-    threshold: ENGULFMENT_REQUIRED_MULTIPLIER, readiness, previousReadiness, trend, weakness, recentAction,
+    threshold: ENGULFMENT_REQUIRED_MULTIPLIER, readiness, maximumPossibleReadiness,
+    currentCollectionTheoreticallySufficient, suspendAfterContinue, previousReadiness, trend, weakness, recentAction,
     feedbackMessageId: feedback?.id ?? null, feedbackMessage: feedback?.text ?? null, success,
     strongestFirst, prefixEvaluations, flamesSnuffed: structuredClone(flamesSnuffed),
     flamesPreserved: assets.filter(asset => !snuffedIds.has(asset.instanceId)).map(asset => structuredClone(asset)),
@@ -307,12 +390,8 @@ export function engulfmentAnimationProfile(offeringMultiplier: number): Engulfme
   return { success, strength, peakPercent: success ? 100 : Math.min(99, progress * 100), durationMs };
 }
 
-export function infernoEvaluationDuration(offeringMultiplier: number, speed: 'normal' | 'fast' | 'instant'): number {
-  const profile = engulfmentAnimationProfile(offeringMultiplier);
-  if (speed === 'normal') return profile.durationMs;
-  if (speed === 'fast') return profile.success ? Math.min(1500, profile.durationMs * .45) : Math.min(650, profile.durationMs * .2);
-  return profile.success ? 700 : 80;
-}
+export const infernoEvaluationDuration = (offeringMultiplier: number): number =>
+  engulfmentAnimationProfile(offeringMultiplier).durationMs;
 
 export function infernoRoman(level: number): string {
   if (level <= 0) return '0';

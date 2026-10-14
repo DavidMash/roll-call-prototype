@@ -252,7 +252,7 @@ describe('tutorial guided interaction beats', () => {
     session.scenario.completedBeatIds.push('flame-basics', 'flame-xmult', 'flame-ember', 'flame-details');
     expect(activeTutorialBeat(session, ui({ flameDetailsOpen: true }))).toMatchObject({
       id: 'flame-stoke',
-      interactiveTargets: ['[data-tutorial="stoke"] button', '[data-tutorial="stoke"] input'],
+      interactiveTargets: ['[data-tutorial="stoke"] button'],
     });
   });
 
