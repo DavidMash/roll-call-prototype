@@ -424,7 +424,7 @@ describe('temporary Special Offers', () => {
     state.specialOfferEffects.taxEvasionRounds = 3;
     state.specialOfferEffects.bottledFairyRounds = 3;
     state.specialOfferEffects.badDreamRounds = 3;
-    state.badDreamCheckpoint = { chapter: 1, hoodedChallenge: null };
+    state.badDreamCheckpoint = { chapter: 1 };
     for (let index = 0; index < 3; index++) {
       state.phase = 'round';
       state.roundSummary = null;
@@ -459,12 +459,19 @@ describe('replay and checkpoint Special Offers', () => {
   });
 
   it('Time Travel replays the completed block while the Chapter Special Offer remains consumed', () => {
-    let state = choose('timeTravel');
+    let state = offerState('timeTravel');
+    state.engulfmentLevel = 2;
+    state.handLevels.ones = 8;
+    state.bonfires = ['lowball'];
+    state = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }, constant()).state;
     expect(state.round).toBe(1);
     expect(state.chapterLifecycle[1]?.specialOfferConsumed).toBe(true);
     expect(state.phase).toBe('round');
     expect(state.round).toBe(1);
     expect(state.currentNodeId).toBe('round:1');
+    expect(state.engulfmentLevel).toBe(2);
+    expect(state.handLevels.ones).toBe(8);
+    expect(state.bonfires).toEqual(['lowball']);
     state.round = 3;
     state.phase = 'roundSummary';
     state.shop = null;
@@ -482,7 +489,7 @@ describe('replay and checkpoint Special Offers', () => {
     expect(activeSpecialOfferStatusItems(state.specialOfferEffects).find(status => status.type === 'badDream')?.label)
       .toBe('Bad Dream · 3 Rounds');
     const checkpoint = structuredClone(state.badDreamCheckpoint!);
-    expect(checkpoint).toEqual({ chapter: 1, hoodedChallenge: null });
+    expect(checkpoint).toEqual({ chapter: 1 });
     state = unlockShop(state);
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.4)).state;
     state.gold = 77;
@@ -490,6 +497,8 @@ describe('replay and checkpoint Special Offers', () => {
     state.dice[0].faces[0].enhancements.vintage = 1;
     state.dice[0].faces[0].vintageSellValue = 18;
     state.dice[0].flame = { id: 'ultimate', investedGold: 61 };
+    state.engulfmentLevel = 3;
+    state.bonfires = ['lowball'];
     state.lives = 1;
     state.target = 1_000_000n;
     state.consumed = [...HAND_IDS];
@@ -504,6 +513,8 @@ describe('replay and checkpoint Special Offers', () => {
     expect(state.handLevels.ones).toBe(9);
     expect(state.dice[0].faces[0]).toMatchObject({ enhancements: { vintage: 1 }, vintageSellValue: 18 });
     expect(state.dice[0].flame).toEqual({ id: 'ultimate', investedGold: 61 });
+    expect(state.engulfmentLevel).toBe(3);
+    expect(state.bonfires).toEqual(['lowball']);
     expect(state.badDreamCheckpoint).toBeNull();
     expect(state.specialOfferEffects.badDreamRounds).toBe(0);
     expect(state.specialOfferEffects.carePackageRerolls).toBe(0);

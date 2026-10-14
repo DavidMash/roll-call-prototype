@@ -51,13 +51,11 @@ describe('Run History V2 characterization', () => {
     expect(result.state.history).toEqual([]);
   });
 
-  it('keeps attached Flame, Bonfire, Wildfire, Charge, and Boss factors explicit', () => {
+  it('keeps attached Ember, Bonfire, Charge, and Boss factors explicit', () => {
     const state = game([4, 4, 4, 4, 4]);
     state.dice[0].flame = { id: 'vineyard', investedGold: 50 };
     enhance(state, 0, 'vintage');
-    state.bonfires = ['lowball', 'momentum'];
-    state.wildfires = [{ flame: 'boxSet', sacrificedFlame: 'minigun', sacrificedAverage: 5,
-      transferMultiplier: 10, resolved: { kind: 'xMult', baseMax: 9, max: 90 } }];
+    state.bonfires = ['lowball', 'momentum', 'boxSet'];
     state.handFamilyFlameStages.boxSet = 'payoff';
     state.chargeXMult = 3;
     state.chargeArmed = true;
@@ -71,7 +69,7 @@ describe('Run History V2 characterization', () => {
     expect(result.state.chargeArmed).toBe(false);
     const hand = result.state.historyV2.find(event => event.kind === 'hand_scored');
     expect(hand?.kind === 'hand_scored' ? hand.xMultContributions.map(item => [item.sourceId, item.origin]) : [])
-      .toEqual(expect.arrayContaining([['charge', 'charge'], ['lowball', 'bonfire'], ['boxSet', 'wildfire'], ['vineyard', 'ember']]));
+      .toEqual(expect.arrayContaining([['charge', 'charge'], ['lowball', 'bonfire'], ['boxSet', 'bonfire'], ['vineyard', 'ember']]));
     expect(hand?.kind === 'hand_scored' ? hand.score.bossFactor : 1).toBe(.5);
     expect(hand?.kind === 'hand_scored' ? hand.sideEffects : []).toContainEqual(expect.objectContaining({ type: 'charge', operation: 'consume_reset' }));
   });

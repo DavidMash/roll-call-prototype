@@ -37,7 +37,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
   onSelect: (hand: HandId) => void; onSubmit: () => void;
 }) {
   const ultimate = new Set(ultimateHands(board.handLevels));
-  const ownsUltimate = board.bonfires.includes('ultimate') || board.wildfires.some(item => item.flame === 'ultimate')
+  const ownsUltimate = board.bonfires.includes('ultimate')
     || board.dice.some(die => activeFlameId(die.flame) === 'ultimate');
   const flameTargets = new Set(handFamilyFlameTargets(board));
   return <section className="scorecard-section" aria-labelledby={`scorecard-${title.toLowerCase()}`}>

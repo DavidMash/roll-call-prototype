@@ -3,7 +3,7 @@ import { activeFace, rollPhysicalDie, scoringPips, weightedSourceFace } from './
 import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, loneWolfPipsFactor, personalTrainerChance, stacks, tankMultiplierFactor, VINTAGE_BASE_SELL_CAP } from './enhancements';
 import {
   activeFlameId, activeFlameInvestment, captureHandStart, currentFlameInstanceId, eligibleFlameIds, FLAMES, handXMultContributions,
-  fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, hasChargeBonfire, HOT_STREAK_SEQUENCE, isChargeFlame,
+  fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, hasChargeBonfire, HOT_STREAK_SEQUENCE,
   initialHandFamilyFlameStages, jumpStartChargeGain, momentumChargeGain, normalizeFlameInstanceRuntime, ownedFlameIds, recalculateMaxCharge,
   removeFlameInstance,
   sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, thirdRailChargeGain,
@@ -11,7 +11,7 @@ import {
 import { hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
 import { OFFER_RARITY_WEIGHTS, rarityFirstSelection, rarityLabel } from './rarity';
-import { applyHandContribution, applyHandMultiplier, applyXMult, createHandAccumulator, finalizeHandScore, finalizeScore, ordinaryFaceContributions, resolvedOrdinaryPips, type HandScoreContribution, type ScoringParticipant } from './scoring';
+import { applyHandContribution, applyHandMultiplier, applyXMult, createHandAccumulator, finalizeHandScore, ordinaryFaceContributions, resolvedOrdinaryPips, type HandScoreContribution, type ScoringParticipant } from './scoring';
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie,
   isBigBossRound, isCursedDie, isMiniBossType, requiredEncounterDieIds, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
@@ -22,7 +22,7 @@ import { chapterEncounterRounds, chapterNumberForRound, ensureChapterPlan } from
 import { chapterRoundForRound } from './chapters';
 import { RUN_HISTORY_V2_RULESET, RUN_HISTORY_V2_SCHEMA_VERSION } from './runHistoryV2';
 import {
-  ENGULFMENT_REQUIRED_MULTIPLIER, engulfmentSucceeds, engulfmentTrainingNormalization, evaluateEngulfmentOffering,
+  createInfernoEvaluation,
   infernoMultiplier,
 } from './engulfment';
 import { appendCriticalDiagnostic, appendDebugTrace } from './debugTrace';
@@ -31,12 +31,6 @@ import {
   captureBustPersistentSpecialOfferState, eligibleSpecialOfferTypes, restoreSpecialOfferEffectsAfterBust,
   SPECIAL_OFFERS, specialOfferDescription, specialOfferName, trainingOfferKey, usableManualRerolls,
 } from './specialOffers';
-import {
-  beginChallengeRound, challengeText, CHALLENGES, completeChallengeRound, createActiveChallenge,
-  HOODED_FIGURE_CONFIG, observeClearingJackpot,
-  observeEnhancementActivation, observeMagneticPulls, observeManualHand, observeManualReroll, observeScoringEvent, projectWildfire,
-  rankedRecipients, rankedSacrifices, selectChallenge, weightedRoundFactor,
-} from './hoodedFigure';
 import type { ChargeFlame } from './flames';
 import type { Enhancement, EngulfmentAssetRef, EventRecord, Face, Flame, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, RunNode, ScoreSource, SpecialOffer } from './types';
 import type {
@@ -47,37 +41,6 @@ import { Decimal, roundPositiveScoreHalf, type ExactScore } from './scoreMath';
 
 type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number };
 type RollContext = 'gameplay' | 'settle' | 'wardenSetup' | 'shop' | 'flameSelection';
-type HoodedChallengeState = NonNullable<GameState['hoodedFigure']['active']>;
-const hoodedProgressFields = (challenge: HoodedChallengeState) => ({
-  challengeId: challenge.id,
-  challengeTarget: challenge.target,
-  challengeAttemptProgress: challenge.attempt.value,
-  challengeCommittedProgress: challenge.committed.value,
-  challengeInvalid: challenge.attempt.invalid,
-  challengeComplete: challenge.complete,
-});
-const hoodedProgressChanged = (before: HoodedChallengeState, after: HoodedChallengeState) =>
-  before.complete !== after.complete
-  || before.attempt.value !== after.attempt.value
-  || before.attempt.invalid !== after.attempt.invalid
-  || before.attempt.jackpotPaid !== after.attempt.jackpotPaid
-  || before.attempt.keys.length !== after.attempt.keys.length
-  || before.attempt.keys.some(key => !after.attempt.keys.includes(key))
-  || before.committed.value !== after.committed.value
-  || before.committed.invalid !== after.committed.invalid
-  || before.committed.jackpotPaid !== after.committed.jackpotPaid
-  || before.committed.keys.length !== after.committed.keys.length
-  || before.committed.keys.some(key => !after.committed.keys.includes(key));
-const hoodedRollbackFields = (before: HoodedChallengeState, after: HoodedChallengeState) => ({
-  attemptProgressBefore: before.attempt.value,
-  attemptProgressAfter: after.attempt.value,
-  committedProgressBefore: before.committed.value,
-  committedProgressAfter: after.committed.value,
-  invalidBefore: before.attempt.invalid,
-  invalidAfter: after.attempt.invalid,
-  completeBefore: before.complete,
-  completeAfter: after.complete,
-});
 type V2HandDraft = {
   parentSeq?: number;
   hand: HandId;
@@ -161,7 +124,6 @@ export class Resolver {
 
   private flameOrigin(flame: Flame, dieId: number | null): FlameOrigin {
     if (dieId !== null) return 'ember';
-    if (this.state.wildfires.some(item => item.flame === flame)) return 'wildfire';
     if (this.state.bonfires.includes(flame)) return 'bonfire';
     return 'external';
   }
@@ -180,8 +142,7 @@ export class Resolver {
         : latestAttempt?.seq ?? sameTimeline[0]?.seq ?? abandonedThroughSeq;
     const retainedSeqs = reason === 'bust' ? [] : sameTimeline.filter(event => event.seq >= abandonedFromSeq
       && event.seq <= abandonedThroughSeq && (event.kind === 'shop_transaction' || event.kind === 'flame_changed'
-        || (event.kind === 'engulfment_attempted' && event.success)
-        || (event.kind === 'hooded_challenge_changed' && event.change === 'forfeited')))
+        || (event.kind === 'inferno_evaluated' && event.evaluation.success)))
       .map(event => event.seq);
     const rewoundEvents = sameTimeline.filter(event => event.seq >= abandonedFromSeq && event.seq <= abandonedThroughSeq);
     const retainedHandSideEffects = reason === 'bust' ? [] : rewoundEvents.flatMap(event => event.kind === 'hand_scored'
@@ -314,14 +275,6 @@ export class Resolver {
           change: { type: 'bonfire_created', flame: record.flame,
             instanceId: currentFlameInstanceId(this.state, record.flame) ?? undefined, dieId: record.dieIds[0] } });
         break;
-      case 'WILDFIRE_CREATED':
-        if (record.recipientFlame && record.sacrificedFlame && record.contributionAverage !== undefined
-          && record.transferMultiplier !== undefined && record.wildfireResolved) this.emitV2({ kind: 'flame_changed', change: {
-            type: 'wildfire_created', flame: record.recipientFlame,
-            instanceId: record.recipientInstanceId ?? currentFlameInstanceId(this.state, record.recipientFlame) ?? undefined,
-            sacrificedFlame: record.sacrificedFlame, sacrificedInstanceId: record.sacrificedInstanceId,
-            contributionAverage: record.contributionAverage, transferMultiplier: record.transferMultiplier, resolved: record.wildfireResolved } });
-        break;
       case 'FLAME_TRIGGERED':
         if (record.flame) this.emitV2({ kind: 'flame_changed', change: { type: 'activated', flame: record.flame,
           origin: this.flameOrigin(record.flame, record.dieIds?.[0] ?? null), dieId: record.dieIds?.[0], factor: record.xMult } });
@@ -338,35 +291,6 @@ export class Resolver {
         this.v2LastCharge = after;
         break;
       }
-      case 'HOODED_CHALLENGE_ISSUED':
-      case 'HOODED_CHALLENGE_PROGRESS_COMMITTED':
-      case 'HOODED_CHALLENGE_COMPLETED':
-      case 'HOODED_CHALLENGE_ROLLED_BACK':
-      case 'HOODED_CHALLENGE_TIME_TRAVEL_RESET':
-      case 'HOODED_CHALLENGE_BAD_DREAM_RESET':
-      case 'HOODED_CHALLENGE_EXPIRED':
-      case 'HOODED_FIGURE_RETURNED': {
-        const changes = { HOODED_CHALLENGE_ISSUED: 'issued', HOODED_CHALLENGE_PROGRESS_COMMITTED: 'progress_committed', HOODED_CHALLENGE_COMPLETED: 'completed',
-          HOODED_CHALLENGE_ROLLED_BACK: 'rolled_back', HOODED_CHALLENGE_TIME_TRAVEL_RESET: 'time_travel_reset',
-          HOODED_CHALLENGE_BAD_DREAM_RESET: 'bad_dream_reset', HOODED_CHALLENGE_EXPIRED: 'expired',
-          HOODED_FIGURE_RETURNED: 'returned' } as const;
-        this.emitV2({ kind: 'hooded_challenge_changed', challengeId: record.challengeId,
-          change: changes[record.type], target: record.challengeTarget,
-          attemptProgress: record.challengeAttemptProgress, committedProgress: record.challengeCommittedProgress,
-          invalid: record.challengeInvalid, complete: record.challengeComplete, rollback: record.challengeRollback });
-        break;
-      }
-      case 'WILDFIRE_SACRIFICE_SELECTED':
-        this.emitV2({ kind: 'hooded_challenge_changed', change: 'sacrifice_selected',
-          recipientFlame: record.recipientFlame, sacrificedFlame: record.sacrificedFlame });
-        break;
-      case 'WILDFIRE_CANDIDATES':
-        if (record.recipientFlame) this.emitV2({ kind: 'hooded_challenge_changed', change: 'recipient_selected',
-          recipientFlame: record.recipientFlame });
-        break;
-      case 'WILDFIRE_WALKED_AWAY':
-        this.emitV2({ kind: 'hooded_challenge_changed', challengeId: record.challengeId, change: 'walked_away' });
-        break;
       case 'BOSS_STARTED':
       case 'BOSS_CLEARED':
       case 'BOSS_HAND_CHANGED':
@@ -444,7 +368,7 @@ export class Resolver {
     const fetchDie = attachedDieId === undefined
       ? this.state.dice.find(die => die.owner === 'player' && activeFlameId(die.flame) === 'fetch')
       : this.state.dice.find(die => die.owner === 'player' && die.id === attachedDieId);
-    const global = this.state.bonfires.includes('fetch') || this.state.wildfires.some(item => item.flame === 'fetch');
+    const global = this.state.bonfires.includes('fetch');
     const dice = fetchDie ? [fetchDie] : global ? this.state.dice.filter(die => die.owner === 'player' && die.id >= 0 && die.id < CONFIG.diceCount) : [];
     const targets = dice.flatMap(die => die.faces.slice(0, 6).map((_, index) => ({ dieId: die.id, physicalFace: (index + 1) as import('./types').Rank })))
       .filter(target => !previous || target.dieId !== previous.dieId || target.physicalFace !== previous.physicalFace);
@@ -515,7 +439,6 @@ export class Resolver {
       message: `Warden unlock target ${this.format(boss.nextUnlockTarget)} reached · next reinforcement released` });
   }
   whenScored(dieId: number, snapshot: Face, hand: HandId, playSource: HandPlaySource, participation: 'selected' | 'hitchhiker'): void {
-    observeEnhancementActivation(this.state.hoodedFigure.active, snapshot);
     if (!this.state.bossSilenced && this.state.boss?.type === 'hexer' && dieId === this.state.boss.cursedDieId) {
       this.state.stats.hexerEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
         kind: playSource === 'jumpingBean' ? 'jumping_bean' : 'hand', face: snapshot.rank, hand });
@@ -660,13 +583,10 @@ export class Resolver {
     return total;
   }
 
-  private chargeFlameSource(flame: ChargeFlame):
-    { investment: number; dieId: number | null; wildfire: import('./types').Wildfire | null } | null {
-    if (this.state.bonfires.includes(flame)) return { investment: 100, dieId: null, wildfire: null };
-    const wildfire = this.state.wildfires.find(item => item.flame === flame);
-    if (wildfire) return { investment: 100, dieId: null, wildfire };
+  private chargeFlameSource(flame: ChargeFlame): { investment: number; dieId: number | null } | null {
+    if (this.state.bonfires.includes(flame)) return { investment: 100, dieId: null };
     const die = this.state.dice.find(item => activeFlameId(item.flame) === flame);
-    return die ? { investment: activeFlameInvestment(die.flame), dieId: die.id, wildfire: null } : null;
+    return die ? { investment: activeFlameInvestment(die.flame), dieId: die.id } : null;
   }
   private growCharge(flame: ChargeFlame, requestedGain: number,
     detail: string, dieIds?: number[]): void {
@@ -686,14 +606,13 @@ export class Resolver {
   private addMomentumCharge(hand: HandId): void {
     const source = this.chargeFlameSource('momentum');
     if (!source) return;
-    const gain = source.wildfire?.resolved.kind === 'charge' ? source.wildfire.resolved.gain ?? 0 : momentumChargeGain(source.investment);
-    this.growCharge('momentum', gain, `${HANDS[hand].name} played`);
+    this.growCharge('momentum', momentumChargeGain(source.investment), `${HANDS[hand].name} played`);
   }
   private applyPowerSurge(hand: HandId, isHighestLevelHand: boolean): void {
     const source = this.chargeFlameSource('powerSurge');
     if (!source || !isHighestLevelHand) return;
     const before = this.state.chargeXMult;
-    const ratio = source.wildfire?.resolved.kind === 'charge' ? source.wildfire.resolved.ratio ?? 1 : 3;
+    const ratio = 3;
     const requestedGain = before * (ratio - 1);
     this.growCharge('powerSurge', requestedGain, `${HANDS[hand].name} multiplied current Charge by ${this.format(ratio)}`);
   }
@@ -712,9 +631,7 @@ export class Resolver {
     const source = this.chargeFlameSource('fluxCapacitor');
     if (!source || pulledMagneticFaces <= 0) return;
     const before = this.state.chargeXMult;
-    const multiplier = source.wildfire?.resolved.kind === 'charge'
-      ? 1 + (source.wildfire.resolved.coefficient ?? 0) * pulledMagneticFaces
-      : fluxCapacitorChargeMultiplier(source.investment, pulledMagneticFaces);
+    const multiplier = fluxCapacitorChargeMultiplier(source.investment, pulledMagneticFaces);
     const after = Number(Math.min(this.state.maxCharge, before * multiplier).toFixed(12));
     const gain = Number((after - before).toFixed(12));
     this.state.chargeXMult = after;
@@ -769,7 +686,6 @@ export class Resolver {
         bumped: false, actualBump: false, clockmakerBump: false, attracted: false };
     });
     const attracted = results.filter(result => result.attracted);
-    if (attracted.length && context === 'gameplay') observeMagneticPulls(this.state.hoodedFigure.active, attracted.length);
     if (attracted.length) {
       for (const anchor of anchors) activeFace(this.state.dice.find(die => die.id === anchor)!).magneticSourceUsed = true;
     }
@@ -784,8 +700,7 @@ export class Resolver {
         message: `D${die.id + 1} rolled: ${result.before} → ${face.rank}${excludeStartingFace ? ' · previous face excluded' : ''}` });
       if ((context === 'gameplay' || context === 'wardenSetup') && face.rank === 3) {
         const source = this.chargeFlameSource('thirdRail');
-        if (source) this.growCharge('thirdRail', source.wildfire?.resolved.kind === 'charge'
-          ? source.wildfire.resolved.gain ?? 0 : thirdRailChargeGain(source.investment), `D${die.id + 1} rolled a 3`, [die.id]);
+        if (source) this.growCharge('thirdRail', thirdRailChargeGain(source.investment), `D${die.id + 1} rolled a 3`, [die.id]);
       }
       if (isCursedDie(die)) {
         this.state.stats.hexerEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
@@ -875,7 +790,7 @@ export class Resolver {
 
   private advanceHotStreak(hand: HandId, scoringIds: number[]): void {
     if (this.state.hotStreakGoal !== hand) return;
-    const bonfire = this.state.bonfires.includes('hotStreak') || this.state.wildfires.some(item => item.flame === 'hotStreak');
+    const bonfire = this.state.bonfires.includes('hotStreak');
     const flameDie = this.state.dice.find(die => scoringIds.includes(die.id) && activeFlameId(die.flame) === 'hotStreak');
     const qualified = bonfire || !!flameDie;
     if (qualified) { this.state.hotStreakCharges++; this.state.stats.hotStreakCharges++; }
@@ -1200,10 +1115,6 @@ export class Resolver {
     }
     const scoringParticipants = [...shapeParticipants, ...hitchhikers].sort((a, b) => a.id - b.id);
     const scoringIds = scoringParticipants.map(item => item.id);
-    if (playSource === 'manual') observeManualHand(this.state.hoodedFigure.active, hand);
-    observeScoringEvent(this.state.hoodedFigure.active,
-      scoringParticipants.map(item => ({ printed: this.state.dice.find(die => die.id === item.id)!.value,
-        enhancements: { ...item.face.enhancements }, enhancementsActive: !item.face.infected })), playSource);
     for (const { id, face } of shapeParticipants) {
       const wild: Enhancement | null = hand === 'smallStraight' || hand === 'largeStraight' ? 'missingLink' : HANDS[hand].rank ? null : 'mirror';
       if (wild && stacks(face, wild)) this.trigger(wild, id, face, 'wild qualification; actual printed pips score');
@@ -1219,14 +1130,12 @@ export class Resolver {
     const xMultFactors = handXMultContributions(handStart, hand, handLevel, scoringIds);
     for (const factor of xMultFactors) {
       const origin: FlameOrigin = factor.source === 'charge' ? 'charge' : factor.dieId !== null ? 'ember'
-        : handStart.wildfires.some(item => item.flame === factor.source) ? 'wildfire'
-          : handStart.bonfires.includes(factor.source) ? 'bonfire' : 'external';
+        : handStart.bonfires.includes(factor.source) ? 'bonfire' : 'external';
       const chargeSources = factor.source === 'charge' ? Object.entries(chargeAttributionAtHandStart)
         .filter((entry): entry is [Flame, number] => (entry[1] ?? 0) > 0)
         .map(([flame, attributed]) => ({ flame,
           instanceId: currentFlameInstanceId(this.state, flame) ?? undefined,
-          origin: this.state.bonfires.includes(flame) ? 'bonfire' as const
-            : this.state.wildfires.some(item => item.flame === flame) ? 'wildfire' as const : 'ember' as const,
+          origin: this.state.bonfires.includes(flame) ? 'bonfire' as const : 'ember' as const,
           attributed,
           factor: handStart.chargeXMult / Math.max(1, handStart.chargeXMult - attributed) })) : undefined;
       const sourceInstanceId = factor.source === 'charge' ? null : currentFlameInstanceId(this.state, factor.source);
@@ -1255,17 +1164,6 @@ export class Resolver {
     this.advanceHandFamilyFlames(hand, xMultFactors);
     const bossFactor = this.flyFactor(hand, playSource);
     const { pips, multiplier, xMult, rawScore, score } = finalizeHandScore(this.handAccumulator, bossFactor);
-    for (const bonfire of this.state.bonfires) {
-      const direct = xMultFactors.find(factor => factor.source === bonfire && factor.dieId === null)?.value;
-      const attributedCharge = chargeAttributionAtHandStart[bonfire] ?? 0;
-      const chargeFactor = handStart.chargeArmed && isChargeFlame(bonfire) && attributedCharge > 0
-        ? handStart.chargeXMult / Math.max(1, handStart.chargeXMult - attributedCharge) : 1;
-      const factor = Math.max(1, direct ?? chargeFactor);
-      const weight = factor > 1
-        ? finalizeScore(pips, multiplier, (xMult / factor) * bossFactor, currentInfernoMultiplier).finalScore
-        : score;
-      (this.state.bonfireRoundContributions[bonfire] ??= { observations: [] }).observations.push({ factor, weight });
-    }
     this.state.stats.handScores.push({ round: this.state.round, hand, handLevel, dieIds: scoringIds,
       basePips: this.handAccumulator.basePips, baseMultiplier: this.handAccumulator.baseMultiplier,
       infernoMultiplier: currentInfernoMultiplier,
@@ -1291,10 +1189,8 @@ export class Resolver {
     this.applyPowerSurge(hand, handStart.ultimateHands.includes(hand));
     if (UPPER_HAND_IDS.includes(hand) && ownedFlameIds(this.state).has('sixPack')) {
       const before = this.state.sixPackXMult;
-      const sixPackWildfire = this.state.wildfires.find(item => item.flame === 'sixPack');
-      const startingFactor = sixPackWildfire?.resolved.kind === 'xMult' ? sixPackWildfire.resolved.max
-        : this.state.bonfires.includes('sixPack') ? sixPackStartingMultiplier(100)
-          : sixPackStartingMultiplier(activeFlameInvestment(this.state.dice.find(die => activeFlameId(die.flame) === 'sixPack')?.flame ?? null));
+      const startingFactor = this.state.bonfires.includes('sixPack') ? sixPackStartingMultiplier(100)
+        : sixPackStartingMultiplier(activeFlameInvestment(this.state.dice.find(die => activeFlameId(die.flame) === 'sixPack')?.flame ?? null));
       this.state.sixPackUpperHandsPlayed = Math.min(6, this.state.sixPackUpperHandsPlayed + 1);
       this.state.sixPackXMult = sixPackMultiplierAfterUpperHands(startingFactor, this.state.sixPackUpperHandsPlayed);
       this.emit({ type: 'SIX_PACK_CHANGED', flame: 'sixPack', hand, xMult: this.state.sixPackXMult,
@@ -1329,7 +1225,6 @@ export class Resolver {
     }
     let jackpotPayout = 0;
     if (winning) jackpotPayout = this.resolveJackpot(scoringIds);
-    if (winning) observeClearingJackpot(this.state.hoodedFigure.active, jackpotPayout > 0);
     const beanRecordIndex = freeBean ? this.state.stats.jumpingBeanFreePlays.push({
       round: this.state.round, dieId: ids[0], face: shapeParticipants[0].face.rank, hand, handLevel,
       basePips: this.state.stats.handScores.at(-1)!.basePips, baseMultiplier: this.state.stats.handScores.at(-1)!.baseMultiplier,
@@ -1382,7 +1277,6 @@ export class Resolver {
   }
 
   manualReroll(dieIds: number[]): void {
-    observeManualReroll(this.state.hoodedFigure.active);
     const ids = [...dieIds].sort((a, b) => a - b);
     const requiredDieIds = requiredEncounterDieIds(this.state);
     const startedDeadBoard = !hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state), requiredDieIds);
@@ -1409,8 +1303,7 @@ export class Resolver {
         message: 'Charge disarmed because its intended hand selection was cleared.' });
     }
     const jumpStart = this.chargeFlameSource('jumpStart');
-    if (jumpStart) for (const dieId of ids) this.growCharge('jumpStart', jumpStart.wildfire?.resolved.kind === 'charge'
-      ? jumpStart.wildfire.resolved.gain ?? 0 : jumpStartChargeGain(jumpStart.investment),
+    if (jumpStart) for (const dieId of ids) this.growCharge('jumpStart', jumpStartChargeGain(jumpStart.investment),
       `1 Reroll spent on D${dieId + 1}`, [dieId]);
     this.v2ManualSpend = { normalCharges: normalSpent, carePackageCharges: carePackageSpent,
       remaining: this.state.manualRerollsRemaining };
@@ -1430,7 +1323,7 @@ export class Resolver {
     // session that launched it. Bust restoration reopens this Shop without
     // generating offers, reroll allowances, exposed faces, or rewards.
     base.phase = 'shop';
-    base.shop ??= { visitId: base.nextShopVisitId++, engulfmentAttemptUsed: false,
+    base.shop ??= { visitId: base.nextShopVisitId++,
       offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
       freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
     // Once the next Chapter has started, a Bust restores this as that Round's
@@ -1473,16 +1366,6 @@ export class Resolver {
       this.emitV2({ kind: 'round_attempt_finished', outcome: 'bust', score: failure.score, target: failure.target,
         boss: this.state.boss?.type ?? null, livesBefore: failure.livesBefore, livesAfter: failure.livesAfter });
       const deathChapter = chapterNumberForRound(this.state.round);
-      const currentChallenge = this.state.hoodedFigure.active;
-      const badDreamChallengeBefore = currentChallenge ? structuredClone(currentChallenge) : null;
-      let badDreamRestoredChallenge: typeof currentChallenge = null;
-      if (badDreamCheckpoint.chapter === deathChapter && currentChallenge && !currentChallenge.complete
-        && !(this.state.hoodedFigure.forfeitedChapters ?? []).includes(deathChapter)
-        && badDreamCheckpoint.hoodedChallenge) {
-        this.state.hoodedFigure.active = structuredClone(badDreamCheckpoint.hoodedChallenge);
-        this.state.hoodedFigure.interaction = null;
-        badDreamRestoredChallenge = this.state.hoodedFigure.active;
-      }
       const destination = chapterEncounterRounds(deathChapter).miniBossRound;
       this.state.round = destination;
       this.state.roundAttemptNumber = 1;
@@ -1492,11 +1375,6 @@ export class Resolver {
       this.state.lives = 1;
       this.state.bust = null;
       this.nextTimeline('bad_dream', destination, 1, 'post_r3_shop');
-      if (badDreamRestoredChallenge) this.emit({ type: 'HOODED_CHALLENGE_BAD_DREAM_RESET',
-        ...hoodedProgressFields(badDreamRestoredChallenge),
-        challengeRollback: badDreamChallengeBefore?.id === badDreamRestoredChallenge.id
-          ? hoodedRollbackFields(badDreamChallengeBefore, badDreamRestoredChallenge) : undefined,
-        message: `${CHALLENGES[badDreamRestoredChallenge.id].name} restored to its Bad Dream checkpoint` });
       this.openShop('backward');
       this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', message: 'Bad Dream returned the current build to the post-R3 Shop with 1 Life' });
       return;
@@ -1523,11 +1401,6 @@ export class Resolver {
     }
     this.emitV2({ kind: 'round_attempt_finished', outcome: 'bust', score: failure.score, target: failure.target,
       boss: this.state.boss?.type ?? null, livesBefore: failure.livesBefore, livesAfter: failure.livesAfter });
-    const currentChallenge = this.state.hoodedFigure.active;
-    const checkpointChallenge = checkpoint.board.hoodedFigure.active;
-    const rolledBackChallenge = currentChallenge && checkpointChallenge
-      && currentChallenge.id === checkpointChallenge.id && hoodedProgressChanged(currentChallenge, checkpointChallenge)
-      ? { before: structuredClone(currentChallenge), after: structuredClone(checkpointChallenge) } : null;
     restoreRollbackState(this.state, checkpoint);
     this.state.specialOfferEffects = restoreSpecialOfferEffectsAfterBust(
       this.state.specialOfferEffects,
@@ -1542,11 +1415,6 @@ export class Resolver {
       freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
     this.state.shop.lifeRestores ??= 0;
     this.nextTimeline('bust', this.state.round, failure.livesAfter > 0 ? failure.attempt + 1 : failure.attempt);
-    if (rolledBackChallenge) this.emit({ type: 'HOODED_CHALLENGE_ROLLED_BACK',
-      ...hoodedProgressFields(rolledBackChallenge.after),
-      challengeRollback: hoodedRollbackFields(rolledBackChallenge.before, rolledBackChallenge.after),
-      amount: rolledBackChallenge.before.attempt.value,
-      message: `${CHALLENGES[rolledBackChallenge.after.id].name} attempt progress rolled back after Bust` });
     this.state.lives = failure.livesAfter;
     this.state.roundAttemptNumber = failure.livesAfter > 0 ? failure.attempt + 1 : failure.attempt;
     this.state.bust = failure;
@@ -1559,11 +1427,9 @@ export class Resolver {
     if (failure.livesAfter > 0) {
       this.state.phase = 'shop';
       this.state.shop!.visitId = this.state.nextShopVisitId++;
-      this.state.shop!.engulfmentAttemptUsed = false;
       this.state.currentNodeId = failedNodeId;
       this.mapTransition(shopNodeBefore(failure.round), 'backward');
-      this.emitV2({ kind: 'shop_visit_started', shopVisitId: this.state.shop!.visitId,
-        reason: 'bust', engulfmentAttemptUsed: false });
+      this.emitV2({ kind: 'shop_visit_started', shopVisitId: this.state.shop!.visitId, reason: 'bust' });
       this.emit({ type: 'SHOP_REOPENED_AFTER_BUST',
         message: `Round ${this.format(failure.round)} attempt ${this.format(failure.attempt)} checkpoint restored · ${this.format(this.state.manualRerollsRemaining)} Rerolls left · Care Package ${this.format(this.state.specialOfferEffects.carePackageRerolls)} · returned to the same Shop · prepare for attempt ${this.format(failure.attempt + 1)}` });
     } else {
@@ -1588,82 +1454,7 @@ export class Resolver {
     }
   }
 
-  private prepareHoodedEncounter(genuinelyNewChapter: boolean): boolean {
-    const chapter = chapterNumberForRound(this.state.round);
-    if (!genuinelyNewChapter || chapterRoundForRound(this.state.round) !== 1
-      || chapter < HOODED_FIGURE_CONFIG.minimumChapter || this.state.bonfires.length < HOODED_FIGURE_CONFIG.minimumOrdinaryBonfires
-      || this.state.hoodedFigure.issuedChapters.includes(chapter)) return false;
-    const plan = ensureChapterPlan(this.state, chapter);
-    const challenge = selectChallenge(this.state, plan.miniBoss, this.state.hoodedFigure.previousChallengeId, this.rng);
-    if (!challenge) return false;
-    const first = !this.state.hoodedFigure.seen;
-    const laterWithWildfire = [
-      '"Prove yourself and I will grant you even more power."',
-      '"You\'ve tasted the power I offer. Now I\'ve returned for more."',
-      '"You know why I am here."',
-    ];
-    const laterWithoutWildfire = [
-      '"I have returned to offer my services again."',
-      '"You have done well thus far, but I can offer greater power."',
-      '"The power I offer is a rare boon in this land."',
-    ];
-    const dialogueLine = first ? '"But first, do something for me..."'
-      : (this.state.wildfires.length ? laterWithWildfire : laterWithoutWildfire)[randomIndex(this.rng, 3)];
-    const active = createActiveChallenge(challenge, this.state, chapter, dialogueLine);
-    const lines = first ? [
-      'A hooded figure approaches...',
-      '"I have powers that may assist you on your journey."',
-      dialogueLine,
-      `"If you can ${challengeText(active, 'short')} before defeating this land's Boss, I may be of service."`,
-      'The figure vanishes.',
-    ] : [
-      'The hooded figure approaches again.',
-      dialogueLine,
-      `"${challengeText(active, 'short')} before defeating this land's Boss, then meet with me${this.state.wildfires.length ? ' again' : ''}."`,
-      'The figure vanishes.',
-    ];
-    this.state.hoodedFigure = {
-      ...this.state.hoodedFigure,
-      seen: true,
-      previousChallengeId: challenge.id,
-      active,
-      interaction: { kind: 'opening', stage: 'story', lines, lineIndex: 0, recipient: null, sacrifice: null },
-      issuedChapters: [...this.state.hoodedFigure.issuedChapters, chapter],
-      challengeCheckpoint: structuredClone(active),
-      contributionCheckpoint: structuredClone(this.state.bonfireContributions),
-    };
-    beginChallengeRound(active);
-    return true;
-  }
-
-  private openHoodedReturn(): boolean {
-    const active = this.state.hoodedFigure.active;
-    const sameChapter = active?.issuedChapter === chapterNumberForRound(this.state.round);
-    if (sameChapter && active.complete) {
-      this.state.phase = 'hoodedFigure';
-      this.state.shop = null; this.state.specialOffer = null;
-      this.state.hoodedFigure.interaction = { kind: 'return', stage: 'story', lineIndex: 0,
-        lines: ['The hooded figure approaches again.', '"You\'ve done well. Let\'s make a Wildfire."', 'Choose a Bonfire to upgrade.'],
-        recipient: null, sacrifice: null };
-      this.emit({ type: 'HOODED_FIGURE_RETURNED', ...hoodedProgressFields(active),
-        message: `Hooded Figure returned after ${CHALLENGES[active.id].name}` });
-      return true;
-    }
-    return false;
-  }
-
-  private expireHoodedChallengeAfterChapter(): void {
-    const active = this.state.hoodedFigure.active;
-    const sameChapter = active?.issuedChapter === chapterNumberForRound(this.state.round);
-    if (sameChapter && !active.complete && chapterRoundForRound(this.state.round) === 6) {
-      this.emit({ type: 'HOODED_CHALLENGE_EXPIRED', ...hoodedProgressFields(active),
-        message: `${CHALLENGES[active.id].name} expired after the Chapter's final Round` });
-      this.state.hoodedFigure.active = null;
-      this.state.hoodedFigure.contributionCheckpoint = null;
-    }
-  }
-
-  private continueAfterHoodedReturn(): void {
+  private continuePostRoundFlow(): void {
     const localRound = chapterRoundForRound(this.state.round);
     const bossReward = this.state.roundSummary?.encounterType === 'boss';
     if (!bossReward) this.openShop();
@@ -1675,87 +1466,11 @@ export class Resolver {
     else this.openShop();
   }
 
-  private continuePostRoundSummaryFlow(): void {
-    if (this.openHoodedReturn()) return;
-    this.expireHoodedChallengeAfterChapter();
-    this.continueAfterHoodedReturn();
-  }
-
-  advanceHoodedFigure(): void {
-    const interaction = this.state.hoodedFigure.interaction!;
-    if (interaction.lineIndex < interaction.lines.length - 1) { interaction.lineIndex++; return; }
-    if (interaction.kind === 'opening') {
-      this.state.hoodedFigure.interaction = null;
-      if (this.state.hoodedFigure.active) {
-        this.state.shop = structuredClone(this.state.roundCheckpoint?.board.shop ?? null);
-        this.startRound(false);
-      }
-      else this.continueAfterHoodedReturn();
-      return;
-    }
-    interaction.stage = 'recipient';
-    interaction.lineIndex = interaction.lines.length - 1;
-    this.emit({ type: 'WILDFIRE_CANDIDATES', message: `Upgrade candidates: ${rankedRecipients(this.state).map(id => FLAMES[id].name).join(', ')}` });
-  }
-
-  selectWildfireRecipient(flame: Flame): void {
-    const interaction = this.state.hoodedFigure.interaction!;
-    interaction.recipient = flame; interaction.sacrifice = null; interaction.stage = 'sacrifice';
-    this.emit({ type: 'WILDFIRE_CANDIDATES', recipientFlame: flame,
-      message: `${FLAMES[flame].name} selected to become a Wildfire; sacrifice candidates: ${rankedSacrifices(this.state, flame).map(id => FLAMES[id].name).join(', ')}` });
-  }
-  selectWildfireSacrifice(flame: Flame): void {
-    const interaction = this.state.hoodedFigure.interaction!;
-    interaction.sacrifice = flame; interaction.stage = 'confirm';
-    const projected = projectWildfire(this.state, interaction.recipient!, flame);
-    this.emit({ type: 'WILDFIRE_SACRIFICE_SELECTED', recipientFlame: interaction.recipient!, sacrificedFlame: flame,
-      contributionAverage: projected.sacrificedAverage, transferMultiplier: projected.transferMultiplier,
-      wildfireResolved: projected.resolved, message: `${FLAMES[flame].name} selected as fuel for ${FLAMES[interaction.recipient!].name}` });
-  }
-  backWildfire(): void {
-    const interaction = this.state.hoodedFigure.interaction!;
-    if (interaction.stage === 'confirm') { interaction.stage = 'sacrifice'; interaction.sacrifice = null; }
-    else { interaction.stage = 'recipient'; interaction.recipient = null; interaction.sacrifice = null; }
-  }
-  walkAwayWildfire(): void {
-    const active = this.state.hoodedFigure.active;
-    this.emit({ type: 'WILDFIRE_WALKED_AWAY', challengeId: active?.id, message: 'The player walked away. The figure vanishes.' });
-    this.state.hoodedFigure.active = null;
-    this.state.hoodedFigure.interaction = { kind: 'opening', stage: 'story', lines: ['The figure vanishes.'], lineIndex: 0, recipient: null, sacrifice: null };
-    this.state.hoodedFigure.contributionCheckpoint = null;
-  }
-  confirmWildfire(): void {
-    const interaction = this.state.hoodedFigure.interaction!;
-    const recipient = interaction.recipient!; const sacrifice = interaction.sacrifice!;
-    const rewardedChapter = this.state.hoodedFigure.active?.issuedChapter;
-    const wildfire = projectWildfire(this.state, recipient, sacrifice);
-    const recipientInstanceId = currentFlameInstanceId(this.state, recipient) ?? undefined;
-    const sacrificedInstanceId = currentFlameInstanceId(this.state, sacrifice) ?? undefined;
-    if (!this.state.bonfires.includes(recipient) || !this.state.bonfires.includes(sacrifice) || recipient === sacrifice)
-      throw new Error('Wildfire conversion candidates are no longer valid.');
-    this.state.bonfires = this.state.bonfires.filter(id => id !== recipient && id !== sacrifice);
-    delete this.state.bonfireContributions[recipient]; delete this.state.bonfireContributions[sacrifice];
-    delete this.state.bonfireRoundContributions[recipient]; delete this.state.bonfireRoundContributions[sacrifice];
-    this.state.wildfires.push(wildfire);
-    removeFlameInstance(this.state, sacrifice);
-    if (rewardedChapter !== undefined && !this.state.hoodedFigure.rewardedChapters.includes(rewardedChapter))
-      this.state.hoodedFigure.rewardedChapters.push(rewardedChapter);
-    this.state.hoodedFigure.active = null;
-    this.state.hoodedFigure.interaction = { kind: 'opening', stage: 'story', lines: ['The figure vanishes.'], lineIndex: 0, recipient: null, sacrifice: null };
-    this.state.hoodedFigure.contributionCheckpoint = null;
-    recalculateMaxCharge(this.state);
-    this.emit({ type: 'WILDFIRE_CREATED', recipientFlame: recipient, recipientInstanceId,
-      sacrificedFlame: sacrifice, sacrificedInstanceId,
-      contributionAverage: wildfire.sacrificedAverage, transferMultiplier: wildfire.transferMultiplier,
-      wildfireResolved: wildfire.resolved, message: `${FLAMES[recipient].name} became a Wildfire; ${FLAMES[sacrifice].name} was sacrificed. The figure vanishes.` });
-  }
-
   startRound(retry = false, direction: 'forward' | 'backward' = 'forward'): void {
     if (retry) {
       const priorBust = this.state.stats.busts.at(-1);
       if (priorBust?.round === this.state.round && !priorBust.retryStarted) priorBust.retryStarted = true;
     }
-    const genuinelyNewChapter = !this.state.presentedChapters.includes(chapterNumberForRound(this.state.round));
     this.enterChapterIfNeeded(this.state.round);
     const chargeBeforeRoundReset = this.state.chargeXMult;
     const chargeWasArmed = this.state.chargeArmed;
@@ -1799,26 +1514,13 @@ export class Resolver {
     if (!this.state.bossSilenced && this.state.boss?.type === 'warden') {
       this.state.boss.unlockCosts = wardenUnlockCosts(this.state.handLevels, [], this.state.target);
     }
-    const sixPackWildfire = this.state.wildfires.find(item => item.flame === 'sixPack');
-    const sixPackInvestment = this.state.bonfires.includes('sixPack') || sixPackWildfire ? 100
+    const sixPackInvestment = this.state.bonfires.includes('sixPack') ? 100
       : activeFlameInvestment(this.state.dice.find(die => activeFlameId(die.flame) === 'sixPack')?.flame ?? null);
-    this.state.sixPackXMult = sixPackWildfire?.resolved.kind === 'xMult' ? sixPackWildfire.resolved.max : sixPackStartingMultiplier(sixPackInvestment);
+    this.state.sixPackXMult = sixPackStartingMultiplier(sixPackInvestment);
     this.state.sixPackUpperHandsPlayed = 0;
     this.state.hotStreakGoal = ownedFlameIds(this.state).has('hotStreak') ? 'pair' : null;
     this.state.handFamilyFlameStages = initialHandFamilyFlameStages(this.state);
-    this.state.bonfireRoundContributions = Object.fromEntries(this.state.bonfires.map(id => [id, { observations: [] }]));
-    const openingPending = this.prepareHoodedEncounter(genuinelyNewChapter);
-    if (!openingPending && this.state.hoodedFigure.active?.issuedChapter === chapterNumberForRound(this.state.round))
-      beginChallengeRound(this.state.hoodedFigure.active);
     this.captureRoundCheckpoint();
-    if (openingPending) {
-      this.state.shop = null;
-      this.state.phase = 'hoodedFigure';
-      const active = this.state.hoodedFigure.active!;
-      this.emit({ type: 'HOODED_CHALLENGE_ISSUED', ...hoodedProgressFields(active),
-        message: `Hooded Figure issued ${CHALLENGES[active.id].name} (target ${this.format(active.target)})` });
-      return;
-    }
     this.state.shop = null;
     this.mapTransition(encounterNode(this.state.round, bossType), direction);
     this.state.stats.rounds.push({ round: this.state.round, attempt: this.state.roundAttemptNumber, target: this.state.target, firstCrossedScore: null,
@@ -1925,64 +1627,38 @@ export class Resolver {
     this.emit({ type: 'TARGET_PRACTICE_SELECTED', flame: 'targetPractice', hand: this.state.targetPracticeHand,
       message: `Target Practice: ${HANDS[this.state.targetPracticeHand].name}` });
   }
-  attemptEngulfment(assets: EngulfmentAssetRef[]): void {
-    const shop = this.state.shop!;
-    const evaluation = evaluateEngulfmentOffering(this.state, assets);
-    const success = engulfmentSucceeds(evaluation.offeringMultiplier);
-    const infernoLevelBefore = this.state.engulfmentLevel;
-    const infernoMultiplierBefore = infernoMultiplier(infernoLevelBefore);
-    const normalization = engulfmentTrainingNormalization(this.state.handLevels);
-    const chapter = chapterNumberForRound(this.state.round);
-    const activeQuest = this.state.hoodedFigure.active;
-    const forfeitedQuest = success && activeQuest && !activeQuest.complete && activeQuest.issuedChapter === chapter
-      ? structuredClone(activeQuest) : null;
-    shop.engulfmentAttemptUsed = true;
-    if (success) {
-      const selectedEmbers = new Map(assets.filter((asset): asset is Extract<EngulfmentAssetRef, { kind: 'ember' }> => asset.kind === 'ember')
+  private performInfernoEvaluation(): void {
+    const evaluation = createInfernoEvaluation(this.state);
+    if (!evaluation) { this.state.infernoEvaluation = null; return; }
+    this.state.infernoProgress.evaluationIndex = evaluation.evaluationIndex;
+    this.state.infernoProgress.previousReadiness = evaluation.readiness;
+    this.state.infernoProgress.recentAction = 'none';
+    if (evaluation.feedbackMessageId) this.state.infernoProgress.recentMessageIds = [
+      ...this.state.infernoProgress.recentMessageIds.filter(id => id !== evaluation.feedbackMessageId),
+      evaluation.feedbackMessageId,
+    ].slice(-3);
+    if (evaluation.success) {
+      const selectedEmbers = new Map(evaluation.flamesSnuffed
+        .filter((asset): asset is Extract<EngulfmentAssetRef, { kind: 'ember' }> => asset.kind === 'ember')
         .map(asset => [asset.dieId, asset.flame]));
       for (const die of this.state.dice) if (selectedEmbers.get(die.id) === activeFlameId(die.flame)) die.flame = null;
-      const selectedBonfires = new Set(assets.filter(asset => asset.kind === 'bonfire').map(asset => asset.flame));
-      const selectedWildfires = new Set(assets.filter(asset => asset.kind === 'wildfire').map(asset => asset.flame));
+      const selectedBonfires = new Set(evaluation.flamesSnuffed.filter(asset => asset.kind === 'bonfire').map(asset => asset.flame));
       this.state.bonfires = this.state.bonfires.filter(flame => !selectedBonfires.has(flame));
-      this.state.wildfires = this.state.wildfires.filter(item => !selectedWildfires.has(item.flame));
-      for (const asset of assets) {
-        delete this.state.bonfireContributions[asset.flame];
-        delete this.state.bonfireRoundContributions[asset.flame];
+      for (const asset of evaluation.flamesSnuffed) {
         delete this.state.chargeAttribution[asset.flame];
         removeFlameInstance(this.state, asset.flame);
       }
-      this.state.engulfmentLevel++;
-      for (const item of normalization.upper.levelsBefore) this.state.handLevels[item.hand] = normalization.upper.unifiedLevel;
-      for (const item of normalization.lower.levelsBefore) this.state.handLevels[item.hand] = normalization.lower.unifiedLevel;
-      if (forfeitedQuest) {
-        const forfeitedChapters = this.state.hoodedFigure.forfeitedChapters ??= [];
-        if (!forfeitedChapters.includes(chapter)) forfeitedChapters.push(chapter);
-        this.state.hoodedFigure.active = null;
-        this.state.hoodedFigure.interaction = null;
-        this.state.hoodedFigure.challengeCheckpoint = null;
-        this.emitV2({ kind: 'hooded_challenge_changed', challengeId: forfeitedQuest.id, change: 'forfeited',
-          target: forfeitedQuest.target, attemptProgress: forfeitedQuest.attempt.value,
-          committedProgress: forfeitedQuest.committed.value, invalid: forfeitedQuest.attempt.invalid, complete: false });
-      }
+      this.state.engulfmentLevel = evaluation.infernoLevelAfter;
+      for (const item of evaluation.upper.levelsBefore) this.state.handLevels[item.hand] = evaluation.upper.unifiedLevel;
+      for (const item of evaluation.lower.levelsBefore) this.state.handLevels[item.hand] = evaluation.lower.unifiedLevel;
       if (!ownedFlameIds(this.state).has('fetch')) this.state.fetchTarget = null;
       if (!ownedFlameIds(this.state).has('targetPractice')) this.state.targetPracticeHand = null;
       this.state.handFamilyFlameStages = Object.fromEntries(Object.entries(this.state.handFamilyFlameStages)
         .filter(([flame]) => ownedFlameIds(this.state).has(flame as Flame)));
-      if (this.state.hoodedFigure.contributionCheckpoint) {
-        this.state.hoodedFigure.contributionCheckpoint = Object.fromEntries(Object.entries(this.state.hoodedFigure.contributionCheckpoint)
-          .filter(([flame]) => this.state.bonfires.includes(flame as Flame)));
-      }
       recalculateMaxCharge(this.state);
     }
-    this.emitV2({ kind: 'engulfment_attempted', shopVisitId: shop.visitId!, attemptNumber: 1,
-      infernoLevelBefore, infernoLevelAfter: this.state.engulfmentLevel,
-      infernoMultiplierBefore, infernoMultiplierAfter: infernoMultiplier(this.state.engulfmentLevel),
-      offerings: evaluation.offerings, evidenceRounds: evaluation.evidenceRounds,
-      offeringMultiplier: evaluation.offeringMultiplier, requiredMultiplier: ENGULFMENT_REQUIRED_MULTIPLIER, success,
-      overqualification: success ? evaluation.offeringMultiplier - ENGULFMENT_REQUIRED_MULTIPLIER : 0,
-      upper: normalization.upper, lower: normalization.lower,
-      flamesSnuffed: success ? structuredClone(assets) : [], questForfeited: !!forfeitedQuest,
-      ...(forfeitedQuest ? { forfeitedQuestId: forfeitedQuest.id } : {}), returnedToShop: true });
+    this.state.infernoEvaluation = evaluation;
+    this.emitV2({ kind: 'inferno_evaluated', evaluation: structuredClone(evaluation) });
   }
   openShop(direction: 'forward' | 'backward' = 'forward'): void {
     this.restoreMagicianDie();
@@ -1992,7 +1668,7 @@ export class Resolver {
     this.state.phase = 'shop'; this.state.flameSelection = null; this.state.specialOffer = null; this.state.roundSummary = null;
     const postBoss = isBigBossRound(this.state.round);
     const visitId = this.state.nextShopVisitId++;
-    this.state.shop = { visitId, engulfmentAttemptUsed: false, kind: postBoss ? 'post_boss' : 'between_rounds', exitUnlocked: false,
+    this.state.shop = { visitId, kind: postBoss ? 'post_boss' : 'between_rounds', exitUnlocked: false,
       offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
       freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
     const upcomingRound = this.state.round + 1;
@@ -2000,7 +1676,7 @@ export class Resolver {
     if (upcomingBoss) this.state.bossSchedule[upcomingRound] = upcomingBoss;
     this.mapTransition(postBoss ? postBossShopNodeAfter(this.state.round) : shopNodeBefore(upcomingRound), direction);
     this.emitV2({ kind: 'shop_visit_started', shopVisitId: visitId,
-      reason: direction === 'backward' ? 'bad_dream' : 'normal', engulfmentAttemptUsed: false });
+      reason: direction === 'backward' ? 'bad_dream' : 'normal' });
     this.freshOffers(); this.freshTrainingOffers();
     if (this.state.specialOfferEffects.semesterShopsRemaining > 0) {
       if (!this.state.shop.trainingOffers.some(offer => offer.kind === 'team')) {
@@ -2081,12 +1757,14 @@ export class Resolver {
         const flame = die.flame!;
         const from = flame.investedGold;
         flame.investedGold = from + Math.ceil((100 - from) / 2);
+        this.state.infernoProgress.recentAction = 'flame_invested';
         this.emit({ type: 'FLAME_INVESTED', flame: flame.id, dieIds: [die.id], amount: flame.investedGold - from,
           message: `Fire Keeper stoked ${FLAMES[flame.id].name}: ${this.format(from)} → ${this.format(flame.investedGold)} / 100` });
         if (flame.investedGold === 100) {
           const id = flame.id;
           die.flame = null;
           if (!this.state.bonfires.includes(id)) this.state.bonfires.push(id);
+          this.state.infernoProgress.recentAction = 'bonfire_created';
           this.emit({ type: 'BONFIRE_CREATED', flame: id, dieIds: [die.id], message: `${FLAMES[id].name} became a Bonfire` });
         }
         recalculateMaxCharge(this.state);
@@ -2118,35 +1796,12 @@ export class Resolver {
       this.state.round = timeTravelDestination;
     }
     if (captureBadDream) {
-      this.state.badDreamCheckpoint = {
-        chapter,
-        hoodedChallenge: structuredClone(this.state.hoodedFigure.active),
-      };
+      this.state.badDreamCheckpoint = { chapter };
     }
   }
   continueSpecialOffer(): void {
     const timeTravel = this.state.specialOffer?.chosen?.type === 'timeTravel';
     if (timeTravel) {
-      const active = this.state.hoodedFigure.active;
-      if (active && !active.complete && active.issuedChapter === chapterNumberForRound(this.state.round)
-        && !(this.state.hoodedFigure.forfeitedChapters ?? []).includes(active.issuedChapter)) {
-        const beforeReset = structuredClone(active);
-        const checkpoint = this.state.hoodedFigure.challengeCheckpoint;
-        if (checkpoint?.id === active.id && checkpoint.issuedChapter === active.issuedChapter)
-          this.state.hoodedFigure.active = structuredClone(checkpoint);
-        else {
-          active.committed = { value: 0, keys: [], invalid: false, jackpotPaid: false };
-          active.attempt = { value: 0, keys: [], invalid: false, jackpotPaid: false };
-          active.complete = false;
-        }
-        this.state.hoodedFigure.interaction = null;
-        if (this.state.hoodedFigure.contributionCheckpoint)
-          this.state.bonfireContributions = structuredClone(this.state.hoodedFigure.contributionCheckpoint);
-        const reset = this.state.hoodedFigure.active!;
-        this.emit({ type: 'HOODED_CHALLENGE_TIME_TRAVEL_RESET', ...hoodedProgressFields(reset),
-          challengeRollback: hoodedRollbackFields(beforeReset, reset),
-          message: `${CHALLENGES[reset.id].name} reset to its Chapter-start progress by Time Travel; Bonfire contribution history rewound` });
-      }
       this.state.roundAttemptNumber = 1;
       this.startRound(false, 'backward');
     }
@@ -2155,7 +1810,13 @@ export class Resolver {
   continueRoundSummary(): void {
     const summary = this.state.roundSummary;
     if (!summary) throw new Error('Round Summary is not available.');
-    this.continuePostRoundSummaryFlow();
+    if (this.state.infernoEvaluation) this.state.phase = 'inferno';
+    else this.continuePostRoundFlow();
+  }
+  continueInfernoEvaluation(): void {
+    if (!this.state.infernoEvaluation) throw new Error('Inferno evaluation is not available.');
+    this.state.infernoEvaluation = null;
+    this.continuePostRoundFlow();
   }
   private completeSpecialOfferRound(): void {
     const effects = this.state.specialOfferEffects;
@@ -2165,26 +1826,10 @@ export class Resolver {
     if (effects.badDreamRounds === 0) this.state.badDreamCheckpoint = null;
   }
   evaluate(): void {
+    if (this.state.phase !== 'round') return;
     const current = this.state.stats.rounds.at(-1)!;
     current.finalScore = this.state.score;
     if (this.state.score >= this.state.target) {
-      const challengeBefore = this.state.hoodedFigure.active ? structuredClone(this.state.hoodedFigure.active) : null;
-      const completedNow = completeChallengeRound(this.state.hoodedFigure.active, this.state.score, this.state.target);
-      const challengeAfter = this.state.hoodedFigure.active;
-      if (completedNow && challengeAfter) this.emit({ type: 'HOODED_CHALLENGE_COMPLETED',
-        ...hoodedProgressFields(challengeAfter), message: `${CHALLENGES[challengeAfter.id].name} completed` });
-      else if (challengeBefore && challengeAfter && (
-        challengeBefore.committed.value !== challengeAfter.committed.value
-        || challengeBefore.committed.keys.length !== challengeAfter.committed.keys.length
-        || challengeBefore.committed.keys.some(key => !challengeAfter.committed.keys.includes(key))
-      )) this.emit({ type: 'HOODED_CHALLENGE_PROGRESS_COMMITTED', ...hoodedProgressFields(challengeAfter),
-        message: `${CHALLENGES[challengeAfter.id].name} progress committed after the cleared Round` });
-      for (const bonfire of this.state.bonfires) {
-        const roundFactor = weightedRoundFactor(this.state.bonfireRoundContributions[bonfire]?.observations ?? []);
-        const history = this.state.bonfireContributions[bonfire] ??= { roundCount: 0, factorSum: 0 };
-        history.roundCount++;
-        history.factorSum = Number((history.factorSum + roundFactor).toFixed(12));
-      }
       current.cleared = true; current.clearMargin = this.state.score - this.state.target;
       current.manualRerollsRemainingAtClear = this.state.manualRerollsRemaining;
       if (this.state.boss) {
@@ -2237,6 +1882,7 @@ export class Resolver {
         goldEarnedTotal: totalGoldEarned, baseRewardGold: payout.baseGold, unusedRerollGold: payout.unusedRerollGold,
         interestGold: payout.interestGold, bossRewardGold: payout.bossRewardGold, goldenGold, jackpotGold,
         message: `${bossType ? `${isMiniBossType(bossType) ? 'Mini-Boss' : 'Boss'} defeated` : `Round ${this.format(this.state.round)} cleared`} · Gold ${this.format(summary.goldBefore)} → ${this.format(summary.goldAfter)} (+${this.format(totalGoldEarned)})` });
+      this.performInfernoEvaluation();
     } else if (this.state.bossSilenced || this.state.boss?.type !== 'warden' || (this.state.boss.startingDieId !== null && this.state.boss.pendingReinforcements === 0)) {
       if (hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state), requiredEncounterDieIds(this.state))) return;
       const rerolls = usableManualRerolls(this.state);

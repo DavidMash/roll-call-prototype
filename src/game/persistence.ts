@@ -1,14 +1,12 @@
 import { createDebugTrace } from './debugTrace';
 import { newRun, normalizeGameState } from './engine';
 import { isRollbackState } from './rollback';
-import { boardSnapshot, createStats } from './telemetry';
-import { chapterNumberForRound } from './chapters';
+import { createStats } from './telemetry';
 import { stringifyExactJson } from './scoreMath';
-import type { Action, BadDreamCheckpoint, GameState, GameStateBase, RollbackState } from './types';
+import type { BadDreamCheckpoint, GameState } from './types';
 
 export const RUN_STORAGE_KEY = 'roll-call:active-run';
-export const RUN_STORAGE_VERSION = 7;
-const SUPPORTED_STORAGE_VERSIONS = new Set([2, 3, 4, 5, 6, RUN_STORAGE_VERSION]);
+export const RUN_STORAGE_VERSION = 8;
 
 type RunStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
@@ -17,23 +15,23 @@ interface PersistedRun {
   state: GameState;
 }
 
-const PHASES = new Set(['round', 'roundSummary', 'bust', 'flameSelection', 'specialOffer', 'hoodedFigure', 'shop', 'lost', 'error']);
+const PHASES = new Set(['round', 'roundSummary', 'inferno', 'bust', 'flameSelection', 'specialOffer', 'shop', 'lost', 'error']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function hasTemplateShape(value: unknown, template: unknown): boolean {
-  if (template === null) return value === null || isRecord(value) || typeof value === 'string';
+  if (template === null) return value === null || isRecord(value)
+    || ['string', 'number', 'boolean'].includes(typeof value);
   if (Array.isArray(template)) return Array.isArray(value);
   if (isRecord(template)) {
     return isRecord(value) && Object.entries(template).every(([key, child]) =>
       (['maxCharge', 'decisionId', 'sixPackXMult', 'sixPackUpperHandsPlayed', 'handFamilyFlameStages', 'bossSilenced',
-        'engulfmentLevel', 'nextShopVisitId', 'nextFlameInstanceId', 'flameInstanceIds', 'visitId', 'engulfmentAttemptUsed',
+        'engulfmentLevel', 'nextShopVisitId', 'nextFlameInstanceId', 'flameInstanceIds', 'visitId',
         'specialOfferEffects', 'suppressedPostBossRewardRounds', 'specialOffer', 'badDreamCheckpoint',
         'freeEnhancementOfferIds', 'freeTrainingOfferKeys', 'chapterPlans', 'presentedChapters', 'chapterLifecycle', 'scorecardCycleConsumed',
-        'wildfires', 'bonfireContributions', 'bonfireRoundContributions', 'chargeAttribution', 'hoodedFigure',
-        'issuedChapters', 'rewardedChapters', 'forfeitedChapters', 'challengeCheckpoint',
+        'chargeAttribution', 'infernoProgress', 'infernoEvaluation',
         'historyV2', 'historyV2TimelineId', 'historyV2Coverage', 'debugTrace', 'actionJournal',
         'nextPlaybackEventId'].includes(key) && !Object.hasOwn(value, key))
       || (Object.hasOwn(value, key) && hasTemplateShape(value[key], child)));
@@ -41,41 +39,8 @@ function hasTemplateShape(value: unknown, template: unknown): boolean {
   return typeof value === typeof template;
 }
 
-function legacyRollbackState(value: unknown): RollbackState | null {
-  if (!isRecord(value)) return null;
-  if (isRollbackState(value)) return value;
-  const legacy = value as unknown as GameStateBase;
-  return { board: boardSnapshot(legacy as GameState), rngState: legacy.rngState, nextOfferId: legacy.nextOfferId };
-}
-
-function badDreamCheckpoint(value: unknown): BadDreamCheckpoint | null {
-  if (!isRecord(value)) return null;
-  if (typeof value.chapter === 'number' && ('hoodedChallenge' in value))
-    return value as unknown as BadDreamCheckpoint;
-  const legacy = legacyRollbackState(value);
-  return legacy ? {
-    chapter: chapterNumberForRound(legacy.board.round),
-    hoodedChallenge: structuredClone(legacy.board.hoodedFigure?.active ?? null),
-  } : null;
-}
-
 function isBadDreamCheckpoint(value: unknown): value is BadDreamCheckpoint {
-  return isRecord(value) && Number.isInteger(value.chapter) && (value.chapter as number) > 0
-    && (value.hoodedChallenge === null || isRecord(value.hoodedChallenge));
-}
-
-/** Converts Pass 1/2 and pre-V2 state shape without interpreting legacy prose. */
-function migratePersistedState(value: unknown): unknown {
-  if (!isRecord(value)) return value;
-  const next = structuredClone(value) as Record<string, unknown>;
-  const legacyStats = isRecord(next.stats) ? next.stats : null;
-  next.actionJournal ??= structuredClone((legacyStats?.actions as Action[] | undefined) ?? []);
-  next.nextPlaybackEventId ??= Array.isArray(next.history)
-    ? next.history.reduce((max, item) => isRecord(item) && typeof item.id === 'number' ? Math.max(max, item.id + 1) : max, 0)
-    : 0;
-  if (next.roundCheckpoint != null) next.roundCheckpoint = legacyRollbackState(next.roundCheckpoint);
-  if (next.badDreamCheckpoint != null) next.badDreamCheckpoint = badDreamCheckpoint(next.badDreamCheckpoint);
-  return next;
+  return isRecord(value) && Number.isInteger(value.chapter) && (value.chapter as number) > 0;
 }
 
 function isGameState(value: unknown): value is GameState {
@@ -130,8 +95,8 @@ export function loadPersistedRun(storage: RunStorage | null, requestedSeed: stri
     const raw = storage.getItem(RUN_STORAGE_KEY);
     if (!raw) return null;
     const saved: unknown = JSON.parse(raw);
-    if (!isRecord(saved) || typeof saved.version !== 'number' || !SUPPORTED_STORAGE_VERSIONS.has(saved.version)) return null;
-    const migrated = normalizeGameState(migratePersistedState(saved.state) as GameState);
+    if (!isRecord(saved) || saved.version !== RUN_STORAGE_VERSION) return null;
+    const migrated = normalizeGameState(saved.state as GameState);
     if (!isGameState(migrated)) return null;
     if (requestedSeed !== null && migrated.seed !== requestedSeed) return null;
     return migrated;

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { wardenUnlockCost, wardenUnlockCosts, wardenUnlockTarget } from './bosses';
 import { dispatch, newRun, normalizeGameState } from './engine';
-import { CHALLENGES, beginChallengeRound, completeChallengeRound, createActiveChallenge, weightedRoundFactor } from './hoodedFigure';
 import { initialHandLevels } from './hands';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION, loadPersistedRun, savePersistedRun } from './persistence';
 import { captureRollbackState, restoreRollbackState } from './rollback';
@@ -72,18 +71,6 @@ describe('exact score gameplay boundaries', () => {
     expect(result.score).toBe((initial + 8n + 1n) / 2n);
   });
 
-  it('evaluates Close Call by exact cross multiplication at huge boundaries', () => {
-    const state = newRun('exact-close-call', constant).state;
-    const challenge = () => {
-      const active = createActiveChallenge(CHALLENGES.closeCall, state, 5, 'exact-close-call');
-      beginChallengeRound(active);
-      return active;
-    };
-    const goal = 10n ** 30n;
-    expect(completeChallengeRound(challenge(), goal, goal)).toBe(true);
-    expect(completeChallengeRound(challenge(), goal * 11n / 10n, goal)).toBe(true);
-    expect(completeChallengeRound(challenge(), goal * 11n / 10n + 1n, goal)).toBe(false);
-  });
 });
 
 describe('exact score state, Warden, and attribution', () => {
@@ -93,12 +80,6 @@ describe('exact score state, Warden, and attribution', () => {
     const cost = wardenUnlockCost(levels, [], 1);
     expect(wardenUnlockTarget(current, levels, [], 1)).toBe(roundScoreToStep(current + cost, 5n));
     expect(wardenUnlockCosts(levels, [], 10n ** 40n)).toEqual([15n, 30n, 105n, 255n]);
-  });
-
-  it('preserves Wildfire score weighting at huge magnitudes', () => {
-    const base = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
-    const average = weightedRoundFactor([{ factor: 1, weight: base }, { factor: 20, weight: base * 100n }]);
-    expect(average).toBeCloseTo(2001 / 101, 12);
   });
 
   it('round-trips exact rollback state without number coercion', () => {
@@ -169,7 +150,7 @@ describe('exact score persistence and structured history', () => {
     expect(stringifyExactJson(exported)).toContain(`"after":"${HUGE_GOAL}"`);
   });
 
-  it('migrates safe numbers exactly, preserves unsafe score approximations, and recomputes unsafe current Goals', () => {
+  it('normalizes safe numbers exactly, preserves unsafe score approximations, and recomputes unsafe current Goals', () => {
     const state = newRun('legacy-exact-migration', constant).state;
     state.round = 200;
     const legacy = toExactJsonValue(state) as unknown as Record<string, unknown>;
@@ -177,7 +158,7 @@ describe('exact score persistence and structured history', () => {
     legacy.target = Number('59604644775390625');
     legacy.effectScore = 42;
     const store = storage();
-    store.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION - 1, state: legacy }));
+    store.setItem(RUN_STORAGE_KEY, JSON.stringify({ version: RUN_STORAGE_VERSION, state: legacy }));
     const loaded = loadPersistedRun(store, state.seed)!;
     expect(loaded.score).toBe(59_604_644_775_390_620n);
     expect(loaded.effectScore).toBe(42n);

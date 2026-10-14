@@ -5,7 +5,6 @@ import { Resolver } from './effects';
 import {
   eligibleFlameIds, flameEligible, FLAME_IDS, speedDemonMultiplier,
 } from './flames';
-import { bonfireMaximum, resolveWildfire, wildfireFactor } from './hoodedFigure';
 import { loadPersistedRun, savePersistedRun } from './persistence';
 import { eligibleSpecialOfferTypes, SPECIAL_OFFER_IDS, specialOfferEligible } from './specialOffers';
 import type { Flame, GameState, RandomSource, SpecialOfferType } from './types';
@@ -203,26 +202,19 @@ describe('build-aware reward eligibility', () => {
   });
 });
 
-describe('Speed Demon ×5 migration', () => {
-  it('keeps Ember/Bonfire scaling and migrates saved Wildfires to the new ordinary base without clamping amplification', () => {
+describe('Speed Demon scaling', () => {
+  it('keeps Ember scaling at the ordinary base across persistence', () => {
     expect(speedDemonMultiplier(0, 0)).toBe(1);
     expect(speedDemonMultiplier(50, 0)).toBe(3);
     expect(speedDemonMultiplier(100, 0)).toBe(5);
     expect(speedDemonMultiplier(100, 5500)).toBe(3);
     expect(speedDemonMultiplier(100, 10000)).toBe(1);
-    expect(bonfireMaximum('speedDemon')).toBe(5);
-    expect(resolveWildfire('speedDemon', 6)).toEqual({ kind: 'xMult', baseMax: 5, max: 30 });
-
     const state = newRun('speed-save-migration', constant()).state;
     state.dice[0].flame = { id: 'speedDemon', investedGold: 50 };
-    state.wildfires = [{ flame: 'speedDemon', sacrificedFlame: 'vineyard', sacrificedAverage: 5,
-      transferMultiplier: 6, resolved: { kind: 'xMult', baseMax: 9, max: 54 } }];
     let saved = '';
     const storage = { getItem: () => saved || null, setItem: (_key: string, value: string) => { saved = value; } };
     expect(savePersistedRun(storage, state)).toBe(true);
     const loaded = loadPersistedRun(storage, state.seed)!;
     expect(loaded.dice[0].flame).toEqual({ id: 'speedDemon', investedGold: 50 });
-    expect(loaded.wildfires[0].resolved).toEqual({ kind: 'xMult', baseMax: 5, max: 30 });
-    expect(wildfireFactor(loaded.wildfires[0], speedDemonMultiplier(100, 0))).toBe(30);
   });
 });

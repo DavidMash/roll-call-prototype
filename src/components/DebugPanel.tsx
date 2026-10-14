@@ -55,7 +55,7 @@ export function RunInfoModal({ state, busy, opened, onClose, seedInput, setSeedI
             <OverviewStat label="Score / goal" value={formatScoreProgress(state.score, state.target)} /><OverviewStat label="Gold" value={state.gold} />
             <OverviewStat label="Shop spend" value={state.lifetimeNormalShopGoldSpent} /><OverviewStat label="Flame investment" value={state.stats.totalFlameInvestment} />
             <OverviewStat label="Charge" value={`×${formatPlayerNumber(state.chargeXMult)} / ×${formatPlayerNumber(state.maxCharge)}${state.chargeArmed ? ' armed' : ''}`} />
-            <OverviewStat label="Bonfires" value={state.bonfires.length} /><OverviewStat label="Wildfires" value={state.wildfires.length} />
+            <OverviewStat label="Bonfires" value={state.bonfires.length} /><OverviewStat label="Inferno" value={state.engulfmentLevel} />
             <OverviewStat label="Bean free plays" value={state.stats.jumpingBeanFreePlays.length} /><OverviewStat label="Jackpot Gold" value={state.stats.goldBySource.jackpot} />
             <OverviewStat label="Busts" value={state.stats.busts.length} /><OverviewStat label="Life restores" value={state.stats.lifeRestores.length} />
             <OverviewStat label="Enhancement sales" value={state.stats.sales.length} /><OverviewStat label="Vintage growth" value={state.stats.vintageGrowth.length} />
@@ -63,7 +63,6 @@ export function RunInfoModal({ state, busy, opened, onClose, seedInput, setSeedI
           <Text size="sm" mt="md"><strong>Hand levels:</strong> {HAND_IDS.map(hand => `${HANDS[hand].name} ${formatPlayerNumber(state.handLevels[hand])}`).join(' · ')}</Text>
           <Text size="sm" mt="sm"><strong>Active Flames:</strong> {state.dice.filter(die => activeFlameId(die.flame)).map(die => `D${die.id + 1} ${FLAMES[activeFlameId(die.flame)!].name} ${formatPlayerNumber(die.flame!.investedGold)}/100`).join(' · ') || 'None'}</Text>
           <Text size="sm"><strong>Bonfires:</strong> {state.bonfires.map(id => FLAMES[id].name).join(' · ') || 'None'}</Text>
-          <Text size="sm"><strong>Wildfires:</strong> {state.wildfires.map(item => FLAMES[item.flame].name).join(' · ') || 'None'}</Text>
           <Text size="sm" mt="sm"><strong>Special Offers:</strong> {activeSpecialOfferStatuses(state.specialOfferEffects).join(' · ') || 'None active'}</Text>
           <Text size="sm" mt="sm"><strong>Gold:</strong> base {formatPlayerNumber(state.stats.goldBySource.roundBase)} · rerolls {formatPlayerNumber(state.stats.goldBySource.unusedRerolls)} · interest {formatPlayerNumber(state.stats.goldBySource.interest)} · Boss Reward {formatPlayerNumber(state.stats.goldBySource.bossReward)} · Golden {formatPlayerNumber(state.stats.goldBySource.golden)} · Jackpot {formatPlayerNumber(state.stats.goldBySource.jackpot)}</Text>
           <Text size="sm" mt="sm"><strong>Probability:</strong> Sticky {state.stats.probabilityProcs.sticky.successes}/{state.stats.probabilityProcs.sticky.checks} · Hitchhiker {state.stats.probabilityProcs.hitchhiker.successes}/{state.stats.probabilityProcs.hitchhiker.checks} · Double Time {state.stats.probabilityProcs.doubleTime.successes}/{state.stats.probabilityProcs.doubleTime.checks} · Trainer {state.stats.personalTrainerSuccesses}/{state.stats.personalTrainerAttempts}</Text>

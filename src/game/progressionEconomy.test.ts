@@ -93,7 +93,6 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     state.handLevels.ones = 2;
     const expectedShop = structuredClone(state.shop);
     expectedShop.visitId = 2;
-    expectedShop.engulfmentAttemptUsed = false;
     const expectedDice = structuredClone(state.dice);
 
     const attempt = dispatch(state, { type: 'NEXT_ROUND' }, constant(0.2)).state;

@@ -3,11 +3,11 @@ import { stringifyExactJson } from './scoreMath';
 import { appendCriticalDiagnostic, appendDebugTrace } from './debugTrace';
 import { dispatch, newRun } from './engine';
 import { HAND_IDS } from './hands';
-import { compactGameStateForPersistence, loadPersistedRun, RUN_STORAGE_KEY, savePersistedRun } from './persistence';
+import { compactGameStateForPersistence, loadPersistedRun, savePersistedRun } from './persistence';
 import { captureRollbackState, restoreRollbackState } from './rollback';
 import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
 import { summarizeRunHistoryV2 } from './runHistoryV2Summary';
-import type { GameState, Rank } from './types';
+import type { Rank } from './types';
 import type { RunHistoryV2Coverage, RunHistoryV2Event } from './runHistoryV2';
 
 class MemoryStorage {
@@ -117,27 +117,6 @@ describe('Run History V2 Pass 3 ownership', () => {
     expect(Buffer.byteLength(stringifyExactJson(compactGameStateForPersistence(state)))).toBeLessThan(100_000);
   });
 
-  it('records Hooded attempt rollback on the new canonical timeline', () => {
-    const state = newRun('hooded-rollback-pass3', { next: () => 0 }).state;
-    state.hoodedFigure.active = { id: 'theLongWay', issuedChapter: 1, target: 4,
-      committed: { value: 0, keys: [], invalid: false, jackpotPaid: false },
-      attempt: { value: 0, keys: [], invalid: false, jackpotPaid: false }, complete: false, dialogueLine: 'test' };
-    state.roundCheckpoint = captureRollbackState(state);
-    state.hoodedFigure.active.attempt.value = 2;
-    state.target = 1_000_000n;
-    state.stats.rounds[0].target = state.target;
-    state.dice.forEach((die, index) => { die.value = ([1, 2, 2, 4, 5] as Rank[])[index]; });
-    state.consumed = HAND_IDS.filter(hand => hand !== 'ones');
-    state.manualRerollsRemaining = 0;
-    const busted = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, { next: () => 0 }).state;
-    const rolledBack = busted.historyV2.find(event => event.kind === 'hooded_challenge_changed'
-      && event.change === 'rolled_back')!;
-    const timelines = classifyRunHistoryV2Timelines(busted.historyV2, busted.historyV2Coverage);
-    expect(rolledBack.timelineId).toBe(busted.historyV2TimelineId);
-    expect(timelines.status(rolledBack)).toBe('canonical');
-    expect(busted.hoodedFigure.active?.attempt.value).toBe(0);
-  });
-
   it('persists V2, gameplay checkpoints, and replay actions without legacy or ordinary/full trace duplication', () => {
     const storage = new MemoryStorage();
     let state = newRun('compact-save', undefined, { debugTraceMode: 'full' }).state;
@@ -162,26 +141,4 @@ describe('Run History V2 Pass 3 ownership', () => {
     expect(loaded.debugTrace.critical).toEqual(state.debugTrace.critical);
   });
 
-  it('resumes a version-2 broad checkpoint, marks missing V2 coverage partial, and writes only V2 afterward', () => {
-    const storage = new MemoryStorage();
-    const legacy = newRun('pass2-migration').state as GameState & Record<string, unknown>;
-    const broad = structuredClone(legacy) as GameState & Record<string, unknown>;
-    broad.roundCheckpoint = null;
-    broad.badDreamCheckpoint = null;
-    legacy.roundCheckpoint = broad as unknown as GameState['roundCheckpoint'];
-    legacy.history = [{ id: 0, round: 1, type: 'ROUND_STARTED', message: 'old prose' }];
-    const oldShape = legacy as Partial<GameState> & Record<string, unknown>;
-    delete oldShape.historyV2;
-    delete oldShape.historyV2Coverage;
-    delete oldShape.historyV2TimelineId;
-    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: 2, state: legacy }));
-    const loaded = loadPersistedRun(storage, null)!;
-    expect(loaded.historyV2Coverage.complete).toBe(false);
-    expect(loaded.roundCheckpoint).toHaveProperty('board');
-    const next = dispatch(loaded, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
-    expect(next.history).toHaveLength(1);
-    expect(next.historyV2.some(event => event.kind === 'roll_batch')).toBe(true);
-    expect(savePersistedRun(storage, next)).toBe(true);
-    expect(JSON.parse(storage.getItem(RUN_STORAGE_KEY)!).state.history).toEqual([]);
-  });
 });

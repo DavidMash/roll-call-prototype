@@ -1,11 +1,11 @@
 import type {
   BossType, ChallengeId, Enhancement, EngulfmentAssetRef, Flame, FlameInstanceId, GoldSource, GoldSpendSource, HandId, HandPlaySource,
-  Rarity, Rank, RunNodeType, SpecialOfferType, WildfireResolved,
+  InfernoEvaluationState, Rarity, Rank, RunNodeType, SpecialOfferType, WildfireResolved,
 } from './types';
 import type { RoundGoalBreakdown } from './goals';
 import type { ExactDecimal, ExactScore } from './scoreMath';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 6 as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 7 as const;
 export const RUN_HISTORY_V2_RULESET = 'engulfment-contribution-v2' as const;
 
 export interface RunHistoryV2Coverage {
@@ -15,6 +15,7 @@ export interface RunHistoryV2Coverage {
   firstSeq: number;
 }
 
+/** `wildfire` remains only so previously exported V2 histories can still render. */
 export type FlameOrigin = 'ember' | 'bonfire' | 'wildfire' | 'charge' | 'boss' | 'special_offer' | 'external';
 export type RollReason = 'initial_round' | 'warden_opening' | 'manual' | 'post_hand' | 'winning_settle'
   | 'jumping_bean_followup' | 'juggler' | 'magician_return' | 'shop' | 'other';
@@ -177,7 +178,6 @@ export interface ShopVisitStartedEvent extends RunHistoryV2Envelope {
   kind: 'shop_visit_started';
   shopVisitId: number;
   reason: 'normal' | 'bust' | 'bad_dream';
-  engulfmentAttemptUsed: false;
 }
 
 export interface EngulfmentOfferingTelemetry {
@@ -259,6 +259,7 @@ export interface ChargeChangedEvent extends RunHistoryV2Envelope {
   dieIds: number[];
 }
 
+/** @deprecated Historical parser shape; current runs never emit this event. */
 export interface HoodedChallengeChangedEvent extends RunHistoryV2Envelope {
   kind: 'hooded_challenge_changed';
   challengeId?: ChallengeId;
@@ -292,6 +293,11 @@ export interface BossStateChangedEvent extends RunHistoryV2Envelope {
   dieIds: number[];
   amount?: number | ExactScore;
   state?: string;
+}
+
+export interface InfernoEvaluatedEvent extends RunHistoryV2Envelope {
+  kind: 'inferno_evaluated';
+  evaluation: InfernoEvaluationState;
 }
 
 export interface ScorecardRefreshedEvent extends RunHistoryV2Envelope {
@@ -356,7 +362,7 @@ export interface MapTransitionV2Event extends RunHistoryV2Envelope {
 
 export type RunHistoryV2Event = RunStartedEvent | ChapterStartedEvent | RoundAttemptStartedEvent | RollBatchEvent
   | HandScoredEvent | ShopVisitStartedEvent | ShopOffersPresentedEvent | ShopTransactionEvent | FlameChangedEvent | ChargeChangedEvent
-  | EngulfmentAttemptedEvent
+  | EngulfmentAttemptedEvent | InfernoEvaluatedEvent
   | HoodedChallengeChangedEvent | BossStateChangedEvent | ScorecardRefreshedEvent | RoundAttemptFinishedEvent
   | CheckpointRestoredEvent | RunFinishedEvent | ErrorEvent | MapTransitionV2Event;
 

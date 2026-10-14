@@ -30,7 +30,7 @@ export type FlameInstanceId = number;
 export type HandId =
   | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes'
   | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
-export type Phase = 'round' | 'roundSummary' | 'bust' | 'flameSelection' | 'specialOffer' | 'hoodedFigure' | 'shop' | 'lost' | 'error';
+export type Phase = 'round' | 'roundSummary' | 'inferno' | 'bust' | 'flameSelection' | 'specialOffer' | 'shop' | 'lost' | 'error';
 export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker' | 'boss';
 export type HandPlaySource = 'manual' | 'jumpingBean';
 export type GoldSource = 'golden' | 'jackpot' | 'enhancementSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward' | 'specialOffer' | 'cashBonus';
@@ -172,8 +172,6 @@ export type TrainingOffer = HandTrainingOffer | TeamTrainingOffer;
 export interface Shop {
   /** Monotonic identity for one semantic Shop visit, including Bust/Bad Dream returns. */
   visitId?: number;
-  /** Engulfment is committed at most once during this visit. */
-  engulfmentAttemptUsed?: boolean;
   /** Lifecycle ownership; post-Boss Shops remain in the completed Chapter until NEXT_CHAPTER. */
   kind?: 'between_rounds' | 'post_boss';
   /** False only during the one-second progression lock for this concrete Shop entry. */
@@ -215,68 +213,62 @@ export type ChallengeId = 'fiveAlive' | 'theLongWay' | 'upperClass' | 'lowerClas
   | 'closeCall' | 'noTakebacks' | 'upperManagement' | 'rollCall' | 'lowProfile' | 'oppositesAttract'
   | 'beanSalad' | 'bonusRound' | 'goldRush' | 'agedToPerfection' | 'magneticPersonality'
   | 'jackpot' | 'getYourRepsIn' | 'fullyLoaded';
-export interface ChallengeProgress {
-  value: number;
-  keys: string[];
-  invalid: boolean;
-  jackpotPaid: boolean;
-}
-export interface ActiveHoodedChallenge {
-  id: ChallengeId;
-  issuedChapter: number;
-  target: number;
-  committed: ChallengeProgress;
-  attempt: ChallengeProgress;
-  complete: boolean;
-  /** Deterministically selected and persisted encounter dialogue. */
-  dialogueLine: string;
-}
-export interface BonfireContribution {
-  roundCount: number;
-  factorSum: number;
-}
-export interface BonfireRoundContribution {
-  observations: { factor: number; weight: ExactScore }[];
-}
+/** Historical Run History V2 parsing only. New gameplay never creates Wildfires. */
 export type WildfireResolved =
   | { kind: 'xMult'; baseMax: number; max: number }
   | { kind: 'charge'; gain?: number; ratio?: number; coefficient?: number; maxCharge: number };
-export interface Wildfire {
-  flame: Flame;
-  sacrificedFlame: Flame;
-  sacrificedAverage: number;
-  transferMultiplier: number;
-  resolved: WildfireResolved;
-}
-export type HoodedInteractionStage = 'story' | 'recipient' | 'sacrifice' | 'confirm';
-export interface HoodedInteraction {
-  kind: 'opening' | 'return';
-  stage: HoodedInteractionStage;
-  lines: string[];
-  lineIndex: number;
-  recipient: Flame | null;
-  sacrifice: Flame | null;
-}
-export interface HoodedFigureState {
-  seen: boolean;
-  previousChallengeId: ChallengeId | null;
-  active: ActiveHoodedChallenge | null;
-  interaction: HoodedInteraction | null;
-  /** Chapters that have already issued their one permitted challenge. */
-  issuedChapters: number[];
-  /** Chapters whose challenge has already produced a Wildfire. */
-  rewardedChapters: number[];
-  /** Chapters whose unfinished quest was permanently forfeited by Engulfment. */
-  forfeitedChapters?: number[];
-  /** Chapter-start challenge state used by Time Travel. */
-  challengeCheckpoint: ActiveHoodedChallenge | null;
-  /** Chapter-start contribution state used by Time Travel. */
-  contributionCheckpoint: Partial<Record<Flame, BonfireContribution>> | null;
-}
 export interface BadDreamCheckpoint {
   chapter: number;
-  /** Only challenge state is checkpointed; the current build is never stored here. */
-  hoodedChallenge: ActiveHoodedChallenge | null;
+}
+export type InfernoTrend = 'first' | 'improving' | 'worsening' | 'stable';
+export type InfernoWeakness = 'quantity' | 'investment' | 'utilization' | 'close';
+export type InfernoRecentAction = 'flame_acquired' | 'flame_invested' | 'bonfire_created' | 'flame_removed'
+  | 'contribution_improved' | 'contribution_declined' | 'none';
+export interface InfernoProgressState {
+  evaluationIndex: number;
+  previousReadiness: number | null;
+  recentMessageIds: string[];
+  recentAction: InfernoRecentAction;
+}
+export interface InfernoFlameDiagnostic {
+  asset: EngulfmentAssetRef;
+  status: 'ember' | 'bonfire';
+  investment: number;
+  hiddenStrength: number;
+}
+export interface InfernoPrefixEvaluation {
+  flameInstanceIds: FlameInstanceId[];
+  effectiveValue: number;
+  success: boolean;
+}
+export interface InfernoEvaluationState {
+  evaluationIndex: number;
+  round: number;
+  chapter: number;
+  flames: InfernoFlameDiagnostic[];
+  evidenceRounds: { round: number; attempt: number; timelineId: number; handCount: number; multiplier: number }[];
+  effectiveValue: number;
+  threshold: number;
+  readiness: number;
+  previousReadiness: number | null;
+  trend: InfernoTrend;
+  weakness: InfernoWeakness;
+  recentAction: InfernoRecentAction;
+  feedbackMessageId: string | null;
+  feedbackMessage: string | null;
+  success: boolean;
+  strongestFirst: EngulfmentAssetRef[];
+  prefixEvaluations: InfernoPrefixEvaluation[];
+  flamesSnuffed: EngulfmentAssetRef[];
+  flamesPreserved: EngulfmentAssetRef[];
+  selectedEffectiveValue: number | null;
+  infernoLevelBefore: number;
+  infernoLevelAfter: number;
+  infernoMultiplierBefore: ExactScore;
+  infernoMultiplierAfter: ExactScore;
+  upper: { levelsBefore: { hand: HandId; level: number }[]; average: number; unifiedLevel: number };
+  lower: { levelsBefore: { hand: HandId; level: number }[]; average: number; unifiedLevel: number };
+  consumedFinalFlame: boolean;
 }
 export interface RoundPayout {
   baseGold: number;
@@ -335,13 +327,11 @@ export interface Board {
   suppressedPostBossRewardRounds: number[];
   dice: Die[];
   bonfires: Flame[];
-  wildfires: Wildfire[];
-  /** Current owned instance for each Flame type, preserved across Ember/Bonfire/Wildfire progression. */
+  /** Current owned instance for each Flame type, preserved across Ember/Bonfire progression. */
   flameInstanceIds: Partial<Record<Flame, FlameInstanceId>>;
-  bonfireContributions: Partial<Record<Flame, BonfireContribution>>;
-  bonfireRoundContributions: Partial<Record<Flame, BonfireRoundContribution>>;
   chargeAttribution: Partial<Record<Flame, number>>;
-  hoodedFigure: HoodedFigureState;
+  infernoProgress: InfernoProgressState;
+  infernoEvaluation: InfernoEvaluationState | null;
   chargeXMult: number;
   maxCharge: number;
   chargeArmed: boolean;
@@ -570,11 +560,7 @@ export type EventType =
   | 'CALLER_CALLED' | 'CALLER_CHANGED' | 'WARDEN_UNLOCK_TARGET' | 'WARDEN_REINFORCEMENT' | 'CURSED_DIE_ROLLED'
   | 'BOSS_HAND_CHANGED' | 'BOSS_FACE_CHANGED'
   | 'RUN_LOST' | 'RESOLUTION_ERROR' | 'MANUAL_REROLL_STARTED' | 'DEAD_BOARD' | 'DEAD_BOARD_RESCUED'
-  | 'TUTORIAL_SAFEGUARD'
-  | 'HOODED_CHALLENGE_ISSUED' | 'HOODED_CHALLENGE_PROGRESS_COMMITTED' | 'HOODED_CHALLENGE_COMPLETED' | 'HOODED_CHALLENGE_ROLLED_BACK'
-  | 'HOODED_CHALLENGE_TIME_TRAVEL_RESET' | 'HOODED_CHALLENGE_BAD_DREAM_RESET' | 'HOODED_CHALLENGE_EXPIRED'
-  | 'HOODED_FIGURE_RETURNED' | 'WILDFIRE_CANDIDATES'
-  | 'WILDFIRE_SACRIFICE_SELECTED' | 'WILDFIRE_WALKED_AWAY' | 'WILDFIRE_CREATED';
+  | 'TUTORIAL_SAFEGUARD' | 'INFERNO_EVALUATED';
 export interface EventRecord {
   id: number;
   round: number;
@@ -627,29 +613,6 @@ export interface EventRecord {
   probability?: { enhancement: 'sticky' | 'hitchhiker' | 'personalTrainer' | 'doubleTime'; stacks: number; chance: number; succeeded: boolean };
   decisionMs?: number;
   handScore?: HandScoreAccumulator;
-  challengeId?: ChallengeId;
-  challengeTarget?: number;
-  challengeAttemptProgress?: number;
-  challengeCommittedProgress?: number;
-  challengeInvalid?: boolean;
-  challengeComplete?: boolean;
-  challengeRollback?: {
-    attemptProgressBefore: number;
-    attemptProgressAfter: number;
-    committedProgressBefore: number;
-    committedProgressAfter: number;
-    invalidBefore: boolean;
-    invalidAfter: boolean;
-    completeBefore: boolean;
-    completeAfter: boolean;
-  };
-  recipientFlame?: Flame;
-  recipientInstanceId?: FlameInstanceId;
-  sacrificedFlame?: Flame;
-  sacrificedInstanceId?: FlameInstanceId;
-  contributionAverage?: number;
-  transferMultiplier?: number;
-  wildfireResolved?: WildfireResolved;
 }
 export interface GameEvent extends EventRecord { board: Board }
 export interface BustSummary {
@@ -685,8 +648,7 @@ export interface GameState extends GameStateBase {
 }
 export type EngulfmentAssetRef =
   | { kind: 'ember'; flame: Flame; instanceId: FlameInstanceId; dieId: number }
-  | { kind: 'bonfire'; flame: Flame; instanceId: FlameInstanceId }
-  | { kind: 'wildfire'; flame: Flame; instanceId: FlameInstanceId };
+  | { kind: 'bonfire'; flame: Flame; instanceId: FlameInstanceId };
 export type Action =
   | { type: 'PLAY'; hand: HandId; dieIds: number[]; decisionMs?: number }
   | { type: 'MANUAL_REROLL'; dieIds: number[] }
@@ -698,19 +660,13 @@ export type Action =
   | { type: 'TRAIN_ALL_HANDS' }
   | { type: 'CHOOSE_FLAME'; offerId: number; dieId: number }
   | { type: 'STOKE_FLAME'; dieId: number; amount: number }
-  | { type: 'ATTEMPT_ENGULFMENT'; assets: EngulfmentAssetRef[] }
   | { type: 'CONTINUE_ROUND_SUMMARY' }
+  | { type: 'CONTINUE_INFERNO_EVALUATION' }
   | { type: 'CONTINUE_FLAME_SELECTION' }
   | { type: 'SKIP_FLAME_SELECTION' }
   | { type: 'CHOOSE_SPECIAL_OFFER'; offerId: number }
   | { type: 'CONTINUE_SPECIAL_OFFER' }
   | { type: 'SKIP_SPECIAL_OFFER' }
-  | { type: 'ADVANCE_HOODED_FIGURE' }
-  | { type: 'SELECT_WILDFIRE_RECIPIENT'; flame: Flame }
-  | { type: 'SELECT_WILDFIRE_SACRIFICE'; flame: Flame }
-  | { type: 'BACK_WILDFIRE' }
-  | { type: 'CONFIRM_WILDFIRE' }
-  | { type: 'WALK_AWAY_WILDFIRE' }
   | { type: 'RESTORE_LIFE' }
   | { type: 'DISMISS_FLAME_TUTORIAL' }
   | { type: 'RETRY_ROUND' }

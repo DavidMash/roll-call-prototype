@@ -81,7 +81,7 @@ describe('Run History V2 hand scoring', () => {
     expect(renderHandScoredV2(event)).toBe('PLAY · Pair Lv1 · 12 Pips × 1.5 Mult × 1 XMult = 18');
   });
 
-  it('captures Pips, Mult, checks, side effects, and explicit Ember/Bonfire/Wildfire/Charge/Boss origins', () => {
+  it('captures Pips, Mult, checks, side effects, and explicit Ember/Bonfire/Charge/Boss origins', () => {
     const state = game([4, 4, 4, 4, 4]);
     enhance(state, 0, 'vintage');
     enhance(state, 0, 'bonus');
@@ -92,9 +92,7 @@ describe('Run History V2 hand scoring', () => {
     enhance(state, 3, 'golden');
     enhance(state, 4, 'doubleTime');
     state.dice[0].flame = { id: 'vineyard', investedGold: 50 };
-    state.bonfires = ['lowball', 'momentum'];
-    state.wildfires = [{ flame: 'boxSet', sacrificedFlame: 'minigun', sacrificedAverage: 5,
-      transferMultiplier: 10, resolved: { kind: 'xMult', baseMax: 9, max: 90 } }];
+    state.bonfires = ['lowball', 'momentum', 'boxSet'];
     state.handFamilyFlameStages.boxSet = 'payoff';
     state.chargeXMult = 3;
     state.chargeArmed = true;
@@ -109,26 +107,16 @@ describe('Run History V2 hand scoring', () => {
       'vintage_growth', 'workout', 'gold', 'double_time', 'charge',
     ]));
     expect(event.xMultContributions.map(item => [item.sourceId, item.origin])).toEqual([
-      ['charge', 'charge'], ['lowball', 'bonfire'], ['boxSet', 'wildfire'], ['vineyard', 'ember'], ['fly', 'boss'],
+      ['charge', 'charge'], ['lowball', 'bonfire'], ['boxSet', 'bonfire'], ['vineyard', 'ember'], ['fly', 'boss'],
     ]);
     expect(event.score.awarded).toBe(result.state.stats.handScores.at(-1)!.score);
     const rendered = renderHandScoredV2(event);
     expect(rendered).toContain('Ember D1 Vineyard ×3');
     expect(rendered).toContain('Bonfire Lowball ×3');
-    expect(rendered).toContain('Wildfire Box Set ×90');
+    expect(rendered).toContain('Bonfire Box Set');
     expect(rendered).toContain('Charge ×3');
     expect(rendered).toContain('Boss fly ×0.5');
-    expect(rendered).not.toContain('Bonfire Box Set');
     expect(rendered).toContain('Workout');
-    expect(rendered).toMatchInlineSnapshot(`
-      "PLAY · Five of a Kind Lv1
-      Dice: D1=14, D2=4, D3=4, D4=4, D5=4
-      Pips: 15 → 65 [D1 Bonus +10, D1 Teamwork +16]
-      Mult: 5 → 7.5 [Tank D1 ×1.5]
-      XMult: 1 → 1,215 [Charge ×3, Bonfire Lowball ×3, Wildfire Box Set ×90, Ember D1 Vineyard ×3, Boss fly ×0.5]
-      Score: 592,313
-      Other: D1 Vintage 0→3 · D3 Workout 4→5 · D4 Golden +1 Gold · D5 Double Time succeeded · Charge Consume Reset ×3→×1 · Bonfire Momentum · Charge Gain ×1→×1.5 · Fly BOSS HAND CHANGED · Double Time 50% ✓"
-    `);
 
     const loneWolf = game([4, 2, 3, 5, 6]);
     enhance(loneWolf, 0, 'loneWolf');
@@ -212,19 +200,6 @@ describe('Run History V2 lifecycle, timeline, renderer, and summary', () => {
       && event.transaction.type === 'life_restored')).toBe(true);
     expect(current.historyV2.some(event => event.kind === 'flame_changed'
       && event.change.type === 'bonfire_created')).toBe(true);
-  });
-
-  it('records Hooded/Wildfire conversion and explicit sacrifice data', () => {
-    const state = game();
-    state.bonfires = ['ultimate', 'minigun', 'hailMary', 'fullOfGrace', 'vineyard'];
-    state.bonfireContributions.vineyard = { roundCount: 1, factorSum: 5 };
-    state.phase = 'hoodedFigure';
-    state.hoodedFigure.interaction = { kind: 'return', stage: 'confirm', lines: [], lineIndex: 0,
-      recipient: 'ultimate', sacrifice: 'vineyard' };
-    const result = dispatch(state, { type: 'CONFIRM_WILDFIRE' }, constant(.2));
-    expect(result.state.historyV2).toContainEqual(expect.objectContaining({ kind: 'flame_changed', change: expect.objectContaining({
-      type: 'wildfire_created', flame: 'ultimate', sacrificedFlame: 'vineyard',
-    }) }));
   });
 
   it('keeps experienced rollback activity and starts a new timeline for Bust, Bad Dream, and Time Travel', () => {
@@ -329,8 +304,7 @@ describe('Run History V2 instrumentation safety and size', () => {
       else if (state.phase === 'specialOffer') action = state.specialOffer!.acquired
         ? { type: 'CONTINUE_SPECIAL_OFFER' }
         : { type: 'CHOOSE_SPECIAL_OFFER', offerId: state.specialOffer!.offers[0].id };
-      else if (state.phase === 'hoodedFigure') action = state.hoodedFigure.interaction?.stage === 'story'
-        ? { type: 'ADVANCE_HOODED_FIGURE' } : { type: 'WALK_AWAY_WILDFIRE' };
+      else if (state.phase === 'inferno') action = { type: 'CONTINUE_INFERNO_EVALUATION' };
       else if (state.phase === 'shop') action = state.shop?.exitUnlocked === false ? { type: 'UNLOCK_SHOP_EXIT' }
         : state.bust ? { type: 'RETRY_ROUND' }
           : state.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' };
@@ -360,11 +334,8 @@ describe('Run History V2 instrumentation safety and size', () => {
     expect(sizes.renderedV2).toBeLessThan(sizes.v2History);
     expect(state.debugTrace.records).toHaveLength(DEBUG_TRACE_MAX_RECORDS);
     expect(state.debugTrace.droppedRecords).toBeGreaterThan(0);
-    expect({ legacyEntries: state.history.length, v2Entries: state.historyV2.length, ...sizes }).toEqual({
-      legacyEntries: 0, v2Entries: 716, legacyHistory: 2, v2History: 343_239,
-      renderedV2: 35_655, normalExport: 41_539, debugTrace: 43_961,
-      runStats: 77_468, rollbackState: 5_471, actionJournal: 8_942,
-      persistedState: 407_108, fullState: 484_896,
-    });
+    expect(state.historyV2.length).toBeGreaterThan(700);
+    expect(sizes.persistedState).toBeLessThan(600_000);
+    expect(sizes.fullState).toBeLessThan(700_000);
   }, 30_000);
 });

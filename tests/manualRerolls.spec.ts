@@ -299,7 +299,6 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   const expectedShop = structuredClone(game.roundCheckpoint?.board.shop);
   expect(expectedShop).toBeTruthy();
   expectedShop!.visitId = (expectedShop!.visitId ?? 0) + 1;
-  expectedShop!.engulfmentAttemptUsed = false;
   game = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }).state;
   await bustContinue.click();
   const fallbackMap = page.getByTestId('run-map-transition');

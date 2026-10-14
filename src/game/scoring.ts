@@ -50,7 +50,7 @@ export function finalizeScore(pips: number, multiplier: number, xMult = 1, infer
   return finalizeExactScore(inferno, pips, multiplier, xMult);
 }
 
-/** Score-weighted effective multiplier shared by Wildfire and Engulfment attribution. */
+/** Score-weighted effective multiplier used by Flame contribution attribution. */
 export function scoreWeightedMultiplier(observations: readonly { factor: number; weight: ExactScore }[]): number {
   return exactWeightedFactorAverage(observations.map(item => ({ ...item, weight: item.weight < 0n ? 0n : item.weight })));
 }

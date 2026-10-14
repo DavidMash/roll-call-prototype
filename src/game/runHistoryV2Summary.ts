@@ -57,7 +57,6 @@ export interface ExperiencedRunMetrics {
   charge: { gains: number; arms: number; consumes: number; resets: number };
   specialOffers: Counts<SpecialOfferType>;
   probabilityChecks: Record<string, { checks: number; successes: number }>;
-  hoodedOutcomes: Record<string, number>;
   bossOutcomes: Record<string, number>;
   largestHandShare: LargestHandShareSummary;
 }
@@ -81,8 +80,6 @@ export interface CanonicalRunMetrics {
   retainedEnhancements: { dieId: number; side: number; rank: number; enhancements: Partial<Record<Enhancement, number>> }[];
   currentEmbers: { dieId: number; flame: Flame; investedGold: number }[];
   bonfires: Flame[];
-  wildfires: GameState['wildfires'];
-  sacrificedFlames: Flame[];
   retainedPurchases: number;
   retainedTrainingPurchases: number;
   trainingGoldSpent: { individual: number; team: number };
@@ -120,7 +117,7 @@ function initialExperienced(): ExperiencedRunMetrics {
     individualTrainingGoldSpent: 0, teamTrainingGoldSpent: 0, vintageRevenue: 0,
     shopRerollSpend: 0, flameTimeline: [], flameActivations: {},
     charge: { gains: 0, arms: 0, consumes: 0, resets: 0 }, specialOffers: {}, probabilityChecks: {},
-    hoodedOutcomes: {}, bossOutcomes: {},
+    bossOutcomes: {},
     largestHandShare: { samples: 0, median: null, p90: null, maximum: null, over50Percent: 0, over80Percent: 0 },
   };
 }
@@ -175,8 +172,7 @@ function canonicalFromState(state: GameState | undefined, events: readonly RunHi
       const flame = activeFlameId(die.flame);
       return die.owner === 'player' && flame ? [{ dieId: die.id, flame, investedGold: die.flame?.investedGold ?? 0 }] : [];
     }) ?? [],
-    bonfires: [...(state?.bonfires ?? [])], wildfires: structuredClone(state?.wildfires ?? []),
-    sacrificedFlames: (state?.wildfires ?? []).map(item => item.sacrificedFlame),
+    bonfires: [...(state?.bonfires ?? [])],
     retainedPurchases, retainedTrainingPurchases,
     trainingGoldSpent: { individual: individualTraining, team: teamTraining },
     retainedOffers: {
@@ -284,7 +280,6 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
         else if (event.operation === 'consume_reset') experienced.charge.consumes++;
         else if (event.operation === 'round_reset') experienced.charge.resets++;
         break;
-      case 'hooded_challenge_changed': add(experienced.hoodedOutcomes, event.change, 1); break;
       case 'boss_state_changed': add(experienced.bossOutcomes, `${event.boss}:${event.change}`, 1); break;
     }
   }

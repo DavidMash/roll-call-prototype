@@ -1,21 +1,26 @@
 import { chapterNumberForRound } from './chapters';
-import { activeFlameId, currentFlameInstanceId } from './flames';
+import { activeFlameId, activeFlameInvestment, currentFlameInstanceId } from './flames';
 import { LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { canonicalRunHistoryV2Events } from './runHistoryV2Timeline';
 import { finalizeScore, infernoMultiplier, INFERNO_BASE, scoreWeightedMultiplier } from './scoring';
 import { exactRatioNumber, type ExactScore } from './scoreMath';
 import type { EngulfmentEvidenceRoundTelemetry, EngulfmentOfferingTelemetry, HandScoredEvent } from './runHistoryV2';
-import type { Board, EngulfmentAssetRef, GameState, HandId, HandLevels } from './types';
+import type {
+  Board, EngulfmentAssetRef, GameState, HandId, HandLevels, InfernoEvaluationState, InfernoRecentAction,
+  InfernoTrend, InfernoWeakness,
+} from './types';
 
 export const ENGULFMENT_EVIDENCE_ROUNDS = 6;
 export const ENGULFMENT_REQUIRED_MULTIPLIER = 20;
+export const INFERNO_TREND_DEAD_ZONE = 0.05;
+export const INFERNO_CLOSE_READINESS = 0.8;
 export { infernoMultiplier, INFERNO_BASE };
 
 export const engulfmentAssetKey = (asset: EngulfmentAssetRef): string => asset.kind === 'ember'
   ? `ember:${asset.instanceId}:${asset.flame}:${asset.dieId}`
-  : `${asset.kind}:${asset.instanceId}:${asset.flame}`;
+  : `bonfire:${asset.instanceId}:${asset.flame}`;
 
-export function ownedEngulfmentAssets(state: Pick<Board, 'dice' | 'bonfires' | 'wildfires' | 'flameInstanceIds'>): EngulfmentAssetRef[] {
+export function ownedEngulfmentAssets(state: Pick<Board, 'dice' | 'bonfires' | 'flameInstanceIds'>): EngulfmentAssetRef[] {
   return [
     ...state.dice.filter(die => die.owner === 'player' && activeFlameId(die.flame) !== null).flatMap(die => {
       const flame = activeFlameId(die.flame)!;
@@ -26,21 +31,8 @@ export function ownedEngulfmentAssets(state: Pick<Board, 'dice' | 'bonfires' | '
       const instanceId = currentFlameInstanceId(state, flame);
       return instanceId === null ? [] : [{ kind: 'bonfire' as const, flame, instanceId }];
     }),
-    ...state.wildfires.flatMap(item => {
-      const instanceId = currentFlameInstanceId(state, item.flame);
-      return instanceId === null ? [] : [{ kind: 'wildfire' as const, flame: item.flame, instanceId }];
-    }),
   ];
 }
-
-export const engulfmentAvailable = (state: Pick<Board, 'phase' | 'shop' | 'bonfires' | 'wildfires'>): boolean =>
-  state.phase === 'shop' && !!state.shop && !state.shop.engulfmentAttemptUsed
-  && (state.bonfires.length > 0 || state.wildfires.length > 0);
-
-export const engulfmentHasQuestWarning = (state: Pick<Board, 'round' | 'hoodedFigure'>): boolean => {
-  const quest = state.hoodedFigure.active;
-  return !!quest && !quest.complete && quest.issuedChapter === chapterNumberForRound(state.round);
-};
 
 export const engulfmentSucceeds = (offeringMultiplier: number): boolean =>
   offeringMultiplier >= ENGULFMENT_REQUIRED_MULTIPLIER;
@@ -86,9 +78,9 @@ export interface EngulfmentOfferingEvaluation {
 }
 
 /**
- * Evaluates the selected Flame instances jointly over the six most recent
- * canonical clears: score-weighted within each Round, then equal-weighted
- * across Rounds.
+ * Authoritative engulfment-contribution-v2 evaluator. Balance behavior is
+ * intentionally unchanged: six latest canonical clears, score-weighted
+ * inside each Round and equal-weighted between Rounds.
  */
 export function evaluateEngulfmentOffering(
   state: Pick<GameState, 'historyV2' | 'historyV2Coverage'>,
@@ -136,6 +128,168 @@ export function engulfmentTrainingNormalization(levels: HandLevels) {
   return { upper: handLevelNormalization(levels, UPPER_HAND_IDS), lower: handLevelNormalization(levels, LOWER_HAND_IDS) };
 }
 
+export const INFERNO_MESSAGE_POOLS = {
+  quantity: [
+    ['quantity-01', 'The Inferno craves more Flames.'], ['quantity-02', 'Gather more Flames.'],
+    ['quantity-03', 'More fire is needed.'], ['quantity-04', 'Build a greater fire.'],
+    ['quantity-05', 'The Inferno hungers for more.'], ['quantity-06', 'Your offering lacks enough Flame.'],
+    ['quantity-07', 'There is not yet enough fire.'], ['quantity-08', 'Gather strength before the Inferno calls again.'],
+  ],
+  investment: [
+    ['investment-01', 'Grow your Flames to unleash their power.'], ['investment-02', 'Stoke your Flames further.'],
+    ['investment-03', 'Your Flames have more power to unlock.'], ['investment-04', 'Feed your Flames before feeding the Inferno.'],
+    ['investment-05', 'Let your Flames mature.'], ['investment-06', 'There is more power waiting in your Flames.'],
+    ['investment-07', 'Your fire needs tending.'], ['investment-08', 'Strengthen what you already possess.'],
+  ],
+  utilization: [
+    ['utilization-01', 'Utilize your Flames as much as possible.'], ['utilization-02', 'Make your Flames prove their worth.'],
+    ['utilization-03', 'Power unused will not satisfy the Inferno.'], ['utilization-04', 'Put your Flames to work.'],
+    ['utilization-05', 'Your Flames must burn brighter in battle.'], ['utilization-06', 'The Inferno wants power it has witnessed.'],
+    ['utilization-07', 'Possessing power is not enough.'], ['utilization-08', 'Show the Inferno what your Flames can do.'],
+  ],
+  close: [
+    ['close-01', 'You are on the right track. Keep up your efforts.'], ['close-02', 'The Inferno is beginning to stir.'],
+    ['close-03', 'The heat is rising.'], ['close-04', 'Your Flames are nearly enough.'],
+    ['close-05', 'The Inferno is close to awakening.'], ['close-06', 'Just a little more.'],
+    ['close-07', 'The fire is almost ready.'], ['close-08', 'Engulfment draws near.'],
+  ],
+  improving: [
+    ['improving-01', 'Your Flames grow stronger.'], ['improving-02', 'The Inferno has noticed your progress.'],
+    ['improving-03', 'You are drawing closer.'], ['improving-04', 'The fire burns brighter than before.'],
+    ['improving-05', 'Your efforts are feeding the Inferno.'], ['improving-06', 'Keep this momentum.'],
+    ['improving-07', 'This is progress.'], ['improving-08', 'The Inferno approves of your direction.'],
+  ],
+  worsening: [
+    ['worsening-01', 'You are losing ground.'], ['worsening-02', 'The fire has weakened.'],
+    ['worsening-03', 'The Inferno was more impressed before.'], ['worsening-04', 'Your Flames have lost some of their edge.'],
+    ['worsening-05', 'You stray farther from Engulfment.'], ['worsening-06', 'Reclaim the power you had.'],
+    ['worsening-07', 'You were closer before.'], ['worsening-08', 'The Inferno recedes.'],
+  ],
+  stagnant: [
+    ['stagnant-01', 'The Inferno waits.'], ['stagnant-02', 'Little has changed.'],
+    ['stagnant-03', 'The fire remains unmoved.'], ['stagnant-04', 'The Inferno is still unconvinced.'],
+    ['stagnant-05', 'You must do more.'], ['stagnant-06', 'Your progress has stalled.'],
+    ['stagnant-07', 'The flames burn, but no brighter.'], ['stagnant-08', 'The Inferno remains unsatisfied.'],
+  ],
+  acquired: [
+    ['acquired-01', 'A new Flame joins the fire. Make it count.'], ['acquired-02', 'Your fire has grown. Now prove its strength.'],
+    ['acquired-03', 'A new Flame brings new potential.'], ['acquired-04', 'More fire. Now make it burn.'],
+  ],
+  invested: [
+    ['invested-01', 'Your investment has been noticed.'], ['invested-02', 'The Flames are growing.'],
+    ['invested-03', 'Stoking them brings you closer.'], ['invested-04', 'Their power is taking shape.'],
+  ],
+  contribution: [
+    ['contribution-01', 'At last, your Flames are proving themselves.'], ['contribution-02', 'The Inferno sees what your Flames can do.'],
+    ['contribution-03', 'That power did not go unnoticed.'], ['contribution-04', 'Your Flames burned brighter this round.'],
+  ],
+} as const;
+
+export function classifyInfernoTrend(readiness: number, previousReadiness: number | null): InfernoTrend {
+  if (previousReadiness === null) return 'first';
+  const delta = readiness - previousReadiness;
+  return delta >= INFERNO_TREND_DEAD_ZONE ? 'improving'
+    : delta <= -INFERNO_TREND_DEAD_ZONE ? 'worsening' : 'stable';
+}
+
+export function classifyInfernoWeakness(
+  assets: readonly EngulfmentAssetRef[], readiness: number, state: Pick<GameState, 'dice'>,
+): InfernoWeakness {
+  if (readiness >= INFERNO_CLOSE_READINESS) return 'close';
+  if (assets.length <= 1) return 'quantity';
+  const averageInvestment = assets.reduce((sum, asset) => sum + (asset.kind === 'bonfire' ? 100
+    : activeFlameInvestment(state.dice.find(die => die.id === asset.dieId)?.flame ?? null)), 0) / assets.length;
+  return averageInvestment < 60 ? 'investment' : 'utilization';
+}
+
+type MessagePool = keyof typeof INFERNO_MESSAGE_POOLS;
+function feedbackPool(weakness: InfernoWeakness, trend: InfernoTrend, recentAction: InfernoRecentAction): MessagePool {
+  if (weakness === 'close') return trend === 'worsening' ? 'worsening' : 'close';
+  if (trend === 'worsening') return 'worsening';
+  if (trend === 'improving') {
+    if (recentAction === 'flame_acquired') return 'acquired';
+    if (recentAction === 'flame_invested' || recentAction === 'bonfire_created') return 'invested';
+    return 'contribution';
+  }
+  if (trend === 'stable' && recentAction === 'flame_acquired' && weakness === 'quantity') return 'acquired';
+  return trend === 'stable' && recentAction === 'none' ? weakness : weakness;
+}
+
+function deterministicHash(value: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+export function selectInfernoFeedback(seed: string, evaluationIndex: number, weakness: InfernoWeakness,
+  trend: InfernoTrend, recentAction: InfernoRecentAction, recentMessageIds: readonly string[]): { id: string; text: string } {
+  const category = feedbackPool(weakness, trend, recentAction);
+  const pool = INFERNO_MESSAGE_POOLS[category];
+  const eligible = pool.filter(([id]) => !recentMessageIds.includes(id));
+  const candidates = eligible.length ? eligible : pool;
+  const selected = candidates[deterministicHash(`${seed}:${evaluationIndex}:${category}`) % candidates.length];
+  return { id: selected[0], text: selected[1] };
+}
+
+/** Freezes one authoritative whole-collection evaluation and strongest-first prefix plan. */
+export function createInfernoEvaluation(state: GameState): InfernoEvaluationState | null {
+  const assets = ownedEngulfmentAssets(state);
+  if (!assets.length) return null;
+  const evaluationIndex = state.infernoProgress.evaluationIndex + 1;
+  const full = evaluateEngulfmentOffering(state, assets);
+  const readiness = Math.max(0, Math.min(1, full.offeringMultiplier / ENGULFMENT_REQUIRED_MULTIPLIER));
+  const previousReadiness = state.infernoProgress.previousReadiness;
+  const trend = classifyInfernoTrend(readiness, previousReadiness);
+  const weakness = classifyInfernoWeakness(assets, readiness, state);
+  const recentAction = trend === 'improving' && state.infernoProgress.recentAction === 'none'
+    ? 'contribution_improved' : trend === 'worsening' && state.infernoProgress.recentAction === 'none'
+      ? 'contribution_declined' : state.infernoProgress.recentAction;
+  const diagnostics = assets.map(asset => ({ asset: structuredClone(asset), status: asset.kind,
+    investment: asset.kind === 'bonfire' ? 100
+      : activeFlameInvestment(state.dice.find(die => die.id === asset.dieId)?.flame ?? null),
+    hiddenStrength: evaluateEngulfmentOffering(state, [asset]).offeringMultiplier }));
+  const strongestFirst = diagnostics.slice().sort((left, right) =>
+    right.hiddenStrength - left.hiddenStrength || left.asset.instanceId - right.asset.instanceId).map(item => item.asset);
+  const success = engulfmentSucceeds(full.offeringMultiplier);
+  const prefixEvaluations: InfernoEvaluationState['prefixEvaluations'] = [];
+  let flamesSnuffed: EngulfmentAssetRef[] = [];
+  let selectedEffectiveValue: number | null = null;
+  if (success) for (let length = 1; length <= strongestFirst.length; length++) {
+    const prefix = strongestFirst.slice(0, length);
+    const prefixEvaluation = evaluateEngulfmentOffering(state, prefix);
+    const prefixSuccess = engulfmentSucceeds(prefixEvaluation.offeringMultiplier);
+    prefixEvaluations.push({ flameInstanceIds: prefix.map(asset => asset.instanceId),
+      effectiveValue: prefixEvaluation.offeringMultiplier, success: prefixSuccess });
+    if (prefixSuccess) {
+      flamesSnuffed = prefix;
+      selectedEffectiveValue = prefixEvaluation.offeringMultiplier;
+      break;
+    }
+  }
+  if (success && !flamesSnuffed.length) throw new Error('A successful Inferno evaluation has no successful strongest-first prefix.');
+  const snuffedIds = new Set(flamesSnuffed.map(asset => asset.instanceId));
+  const feedback = success ? null : selectInfernoFeedback(state.seed, evaluationIndex, weakness, trend, recentAction,
+    state.infernoProgress.recentMessageIds);
+  const normalization = engulfmentTrainingNormalization(state.handLevels);
+  const infernoLevelBefore = state.engulfmentLevel;
+  return {
+    evaluationIndex, round: state.round, chapter: chapterNumberForRound(state.round), flames: diagnostics,
+    evidenceRounds: full.evidenceRounds, effectiveValue: full.offeringMultiplier,
+    threshold: ENGULFMENT_REQUIRED_MULTIPLIER, readiness, previousReadiness, trend, weakness, recentAction,
+    feedbackMessageId: feedback?.id ?? null, feedbackMessage: feedback?.text ?? null, success,
+    strongestFirst, prefixEvaluations, flamesSnuffed: structuredClone(flamesSnuffed),
+    flamesPreserved: assets.filter(asset => !snuffedIds.has(asset.instanceId)).map(asset => structuredClone(asset)),
+    selectedEffectiveValue, infernoLevelBefore, infernoLevelAfter: infernoLevelBefore + (success ? 1 : 0),
+    infernoMultiplierBefore: infernoMultiplier(infernoLevelBefore),
+    infernoMultiplierAfter: infernoMultiplier(infernoLevelBefore + (success ? 1 : 0)),
+    upper: normalization.upper, lower: normalization.lower,
+    consumedFinalFlame: success && flamesSnuffed.length === assets.length,
+  };
+}
+
 export interface EngulfmentAnimationProfile {
   success: boolean;
   strength: 'very_weak' | 'moderate' | 'near' | 'bare' | 'strong' | 'massive';
@@ -151,6 +305,13 @@ export function engulfmentAnimationProfile(offeringMultiplier: number): Engulfme
   const durationMs = strength === 'near' ? 4000 : strength === 'bare' ? 3800
     : strength === 'moderate' ? 2700 : strength === 'very_weak' ? 2100 : strength === 'strong' ? 2300 : 1400;
   return { success, strength, peakPercent: success ? 100 : Math.min(99, progress * 100), durationMs };
+}
+
+export function infernoEvaluationDuration(offeringMultiplier: number, speed: 'normal' | 'fast' | 'instant'): number {
+  const profile = engulfmentAnimationProfile(offeringMultiplier);
+  if (speed === 'normal') return profile.durationMs;
+  if (speed === 'fast') return profile.success ? Math.min(1500, profile.durationMs * .45) : Math.min(650, profile.durationMs * .2);
+  return profile.success ? 700 : 80;
 }
 
 export function infernoRoman(level: number): string {

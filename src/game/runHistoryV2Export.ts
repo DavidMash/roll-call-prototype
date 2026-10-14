@@ -56,7 +56,6 @@ export function renderRunSummaryV2(state: GameState): string {
     `Enhancements: ${build}`,
     `Embers: ${embers}`,
     `Bonfires: ${canonical.bonfires.map(flame => FLAMES[flame].name).join(' · ') || 'None'}`,
-    `Wildfires: ${canonical.wildfires.map(item => `${FLAMES[item.flame].name} (sacrificed ${FLAMES[item.sacrificedFlame].name})`).join(' · ') || 'None'}`,
     `Flame timeline experienced: ${experienced.flameTimeline.map(item => `R${item.round} ${item.type}${item.flame ? ` ${FLAMES[item.flame].name}` : ''}${item.abandoned ? ' [rolled back]' : ''}`).join(' · ') || 'None'}`,
     '',
     'ECONOMY · CANONICAL',
@@ -76,7 +75,7 @@ export function renderRunSummaryV2(state: GameState): string {
     `Largest-hand share: median ${shares.median === null ? '—' : percent(shares.median)} · P90 ${shares.p90 === null ? '—' : percent(shares.p90)} · max ${shares.maximum === null ? '—' : percent(shares.maximum)} · >50% ${shares.over50Percent}/${shares.samples} · >80% ${shares.over80Percent}/${shares.samples}`,
     `Flame activations: ${entries(experienced.flameActivations)}`,
     `Charge: armed ${number(experienced.charge.arms)} · consumed ${number(experienced.charge.consumes)} · resets ${number(experienced.charge.resets)}`,
-    `Boss outcomes: ${entries(experienced.bossOutcomes)} · Special Offers: ${entries(experienced.specialOffers)} · Hooded: ${entries(experienced.hoodedOutcomes)}`,
+    `Boss outcomes: ${entries(experienced.bossOutcomes)} · Special Offers: ${entries(experienced.specialOffers)}`,
   ].join('\n');
 }
 
@@ -99,7 +98,7 @@ export function exportRunHistoryV2(state: GameState) {
       phase: state.phase, round: state.round, attempt: state.roundAttemptNumber, score: state.score,
       target: state.target, gold: state.gold, lives: state.lives, currentNodeId: state.currentNodeId,
       infernoLevel: state.engulfmentLevel, infernoMultiplier: infernoMultiplier(state.engulfmentLevel),
-      shopVisit: state.shop ? { id: state.shop.visitId, engulfmentAttemptUsed: state.shop.engulfmentAttemptUsed } : null,
+      shopVisit: state.shop ? { id: state.shop.visitId } : null,
       build: summary.canonical, consumedHands: [...state.consumed], specialOfferEffects: structuredClone(state.specialOfferEffects),
     },
     events: state.historyV2.map(event => ({ ...event, timelineStatus: timelines.status(event) })),
