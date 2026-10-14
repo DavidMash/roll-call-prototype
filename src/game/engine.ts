@@ -4,7 +4,7 @@ import { Resolver } from './effects';
 import type { ResolverOptions } from './effects';
 import { enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, placementError, stacks, VINTAGE_BASE_SELL_CAP } from './enhancements';
 import {
-  activeFlameId, activeFlameInvestment, assignFlameInstance, flameEffectText, FLAMES, hasChargeBonfire, hasOwnedChargeFlame,
+  activeFlameId, activeFlameInvestment, assignFlameInstance, flameEffectText, flameStokeLimits, FLAMES, hasChargeBonfire, hasOwnedChargeFlame,
   HAND_FAMILY_FLAME_IDS, hasOwnedFlame, isChargeFlame, isFlame, ownedFlameIds, recalculateMaxCharge,
   normalizeFlameInstanceRuntime, removeFlameInstance, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier,
 } from './flames';
@@ -543,8 +543,9 @@ export function validateAction(state: Board, action: Action): string | null {
     const die = state.dice.find(item => item.id === action.dieId && item.owner === 'player');
     if (!die?.flame || !activeFlameId(die.flame)) return 'Choose an active Flame to invest in.';
     if (!Number.isInteger(action.amount) || action.amount <= 0) return 'Stoking requires a positive whole Gold amount.';
-    if (action.amount > state.gold) return 'Not enough Gold to Stoke that Ember.';
-    if (activeFlameInvestment(die.flame) + action.amount > 100) return 'A Flame cannot hold more than 100 invested Gold.';
+    const limits = flameStokeLimits(state, action.dieId);
+    if (action.amount > limits.affordableAmount) return 'Not enough Gold to Stoke that Ember.';
+    if (action.amount > limits.remainingCapacity) return 'A Flame cannot hold more than 100 invested Gold.';
     return null;
   }
   if (action.type === 'CHOOSE_FLAME' || action.type === 'CONTINUE_FLAME_SELECTION' || action.type === 'SKIP_FLAME_SELECTION') {

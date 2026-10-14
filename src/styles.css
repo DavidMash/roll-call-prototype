@@ -287,9 +287,12 @@ button { font: inherit; }
   min-height: 3.25rem; min-width: 9rem; overflow: hidden; user-select: none;
 }
 .stoke-stepper-value {
-  align-items: center; display: flex; font-size: 1.25rem; font-variant-numeric: tabular-nums;
-  font-weight: 850; justify-content: center; padding: 0 .75rem;
+  appearance: textfield; background: transparent; border: 0; color: inherit; font: inherit; font-size: 1.25rem;
+  font-variant-numeric: tabular-nums; font-weight: 850; min-width: 0; padding: 0 .75rem;
+  text-align: center; user-select: text; width: 100%;
 }
+.stoke-stepper-value::-webkit-inner-spin-button, .stoke-stepper-value::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.stoke-stepper-value:focus-visible { outline: 2px solid #ffb74d; outline-offset: -3px; }
 .stoke-stepper-buttons { display: grid; grid-template-rows: 1fr 1fr; }
 .stoke-stepper-buttons button {
   align-items: center; background: rgba(255,152,0,.14); border: 0;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { dispatch, newRun, validateAction } from './engine';
 import { Resolver } from './effects';
 import {
-  captureHandStart, composeXMult, flameEffectText, FLAME_IDS, momentumChargeGain,
+  captureHandStart, composeXMult, flameEffectText, flameStokeLimits, FLAME_IDS, momentumChargeGain,
   handFamilyFlameMultiplier, handXMultContributions, hotStreakMultiplier, lowballMultiplier, standardFlameMultiplier,
   targetPracticeMultiplier, XMult_FLAME_IDS,
 } from './flames';
@@ -162,6 +162,13 @@ describe('investment, uniqueness, and reward lifecycle', () => {
     state.gold = 100;
     expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 0, amount: 6 })).toContain('more than 100');
     state.phase = 'round'; state.shop = null; expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 0, amount: 1 })).toContain('normal Shop');
+  });
+  it('derives UI Stoke limits from the same affordability and capacity rules as validation', () => {
+    const state = reward(); flame(state, 0, 'momentum', 95); state.gold = 4;
+    expect(flameStokeLimits(state, 0)).toEqual({ remainingCapacity: 5, affordableAmount: 4, maximumAmount: 4 });
+    state.gold = 100;
+    expect(flameStokeLimits(state, 0)).toEqual({ remainingCapacity: 5, affordableAmount: 100, maximumAmount: 5 });
+    expect(flameStokeLimits(state, 1).maximumAmount).toBe(0);
   });
   it.each([1, 2, 4, 8])('allows arbitrary Stoke at an ordinary round-%s shop without enabling acquisition', round => {
     const state = game(); state.phase = 'shop'; state.round = round; state.gold = 14;

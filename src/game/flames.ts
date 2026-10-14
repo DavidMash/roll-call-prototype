@@ -151,6 +151,22 @@ export const activeFlameInvestment = (flame: ActiveFlame | null | unknown) =>
   typeof flame === 'object' && flame !== null && 'investedGold' in flame && Number.isFinite((flame as ActiveFlame).investedGold)
     ? Math.max(0, Math.min(100, (flame as ActiveFlame).investedGold)) : 0;
 
+export interface FlameStokeLimits {
+  remainingCapacity: number;
+  affordableAmount: number;
+  maximumAmount: number;
+}
+
+/** Shared investment limits used by both action validation and the Shop control. */
+export function flameStokeLimits(state: Pick<Board, 'dice' | 'gold'>, dieId: number): FlameStokeLimits {
+  const die = state.dice.find(item => item.id === dieId && item.owner === 'player');
+  const remainingCapacity = die?.flame && activeFlameId(die.flame)
+    ? Math.max(0, 100 - activeFlameInvestment(die.flame)) : 0;
+  const affordableAmount = Math.max(0, Math.floor(state.gold));
+  return { remainingCapacity, affordableAmount,
+    maximumAmount: Math.min(remainingCapacity, affordableAmount) };
+}
+
 type FlameInstanceRuntime = Pick<Board, 'dice' | 'bonfires' | 'boss' | 'flameInstanceIds' | 'nextFlameInstanceId'>;
 
 export function normalizeFlameInstanceRuntime(state: FlameInstanceRuntime): void {

@@ -1,6 +1,6 @@
 import { Badge, Button, Group, Modal, Progress, Stack, Text } from '@mantine/core';
 import { useEffect, useState } from 'react';
-import { activeFlameId, activeFlameInvestment, flameDetailsPresentation, flameEffectText, FLAMES } from '../game/flames';
+import { activeFlameId, activeFlameInvestment, flameDetailsPresentation, flameEffectText, flameStokeLimits, FLAMES } from '../game/flames';
 import type { Action, Board, Flame } from '../game/types';
 import { formatPlayerNumber } from '../game/copy';
 import { RarityBadge } from './RarityBadge';
@@ -19,30 +19,42 @@ export function FlameDetailsModal({ board, target, busy, actionsEnabled, onClose
   onClose: () => void;
   submit: (action: Action) => void;
 }) {
-  const [stokeAmount, setStokeAmount] = useState(0);
+  const [stokeDraft, setStokeDraft] = useState('0');
   const die = target?.dieId === undefined ? null : board.dice.find(item => item.id === target.dieId) ?? null;
   const activeId = activeFlameId(die?.flame);
   const flameId = target?.flame ?? null;
   const isEmber = target?.kind === 'ember' && !!die && activeId === flameId;
   const invested = target?.kind === 'bonfire' ? 100 : isEmber ? activeFlameInvestment(die.flame) : 0;
-  const maxStoke = isEmber ? Math.min(board.gold, 100 - invested) : 0;
-  const amount = Math.max(0, Math.min(Math.floor(stokeAmount || 0), maxStoke));
+  const maxStoke = isEmber ? flameStokeLimits(board, die.id).maximumAmount : 0;
+  function normalizedAmount(value: string): number {
+    if (!/^\d+$/.test(value)) return 0;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(0, Math.min(Math.floor(parsed), maxStoke)) : maxStoke;
+  }
+  const amount = normalizedAmount(stokeDraft);
   const canStoke = isEmber && board.phase === 'shop' && actionsEnabled;
-  useEffect(() => { setStokeAmount(0); }, [target?.dieId, target?.flame, target?.kind]);
+  useEffect(() => { setStokeDraft('0'); }, [target?.dieId, target?.flame, target?.kind]);
   if (!flameId) return null;
   const definition = FLAMES[flameId];
   const details = flameDetailsPresentation(flameId, invested, board);
   const afterInvestment = invested + amount;
   const afterBoard = { ...board, gold: board.gold - amount };
   const afterDetails = flameDetailsPresentation(flameId, afterInvestment, afterBoard);
-  function clampAmount(value: number) { return Math.max(0, Math.min(Math.floor(value || 0), maxStoke)); }
-  function setAmount(value: number) { setStokeAmount(clampAmount(value)); }
-  function stepAmount(delta: -1 | 1) { setStokeAmount(current => clampAmount(current + delta)); }
+  function commitDraft(value = stokeDraft): number {
+    const normalized = normalizedAmount(value);
+    setStokeDraft(String(normalized));
+    return normalized;
+  }
+  function setAmount(value: number) { setStokeDraft(String(normalizedAmount(String(value)))); }
+  function stepAmount(delta: -1 | 1) {
+    setStokeDraft(current => String(normalizedAmount(String(normalizedAmount(current) + delta))));
+  }
   function stoke() {
-    if (!die || !canStoke || amount < 1) return;
-    const createsBonfire = invested + amount === 100;
-    submit({ type: 'STOKE_FLAME', dieId: die.id, amount });
-    setStokeAmount(0);
+    const committedAmount = commitDraft();
+    if (!die || !canStoke || committedAmount < 1) return;
+    const createsBonfire = invested + committedAmount === 100;
+    submit({ type: 'STOKE_FLAME', dieId: die.id, amount: committedAmount });
+    setStokeDraft('0');
     if (createsBonfire) onClose();
   }
 
@@ -77,9 +89,12 @@ export function FlameDetailsModal({ board, target, busy, actionsEnabled, onClose
           <Text size="sm" fw={700}>{afterInvestment === 100 ? definition.bonfireDescription : flameEffectText(flameId, afterInvestment, afterBoard)}</Text></div>}
         <Group gap="xs" wrap="wrap" className="stoke-controls">
           <div className="stoke-stepper">
-            <output className="stoke-stepper-value" aria-label={`Stoke amount for ${definition.name}`} role="spinbutton"
-              aria-readonly="true" aria-valuemin={0} aria-valuemax={maxStoke} aria-valuenow={amount}
-              aria-live="polite">{formatPlayerNumber(amount)}</output>
+            <input className="stoke-stepper-value" type="number" inputMode="numeric" step={1} min={0} max={maxStoke}
+              aria-label={`Stoke amount for ${definition.name}`} disabled={busy} value={stokeDraft}
+              onChange={event => { if (/^\d*$/.test(event.currentTarget.value)) setStokeDraft(event.currentTarget.value); }}
+              onBlur={() => commitDraft()} onKeyDown={event => {
+                if (event.key === 'Enter') { event.preventDefault(); stoke(); }
+              }} />
             <div className="stoke-stepper-buttons">
               <button type="button" aria-label="Increase investment" disabled={busy || amount >= maxStoke}
                 onClick={() => stepAmount(1)}>▲</button>
