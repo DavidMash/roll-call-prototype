@@ -16,9 +16,10 @@ export interface ChapterPlan {
 export type RunNodeType = 'normal_round' | 'mini_boss_round' | 'boss_round' | 'shop' | 'flame_selection' | 'special_offer';
 export type Enhancement =
   | 'bonus' | 'jumpingBean' | 'golden' | 'workout'
-  | 'missingLink' | 'mirror' | 'magnetic' | 'sticky' | 'slippy'
+  | 'missingLink' | 'mirror' | 'magnetic' | 'boomerang' | 'sticky' | 'slippy'
   | 'hitchhiker' | 'weighted' | 'jackpot' | 'personalTrainer' | 'bump' | 'vintage'
-  | 'teamwork' | 'loneWolf' | 'doubleTime' | 'tank';
+  | 'teamwork' | 'loneWolf' | 'doubleTime' | 'tank' | 'freePlay'
+  | 'shifter' | 'flywheel' | 'holiday' | 'magic' | 'conjoined' | 'furnace' | 'sustainable';
 export type Flame =
   | 'ultimate' | 'minigun' | 'hailMary' | 'fullOfGrace'
   | 'momentum' | 'thirdRail' | 'jumpStart' | 'powerSurge'
@@ -32,7 +33,7 @@ export type HandId =
   | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
 export type Phase = 'round' | 'roundSummary' | 'inferno' | 'bust' | 'flameSelection' | 'specialOffer' | 'shop' | 'lost' | 'error';
 export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker' | 'boss';
-export type HandPlaySource = 'manual' | 'jumpingBean';
+export type HandPlaySource = 'manual' | 'jumpingBean' | 'freePlay';
 export type GoldSource = 'golden' | 'jackpot' | 'enhancementSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward' | 'specialOffer' | 'cashBonus';
 export type GoldSpendSource = 'enhancement' | 'shopDiceReroll' | 'enhancementReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore';
 export type HandLevels = Record<HandId, number>;
@@ -152,6 +153,13 @@ export interface Face {
   infected?: boolean;
   snakeEyesOriginalRank?: Rank;
   magneticSourceUsed?: boolean;
+  /** Original value while Shifter has temporarily changed this physical face. */
+  shifterBaseRank?: Rank;
+  /** Persistent per-instance Furnace factor. */
+  furnaceMultiplier?: number;
+  /** Round-local charges; persisted only to support mid-Round resume. */
+  flywheelCharges?: number;
+  sustainableCharges?: number;
 }
 export interface ActiveFlame { id: Flame; investedGold: number }
 export interface StandaloneScoreRecord {
@@ -528,7 +536,7 @@ export interface RunStats {
   goldSpent: number;
   goldSpentBySource: Record<GoldSpendSource, number>;
   triggers: Partial<Record<Enhancement, number>>;
-  probabilityProcs: Record<'sticky' | 'hitchhiker' | 'personalTrainer' | 'doubleTime', ProbabilityProcStats>;
+  probabilityProcs: Record<'boomerang' | 'holiday' | 'hitchhiker' | 'personalTrainer' | 'doubleTime' | 'sticky', ProbabilityProcStats>;
   scoreBySource: Record<ScoreSource, ExactScore>;
   handScores: HandScoreRecord[];
   jumpingBeanFreePlays: JumpingBeanPlayRecord[];
@@ -610,7 +618,7 @@ export interface EventRecord {
   bossRewardGold?: number;
   goldenGold?: number;
   jackpotGold?: number;
-  probability?: { enhancement: 'sticky' | 'hitchhiker' | 'personalTrainer' | 'doubleTime'; stacks: number; chance: number; succeeded: boolean };
+  probability?: { enhancement: 'boomerang' | 'holiday' | 'hitchhiker' | 'personalTrainer' | 'doubleTime' | 'sticky'; stacks: number; chance: number; succeeded: boolean };
   decisionMs?: number;
   handScore?: HandScoreAccumulator;
 }

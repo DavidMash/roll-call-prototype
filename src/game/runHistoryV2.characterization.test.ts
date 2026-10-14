@@ -136,7 +136,7 @@ describe('Run History V2 characterization', () => {
       {
         "historyEntries": 0,
         "legacyHistoryBytes": 2,
-        "runStatsBytes": 2673,
+        "runStatsBytes": 2813,
       }
     `);
   });

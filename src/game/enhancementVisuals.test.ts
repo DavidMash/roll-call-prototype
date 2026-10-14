@@ -3,25 +3,12 @@ import { ENHANCEMENTS, ENHANCEMENT_IDS, enhancementLabel } from './enhancements'
 import type { Enhancement } from './types';
 
 const IMPLEMENTED_ENHANCEMENTS: Enhancement[] = [
-  'bonus',
-  'jumpingBean',
-  'golden',
-  'workout',
-  'missingLink',
-  'mirror',
-  'magnetic',
-  'sticky',
-  'slippy',
-  'hitchhiker',
-  'weighted',
-  'jackpot',
-  'personalTrainer',
-  'bump',
-  'vintage',
-  'teamwork',
-  'loneWolf',
-  'doubleTime',
-  'tank',
+  'bonus', 'golden', 'workout', 'vintage', 'boomerang',
+  'hitchhiker', 'weighted', 'bump', 'magnetic', 'jackpot',
+  'teamwork', 'loneWolf', 'tank', 'freePlay',
+  'mirror', 'missingLink', 'doubleTime', 'jumpingBean',
+  'shifter', 'flywheel', 'holiday', 'personalTrainer',
+  'magic', 'conjoined', 'furnace', 'sustainable',
 ];
 
 describe('canonical Enhancement visual metadata', () => {

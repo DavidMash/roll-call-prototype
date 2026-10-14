@@ -13,8 +13,7 @@ describe('canonical player-facing definitions', () => {
       missingLink: 'Counts as any face in a Straight. Scores its own Pips.',
       mirror: 'Counts as any matching face in group hands. Scores its own Pips.',
       magnetic: 'While held, pulls rolling dice to their Magnetic faces once per Round.\nOne Magnetic face per die.',
-      sticky: 'May keep this die from rerolling after it scores. Stack up to three to increase the odds.',
-      slippy: 'Rerolls after you play a hand, even if this die did not score.',
+      boomerang: 'When rerolled from this face, it has a chance to return to this face.',
       hitchhiker: 'When left out of a hand, it may jump in and score anyway. Stack up to three to increase the odds.',
       weighted: 'Makes the opposite face more likely to roll. Stack to increase the odds.',
       jackpot: 'Gain +3 Gold if this face scores in the hand that clears the Round. Stack up to three for more Gold.',
@@ -25,6 +24,14 @@ describe('canonical player-facing definitions', () => {
       loneWolf: 'Gain up to ×4 Pips when fewer dice score. 1/2/3/4/5+ dice: ×4/×3/×2/×1.5/×1.',
       doubleTime: 'Chance for this face to score twice. Stack up to three for a 50%/75%/87.5% chance.',
       tank: 'Multiply Mult when this face scores. ×1/×2/×3 stacks: Mult ×1.5/×2/×2.5. Multiple Tank faces each activate.',
+      freePlay: 'If this face rerolls back to itself, score it as a free play.',
+      shifter: 'When rolled to, this face temporarily changes its physical Pips to match the most common currently showing value.',
+      flywheel: 'This face can be rerolled for free once per stack each Round.',
+      holiday: 'Chance to triple the effect of Bonus Enhancements on this face.',
+      magic: 'This face is rolled to when it would complete the highest-level available hand.',
+      conjoined: 'This face counts as two of itself for hand qualification.',
+      furnace: 'When scored, destroy all other Enhancements on this face. Furnace permanently gains ×0.25 Mult for each Enhancement stack destroyed.',
+      sustainable: 'When this face is scored, the hand is not consumed once per stack each Round.',
     });
   });
 

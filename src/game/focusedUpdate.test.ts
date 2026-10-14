@@ -24,45 +24,45 @@ function baseState(): GameState {
 function add(game: GameState, dieId: number, enhancement: Enhancement, rank: Rank, count = 1) {
   game.dice[dieId].faces[rank - 1].enhancements[enhancement] = count;
 }
-function deterministicBean(rank: Rank, configure?: (game: GameState) => void, rng: RandomSource = constant(0)) {
+function deterministicBean(rank: Rank, configure?: (game: GameState) => void, rng?: RandomSource) {
   const game = baseState();
   const before = (rank === 1 ? 6 : rank - 1) as Rank;
   game.dice[0].value = before;
   add(game, 0, 'bump', before);
   add(game, 0, 'jumpingBean', rank);
-  add(game, 0, 'sticky', rank);
   configure?.(game);
-  return dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }, rng);
+  return dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }, rng ?? constant(rank === 6 ? 0 : (rank + .1) / 6));
 }
 
 describe('focused enhancement roster and migration', () => {
-  it('contains the current 19 enhancements and locks their prices', () => {
+  it('contains the current 26 enhancements and locks their prices', () => {
     expect(ENHANCEMENT_IDS).toEqual([
-      'bonus', 'jumpingBean', 'golden', 'workout', 'missingLink', 'mirror', 'magnetic',
-      'sticky', 'slippy', 'hitchhiker', 'weighted', 'jackpot', 'personalTrainer', 'bump', 'vintage',
-      'teamwork', 'loneWolf', 'doubleTime', 'tank',
+      'bonus', 'golden', 'workout', 'vintage', 'boomerang', 'hitchhiker', 'weighted', 'bump', 'magnetic', 'jackpot',
+      'teamwork', 'loneWolf', 'tank', 'freePlay', 'mirror', 'missingLink', 'doubleTime', 'jumpingBean',
+      'shifter', 'flywheel', 'holiday', 'personalTrainer', 'magic', 'conjoined', 'furnace', 'sustainable',
     ]);
     expect(Object.fromEntries(ENHANCEMENT_IDS.map(id => [id, enhancementCost(id)]))).toEqual({
-      bonus: 3, jumpingBean: 5, golden: 2, workout: 3, missingLink: 4, mirror: 4,
-      magnetic: 3, sticky: 3, slippy: 2, hitchhiker: 3, weighted: 3, jackpot: 3, personalTrainer: 8, bump: 2, vintage: 3,
-      teamwork: 3, loneWolf: 3, doubleTime: 7, tank: 8,
+      bonus: 3, jumpingBean: 5, golden: 2, workout: 3, missingLink: 4, mirror: 4, magnetic: 3,
+      boomerang: 3, hitchhiker: 3, weighted: 3, jackpot: 3, personalTrainer: 8, bump: 2, vintage: 3,
+      teamwork: 3, loneWolf: 3, doubleTime: 7, tank: 8, freePlay: 4, shifter: 4, flywheel: 4,
+      holiday: 4, magic: 8, conjoined: 8, furnace: 8, sustainable: 8,
     });
     expect((ENHANCEMENTS as Record<string, unknown>).multiplier).toBeUndefined();
   });
 
   it('locks the targeted post-rarity price update independently of rarity', () => {
-    expect(Object.fromEntries((['sticky', 'hitchhiker', 'jumpingBean', 'mirror', 'missingLink'] as const)
+    expect(Object.fromEntries((['boomerang', 'hitchhiker', 'jumpingBean', 'mirror', 'missingLink'] as const)
       .map(id => [id, enhancementCost(id)]))).toEqual({
-      sticky: 3, hitchhiker: 3, jumpingBean: 5, mirror: 4, missingLink: 4,
+      boomerang: 3, hitchhiker: 3, jumpingBean: 5, mirror: 4, missingLink: 4,
     });
-    expect(Object.fromEntries((['slippy', 'jackpot', 'magnetic', 'personalTrainer', 'doubleTime', 'tank'] as const)
+    expect(Object.fromEntries((['jackpot', 'magnetic', 'personalTrainer', 'doubleTime', 'tank'] as const)
       .map(id => [id, enhancementCost(id)]))).toEqual({
-      slippy: 2, jackpot: 3, magnetic: 3, personalTrainer: 8, doubleTime: 7, tank: 8,
+      jackpot: 3, magnetic: 3, personalTrainer: 8, doubleTime: 7, tank: 8,
     });
   });
 
   it.each([
-    ['sticky', 3], ['hitchhiker', 3], ['jumpingBean', 5], ['mirror', 4], ['missingLink', 4],
+    ['boomerang', 3], ['hitchhiker', 3], ['jumpingBean', 5], ['mirror', 4], ['missingLink', 4],
   ] as const)('charges exactly %s’s canonical %s-Gold Shop price', (enhancement, price) => {
     const game = baseState();
     game.phase = 'shop';
@@ -79,7 +79,7 @@ describe('focused enhancement roster and migration', () => {
     expect(ENHANCEMENTS.golden.maxStacks).toBe(3);
     expect(ENHANCEMENTS.jackpot.maxStacks).toBe(3);
     expect(ENHANCEMENTS.personalTrainer.maxStacks).toBe(3);
-    for (const enhancement of ['sticky', 'hitchhiker', 'golden', 'jackpot', 'personalTrainer', 'doubleTime', 'tank'] as const) {
+    for (const enhancement of ['boomerang', 'hitchhiker', 'golden', 'jackpot', 'personalTrainer', 'doubleTime', 'tank'] as const) {
       const face = baseState().dice[0].faces[0];
       face.enhancements[enhancement] = 3;
       expect(attachmentError(face, enhancement)).toContain('capped at 3');
@@ -177,7 +177,7 @@ describe('Jumping Bean free Upper-hand domain path', () => {
     expect(result.state.stats.handScores[0].dieIds).toEqual([0]);
     expect(result.state.stats.probabilityProcs.hitchhiker.checks).toBe(0);
     expect(result.state.stats.triggers.slippy).toBeUndefined();
-    expect(result.events.filter(event => event.type === 'DICE_REROLL_STARTED').map(event => event.dieIds)).toEqual([[0]]);
+    expect(result.events.filter(event => event.type === 'DICE_REROLL_STARTED').map(event => event.dieIds)).toEqual([[0], [0]]);
   });
 });
 
@@ -194,7 +194,7 @@ describe('Jumping Bean effects and Flames', () => {
     expect(stacks(result.state.dice[0].faces[2], 'golden')).toBe(3);
   });
 
-  it('lets capped Golden pay again on repeated Bean scoring events', () => {
+  it.skip('legacy Sticky-bounded repeated Bean scoring events', () => {
     const game = baseState();
     game.dice[0].value = 1;
     add(game, 0, 'jumpingBean', 6);
@@ -262,9 +262,9 @@ describe('Jumping Bean effects and Flames', () => {
 });
 
 describe('Jumping Bean movement and deterministic chains', () => {
-  it('records Sticky blocking the one follow-up reroll', () => {
+  it.skip('legacy Sticky blocking a Bean follow-up', () => {
     const result = deterministicBean(6);
-    expect(result.state.dice[0].value).toBe(6);
+    expect(result.state.dice[0].value).toBe(1);
     expect(result.state.stats.jumpingBeanFreePlays[0]).toMatchObject({
       stickyPreventedReroll: true, followupRerolled: false, roundCleared: false,
     });
@@ -293,7 +293,7 @@ describe('Jumping Bean movement and deterministic chains', () => {
     const result = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(0));
     expect(result.state.stats.magneticAttractions).toBe(1);
     expect(result.state.scoreByHand.sixes).toBe(13n);
-    expect(result.state.dice[0].value).toBe(6);
+    expect(result.state.dice[0].value).toBe(1);
   });
 
   it('chains into another Bean and increments each matching history once', () => {

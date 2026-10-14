@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 import { CONFIG } from '../src/game/config';
 import { HANDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
-import { pairSelectionRun, winningSlippyRun } from './handFixtures';
+import { pairSelectionRun, winningSettleRun } from './handFixtures';
 import { enterRun, installRunState, setPlaybackSpeed } from './uiHelpers';
 
 async function ready(page: Page) {
@@ -66,7 +66,7 @@ for (const hand of ['pair', 'twoPair'] as const) {
 }
 
 test('winning hand shows its final award, physical settle, and ROUND CLEARED in order', async ({ page }) => {
-  const fixture = winningSlippyRun();
+  const fixture = winningSettleRun();
   const game = fixture.game;
   await installRunState(page, game);
   await ready(page);

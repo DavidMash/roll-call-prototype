@@ -60,6 +60,8 @@ function normalizeHistoricalScores(state: GameState): void {
   state.historyV2 ??= [];
   state.stats.rounds ??= [];
   state.stats.scoreBySource ??= { hand: 0n, jumpingBean: 0n, hitchhiker: 0n, boss: 0n };
+  state.stats.probabilityProcs.boomerang ??= { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] };
+  state.stats.probabilityProcs.holiday ??= { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] };
   state.stats.handScores ??= [];
   state.stats.standaloneScores ??= [];
   state.stats.jumpingBeanFreePlays ??= [];
@@ -269,6 +271,13 @@ export function normalizeGameState(state: GameState): GameState {
         delete face.vintageSellValue;
         delete face.vintageSommelierBoosted;
       }
+      if ((face.enhancements.furnace ?? 0) > 0 && face.furnaceMultiplier !== undefined)
+        face.furnaceMultiplier = Math.max(1, Number(face.furnaceMultiplier));
+      else if (!(face.enhancements.furnace ?? 0)) delete face.furnaceMultiplier;
+      if ((face.enhancements.flywheel ?? 0) > 0) face.flywheelCharges = Math.min(stacks(face, 'flywheel'), Math.max(0, Math.floor(face.flywheelCharges ?? 0)));
+      else delete face.flywheelCharges;
+      if ((face.enhancements.sustainable ?? 0) > 0) face.sustainableCharges = Math.min(stacks(face, 'sustainable'), Math.max(0, Math.floor(face.sustainableCharges ?? 0)));
+      else delete face.sustainableCharges;
     }
     const rawFlame = die.flame as unknown;
     const rawId = typeof rawFlame === 'string' ? rawFlame
@@ -459,7 +468,12 @@ export function validateAction(state: Board, action: Action): string | null {
     if (!action.dieIds.length) return 'Select at least one die to reroll.';
     if (new Set(action.dieIds).size !== action.dieIds.length
       || action.dieIds.some(id => !Number.isInteger(id) || !activeEncounterDice(state).some(die => die.id === id))) return 'Select distinct unlocked dice that are on the board.';
-    if (action.dieIds.length > usableManualRerolls(state)) return 'Not enough manual rerolls for these dice.';
+    const paidDice = action.dieIds.filter(id => {
+      const die = activeEncounterDice(state).find(item => item.id === id)!;
+      const face = activeFace(die);
+      return !stacks(face, 'flywheel') || (face.flywheelCharges ?? 0) <= 0;
+    }).length;
+    if (paidDice > usableManualRerolls(state)) return 'Not enough manual rerolls for these dice.';
     return null;
   }
   if (action.type === 'PLAY') {
@@ -552,7 +566,7 @@ export function validateAction(state: Board, action: Action): string | null {
     if (!offer || offer.purchased || !die) return 'Choose an available offer and a physical die.';
     const cost = enhancementOfferIsFree(state.shop, offer.id) ? 0 : enhancementCost(offer.enhancement);
     if (state.gold < cost) return 'Not enough Gold for this Enhancement.';
-    return placementError(die, activeFace(die), offer.enhancement);
+    return placementError(die, activeFace(die), offer.enhancement, state.engulfmentLevel);
   }
   if (action.type === 'SELL_ENHANCEMENT') {
     const die = state.dice.find(item => item.id === action.dieId);
@@ -677,6 +691,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         next.shop!.freeEnhancementOfferIds = (next.shop!.freeEnhancementOfferIds ?? []).filter(id => id !== offer.id);
         face.enhancements[offer.enhancement] = (face.enhancements[offer.enhancement] ?? 0) + 1;
         if (offer.enhancement === 'vintage') { face.vintageSellValue = 0; delete face.vintageSommelierBoosted; }
+        if (offer.enhancement === 'furnace') face.furnaceMultiplier = 1;
         offer.purchased = true;
         next.stats.purchases.push({ round: next.round, enhancement: offer.enhancement, dieId: die.id, face: face.rank, cost, stacksApplied: 1 });
         const key = `D${die.id + 1}:${face.rank}`;
@@ -695,6 +710,9 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const vintageSellValue = action.enhancement === 'vintage' ? totalProceeds : undefined;
         delete face.enhancements[action.enhancement];
         if (action.enhancement === 'vintage') { delete face.vintageSellValue; delete face.vintageSommelierBoosted; }
+        if (action.enhancement === 'furnace') delete face.furnaceMultiplier;
+        if (action.enhancement === 'flywheel') delete face.flywheelCharges;
+        if (action.enhancement === 'sustainable') delete face.sustainableCharges;
         resolver.addGold(totalProceeds, `Sold ${definition.name} ×${formatPlayerNumber(stacksSold)}: +${formatPlayerNumber(totalProceeds)} Gold`, 'enhancementSale', die.id, action.enhancement, face.rank);
         next.stats.sales.push({ round: next.round, enhancement: action.enhancement, dieId: die.id, face: face.rank, stacksSold,
           baseSellPrice: definition.baseSellPrice, totalProceeds, goldBefore, goldAfter: next.gold, vintageSellValue });

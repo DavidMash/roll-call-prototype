@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { activeFace } from '../src/game/dice';
 import { newRun } from '../src/game/engine';
 import { HAND_IDS } from '../src/game/hands';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
@@ -18,7 +17,6 @@ function cycleState(seed: string): GameState {
   state.consumed = HAND_IDS.filter(hand => hand !== 'ones');
   state.scorecardCycleConsumed = [...state.consumed];
   state.dice.forEach((die, index) => { die.value = (index + 1) as Rank; });
-  activeFace(state.dice[0]).enhancements.sticky = 1;
   return state;
 }
 

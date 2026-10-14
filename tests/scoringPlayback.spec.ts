@@ -8,6 +8,7 @@ import { activeEncounterDice } from '../src/game/bosses';
 import { enterRun, installRunState, setPlaybackSpeed } from './uiHelpers';
 import { captureHandStart, composeXMult, handXMultContributions } from '../src/game/flames';
 import { finalizeScore } from '../src/game/scoring';
+import { formatScoreEquation } from '../src/game/copy';
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
@@ -32,7 +33,9 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
   const game = fixture.game;
   await installRunState(page, game);
   await ready(page);
-  await expect(page.getByTestId('round-score-progress')).toHaveText(`${game.score} / ${game.target}`);
+  await expect(page.getByTestId('round-score-progress')).toHaveText(
+    `${game.score.toLocaleString('en-US')} / ${game.target.toLocaleString('en-US')}`,
+  );
   const finalRow = page.getByRole('button', { name: new RegExp(`^${HANDS[fixture.action.hand].name} `) });
   await finalRow.click();
   for (const physical of activeEncounterDice(game)) {
@@ -46,9 +49,11 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
   const xMult = composeXMult(handXMultContributions(snapshot, fixture.action.hand,
     game.handLevels[fixture.action.hand], fixture.action.dieIds));
   const effectiveXMult = Number((xMult * snapshot.bossFactor).toFixed(12));
-  const previewScore = finalizeScore(deterministicPreview.pips, deterministicPreview.multiplier, effectiveXMult).finalScore;
+  const previewScore = finalizeScore(deterministicPreview.pips, deterministicPreview.multiplier,
+    effectiveXMult, snapshot.infernoMultiplier).finalScore;
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText(
-    `${deterministicPreview.pips} × ${deterministicPreview.multiplier} × ${effectiveXMult} = ${previewScore.toLocaleString('en-US')} • PLAY`,
+    `${formatScoreEquation(deterministicPreview.pips, deterministicPreview.multiplier, effectiveXMult,
+      previewScore, snapshot.infernoMultiplier)} • PLAY`,
   );
 
   await page.clock.install({ time: new Date('2026-09-17T12:00:00Z') });
@@ -81,12 +86,12 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
         observed.push(['Hitchhiker', event.handScore.currentPips, event.handScore.currentMultiplier]);
       }
       if (event.type === 'HAND_SCORE_FINALIZED') {
-        await expect(page.locator('.score-tick')).toHaveText(`+${final.amount}`);
-        await expect(page.getByTestId('hand-final-score')).toContainText(String(final.amount));
+        await expect(page.locator('.score-tick')).toHaveText(`+${final.amount!.toLocaleString('en-US')}`);
+        await expect(page.getByTestId('hand-final-score')).toContainText(final.amount!.toLocaleString('en-US'));
       }
     }
     if (event.type === 'SCORE_ADDED' && event.source === 'hand') {
-      await expect(page.locator('.score-tick')).toHaveText(`+${final.amount}`);
+      await expect(page.locator('.score-tick')).toHaveText(`+${final.amount!.toLocaleString('en-US')}`);
       break;
     }
     await page.clock.runFor(CONFIG.tickMs.normal);
@@ -103,14 +108,16 @@ test('live Pips build through Bonus and Hitchhiker under trained Mult before one
   await expect(page.getByTestId('score-box-mult')).toBeVisible();
   await expect(page.getByTestId('score-box-xmult')).toHaveCount(0);
   await page.getByRole('button', { name: 'Skip playback' }).click();
-  await expect(page.getByTestId('hand-final-score')).toContainText(String(final.amount));
+  await expect(page.getByTestId('hand-final-score')).toContainText(final.amount!.toLocaleString('en-US'));
   await page.clock.runFor(500);
   await ready(page);
   if (fixture.result.state.phase === 'roundSummary') {
     await expect(page.getByRole('heading', { name: /DEFEATED|CLEARED/ })).toBeVisible();
     await expect(page.getByText(`${fixture.result.state.score.toLocaleString('en-US')} / ${fixture.result.state.target.toLocaleString('en-US')}`, { exact: true })).toBeVisible();
   } else {
-    await expect(page.getByTestId('round-score-progress')).toHaveText(`${fixture.result.state.score} / ${fixture.result.state.target}`);
+    await expect(page.getByTestId('round-score-progress')).toHaveText(
+      `${fixture.result.state.score.toLocaleString('en-US')} / ${fixture.result.state.target.toLocaleString('en-US')}`,
+    );
   }
 });
 

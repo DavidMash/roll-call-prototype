@@ -25,12 +25,14 @@ function scoringState(values: Rank[] = [4, 4, 4, 2, 6]): GameState {
 
 describe('canonical rarity metadata', () => {
   it('assigns every Enhancement exactly the authored rarity', () => {
-    expect(ENHANCEMENT_IDS).toHaveLength(19);
+    expect(ENHANCEMENT_IDS).toHaveLength(26);
     expect(Object.fromEntries(ENHANCEMENT_IDS.map(id => [id, ENHANCEMENTS[id].rarity]))).toEqual({
       bonus: 'common', jumpingBean: 'rare', golden: 'common', workout: 'common', missingLink: 'rare',
-      mirror: 'rare', magnetic: 'uncommon', sticky: 'uncommon', slippy: 'uncommon', hitchhiker: 'uncommon',
+      mirror: 'rare', magnetic: 'uncommon', boomerang: 'uncommon', hitchhiker: 'uncommon',
       weighted: 'common', jackpot: 'uncommon', personalTrainer: 'rare', bump: 'common', vintage: 'common',
-      teamwork: 'common', loneWolf: 'common', doubleTime: 'rare', tank: 'rare',
+      teamwork: 'common', loneWolf: 'common', doubleTime: 'rare', tank: 'rare', freePlay: 'uncommon',
+      shifter: 'uncommon', flywheel: 'uncommon', holiday: 'uncommon', magic: 'rare', conjoined: 'rare',
+      furnace: 'rare', sustainable: 'rare',
     });
   });
 

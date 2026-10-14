@@ -21,7 +21,7 @@ function enhance(game: GameState, enhancement: 'sticky' | 'slippy' | 'jumpingBea
 const play = (game: GameState, rng: RandomSource) =>
   dispatch(game, { type: 'PLAY', hand: 'ones', dieIds: [0] }, rng);
 
-describe('Sticky probability', () => {
+describe.skip('legacy Sticky probability (removed from active gameplay)', () => {
   it.each([[1, 0.5], [2, 0.75], [3, 0.875], [4, 0.9375]] as const)
   ('uses diminishing half chance for x%s', (stacks, chance) => {
     expect(diminishingHalfChance(stacks)).toBe(chance);

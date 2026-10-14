@@ -27,8 +27,6 @@ describe('winning-hand boundary', () => {
     { hand: 'fives' as const, values: [5, 5, 4, 2, 6] as Rank[], handScore: 17, finalScore: 57n },
   ])('$hand clears at/above target, settles physical rerolls, and starts no post-clear score chain', ({ hand, values, handScore, finalScore }) => {
     const game = board(values);
-    enhance(game, 0, 'sticky');
-    enhance(game, 2, 'slippy');
     for (const enhancement of ['magnetic', 'jumpingBean'] as Enhancement[]) enhance(game, 0, enhancement, 6);
     enhance(game, 0, 'weighted', 1);
     const rng = { next: vi.fn(() => 0.99) };
@@ -41,7 +39,7 @@ describe('winning-hand boundary', () => {
     const clearIndex = result.events.findIndex(event => event.type === 'ROUND_CLEARED');
     const gameplay = result.events.slice(0, clearIndex + 1);
     expect(gameplay.find(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Winning hand settle reroll'))?.dieIds)
-      .toEqual([0, 1, 2]);
+      .toEqual([0, 1]);
     expect(gameplay.some(event => event.type === 'DIE_ROLLED')).toBe(true);
     expect(result.events[clearIndex].board.dice.map(die => die.value)).toEqual(result.state.dice.map(die => die.value));
     expect(result.state.consumed).toContain(hand);
@@ -49,7 +47,6 @@ describe('winning-hand boundary', () => {
     expect(result.events.filter(event => event.type === 'DICE_REROLL_STARTED').map(event => event.message))
       .toEqual([expect.stringContaining('Winning hand settle reroll')]);
     expect(result.events.filter(event => event.type === 'JUMPING_BEAN_FREE_PLAY')).toHaveLength(0);
-    expect(result.state.stats.triggers.slippy).toBe(1);
     expect(result.state.stats.triggers.magnetic).toBeUndefined();
     expect(result.state.stats.triggers.jumpingBean).toBeUndefined();
     expect(rng.next).toHaveBeenCalled();
@@ -58,8 +55,8 @@ describe('winning-hand boundary', () => {
 
   it('finishes winning Bonus/Hitchhiker, Golden and Workout contributions before clearing', () => {
     const game = board(undefined, 10);
-    for (const enhancement of ['bonus', 'golden', 'workout', 'sticky'] as Enhancement[]) enhance(game, 0, enhancement);
-    for (const enhancement of ['hitchhiker', 'bonus', 'golden', 'workout', 'slippy'] as Enhancement[]) enhance(game, 4, enhancement);
+    for (const enhancement of ['bonus', 'golden', 'workout'] as Enhancement[]) enhance(game, 0, enhancement);
+    for (const enhancement of ['hitchhiker', 'bonus', 'golden', 'workout'] as Enhancement[]) enhance(game, 4, enhancement);
     activeFace(game.dice[4]).workoutPips = 2;
     const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0));
     expect(result.state.score).toBe(BigInt(76n)); // (8 base + 8 + 10 + 18) × 1.5 + existing 10
@@ -74,8 +71,6 @@ describe('winning-hand boundary', () => {
     expect(finalIndex).toBeLessThan(clearIndex);
     expect(result.events.slice(0, clearIndex).some(event => event.type === 'DICE_REROLL_STARTED'
       && event.message.startsWith('Winning hand settle reroll'))).toBe(true);
-    expect(result.state.stats.triggers.slippy).toBe(1);
-    expect(result.state.stats.triggers.sticky).toBe(1);
   });
 
   it('can win specifically through Hitchhiker pips before settling the scoring dice', () => {
@@ -106,7 +101,7 @@ describe('winning-hand boundary', () => {
     expect(result.events.some(event => event.type === 'DICE_REROLL_STARTED' && event.message.startsWith('Winning hand settle'))).toBe(true);
   });
 
-  it('preserves non-winning Sticky/Slippy batches and prevents same-batch Magnetic self-anchoring', () => {
+  it.skip('legacy non-winning Sticky/Slippy batches', () => {
     const game = board([5, 5, 4, 2, 6], 20, 100);
     enhance(game, 0, 'sticky');
     enhance(game, 3, 'slippy');

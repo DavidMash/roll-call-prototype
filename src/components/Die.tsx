@@ -100,7 +100,7 @@ export function Die({ die, display, selected, highlighted, rolling, resolving = 
     <button type="button" className={`die-enhancement-strip${enhancements.length ? '' : ' empty'}`} disabled={detailsDisabled}
       aria-label={`View Enhancements on ${die.owner === 'boss' ? 'Cursed Die' : `D${die.id + 1}`} face ${face.rank}${enhancementSummary ? `: ${enhancementSummary}` : ': none'}`}
       onClick={onEnhancements}>
-      {enhancements.length ? enhancements.slice(0, 3).map(id => <EnhancementSymbol key={id} enhancement={id}
+      {enhancements.length ? enhancements.slice(0, 6).map(id => <EnhancementSymbol key={id} enhancement={id}
         stacks={face.enhancements[id]!} decorative className={face.infected ? 'disabled' : ''} />)
         : <span className="enhancement-strip-empty" aria-hidden="true">· · ·</span>}
     </button>

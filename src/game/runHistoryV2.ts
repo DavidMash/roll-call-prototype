@@ -5,8 +5,8 @@ import type {
 import type { RoundGoalBreakdown } from './goals';
 import type { ExactDecimal, ExactScore } from './scoreMath';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 7 as const;
-export const RUN_HISTORY_V2_RULESET = 'engulfment-contribution-v2' as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 8 as const;
+export const RUN_HISTORY_V2_RULESET = 'enhancement-progression-v1' as const;
 
 export interface RunHistoryV2Coverage {
   complete: boolean;
@@ -50,7 +50,7 @@ export interface PipsContribution {
 }
 
 export interface MultContribution {
-  source: 'hand_base' | 'tank';
+  source: 'hand_base' | 'tank' | 'furnace';
   factor: number;
   before: number;
   after: number;
@@ -71,7 +71,7 @@ export interface XMultContribution {
 }
 
 export interface ProbabilityCheck {
-  source: 'sticky' | 'hitchhiker' | 'personalTrainer' | 'doubleTime';
+  source: 'sticky' | 'boomerang' | 'holiday' | 'hitchhiker' | 'personalTrainer' | 'doubleTime';
   stacks: number;
   chance: number;
   succeeded: boolean;
@@ -87,6 +87,11 @@ export type HandSideEffect =
   | { type: 'charge'; operation: 'gain' | 'consume_reset' | 'arm' | 'disarm'; before: number; after: number; source?: Flame }
   | { type: 'flame_activation'; flame: Flame; origin: FlameOrigin; dieId?: number; factor?: number }
   | { type: 'enhancement'; enhancement: Enhancement; dieIds: number[]; amount?: number }
+  | { type: 'free_play'; dieId: number; rerollEventId: string }
+  | { type: 'holiday'; dieId: number; baseBonusPips: number; finalBonusPips: number; succeeded: boolean }
+  | { type: 'furnace'; dieId: number; destroyed: { enhancement: Enhancement; stacks: number }[]; before: number; after: number }
+  | { type: 'sustainable'; dieId: number; hand: HandId; chargesRemaining: number }
+  | { type: 'conjoined'; dieId: number; hand: HandId }
   | { type: 'boss_state'; boss: BossType; change: string; amount?: number | ExactScore;
     hand?: HandId; hands?: HandId[]; dieIds?: number[]; state?: string };
 
@@ -128,6 +133,10 @@ export interface RollResult {
   weighted: null | { sourceFace: Rank; stacks: number; destinationWeight: number };
   bump: null | { source: 'enhancement' | 'clockmaker' };
   magneticAnchorIds: number[];
+  controller: 'clockmaker' | 'bump' | 'magnetic' | 'magic' | 'boomerang' | 'rng';
+  shifter?: { from: Rank; to: Rank };
+  magicHand?: HandId;
+  flywheel?: { chargeConsumed: true; chargesRemaining: number };
 }
 
 export type RollEffect =
@@ -219,6 +228,8 @@ export interface ShopOffersPresentedEvent extends RunHistoryV2Envelope {
   pool: 'enhancement' | 'flame' | 'special_offer';
   reason: 'initial' | 'reroll' | 'reward';
   offers: { id: number; contentId: Enhancement | Flame | SpecialOfferType; rarity: Rarity }[];
+  infernoLevel?: number;
+  eligibleEnhancements?: Enhancement[];
 }
 
 export type ShopTransaction =
@@ -298,6 +309,7 @@ export interface BossStateChangedEvent extends RunHistoryV2Envelope {
 export interface InfernoEvaluatedEvent extends RunHistoryV2Envelope {
   kind: 'inferno_evaluated';
   evaluation: InfernoEvaluationState;
+  enhancementProgression?: { capacityBefore: number; capacityAfter: number; unlocked: Enhancement[] };
 }
 
 export interface ScorecardRefreshedEvent extends RunHistoryV2Envelope {

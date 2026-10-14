@@ -87,37 +87,37 @@ describe('flat round Gold economy', () => {
 });
 
 describe('enhancement metadata, face slots, caps, and selling', () => {
-  it('allows three distinct types, rejects a fourth, and permits an existing stack', () => {
+  it('uses Inferno capacity while permitting an existing stack', () => {
     const state = shop(); const face = activeFace(state.dice[0]);
     face.enhancements.bonus = 1; face.enhancements.workout = 1; face.enhancements.golden = 1;
     expect(faceEnhancementTypes(face)).toHaveLength(3);
-    expect(canAttach(face, 'mirror')).toBe(false);
-    expect(canAttach(face, 'bonus')).toBe(true);
+    expect(canAttach(face, 'mirror', 2)).toBe(false);
+    expect(canAttach(face, 'bonus', 2)).toBe(true);
     state.dice[0].flame = { id: 'ultimate', investedGold: 0 };
     expect(faceEnhancementTypes(face)).toHaveLength(3);
   });
-  it('caps Sticky and Hitchhiker at three stacks and 87.5%', () => {
+  it('caps Boomerang and Hitchhiker at three stacks and 87.5%', () => {
     expect([1, 2, 3].map(diminishingHalfChance)).toEqual([0.5, 0.75, 0.875]);
-    for (const id of ['sticky', 'hitchhiker'] as const) {
+    for (const id of ['boomerang', 'hitchhiker'] as const) {
       const state = shop(); activeFace(state.dice[0]).enhancements[id] = 3;
       expect(canAttach(activeFace(state.dice[0]), id)).toBe(false);
     }
   });
   it('sells every stack for its metadata value and frees a type slot', () => {
     const state = shop(); const face = state.dice[0].faces[3];
-    face.enhancements.sticky = 3; face.enhancements.bonus = 2; face.enhancements.workout = 1;
-    const result = dispatch(state, { type: 'SELL_ENHANCEMENT', dieId: 0, face: 4, enhancement: 'sticky' });
-    expect(result.state.gold).toBe(103); expect(result.state.dice[0].faces[3].enhancements.sticky).toBeUndefined();
-    expect(canAttach(result.state.dice[0].faces[3], 'bump')).toBe(true);
+    face.enhancements.boomerang = 3; face.enhancements.bonus = 2; face.enhancements.workout = 1;
+    const result = dispatch(state, { type: 'SELL_ENHANCEMENT', dieId: 0, face: 4, enhancement: 'boomerang' });
+    expect(result.state.gold).toBe(103); expect(result.state.dice[0].faces[3].enhancements.boomerang).toBeUndefined();
+    expect(canAttach(result.state.dice[0].faces[3], 'bump', 2)).toBe(true);
     expect(result.state.stats.sales[0]).toMatchObject({ stacksSold: 3, face: 4, totalProceeds: 3 });
   });
   it('rejects a fourth type authoritatively during purchase', () => {
-    const state = shop(); const face = activeFace(state.dice[0]);
+    const state = shop(); state.engulfmentLevel = 2; const face = activeFace(state.dice[0]);
     face.enhancements.bonus = 1; face.enhancements.workout = 1; face.enhancements.golden = 1; offer(state, 1, 'bump');
     expect(validateAction(state, { type: 'BUY', offerId: 1, dieId: 0 })).toContain('This Face is full');
   });
-  it('excludes Sustainable and includes Bump in the offer catalog', () => {
-    expect(ENHANCEMENT_IDS).toContain('bump'); expect(ENHANCEMENT_IDS).not.toContain('sustainable');
+  it('includes Sustainable and excludes removed legacy Enhancements', () => {
+    expect(ENHANCEMENT_IDS).toContain('sustainable'); expect(ENHANCEMENT_IDS).not.toContain('sticky'); expect(ENHANCEMENT_IDS).not.toContain('slippy');
   });
 });
 

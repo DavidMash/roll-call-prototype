@@ -37,12 +37,17 @@ function sideEffectLabel(effect: HandScoredEvent['sideEffects'][number]): string
     case 'charge': return `Charge ${label(effect.operation)} ×${number(effect.before)}→×${number(effect.after)}`;
     case 'flame_activation': return `${originLabel[effect.origin]} ${FLAMES[effect.flame].name}${effect.factor === undefined ? '' : ` ×${number(effect.factor)}`}`;
     case 'enhancement': return `${ENHANCEMENTS[effect.enhancement].name}${effect.amount === undefined ? '' : ` ${number(effect.amount)}`}`;
+    case 'free_play': return `${die(effect.dieId)} Free Play event ${effect.rerollEventId}`;
+    case 'holiday': return `${die(effect.dieId)} Holiday ${effect.succeeded ? 'succeeded' : 'failed'} · Bonus ${number(effect.baseBonusPips)}→${number(effect.finalBonusPips)} Pips`;
+    case 'furnace': return `${die(effect.dieId)} Furnace ×${number(effect.before)}→×${number(effect.after)}`;
+    case 'sustainable': return `${die(effect.dieId)} Sustainable preserved ${HANDS[effect.hand].name} (${number(effect.chargesRemaining)} left)`;
+    case 'conjoined': return `${die(effect.dieId)} Conjoined qualified ${HANDS[effect.hand].name}`;
     case 'boss_state': return `${label(effect.boss)} ${label(effect.change)}`;
   }
 }
 
 export function renderHandScoredV2(event: HandScoredEvent): string {
-  const play = event.playSource === 'jumpingBean' ? 'FREE PLAY' : 'PLAY';
+  const play = event.playSource === 'manual' ? 'PLAY' : 'FREE PLAY';
   const title = `${play} · ${HANDS[event.hand].name} Lv${number(event.level)}`;
   const meaningfulPips = event.pipsContributions.some(item => item.source !== 'hand_base' && item.source !== 'die_base');
   const meaningfulMult = event.multContributions.some(item => item.source !== 'hand_base');

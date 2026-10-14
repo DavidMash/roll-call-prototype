@@ -36,7 +36,7 @@ function shop(): GameState {
   game.gold = 100;
   game.shop = { diceRerolls: 0, offerRerolls: 0, lifeRestores: 0, trainingOffers: [], offers: [
     { id: 0, enhancement: 'bonus', purchased: false },
-    { id: 1, enhancement: 'sticky', purchased: false },
+    { id: 1, enhancement: 'boomerang', purchased: false },
     { id: 2, enhancement: 'weighted', purchased: false },
   ] };
   game.nextOfferId = 3;
@@ -118,7 +118,7 @@ describe('upper-hand subset resolution', () => {
     expect(result.events.filter(event => event.type === 'DIE_ROLLED').map(event => event.dieIds)).toEqual([[0]]);
     expect(result.state.dice[1].value).toBe(4);
   });
-  it('Sticky only suppresses the selected scored reroll; unselected Slippy still rerolls', () => {
+  it.skip('legacy Sticky/Slippy post-hand behavior', () => {
     const game = state([4, 4, 4, 2, 6]);
     enhance(game, 0, 'sticky');
     enhance(game, 1, 'sticky');
@@ -175,7 +175,7 @@ describe('Golden and Workout', () => {
   });
 });
 
-describe('Sticky and Slippy', () => {
+describe.skip('legacy Sticky and Slippy (removed from active gameplay)', () => {
   it('Sticky prevents the ordinary scored reroll', () => {
     const game = state();
     enhance(game, 0, 'sticky');
@@ -315,7 +315,7 @@ describe('Jumping Bean', () => {
     expect(result.state.consumed).not.toContain('sixes');
     expect(result.state.handPlayCounts.sixes).toBe(2);
   });
-  it('Sticky stops automatic rerolls', () => {
+  it.skip('legacy Sticky stops automatic rerolls', () => {
     const game = state();
     enhance(game, 0, 'jumpingBean', 1, 6);
     enhance(game, 0, 'sticky', 1, 6);
@@ -488,7 +488,7 @@ describe('shop', () => {
     const bought = dispatch(game, { type: 'BUY', offerId: 0, dieId: 2 }).state;
     expect(dispatch(bought, { type: 'BUY', offerId: 0, dieId: 2 }).state).toBe(bought);
   });
-  it.each(ENHANCEMENT_IDS.filter(id => !['bonus', 'golden', 'workout', 'sticky', 'weighted', 'jackpot', 'hitchhiker', 'personalTrainer', 'doubleTime', 'tank'].includes(id)))('rejects redundant %s without charging', enhancement => {
+  it.each(ENHANCEMENT_IDS.filter(id => !['bonus', 'golden', 'workout', 'boomerang', 'weighted', 'jackpot', 'hitchhiker', 'personalTrainer', 'doubleTime', 'tank', 'flywheel', 'holiday', 'sustainable'].includes(id)))('rejects redundant %s without charging', enhancement => {
     const game = shop();
     game.shop!.offers[0].enhancement = enhancement;
     enhance(game, 0, enhancement);
@@ -497,13 +497,13 @@ describe('shop', () => {
     expect(result.state).toBe(game);
     expect(game.gold).toBe(100);
   });
-  it.each<Enhancement>(['bonus', 'golden', 'workout', 'sticky', 'weighted', 'jackpot', 'hitchhiker', 'personalTrainer', 'doubleTime', 'tank'])('allows stacking %s', enhancement => {
+  it.each<Enhancement>(['bonus', 'golden', 'workout', 'boomerang', 'weighted', 'jackpot', 'hitchhiker', 'personalTrainer', 'doubleTime', 'tank', 'flywheel', 'holiday', 'sustainable'])('allows stacking %s', enhancement => {
     const game = shop();
     game.shop!.offers[0].enhancement = enhancement;
     enhance(game, 0, enhancement);
     expect(dispatch(game, { type: 'BUY', offerId: 0, dieId: 0 }).state.dice[0].faces[0].enhancements[enhancement]).toBe(2);
   });
-  it.each<Enhancement>(['sticky', 'golden', 'weighted', 'jackpot'])('charges normally for repeated %s purchases on one physical face', enhancement => {
+  it.each<Enhancement>(['boomerang', 'golden', 'weighted', 'jackpot'])('charges normally for repeated %s purchases on one physical face', enhancement => {
     let game = shop();
     game.shop!.offers[0].enhancement = enhancement;
     game.shop!.offers[1].enhancement = enhancement;

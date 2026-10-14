@@ -109,14 +109,14 @@ test('Shop uses the same face and Flame modals for authoritative Sell and Stoke 
   const focusedFace = activeFace(state.dice[0]).rank;
   const compactFace = faceModal.getByTestId(`manage-face-${focusedFace}`);
   await expect(compactFace.getByTestId(`manage-face-enhancements-${focusedFace}`).locator('.enhancement-icon')).toHaveCount(3);
-  await expect(compactFace).toHaveAccessibleName(/Bonus, 2 stacks.*Personal Trainer, 3 stacks.*Vintage, 1 stack/);
+  await expect(compactFace).toHaveAccessibleName(/Bonus, 2 stacks.*Vintage, 1 stack.*Personal Trainer, 3 stacks/);
   await expect(compactFace.locator('.enhancement-identity-name')).toHaveCount(0);
   const sellButtons = faceModal.locator('.enhancement-sell-button');
   await expect(sellButtons).toHaveCount(3);
   await expect(sellButtons.nth(0).locator('.enhancement-sell-button-label')).toHaveText('Sell');
   await expect(sellButtons.nth(0).locator('.enhancement-sell-button-value')).toHaveText('2 Gold');
-  await expect(sellButtons.nth(1).locator('.enhancement-sell-button-value')).toHaveText('12 Gold');
-  await expect(sellButtons.nth(2).locator('.enhancement-sell-button-value')).toHaveText('9 Gold');
+  await expect(sellButtons.nth(1).locator('.enhancement-sell-button-value')).toHaveText('9 Gold');
+  await expect(sellButtons.nth(2).locator('.enhancement-sell-button-value')).toHaveText('12 Gold');
   expect(await faceModal.locator('.face-detail-item').evaluateAll(items => items.every(item => {
     const copy = item.querySelector<HTMLElement>('.face-detail-item-copy')!;
     const button = item.querySelector<HTMLElement>('.enhancement-sell-button')!;

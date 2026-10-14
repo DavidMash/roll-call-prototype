@@ -1,7 +1,5 @@
-import { activeFace } from '../src/game/dice';
 import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands } from '../src/game/bosses';
 import { dispatch, newRun } from '../src/game/engine';
-import { stacks } from '../src/game/enhancements';
 import { combinationsForHand, handOptions } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
@@ -30,12 +28,11 @@ function choices(game: GameState) {
     });
 }
 
-export function winningSlippyRun() {
+export function winningSettleRun() {
   for (let index = 0; index < 1000; index++) {
-    const seed = `winning-slippy-${index}`;
+    const seed = `winning-settle-${index}`;
     let game = newRun(seed).state;
     const actions: Action[] = [];
-    let boughtSlippy = false;
     for (let step = 0; step < 80 && game.round <= 4; step++) {
       if (game.phase === 'lost' || game.phase === 'error') break;
       let action: Action;
@@ -52,13 +49,7 @@ export function winningSlippyRun() {
       } else if (game.phase === 'shop') {
         if (game.shop!.exitUnlocked === false) {
           action = { type: 'UNLOCK_SHOP_EXIT' };
-        } else {
-        const offer = !game.bust ? game.shop!.offers.find(item => item.enhancement === 'slippy' && !item.purchased) : undefined;
-        if (offer && !boughtSlippy) {
-          action = { type: 'BUY', offerId: offer.id, dieId: 4 };
-          boughtSlippy = true;
         } else action = game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' };
-        }
       } else {
         if (game.boss?.type === 'warden' && game.boss.pendingReinforcements > 0) {
           const activeDieIds = game.boss.activeDieIds;
@@ -73,7 +64,7 @@ export function winningSlippyRun() {
         }
         const hands = choices(game);
         const winning = hands.find(choice => game.score + handScore(game.dice, choice.hand, choice.dieIds).score >= game.target);
-        if (winning && !game.boss && stacks(activeFace(game.dice[4]), 'slippy')) {
+        if (winning && !game.boss) {
           return { seed, game, actions, action: winning, result: dispatch(game, winning) };
         }
         action = hands[0] ?? { type: 'MANUAL_REROLL', dieIds: [0] };
@@ -84,5 +75,5 @@ export function winningSlippyRun() {
       game = result.state;
     }
   }
-  throw new Error('No deterministic winning hand with exposed Slippy found');
+  throw new Error('No deterministic winning-hand settle fixture found');
 }

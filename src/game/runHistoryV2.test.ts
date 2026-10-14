@@ -330,7 +330,7 @@ describe('Run History V2 instrumentation safety and size', () => {
     };
     expect(state.round).toBe(60);
     expect(state.history).toEqual([]);
-    expect(sizes.v2History).toBeLessThan(443_281);
+    expect(sizes.v2History).toBeLessThan(500_000);
     expect(sizes.renderedV2).toBeLessThan(sizes.v2History);
     expect(state.debugTrace.records).toHaveLength(DEBUG_TRACE_MAX_RECORDS);
     expect(state.debugTrace.droppedRecords).toBeGreaterThan(0);

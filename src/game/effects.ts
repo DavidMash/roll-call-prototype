@@ -1,6 +1,6 @@
 import { bossRewardForRound, CONFIG, interestForGold, roundReward } from './config';
 import { activeFace, rollPhysicalDie, scoringPips, weightedSourceFace } from './dice';
-import { diminishingHalfChance, ENHANCEMENTS, ENHANCEMENT_IDS, loneWolfPipsFactor, personalTrainerChance, stacks, tankMultiplierFactor, VINTAGE_BASE_SELL_CAP } from './enhancements';
+import { diminishingHalfChance, eligibleEnhancements, ENHANCEMENTS, enhancementsUnlockedAt, loneWolfPipsFactor, maxEnhancementTypesPerFace, personalTrainerChance, stacks, tankMultiplierFactor, VINTAGE_BASE_SELL_CAP } from './enhancements';
 import {
   activeFlameId, activeFlameInvestment, captureHandStart, currentFlameInstanceId, eligibleFlameIds, FLAMES, handXMultContributions,
   fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, hasChargeBonfire, HOT_STREAK_SEQUENCE,
@@ -8,7 +8,7 @@ import {
   removeFlameInstance,
   sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, thirdRailChargeGain,
 } from './flames';
-import { hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
+import { combinationsForHand, hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, rankedHands, UPPER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
 import { OFFER_RARITY_WEIGHTS, rarityFirstSelection, rarityLabel } from './rarity';
 import { applyHandContribution, applyHandMultiplier, applyXMult, createHandAccumulator, finalizeHandScore, ordinaryFaceContributions, resolvedOrdinaryPips, type HandScoreContribution, type ScoringParticipant } from './scoring';
@@ -39,7 +39,7 @@ import type {
 } from './runHistoryV2';
 import { Decimal, roundPositiveScoreHalf, type ExactScore } from './scoreMath';
 
-type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number };
+type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean' | 'freePlay'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number; rerollEventId?: string };
 type RollContext = 'gameplay' | 'settle' | 'wardenSetup' | 'shop' | 'flameSelection';
 type V2HandDraft = {
   parentSeq?: number;
@@ -80,6 +80,8 @@ export class Resolver {
   private v2ParentSeq: number | undefined;
   private lastV2RollSeq: number | undefined;
   private v2LastCharge: number;
+  private pendingFreePlayEventId: string | null = null;
+  private pendingFlywheel = new Map<number, number>();
   constructor(readonly state: GameState, readonly rng: RandomSource, readonly options: ResolverOptions = {}) {
     state.historyV2 ??= [];
     state.historyV2TimelineId = Math.max(0, Math.floor(state.historyV2TimelineId ?? 0));
@@ -377,7 +379,7 @@ export class Resolver {
     this.emit({ type: 'FETCH_TARGET_CHANGED', flame: 'fetch', dieIds: [this.state.fetchTarget.dieId], face: this.state.fetchTarget.physicalFace,
       message: `Fetch target: D${this.state.fetchTarget.dieId + 1} face ${this.state.fetchTarget.physicalFace}` });
   }
-  checkProbability(enhancement: 'sticky' | 'hitchhiker' | 'personalTrainer' | 'doubleTime', stackCount: number, dieIds: number[], hand?: HandId, effectiveChance?: number): boolean {
+  checkProbability(enhancement: 'sticky' | 'boomerang' | 'holiday' | 'hitchhiker' | 'personalTrainer' | 'doubleTime', stackCount: number, dieIds: number[], hand?: HandId, effectiveChance?: number): boolean {
     const chance = effectiveChance ?? diminishingHalfChance(stackCount);
     const succeeded = probabilityCheck(this.rng, chance);
     this.trace({ kind: 'probability_check', source: enhancement, chance, stacks: stackCount, succeeded,
@@ -503,6 +505,19 @@ export class Resolver {
       message: `D${dieId + 1}${role === 'hitchhiker' ? ' Hitchhiker' : ''} ${kind === 'teamwork' ? 'Teamwork copied' : 'added'} ${this.format(amount)} Pips` });
   }
 
+  private scoringContributions(participant: ScoringParticipant, scoringDice: number): HandScoreContribution[] {
+    const contributions = ordinaryFaceContributions(participant, scoringDice);
+    const holiday = stacks(participant.face, 'holiday');
+    if (!holiday) return contributions;
+    const succeeded = this.checkProbability('holiday', holiday, [participant.id]);
+    const baseBonusPips = contributions.filter(contribution => contribution.kind === 'bonus')
+      .reduce((sum, contribution) => sum + contribution.amount, 0);
+    this.v2Hand?.sideEffects.push({ type: 'holiday', dieId: participant.id, baseBonusPips,
+      finalBonusPips: succeeded ? baseBonusPips * 3 : baseBonusPips, succeeded });
+    return succeeded ? contributions.map(contribution => contribution.kind === 'bonus'
+      ? { ...contribution, amount: contribution.amount * 3 } : contribution) : contributions;
+  }
+
   private resolvePersonalTrainerActivation(hand: HandId, id: number, face: Face): boolean | null {
     const count = stacks(face, 'personalTrainer');
     if (!count) return null;
@@ -540,12 +555,20 @@ export class Resolver {
         face: participant.face.rank, amount: factor, multiplier: this.handAccumulator!.currentMultiplier,
         message: `D${participant.id + 1} Tank ×${this.format(tank)}: Mult ${this.format(before)} × ${this.format(factor)} = ${this.format(this.handAccumulator!.currentMultiplier)}` });
     }
+    if (stacks(participant.face, 'furnace')) {
+      const factor = Math.max(1, participant.face.furnaceMultiplier ?? 1);
+      const before = this.handAccumulator!.currentMultiplier;
+      applyHandMultiplier(this.handAccumulator!, factor);
+      this.trigger('furnace', participant.id, participant.face, `Mult ×${this.format(factor)}`, { hand });
+      this.v2Hand?.multContributions.push({ source: 'furnace', factor, before,
+        after: this.handAccumulator!.currentMultiplier, dieId: participant.id, stacks: 1 });
+    }
     this.whenScored(participant.id, participant.face, hand, playSource, participant.role);
     const trainerActivations = stacks(participant.face, 'personalTrainer') ? [participant] : [];
     const doubleTime = allowDoubleTime ? stacks(participant.face, 'doubleTime') : 0;
     if (doubleTime && this.checkProbability('doubleTime', doubleTime, [participant.id], hand)) {
       this.trigger('doubleTime', participant.id, participant.face, 'scored again', { hand });
-      for (const contribution of ordinaryFaceContributions(participant, scoringDice))
+      for (const contribution of this.scoringContributions(participant, scoringDice))
         this.applyScoringContribution(contribution, hand, playSource, scoringDice);
       const bonus = this.activateScoringFace(participant, participants, hand, playSource, false);
       trainerActivations.push(...bonus);
@@ -643,6 +666,48 @@ export class Resolver {
     this.emit({ type: 'CHARGE_CHANGED', flame: 'fluxCapacitor', dieIds, xMult: after,
       message: `${FLAMES.fluxCapacitor.name}: Charge ×${this.format(before)} × ${this.format(multiplier)} = ×${this.format(after)}` });
   }
+  private magicDestination(die: import('./types').Die, rolling: ReadonlySet<number>, suppressBeanFace = false): { physicalFace: import('./types').Rank; hand: HandId } | null {
+    const candidates = die.faces.map((face, index) => ({ face, physicalFace: (index + 1) as import('./types').Rank }))
+      .filter(candidate => stacks(candidate.face, 'magic') && (!suppressBeanFace || !stacks(candidate.face, 'jumpingBean')));
+    if (!candidates.length) return null;
+    const unavailable = new Set([...this.state.consumed, ...unavailableEncounterHands(this.state)]);
+    const required = requiredEncounterDieIds(this.state).filter(id => !rolling.has(id) || id === die.id);
+    const handOrder = rankedHands(this.state.handLevels);
+    const evaluated = candidates.flatMap(candidate => {
+      const simulated = activeEncounterDice(this.state).filter(item => !rolling.has(item.id) || item.id === die.id)
+        .map(item => item.id === die.id ? { ...item, value: candidate.physicalFace } : item);
+      const hand = handOrder.find(id => !unavailable.has(id) && combinationsForHand(simulated, id)
+        .some(combination => combination.includes(die.id) && required.every(requiredId => combination.includes(requiredId))));
+      return hand ? [{ ...candidate, hand }] : [];
+    });
+    evaluated.sort((a, b) => this.state.handLevels[b.hand] - this.state.handLevels[a.hand]
+      || handOrder.indexOf(a.hand) - handOrder.indexOf(b.hand)
+      || b.face.rank - a.face.rank || a.physicalFace - b.physicalFace);
+    return evaluated.length ? { physicalFace: evaluated[0].physicalFace, hand: evaluated[0].hand } : null;
+  }
+
+  private applyLandedShifters(ids: readonly number[]): Map<number, { from: import('./types').Rank; to: import('./types').Rank }> {
+    const landed = ids.map(id => this.state.dice.find(die => die.id === id)!)
+      .filter(die => stacks(activeFace(die), 'shifter'));
+    const results = new Map<number, { from: import('./types').Rank; to: import('./types').Rank }>();
+    if (!landed.length) return results;
+    const snapshot = new Map(activeEncounterDice(this.state).map(die => [die.id, structuredClone(activeFace(die))]));
+    for (const die of landed) {
+      const face = activeFace(die);
+      const otherFaces = [...snapshot.entries()].filter(([id]) => id !== die.id).map(([, other]) => other);
+      if (!otherFaces.length) continue;
+      const counts = ([1, 2, 3, 4, 5, 6] as import('./types').Rank[]).map(rank => ({ rank,
+        count: otherFaces.reduce((total, other) => total
+          + (stacks(other, 'mirror') || stacks(other, 'missingLink') ? 1 : other.rank === rank ? 1 : 0), 0) }));
+      counts.sort((a, b) => b.count - a.count || b.rank - a.rank);
+      const from = face.rank;
+      face.shifterBaseRank ??= face.rank;
+      face.rank = counts[0].rank;
+      results.set(die.id, { from, to: face.rank });
+      this.trigger('shifter', die.id, structuredClone(face), `${from} → ${face.rank}; most common relevant value, high tie`);
+    }
+    return results;
+  }
   rollBatch(dieIds: number[], reason: string, context: RollContext, excludeStartingFace = false,
     reasonId: RollReason = 'other'): void {
     const ids = [...new Set(dieIds)].sort((a, b) => a - b);
@@ -661,17 +726,22 @@ export class Resolver {
       this.state.stats.magneticAnchorBatches++;
       this.log({ type: 'ABILITY_EVALUATED', enhancement: 'magnetic', dieIds: anchors, message: `Held Magnetic anchor${anchors.length > 1 ? 's' : ''}: ${anchors.map(id => `D${id + 1}`).join(', ')}` });
     }
+    const rerollEventId = `${this.state.historyV2TimelineId}:${this.state.round}:${this.state.actionJournal.length}:${this.state.historyV2.length}`;
+    const allowsRollEnhancements = physicalGameplayRoll;
+    const genuineReroll = !['initial_round', 'warden_opening'].includes(reasonId);
     const results = ids.map(dieId => {
       const die = this.state.dice.find(item => item.id === dieId)!;
       const beforePhysical = die.value;
       const before = activeFace(die).rank;
-      const actualBump = (physicalGameplayRoll || context === 'wardenSetup') && stacks(activeFace(die), 'bump') > 0;
+      const origin = structuredClone(activeFace(die));
+      const actualBump = (allowsRollEnhancements || context === 'wardenSetup') && stacks(origin, 'bump') > 0;
       const clockmakerBump = physicalGameplayRoll && !this.state.bossSilenced && this.state.boss?.type === 'clockmaker';
-      const bumped = actualBump || clockmakerBump;
+      const bumped = clockmakerBump || actualBump;
       if (bumped) {
         const physicalFace = (isCursedDie(die) ? Math.min(7, beforePhysical + 1) : beforePhysical === 6 ? 1 : beforePhysical + 1) as import('./types').Rank;
         return { dieId, before, beforePhysical, physicalFace, value: die.faces[physicalFace - 1].rank, weighted: false,
-          bumped, actualBump, clockmakerBump, attracted: false };
+          bumped, actualBump: !clockmakerBump && actualBump, clockmakerBump, attracted: false,
+          controller: clockmakerBump ? 'clockmaker' as const : 'bump' as const, origin, magicHand: null as HandId | null };
       }
       const destinations = anchors.length
         ? die.faces.map((face, index) => ({ face, physicalFace: (index + 1) as import('./types').Rank }))
@@ -680,24 +750,36 @@ export class Resolver {
       if (destinations.length) {
         const destination = destinations[randomIndex(this.rng, destinations.length)];
         return { dieId, before, beforePhysical, physicalFace: destination.physicalFace, value: destination.face.rank, weighted: false,
-          bumped: false, actualBump: false, clockmakerBump: false, attracted: true };
+          bumped: false, actualBump: false, clockmakerBump: false, attracted: true,
+          controller: 'magnetic' as const, origin, magicHand: null as HandId | null };
       }
-      return { dieId, before, beforePhysical, ...rollPhysicalDie(die, this.rng, excludeStartingFace ? beforePhysical : undefined),
-        bumped: false, actualBump: false, clockmakerBump: false, attracted: false };
+      const magic = allowsRollEnhancements ? this.magicDestination(die, rolling, reasonId === 'jumping_bean_followup') : null;
+      if (magic) return { dieId, before, beforePhysical, physicalFace: magic.physicalFace,
+        value: die.faces[magic.physicalFace - 1].rank, weighted: false, bumped: false, actualBump: false,
+        clockmakerBump: false, attracted: false, controller: 'magic' as const, origin, magicHand: magic.hand };
+      const boomerang = allowsRollEnhancements && genuineReroll ? stacks(origin, 'boomerang') : 0;
+      if (boomerang && this.checkProbability('boomerang', boomerang, [die.id])) return { dieId, before, beforePhysical,
+        physicalFace: beforePhysical, value: origin.rank, weighted: false, bumped: false, actualBump: false,
+        clockmakerBump: false, attracted: false, controller: 'boomerang' as const, origin, magicHand: null as HandId | null };
+      const previousFaceExcluded = excludeStartingFace && !stacks(origin, 'freePlay');
+      return { dieId, before, beforePhysical, ...rollPhysicalDie(die, this.rng, previousFaceExcluded ? beforePhysical : undefined),
+        bumped: false, actualBump: false, clockmakerBump: false, attracted: false,
+        controller: 'rng' as const, origin, magicHand: null as HandId | null, previousFaceExcluded };
     });
     const attracted = results.filter(result => result.attracted);
     if (attracted.length) {
       for (const anchor of anchors) activeFace(this.state.dice.find(die => die.id === anchor)!).magneticSourceUsed = true;
     }
+    for (const result of results) this.state.dice.find(item => item.id === result.dieId)!.value = result.physicalFace;
+    const shifterResults = allowsRollEnhancements ? this.applyLandedShifters(ids) : new Map();
     const triggers: RollTrigger[] = [];
     for (const result of results) {
       const die = this.state.dice.find(item => item.id === result.dieId)!;
-      die.value = result.physicalFace;
       const face = structuredClone(activeFace(die));
       this.emit({ type: 'DIE_ROLLED', dieIds: [die.id], face: face.rank,
         rollSource: excludeStartingFace ? 'manual_reroll' : 'automatic', previousFace: result.before, resultFace: face.rank,
-        sameFaceExcluded: excludeStartingFace && !result.bumped,
-        message: `D${die.id + 1} rolled: ${result.before} → ${face.rank}${excludeStartingFace ? ' · previous face excluded' : ''}` });
+        sameFaceExcluded: (result.controller === 'rng' && !!result.previousFaceExcluded) || (result.controller === 'magnetic' && excludeStartingFace),
+        message: `D${die.id + 1} rolled: ${result.before} → ${face.rank}${result.controller === 'rng' && result.previousFaceExcluded ? ' · previous face excluded' : ''}` });
       if ((context === 'gameplay' || context === 'wardenSetup') && face.rank === 3) {
         const source = this.chargeFlameSource('thirdRail');
         if (source) this.growCharge('thirdRail', thirdRailChargeGain(source.investment), `D${die.id + 1} rolled a 3`, [die.id]);
@@ -722,12 +804,16 @@ export class Resolver {
         this.emit({ type: 'MAGNETIC_ATTRACTION', enhancement: 'magnetic', dieIds: [die.id, ...anchors], face: face.rank,
           message: `Held Magnetic anchor attracted D${die.id + 1} to face ${face.rank}` });
       }
+      if (result.controller === 'magic') this.trigger('magic', die.id, face, `${HANDS[result.magicHand!].name} completed`);
+      if (result.controller === 'boomerang') this.trigger('boomerang', die.id, face, `returned to physical face ${result.beforePhysical}`);
       if (result.weighted) {
         const source = weightedSourceFace(die, result.physicalFace)!;
         const weightedStacks = stacks(source, 'weighted');
         triggers.push({ dieId: die.id, face, enhancement: 'weighted', weightedSourceFace: source.rank, weightedStacks, rollWeight: 1 + weightedStacks });
       }
       if (context === 'gameplay' && stacks(face, 'jumpingBean')) triggers.push({ dieId: die.id, face, enhancement: 'jumpingBean' });
+      if (context === 'gameplay' && genuineReroll && stacks(result.origin, 'freePlay') && result.physicalFace === result.beforePhysical)
+        triggers.unshift({ dieId: die.id, face, enhancement: 'freePlay', rerollEventId });
     }
     if (attracted.length && context === 'gameplay') this.applyFluxCapacitor(attracted.length, attracted.map(result => result.dieId));
     if (context === 'gameplay') this.queue.push(...triggers);
@@ -742,12 +828,18 @@ export class Resolver {
         const weightedSource = result.weighted ? weightedSourceFace(die, result.physicalFace) : undefined;
         const weightedStacks = weightedSource ? stacks(weightedSource, 'weighted') : 0;
         return { dieId: result.dieId, beforePhysicalFace: result.beforePhysical, afterPhysicalFace: result.physicalFace,
-          beforeFace: result.before, afterFace: result.value, previousFaceExcluded: excludeStartingFace && !result.bumped,
+          beforeFace: result.before, afterFace: activeFace(die).rank,
+          previousFaceExcluded: (result.controller === 'rng' && !!result.previousFaceExcluded) || (result.controller === 'magnetic' && excludeStartingFace),
           weighted: result.weighted && weightedSource ? { sourceFace: weightedSource.rank, stacks: weightedStacks,
             destinationWeight: 1 + weightedStacks } : null,
           bump: result.bumped ? { source: result.clockmakerBump ? 'clockmaker' as const : 'enhancement' as const } : null,
-          magneticAnchorIds: result.attracted ? [...anchors] : [] };
+          magneticAnchorIds: result.attracted ? [...anchors] : [], controller: result.controller,
+          ...(shifterResults.has(result.dieId) ? { shifter: shifterResults.get(result.dieId)! } : {}),
+          ...(result.magicHand ? { magicHand: result.magicHand } : {}),
+          ...(this.pendingFlywheel.has(result.dieId) ? { flywheel: { chargeConsumed: true as const,
+            chargesRemaining: this.pendingFlywheel.get(result.dieId)! } } : {}) };
       }) });
+    for (const id of ids) this.pendingFlywheel.delete(id);
     this.v2ManualSpend = null;
     this.lastV2RollSeq = event.seq;
     if (event.kind === 'roll_batch') this.trace({ kind: 'roll_batch', reason: reasonId, dieIds: [...ids],
@@ -759,6 +851,18 @@ export class Resolver {
       const item = this.queue[cursor++];
       this.trigger(item.enhancement, item.dieId, item.face, item.enhancement === 'weighted'
         ? `source face ${item.weightedSourceFace} ×${this.format(item.weightedStacks ?? 0)}; destination weight ${this.format(item.rollWeight ?? 0)}` : '');
+      if (item.enhancement === 'freePlay') {
+        const hand = UPPER_HAND_BY_FACE[item.face.rank];
+        if (!hand) continue;
+        this.v2ParentSeq = this.lastV2RollSeq;
+        this.pendingFreePlayEventId = item.rerollEventId ?? 'unknown';
+        const outcome = this.play(hand, [item.dieId], 'freePlay');
+        this.pendingFreePlayEventId = null;
+        this.emit({ type: 'JUMPING_BEAN_FREE_PLAY', enhancement: 'freePlay', hand, dieIds: [item.dieId],
+          playSource: 'freePlay', handConsumed: false,
+          message: `Free Play ${item.rerollEventId}: reroll returned to the same physical face; ${HANDS[hand].name} scored without consumption` });
+        if (outcome.winning) { this.queue = []; return; }
+      }
       if (item.enhancement === 'jumpingBean') {
         const hand = UPPER_HAND_BY_FACE[item.face.rank];
         if (!hand) continue;
@@ -771,18 +875,10 @@ export class Resolver {
           this.queue = [];
           return;
         }
-        const sticky = stacks(item.face, 'sticky');
-        if (sticky && this.checkProbability('sticky', sticky, [item.dieId])) {
-          if (record) record.stickyPreventedReroll = true;
-          this.trigger('sticky', item.dieId, item.face, `×${sticky} prevented Jumping Bean reroll`);
-          this.emit({ type: 'JUMPING_BEAN_FOLLOWUP', enhancement: 'jumpingBean', hand, dieIds: [item.dieId], playSource: 'jumpingBean',
-            message: `Sticky prevented D${item.dieId + 1}'s Jumping Bean follow-up reroll.` });
-        } else {
-          if (record) record.followupRerolled = true;
-          this.emit({ type: 'JUMPING_BEAN_FOLLOWUP', enhancement: 'jumpingBean', hand, dieIds: [item.dieId], playSource: 'jumpingBean',
-            message: `D${item.dieId + 1} begins its Jumping Bean follow-up reroll.` });
-          this.rollBatch([item.dieId], 'Jumping Bean reroll', 'gameplay', false, 'jumping_bean_followup');
-        }
+        if (record) record.followupRerolled = true;
+        this.emit({ type: 'JUMPING_BEAN_FOLLOWUP', enhancement: 'jumpingBean', hand, dieIds: [item.dieId], playSource: 'jumpingBean',
+          message: `D${item.dieId + 1} begins its Jumping Bean follow-up reroll.` });
+        this.rollBatch([item.dieId], 'Jumping Bean reroll', 'gameplay', false, 'jumping_bean_followup');
       }
     }
     this.queue = [];
@@ -1000,21 +1096,12 @@ export class Resolver {
   }
 
   private postHandRerolls(shapeParticipants: { id: number; face: Face }[]): Set<number> {
-    const normalRerolls: number[] = [];
-    for (const { id, face } of shapeParticipants) {
-      const sticky = stacks(face, 'sticky');
-      if (sticky && this.checkProbability('sticky', sticky, [id])) this.trigger('sticky', id, face, `×${this.format(sticky)} stayed after scoring`);
-      else normalRerolls.push(id);
-    }
+    const normalRerolls = shapeParticipants.map(({ id }) => id);
     const crawlerRerolls = !this.state.bossSilenced && this.state.boss?.type === 'crawler' && normalRerolls.length > 1
       ? [normalRerolls[randomIndex(this.rng, normalRerolls.length)]] : normalRerolls;
     const rerolls = new Set(crawlerRerolls);
     if (crawlerRerolls.length !== normalRerolls.length) this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'crawler', dieIds: crawlerRerolls,
       message: `The Crawler limited the scoring reroll to D${crawlerRerolls[0] + 1}` });
-    for (const die of activeEncounterDice(this.state)) if (stacks(activeFace(die), 'slippy')) {
-      this.trigger('slippy', die.id, activeFace(die), 'joined post-hand reroll');
-      rerolls.add(die.id);
-    }
     return rerolls;
   }
 
@@ -1078,13 +1165,15 @@ export class Resolver {
   play(hand: HandId, dieIds: number[], playSource: HandPlaySource = 'manual', decisionMs: number | null = null): { winning: boolean; beanRecordIndex: number | null } {
     this.v2RecentHand = null;
     const freeBean = playSource === 'jumpingBean';
-    const consumesHand = !freeBean && (this.state.bossSilenced || this.state.boss?.type !== 'marathon');
+    const freePlay = playSource !== 'manual';
     const ids = [...dieIds].sort((a, b) => a - b);
+    const wouldConsumeHand = !freePlay && (this.state.bossSilenced || this.state.boss?.type !== 'marathon');
+    let consumesHand = wouldConsumeHand;
     const handLevel = this.state.handLevels[hand];
     const currentInfernoMultiplier = infernoMultiplier(this.state.engulfmentLevel);
     const handStart = captureHandStart(this.state, hand, ids, playSource === 'manual' ? decisionMs : null);
     const chargeAttributionAtHandStart = structuredClone(this.state.chargeAttribution);
-    if (freeBean) handStart.chargeArmed = false;
+    if (freePlay) handStart.chargeArmed = false;
     const shapeParticipants = ids.map(id => ({ id, face: structuredClone(activeFace(this.state.dice.find(die => die.id === id)!)), role: 'selected' as const }));
     this.v2Hand = {
       parentSeq: this.v2ParentSeq,
@@ -1093,19 +1182,18 @@ export class Resolver {
       pipsContributions: [{ source: 'hand_base', amount: createHandAccumulator(hand, ids, handLevel).basePips }],
       multContributions: [{ source: 'hand_base', factor: createHandAccumulator(hand, ids, handLevel).baseMultiplier,
         before: 0, after: createHandAccumulator(hand, ids, handLevel).baseMultiplier }],
-      xMultContributions: [], checks: [], sideEffects: [],
+      xMultContributions: [], checks: [], sideEffects: playSource === 'freePlay'
+        ? [{ type: 'free_play', dieId: ids[0], rerollEventId: this.pendingFreePlayEventId ?? 'unknown' }] : [],
     };
     this.v2ParentSeq = undefined;
     if (freeBean) this.emit({ type: 'JUMPING_BEAN_FREE_PLAY', enhancement: 'jumpingBean', hand, dieIds: ids,
       face: shapeParticipants[0].face.rank, playSource, handConsumed: false,
       message: `Jumping Bean free-play: ${HANDS[hand].name}; scoring dice: D${ids[0] + 1}; normal hand availability unchanged` });
     this.handAccumulator = createHandAccumulator(hand, ids, handLevel, currentInfernoMultiplier);
-    this.emit({ type: 'HAND_STARTED', hand, dieIds: ids, playSource, handConsumed: consumesHand,
-      message: `${freeBean ? 'Free-played' : 'Played'} ${HANDS[hand].name} Lv. ${this.format(handLevel)}` });
     const round = this.state.stats.rounds.at(-1)!;
     round.lastHand = hand; round.lastAction = freeBean ? 'JUMPING_BEAN' : 'PLAY';
     const hitchhikers: { id: number; face: Face; role: 'hitchhiker' }[] = [];
-    for (const die of freeBean ? [] : [...activeEncounterDice(this.state)].sort((a, b) => a.id - b.id)) {
+    for (const die of freePlay ? [] : [...activeEncounterDice(this.state)].sort((a, b) => a.id - b.id)) {
       if (ids.includes(die.id)) continue;
       const face = structuredClone(activeFace(die));
       const count = stacks(face, 'hitchhiker');
@@ -1115,12 +1203,49 @@ export class Resolver {
     }
     const scoringParticipants = [...shapeParticipants, ...hitchhikers].sort((a, b) => a.id - b.id);
     const scoringIds = scoringParticipants.map(item => item.id);
+    for (const participant of scoringParticipants) {
+      if (!stacks(participant.face, 'furnace')) continue;
+      const live = activeFace(this.state.dice.find(die => die.id === participant.id)!);
+      const destroyedEnhancements = (Object.entries(live.enhancements) as [Enhancement, number][])
+        .filter(([id, count]) => id !== 'furnace' && count > 0).map(([enhancement, count]) => ({ enhancement, stacks: count }));
+      const destroyed = destroyedEnhancements.reduce((sum, item) => sum + item.stacks, 0);
+      const before = live.furnaceMultiplier ?? 1;
+      for (const id of Object.keys(live.enhancements) as Enhancement[]) if (id !== 'furnace') delete live.enhancements[id];
+      live.furnaceMultiplier = Number(((live.furnaceMultiplier ?? 1) + destroyed * .25).toFixed(12));
+      participant.face.enhancements = { furnace: 1 };
+      participant.face.furnaceMultiplier = live.furnaceMultiplier;
+      this.v2Hand.sideEffects.push({ type: 'furnace', dieId: participant.id, destroyed: destroyedEnhancements,
+        before, after: live.furnaceMultiplier });
+      this.trigger('furnace', participant.id, participant.face,
+        `destroyed ${destroyed} stack(s); permanent factor ×${this.format(live.furnaceMultiplier)}`, { hand });
+    }
+    const sustainableParticipant = wouldConsumeHand ? scoringParticipants.find(participant => {
+      const live = activeFace(this.state.dice.find(die => die.id === participant.id)!);
+      return stacks(participant.face, 'sustainable') && (live.sustainableCharges ?? 0) > 0;
+    }) : undefined;
+    if (sustainableParticipant) {
+      const live = activeFace(this.state.dice.find(die => die.id === sustainableParticipant.id)!);
+      live.sustainableCharges!--;
+      sustainableParticipant.face.sustainableCharges = live.sustainableCharges;
+      consumesHand = false;
+      this.v2Hand.consumed = false;
+      this.trigger('sustainable', sustainableParticipant.id, structuredClone(live),
+        `${HANDS[hand].name} preserved; ${live.sustainableCharges} charge(s) remain`, { hand });
+      this.v2Hand.sideEffects.push({ type: 'sustainable', dieId: sustainableParticipant.id, hand,
+        chargesRemaining: live.sustainableCharges ?? 0 });
+    }
+    this.emit({ type: 'HAND_STARTED', hand, dieIds: ids, playSource, handConsumed: consumesHand,
+      message: `${freePlay ? 'Free-played' : 'Played'} ${HANDS[hand].name} Lv. ${this.format(handLevel)}` });
     for (const { id, face } of shapeParticipants) {
       const wild: Enhancement | null = hand === 'smallStraight' || hand === 'largeStraight' ? 'missingLink' : HANDS[hand].rank ? null : 'mirror';
       if (wild && stacks(face, wild)) this.trigger(wild, id, face, 'wild qualification; actual printed pips score');
+      if (stacks(face, 'conjoined') && HANDS[hand].groups) {
+        this.trigger('conjoined', id, face, 'contributed one phantom qualification copy', { hand });
+        this.v2Hand.sideEffects.push({ type: 'conjoined', dieId: id, hand });
+      }
     }
     const originalContributions = scoringParticipants.flatMap(participant =>
-      ordinaryFaceContributions(participant, scoringParticipants.length));
+      this.scoringContributions(participant, scoringParticipants.length));
     for (const kind of ['base', 'bonus', 'loneWolf'] as const) for (const contribution of originalContributions)
       if (contribution.kind === kind) this.applyScoringContribution(contribution, hand, playSource, scoringParticipants.length);
     const trainerActivations: ScoringParticipant[] = [];
@@ -1172,13 +1297,14 @@ export class Resolver {
       playSource, consumedHand: consumesHand });
     this.state.stats.handBonusPips += this.handAccumulator.bonusPips;
     this.state.stats.hitchhikerPipsContributed += this.handAccumulator.hitchhikerPips;
-    this.log({ type: 'SCORE_ROUNDING_AUDIT', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score, source: freeBean ? 'jumpingBean' : 'hand', playSource,
+    const scoreSource = freePlay ? 'jumpingBean' as const : 'hand' as const;
+    this.log({ type: 'SCORE_ROUNDING_AUDIT', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score, source: scoreSource, playSource,
       message: `Final: ${this.format(pips)} × ${this.format(multiplier)} × ${this.format(xMult)}${bossFactor !== 1 ? ` × boss ${this.format(bossFactor)}` : ''} = ${this.format(rawScore)}; rounded ${this.format(score)}` });
     this.emit({ type: 'HAND_SCORE_FINALIZED', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score,
-      source: freeBean ? 'jumpingBean' : 'hand', playSource, handConsumed: consumesHand, message: `Final awarded hand score: ${this.format(score)}` });
-    this.addScore(score, freeBean ? 'jumpingBean' : 'hand', `${freeBean ? 'Jumping Bean free-play: ' : ''}${HANDS[hand].name}: round score +${this.format(score)}`, scoringIds, hand);
+      source: scoreSource, playSource, handConsumed: consumesHand, message: `Final awarded hand score: ${this.format(score)}` });
+    this.addScore(score, scoreSource, `${freePlay ? 'Free play: ' : ''}${HANDS[hand].name}: round score +${this.format(score)}`, scoringIds, hand);
     const roundScoreAfterAward = this.state.score;
-    if (!freeBean && handStart.chargeArmed) {
+    if (!freePlay && handStart.chargeArmed) {
       const consumed = this.state.chargeXMult;
       this.state.chargeXMult = 1; this.state.chargeArmed = false;
       this.state.chargeAttribution = {};
@@ -1196,7 +1322,7 @@ export class Resolver {
       this.emit({ type: 'SIX_PACK_CHANGED', flame: 'sixPack', hand, xMult: this.state.sixPackXMult,
         message: `Six Pack ×${this.format(before)} → ×${this.format(this.state.sixPackXMult)}` });
     }
-    if (!freeBean) this.advanceHotStreak(hand, scoringIds);
+    if (!freePlay) this.advanceHotStreak(hand, scoringIds);
     let personalTrainerSucceeded: boolean | null = trainerActivations.length ? false : null;
     for (const participant of trainerActivations) {
       const succeeded = this.resolvePersonalTrainerActivation(hand, participant.id, participant.face) === true;
@@ -1254,7 +1380,7 @@ export class Resolver {
     this.advanceNeglected();
     const jugglerRerolls = this.jugglerRerolls(hand);
     if (winning) {
-      if (!freeBean || jugglerRerolls) {
+      if (!freePlay || jugglerRerolls) {
         const settleRerolls = jugglerRerolls ?? [...this.postHandRerolls(shapeParticipants)];
         this.rollBatch(settleRerolls, jugglerRerolls ? 'The Juggler reroll' : 'Winning hand settle reroll',
           'settle', false, jugglerRerolls ? 'juggler' : 'winning_settle');
@@ -1262,7 +1388,7 @@ export class Resolver {
       }
       return { winning, beanRecordIndex };
     }
-    if (freeBean) {
+    if (freePlay) {
       if (jugglerRerolls) this.rollBatch(jugglerRerolls, 'The Juggler reroll', 'gameplay', false, 'juggler');
       return { winning, beanRecordIndex };
     }
@@ -1280,14 +1406,25 @@ export class Resolver {
     const ids = [...dieIds].sort((a, b) => a - b);
     const requiredDieIds = requiredEncounterDieIds(this.state);
     const startedDeadBoard = !hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state), requiredDieIds);
-    const normalSpent = Math.min(this.state.manualRerollsRemaining, ids.length);
-    const carePackageSpent = ids.length - normalSpent;
+    const flywheelIds = ids.filter(id => {
+      const face = activeFace(this.state.dice.find(die => die.id === id)!);
+      return stacks(face, 'flywheel') > 0 && (face.flywheelCharges ?? 0) > 0;
+    });
+    for (const id of flywheelIds) {
+      const face = activeFace(this.state.dice.find(die => die.id === id)!);
+      face.flywheelCharges!--;
+      this.pendingFlywheel.set(id, face.flywheelCharges ?? 0);
+      this.trigger('flywheel', id, structuredClone(face), `free manual reroll; ${face.flywheelCharges} charge(s) remain`);
+    }
+    const paidDice = ids.length - flywheelIds.length;
+    const normalSpent = Math.min(this.state.manualRerollsRemaining, paidDice);
+    const carePackageSpent = paidDice - normalSpent;
     this.state.manualRerollsRemaining -= normalSpent;
     this.state.specialOfferEffects.carePackageRerolls -= carePackageSpent;
     const round = this.state.stats.rounds.at(-1)!;
-    round.lastAction = 'MANUAL_REROLL'; round.manualRerollChargesSpent += ids.length; round.manualRerollActions++;
+    round.lastAction = 'MANUAL_REROLL'; round.manualRerollChargesSpent += paidDice; round.manualRerollActions++;
     this.state.stats.manualRerollActions++; this.state.stats.manualDiceRerolled += ids.length;
-    const record = { round: this.state.round, dieIds: ids, charges: ids.length, remaining: this.state.manualRerollsRemaining, startedDeadBoard, rescuedDeadBoard: false };
+    const record = { round: this.state.round, dieIds: ids, charges: paidDice, remaining: this.state.manualRerollsRemaining, startedDeadBoard, rescuedDeadBoard: false };
     this.state.stats.manualRerolls.push(record);
     const normalRemaining = this.state.manualRerollsRemaining;
     const carePackageRemaining = this.state.specialOfferEffects.carePackageRerolls;
@@ -1485,7 +1622,14 @@ export class Resolver {
     this.v2LastCharge = 1;
     this.state.flameSelection = null; this.state.specialOffer = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
     this.state.dice = this.state.dice.filter(die => die.owner === 'player');
-    for (const die of this.state.dice) for (const face of die.faces) delete face.magneticSourceUsed;
+    for (const die of this.state.dice) for (const face of die.faces) {
+      delete face.magneticSourceUsed;
+      if (face.shifterBaseRank !== undefined) { face.rank = face.shifterBaseRank; delete face.shifterBaseRank; }
+      const flywheel = stacks(face, 'flywheel');
+      const sustainable = stacks(face, 'sustainable');
+      if (flywheel) face.flywheelCharges = flywheel; else delete face.flywheelCharges;
+      if (sustainable) face.sustainableCharges = sustainable; else delete face.sustainableCharges;
+    }
     const bossType = this.state.bossSchedule[this.state.round]
       ?? (this.state.round > 60 ? bossTypeForRound(this.state.seed, this.state.round) : null);
     if (bossType) this.state.bossSchedule[this.state.round] = bossType;
@@ -1567,13 +1711,15 @@ export class Resolver {
     if (this.state.phase === 'round') this.state.decisionId++;
   }
   freshOffers(reason: 'initial' | 'reroll' = 'initial'): void {
-    const selected = rarityFirstSelection(ENHANCEMENT_IDS, 3, id => ENHANCEMENTS[id].rarity,
+    const pool = eligibleEnhancements(this.state.engulfmentLevel);
+    const selected = rarityFirstSelection(pool, 3, id => ENHANCEMENTS[id].rarity,
       OFFER_RARITY_WEIGHTS.enhancement, this.rng);
     this.state.shop!.offers = selected.map(enhancement => ({ id: this.state.nextOfferId++, enhancement, purchased: false }));
     const offerSet = selected.map(id => ({ name: ENHANCEMENTS[id].name, rarity: ENHANCEMENTS[id].rarity }));
     this.log({ type: 'OFFERS_REFRESHED', offerSet,
       message: `Enhancement offers: ${offerSet.map(item => `${item.name} [${rarityLabel(item.rarity)}]`).join(', ')}` });
     this.emitV2({ kind: 'shop_offers_presented', pool: 'enhancement', reason,
+      infernoLevel: this.state.engulfmentLevel, eligibleEnhancements: [...pool],
       offers: this.state.shop!.offers.map(offer => ({ id: offer.id, contentId: offer.enhancement,
         rarity: ENHANCEMENTS[offer.enhancement].rarity })) });
   }
@@ -1658,7 +1804,11 @@ export class Resolver {
       recalculateMaxCharge(this.state);
     }
     this.state.infernoEvaluation = evaluation;
-    this.emitV2({ kind: 'inferno_evaluated', evaluation: structuredClone(evaluation) });
+    this.emitV2({ kind: 'inferno_evaluated', evaluation: structuredClone(evaluation), enhancementProgression: {
+      capacityBefore: maxEnhancementTypesPerFace(evaluation.infernoLevelBefore),
+      capacityAfter: maxEnhancementTypesPerFace(evaluation.infernoLevelAfter),
+      unlocked: evaluation.success ? enhancementsUnlockedAt(evaluation.infernoLevelAfter) : [],
+    } });
   }
   openShop(direction: 'forward' | 'backward' = 'forward'): void {
     this.restoreMagicianDie();
@@ -1875,6 +2025,9 @@ export class Resolver {
       };
       if (Object.values(summary.sources).reduce((sum, amount) => sum + amount, 0) !== totalGoldEarned)
         throw new Error('Round Summary Gold sources do not reconcile.');
+      for (const die of this.state.dice) for (const face of die.faces) if (face.shifterBaseRank !== undefined) {
+        face.rank = face.shifterBaseRank; delete face.shifterBaseRank;
+      }
       this.state.phase = 'roundSummary';
       this.completeSpecialOfferRound();
       this.emit({ type: 'ROUND_SUMMARY_SHOWN', boss: bossType ?? undefined, roundSummary: structuredClone(summary), amount: totalGoldEarned,

@@ -1,6 +1,6 @@
 import { Alert, Button, Group, Modal, Paper, SimpleGrid, Stack, Text } from '@mantine/core';
 import { useEffect, useState } from 'react';
-import { diminishingHalfChance, enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, FACE_TYPE_LIMIT, faceEnhancementTypes, placementError, tankMultiplierFactor } from '../game/enhancements';
+import { diminishingHalfChance, enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, faceEnhancementTypes, furnaceMultiplier, maxEnhancementTypesPerFace, placementError, tankMultiplierFactor } from '../game/enhancements';
 import { enhancementOfferIsFree } from '../game/specialOffers';
 import type { Action, Board, Enhancement, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
@@ -37,7 +37,8 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
   const shop = board.phase === 'shop' ? board.shop : null;
   const offer = shop?.offers.find(item => item.id === selectedOffer && !item.purchased);
   const isExposed = die.value === focusedFace;
-  const offerError = offer && isExposed ? placementError(die, face, offer.enhancement) : null;
+  const capacity = maxEnhancementTypesPerFace(board.engulfmentLevel);
+  const offerError = offer && isExposed ? placementError(die, face, offer.enhancement, board.engulfmentLevel) : null;
   const offerCostAvailable = !!(offer && shop && (enhancementOfferIsFree(shop, offer.id) || board.gold >= enhancementCost(offer.enhancement)));
   const canApply = actionsEnabled && isExposed && !!offer && !offerError && offerCostAvailable;
   const shopActions = board.phase === 'shop' && actionsEnabled;
@@ -78,7 +79,7 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
               <strong>FACE {physicalFace}</strong>
               {die.value === physicalFace && <span className="manage-face-exposed">EXPOSED</span>}
               {isFetchTarget && <span className="manage-face-fetch">FETCH</span>}
-              <small>{typeCount} / {FACE_TYPE_LIMIT} ENHANCEMENTS</small>
+              <small>ENHANCEMENTS {typeCount} / {capacity}</small>
               <span className="manage-face-enhancements" data-testid={`manage-face-enhancements-${physicalFace}`}>
                 {faceIds.map(id => <EnhancementSymbol key={id} enhancement={id} stacks={candidate.enhancements[id]!} decorative />)}
               </span>
@@ -88,7 +89,7 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
 
         <div className="face-details-heading">
           <Text size="xs" fw={850} tt="uppercase" c="dimmed">D{die.id + 1} · FACE {focusedFace}</Text>
-          <Text fw={850}>{ids.length ? `${ids.length} Enhancement${ids.length === 1 ? '' : 's'}` : 'No Enhancements'}</Text>
+          <Text fw={850}>Enhancements {faceEnhancementTypes(face).length} / {capacity}</Text>
         </div>
         {offer && isExposed && offerError?.startsWith('This Face is full.') && <Alert color="orange" title="FACE FULL">Sell an Enhancement to make room.</Alert>}
         <Stack gap="xs" className="face-detail-list">
@@ -100,7 +101,11 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
                 : id === 'magnetic' && face.magneticSourceUsed ? 'Pull used this Round'
                   : id === 'personalTrainer' ? `Base training chance: ${formatPercentage(diminishingHalfChance(stacks))} before hand-level adjustment`
                     : id === 'doubleTime' ? `Score-twice chance: ${formatPercentage(diminishingHalfChance(stacks))}`
-                      : id === 'tank' ? `Mult factor per scoring activation: ×${formatPlayerNumber(tankMultiplierFactor(stacks))}` : null;
+                      : id === 'tank' ? `Mult factor per scoring activation: ×${formatPlayerNumber(tankMultiplierFactor(stacks))}`
+                        : id === 'furnace' ? `Current Mult factor: ×${formatPlayerNumber(furnaceMultiplier(face))}`
+                          : id === 'flywheel' ? `${formatPlayerNumber(face.flywheelCharges ?? stacks)} free manual reroll charge${(face.flywheelCharges ?? stacks) === 1 ? '' : 's'} remaining this Round`
+                            : id === 'sustainable' ? `${formatPlayerNumber(face.sustainableCharges ?? stacks)} hand-preservation charge${(face.sustainableCharges ?? stacks) === 1 ? '' : 's'} remaining this Round`
+                              : id === 'boomerang' || id === 'holiday' ? `Chance: ${formatPercentage(diminishingHalfChance(stacks))}` : null;
             return <Paper key={id} withBorder p="sm" className="face-detail-item">
               <Group className="face-detail-item-layout" justify="space-between" align="flex-start" wrap="nowrap">
                 <div className="face-detail-item-copy"><Text fw={800}><EnhancementIdentity enhancement={id} stacks={stacks} /></Text>

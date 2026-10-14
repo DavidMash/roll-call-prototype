@@ -111,9 +111,8 @@ describe('Clockmaker roll pipeline', () => {
     let state = clockmakerEncounter();
     state.target = 1_000_000n;
     expose(state, [2, 2, 3, 4, 5]);
-    activeFace(state.dice[4]).enhancements.slippy = 1;
     let result = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.99));
-    expect(result.state.dice.map(die => die.value)).toEqual([3, 3, 3, 4, 6]);
+    expect(result.state.dice.map(die => die.value)).toEqual([3, 3, 3, 4, 5]);
     expect(result.events.some(event => event.type === 'DIE_FLIPPED' && event.boss === 'clockmaker')).toBe(false);
 
     state = result.state;

@@ -297,12 +297,14 @@ describe('life restoration economy', () => {
 
 describe('enhancement selling and Vintage', () => {
   it('keeps authoritative buy/sell metadata, including targeted purchase-price exceptions', () => {
-    const expected = {
-      sticky: [3, 1], slippy: [2, 1], jumpingBean: [5, 1], golden: [2, 1], missingLink: [4, 1],
+    const expected: Partial<Record<import('./types').Enhancement, readonly [number, number]>> = {
+      boomerang: [3, 1], jumpingBean: [5, 1], golden: [2, 1], missingLink: [4, 1],
       mirror: [4, 1], hitchhiker: [3, 1], bump: [2, 1], bonus: [3, 1], workout: [3, 2],
       magnetic: [3, 2], weighted: [3, 2], jackpot: [3, 1], vintage: [3, 0],
       personalTrainer: [8, 4], teamwork: [3, 1], loneWolf: [3, 1], doubleTime: [7, 3], tank: [8, 4],
-    } as const;
+      freePlay: [4, 2], shifter: [4, 2], flywheel: [4, 2], holiday: [4, 2],
+      magic: [8, 4], conjoined: [8, 4], furnace: [8, 4], sustainable: [8, 4],
+    };
     for (const id of ENHANCEMENT_IDS) {
       expect([ENHANCEMENTS[id].purchasePrice, ENHANCEMENTS[id].baseSellPrice]).toEqual(expected[id]);
       expect(ENHANCEMENTS[id].baseSellPrice).toBeLessThan(ENHANCEMENTS[id].purchasePrice);

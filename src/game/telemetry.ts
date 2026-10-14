@@ -21,6 +21,8 @@ export function createStats(seed: string): RunStats {
     manualRerollActions: 0, manualDiceRerolled: 0, manualRerolls: [], deadBoardRescues: 0,
     triggers: {}, probabilityProcs: {
       sticky: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
+      boomerang: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
+      holiday: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
       hitchhiker: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
       personalTrainer: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
       doubleTime: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },

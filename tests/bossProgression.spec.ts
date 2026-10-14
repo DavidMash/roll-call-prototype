@@ -521,7 +521,7 @@ test('Hexer face 7 renders seven pips with Bonus and Mirror and remains freely s
   await expect(slot.locator('.enhancement-mirror')).toHaveCount(1);
   await expect(slot.locator('.enhancement-bonus')).toHaveAttribute('title', 'Bonus ×5');
   await expect(slot.locator('.enhancement-jackpot')).toHaveCount(0);
-  await expect(slot.locator('.enhancement-sticky')).toHaveCount(0);
+  await expect(slot.locator('.enhancement-boomerang')).toHaveCount(0);
   await expect(button).toHaveAttribute('aria-pressed', 'false');
   await expect(button).toHaveAttribute('aria-disabled', 'false');
   await button.click();

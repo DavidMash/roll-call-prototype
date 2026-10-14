@@ -934,7 +934,7 @@ body, #root { overflow: hidden; }
 .die-slot .die > .pip-face { z-index: 1; width: min(66%, 58px); }
 .die-slot .die-id { z-index: 3; top: 4px; left: 5px; }
 .die-enhancement-strip {
-  width: 100%; height: 24px; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 3px;
+  width: 100%; min-height: 24px; height: auto; min-width: 0; display: grid; grid-template-columns: repeat(3, max-content); align-content: center; justify-content: center; gap: 2px 3px;
   padding: 2px 3px; overflow: hidden; border: 1px solid rgba(255,255,255,.08); border-radius: 3px 3px 7px 7px;
   color: var(--mantine-color-gray-2); background: rgba(255,255,255,.025); cursor: pointer;
 }
@@ -1025,14 +1025,14 @@ body, #root { overflow: hidden; }
   .shop-action-dock .run-action-right .mantine-Button-root { padding-inline: 8px; font-size: clamp(.65rem, 2.7vw, .78rem); }
   .run-action-row .gameplay-actions { gap: 3px; }
   .dice-dock .dice-row { gap: 3px; }
-  .die-slot { grid-template-rows: 18px auto 22px; }
+  .die-slot { grid-template-rows: 18px auto minmax(22px, auto); }
   .die-flame-zone { height: 18px; }
   .die-flame-cap { height: 17px; padding-inline: 3px; font-size: .46rem; }
   .die-slot .die { width: 100%; min-height: 50px; max-height: 62px; padding: 2px; }
   .die-slot .die > .die-number { font-size: clamp(1.55rem, 8vw, 2rem); }
   .die-slot .die > .pip-face { width: min(62%, 38px); }
   .die-slot .die-id { top: 3px; left: 4px; font-size: .46rem; }
-  .die-enhancement-strip { height: 22px; gap: 1px; padding-inline: 1px; }
+  .die-enhancement-strip { min-height: 22px; height: auto; gap: 1px; padding-inline: 1px; }
   .enhancement-icon { min-width: 14px; height: 16px; padding-inline: 2px; font-size: .48rem; }
   .enhancement-icon strong { font-size: .4rem; }
   .die-lock-overlay { top: -6px; right: -2px; height: 16px; padding-inline: 2px; font-size: .4rem; }

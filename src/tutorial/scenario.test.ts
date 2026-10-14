@@ -262,7 +262,7 @@ describe('tutorial scenario', () => {
     session.game.shop = { offers: [
       { id: 1, enhancement: 'bonus', purchased: false },
       { id: 2, enhancement: 'golden', purchased: false },
-      { id: 3, enhancement: 'sticky', purchased: false },
+      { id: 3, enhancement: 'boomerang', purchased: false },
     ], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     curateTutorialOffers(session.game, session.scenario);
     expect(session.game.shop.offers.some(offer => offer.enhancement === 'vintage')).toBe(true);

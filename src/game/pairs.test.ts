@@ -158,12 +158,12 @@ describe('Pair resolution and loss integration', () => {
     expect(next.state.manualRerollsRemaining).toBe(3);
   });
   it.each([
-    { hand: 'pair' as const, values: [4, 4, 4, 2, 6] as Rank[], ids: [0, 1], pips: 44, mult: 1.5, score: 66n, rerolls: [1, 4] },
-    { hand: 'twoPair' as const, values: [2, 2, 5, 5, 6] as Rank[], ids: [0, 1, 2, 3], pips: 51, mult: 2, score: 102n, rerolls: [1, 2, 3, 4] },
+    { hand: 'pair' as const, values: [4, 4, 4, 2, 6] as Rank[], ids: [0, 1], pips: 44, mult: 1.5, score: 66n, rerolls: [0, 1] },
+    { hand: 'twoPair' as const, values: [2, 2, 5, 5, 6] as Rank[], ids: [0, 1, 2, 3], pips: 51, mult: 2, score: 102n, rerolls: [0, 1, 2, 3] },
   ])('$hand shares all participation and scoring enhancement rules', ({ hand, values, ids, pips, mult, score, rerolls }) => {
     const state = game(values);
-    for (const enhancement of ['bonus', 'golden', 'workout', 'sticky'] as Enhancement[]) enhance(state, 0, enhancement);
-    for (const enhancement of ['hitchhiker', 'bonus', 'golden', 'workout', 'slippy'] as Enhancement[]) enhance(state, 4, enhancement);
+    for (const enhancement of ['bonus', 'golden', 'workout'] as Enhancement[]) enhance(state, 0, enhancement);
+    for (const enhancement of ['hitchhiker', 'bonus', 'golden', 'workout'] as Enhancement[]) enhance(state, 4, enhancement);
     activeFace(state.dice[4]).workoutPips = 2;
     const result = dispatch(state, { type: 'PLAY', hand, dieIds: ids }, { next: () => 0 });
     expect(result.state.score).toBe(BigInt(score));

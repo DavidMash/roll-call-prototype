@@ -10,17 +10,17 @@ const wrap = (node: React.ReactNode) => renderToStaticMarkup(<MantineProvider>{n
 
 describe('restrained rarity presentation', () => {
   it('labels and styles Common, Uncommon, and Rare Enhancement offers accessibly', () => {
-    for (const [enhancement, rarity] of [['bonus', 'Common'], ['sticky', 'Uncommon'], ['mirror', 'Rare']] as const) {
+    for (const [enhancement, rarity] of [['bonus', 'Common'], ['boomerang', 'Uncommon'], ['mirror', 'Rare']] as const) {
       const html = wrap(<EnhancementCard offer={{ id: 1, enhancement, purchased: false }} selected={false}
         gold={100} busy={false} onSelect={() => {}} />);
-      expect(html).toContain(`aria-label="${enhancement === 'bonus' ? 'Bonus' : enhancement === 'sticky' ? 'Sticky' : 'Mirror'}, ${rarity} Enhancement"`);
+      expect(html).toContain(`aria-label="${enhancement === 'bonus' ? 'Bonus' : enhancement === 'boomerang' ? 'Boomerang' : 'Mirror'}, ${rarity} Enhancement"`);
       expect(html).toContain(`rarity-${rarity.toLowerCase()}`);
       expect(html).toContain(`>${rarity}<`);
     }
   });
 
   it.each([
-    ['sticky', 3], ['hitchhiker', 3], ['jumpingBean', 5], ['mirror', 4], ['missingLink', 4],
+    ['boomerang', 3], ['hitchhiker', 3], ['jumpingBean', 5], ['mirror', 4], ['missingLink', 4],
   ] as const)('renders %s with its exact canonical %s-Gold price', (enhancement, price) => {
     const html = wrap(<EnhancementCard offer={{ id: 1, enhancement, purchased: false }} selected={false}
       gold={100} busy={false} onSelect={() => {}} />);

@@ -106,15 +106,23 @@ function straightValid(dice: Die[], size: number): boolean {
   return HAND_RANKS.slice(0, HAND_RANKS.length - size + 1).some(start => natural.every(rank => rank >= start && rank < start + size));
 }
 function matchingGroupsValid(dice: Die[], groups: readonly number[]): boolean {
-  const natural = dice.filter(die => !stacks(activeFace(die), 'mirror')).map(die => activeFace(die).rank);
-  // Distinct ranks own disjoint slots. Every Mirror fills exactly one remaining slot.
+  const qualificationFaces = dice.flatMap(die => {
+    const face = activeFace(die);
+    return Array.from({ length: stacks(face, 'conjoined') ? 2 : 1 }, () => face);
+  });
+  const natural = qualificationFaces.filter(face => !stacks(face, 'mirror')).map(face => face.rank);
+  const mirrorCount = qualificationFaces.length - natural.length;
+  // Distinct ranks own disjoint slots. Mirror qualification copies fill remaining slots.
   function assign(group: number, ranks: Rank[]): boolean {
-    if (group === groups.length) return natural.every(rank => ranks.includes(rank));
+    if (group === groups.length) {
+      const naturalSlots = ranks.reduce((total, rank, index) => total + Math.min(groups[index], natural.filter(value => value === rank).length), 0);
+      return natural.every(rank => ranks.includes(rank)) && naturalSlots + mirrorCount === groups.reduce((sum, size) => sum + size, 0);
+    }
     return HAND_RANKS.some(rank => !ranks.includes(rank)
       && natural.filter(value => value === rank).length <= groups[group]
       && assign(group + 1, [...ranks, rank]));
   }
-  return dice.length === groups.reduce((sum, size) => sum + size, 0) && assign(0, []);
+  return qualificationFaces.length === groups.reduce((sum, size) => sum + size, 0) && assign(0, []);
 }
 
 export function combinationsForHand(dice: Die[], hand: HandId): number[][] {
@@ -124,7 +132,10 @@ export function combinationsForHand(dice: Die[], hand: HandId): number[][] {
     // Largest first preserves the all-matching hand-first default.
     return Array.from({ length: matching.length }, (_, index) => subsets(matching, matching.length - index)).flat();
   }
-  return subsets(dice, rule.size!).filter(set => {
+  const candidateSets = (hand === 'smallStraight' || hand === 'largeStraight')
+    ? subsets(dice, rule.size!)
+    : Array.from({ length: Math.min(rule.size!, dice.length) }, (_, index) => subsets(dice, index + 1)).flat();
+  return candidateSets.filter(set => {
     if (hand === 'smallStraight' || hand === 'largeStraight') return straightValid(set, rule.size!);
     return rule.groups ? matchingGroupsValid(set, rule.groups) : false;
   }).map(set => set.map(die => die.id));
