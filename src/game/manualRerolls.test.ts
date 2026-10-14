@@ -159,7 +159,7 @@ describe('manual roll effects and hand independence', () => {
     enhance(game, 0, enhancement);
     const result = reroll(game, [0]);
     expect(result.error).toBeUndefined();
-    expect(result.state.dice[0].value).toBe(enhancement === 'bump' ? 2 : enhancement === 'magic' ? 1 : 6);
+    expect(result.state.dice[0].value).toBe(enhancement === 'bump' ? 2 : 6);
     expect(result.state.manualRerollsRemaining).toBe(2);
   });
   it('uses Weighted probability and produces the usual feedback', () => {

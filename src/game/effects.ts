@@ -666,9 +666,11 @@ export class Resolver {
     this.emit({ type: 'CHARGE_CHANGED', flame: 'fluxCapacitor', dieIds, xMult: after,
       message: `${FLAMES.fluxCapacitor.name}: Charge ×${this.format(before)} × ${this.format(multiplier)} = ×${this.format(after)}` });
   }
-  private magicDestination(die: import('./types').Die, rolling: ReadonlySet<number>, suppressBeanFace = false): { physicalFace: import('./types').Rank; hand: HandId } | null {
+  private magicDestination(die: import('./types').Die, rolling: ReadonlySet<number>, suppressBeanFace = false,
+    excludedPhysicalFace?: import('./types').Rank): { physicalFace: import('./types').Rank; hand: HandId } | null {
     const candidates = die.faces.map((face, index) => ({ face, physicalFace: (index + 1) as import('./types').Rank }))
-      .filter(candidate => stacks(candidate.face, 'magic') && (!suppressBeanFace || !stacks(candidate.face, 'jumpingBean')));
+      .filter(candidate => candidate.physicalFace !== excludedPhysicalFace && stacks(candidate.face, 'magic')
+        && (!suppressBeanFace || !stacks(candidate.face, 'jumpingBean')));
     if (!candidates.length) return null;
     const unavailable = new Set([...this.state.consumed, ...unavailableEncounterHands(this.state)]);
     const required = requiredEncounterDieIds(this.state).filter(id => !rolling.has(id) || id === die.id);
@@ -708,7 +710,7 @@ export class Resolver {
     }
     return results;
   }
-  rollBatch(dieIds: number[], reason: string, context: RollContext, excludeStartingFace = false,
+  rollBatch(dieIds: number[], reason: string, context: RollContext, _excludeStartingFace = false,
     reasonId: RollReason = 'other'): void {
     const ids = [...new Set(dieIds)].sort((a, b) => a - b);
     if (!ids.length) return;
@@ -729,6 +731,7 @@ export class Resolver {
     const rerollEventId = `${this.state.historyV2TimelineId}:${this.state.round}:${this.state.actionJournal.length}:${this.state.historyV2.length}`;
     const allowsRollEnhancements = physicalGameplayRoll;
     const genuineReroll = !['initial_round', 'warden_opening'].includes(reasonId);
+    const manualReroll = reasonId === 'manual';
     const results = ids.map(dieId => {
       const die = this.state.dice.find(item => item.id === dieId)!;
       const beforePhysical = die.value;
@@ -739,13 +742,14 @@ export class Resolver {
       const bumped = clockmakerBump || actualBump;
       if (bumped) {
         const physicalFace = (isCursedDie(die) ? Math.min(7, beforePhysical + 1) : beforePhysical === 6 ? 1 : beforePhysical + 1) as import('./types').Rank;
-        return { dieId, before, beforePhysical, physicalFace, value: die.faces[physicalFace - 1].rank, weighted: false,
-          bumped, actualBump: !clockmakerBump && actualBump, clockmakerBump, attracted: false,
-          controller: clockmakerBump ? 'clockmaker' as const : 'bump' as const, origin, magicHand: null as HandId | null };
+        if (!manualReroll || physicalFace !== beforePhysical)
+          return { dieId, before, beforePhysical, physicalFace, value: die.faces[physicalFace - 1].rank, weighted: false,
+            bumped, actualBump: !clockmakerBump && actualBump, clockmakerBump, attracted: false,
+            controller: clockmakerBump ? 'clockmaker' as const : 'bump' as const, origin, magicHand: null as HandId | null };
       }
       const destinations = anchors.length
         ? die.faces.map((face, index) => ({ face, physicalFace: (index + 1) as import('./types').Rank }))
-          .filter(item => stacks(item.face, 'magnetic') && (!excludeStartingFace || item.physicalFace !== beforePhysical))
+          .filter(item => stacks(item.face, 'magnetic') && (!manualReroll || item.physicalFace !== beforePhysical))
         : [];
       if (destinations.length) {
         const destination = destinations[randomIndex(this.rng, destinations.length)];
@@ -753,16 +757,18 @@ export class Resolver {
           bumped: false, actualBump: false, clockmakerBump: false, attracted: true,
           controller: 'magnetic' as const, origin, magicHand: null as HandId | null };
       }
-      const magic = allowsRollEnhancements ? this.magicDestination(die, rolling, reasonId === 'jumping_bean_followup') : null;
+      const magic = allowsRollEnhancements ? this.magicDestination(die, rolling, reasonId === 'jumping_bean_followup',
+        manualReroll ? beforePhysical : undefined) : null;
       if (magic) return { dieId, before, beforePhysical, physicalFace: magic.physicalFace,
         value: die.faces[magic.physicalFace - 1].rank, weighted: false, bumped: false, actualBump: false,
         clockmakerBump: false, attracted: false, controller: 'magic' as const, origin, magicHand: magic.hand };
-      const boomerang = allowsRollEnhancements && genuineReroll ? stacks(origin, 'boomerang') : 0;
+      const boomerang = allowsRollEnhancements && genuineReroll && !manualReroll ? stacks(origin, 'boomerang') : 0;
       if (boomerang && this.checkProbability('boomerang', boomerang, [die.id])) return { dieId, before, beforePhysical,
         physicalFace: beforePhysical, value: origin.rank, weighted: false, bumped: false, actualBump: false,
         clockmakerBump: false, attracted: false, controller: 'boomerang' as const, origin, magicHand: null as HandId | null };
-      const previousFaceExcluded = excludeStartingFace && !stacks(origin, 'freePlay');
-      return { dieId, before, beforePhysical, ...rollPhysicalDie(die, this.rng, previousFaceExcluded ? beforePhysical : undefined),
+      const previousFaceExcluded = manualReroll;
+      return { dieId, before, beforePhysical,
+        ...rollPhysicalDie(die, this.rng, previousFaceExcluded ? beforePhysical : undefined, manualReroll && bumped),
         bumped: false, actualBump: false, clockmakerBump: false, attracted: false,
         controller: 'rng' as const, origin, magicHand: null as HandId | null, previousFaceExcluded };
     });
@@ -777,8 +783,8 @@ export class Resolver {
       const die = this.state.dice.find(item => item.id === result.dieId)!;
       const face = structuredClone(activeFace(die));
       this.emit({ type: 'DIE_ROLLED', dieIds: [die.id], face: face.rank,
-        rollSource: excludeStartingFace ? 'manual_reroll' : 'automatic', previousFace: result.before, resultFace: face.rank,
-        sameFaceExcluded: (result.controller === 'rng' && !!result.previousFaceExcluded) || (result.controller === 'magnetic' && excludeStartingFace),
+        rollSource: manualReroll ? 'manual_reroll' : 'automatic', previousFace: result.before, resultFace: face.rank,
+        sameFaceExcluded: manualReroll,
         message: `D${die.id + 1} rolled: ${result.before} → ${face.rank}${result.controller === 'rng' && result.previousFaceExcluded ? ' · previous face excluded' : ''}` });
       if ((context === 'gameplay' || context === 'wardenSetup') && face.rank === 3) {
         const source = this.chargeFlameSource('thirdRail');
@@ -812,7 +818,8 @@ export class Resolver {
         triggers.push({ dieId: die.id, face, enhancement: 'weighted', weightedSourceFace: source.rank, weightedStacks, rollWeight: 1 + weightedStacks });
       }
       if (context === 'gameplay' && stacks(face, 'jumpingBean')) triggers.push({ dieId: die.id, face, enhancement: 'jumpingBean' });
-      if (context === 'gameplay' && genuineReroll && stacks(result.origin, 'freePlay') && result.physicalFace === result.beforePhysical)
+      if (context === 'gameplay' && genuineReroll && !manualReroll
+        && stacks(result.origin, 'freePlay') && result.physicalFace === result.beforePhysical)
         triggers.unshift({ dieId: die.id, face, enhancement: 'freePlay', rerollEventId });
     }
     if (attracted.length && context === 'gameplay') this.applyFluxCapacitor(attracted.length, attracted.map(result => result.dieId));
@@ -829,7 +836,7 @@ export class Resolver {
         const weightedStacks = weightedSource ? stacks(weightedSource, 'weighted') : 0;
         return { dieId: result.dieId, beforePhysicalFace: result.beforePhysical, afterPhysicalFace: result.physicalFace,
           beforeFace: result.before, afterFace: activeFace(die).rank,
-          previousFaceExcluded: (result.controller === 'rng' && !!result.previousFaceExcluded) || (result.controller === 'magnetic' && excludeStartingFace),
+          previousFaceExcluded: manualReroll,
           weighted: result.weighted && weightedSource ? { sourceFace: weightedSource.rank, stacks: weightedStacks,
             destinationWeight: 1 + weightedStacks } : null,
           bump: result.bumped ? { source: result.clockmakerBump ? 'clockmaker' as const : 'enhancement' as const } : null,

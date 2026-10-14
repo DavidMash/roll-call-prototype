@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { activeFace } from './dice';
+import { createCursedDie } from './bosses';
 import { Resolver } from './effects';
 import { dispatch, newRun, validateAction } from './engine';
 import {
@@ -184,27 +185,35 @@ describe('new qualification and scoring Enhancements', () => {
 });
 
 describe('new roll Enhancements', () => {
-  it('Boomerang succeeds before RNG and can trigger one physical-face Free Play', () => {
+  it('keeps Boomerang and physical-face Free Play on non-manual rerolls', () => {
     const state = game();
     values(state, [1, 2, 3, 4, 5]);
     activeFace(state.dice[0]).enhancements = { boomerang: 1, freePlay: 1 };
-    const result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(.49));
-    expect(result.state.dice[0].value).toBe(1);
-    expect(result.state.score).toBeGreaterThan(0n);
-    expect(result.state.consumed).not.toContain('ones');
-    const roll = [...result.state.historyV2].reverse().find(event => event.kind === 'roll_batch' && event.reason === 'manual');
+    const resolver = new Resolver(state, constant(.49));
+    resolver.rollBatch([0], 'Post-hand reroll', 'gameplay', false, 'post_hand');
+    resolver.drain();
+    expect(state.dice[0].value).toBe(1);
+    expect(state.score).toBeGreaterThan(0n);
+    expect(state.consumed).not.toContain('ones');
+    const roll = [...state.historyV2].reverse().find(event => event.kind === 'roll_batch' && event.reason === 'post_hand');
     expect(roll?.kind === 'roll_batch' && roll.results[0].controller).toBe('boomerang');
-    expect(result.state.historyV2.filter(event => event.kind === 'hand_scored' && event.playSource === 'freePlay')).toHaveLength(1);
+    expect(state.historyV2.filter(event => event.kind === 'hand_scored' && event.playSource === 'freePlay')).toHaveLength(1);
   });
 
-  it('Boomerang failure falls through to ordinary RNG', () => {
+  it('manual rerolls ignore Boomerang and Free Play and spend one RNG draw on a different face', () => {
     const state = game();
     values(state, [1, 2, 3, 4, 5]);
-    activeFace(state.dice[0]).enhancements.boomerang = 1;
-    const result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, sequence(.5, .99));
-    expect(result.state.dice[0].value).toBe(6);
+    activeFace(state.dice[0]).enhancements = { boomerang: 3, freePlay: 1 };
+    let draws = 0;
+    const result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, { next: () => { draws++; return .5; } });
+    expect(result.state.dice[0].value).toBe(4);
+    expect(draws).toBe(1);
+    expect(result.state.stats.probabilityProcs.boomerang.checks).toBe(0);
+    expect(result.state.score).toBe(0n);
+    expect(result.state.historyV2.filter(event => event.kind === 'hand_scored' && event.playSource === 'freePlay')).toHaveLength(0);
     const roll = [...result.state.historyV2].reverse().find(event => event.kind === 'roll_batch' && event.reason === 'manual');
-    expect(roll?.kind === 'roll_batch' && roll.results[0].controller).toBe('rng');
+    expect(roll?.kind === 'roll_batch' ? roll.results[0] : null)
+      .toMatchObject({ controller: 'rng', beforePhysicalFace: 1, afterPhysicalFace: 4, previousFaceExcluded: true });
   });
 
   it('Flywheel pays per die before normal rerolls', () => {
@@ -217,6 +226,7 @@ describe('new roll Enhancements', () => {
     expect(validateAction(state, { type: 'MANUAL_REROLL', dieIds: [0] })).toBeNull();
     const result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant(.9));
     expect(result.state.dice[0].faces[0].flywheelCharges).toBe(1);
+    expect(result.state.dice[0].value).not.toBe(1);
     expect(result.state.manualRerollsRemaining).toBe(0);
     const roll = [...result.state.historyV2].reverse().find(event => event.kind === 'roll_batch' && event.reason === 'manual');
     expect(roll?.kind === 'roll_batch' && roll.results[0].flywheel).toEqual({ chargeConsumed: true, chargesRemaining: 1 });
@@ -234,7 +244,7 @@ describe('new roll Enhancements', () => {
     expect(activeFace(result.state.dice[0]).flywheelCharges ?? 0).toBe(0);
   });
 
-  it('uses the exact Clockmaker, Bump, Magnetic, Magic, Boomerang, RNG precedence', () => {
+  it('uses Clockmaker, Bump, Magnetic, Magic, then RNG for manual rerolls', () => {
     const roll = (state: GameState) => {
       new Resolver(state, constant(.1)).rollBatch([0], 'precedence', 'gameplay', true, 'manual');
       const event = [...state.historyV2].reverse().find(item => item.kind === 'roll_batch');
@@ -265,12 +275,47 @@ describe('new roll Enhancements', () => {
     delete activeFace(boomerang.dice[0]).enhancements.bump;
     delete activeFace(boomerang.dice[1]).enhancements.magnetic;
     delete boomerang.dice[0].faces[1].enhancements.magic;
-    expect(roll(boomerang)).toBe('boomerang');
+    expect(roll(boomerang)).toBe('rng');
     const rng = configured();
     activeFace(rng.dice[0]).enhancements = {};
     delete activeFace(rng.dice[1]).enhancements.magnetic;
     delete rng.dice[0].faces[1].enhancements.magic;
     expect(roll(rng)).toBe('rng');
+  });
+
+  it('falls through same-origin Bump, Magnetic, and Magic manual destinations', () => {
+    const bumped = game();
+    const cursed = createCursedDie();
+    cursed.value = 7;
+    activeFace(cursed).enhancements.bump = 1;
+    bumped.dice.push(cursed);
+    new Resolver(bumped, constant(0)).rollBatch([cursed.id], 'manual Bump fallback', 'gameplay', true, 'manual');
+    const bumpRoll = [...bumped.historyV2].reverse().find(event => event.kind === 'roll_batch');
+    expect(cursed.value).not.toBe(7);
+    expect(bumpRoll?.kind === 'roll_batch' ? bumpRoll.results[0] : null)
+      .toMatchObject({ controller: 'rng', beforePhysicalFace: 7, previousFaceExcluded: true });
+
+    const magnetic = game();
+    values(magnetic, [1, 3, 3, 5, 6]);
+    activeFace(magnetic.dice[1]).enhancements.magnetic = 1;
+    magnetic.dice[0].faces[0].enhancements.magnetic = 1;
+    magnetic.dice[0].faces[3].enhancements.magnetic = 1;
+    new Resolver(magnetic, constant(0)).rollBatch([0], 'manual Magnetic exclusion', 'gameplay', true, 'manual');
+    const magneticRoll = [...magnetic.historyV2].reverse().find(event => event.kind === 'roll_batch');
+    expect(magnetic.dice[0].value).toBe(4);
+    expect(magneticRoll?.kind === 'roll_batch' ? magneticRoll.results[0].controller : null).toBe('magnetic');
+
+    const magic = game();
+    values(magic, [1, 2, 2, 4, 5]);
+    magic.handLevels.ones = 100;
+    activeFace(magic.dice[0]).enhancements.magic = 1;
+    magic.dice[0].faces[1].enhancements.magic = 1;
+    new Resolver(magic, constant(0)).rollBatch([0], 'manual Magic fallback', 'gameplay', true, 'manual');
+    const magicRoll = [...magic.historyV2].reverse().find(event => event.kind === 'roll_batch');
+    expect(magic.dice[0].value).toBe(2);
+    expect(magicRoll?.kind === 'roll_batch' ? magicRoll.results[0] : null)
+      .toMatchObject({ controller: 'magic', beforePhysicalFace: 1, afterPhysicalFace: 2,
+        previousFaceExcluded: true, magicHand: 'threeKind' });
   });
 
   it('Magic uses authoritative group qualification and deterministic ranking', () => {

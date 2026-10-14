@@ -26,8 +26,9 @@ export const rollWeights = (die: Die, excludedFace?: Rank): number[] => (die.own
 export const weightedSourceFace = (die: Die, destination: Rank): Face | undefined => die.owner === 'boss'
   ? die.faces.find(face => face.weightedTarget === destination && stacks(face, 'weighted'))
   : die.faces[oppositeFace(destination) - 1];
-export function rollPhysicalDie(die: Die, rng: RandomSource, excludedFace?: Rank): { physicalFace: Rank; value: Rank; weighted: boolean } {
-  if (stacks(activeFace(die), 'bump')) {
+export function rollPhysicalDie(die: Die, rng: RandomSource, excludedFace?: Rank,
+  suppressBump = false): { physicalFace: Rank; value: Rank; weighted: boolean } {
+  if (!suppressBump && stacks(activeFace(die), 'bump')) {
     const physicalFace = (die.owner === 'boss' ? Math.min(7, die.value + 1) : die.value === 6 ? 1 : die.value + 1) as Rank;
     return { physicalFace, value: die.faces[physicalFace - 1].rank, weighted: false };
   }
