@@ -5,7 +5,7 @@ import { CONFIG } from './config';
 import { Decimal } from './scoreMath';
 import {
   beautifyGoal, getChapterBaseGoal, getRawRoundGoal, getRoundGoalBreakdown, goalRoundingIncrement,
-  LOCAL_ROUND_GOAL_MULTIPLIERS, MAX_COARSE_GOAL_DEVIATION, prettyRoundGoal, targetForRound,
+  getEncounterGoalBreakdown, LOCAL_ROUND_GOAL_MULTIPLIERS, MAX_COARSE_GOAL_DEVIATION, prettyRoundGoal, targetForRound,
 } from './goals';
 
 const EXPECTED_CHAPTERS = [
@@ -146,6 +146,17 @@ describe('Boss Goal modifiers', () => {
     expect(targetForRound(6, 'quickdraw')).toBeLessThan(targetForRound(6));
     expect(targetForRound(3, 'tightrope')).toBeLessThan(targetForRound(3));
     expect(getRoundGoalBreakdown(6, 'quickdraw').postBossRawGoal).toBe('133.33333333333333333333333333333333333333333333333333333333333333333333333333333');
+  });
+
+  it('routes silenced Bosses through the authoritative neutral Goal calculation', () => {
+    const round = 6;
+    const neutral = getRoundGoalBreakdown(round);
+    expect(getEncounterGoalBreakdown(round, 'marathon', false).finalGoal)
+      .toBe(getRoundGoalBreakdown(round, 'marathon').finalGoal);
+    for (const boss of ['marathon', 'tightrope', 'quickdraw'] as const)
+      expect(getEncounterGoalBreakdown(round, boss, true)).toEqual(neutral);
+    expect(getEncounterGoalBreakdown(round, null, true)).toEqual(neutral);
+    expect(getEncounterGoalBreakdown(round, null, false)).toEqual(neutral);
   });
 });
 

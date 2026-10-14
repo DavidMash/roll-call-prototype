@@ -3,6 +3,7 @@ import { activeFace } from './dice';
 import { dispatch, newRun } from './engine';
 import { Resolver } from './effects';
 import { HAND_IDS } from './hands';
+import { getRoundGoalBreakdown, targetForRound } from './goals';
 import { postBossRewardForRound, routeThrough } from './progression';
 import { loadPersistedRun, savePersistedRun } from './persistence';
 import {
@@ -404,19 +405,95 @@ describe('temporary Special Offers', () => {
     expect(state.phase).toBe('shop');
   });
 
-  it('Silence is consumed at Boss start and disables the mechanic while preserving its Goal', () => {
+  it('Silence is consumed at Boss start and uses the neutral Goal in state and history', () => {
     let state = choose('silence');
     expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Silence · Next Boss');
     state = unlockShop(state);
-    state.round = 8;
-    state.bossSchedule[9] = 'hexer';
+    state.round = 5;
+    state.bossSchedule[6] = 'marathon';
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.3)).state;
-    expect(state.boss?.type).toBe('hexer');
+    expect(state.boss?.type).toBe('marathon');
     expect(state.bossSilenced).toBe(true);
     expect(state.specialOfferEffects.silence).toBe(false);
     expect(activeSpecialOfferStatusItems(state.specialOfferEffects)).toEqual([]);
     expect(state.dice.every(die => die.owner === 'player')).toBe(true);
-    expect(state.target).toBeGreaterThan(0);
+    expect(state.target).toBe(targetForRound(6));
+    expect(state.target).not.toBe(targetForRound(6, 'marathon'));
+    const started = [...state.historyV2].reverse().find(event => event.kind === 'round_attempt_started');
+    expect(started?.kind === 'round_attempt_started' ? started.target : null)
+      .toEqual(expect.objectContaining({ bossModifier: 1, postBossRawGoal: getRoundGoalBreakdown(6).neutralRawGoal,
+        finalGoal: targetForRound(6) }));
+  });
+
+  it.each(['tightrope', 'quickdraw'] as const)('Silence gives %s the neutral Goal', boss => {
+    let state = unlockShop(choose('silence'));
+    state.round = 5;
+    state.bossSchedule[6] = boss;
+    state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.3)).state;
+    expect(state.boss?.type).toBe(boss);
+    expect(state.bossSilenced).toBe(true);
+    expect(state.target).toBe(targetForRound(6));
+    expect(state.target).not.toBe(targetForRound(6, boss));
+  });
+
+  it('leaves Marathon and ordinary Goals unchanged without an active Silence', () => {
+    let marathon = unlockShop(choose('silence'));
+    marathon.specialOfferEffects.silence = false;
+    marathon.round = 5;
+    marathon.bossSchedule[6] = 'marathon';
+    marathon = dispatch(marathon, { type: 'NEXT_ROUND' }, constant(.3)).state;
+    expect(marathon.bossSilenced).toBe(false);
+    expect(marathon.target).toBe(targetForRound(6, 'marathon'));
+
+    let ordinary = unlockShop(choose('silence'));
+    ordinary.round = 3;
+    delete ordinary.bossSchedule[4];
+    ordinary = dispatch(ordinary, { type: 'NEXT_ROUND' }, constant(.3)).state;
+    expect(ordinary.boss).toBeNull();
+    expect(ordinary.specialOfferEffects.silence).toBe(true);
+    expect(ordinary.target).toBe(targetForRound(4));
+  });
+
+  it('keeps a silenced Marathon neutral across save/load, Bust restoration, and retry', () => {
+    let state = unlockShop(choose('silence'));
+    state.round = 5;
+    state.bossSchedule[6] = 'marathon';
+    state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.3)).state;
+    const neutral = targetForRound(6);
+    const legacyBossGoal = targetForRound(6, 'marathon');
+
+    // Simulate a persisted active encounter created before Silence selected
+    // the neutral Goal. Loading must repair gameplay and its projections.
+    state.target = legacyBossGoal;
+    state.stats.rounds.at(-1)!.target = legacyBossGoal;
+    const legacyStarted = [...state.historyV2].reverse().find(event => event.kind === 'round_attempt_started');
+    if (legacyStarted?.kind === 'round_attempt_started')
+      legacyStarted.target = getRoundGoalBreakdown(6, 'marathon');
+
+    const values = new Map<string, string>();
+    const storage = { getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); } };
+    expect(savePersistedRun(storage, state)).toBe(true);
+    state = loadPersistedRun(storage, state.seed)!;
+    expect(state.target).toBe(neutral);
+    expect(state.roundCheckpoint?.board.target).toBe(neutral);
+    expect(state.stats.rounds.at(-1)?.target).toBe(neutral);
+    const loadedStarted = [...state.historyV2].reverse().find(event => event.kind === 'round_attempt_started');
+    expect(loadedStarted?.kind === 'round_attempt_started' ? loadedStarted.target.finalGoal : null).toBe(neutral);
+
+    state.score = 0n;
+    state.consumed = [...HAND_IDS];
+    state.manualRerollsRemaining = 0;
+    new Resolver(state, constant(.3)).evaluate();
+    expect(state.phase).toBe('shop');
+    expect(state.specialOfferEffects.silence).toBe(true);
+    expect(state.target).toBe(neutral);
+
+    state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.3)).state;
+    expect(state.boss?.type).toBe('marathon');
+    expect(state.bossSilenced).toBe(true);
+    expect(state.target).toBe(neutral);
+    expect(state.stats.rounds.at(-1)?.target).toBe(neutral);
   });
 
   it('expires every unconsumed three-Round effect after three completed encounters', () => {

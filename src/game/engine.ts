@@ -20,7 +20,7 @@ import { appendCriticalDiagnostic, appendDebugTrace, createDebugTrace, normalize
 import { isRollbackState } from './rollback';
 import { enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey, usableManualRerolls } from './specialOffers';
 import { Decimal, exactInferno, scoreFromUnknown, type ExactScore } from './scoreMath';
-import { targetForRound } from './goals';
+import { getEncounterGoalBreakdown, targetForRound } from './goals';
 import type { Action, Board, GameState, GameStateBase, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
 
 const exact = (value: unknown, fallback: ExactScore = 0n): ExactScore => value === undefined || value === null
@@ -206,6 +206,22 @@ function normalizeHandFamilyFlameRuntime(state: Pick<Board, 'dice' | 'bonfires' 
   }));
 }
 
+function normalizeSilencedBossGoal(state: GameState): void {
+  if (state.phase !== 'round' || !state.bossSilenced || !state.boss) return;
+  const breakdown = getEncounterGoalBreakdown(state.round, state.boss.type, true);
+  state.target = breakdown.finalGoal;
+  const currentRound = [...state.stats.rounds].reverse().find(round =>
+    round.round === state.round && round.attempt === state.roundAttemptNumber && !round.cleared);
+  if (currentRound) currentRound.target = breakdown.finalGoal;
+  const started = [...state.historyV2].reverse().find(event => event.kind === 'round_attempt_started'
+    && event.timelineId === state.historyV2TimelineId && event.round === state.round
+    && event.attempt === state.roundAttemptNumber);
+  if (started?.kind === 'round_attempt_started') {
+    const { chapter: _chapter, localRound: _localRound, ...target } = breakdown;
+    started.target = target;
+  }
+}
+
 export function normalizeGameState(state: GameState): GameState {
   const next = structuredClone(state);
   if (typeof next.target === 'number' && !Number.isSafeInteger(next.target))
@@ -249,6 +265,7 @@ export function normalizeGameState(state: GameState): GameState {
   next.scorecardCycleConsumed ??= next.consumed.filter(hand =>
     next.bossSilenced || next.boss?.type !== 'neglected' || next.boss.restored || !next.boss.neglectedHands.includes(hand));
   normalizeSpecialRuntime(next);
+  normalizeSilencedBossGoal(next);
   normalizeChapterLifecycle(next);
   const legacy = next as GameState & { flameReward?: GameState['flameSelection'] };
   if (!next.flameSelection && legacy.flameReward) next.flameSelection = legacy.flameReward;
@@ -329,6 +346,8 @@ export function normalizeGameState(state: GameState): GameState {
     );
     ensureChapterPlan({ ...checkpoint, seed: next.seed }, chapterNumberForRound(checkpoint.round));
     normalizeSpecialRuntime(checkpoint);
+    if (checkpoint.specialOfferEffects.silence && checkpoint.bossSchedule[checkpoint.round])
+      checkpoint.target = targetForRound(checkpoint.round);
     normalizeChapterLifecycle(checkpoint);
     if (checkpoint.shop) normalizeShop(checkpoint.shop, checkpoint);
     for (const die of checkpoint.dice) {

@@ -154,6 +154,19 @@ export function getRoundGoalBreakdown(globalRound: number, boss: BossType | null
   };
 }
 
+/**
+ * Selects the authoritative Goal for an encounter. Silence does not undo a
+ * Boss modifier after the fact: it routes the encounter through the same
+ * neutral Goal calculation (including neutral adjacent-round beautification)
+ * used when no Boss is present.
+ */
+export function getEncounterGoalBreakdown(globalRound: number, boss: BossType | null,
+  bossSilenced: boolean, bossForRound: BossForRound = () => null): RoundGoalBreakdown {
+  return bossSilenced
+    ? getRoundGoalBreakdown(globalRound)
+    : getRoundGoalBreakdown(globalRound, boss, bossForRound);
+}
+
 export function targetForRound(globalRound: number, boss: BossType | null = null,
   bossForRound?: BossForRound): ExactScore {
   return getRoundGoalBreakdown(globalRound, boss, bossForRound).finalGoal;

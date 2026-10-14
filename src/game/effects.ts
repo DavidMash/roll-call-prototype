@@ -15,7 +15,7 @@ import { applyHandContribution, applyHandMultiplier, applyXMult, createHandAccum
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie,
   isBigBossRound, isCursedDie, isMiniBossType, requiredEncounterDieIds, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
-import { getRoundGoalBreakdown } from './goals';
+import { getEncounterGoalBreakdown } from './goals';
 import { encounterNode, flameNodeAfter, postBossShopNodeAfter, shopNodeBefore, specialOfferNodeAfter, timeTravelDestinationRound } from './progression';
 import { formatExactDecimal, formatExactScore, formatPercentage, formatPlayerNumber } from './copy';
 import { chapterEncounterRounds, chapterNumberForRound, ensureChapterPlan } from './chapters';
@@ -1639,16 +1639,19 @@ export class Resolver {
     const bossType = this.state.bossSchedule[this.state.round]
       ?? (this.state.round > 60 ? bossTypeForRound(this.state.seed, this.state.round) : null);
     if (bossType) this.state.bossSchedule[this.state.round] = bossType;
+    const bossSilenced = !!bossType && this.state.specialOfferEffects.silence;
     const bossForGoalRound = (round: number) => this.state.bossSchedule[round]
       ?? (round > 60 ? bossTypeForRound(this.state.seed, round) : null);
-    const targetBreakdown = getRoundGoalBreakdown(this.state.round, bossType ?? null, bossForGoalRound);
+    const targetBreakdown = getEncounterGoalBreakdown(
+      this.state.round, bossType ?? null, bossSilenced, bossForGoalRound,
+    );
     const { chapter: targetChapter, localRound: targetLocalRound, ...historyTargetBreakdown } = targetBreakdown;
     this.state.target = targetBreakdown.finalGoal;
     this.state.boss = bossType ? createBossRuntime(this.state.seed, this.state.round, bossType, {
       handPlayCounts: this.state.handPlayCounts,
       playerDieIds: this.state.dice.filter(die => die.owner === 'player').map(die => die.id),
     }) : null;
-    this.state.bossSilenced = !!this.state.boss && this.state.specialOfferEffects.silence;
+    this.state.bossSilenced = bossSilenced;
     if (this.state.bossSilenced) this.state.specialOfferEffects.silence = false;
     if (!this.state.bossSilenced && this.state.boss?.type === 'neglected')
       this.state.consumed.push(...this.state.boss.neglectedHands);
