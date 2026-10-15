@@ -5,7 +5,7 @@ import { Resolver } from './effects';
 import { dispatch, newRun, validateAction } from './engine';
 import {
   canAttach, diminishingHalfChance, eligibleEnhancements, ENHANCEMENTS, ENHANCEMENT_IDS,
-  enhancementsUnlockedAt, maxEnhancementTypesPerFace,
+  enhancementsUnlockedInChapter, highestUnlockedEnhancementTier, maxEnhancementTypesPerFace,
 } from './enhancements';
 import { combinationsForHand } from './hands';
 import { HAND_IDS } from './hands';
@@ -29,16 +29,19 @@ function values(state: GameState, next: Rank[]) {
   next.forEach((value, index) => { state.dice[index].value = value; });
 }
 
-describe('Inferno Enhancement progression', () => {
-  it('uses the exact dynamic distinct-type capacity with a permanent six-type ceiling', () => {
-    expect([0, 1, 2, 3, 4, 5, 6, 20].map(maxEnhancementTypesPerFace)).toEqual([1, 2, 3, 4, 5, 6, 6, 6]);
+describe('Chapter Enhancement progression', () => {
+  it('uses the exact Chapter capacity with a permanent six-type ceiling, independent of Inferno', () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 10].map(maxEnhancementTypesPerFace)).toEqual([1, 2, 3, 4, 5, 6, 6, 6]);
+    expect(maxEnhancementTypesPerFace(4)).toBe(4); // Chapter 4 / Inferno 0
+    expect(maxEnhancementTypesPerFace(2)).toBe(2); // Chapter 2 / Inferno III
+    expect(maxEnhancementTypesPerFace(10)).toBe(6); // Chapter 10 / Inferno 0
     const face = game().dice[0].faces[0];
     face.enhancements.workout = 2;
-    expect(canAttach(face, 'workout', 0)).toBe(true);
-    expect(canAttach(face, 'golden', 0)).toBe(false);
-    expect(canAttach(face, 'golden', 1)).toBe(true);
+    expect(canAttach(face, 'workout', 1)).toBe(true);
+    expect(canAttach(face, 'golden', 1)).toBe(false);
+    expect(canAttach(face, 'golden', 2)).toBe(true);
     delete face.enhancements.workout;
-    expect(canAttach(face, 'golden', 0)).toBe(true);
+    expect(canAttach(face, 'golden', 1)).toBe(true);
   });
 
   it('exposes exactly 26 active Enhancements and the authored cumulative tier pools', () => {
@@ -53,9 +56,23 @@ describe('Inferno Enhancement progression', () => {
     expect(ENHANCEMENT_IDS).toHaveLength(26);
     expect(ENHANCEMENT_IDS).not.toContain('sticky');
     expect(ENHANCEMENT_IDS).not.toContain('slippy');
-    tiers.forEach((tier, level) => expect(enhancementsUnlockedAt(level)).toEqual(tier));
-    tiers.forEach((_tier, level) => expect(eligibleEnhancements(level)).toEqual(tiers.slice(0, level + 1).flat()));
-    expect(eligibleEnhancements(6)).toEqual(eligibleEnhancements(5));
+    tiers.forEach((tier, index) => expect(enhancementsUnlockedInChapter(index + 1)).toEqual(tier));
+    tiers.forEach((_tier, index) => expect(eligibleEnhancements(index + 1)).toEqual(tiers.slice(0, index + 1).flat()));
+    expect(enhancementsUnlockedInChapter(7)).toEqual([]);
+    expect(eligibleEnhancements(7)).toEqual(eligibleEnhancements(6));
+    expect([1, 2, 3, 4, 5, 6, 10].map(highestUnlockedEnhancementTier)).toEqual([0, 1, 2, 3, 4, 5, 5]);
+    expect(eligibleEnhancements(1)).not.toContain('weighted');
+    expect(eligibleEnhancements(2)).toContain('weighted');
+    expect(eligibleEnhancements(2)).not.toContain('teamwork');
+    expect(eligibleEnhancements(3)).toContain('teamwork');
+    expect(eligibleEnhancements(3)).not.toContain('jumpingBean');
+    expect(eligibleEnhancements(4)).toContain('jumpingBean');
+    expect(eligibleEnhancements(4)).not.toContain('personalTrainer');
+    expect(eligibleEnhancements(5)).toContain('personalTrainer');
+    for (const id of ['magic', 'furnace', 'sustainable'] as const) {
+      expect(eligibleEnhancements(5)).not.toContain(id);
+      expect(eligibleEnhancements(6)).toContain(id);
+    }
   });
 
   it('keeps rarity independent and preserves Boomerang replacement economics', () => {
@@ -65,20 +82,42 @@ describe('Inferno Enhancement progression', () => {
     expect([1, 2, 3].map(diminishingHalfChance)).toEqual([.5, .75, .875]);
   });
 
-  it('filters every fresh and rerolled offer set to the current cumulative Inferno pool', () => {
-    for (let level = 0; level <= 6; level++) {
+  it('filters every fresh and rerolled offer set to the current cumulative Chapter pool', () => {
+    for (let chapter = 1; chapter <= 7; chapter++) {
       const state = game();
-      state.engulfmentLevel = level;
+      state.round = (chapter - 1) * 6 + 1;
+      state.engulfmentLevel = chapter % 2 ? 5 : 0;
       state.phase = 'shop';
       state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
-      const resolver = new Resolver(state, new SeededRng(hashSeed(`offers-${level}`)));
+      const resolver = new Resolver(state, new SeededRng(hashSeed(`offers-${chapter}`)));
       for (let refresh = 0; refresh < 20; refresh++) {
         resolver.freshOffers(refresh ? 'reroll' : 'initial');
-        expect(state.shop.offers.every(offer => eligibleEnhancements(level).includes(offer.enhancement))).toBe(true);
+        expect(state.shop.offers).toHaveLength(3);
+        expect(new Set(state.shop.offers.map(offer => offer.enhancement))).toHaveLength(3);
+        expect(state.shop.offers.every(offer => eligibleEnhancements(chapter).includes(offer.enhancement))).toBe(true);
       }
       const presented = [...state.historyV2].reverse().find(event => event.kind === 'shop_offers_presented');
-      expect(presented?.kind === 'shop_offers_presented' ? presented.eligibleEnhancements : null)
-        .toEqual(eligibleEnhancements(level));
+      expect(presented?.kind === 'shop_offers_presented' ? presented : null).toMatchObject({
+        chapter, maxEnhancementTypesPerFace: Math.min(6, chapter),
+        highestUnlockedEnhancementTier: Math.min(5, chapter - 1),
+        eligibleEnhancements: eligibleEnhancements(chapter),
+      });
+    }
+  });
+
+  it('repeatedly fills unique early-Chapter offers when no Rare Enhancement is eligible', () => {
+    for (const chapter of [1, 2]) {
+      const state = game();
+      state.round = (chapter - 1) * 6 + 1;
+      state.phase = 'shop';
+      state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+      const resolver = new Resolver(state, new SeededRng(hashSeed(`early-no-rare-${chapter}`)));
+      for (let refresh = 0; refresh < 100; refresh++) {
+        resolver.freshOffers(refresh ? 'reroll' : 'initial');
+        expect(state.shop.offers).toHaveLength(3);
+        expect(new Set(state.shop.offers.map(offer => offer.enhancement))).toHaveLength(3);
+        expect(state.shop.offers.every(offer => ENHANCEMENTS[offer.enhancement].rarity !== 'rare')).toBe(true);
+      }
     }
   });
 });

@@ -5,8 +5,8 @@ import type {
 import type { RoundGoalBreakdown } from './goals';
 import type { ExactDecimal, ExactScore } from './scoreMath';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 8 as const;
-export const RUN_HISTORY_V2_RULESET = 'enhancement-progression-v1' as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 9 as const;
+export const RUN_HISTORY_V2_RULESET = 'chapter-enhancement-progression-v1' as const;
 
 export interface RunHistoryV2Coverage {
   complete: boolean;
@@ -110,6 +110,7 @@ export interface ChapterStartedEvent extends RunHistoryV2Envelope {
   chapter: number;
   miniBoss: BossType;
   boss: BossType;
+  enhancementProgression?: { capacityBefore: number; capacityAfter: number; newlyUnlocked: Enhancement[] };
 }
 
 export interface RoundAttemptStartedEvent extends RunHistoryV2Envelope {
@@ -228,7 +229,9 @@ export interface ShopOffersPresentedEvent extends RunHistoryV2Envelope {
   pool: 'enhancement' | 'flame' | 'special_offer';
   reason: 'initial' | 'reroll' | 'reward';
   offers: { id: number; contentId: Enhancement | Flame | SpecialOfferType; rarity: Rarity }[];
-  infernoLevel?: number;
+  chapter?: number;
+  maxEnhancementTypesPerFace?: number;
+  highestUnlockedEnhancementTier?: number;
   eligibleEnhancements?: Enhancement[];
 }
 
@@ -309,7 +312,6 @@ export interface BossStateChangedEvent extends RunHistoryV2Envelope {
 export interface InfernoEvaluatedEvent extends RunHistoryV2Envelope {
   kind: 'inferno_evaluated';
   evaluation: InfernoEvaluationState;
-  enhancementProgression?: { capacityBefore: number; capacityAfter: number; unlocked: Enhancement[] };
 }
 
 export interface InfernoSuspensionChangedEvent extends RunHistoryV2Envelope {

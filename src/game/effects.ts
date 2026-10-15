@@ -1,6 +1,6 @@
 import { bossRewardForRound, CONFIG, interestForGold, roundReward } from './config';
 import { activeFace, rollPhysicalDie, scoringPips, weightedSourceFace } from './dice';
-import { diminishingHalfChance, eligibleEnhancements, ENHANCEMENTS, enhancementsUnlockedAt, loneWolfPipsFactor, maxEnhancementTypesPerFace, personalTrainerChance, stacks, tankMultiplierFactor, VINTAGE_BASE_SELL_CAP } from './enhancements';
+import { diminishingHalfChance, eligibleEnhancements, ENHANCEMENTS, enhancementsUnlockedInChapter, highestUnlockedEnhancementTier, loneWolfPipsFactor, maxEnhancementTypesPerFace, personalTrainerChance, stacks, tankMultiplierFactor, VINTAGE_BASE_SELL_CAP } from './enhancements';
 import {
   activeFlameId, activeFlameInvestment, captureHandStart, currentFlameInstanceId, eligibleFlameIds, FLAMES, handXMultContributions,
   fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, hasChargeBonfire, HOT_STREAK_SEQUENCE,
@@ -205,7 +205,11 @@ export class Resolver {
         break;
       case 'CHAPTER_STARTED':
         if (record.chapterNumber && record.chapterMiniBoss && record.chapterBoss) this.emitV2({ kind: 'chapter_started',
-          chapter: record.chapterNumber, miniBoss: record.chapterMiniBoss, boss: record.chapterBoss });
+          chapter: record.chapterNumber, miniBoss: record.chapterMiniBoss, boss: record.chapterBoss,
+          ...(record.enhancementCapacityBefore !== undefined && record.enhancementCapacityAfter !== undefined
+            ? { enhancementProgression: { capacityBefore: record.enhancementCapacityBefore,
+              capacityAfter: record.enhancementCapacityAfter,
+              newlyUnlocked: [...(record.newlyUnlockedEnhancements ?? [])] } } : {}) });
         break;
       case 'GOLD_ADDED':
         if (record.goldSource && ['roundBase', 'unusedRerolls', 'interest', 'bossReward'].includes(record.goldSource)) break;
@@ -347,8 +351,15 @@ export class Resolver {
     const plan = ensureChapterPlan(this.state, chapterNumber);
     if (this.state.presentedChapters.includes(chapterNumber)) return;
     this.state.presentedChapters.push(chapterNumber);
+    const capacityBefore = maxEnhancementTypesPerFace(chapterNumber - 1);
+    const capacityAfter = maxEnhancementTypesPerFace(chapterNumber);
+    const newlyUnlockedEnhancements = enhancementsUnlockedInChapter(chapterNumber);
+    const enhancementProgression = chapterNumber >= 2 && chapterNumber <= 6
+      ? { enhancementCapacityBefore: capacityBefore, enhancementCapacityAfter: capacityAfter,
+        newlyUnlockedEnhancements } : {};
     this.emit({
       type: 'CHAPTER_STARTED', chapterNumber, chapterMiniBoss: plan.miniBoss, chapterBoss: plan.boss,
+      ...enhancementProgression,
       message: `Chapter ${chapterNumber} entered`,
     });
   }
@@ -1727,7 +1738,8 @@ export class Resolver {
     if (this.state.phase === 'round') this.state.decisionId++;
   }
   freshOffers(reason: 'initial' | 'reroll' = 'initial'): void {
-    const pool = eligibleEnhancements(this.state.engulfmentLevel);
+    const chapter = chapterNumberForRound(this.state.round);
+    const pool = eligibleEnhancements(chapter);
     const selected = rarityFirstSelection(pool, 3, id => ENHANCEMENTS[id].rarity,
       OFFER_RARITY_WEIGHTS.enhancement, this.rng);
     this.state.shop!.offers = selected.map(enhancement => ({ id: this.state.nextOfferId++, enhancement, purchased: false }));
@@ -1735,7 +1747,8 @@ export class Resolver {
     this.log({ type: 'OFFERS_REFRESHED', offerSet,
       message: `Enhancement offers: ${offerSet.map(item => `${item.name} [${rarityLabel(item.rarity)}]`).join(', ')}` });
     this.emitV2({ kind: 'shop_offers_presented', pool: 'enhancement', reason,
-      infernoLevel: this.state.engulfmentLevel, eligibleEnhancements: [...pool],
+      chapter, maxEnhancementTypesPerFace: maxEnhancementTypesPerFace(chapter),
+      highestUnlockedEnhancementTier: highestUnlockedEnhancementTier(chapter), eligibleEnhancements: [...pool],
       offers: this.state.shop!.offers.map(offer => ({ id: offer.id, contentId: offer.enhancement,
         rarity: ENHANCEMENTS[offer.enhancement].rarity })) });
   }
@@ -1824,11 +1837,7 @@ export class Resolver {
       recalculateMaxCharge(this.state);
     }
     this.state.infernoEvaluation = evaluation;
-    this.emitV2({ kind: 'inferno_evaluated', evaluation: structuredClone(evaluation), enhancementProgression: {
-      capacityBefore: maxEnhancementTypesPerFace(evaluation.infernoLevelBefore),
-      capacityAfter: maxEnhancementTypesPerFace(evaluation.infernoLevelAfter),
-      unlocked: evaluation.success ? enhancementsUnlockedAt(evaluation.infernoLevelAfter) : [],
-    } });
+    this.emitV2({ kind: 'inferno_evaluated', evaluation: structuredClone(evaluation) });
   }
   openShop(direction: 'forward' | 'backward' = 'forward'): void {
     this.restoreMagicianDie();

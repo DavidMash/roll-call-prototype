@@ -12,11 +12,11 @@ export interface EnhancementDefinition {
   maxFacesPerDie: number | null;
   countsTowardFaceTypeLimit: boolean;
   rarity: Rarity;
-  unlockLevel: number;
+  unlockTier: number;
 }
 const definition = (name: string, symbol: string, description: string, purchasePrice: number, baseSellPrice: number,
-  stackable: boolean, rarity: Rarity, unlockLevel: number, maxStacks: number | null = null, maxFacesPerDie: number | null = null): EnhancementDefinition =>
-  ({ name, symbol, description, purchasePrice, baseSellPrice, stackable, maxStacks, maxFacesPerDie, countsTowardFaceTypeLimit: true, rarity, unlockLevel });
+  stackable: boolean, rarity: Rarity, unlockTier: number, maxStacks: number | null = null, maxFacesPerDie: number | null = null): EnhancementDefinition =>
+  ({ name, symbol, description, purchasePrice, baseSellPrice, stackable, maxStacks, maxFacesPerDie, countsTowardFaceTypeLimit: true, rarity, unlockTier });
 
 export const ENHANCEMENTS: Record<Enhancement, EnhancementDefinition> = {
   bonus: definition('Bonus', '+', `+${CONFIG.bonusPips} Pips when this face scores. Stack for more Pips.`, 3, 1, true, 'common', 0),
@@ -58,11 +58,16 @@ export const enhancementLabel = (enhancement: Enhancement, uppercase = false) =>
   const definition = ENHANCEMENTS[enhancement];
   return `${definition.symbol} ${uppercase ? definition.name.toUpperCase() : definition.name}`;
 };
-export const maxEnhancementTypesPerFace = (infernoLevel: number): number => Math.min(6, Math.max(0, Math.floor(infernoLevel)) + 1);
-export const enhancementsUnlockedAt = (infernoLevel: number): Enhancement[] => ENHANCEMENT_IDS
-  .filter(id => ENHANCEMENTS[id].unlockLevel === infernoLevel);
-export const eligibleEnhancements = (infernoLevel: number): Enhancement[] => ENHANCEMENT_IDS
-  .filter(id => ENHANCEMENTS[id].unlockLevel <= Math.max(0, Math.floor(infernoLevel)));
+const normalizedChapter = (chapter: number): number => Math.max(1, Math.floor(chapter));
+export const maxEnhancementTypesPerFace = (chapter: number): number => Math.min(6, normalizedChapter(chapter));
+export const highestUnlockedEnhancementTier = (chapter: number): number => Math.min(5, normalizedChapter(chapter) - 1);
+export const enhancementsUnlockedInChapter = (chapter: number): Enhancement[] => {
+  const normalized = normalizedChapter(chapter);
+  if (normalized > 6) return [];
+  return ENHANCEMENT_IDS.filter(id => ENHANCEMENTS[id].unlockTier === normalized - 1);
+};
+export const eligibleEnhancements = (chapter: number): Enhancement[] => ENHANCEMENT_IDS
+  .filter(id => ENHANCEMENTS[id].unlockTier <= highestUnlockedEnhancementTier(chapter));
 export const stacks = (face: Face, enhancement: Enhancement) => {
   if (face.infected) return 0;
   const raw = Math.max(0, Math.floor(face.enhancements[enhancement] ?? 0));
@@ -70,18 +75,18 @@ export const stacks = (face: Face, enhancement: Enhancement) => {
   return cap === null ? raw : Math.min(raw, cap);
 };
 export const faceEnhancementTypes = (face: Face) => ENHANCEMENT_IDS.filter(id => stacks(face, id) > 0 && ENHANCEMENTS[id].countsTowardFaceTypeLimit);
-export function attachmentError(face: Face, enhancement: Enhancement, infernoLevel = 0): string | null {
+export function attachmentError(face: Face, enhancement: Enhancement, chapter = 1): string | null {
   const metadata = ENHANCEMENTS[enhancement];
   const current = stacks(face, enhancement);
   if (!metadata.stackable && current > 0) return `${metadata.name} is already on this Face.`;
   if (metadata.maxStacks !== null && current >= metadata.maxStacks) return `${metadata.name} is capped at ${metadata.maxStacks} stacks.`;
-  if (current === 0 && metadata.countsTowardFaceTypeLimit && faceEnhancementTypes(face).length >= maxEnhancementTypesPerFace(infernoLevel)) {
+  if (current === 0 && metadata.countsTowardFaceTypeLimit && faceEnhancementTypes(face).length >= maxEnhancementTypesPerFace(chapter)) {
     return `This Face is full. Sell an Enhancement before adding ${metadata.name}.`;
   }
   return null;
 }
-export function placementError(die: Pick<Die, 'faces'>, face: Face, enhancement: Enhancement, infernoLevel = 0): string | null {
-  const faceError = attachmentError(face, enhancement, infernoLevel);
+export function placementError(die: Pick<Die, 'faces'>, face: Face, enhancement: Enhancement, chapter = 1): string | null {
+  const faceError = attachmentError(face, enhancement, chapter);
   if (faceError) return faceError;
   const limit = ENHANCEMENTS[enhancement].maxFacesPerDie;
   if (limit !== null && die.faces.filter(candidate => (candidate.enhancements[enhancement] ?? 0) > 0).length >= limit) {
@@ -89,8 +94,8 @@ export function placementError(die: Pick<Die, 'faces'>, face: Face, enhancement:
   }
   return null;
 }
-export const canAttach = (face: Face, enhancement: Enhancement, infernoLevel = 0) => attachmentError(face, enhancement, infernoLevel) === null;
-export const canPlace = (die: Pick<Die, 'faces'>, face: Face, enhancement: Enhancement, infernoLevel = 0) => placementError(die, face, enhancement, infernoLevel) === null;
+export const canAttach = (face: Face, enhancement: Enhancement, chapter = 1) => attachmentError(face, enhancement, chapter) === null;
+export const canPlace = (die: Pick<Die, 'faces'>, face: Face, enhancement: Enhancement, chapter = 1) => placementError(die, face, enhancement, chapter) === null;
 export const furnaceMultiplier = (face: Face): number => Math.max(1, face.furnaceMultiplier ?? 1);
 /** A pull needs a held Magnetic source plus a different Magnetic-bearing die that can roll without Bump winning. */
 export const magneticPullCapable = (dice: readonly Pick<Die, 'owner' | 'faces'>[]) => {

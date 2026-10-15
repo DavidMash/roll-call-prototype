@@ -60,6 +60,9 @@ for (const speed of ['normal', 'fast', 'instant'] as const) {
     await page.clock.runFor(Math.floor(duration / 2));
     await expect(page.getByTestId('engulfment-success')).toHaveCount(0);
     await page.clock.runFor(Math.ceil(duration / 2) + REVEAL_PAUSE_MS);
-    await expect(page.getByTestId('engulfment-success')).toBeVisible();
+    const success = page.getByTestId('engulfment-success');
+    await expect(success).toBeVisible();
+    await expect(success).not.toContainText('Enhancement Capacity');
+    await expect(success).not.toContainText('New Enhancements Unlocked');
   });
 }

@@ -13,6 +13,7 @@ import {
 } from './specialOffers';
 import { SCREEN_THEMES } from './screenThemes';
 import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
+import { eligibleEnhancements } from './enhancements';
 import type { GameState, HandId, RandomSource, RoundSummary, SpecialOfferType } from './types';
 
 const constant = (value = 0): RandomSource => ({ next: () => value });
@@ -423,6 +424,17 @@ describe('temporary Special Offers', () => {
     expect(started?.kind === 'round_attempt_started' ? started.target : null)
       .toEqual(expect.objectContaining({ bossModifier: 1, postBossRawGoal: getRoundGoalBreakdown(6).neutralRawGoal,
         finalGoal: targetForRound(6) }));
+  });
+
+  it('On The House generates its next Shop Enhancement offers from the current Chapter pool', () => {
+    const state = offerState('onTheHouse');
+    state.round = 9;
+    state.presentedChapters = [1, 2];
+    const chosen = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }, constant()).state;
+    expect(chosen.phase).toBe('shop');
+    expect(chosen.shop!.offers.every(offer => eligibleEnhancements(2).includes(offer.enhancement))).toBe(true);
+    expect([...chosen.historyV2].reverse().find(event => event.kind === 'shop_offers_presented' && event.pool === 'enhancement'))
+      .toMatchObject({ chapter: 2, maxEnhancementTypesPerFace: 2, highestUnlockedEnhancementTier: 1 });
   });
 
   it.each(['tightrope', 'quickdraw'] as const)('Silence gives %s the neutral Goal', boss => {

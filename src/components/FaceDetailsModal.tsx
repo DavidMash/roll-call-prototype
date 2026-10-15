@@ -8,6 +8,7 @@ import { formatPercentage, formatPlayerNumber } from '../game/copy';
 import { PipFace } from './PipFace';
 import { enhancementAccessibleName, EnhancementIdentity, EnhancementSymbol } from './EnhancementIdentity';
 import { EnhancementSellButton } from './EnhancementSellButton';
+import { chapterNumberForRound } from '../game/chapters';
 
 export interface FaceDetailsTarget { dieId: number; face: Rank }
 interface SaleTarget { enhancement: Enhancement; stacks: number }
@@ -37,8 +38,9 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
   const shop = board.phase === 'shop' ? board.shop : null;
   const offer = shop?.offers.find(item => item.id === selectedOffer && !item.purchased);
   const isExposed = die.value === focusedFace;
-  const capacity = maxEnhancementTypesPerFace(board.engulfmentLevel);
-  const offerError = offer && isExposed ? placementError(die, face, offer.enhancement, board.engulfmentLevel) : null;
+  const chapter = chapterNumberForRound(board.round);
+  const capacity = maxEnhancementTypesPerFace(chapter);
+  const offerError = offer && isExposed ? placementError(die, face, offer.enhancement, chapter) : null;
   const offerCostAvailable = !!(offer && shop && (enhancementOfferIsFree(shop, offer.id) || board.gold >= enhancementCost(offer.enhancement)));
   const canApply = actionsEnabled && isExposed && !!offer && !offerError && offerCostAvailable;
   const shopActions = board.phase === 'shop' && actionsEnabled;

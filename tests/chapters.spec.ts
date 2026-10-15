@@ -263,6 +263,11 @@ test('the post-Boss Shop stays in the completed Chapter until NEXT CHAPTER start
   const splash = page.getByTestId('chapter-splash');
   await expect(splash).toHaveAttribute('data-chapter', '2');
   await expect(splash).toHaveText(/CHAPTER 2/);
+  const unlock = splash.getByTestId('chapter-enhancement-unlock');
+  await expect(unlock).toContainText('ENHANCEMENT CAPACITY');
+  await expect(unlock).toContainText('1 → 2');
+  await expect(unlock).toContainText('NEW ENHANCEMENTS');
+  for (const name of ['Hitchhiker', 'Weighted', 'Bump', 'Magnetic', 'Jackpot']) await expect(unlock).toContainText(name);
   await expect(map).toBeVisible({ timeout: 4_000 });
   await expect(map.locator('.map-kicker')).toHaveText('CHAPTER 2');
   await expect(map.locator('.run-map-track')).toHaveAttribute('data-chapter', '2');

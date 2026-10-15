@@ -63,7 +63,7 @@ describe.each(['jumpingBean', 'magnetic'] as const)('%s per-die placement limit'
 });
 
 describe('placement rule compatibility', () => {
-  it('keeps same-face nonstackability and the three-type face capacity rule', () => {
+  it('keeps same-face nonstackability and the Chapter 3 three-type face capacity rule', () => {
     const state = shopState('jumpingBean');
     const die = state.dice[0];
     const face = activeFace(die);
@@ -75,7 +75,7 @@ describe('placement rule compatibility', () => {
     face.enhancements.bonus = 1;
     face.enhancements.golden = 1;
     face.enhancements.workout = 1;
-    expect(placementError(die, face, 'mirror')).toContain('This Face is full');
-    expect(canPlace(die, face, 'bonus')).toBe(true);
+    expect(placementError(die, face, 'mirror', 3)).toContain('This Face is full');
+    expect(canPlace(die, face, 'bonus', 3)).toBe(true);
   });
 });

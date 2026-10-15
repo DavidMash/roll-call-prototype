@@ -144,6 +144,12 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   test.setTimeout(120_000);
   const seed = flameSeed();
   let game = await reachReward(page, seed);
+  const generatedMinigun = game.flameSelection!.offers.find(item => item.flame === 'minigun');
+  if (!generatedMinigun) {
+    game.flameSelection!.offers[0].flame = 'minigun';
+    await installRunState(page, game);
+    await ready(page);
+  }
   await expect(page.getByRole('main').getByText('FLAME SELECTION', { exact: true })).toBeVisible();
   await expect(page.getByText('Active Embers', { exact: true })).toHaveCount(0);
   await expect(page.locator('[data-testid^="flame-offer-"]')).toHaveCount(3);
@@ -207,10 +213,9 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   await expect(page.locator('.driver-popover')).toHaveCount(0);
   const shopStoke = page.getByRole('dialog', { name: FLAMES.minigun.name });
   const amountControl = shopStoke.getByRole('spinbutton', { name: `Stoke amount for ${FLAMES.minigun.name}` });
-  await expect(amountControl).toHaveAttribute('aria-readonly', 'true');
-  await expect(amountControl.locator('input')).toHaveCount(0);
+  await expect(amountControl).toHaveAttribute('type', 'number');
   for (let step = 0; step < 2; step++) await shopStoke.getByRole('button', { name: 'Increase investment' }).click();
-  await expect(amountControl).toHaveAttribute('aria-valuenow', '2');
+  await expect(amountControl).toHaveValue('2');
   await expect(shopStoke.getByText(/AFTER STOKE · 2\/100/)).toBeVisible();
   await shopStoke.getByRole('button', { name: 'STOKE 2 GOLD', exact: true }).click();
   game = dispatch(game, { type: 'STOKE_FLAME', dieId: 0, amount: 2 }).state;

@@ -1001,7 +1001,8 @@ test('stackable enhancement purchases show a single readable count badge', async
 
 test('six Enhancement types fit in two rows and remain manageable on mobile', async ({ page }) => {
   let game = await reachShop(page, findShopSeed());
-  game.engulfmentLevel = 5;
+  game.round = 31;
+  game.engulfmentLevel = 0;
   activeFace(game.dice[0]).enhancements = {
     bonus: 2, golden: 1, workout: 1, vintage: 1, boomerang: 3, hitchhiker: 1,
   };

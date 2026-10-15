@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { engulfmentAnimationProfile, engulfmentAssetKey, infernoEvaluationDuration, infernoRoman } from '../game/engulfment';
 import { formatExactScore, formatPlayerNumber } from '../game/copy';
 import { FLAMES } from '../game/flames';
-import { ENHANCEMENTS, enhancementsUnlockedAt, maxEnhancementTypesPerFace } from '../game/enhancements';
 import type { Action, Board } from '../game/types';
 
 export const INFERNO_RESULT_REVEAL_PAUSE_MS = 180;
@@ -16,9 +15,6 @@ export function InfernoEvaluationScreen({ board, submit }: {
   const [stage, setStage] = useState<'meter' | 'result'>('meter');
   const profile = useMemo(() => engulfmentAnimationProfile(evaluation.effectiveValue), [evaluation.effectiveValue]);
   const durationMs = infernoEvaluationDuration(evaluation.effectiveValue);
-  const oldCapacity = maxEnhancementTypesPerFace(evaluation.infernoLevelBefore);
-  const newCapacity = maxEnhancementTypesPerFace(evaluation.infernoLevelAfter);
-  const unlocked = enhancementsUnlockedAt(evaluation.infernoLevelAfter);
 
   useEffect(() => {
     setStage('meter');
@@ -48,12 +44,6 @@ export function InfernoEvaluationScreen({ board, submit }: {
     <Text fw={950} tt="uppercase" lts=".18em">ENGULFMENT</Text>
     <Title order={1}>INFERNO {infernoRoman(evaluation.infernoLevelAfter)}</Title>
     <Text className="engulfment-new-multiplier">×{formatExactScore(evaluation.infernoMultiplierAfter)}</Text>
-    {newCapacity > oldCapacity && <Stack gap={2} align="center" data-testid="inferno-enhancement-unlocks">
-      <Text size="xs" fw={900} tt="uppercase">Enhancement Capacity</Text>
-      <Text fw={950}>{oldCapacity} → {newCapacity}</Text>
-      {!!unlocked.length && <><Text size="xs" fw={900} tt="uppercase" mt="xs">New Enhancements Unlocked</Text>
-        <Text ta="center">{unlocked.map(id => ENHANCEMENTS[id].name).join(' · ')}</Text></>}
-    </Stack>}
     <div className="snuffed-flames" aria-label="Snuffed Flames">{evaluation.flamesSnuffed.map(asset => <Badge
       className="snuffed-flame" key={engulfmentAssetKey(asset)} color="dark" variant="filled">
       {FLAMES[asset.flame].name} · SNUFFED

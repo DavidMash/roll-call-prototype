@@ -595,7 +595,7 @@ export function validateAction(state: Board, action: Action): string | null {
     if (!offer || offer.purchased || !die) return 'Choose an available offer and a physical die.';
     const cost = enhancementOfferIsFree(state.shop, offer.id) ? 0 : enhancementCost(offer.enhancement);
     if (state.gold < cost) return 'Not enough Gold for this Enhancement.';
-    return placementError(die, activeFace(die), offer.enhancement, state.engulfmentLevel);
+    return placementError(die, activeFace(die), offer.enhancement, chapterNumberForRound(state.round));
   }
   if (action.type === 'SELL_ENHANCEMENT') {
     const die = state.dice.find(item => item.id === action.dieId);

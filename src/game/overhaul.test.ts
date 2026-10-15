@@ -87,12 +87,12 @@ describe('flat round Gold economy', () => {
 });
 
 describe('enhancement metadata, face slots, caps, and selling', () => {
-  it('uses Inferno capacity while permitting an existing stack', () => {
+  it('uses Chapter capacity while permitting an existing stack', () => {
     const state = shop(); const face = activeFace(state.dice[0]);
     face.enhancements.bonus = 1; face.enhancements.workout = 1; face.enhancements.golden = 1;
     expect(faceEnhancementTypes(face)).toHaveLength(3);
-    expect(canAttach(face, 'mirror', 2)).toBe(false);
-    expect(canAttach(face, 'bonus', 2)).toBe(true);
+    expect(canAttach(face, 'mirror', 3)).toBe(false);
+    expect(canAttach(face, 'bonus', 3)).toBe(true);
     state.dice[0].flame = { id: 'ultimate', investedGold: 0 };
     expect(faceEnhancementTypes(face)).toHaveLength(3);
   });
@@ -108,11 +108,11 @@ describe('enhancement metadata, face slots, caps, and selling', () => {
     face.enhancements.boomerang = 3; face.enhancements.bonus = 2; face.enhancements.workout = 1;
     const result = dispatch(state, { type: 'SELL_ENHANCEMENT', dieId: 0, face: 4, enhancement: 'boomerang' });
     expect(result.state.gold).toBe(103); expect(result.state.dice[0].faces[3].enhancements.boomerang).toBeUndefined();
-    expect(canAttach(result.state.dice[0].faces[3], 'bump', 2)).toBe(true);
+    expect(canAttach(result.state.dice[0].faces[3], 'bump', 3)).toBe(true);
     expect(result.state.stats.sales[0]).toMatchObject({ stacksSold: 3, face: 4, totalProceeds: 3 });
   });
   it('rejects a fourth type authoritatively during purchase', () => {
-    const state = shop(); state.engulfmentLevel = 2; const face = activeFace(state.dice[0]);
+    const state = shop(); state.round = 13; state.engulfmentLevel = 99; const face = activeFace(state.dice[0]);
     face.enhancements.bonus = 1; face.enhancements.workout = 1; face.enhancements.golden = 1; offer(state, 1, 'bump');
     expect(validateAction(state, { type: 'BUY', offerId: 1, dieId: 0 })).toContain('This Face is full');
   });

@@ -446,6 +446,11 @@ button { font: inherit; }
 .chapter-splash-title { text-align: center; text-shadow: 0 2px 18px rgba(0,0,0,.8), 0 0 38px rgba(255,255,255,.18); }
 .chapter-splash-title h1 { margin: 0; font-size: clamp(2.25rem, 8vw, 5.5rem); font-weight: 950; letter-spacing: .08em; }
 .chapter-splash-kicker { margin-bottom: 8px; color: rgba(255,255,255,.72); font-size: .68rem; font-weight: 900; letter-spacing: .32em; }
+.chapter-enhancement-unlock { width: min(88vw, 540px); margin: 20px auto 0; padding: 14px 18px; border: 1px solid rgba(255,255,255,.22);
+  border-radius: 12px; background: rgba(8,8,12,.48); box-shadow: 0 10px 34px rgba(0,0,0,.28); }
+.chapter-unlock-label { color: rgba(255,255,255,.72); font-size: .66rem; font-weight: 900; letter-spacing: .16em; }
+.chapter-unlock-capacity { margin: 1px 0 9px; font-size: clamp(1.25rem, 4vw, 1.75rem); font-weight: 950; }
+.chapter-unlock-names { margin-top: 3px; font-size: clamp(.78rem, 2.5vw, .98rem); font-weight: 750; line-height: 1.35; }
 @keyframes chapter-splash-fade { 0% { opacity: 0; } 15%, 78% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes chapter-start-light { 0%, 18% { opacity: 1; transform: translateX(-3%) scale(1); } 80%, 100% { opacity: .16; transform: translateX(7%) scale(1.08); } }
 @keyframes chapter-end-light { 0%, 20% { opacity: .08; transform: translateX(-6%) scale(.94); } 78%, 100% { opacity: 1; transform: translateX(3%) scale(1.08); } }

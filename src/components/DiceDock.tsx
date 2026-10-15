@@ -14,6 +14,7 @@ import { DiceRow } from './DiceRow';
 import type { FaceDetailsTarget } from './FaceDetailsModal';
 import type { FlameDetailsTarget } from './FlameDetailsModal';
 import { formatPlayerNumber } from '../game/copy';
+import { chapterNumberForRound } from '../game/chapters';
 import { EnhancementIdentity } from './EnhancementIdentity';
 
 export function DiceDock({ board, event, busy, actionsEnabled, cinematic, display, selection, setSelection,
@@ -45,9 +46,10 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
   const effectiveSelection = board.phase === 'round' && !awaitingWardenChoice
     ? normalizeBoardSelection(board, selection) : { dieIds: [], hand: null } satisfies Selection;
   const shop = board.phase === 'shop' ? board.shop : null;
+  const chapter = chapterNumberForRound(board.round);
   const offer = shop?.offers.find(item => item.id === selectedOffer && !item.purchased);
   const placementErrors = Object.fromEntries(dice.map(die => {
-    const faceError = offer ? placementError(die, activeFace(die), offer.enhancement, board.engulfmentLevel) : null;
+    const faceError = offer ? placementError(die, activeFace(die), offer.enhancement, chapter) : null;
     const costError = offer && shop && !enhancementOfferIsFree(shop, offer.id) && board.gold < enhancementCost(offer.enhancement)
       ? `Need ${formatPlayerNumber(enhancementCost(offer.enhancement))} Gold; you have ${formatPlayerNumber(board.gold)}.` : null;
     return [die.id, faceError ?? costError ?? ''];
@@ -77,7 +79,7 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
     const selected = shop.offers.find(item => item.id === offerId && !item.purchased);
     const die = board.dice.find(item => item.id === dieId);
     if (!selected || !die) return;
-    const error = placementError(die, activeFace(die), selected.enhancement, board.engulfmentLevel);
+    const error = placementError(die, activeFace(die), selected.enhancement, chapter);
     if (error?.startsWith('This Face is full.')) {
       setSelectedOffer(offerId);
       openFaceDetails({ dieId, face: die.value });

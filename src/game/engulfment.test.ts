@@ -9,6 +9,7 @@ import {
 import { HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { captureRollbackState } from './rollback';
 import { loadPersistedRun, savePersistedRun } from './persistence';
+import { highestUnlockedEnhancementTier, maxEnhancementTypesPerFace } from './enhancements';
 import type { Rank } from './types';
 import type { GameState } from './types';
 import type { HandScoredEvent, RoundAttemptFinishedEvent, XMultContribution } from './runHistoryV2';
@@ -100,6 +101,8 @@ describe('automatic Inferno evaluation', () => {
 
   it('runs automatically after payout, freezes the result, and gates the next reward flow', () => {
     const state = offeringState();
+    state.round = 13;
+    for (const event of state.historyV2) if (event.kind === 'hand_scored' || event.kind === 'round_attempt_finished') event.round = 13;
     state.historyV2 = state.historyV2.filter(event => event.kind !== 'round_attempt_finished');
     state.score = state.target;
     state.stats.rounds[0].finalScore = state.score;
@@ -109,6 +112,8 @@ describe('automatic Inferno evaluation', () => {
     expect(state.phase).toBe('roundSummary');
     expect(state.infernoEvaluation?.success).toBe(true);
     expect(state.engulfmentLevel).toBe(1);
+    expect(maxEnhancementTypesPerFace(3)).toBe(3);
+    expect(highestUnlockedEnhancementTier(3)).toBe(2);
     expect(state.dice[0].flame).toBeNull();
     expect(state.bonfires).toEqual(['lowball']);
     const clearedIndex = state.historyV2.findIndex(event => event.kind === 'round_attempt_finished' && event.outcome === 'cleared');
@@ -117,6 +122,7 @@ describe('automatic Inferno evaluation', () => {
     const evaluationIndex = state.historyV2.findIndex(event => event.kind === 'inferno_evaluated');
     expect(clearedIndex).toBeLessThan(payoutIndex);
     expect(payoutIndex).toBeLessThan(evaluationIndex);
+    expect(state.historyV2[evaluationIndex]).not.toHaveProperty('enhancementProgression');
 
     const frozen = structuredClone(state.infernoEvaluation);
     resolver.continueRoundSummary();

@@ -2,6 +2,7 @@ import { Paper, Text, Title } from '@mantine/core';
 import { useReducedMotion } from '@mantine/hooks';
 import { useEffect, useRef } from 'react';
 import { SCREEN_THEMES } from '../game/screenThemes';
+import { ENHANCEMENTS, enhancementsUnlockedInChapter, maxEnhancementTypesPerFace } from '../game/enhancements';
 import type { GameEvent } from '../game/types';
 
 export const CHAPTER_SPLASH_DURATION_MS = 1800;
@@ -17,6 +18,11 @@ export function ChapterSplash({ event, onComplete }: { event: GameEvent; onCompl
   const boss = event.chapterBoss;
   const startColor = miniBoss ? SCREEN_THEMES[miniBoss].accent : SCREEN_THEMES.round.accent;
   const endColor = boss ? SCREEN_THEMES[boss].accent : SCREEN_THEMES.round.accentStrong;
+  const capacityBefore = event.enhancementCapacityBefore ?? maxEnhancementTypesPerFace(chapterNumber - 1);
+  const capacityAfter = event.enhancementCapacityAfter ?? maxEnhancementTypesPerFace(chapterNumber);
+  const newlyUnlocked = event.newlyUnlockedEnhancements ?? enhancementsUnlockedInChapter(chapterNumber);
+  const showEnhancementUnlock = chapterNumber >= 2 && chapterNumber <= 6
+    && capacityAfter > capacityBefore && newlyUnlocked.length > 0;
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -35,6 +41,12 @@ export function ChapterSplash({ event, onComplete }: { event: GameEvent; onCompl
     <div className="chapter-splash-title">
       <Text className="chapter-splash-kicker">ROLL CALL</Text>
       <Title order={1}>CHAPTER {chapterNumber}</Title>
+      {showEnhancementUnlock && <div className="chapter-enhancement-unlock" data-testid="chapter-enhancement-unlock">
+        <Text className="chapter-unlock-label">ENHANCEMENT CAPACITY</Text>
+        <Text className="chapter-unlock-capacity">{capacityBefore} → {capacityAfter}</Text>
+        <Text className="chapter-unlock-label">NEW ENHANCEMENTS</Text>
+        <Text className="chapter-unlock-names">{newlyUnlocked.map(id => ENHANCEMENTS[id].name).join(' · ')}</Text>
+      </div>}
     </div>
   </Paper>;
 }

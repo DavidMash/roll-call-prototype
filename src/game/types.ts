@@ -594,6 +594,9 @@ export interface EventRecord {
   chapterNumber?: number;
   chapterMiniBoss?: MiniBossType;
   chapterBoss?: BigBossType;
+  enhancementCapacityBefore?: number;
+  enhancementCapacityAfter?: number;
+  newlyUnlockedEnhancements?: Enhancement[];
   hand?: HandId;
   playSource?: HandPlaySource;
   handConsumed?: boolean;

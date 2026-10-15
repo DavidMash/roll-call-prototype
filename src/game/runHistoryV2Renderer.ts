@@ -77,7 +77,9 @@ export function renderHandScoredV2(event: HandScoredEvent): string {
 export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
   switch (event.kind) {
     case 'run_started': return `RUN · ${event.seed} · schema ${event.schemaVersion} · ${event.ruleset}`;
-    case 'chapter_started': return `CHAPTER ${number(event.chapter)} · ${event.miniBoss} / ${event.boss}`;
+    case 'chapter_started': return `CHAPTER ${number(event.chapter)} · ${event.miniBoss} / ${event.boss}`
+      + (event.enhancementProgression ? ` · Enhancement capacity ${number(event.enhancementProgression.capacityBefore)}→${number(event.enhancementProgression.capacityAfter)}`
+        + ` · unlocked ${event.enhancementProgression.newlyUnlocked.join(', ')}` : '');
     case 'round_attempt_started': {
       const target = event.target as typeof event.target & { final?: number };
       return `ROUND ${number(event.round)} · Attempt ${number(event.attempt)} · Goal ${number(target.finalGoal ?? target.final ?? 0)}${event.boss ? ` · ${event.boss}` : ''}`;
@@ -85,7 +87,10 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     case 'hand_scored': return renderHandScoredV2(event);
     case 'roll_batch': return `ROLL · ${event.reason} · ${event.results.map(result => `${die(result.dieId)} ${number(result.beforeFace)}→${number(result.afterFace)}`).join(' · ')}`;
     case 'shop_visit_started': return `SHOP VISIT ${number(event.shopVisitId)} · ${event.reason}`;
-    case 'shop_offers_presented': return `OFFERS · ${event.pool} · ${event.offers.map(offer => `${offer.contentId} [${offer.rarity}]`).join(', ')}`;
+    case 'shop_offers_presented': return `OFFERS · ${event.pool}`
+      + (event.pool === 'enhancement' && event.chapter !== undefined
+        ? ` · Chapter ${number(event.chapter)} · capacity ${number(event.maxEnhancementTypesPerFace ?? 0)} · tier ${number(event.highestUnlockedEnhancementTier ?? 0)}` : '')
+      + ` · ${event.offers.map(offer => `${offer.contentId} [${offer.rarity}]`).join(', ')}`;
     case 'shop_transaction': return `SHOP · ${event.transaction.type} · ${'amount' in event.transaction ? number(event.transaction.amount) : ''}`.trim();
     case 'flame_changed': return `FLAME · ${event.change.type}${'flame' in event.change ? ` · ${FLAMES[event.change.flame].name}` : ''}`;
     case 'charge_changed': return `CHARGE · ${event.operation} · ×${number(event.before)}→×${number(event.after)}`;
