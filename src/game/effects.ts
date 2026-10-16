@@ -1,4 +1,4 @@
-import { bossRewardForRound, CONFIG, interestForGold, roundReward } from './config';
+import { bossRewardForEncounter, CONFIG, interestForGold, roundReward } from './config';
 import { activeFace, rollPhysicalDie, scoringPips, weightedSourceFace } from './dice';
 import { diminishingHalfChance, eligibleEnhancements, ENHANCEMENTS, enhancementsUnlockedInChapter, highestUnlockedEnhancementTier, loneWolfPipsFactor, maxEnhancementTypesPerFace, personalTrainerChance, stacks, tankMultiplierFactor, VINTAGE_BASE_SELL_CAP } from './enhancements';
 import {
@@ -2037,7 +2037,8 @@ export class Resolver {
       const heldGoldSnapshot = this.state.gold;
       const payout = { baseGold: roundReward(), unusedRerollGold: Math.max(0, this.state.manualRerollsRemaining - Math.max(0, this.options.nonPayingManualRerolls ?? 0)),
         interestGold: interestForGold(heldGoldSnapshot) * (this.state.specialOfferEffects.taxEvasionRounds > 0 ? 2 : 1),
-        bossRewardGold: bossType ? bossRewardForRound(this.state.round) : 0, heldGoldSnapshot, totalRoundRewardGold: 0 };
+        bossRewardGold: bossType ? bossRewardForEncounter(isMiniBossType(bossType)) : 0,
+        heldGoldSnapshot, totalRoundRewardGold: 0 };
       payout.totalRoundRewardGold = payout.baseGold + payout.unusedRerollGold + payout.interestGold + payout.bossRewardGold;
       current.payout = payout; this.state.lastRoundPayout = payout;
       this.addGold(payout.baseGold, `Round clear base: +${this.format(payout.baseGold)} gold`, 'roundBase');

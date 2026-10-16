@@ -37,11 +37,11 @@ describe('post-Boss Chapter boundary', () => {
     const summary = postBossFlameSelection('reward-resume');
     summary.phase = 'roundSummary';
     summary.flameSelection = null;
-    summary.gold = 29;
+    summary.gold = 39;
     summary.roundSummary = {
       round: 6, encounterType: 'boss', bossType: 'caller', score: 500n, target: 450n,
-      goldBefore: 10, goldAfter: 29, totalGoldEarned: 19,
-      sources: { baseRewardGold: 5, unusedRerollGold: 3, interestGold: 1, bossRewardGold: 10,
+      goldBefore: 10, goldAfter: 39, totalGoldEarned: 29,
+      sources: { baseRewardGold: 5, unusedRerollGold: 3, interestGold: 1, bossRewardGold: 20,
         goldenGold: 0, jackpotGold: 0, otherGold: 0 },
     };
     const gold = summary.gold;

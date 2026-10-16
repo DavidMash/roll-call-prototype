@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
 import { newRun, dispatch } from '../src/game/engine';
 import { activeFace } from '../src/game/dice';
-import { handOptions, handStats, HANDS, HAND_IDS } from '../src/game/hands';
+import { handOptions, handStats, HANDS, HAND_IDS, LOWER_HAND_IDS, relativeHandStrengthTiers, UPPER_HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import { enhancementCost, ENHANCEMENTS } from '../src/game/enhancements';
 import { CONFIG } from '../src/game/config';
@@ -269,12 +269,15 @@ test('scorecard keeps all fourteen categories visible with simplified actionable
     const row = page.getByTestId(`scorecard-row-${hand}`);
     const stats = handStats(hand, 1);
     await expect(row).toBeVisible();
-    await expect(row).toContainText(`Lv. ${stats.level}`);
-    await expect(page.getByTestId(`scorecard-stats-${hand}`)).toHaveCount(0);
+    await expect(page.getByTestId(`scorecard-stats-${hand}`)).toHaveText(`Lv. ${stats.level} · ${stats.basePips} × ${stats.baseMultiplier}`);
+    const section = UPPER_HAND_IDS.includes(hand) ? UPPER_HAND_IDS : LOWER_HAND_IDS;
+    const expectedTier = relativeHandStrengthTiers(Object.fromEntries(HAND_IDS.map(id => [id, 1])) as GameState['handLevels'], section)[hand];
+    await expect(row).toHaveAttribute('data-strength-tier', expectedTier!);
     await expect(page.getByTestId(`scorecard-score-${hand}`)).toHaveText('—');
   }
   await expect(page.locator('[data-state="playable"]')).not.toHaveCount(0);
   await expect(page.locator('[data-state="unavailable"]')).not.toHaveCount(0);
+  await expect(page.locator('[data-state="unavailable"][data-strength-tier]')).not.toHaveCount(0);
   await expect(page.getByText('Scorecard', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Clear selection' })).toHaveCount(0);
   await expect(page.getByTestId('round-score-progress')).toHaveText('0 / 100');
@@ -609,7 +612,12 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   await matchBoard(page, game);
   const row = page.getByTestId(`scorecard-row-${hand}`);
   await expect(row).toContainText(`Lv. 2`);
-  await expect(page.getByTestId(`scorecard-stats-${hand}`)).toHaveCount(0);
+  await expect(page.getByTestId(`scorecard-stats-${hand}`)).toHaveText(
+    `Lv. 2 · ${level2.basePips} × ${level2.baseMultiplier}`,
+  );
+  const section = UPPER_HAND_IDS.includes(hand) ? UPPER_HAND_IDS : LOWER_HAND_IDS;
+  const expectedTier = relativeHandStrengthTiers(game.handLevels, section)[hand];
+  await expect(row).toHaveAttribute('data-strength-tier', expectedTier!);
 
   await page.clock.install({ time: new Date('2026-09-18T12:00:00Z') });
   await setPlaybackSpeed(page, 'NORMAL');

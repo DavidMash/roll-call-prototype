@@ -1,5 +1,5 @@
 import { Badge, Button, Text, Tooltip } from '@mantine/core';
-import { handStats, HANDS, HAND_IDS, LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from '../game/hands';
+import { handStats, HANDS, HAND_IDS, LOWER_HAND_IDS, relativeHandStrengthTiers, ultimateHands, UPPER_HAND_IDS } from '../game/hands';
 import { activeFlameId, handFamilyFlameTargets } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
@@ -40,6 +40,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
   const ownsUltimate = board.bonfires.includes('ultimate')
     || board.dice.some(die => activeFlameId(die.flame) === 'ultimate');
   const flameTargets = new Set(handFamilyFlameTargets(board));
+  const strengthTiers = relativeHandStrengthTiers(board.handLevels, hands);
   return <section className="scorecard-section" aria-labelledby={`scorecard-${title.toLowerCase()}`}>
     <Text id={`scorecard-${title.toLowerCase()}`} className="scorecard-section-title" size="xs" fw={700} tt="uppercase">{title}</Text>
     <div className="scorecard-rows">
@@ -60,11 +61,12 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
         const magicianCompleted = magicianCalled && board.boss?.type === 'magician' && board.boss.completedHands.includes(hand);
         const score = board.scoreByHand[hand];
         const state = used ? 'consumed' : selected ? 'selected' : playable ? 'playable' : 'unavailable';
+        const strengthTier = strengthTiers[hand] ?? 'normal';
         const scoreLabel = score === undefined ? EMPTY_TEXT.score : `${formatExactScore(score)} points`;
         const showQuickPlay = selected && canSubmit;
         return <div key={hand} className={`scorecard-row-shell ${showQuickPlay ? 'has-quick-play' : ''}`} data-tutorial={`hand-${hand}`}>
         <Button variant={selected ? 'light' : 'subtle'} color={selected ? 'teal' : 'gray'}
-          className={`scorecard-row ${state} ${targeted ? 'targeted' : ''} ${board.boss?.type === 'caller' && board.boss.calledHand === hand ? 'caller-called' : ''} ${board.boss?.type === 'fly' && board.boss.flyHand === hand ? 'fly-row' : ''}`} data-testid={`scorecard-row-${hand}`} data-state={state}
+          className={`scorecard-row ${state} strength-${strengthTier} ${targeted ? 'targeted' : ''} ${board.boss?.type === 'caller' && board.boss.calledHand === hand ? 'caller-called' : ''} ${board.boss?.type === 'fly' && board.boss.flyHand === hand ? 'fly-row' : ''}`} data-testid={`scorecard-row-${hand}`} data-state={state} data-strength-tier={strengthTier}
           disabled={busy || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}
           aria-keyshortcuts={selected && canSubmit ? 'Enter' : undefined}
           aria-label={`${definition.name} · Lv. ${formatPlayerNumber(stats.level)} · ${formatPlayerNumber(stats.basePips)} Pips · ×${formatPlayerNumber(stats.baseMultiplier)} Mult${isUltimate ? ' · Ultimate Hand' : ''}${magicianCalled ? ` · Magician call ${magicianCompleted ? 'completed' : 'pending'}` : ''} · ${scoreLabel}${used ? ' · Used' : ''}${neglected ? ' · Neglected' : ''}`}>
@@ -76,7 +78,9 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
                 {board.boss?.type === 'fly' && board.boss.flyHand === hand && <span className="fly-marker" title="The Fly is here"><span className="wide-label">● FLY </span><span className="compact-label">● </span></span>}
                 <span className="hand-name-full">{definition.name}</span><span className="hand-name-compact">{MOBILE_HAND_NAMES[hand] ?? definition.name}</span>
               </span>
-              <span className="hand-level">Lv. {formatPlayerNumber(stats.level)}</span>
+              <span className="hand-level" data-testid={`scorecard-stats-${hand}`}>
+                Lv. {formatPlayerNumber(stats.level)} <span aria-hidden="true">·</span> {formatPlayerNumber(stats.basePips)} × {formatPlayerNumber(stats.baseMultiplier)}
+              </span>
             </span>
             {(isUltimate || magicianCalled) && <span className="scorecard-marker-badges">
               {isUltimate && <Tooltip label="Your highest level hand." multiline maw={300} withArrow>

@@ -481,6 +481,7 @@ test('Hexer preview keeps its faces secret and encounter fits all six dice on on
   const legalHands = new Set(handOptions(activeEncounterDice(game), game.consumed, [cursed.id]).map(option => option.id));
   for (const hand of HAND_IDS) {
     await expect(page.getByTestId(`scorecard-row-${hand}`)).toHaveAttribute('data-state', legalHands.has(hand) ? 'playable' : 'unavailable');
+    await expect(page.getByTestId(`scorecard-row-${hand}`)).toHaveAttribute('data-strength-tier', /normal|elevated|strongest/);
   }
 
   const playerButton = page.getByRole('button', { name: /^Die 1,/ });

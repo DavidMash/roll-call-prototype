@@ -36,7 +36,7 @@ describe('authoritative Round Summary', () => {
     });
   });
 
-  it('adds the escalating Boss Reward after interest and routes a Big Boss to Flame Selection', () => {
+  it('adds the fixed Big Boss Reward after interest and routes to Flame Selection', () => {
     const state = clearState(50);
     state.round = 6;
     state.stats.rounds[0].round = 6;
@@ -44,9 +44,9 @@ describe('authoritative Round Summary', () => {
     state.boss = { type: 'caller', calledHand: 'sixes', playsRemaining: 3, satisfied: true, satisfyingSource: 'manual' };
     const result = dispatch(state, { type: 'PLAY', hand: 'sixes', dieIds: [0] }, constant());
     const summary = result.state.roundSummary!;
-    expect(summary).toMatchObject({ encounterType: 'boss', bossType: 'caller', goldBefore: 50, goldAfter: 78, totalGoldEarned: 28,
-      sources: { baseRewardGold: 5, unusedRerollGold: 2, interestGold: 10, bossRewardGold: 11, goldenGold: 0, jackpotGold: 0, otherGold: 0 } });
-    expect(result.events.find(event => event.type === 'ROUND_SUMMARY_SHOWN')).toMatchObject({ bossRewardGold: 11, goldEarnedTotal: 28 });
+    expect(summary).toMatchObject({ encounterType: 'boss', bossType: 'caller', goldBefore: 50, goldAfter: 87, totalGoldEarned: 37,
+      sources: { baseRewardGold: 5, unusedRerollGold: 2, interestGold: 10, bossRewardGold: 20, goldenGold: 0, jackpotGold: 0, otherGold: 0 } });
+    expect(result.events.find(event => event.type === 'ROUND_SUMMARY_SHOWN')).toMatchObject({ bossRewardGold: 20, goldEarnedTotal: 37 });
     const goldEvents = result.events.filter(event => event.type === 'GOLD_ADDED').map(event => event.goldSource);
     expect(goldEvents).toEqual(['roundBase', 'unusedRerolls', 'interest', 'bossReward']);
     expect(result.events.some(event => event.type === 'MAP_TRANSITION')).toBe(false);

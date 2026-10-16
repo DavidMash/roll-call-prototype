@@ -69,6 +69,7 @@ test('Mini-Boss map, preview, encounter label, and Neglected badges reuse the bo
   await expect(page.getByTestId('boss-panel')).toContainText('THE NEGLECTED');
   for (const hand of ['ones', 'threes']) {
     await expect(page.getByTestId(`scorecard-row-${hand}`)).toHaveAttribute('data-state', 'consumed');
+    await expect(page.getByTestId(`scorecard-row-${hand}`)).toHaveAttribute('data-strength-tier', /normal|elevated|strongest/);
     await expect(page.getByTestId(`scorecard-row-${hand}`)).toContainText('NEGLECTED');
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -109,6 +110,7 @@ test('Magician presents all calls while the missing die is absent', async ({ pag
   state.bonfires = ['ultimate'];
   await install(page, state);
   const completedRow = page.getByTestId(`scorecard-row-${completed}`);
+  await expect(completedRow).toHaveAttribute('data-strength-tier', 'strongest');
   await expect(page.getByTestId(`magician-call-${completed}`)).toHaveAttribute('data-state', 'completed');
   await expect(page.getByTestId(`magician-call-${completed}`)).toHaveAttribute('title', 'Magician call completed');
   await expect(completedRow).toContainText('USED');

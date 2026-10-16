@@ -3,7 +3,7 @@ import { dispatch, newRun } from './engine';
 import { Resolver } from './effects';
 import {
   classifyInfernoTrend, classifyInfernoWeakness, createInfernoEvaluation, ENGULFMENT_REQUIRED_MULTIPLIER,
-  engulfmentTrainingNormalization, evaluateEngulfmentOffering, infernoEvaluationDuration, infernoMultiplier,
+  engulfmentSucceeds, engulfmentTrainingNormalization, evaluateEngulfmentOffering, infernoEvaluationDuration, infernoMultiplier,
   INFERNO_SUSPENSION_MESSAGE, maximumPossibleEngulfmentReadiness, ownedEngulfmentAssets, selectInfernoFeedback,
 } from './engulfment';
 import { HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
@@ -13,6 +13,7 @@ import { highestUnlockedEnhancementTier, maxEnhancementTypesPerFace } from './en
 import type { Rank } from './types';
 import type { GameState } from './types';
 import type { HandScoredEvent, RoundAttemptFinishedEvent, XMultContribution } from './runHistoryV2';
+import { renderRunHistoryV2Event } from './runHistoryV2Renderer';
 
 function envelope(seq: number) {
   return { seq, round: 1, attempt: 1, actionId: seq, timelineId: 0 };
@@ -62,7 +63,9 @@ describe('automatic Inferno evaluation', () => {
     expect(evaluateEngulfmentOffering(state, assets).offeringMultiplier).toBe(125);
     expect(evaluateEngulfmentOffering(state, [assets[0]]).offeringMultiplier).toBe(25);
     expect(evaluateEngulfmentOffering(state, [assets[1]]).offeringMultiplier).toBe(5);
-    expect(ENGULFMENT_REQUIRED_MULTIPLIER).toBe(20);
+    expect(ENGULFMENT_REQUIRED_MULTIPLIER).toBe(25);
+    expect(engulfmentSucceeds(24.999)).toBe(false);
+    expect(engulfmentSucceeds(25)).toBe(true);
   });
 
   it('snuffs the shortest successful strongest-first prefix and preserves the rest', () => {
@@ -123,6 +126,9 @@ describe('automatic Inferno evaluation', () => {
     expect(clearedIndex).toBeLessThan(payoutIndex);
     expect(payoutIndex).toBeLessThan(evaluationIndex);
     expect(state.historyV2[evaluationIndex]).not.toHaveProperty('enhancementProgression');
+    const historyEvaluation = state.historyV2[evaluationIndex];
+    expect(historyEvaluation).toMatchObject({ kind: 'inferno_evaluated', evaluation: { threshold: 25 } });
+    expect(renderRunHistoryV2Event(historyEvaluation)).toContain('/ ×25');
 
     const frozen = structuredClone(state.infernoEvaluation);
     resolver.continueRoundSummary();
@@ -364,7 +370,7 @@ describe('automatic Inferno evaluation', () => {
   it('uses one fixed ceremony duration independent of gameplay playback speed', () => {
     for (const _speed of ['normal', 'fast', 'instant'] as const) {
       expect(infernoEvaluationDuration(5)).toBe(2100);
-      expect(infernoEvaluationDuration(25)).toBe(2300);
+      expect(infernoEvaluationDuration(25)).toBe(3800);
     }
     expect(infernoEvaluationDuration(25)).toBeGreaterThan(infernoEvaluationDuration(5));
   });

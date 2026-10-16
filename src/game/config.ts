@@ -24,7 +24,10 @@ export const CONFIG = {
   resolutionEventCap: 10000,
 } as const;
 export const roundReward = (_round?: number) => CONFIG.roundRewardBase;
-export const bossRewardForRound = (round: number) => 9 + round / 3;
+export const MINI_BOSS_REWARD_GOLD = 15;
+export const BOSS_REWARD_GOLD = 20;
+export const bossRewardForEncounter = (miniBoss: boolean) =>
+  miniBoss ? MINI_BOSS_REWARD_GOLD : BOSS_REWARD_GOLD;
 export const interestForGold = (heldGold: number) => Math.min(CONFIG.interestCap,
   Math.floor(Math.max(0, heldGold) / CONFIG.interestInterval));
 export const diceRerollCost = (count: number) => CONFIG.diceRerollBase * CONFIG.rerollCostGrowth ** count;

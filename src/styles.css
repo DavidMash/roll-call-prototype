@@ -76,9 +76,15 @@ button { font: inherit; }
 .scorecard-row-copy { min-width: 0; display: flex; align-items: center; justify-content: flex-start; gap: 6px; overflow: hidden; line-height: 1; text-align: left; }
 .scorecard-hand-name { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; overflow: hidden; white-space: nowrap; text-align: left; }
 .scorecard-name-line { max-width: 100%; overflow: hidden; color: var(--mantine-color-gray-1); font-size: .9rem; font-weight: 800; line-height: 1; text-overflow: ellipsis; }
-.scorecard-hand-name > .hand-level { color: var(--mantine-color-gray-5); font-size: .64rem; font-weight: 650; line-height: 1; }
+.scorecard-hand-name > .hand-level { max-width: 100%; overflow: hidden; color: var(--mantine-color-gray-5); font-size: .64rem; font-weight: 650; line-height: 1; text-overflow: ellipsis; }
 .scorecard-base { color: var(--mantine-color-gray-5); font-size: .65rem; font-weight: 550; white-space: nowrap; }
 .scorecard-row-result { display: flex; align-items: center; justify-content: flex-end; gap: 5px; color: var(--mantine-color-gray-1); font-size: .78rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+.scorecard-row.strength-elevated:not(.unavailable):not(.consumed):not(.selected) { background: rgba(34, 139, 230, .055); }
+.scorecard-row.strength-strongest:not(.unavailable):not(.consumed):not(.selected) { background: rgba(18, 184, 134, .105); }
+.scorecard-row.strength-elevated:not(.unavailable):not(.consumed):not(.selected):hover { background: rgba(34, 139, 230, .11); }
+.scorecard-row.strength-strongest:not(.unavailable):not(.consumed):not(.selected):hover { background: rgba(18, 184, 134, .16); }
+.scorecard-row.strength-elevated .scorecard-name-line { color: var(--mantine-color-blue-2); }
+.scorecard-row.strength-strongest .scorecard-name-line { color: var(--mantine-color-teal-2); font-weight: 900; }
 .scorecard-row.selected { background: rgba(18, 184, 134, .16); box-shadow: inset 3px 0 var(--mantine-color-teal-5); }
 .scorecard-row.targeted { box-shadow: inset 3px 0 var(--mantine-color-orange-6); }
 .scorecard-row.targeted.selected { box-shadow: inset 3px 0 var(--mantine-color-orange-5), inset 0 0 0 1px var(--mantine-color-teal-7); }
@@ -88,6 +94,7 @@ button { font: inherit; }
 .well-trained-preview { color: var(--mantine-color-violet-3); font-size: .52rem; font-weight: 750; white-space: nowrap; }
 .scorecard-row.unavailable:disabled { opacity: .35; }
 .scorecard-row.consumed:disabled { opacity: .56; background: rgba(255,255,255,.018); }
+.scorecard-row.unavailable .scorecard-name-line, .scorecard-row.consumed .scorecard-name-line { color: var(--mantine-color-gray-4); }
 .scorecard-row.consumed .scorecard-row-result { color: var(--mantine-color-gray-4); }
 .scorecard-refresh-celebration {
   position: absolute; z-index: 24; left: 50%; top: 50%; width: min(88%, 390px); transform: translate(-50%, -50%);
@@ -640,7 +647,7 @@ button { font: inherit; }
   .active-gameplay .scorecard-row-copy { align-self: stretch; display: flex; gap: 4px; align-items: center; overflow: hidden; }
   .active-gameplay .scorecard-hand-name { min-width: 0; justify-content: center; gap: 4px; }
   .active-gameplay .scorecard-name-line { font-size: clamp(.9rem, 4.6vw, 1.25rem); }
-  .active-gameplay .scorecard-hand-name > .hand-level { font-size: clamp(.66rem, 3vw, .85rem); }
+  .active-gameplay .scorecard-hand-name > .hand-level { font-size: clamp(.56rem, 2.45vw, .72rem); }
   .active-gameplay .ultimate-badge, .active-gameplay .magician-call-badge,
   .active-gameplay .scorecard-row-result .mantine-Badge-root { flex: none; height: 12px; padding-inline: 2px; font-size: .4rem; }
   .active-gameplay .ultimate-badge { width: 12px; }

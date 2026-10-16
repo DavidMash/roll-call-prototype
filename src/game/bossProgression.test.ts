@@ -346,7 +346,7 @@ describe('The Hexer', () => {
     state.target = 1n;
     state = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, cursed.id] }, constant(.2)).state;
     expect(state.phase).toBe('roundSummary');
-    expect(state.lastRoundPayout).toMatchObject({ baseGold: 5, unusedRerollGold: 3, interestGold: 0, bossRewardGold: 10, totalRoundRewardGold: 18 });
+    expect(state.lastRoundPayout).toMatchObject({ baseGold: 5, unusedRerollGold: 3, interestGold: 0, bossRewardGold: 20, totalRoundRewardGold: 28 });
     state = dispatch(state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
     expect(state.phase).toBe('specialOffer');
     expect(state.dice.every(die => die.owner === 'player')).toBe(true);

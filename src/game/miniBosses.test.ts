@@ -70,7 +70,7 @@ describe('six-Round encounter cadence', () => {
     state.stats.rounds.at(-1)!.target = 1n;
     state.dice[0].value = 6;
     const clear = dispatch(state, { type: 'PLAY', hand: 'sixes', dieIds: [0] }, constant(.2));
-    expect(clear.state.lastRoundPayout?.bossRewardGold).toBe(10);
+    expect(clear.state.lastRoundPayout?.bossRewardGold).toBe(15);
     expect(clear.events.find(event => event.type === 'GOLD_ADDED' && event.goldSource === 'bossReward')?.message)
       .toContain('Mini-Boss Reward');
     const continued = dispatch(clear.state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant(.2));

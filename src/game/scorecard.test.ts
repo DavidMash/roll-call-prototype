@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { activeFace } from './dice';
 import { dispatch, newRun } from './engine';
-import { HAND_IDS, startingBasePips } from './hands';
+import { handStats, HAND_IDS, LOWER_HAND_IDS, relativeHandStrengthTiers, startingBasePips, UPPER_HAND_IDS } from './hands';
 import { handScore } from './scoring';
 import type { GameState, HandId, Rank } from './types';
 
@@ -38,6 +38,30 @@ describe('intrinsic hand stats', () => {
     ['fiveKind', [6, 6, 6, 6, 6], [0, 1, 2, 3, 4], 225n],
   ])('%s includes Base Pips before its multiplier', (hand, values, dieIds, score) => {
     expect(handScore(board(values).dice, hand, dieIds).score).toBe(BigInt(score));
+  });
+});
+
+describe('scorecard strength tiers', () => {
+  it('uses authoritative Base Pips × Base Mult and compares Upper and Lower independently', () => {
+    const levels = newRun('strength-sections').state.handLevels;
+    levels.ones = 8;
+    const upper = relativeHandStrengthTiers(levels, UPPER_HAND_IDS);
+    const lower = relativeHandStrengthTiers(levels, LOWER_HAND_IDS);
+    expect(handStats('ones', levels.ones).basePips * handStats('ones', levels.ones).baseMultiplier)
+      .toBeGreaterThan(handStats('fiveKind', levels.fiveKind).basePips * handStats('fiveKind', levels.fiveKind).baseMultiplier);
+    expect(upper.ones).toBe('strongest');
+    expect(lower.fiveKind).toBe('strongest');
+  });
+
+  it('allows ties and recalculates tiers when current levels change', () => {
+    const levels = newRun('strength-updates').state.handLevels;
+    const tied = relativeHandStrengthTiers(levels, UPPER_HAND_IDS);
+    expect(UPPER_HAND_IDS.every(hand => tied[hand] === 'strongest')).toBe(true);
+
+    levels.ones = 2;
+    const trained = relativeHandStrengthTiers(levels, UPPER_HAND_IDS);
+    expect(trained.ones).toBe('strongest');
+    expect(UPPER_HAND_IDS.filter(hand => hand !== 'ones').every(hand => trained[hand] === 'normal')).toBe(true);
   });
 });
 

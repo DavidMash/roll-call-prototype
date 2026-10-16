@@ -15,7 +15,7 @@ import type {
 } from './types';
 
 export const ENGULFMENT_EVIDENCE_ROUNDS = 6;
-export const ENGULFMENT_REQUIRED_MULTIPLIER = 20;
+export const ENGULFMENT_REQUIRED_MULTIPLIER = 25;
 export const INFERNO_TREND_DEAD_ZONE = 0.05;
 export const INFERNO_CLOSE_READINESS = 0.8;
 export const INFERNO_SUSPENSION_MESSAGE = 'The Inferno will return when you have more Flames to offer.';

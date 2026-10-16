@@ -234,7 +234,11 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     choice.value = 1;
     const cleared = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [choice.id] }, constant()).state;
     expect(cleared.stats.goldBySource.roundBase).toBe(5);
-    expect(cleared.stats.goldBySource.bossReward).toBe(10);
+    expect(cleared.stats.goldBySource.bossReward).toBe(15);
+    const rewardGold = cleared.gold;
+    const continued = dispatch(cleared, { type: 'CONTINUE_ROUND_SUMMARY' }, constant(0.2)).state;
+    expect(continued.stats.goldBySource.bossReward).toBe(15);
+    expect(continued.gold).toBe(rewardGold);
   });
 });
 

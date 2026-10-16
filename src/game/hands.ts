@@ -74,6 +74,25 @@ export const trainedBaselineStrength = (hand: HandId, level: number) => {
   const stats = handStats(hand, level);
   return stats.basePips * stats.baseMultiplier;
 };
+export type HandStrengthTier = 'normal' | 'elevated' | 'strongest';
+
+/**
+ * Groups current authoritative Base Pips × Base Mult into a few relative tiers.
+ * Call once per scorecard section so Upper and Lower hands are never compared.
+ */
+export function relativeHandStrengthTiers(
+  handLevels: HandLevels,
+  hands: readonly HandId[],
+): Partial<Record<HandId, HandStrengthTier>> {
+  const strengths = hands.map(hand => trainedBaselineStrength(hand, handLevels[hand]));
+  const strongest = Math.max(0, ...strengths);
+  return Object.fromEntries(hands.map((hand, index) => {
+    const relativeStrength = strongest > 0 ? strengths[index] / strongest : 0;
+    const tier: HandStrengthTier = relativeStrength >= .9 ? 'strongest'
+      : relativeStrength >= .65 ? 'elevated' : 'normal';
+    return [hand, tier];
+  })) as Partial<Record<HandId, HandStrengthTier>>;
+}
 export function rankedHands(handLevels: HandLevels): HandId[] {
   return [...HAND_IDS].sort((a, b) => {
     const levelDifference = handLevels[b] - handLevels[a];
