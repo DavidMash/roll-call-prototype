@@ -4,7 +4,8 @@ import { Resolver } from './effects';
 import {
   classifyInfernoTrend, classifyInfernoWeakness, createInfernoEvaluation, ENGULFMENT_REQUIRED_MULTIPLIER,
   engulfmentSucceeds, engulfmentTrainingNormalization, evaluateEngulfmentOffering, infernoEvaluationDuration, infernoMultiplier,
-  INFERNO_SUSPENSION_MESSAGE, maximumPossibleEngulfmentReadiness, ownedEngulfmentAssets, selectInfernoFeedback,
+  infernoMeterTransition, INFERNO_SUSPENSION_MESSAGE, maximumPossibleEngulfmentReadiness, ownedEngulfmentAssets,
+  selectInfernoFeedback, visibleInfernoMeterPercent,
 } from './engulfment';
 import { HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { captureRollbackState } from './rollback';
@@ -51,7 +52,18 @@ function offeringState(): GameState {
   return state;
 }
 
-describe('automatic Inferno evaluation', () => {
+function singleFlameState(factor: number): GameState {
+  const state = newRun(`single-flame-${factor}`, { next: () => .25 }).state;
+  state.dice[0].flame = { id: 'vineyard', investedGold: 100 };
+  state.flameInstanceIds = { vineyard: 3 };
+  state.nextFlameInstanceId = 4;
+  state.historyV2.push(scored(100, [
+    { sourceId: 'vineyard', origin: 'ember', factor, sourceInstanceId: 3, dieId: 0 },
+  ]), cleared(101));
+  return state;
+}
+
+describe('Inferno evaluation and explicit Engulfment', () => {
   it('skips evaluation when no Flames are owned', () => {
     expect(ownedEngulfmentAssets(newRun('no-flames').state)).toEqual([]);
     expect(createInfernoEvaluation(newRun('no-flames').state)).toBeNull();
@@ -66,6 +78,12 @@ describe('automatic Inferno evaluation', () => {
     expect(ENGULFMENT_REQUIRED_MULTIPLIER).toBe(25);
     expect(engulfmentSucceeds(24.999)).toBe(false);
     expect(engulfmentSucceeds(25)).toBe(true);
+
+    const belowThreshold = createInfernoEvaluation(singleFlameState(24.9))!;
+    const atThreshold = createInfernoEvaluation(singleFlameState(25))!;
+    expect(belowThreshold.flames[0].investment).toBe(100);
+    expect(belowThreshold.success).toBe(false);
+    expect(atThreshold.success).toBe(true);
   });
 
   it('snuffs the shortest successful strongest-first prefix and preserves the rest', () => {
@@ -76,6 +94,7 @@ describe('automatic Inferno evaluation', () => {
     expect(evaluation.flamesSnuffed.map(asset => asset.instanceId)).toEqual([3]);
     expect(evaluation.flamesPreserved.map(asset => asset.instanceId)).toEqual([8]);
     expect(evaluation.infernoMultiplierAfter).toBe(25n);
+    expect(infernoMeterTransition(evaluation).endPercent).toBe(100);
   });
 
   it('uses stable instance IDs as the singleton-strength tie breaker', () => {
@@ -102,23 +121,87 @@ describe('automatic Inferno evaluation', () => {
     expect(selectInfernoFeedback('seed', 2, 'close', 'worsening', 'contribution_declined', []).id.startsWith('worsening-')).toBe(true);
   });
 
-  it('runs automatically after payout, freezes the result, and gates the next reward flow', () => {
+  it('animates from the persisted prior position upward, unchanged, and downward while capping visible fill', () => {
+    const state = singleFlameState(19);
+    state.infernoProgress.previousReadiness = .4;
+    const upward = createInfernoEvaluation(state)!;
+    expect(infernoMeterTransition(upward)).toEqual({ startPercent: 40, endPercent: 76 });
+
+    state.infernoProgress.previousReadiness = upward.readiness;
+    const unchanged = createInfernoEvaluation(state)!;
+    expect(infernoMeterTransition(unchanged)).toEqual({ startPercent: 76, endPercent: 76 });
+
+    const hand = state.historyV2.find(event => event.kind === 'hand_scored')! as HandScoredEvent;
+    hand.xMultContributions[0].factor = 13;
+    hand.score.finalXMult = 13;
+    hand.score.awarded = 1_300n;
+    hand.score.raw = '1300';
+    const downward = createInfernoEvaluation(state)!;
+    expect(infernoMeterTransition(downward)).toEqual({ startPercent: 76, endPercent: 52 });
+    expect(visibleInfernoMeterPercent(1.4)).toBe(100);
+    expect(visibleInfernoMeterPercent(-.2)).toBe(0);
+  });
+
+  it('uses prior readiness only as the animation origin and never accumulates it into current Fuel', () => {
+    const state = singleFlameState(15);
+    state.infernoProgress.previousReadiness = .8;
+    const evaluation = createInfernoEvaluation(state)!;
+    expect(evaluation.effectiveValue).toBe(15);
+    expect(evaluation.readiness).toBe(.6);
+    expect(infernoMeterTransition(evaluation)).toEqual({ startPercent: 80, endPercent: 60 });
+  });
+
+  it('NOT YET preserves the build and meter but later offerings can lose and regain readiness', () => {
+    const state = offeringState();
+    const evaluation = createInfernoEvaluation(state)!;
+    state.phase = 'inferno';
+    state.infernoEvaluation = evaluation;
+    state.infernoProgress.previousReadiness = evaluation.readiness;
+    const buildBefore = {
+      dice: structuredClone(state.dice), bonfires: [...state.bonfires], flameInstanceIds: structuredClone(state.flameInstanceIds),
+      level: state.engulfmentLevel, handLevels: structuredClone(state.handLevels),
+    };
+    const deferred = dispatch(state, { type: 'NOT_YET' }, { next: () => .25 }).state;
+    expect(deferred.infernoEvaluation).toBeNull();
+    expect(deferred.infernoProgress.previousReadiness).toBe(1);
+    expect({ dice: deferred.dice, bonfires: deferred.bonfires, flameInstanceIds: deferred.flameInstanceIds,
+      level: deferred.engulfmentLevel, handLevels: deferred.handLevels }).toEqual(buildBefore);
+
+    const vineyard = deferred.dice[0].flame;
+    deferred.dice[0].flame = null;
+    delete deferred.flameInstanceIds.vineyard;
+    const weaker = createInfernoEvaluation(deferred)!;
+    expect(weaker.success).toBe(false);
+    expect(infernoMeterTransition(weaker)).toEqual({ startPercent: 100, endPercent: 20 });
+
+    deferred.dice[0].flame = vineyard;
+    deferred.flameInstanceIds.vineyard = 3;
+    deferred.infernoProgress.previousReadiness = weaker.readiness;
+    const readyAgain = createInfernoEvaluation(deferred)!;
+    expect(readyAgain.success).toBe(true);
+    expect(infernoMeterTransition(readyAgain)).toEqual({ startPercent: 20, endPercent: 100 });
+    expect(readyAgain.flamesSnuffed.map(asset => asset.instanceId)).toEqual([3]);
+  });
+
+  it('evaluates after payout without automatically Engulfing, then resolves only after acceptance', () => {
     const state = offeringState();
     state.round = 13;
     for (const event of state.historyV2) if (event.kind === 'hand_scored' || event.kind === 'round_attempt_finished') event.round = 13;
     state.historyV2 = state.historyV2.filter(event => event.kind !== 'round_attempt_finished');
     state.score = state.target;
     state.stats.rounds[0].finalScore = state.score;
+    UPPER_HAND_IDS.forEach((hand, index) => { state.handLevels[hand] = index + 1; });
+    LOWER_HAND_IDS.forEach((hand, index) => { state.handLevels[hand] = index + 1; });
+    const levelsBefore = structuredClone(state.handLevels);
     const resolver = new Resolver(state, { next: () => .25 });
     resolver.evaluate();
 
     expect(state.phase).toBe('roundSummary');
     expect(state.infernoEvaluation?.success).toBe(true);
-    expect(state.engulfmentLevel).toBe(1);
-    expect(maxEnhancementTypesPerFace(3)).toBe(3);
-    expect(highestUnlockedEnhancementTier(3)).toBe(2);
-    expect(state.dice[0].flame).toBeNull();
+    expect(state.engulfmentLevel).toBe(0);
+    expect(state.dice[0].flame?.id).toBe('vineyard');
     expect(state.bonfires).toEqual(['lowball']);
+    expect(state.handLevels).toEqual(levelsBefore);
     const clearedIndex = state.historyV2.findIndex(event => event.kind === 'round_attempt_finished' && event.outcome === 'cleared');
     const payoutIndex = state.historyV2.findIndex(event => event.kind === 'shop_transaction'
       && event.transaction.type === 'round_payout');
@@ -129,11 +212,22 @@ describe('automatic Inferno evaluation', () => {
     const historyEvaluation = state.historyV2[evaluationIndex];
     expect(historyEvaluation).toMatchObject({ kind: 'inferno_evaluated', evaluation: { threshold: 25 } });
     expect(renderRunHistoryV2Event(historyEvaluation)).toContain('/ ×25');
+    expect(renderRunHistoryV2Event(historyEvaluation)).toContain('READY');
 
     const frozen = structuredClone(state.infernoEvaluation);
     resolver.continueRoundSummary();
     expect(state.phase).toBe('inferno');
     expect(state.infernoEvaluation).toEqual(frozen);
+    resolver.engulfNow();
+    expect(state.engulfmentLevel).toBe(1);
+    expect(maxEnhancementTypesPerFace(3)).toBe(3);
+    expect(highestUnlockedEnhancementTier(3)).toBe(2);
+    expect(state.dice[0].flame).toBeNull();
+    expect(state.bonfires).toEqual(['lowball']);
+    expect(UPPER_HAND_IDS.map(hand => state.handLevels[hand])).toEqual(Array(6).fill(4));
+    expect(LOWER_HAND_IDS.map(hand => state.handLevels[hand])).toEqual(Array(8).fill(5));
+    expect(state.infernoProgress.previousReadiness).toBe(0);
+    expect(state.infernoEvaluation?.engulfed).toBe(true);
     resolver.continueInfernoEvaluation();
     expect(state.phase).toBe('shop');
     expect(state.infernoEvaluation).toBeNull();
@@ -151,7 +245,7 @@ describe('automatic Inferno evaluation', () => {
     expect(state.phase).toBe('shop');
   });
 
-  it('stops evaluating after a success consumes the final Flame', () => {
+  it('destroys a final offered Flame only after ENGULF NOW and then stops evaluating', () => {
     const state = offeringState();
     state.bonfires = [];
     delete state.flameInstanceIds.lowball;
@@ -165,10 +259,13 @@ describe('automatic Inferno evaluation', () => {
     const resolver = new Resolver(state, { next: () => .25 });
     resolver.evaluate();
     expect(state.infernoEvaluation?.consumedFinalFlame).toBe(true);
+    expect(ownedEngulfmentAssets(state)).toHaveLength(1);
+    resolver.continueRoundSummary();
+    resolver.engulfNow();
     expect(ownedEngulfmentAssets(state)).toEqual([]);
     expect(state.historyV2.filter(event => event.kind === 'inferno_evaluated')).toHaveLength(1);
 
-    state.infernoEvaluation = null;
+    resolver.continueInfernoEvaluation();
     state.phase = 'round';
     state.score = state.target;
     resolver.evaluate();

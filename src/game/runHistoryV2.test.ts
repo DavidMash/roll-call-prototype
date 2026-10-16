@@ -304,7 +304,8 @@ describe('Run History V2 instrumentation safety and size', () => {
       else if (state.phase === 'specialOffer') action = state.specialOffer!.acquired
         ? { type: 'CONTINUE_SPECIAL_OFFER' }
         : { type: 'CHOOSE_SPECIAL_OFFER', offerId: state.specialOffer!.offers[0].id };
-      else if (state.phase === 'inferno') action = { type: 'CONTINUE_INFERNO_EVALUATION' };
+      else if (state.phase === 'inferno') action = state.infernoEvaluation?.success
+        ? { type: 'NOT_YET' } : { type: 'CONTINUE_INFERNO_EVALUATION' };
       else if (state.phase === 'shop') action = state.shop?.exitUnlocked === false ? { type: 'UNLOCK_SHOP_EXIT' }
         : state.bust ? { type: 'RETRY_ROUND' }
           : state.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' };

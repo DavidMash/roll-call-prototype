@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { newRun } from './engine';
 import { compactGameStateForPersistence, isResumableRun, loadPersistedRun, RUN_STORAGE_KEY, RUN_STORAGE_VERSION, savePersistedRun } from './persistence';
 import { stringifyExactJson } from './scoreMath';
+import { createInfernoEvaluation, infernoMeterTransition } from './engulfment';
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -18,9 +19,15 @@ describe('run persistence', () => {
       evaluationIndex: 4, previousReadiness: .75,
       recentMessageIds: ['close-01', 'close-02'], recentAction: 'flame_invested',
     };
-    state.infernoEvaluationSuspendedUntilNewFlame = true;
+    state.dice[0].flame = { id: 'vineyard', investedGold: 40 };
+    state.flameInstanceIds.vineyard = 1;
+    state.nextFlameInstanceId = 2;
+    state.infernoEvaluation = createInfernoEvaluation(state);
+    state.phase = 'inferno';
     expect(savePersistedRun(storage, state)).toBe(true);
-    expect(loadPersistedRun(storage, state.seed)).toEqual(compactGameStateForPersistence(state));
+    const loaded = loadPersistedRun(storage, state.seed)!;
+    expect(loaded).toEqual(compactGameStateForPersistence(state));
+    expect(infernoMeterTransition(loaded.infernoEvaluation!).startPercent).toBe(75);
   });
 
   it('only treats non-terminal phases as resumable', () => {

@@ -362,7 +362,7 @@ export function createInfernoEvaluation(state: GameState): InfernoEvaluationStat
     evidenceRounds: full.evidenceRounds, effectiveValue: full.offeringMultiplier,
     threshold: ENGULFMENT_REQUIRED_MULTIPLIER, readiness, maximumPossibleReadiness,
     currentCollectionTheoreticallySufficient, suspendAfterContinue, previousReadiness, trend, weakness, recentAction,
-    feedbackMessageId: feedback?.id ?? null, feedbackMessage: feedback?.text ?? null, success,
+    feedbackMessageId: feedback?.id ?? null, feedbackMessage: feedback?.text ?? null, engulfed: false, success,
     strongestFirst, prefixEvaluations, flamesSnuffed: structuredClone(flamesSnuffed),
     flamesPreserved: assets.filter(asset => !snuffedIds.has(asset.instanceId)).map(asset => structuredClone(asset)),
     selectedEffectiveValue, infernoLevelBefore, infernoLevelAfter: infernoLevelBefore + (success ? 1 : 0),
@@ -376,8 +376,19 @@ export function createInfernoEvaluation(state: GameState): InfernoEvaluationStat
 export interface EngulfmentAnimationProfile {
   success: boolean;
   strength: 'very_weak' | 'moderate' | 'near' | 'bare' | 'strong' | 'massive';
-  peakPercent: number;
   durationMs: number;
+}
+
+export const visibleInfernoMeterPercent = (readiness: number | null): number =>
+  Math.max(0, Math.min(100, (readiness ?? 0) * 100));
+
+export function infernoMeterTransition(
+  evaluation: Pick<InfernoEvaluationState, 'previousReadiness' | 'readiness'>,
+): { startPercent: number; endPercent: number } {
+  return {
+    startPercent: visibleInfernoMeterPercent(evaluation.previousReadiness),
+    endPercent: visibleInfernoMeterPercent(evaluation.readiness),
+  };
 }
 
 export function engulfmentAnimationProfile(offeringMultiplier: number): EngulfmentAnimationProfile {
@@ -387,7 +398,7 @@ export function engulfmentAnimationProfile(offeringMultiplier: number): Engulfme
     : progress < 1.2 ? 'bare' : progress < 1.75 ? 'strong' : 'massive';
   const durationMs = strength === 'near' ? 4000 : strength === 'bare' ? 3800
     : strength === 'moderate' ? 2700 : strength === 'very_weak' ? 2100 : strength === 'strong' ? 2300 : 1400;
-  return { success, strength, peakPercent: success ? 100 : Math.min(99, progress * 100), durationMs };
+  return { success, strength, durationMs };
 }
 
 export const infernoEvaluationDuration = (offeringMultiplier: number): number =>

@@ -192,7 +192,8 @@ describe('Care Package resources and Time Travel boundaries', () => {
       state = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.2)).state;
       expect(state.phase).toBe('roundSummary');
       state = dispatch(state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant(.2)).state;
-      if (state.phase === 'inferno') state = dispatch(state, { type: 'CONTINUE_INFERNO_EVALUATION' }, constant(.2)).state;
+      if (state.phase === 'inferno') state = dispatch(state, state.infernoEvaluation?.success
+        ? { type: 'NOT_YET' } : { type: 'CONTINUE_INFERNO_EVALUATION' }, constant(.2)).state;
       expect(state).toMatchObject({ phase: 'shop', currentNodeId: 'shop:before-round:2' });
     }
   });

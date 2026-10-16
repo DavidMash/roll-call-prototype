@@ -23,7 +23,9 @@ import { chapterRoundForRound } from './chapters';
 import { RUN_HISTORY_V2_RULESET, RUN_HISTORY_V2_SCHEMA_VERSION } from './runHistoryV2';
 import {
   createInfernoEvaluation,
+  engulfmentAssetKey,
   infernoMultiplier,
+  ownedEngulfmentAssets,
 } from './engulfment';
 import { appendCriticalDiagnostic, appendDebugTrace } from './debugTrace';
 import { captureRollbackState, restoreRollbackState } from './rollback';
@@ -143,8 +145,7 @@ export class Resolver {
       : reason === 'time_travel' && timeTravelStart ? timeTravelStart.seq
         : latestAttempt?.seq ?? sameTimeline[0]?.seq ?? abandonedThroughSeq;
     const retainedSeqs = reason === 'bust' ? [] : sameTimeline.filter(event => event.seq >= abandonedFromSeq
-      && event.seq <= abandonedThroughSeq && (event.kind === 'shop_transaction' || event.kind === 'flame_changed'
-        || (event.kind === 'inferno_evaluated' && event.evaluation.success)))
+      && event.seq <= abandonedThroughSeq && (event.kind === 'shop_transaction' || event.kind === 'flame_changed'))
       .map(event => event.seq);
     const rewoundEvents = sameTimeline.filter(event => event.seq >= abandonedFromSeq && event.seq <= abandonedThroughSeq);
     const retainedHandSideEffects = reason === 'bust' ? [] : rewoundEvents.flatMap(event => event.kind === 'hand_scored'
@@ -1816,28 +1817,45 @@ export class Resolver {
       ...this.state.infernoProgress.recentMessageIds.filter(id => id !== evaluation.feedbackMessageId),
       evaluation.feedbackMessageId,
     ].slice(-3);
-    if (evaluation.success) {
-      const selectedEmbers = new Map(evaluation.flamesSnuffed
-        .filter((asset): asset is Extract<EngulfmentAssetRef, { kind: 'ember' }> => asset.kind === 'ember')
-        .map(asset => [asset.dieId, asset.flame]));
-      for (const die of this.state.dice) if (selectedEmbers.get(die.id) === activeFlameId(die.flame)) die.flame = null;
-      const selectedBonfires = new Set(evaluation.flamesSnuffed.filter(asset => asset.kind === 'bonfire').map(asset => asset.flame));
-      this.state.bonfires = this.state.bonfires.filter(flame => !selectedBonfires.has(flame));
-      for (const asset of evaluation.flamesSnuffed) {
-        delete this.state.chargeAttribution[asset.flame];
-        removeFlameInstance(this.state, asset.flame);
-      }
-      this.state.engulfmentLevel = evaluation.infernoLevelAfter;
-      for (const item of evaluation.upper.levelsBefore) this.state.handLevels[item.hand] = evaluation.upper.unifiedLevel;
-      for (const item of evaluation.lower.levelsBefore) this.state.handLevels[item.hand] = evaluation.lower.unifiedLevel;
-      if (!ownedFlameIds(this.state).has('fetch')) this.state.fetchTarget = null;
-      if (!ownedFlameIds(this.state).has('targetPractice')) this.state.targetPracticeHand = null;
-      this.state.handFamilyFlameStages = Object.fromEntries(Object.entries(this.state.handFamilyFlameStages)
-        .filter(([flame]) => ownedFlameIds(this.state).has(flame as Flame)));
-      recalculateMaxCharge(this.state);
-    }
     this.state.infernoEvaluation = evaluation;
     this.emitV2({ kind: 'inferno_evaluated', evaluation: structuredClone(evaluation) });
+  }
+  engulfNow(): void {
+    const evaluation = this.state.infernoEvaluation;
+    if (!evaluation?.success || evaluation.engulfed) throw new Error('A ready Inferno evaluation is required.');
+    const ownedKeys = new Set(ownedEngulfmentAssets(this.state).map(engulfmentAssetKey));
+    if (evaluation.flamesSnuffed.some(asset => !ownedKeys.has(engulfmentAssetKey(asset))))
+      throw new Error('The frozen Inferno offering no longer matches the current build.');
+
+    const selectedEmbers = new Map(evaluation.flamesSnuffed
+      .filter((asset): asset is Extract<EngulfmentAssetRef, { kind: 'ember' }> => asset.kind === 'ember')
+      .map(asset => [asset.dieId, asset.flame]));
+    for (const die of this.state.dice) if (selectedEmbers.get(die.id) === activeFlameId(die.flame)) die.flame = null;
+    const selectedBonfires = new Set(evaluation.flamesSnuffed.filter(asset => asset.kind === 'bonfire').map(asset => asset.flame));
+    this.state.bonfires = this.state.bonfires.filter(flame => !selectedBonfires.has(flame));
+    for (const asset of evaluation.flamesSnuffed) {
+      delete this.state.chargeAttribution[asset.flame];
+      removeFlameInstance(this.state, asset.flame);
+    }
+    this.state.engulfmentLevel = evaluation.infernoLevelAfter;
+    for (const item of evaluation.upper.levelsBefore) this.state.handLevels[item.hand] = evaluation.upper.unifiedLevel;
+    for (const item of evaluation.lower.levelsBefore) this.state.handLevels[item.hand] = evaluation.lower.unifiedLevel;
+    if (!ownedFlameIds(this.state).has('fetch')) this.state.fetchTarget = null;
+    if (!ownedFlameIds(this.state).has('targetPractice')) this.state.targetPracticeHand = null;
+    this.state.handFamilyFlameStages = Object.fromEntries(Object.entries(this.state.handFamilyFlameStages)
+      .filter(([flame]) => ownedFlameIds(this.state).has(flame as Flame)));
+    recalculateMaxCharge(this.state);
+    evaluation.engulfed = true;
+    this.state.infernoProgress.previousReadiness = 0;
+    this.emit({ type: 'INFERNO_EVALUATED',
+      message: `Engulfment accepted: Inferno ${this.format(evaluation.infernoMultiplierBefore)} to ${this.format(evaluation.infernoMultiplierAfter)}; ${this.format(evaluation.flamesSnuffed.length)} Flame${evaluation.flamesSnuffed.length === 1 ? '' : 's'} snuffed` });
+  }
+  deferEngulfment(): void {
+    const evaluation = this.state.infernoEvaluation;
+    if (!evaluation?.success || evaluation.engulfed) throw new Error('A pending ready Inferno evaluation is required.');
+    this.emit({ type: 'INFERNO_EVALUATED', message: 'Engulfment postponed; the current build was preserved' });
+    this.state.infernoEvaluation = null;
+    this.continuePostRoundFlow();
   }
   openShop(direction: 'forward' | 'backward' = 'forward'): void {
     this.restoreMagicianDie();
@@ -1994,6 +2012,8 @@ export class Resolver {
   }
   continueInfernoEvaluation(): void {
     if (!this.state.infernoEvaluation) throw new Error('Inferno evaluation is not available.');
+    if (this.state.infernoEvaluation.success && !this.state.infernoEvaluation.engulfed)
+      throw new Error('Choose whether to Engulf now or not yet.');
     if (this.state.infernoEvaluation.suspendAfterContinue) {
       this.state.infernoEvaluationSuspendedUntilNewFlame = true;
       this.emitV2({ kind: 'inferno_suspension_changed', suspended: true, reason: 'collection_insufficient' });

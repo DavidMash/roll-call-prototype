@@ -44,6 +44,10 @@ function normalizeBoardScores(board: Board): void {
     board.roundSummary.score = exact(board.roundSummary.score);
     board.roundSummary.target = exact(board.roundSummary.target);
   }
+  if (board.infernoEvaluation) {
+    board.infernoEvaluation.infernoMultiplierBefore = exactInferno(board.infernoEvaluation.infernoLevelBefore);
+    board.infernoEvaluation.infernoMultiplierAfter = exactInferno(board.infernoEvaluation.infernoLevelAfter);
+  }
   if (board.bust) {
     board.bust.score = exact(board.bust.score);
     board.bust.target = exact(board.bust.target);
@@ -117,6 +121,9 @@ function normalizeHistoricalScores(state: GameState): void {
     } else if (event.kind === 'engulfment_attempted') {
       event.infernoMultiplierBefore = exactInferno(event.infernoLevelBefore);
       event.infernoMultiplierAfter = exactInferno(event.infernoLevelAfter);
+    } else if (event.kind === 'inferno_evaluated') {
+      event.evaluation.infernoMultiplierBefore = exactInferno(event.evaluation.infernoLevelBefore);
+      event.evaluation.infernoMultiplierAfter = exactInferno(event.evaluation.infernoLevelAfter);
     } else if (event.kind === 'boss_state_changed' && (event.change === 'warden_target' || event.change === 'warden_unlock')
       && event.amount !== undefined) event.amount = exact(event.amount);
   }
@@ -239,6 +246,7 @@ export function normalizeGameState(state: GameState): GameState {
   next.infernoEvaluationSuspendedUntilNewFlame = !!next.infernoEvaluationSuspendedUntilNewFlame;
   next.bustPresentationDice ??= null;
   if (next.infernoEvaluation) {
+    next.infernoEvaluation.engulfed ??= false;
     next.infernoEvaluation.maximumPossibleReadiness ??= next.infernoEvaluation.threshold;
     next.infernoEvaluation.currentCollectionTheoreticallySufficient ??= true;
     next.infernoEvaluation.suspendAfterContinue ??= false;
@@ -331,6 +339,7 @@ export function normalizeGameState(state: GameState): GameState {
     checkpoint.engulfmentLevel = Math.max(0, Math.floor(checkpoint.engulfmentLevel ?? 0));
     checkpoint.infernoProgress ??= structuredClone(next.infernoProgress);
     checkpoint.infernoEvaluation ??= null;
+    if (checkpoint.infernoEvaluation) checkpoint.infernoEvaluation.engulfed ??= false;
     checkpoint.infernoEvaluationSuspendedUntilNewFlame = !!checkpoint.infernoEvaluationSuspendedUntilNewFlame;
     checkpoint.bustPresentationDice ??= null;
     checkpoint.nextShopVisitId = Math.max(1, Math.floor(checkpoint.nextShopVisitId ?? 1));
@@ -489,7 +498,12 @@ export function validateAction(state: Board, action: Action): string | null {
   if (action.type === 'CONTINUE_ROUND_SUMMARY') return state.phase === 'roundSummary' && !!state.roundSummary
     ? null : 'A completed encounter summary is required.';
   if (action.type === 'CONTINUE_INFERNO_EVALUATION') return state.phase === 'inferno' && !!state.infernoEvaluation
-    ? null : 'An Inferno evaluation is required.';
+    && (!state.infernoEvaluation.success || state.infernoEvaluation.engulfed)
+    ? null : 'A completed or insufficient Inferno evaluation is required.';
+  if (action.type === 'ENGULF_NOW') return state.phase === 'inferno' && !!state.infernoEvaluation?.success
+    && !state.infernoEvaluation.engulfed ? null : 'A ready Inferno evaluation is required.';
+  if (action.type === 'NOT_YET') return state.phase === 'inferno' && !!state.infernoEvaluation?.success
+    && !state.infernoEvaluation.engulfed ? null : 'A pending ready Inferno evaluation is required.';
   if (action.type === 'MANUAL_REROLL') {
     if (state.phase !== 'round') return 'Manual rerolls can only be used during a gameplay round.';
     if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0) return 'Unlock a Warden die before taking another action.';
@@ -804,6 +818,8 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       }
       case 'CONTINUE_ROUND_SUMMARY': resolver.continueRoundSummary(); break;
       case 'CONTINUE_INFERNO_EVALUATION': resolver.continueInfernoEvaluation(); break;
+      case 'ENGULF_NOW': resolver.engulfNow(); break;
+      case 'NOT_YET': resolver.deferEngulfment(); break;
       case 'CONTINUE_FLAME_SELECTION': resolver.openShop(); break;
       case 'SKIP_FLAME_SELECTION':
         resolver.emit({ type: 'FLAME_SKIPPED', message: `Skipped Flame acquisition for round ${formatPlayerNumber(next.round)}` });

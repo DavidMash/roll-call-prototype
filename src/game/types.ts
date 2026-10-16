@@ -268,6 +268,8 @@ export interface InfernoEvaluationState {
   recentAction: InfernoRecentAction;
   feedbackMessageId: string | null;
   feedbackMessage: string | null;
+  /** True only after the player accepts this frozen ready evaluation. */
+  engulfed: boolean;
   success: boolean;
   strongestFirst: EngulfmentAssetRef[];
   prefixEvaluations: InfernoPrefixEvaluation[];
@@ -682,6 +684,8 @@ export type Action =
   | { type: 'STOKE_FLAME'; dieId: number; amount: number }
   | { type: 'CONTINUE_ROUND_SUMMARY' }
   | { type: 'CONTINUE_INFERNO_EVALUATION' }
+  | { type: 'ENGULF_NOW' }
+  | { type: 'NOT_YET' }
   | { type: 'CONTINUE_FLAME_SELECTION' }
   | { type: 'SKIP_FLAME_SELECTION' }
   | { type: 'CHOOSE_SPECIAL_OFFER'; offerId: number }
