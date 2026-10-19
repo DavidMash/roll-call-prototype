@@ -6,7 +6,7 @@ import { stringifyExactJson } from './scoreMath';
 import type { BadDreamCheckpoint, GameState } from './types';
 
 export const RUN_STORAGE_KEY = 'roll-call:active-run';
-export const RUN_STORAGE_VERSION = 10;
+export const RUN_STORAGE_VERSION = 11;
 
 type RunStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
@@ -27,7 +27,7 @@ function hasTemplateShape(value: unknown, template: unknown): boolean {
   if (Array.isArray(template)) return Array.isArray(value);
   if (isRecord(template)) {
     return isRecord(value) && Object.entries(template).every(([key, child]) =>
-      (key === 'diceInventory' && Object.hasOwn(value, key) && isRecord(value[key]))
+      ((key === 'diceInventory' || key === 'dieRoundState') && Object.hasOwn(value, key) && isRecord(value[key]))
       ||
       (['maxCharge', 'decisionId', 'sixPackXMult', 'sixPackUpperHandsPlayed', 'handFamilyFlameStages', 'bossSilenced',
         'engulfmentLevel', 'nextShopVisitId', 'nextFlameInstanceId', 'flameInstanceIds', 'visitId',

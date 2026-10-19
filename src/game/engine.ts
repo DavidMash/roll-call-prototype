@@ -19,6 +19,7 @@ import { rarityLabel } from './rarity';
 import { appendCriticalDiagnostic, appendDebugTrace, createDebugTrace, normalizeDebugTrace, type DebugTraceMode } from './debugTrace';
 import { isRollbackState } from './rollback';
 import { assertDiceInventory, collectibleDieById, ownedDice, syncActiveDiceProjection } from './inventory';
+import { normalizeDieRoundRuntime, resetDieRoundState } from './specialDice';
 import { enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey, usableManualRerolls } from './specialOffers';
 import { Decimal, exactInferno, scoreFromUnknown, type ExactScore } from './scoreMath';
 import { getEncounterGoalBreakdown, targetForRound } from './goals';
@@ -236,6 +237,9 @@ export function normalizeGameState(state: GameState): GameState {
     throw new Error('This saved run predates the collectible-dice inventory schema.');
   assertDiceInventory(next.diceInventory, next.encounterDice);
   syncActiveDiceProjection(next);
+  next.dieRoundState ??= {};
+  next.dieRoundState = Object.fromEntries(ownedDice(next).filter(die => next.diceInventory.roster.includes(die.id))
+    .map(die => [die.id, normalizeDieRoundRuntime(die, next.dieRoundState[die.id])]));
   if (typeof next.target === 'number' && !Number.isSafeInteger(next.target))
     next.target = targetForRound(next.round, next.boss?.type ?? next.bossSchedule?.[next.round] ?? null);
   normalizeBoardScores(next);
@@ -522,6 +526,39 @@ export function validateAction(state: Board, action: Action): string | null {
     if (paidDice > usableManualRerolls(state)) return 'Not enough manual rerolls for these dice.';
     return null;
   }
+  if (action.type === 'INVOKE_JUMPING_BEAN' || action.type === 'INVOKE_CHAMELEON'
+    || action.type === 'INVOKE_FLYWHEEL' || action.type === 'ARM_MAGIC' || action.type === 'FEED_FURNACE') {
+    if (state.phase !== 'round') return 'Special die commands can only be used during an active Round.';
+    const die = state.dice.find(item => item.id === action.dieId && item.owner === 'player');
+    if (!die || die.owner !== 'player') return 'Choose an equipped collectible die.';
+    const expected = action.type === 'INVOKE_JUMPING_BEAN' ? 'jumpingBean'
+      : action.type === 'INVOKE_CHAMELEON' ? 'chameleon'
+        : action.type === 'INVOKE_FLYWHEEL' ? 'flywheel'
+          : action.type === 'ARM_MAGIC' ? 'magic' : 'furnace';
+    if (die.type !== expected) return `That die cannot perform ${action.type}.`;
+    const runtime = state.dieRoundState[die.id];
+    if (!runtime) return 'That die has no active Round state.';
+    if (action.type !== 'FEED_FURNACE' && runtime.invocationsRemaining <= 0) return 'That die has no Invocations remaining.';
+    if (action.type === 'INVOKE_CHAMELEON' && !state.dice.some(item => item.owner === 'player' && item.id !== die.id))
+      return 'Chameleon requires another equipped die.';
+    if (action.type === 'ARM_MAGIC') {
+      if (![1, 2, 3, 4, 5, 6].includes(action.face)) return 'Choose a valid Magic face.';
+      if (runtime.magicArmedFace !== null) return 'Magic is already armed for its next Reroll.';
+    }
+    if (action.type === 'FEED_FURNACE') {
+      if (!Number.isSafeInteger(action.amount) || action.amount <= 0) return 'Feed Furnace a positive whole Gold amount.';
+      if (runtime.furnaceUnits + action.amount > 5) return 'Furnace can hold at most 5 units.';
+      if (state.gold < action.amount) return 'Not enough Gold to feed Furnace.';
+    }
+    return null;
+  }
+  if (action.type === 'SET_WEIGHTED_FACE') {
+    if (state.phase !== 'shop') return 'Choose the Weighted face before the next Round.';
+    const die = state.dice.find(item => item.id === action.dieId && item.owner === 'player');
+    if (!die || die.owner !== 'player' || die.type !== 'weighted') return 'Choose an equipped Weighted die.';
+    if (![1, 2, 3, 4, 5, 6].includes(action.face)) return 'Choose a valid Weighted face.';
+    return null;
+  }
   if (action.type === 'PLAY') {
     if (state.phase !== 'round') return 'Hands can only be played during a round.';
     if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0) return 'Unlock a Warden die before committing another hand.';
@@ -533,7 +570,10 @@ export function validateAction(state: Board, action: Action): string | null {
       const missing = requiredChargeFlameDieIds(state).filter(id => !action.dieIds.includes(id));
       if (missing.length) return 'Every Charge Flame die must participate while Charge is armed.';
     }
-    if (!planQualification(activeEncounterDice(state), action.hand, action.dieIds).legal) return 'Select a complete valid set of participating dice.';
+    const qualification = planQualification(activeEncounterDice(state), action.hand, action.dieIds,
+      { roundState: state.dieRoundState, claims: action.qualificationClaims });
+    if (!qualification.legal) return 'Select a complete valid set of participating dice.';
+    if (qualification.ambiguousClaims) return 'Choose which qualification die should spend its Invocation.';
     return null;
   }
   if (action.type === 'UNLOCK_WARDEN_DIE') {
@@ -551,7 +591,7 @@ export function validateAction(state: Board, action: Action): string | null {
       const required = requiredChargeFlameDieIds(state);
       const selected = action.dieIds ?? [];
       if (!required.length || required.some(id => !selected.includes(id)) || !action.hand
-        || !isValidSelection(activeEncounterDice(state), action.hand, selected))
+        || !isValidSelection(activeEncounterDice(state), action.hand, selected, state.dieRoundState))
         return 'Select every Charge Flame die in the intended hand before arming Charge.';
     }
     return null;
@@ -689,7 +729,7 @@ export function newRun(seed: string, random?: RandomSource, options?: { debugTra
     nextFlameInstanceId: 1, roundAttemptNumber: 1,
     bossSchedule: {}, chapterPlans: {}, presentedChapters: [], chapterLifecycle: {}, boss: null, bossSilenced: false, currentNodeId: '',
     bust: null, bustPresentationDice: null, flameTutorial: { pendingDieId: null, completed: false },
-    diceInventory, encounterDice: [], dice: [], bonfires: [], flameInstanceIds: {},
+    diceInventory, encounterDice: [], dice: [], dieRoundState: resetDieRoundState(Object.values(diceInventory.instances)), bonfires: [], flameInstanceIds: {},
     chargeAttribution: {}, infernoProgress: { evaluationIndex: 0, previousReadiness: null, recentMessageIds: [], recentAction: 'none' },
     infernoEvaluation: null, infernoEvaluationSuspendedUntilNewFlame: false, chargeXMult: 1, maxCharge: 1,
     chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
@@ -724,8 +764,21 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
     const next = resolver.state;
     next.actionJournal.push(structuredClone(action));
     switch (action.type) {
-      case 'PLAY': resolver.play(action.hand, action.dieIds, 'manual', action.decisionMs ?? null); break;
+      case 'PLAY': resolver.play(action.hand, action.dieIds, 'manual', action.decisionMs ?? null,
+        action.qualificationClaims?.map(claim => ({ ...claim, resource: 'invocation', amount: 1 })) ?? []); break;
       case 'MANUAL_REROLL': resolver.manualReroll(action.dieIds); break;
+      case 'INVOKE_JUMPING_BEAN': resolver.invokeJumpingBean(action.dieId); break;
+      case 'INVOKE_CHAMELEON': resolver.invokeChameleon(action.dieId); break;
+      case 'INVOKE_FLYWHEEL': resolver.invokeFlywheel(action.dieId); break;
+      case 'ARM_MAGIC': resolver.armMagic(action.dieId, action.face); break;
+      case 'FEED_FURNACE': resolver.feedFurnace(action.dieId, action.amount); break;
+      case 'SET_WEIGHTED_FACE': {
+        const die = collectibleDieById(next, action.dieId)!;
+        die.weightedFace = action.face;
+        resolver.emit({ type: 'SPECIAL_DIE_EFFECT', dieIds: [die.id], dieType: die.type, dieLevel: die.level,
+          face: action.face, effectCause: 'configuration', message: `D${die.id + 1} Weighted target set to ${action.face}` });
+        break;
+      }
       case 'UNLOCK_WARDEN_DIE': resolver.unlockWardenDie(action.dieId); break;
       case 'TOGGLE_CHARGE':
         next.chargeArmed = !next.chargeArmed;

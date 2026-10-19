@@ -34,6 +34,7 @@ function sideEffectLabel(effect: HandScoredEvent['sideEffects'][number]): string
     case 'gold': return `${effect.dieId === undefined ? '' : `${die(effect.dieId)} `}${label(effect.source)} +${number(effect.amount)} Gold`;
     case 'vintage_growth': return `${die(effect.dieId)} Vintage ${number(effect.before)}→${number(effect.after)}`;
     case 'double_time': return `${die(effect.dieId)} Double Time ${effect.succeeded ? 'succeeded' : 'failed'}`;
+    case 'special_die': return `${die(effect.dieId)} ${label(effect.dieType)} ${effect.detail}`;
     case 'charge': return `Charge ${label(effect.operation)} ×${number(effect.before)}→×${number(effect.after)}`;
     case 'flame_activation': return `${originLabel[effect.origin]} ${FLAMES[effect.flame].name}${effect.factor === undefined ? '' : ` ×${number(effect.factor)}`}`;
     case 'enhancement': return `${ENHANCEMENTS[effect.enhancement].name}${effect.amount === undefined ? '' : ` ${number(effect.amount)}`}`;

@@ -83,7 +83,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     ? `, PLUS ${carePackageRerolls} CARE PACKAGE REROLL${carePackageRerolls === 1 ? '' : 'S'}` : ''}`;
   const rerollVisualResourceText = `${board.manualRerollsRemaining} LEFT${carePackageRerolls ? ` + ${carePackageRerolls}` : ''}`;
   const normalRerollFill = Math.max(0, Math.min(1, board.manualRerollsRemaining / CONFIG.manualRerollsPerRound));
-  const deadBoard = !hasPlayableHand(encounterDice, unavailableHands, requiredDieIds);
+  const deadBoard = !hasPlayableHand(encounterDice, unavailableHands, requiredDieIds, board.dieRoundState);
   const chargeDieIds = encounterDice.filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id);
   const chargeGloballyUnlocked = hasChargeBonfire(board);
   const speedStrength = (speedDemonMultiplier(100, decisionMs) - 1) / 4;

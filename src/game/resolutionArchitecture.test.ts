@@ -20,7 +20,7 @@ describe('resolution architecture boundaries', () => {
     const mirrorBefore = structuredClone(mirrorDice);
     expect(planQualification(mirrorDice, 'pair', [0, 1])).toEqual({
       hand: 'pair', requestedDieIds: [0, 1], qualifyingDieIds: [0, 1], legal: true,
-      effects: [{ dieId: 0, face: 2, effect: 'mirror' }], resourceClaims: [],
+      effects: [{ dieId: 0, face: 2, effect: 'mirror' }], resourceClaims: [], claimOptions: [[]], ambiguousClaims: false,
     });
     expect(mirrorDice).toEqual(mirrorBefore);
 

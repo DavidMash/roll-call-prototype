@@ -1,6 +1,6 @@
 import { CONFIG } from './config';
 import { stacks } from './enhancements';
-import type { CollectibleDie, DiceInventory, Die, Face, RandomSource, Rank } from './types';
+import type { CollectibleDie, DiceInventory, Die, DieType, Face, RandomSource, Rank } from './types';
 import { INITIAL_STORAGE_SLOT_COUNT, rosterTuple } from './inventory';
 
 export const RANKS: Rank[] = [1, 2, 3, 4, 5, 6];
@@ -13,9 +13,12 @@ export const oppositeFace = (rank: Rank): Rank => {
 export const baseScoringPips = (face: Face) =>
   Math.max(0, (face.snakeEyed ? 1 : face.rank) + face.workoutPips - (face.infected ? CONFIG.infectedFacePipPenalty : 0));
 export const scoringPips = (face: Face) => baseScoringPips(face) + stacks(face, 'bonus') * CONFIG.bonusPips;
-export function createCollectibleDie(id: number): CollectibleDie {
+export function createCollectibleDie(id: number, type: DieType = 'normal', level = 1): CollectibleDie {
+  if (!Number.isSafeInteger(level) || level < 1 || (type === 'normal' && level !== 1))
+    throw new Error('Collectible die level must be a positive integer; Normal dice remain level 1.');
   return {
-    id, value: 1, flame: null, owner: 'player', type: 'normal', level: 1,
+    id, value: 1, flame: null, owner: 'player', type, level,
+    vintageAppreciation: 0, weightedFace: 6,
     faces: RANKS.map(rank => ({ rank, workoutPips: 0, enhancements: {} })),
   };
 }

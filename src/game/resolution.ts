@@ -1,5 +1,5 @@
 import type { RollReason } from './runHistoryV2';
-import type { Enhancement, Face, HandId, HandPlaySource, Rank } from './types';
+import type { DieType, Enhancement, Face, HandId, HandPlaySource, Rank } from './types';
 
 export type PlayCause = 'player' | 'free_play_effect' | 'jumping_bean';
 
@@ -16,6 +16,7 @@ export interface PlayIntent {
   /** Empty for generated plays; future selection-sensitive effects can key off this explicitly. */
   playerSelectedDieIds: number[];
   decisionMs: number | null;
+  qualificationClaims: QualificationResourceClaim[];
 }
 
 export type QualificationEffect = 'mirror' | 'missingLink' | 'conjoined';
@@ -42,9 +43,12 @@ export interface QualificationPlan {
   legal: boolean;
   effects: QualificationEffectParticipation[];
   resourceClaims: QualificationResourceClaim[];
+  claimOptions: QualificationResourceClaim[][];
+  ambiguousClaims: boolean;
 }
 
-export type ScoreOccurrenceCause = 'play_selection' | 'hitchhiker' | 'double_time';
+export type ScoreOccurrenceCause = 'play_selection' | 'hitchhiker' | 'double_time' | 'lone_wolf';
+export type ScoreEffectSuppression = Enhancement | 'wholeDieDoubleTime';
 
 /** One genuine scoring activation by one die within a Play. */
 export interface ScoreOccurrence {
@@ -61,11 +65,12 @@ export interface ScoreOccurrence {
   playerSelected: boolean;
   additional: boolean;
   /** Only named effects are suppressed; all other Score-triggered behavior still resolves. */
-  suppressedEffects: Enhancement[];
+  suppressedEffects: ScoreEffectSuppression[];
 }
 
 export type RollContext = 'gameplay' | 'settle' | 'wardenSetup' | 'shop' | 'flameSelection';
-export type RollController = 'clockmaker' | 'bump' | 'magnetic' | 'magic' | 'boomerang' | 'rng';
+export type RollController = 'tank' | 'weightedDie' | 'clockworkDie' | 'magicDie' | 'magneticDie'
+  | 'clockmaker' | 'bump' | 'magnetic' | 'magic' | 'boomerang' | 'rng';
 
 export interface RollBatchIntent {
   id: string;
@@ -110,6 +115,10 @@ export interface RollResolution {
   controller: RollController;
   origin: Face;
   magicHand: HandId | null;
+  controllerDieId?: number;
+  locked?: boolean;
+  intercepted?: boolean;
+  specialDieType?: DieType;
   previousFaceExcluded?: boolean;
 }
 
@@ -119,6 +128,7 @@ export function createPlayIntent(
   dieIds: readonly number[],
   source: HandPlaySource,
   decisionMs: number | null,
+  qualificationClaims: QualificationResourceClaim[] = [],
 ): PlayIntent {
   const selectedDieIds = [...dieIds];
   return {
@@ -130,6 +140,7 @@ export function createPlayIntent(
     originalSelectedDieIds: [...selectedDieIds],
     playerSelectedDieIds: source === 'manual' ? [...selectedDieIds] : [],
     decisionMs,
+    qualificationClaims: structuredClone(qualificationClaims),
   };
 }
 

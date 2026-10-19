@@ -134,7 +134,7 @@ function canonicalFromState(state: GameState | undefined, events: readonly RunHi
   const earned: Record<GoldSource, number> = { golden: 0, jackpot: 0, enhancementSale: 0, roundBase: 0,
     unusedRerolls: 0, interest: 0, bossReward: 0, specialOffer: 0, cashBonus: 0 };
   const spent: Record<GoldSpendSource, number> = { enhancement: 0, shopDiceReroll: 0, enhancementReroll: 0,
-    handTraining: 0, flameInvestment: 0, lifeRestore: 0 };
+    handTraining: 0, flameInvestment: 0, lifeRestore: 0, furnace: 0 };
   let retainedPurchases = 0;
   let retainedTrainingPurchases = 0;
   let individualTraining = 0;

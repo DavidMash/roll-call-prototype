@@ -9,7 +9,7 @@ export const INFERNO_BASE = 25;
 export const infernoMultiplier = (level: number): ExactScore => exactInferno(Math.max(0, Math.floor(level)));
 
 export interface HandScoreContribution {
-  kind: 'base' | 'bonus' | 'loneWolf' | 'teamwork';
+  kind: 'base' | 'bonus' | 'loneWolf' | 'teamwork' | 'special' | 'teamPlayer';
   role: 'selected' | 'hitchhiker';
   dieId: number;
   face: Face;

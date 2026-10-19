@@ -1,4 +1,5 @@
 import type { CollectibleDie, DiceInventory, Die, DieId, EncounterDie, GameState, RosterSlots } from './types';
+import { assertCollectibleDie } from './specialDice';
 
 export const ROSTER_SLOT_COUNT = 5;
 export const INITIAL_STORAGE_SLOT_COUNT = 3;
@@ -77,8 +78,8 @@ export function assertDiceInventory(inventory: DiceInventory, encounter: readonl
     const die = inventory.instances[id];
     if (die.id !== id) throw new Error(`Collectible die record ${id} contains mismatched ID ${die.id}.`);
     if (!seen.has(id)) throw new Error(`Owned collectible die ${id} does not occupy a Roster or Storage slot.`);
-    if (die.owner !== 'player' || die.type !== 'normal' || die.level !== 1)
-      throw new Error(`Collectible die ${id} has invalid Stage 2 identity data.`);
+    if (die.owner !== 'player') throw new Error(`Collectible die ${id} has invalid ownership data.`);
+    assertCollectibleDie(die);
   }
   const maximumId = instanceIds.length ? Math.max(...instanceIds) : -1;
   if (!Number.isSafeInteger(inventory.nextDieId) || inventory.nextDieId <= maximumId)

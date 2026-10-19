@@ -29,7 +29,13 @@ export type Flame =
   | 'threesCompany' | 'boxSet' | 'missingPair' | 'oneShort';
 export type FlameInstanceId = number;
 export type DieId = number;
-export type DieType = 'normal';
+export type DieType =
+  | 'normal' | 'bonus' | 'workout' | 'vintage' | 'golden'
+  | 'hitchhiker' | 'weighted' | 'clockwork' | 'magnetic' | 'jackpot'
+  | 'teamPlayer' | 'loneWolf' | 'tank' | 'freePlay'
+  | 'mirror' | 'missingLink' | 'doubleTime' | 'jumpingBean'
+  | 'chameleon' | 'flywheel' | 'magic' | 'conjoined' | 'furnace' | 'sustainable';
+export type DiceRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
 export type HandId =
   | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes'
   | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
@@ -37,7 +43,7 @@ export type Phase = 'round' | 'roundSummary' | 'inferno' | 'bust' | 'flameSelect
 export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker' | 'boss';
 export type HandPlaySource = 'manual' | 'jumpingBean' | 'freePlay';
 export type GoldSource = 'golden' | 'jackpot' | 'enhancementSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward' | 'specialOffer' | 'cashBonus';
-export type GoldSpendSource = 'enhancement' | 'shopDiceReroll' | 'enhancementReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore';
+export type GoldSpendSource = 'enhancement' | 'shopDiceReroll' | 'enhancementReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore' | 'furnace';
 export type HandLevels = Record<HandId, number>;
 export type HandFamilyFlameStage = 'setup' | 'payoff' | 'spent';
 
@@ -181,6 +187,10 @@ export interface CollectibleDie extends PhysicalDieState {
   owner: 'player';
   type: DieType;
   level: number;
+  /** Persistent value added to this die's future sale price by Vintage. */
+  vintageAppreciation: number;
+  /** Persistent player configuration copied into each Weighted Round runtime. */
+  weightedFace: Exclude<Rank, 7>;
 }
 export interface EncounterDie extends PhysicalDieState {
   owner: 'boss';
@@ -196,6 +206,20 @@ export interface DiceInventory {
   /** Chapter numbers whose one-time completion slot has already been granted. */
   storageAwardedChapters: number[];
 }
+/** Authoritative resources that exist only for one Round attempt. */
+export interface DieRoundRuntime {
+  dieId: DieId;
+  type: DieType;
+  invocationsRemaining: number;
+  goldenGoldEarned: number;
+  temporaryPips: number;
+  clockworkRolls: number;
+  freePlayUsesByFace: Record<Exclude<Rank, 7>, number>;
+  furnaceUnits: number;
+  magicArmedFace: Exclude<Rank, 7> | null;
+  weightedFace: Exclude<Rank, 7>;
+}
+export type DieRoundState = Record<DieId, DieRoundRuntime>;
 export interface Offer { id: number; enhancement: Enhancement; purchased: boolean }
 export interface HandTrainingOffer { kind: 'hand'; hand: HandId; purchases: number }
 export interface TeamTrainingOffer { kind: 'team'; purchases: number }
@@ -366,6 +390,8 @@ export interface Board {
   suppressedPostBossRewardRounds: number[];
   /** Derived active encounter projection in Roster order; never collection authority. */
   dice: Die[];
+  /** Round-attempt resources for equipped collectible dice, keyed by stable die ID. */
+  dieRoundState: DieRoundState;
   bonfires: Flame[];
   /** Current owned instance for each Flame type, preserved across Ember/Bonfire progression. */
   flameInstanceIds: Partial<Record<Flame, FlameInstanceId>>;
@@ -601,7 +627,7 @@ export type EventType =
   | 'CALLER_CALLED' | 'CALLER_CHANGED' | 'WARDEN_UNLOCK_TARGET' | 'WARDEN_REINFORCEMENT' | 'CURSED_DIE_ROLLED'
   | 'BOSS_HAND_CHANGED' | 'BOSS_FACE_CHANGED'
   | 'RUN_LOST' | 'RESOLUTION_ERROR' | 'MANUAL_REROLL_STARTED' | 'DEAD_BOARD' | 'DEAD_BOARD_RESCUED'
-  | 'TUTORIAL_SAFEGUARD' | 'INFERNO_EVALUATED';
+  | 'TUTORIAL_SAFEGUARD' | 'INFERNO_EVALUATED' | 'SPECIAL_DIE_EFFECT';
 export interface EventRecord {
   id: number;
   round: number;
@@ -636,6 +662,11 @@ export interface EventRecord {
   goldSource?: GoldSource;
   goldSpendSource?: GoldSpendSource;
   rarity?: Rarity;
+  dieType?: DieType;
+  dieLevel?: number;
+  invocationBefore?: number;
+  invocationAfter?: number;
+  effectCause?: string;
   offerSet?: { name: string; rarity: Rarity }[];
   face?: Rank;
   rollSource?: 'manual_reroll' | 'automatic';
@@ -702,8 +733,15 @@ export type EngulfmentAssetRef =
   | { kind: 'ember'; flame: Flame; instanceId: FlameInstanceId; dieId: number }
   | { kind: 'bonfire'; flame: Flame; instanceId: FlameInstanceId };
 export type Action =
-  | { type: 'PLAY'; hand: HandId; dieIds: number[]; decisionMs?: number }
+  | { type: 'PLAY'; hand: HandId; dieIds: number[]; decisionMs?: number;
+      qualificationClaims?: { dieId: DieId; effect: 'mirror' | 'missingLink' | 'conjoined' }[] }
   | { type: 'MANUAL_REROLL'; dieIds: number[] }
+  | { type: 'INVOKE_JUMPING_BEAN'; dieId: DieId }
+  | { type: 'INVOKE_CHAMELEON'; dieId: DieId }
+  | { type: 'INVOKE_FLYWHEEL'; dieId: DieId }
+  | { type: 'ARM_MAGIC'; dieId: DieId; face: Exclude<Rank, 7> }
+  | { type: 'FEED_FURNACE'; dieId: DieId; amount: number }
+  | { type: 'SET_WEIGHTED_FACE'; dieId: DieId; face: Exclude<Rank, 7> }
   | { type: 'UNLOCK_WARDEN_DIE'; dieId: number }
   | { type: 'TOGGLE_CHARGE'; hand?: HandId | null; dieIds?: number[] }
   | { type: 'BUY'; offerId: number; dieId: number }

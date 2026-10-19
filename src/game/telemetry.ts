@@ -18,7 +18,7 @@ export function createStats(seed: string): RunStats {
     goldEarned: 0,
     goldBySource: { golden: 0, jackpot: 0, enhancementSale: 0, roundBase: 0, unusedRerolls: 0, interest: 0, bossReward: 0, specialOffer: 0, cashBonus: 0 },
     goldSpent: 0,
-    goldSpentBySource: { enhancement: 0, shopDiceReroll: 0, enhancementReroll: 0, handTraining: 0, flameInvestment: 0, lifeRestore: 0 },
+    goldSpentBySource: { enhancement: 0, shopDiceReroll: 0, enhancementReroll: 0, handTraining: 0, flameInvestment: 0, lifeRestore: 0, furnace: 0 },
     manualRerollActions: 0, manualDiceRerolled: 0, manualRerolls: [], deadBoardRescues: 0,
     triggers: {}, probabilityProcs: {
       sticky: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
@@ -34,11 +34,11 @@ export function createStats(seed: string): RunStats {
 }
 export function boardSnapshot(state: GameState): Board {
   const { phase, round, target, score, gold, lives, engulfmentLevel, nextShopVisitId, nextFlameInstanceId, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, bustPresentationDice, flameTutorial,
-    manualRerollsRemaining, specialOfferEffects, suppressedPostBossRewardRounds, bossSilenced, dice, bonfires, flameInstanceIds, chargeAttribution, infernoProgress, infernoEvaluation, infernoEvaluationSuspendedUntilNewFlame, chargeXMult, maxCharge, decisionId, sixPackXMult, sixPackUpperHandsPlayed,
+    manualRerollsRemaining, specialOfferEffects, suppressedPostBossRewardRounds, bossSilenced, dice, dieRoundState, bonfires, flameInstanceIds, chargeAttribution, infernoProgress, infernoEvaluation, infernoEvaluationSuspendedUntilNewFlame, chargeXMult, maxCharge, decisionId, sixPackXMult, sixPackUpperHandsPlayed,
     chargeArmed, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, lifetimeNormalShopGoldSpent, consumed, scorecardCycleConsumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, fetchTarget, lastRoundPayout, roundSummary, shop, flameSelection, specialOffer } = state;
   return structuredClone({ phase, round, target, score, gold, lives, engulfmentLevel, nextShopVisitId, nextFlameInstanceId, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, bustPresentationDice, flameTutorial,
-    manualRerollsRemaining, specialOfferEffects, suppressedPostBossRewardRounds, bossSilenced, dice, bonfires, flameInstanceIds, chargeAttribution, infernoProgress, infernoEvaluation, infernoEvaluationSuspendedUntilNewFlame,
+    manualRerollsRemaining, specialOfferEffects, suppressedPostBossRewardRounds, bossSilenced, dice, dieRoundState, bonfires, flameInstanceIds, chargeAttribution, infernoProgress, infernoEvaluation, infernoEvaluationSuspendedUntilNewFlame,
     chargeXMult, maxCharge, chargeArmed, decisionId, sixPackXMult, sixPackUpperHandsPlayed, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, lifetimeNormalShopGoldSpent, consumed, scorecardCycleConsumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, fetchTarget, lastRoundPayout, roundSummary, shop, flameSelection, specialOffer });
 }

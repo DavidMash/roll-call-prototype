@@ -34,7 +34,7 @@ import {
   SPECIAL_OFFERS, specialOfferDescription, specialOfferName, trainingOfferKey, usableManualRerolls,
 } from './specialOffers';
 import type { ChargeFlame, HandStartSnapshot } from './flames';
-import type { Enhancement, EngulfmentAssetRef, EventRecord, Face, Flame, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, RunNode, ScoreSource, SpecialOffer } from './types';
+import type { CollectibleDie, Enhancement, EngulfmentAssetRef, EventRecord, Face, Flame, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, Rank, RunNode, ScoreSource, SpecialOffer } from './types';
 import type {
   FlameOrigin, HandSideEffect, HistoryDieState, MultContribution, PipsContribution,
   ProbabilityCheck, RollEffect, RollReason, RunHistoryV2Event, RunHistoryV2EventInput, XMultContribution,
@@ -43,8 +43,9 @@ import { Decimal, roundPositiveScoreHalf, type ExactScore } from './scoreMath';
 import { createPlayIntent, createRollBatchIntent, createRollIntent } from './resolution';
 import { grantChapterStorageSlot, orderDieIdsByEncounter, rosterDice, rosterSlotOf, syncActiveDiceProjection } from './inventory';
 import type { PlayIntent, QualificationPlan, RollBatchIntent, RollContext, RollIntent, RollResolution, ScoreOccurrence } from './resolution';
+import { resetDieRoundState } from './specialDice';
 
-type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean' | 'freePlay'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number; rerollEventId?: string };
+type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean' | 'freePlay' | 'specialFreePlay'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number; rerollEventId?: string };
 type V2HandDraft = {
   parentSeq?: number;
   hand: HandId;
@@ -104,6 +105,32 @@ export class Resolver {
     recalculateMaxCharge(state);
   }
 
+  private collectible(dieId: number): CollectibleDie | null {
+    const die = this.state.dice.find(item => item.id === dieId);
+    return die?.owner === 'player' ? die : null;
+  }
+
+  private specialRuntime(dieId: number) {
+    return this.state.dieRoundState[dieId];
+  }
+
+  private emitSpecial(die: CollectibleDie, detail: string, effectCause: string,
+    invocationBefore?: number, invocationAfter?: number, extra: Partial<EventRecord> = {}): void {
+    this.v2Hand?.sideEffects.push({ type: 'special_die', dieId: die.id, dieType: die.type, detail,
+      ...(invocationBefore === undefined ? {} : { invocationBefore }),
+      ...(invocationAfter === undefined ? {} : { invocationAfter }) });
+    this.emit({ type: 'SPECIAL_DIE_EFFECT', dieIds: [die.id], dieType: die.type, dieLevel: die.level,
+      effectCause, invocationBefore, invocationAfter, message: `D${die.id + 1} ${detail}`, ...extra });
+  }
+
+  private spendInvocation(die: CollectibleDie, detail: string, effectCause: string): void {
+    const runtime = this.specialRuntime(die.id);
+    if (!runtime || runtime.invocationsRemaining <= 0) throw new Error(`${die.type} has no Invocation remaining.`);
+    const before = runtime.invocationsRemaining;
+    runtime.invocationsRemaining--;
+    this.emitSpecial(die, detail, effectCause, before, runtime.invocationsRemaining);
+  }
+
   private historyDie(dieId: number, faceSnapshot?: Face): HistoryDieState {
     const die = this.state.dice.find(item => item.id === dieId)!;
     const face = faceSnapshot ?? activeFace(die);
@@ -113,6 +140,8 @@ export class Resolver {
       ...(die.owner === 'player' ? { collectibleType: die.type, level: die.level } : { encounterId: die.encounterId }),
       physicalFace: die.value, face: face.rank, pips: scoringPips(face),
       enhancements: { ...face.enhancements }, flame,
+      ...(die.owner === 'player' && die.type !== 'normal' && this.specialRuntime(die.id)
+        ? { specialRuntime: structuredClone(this.specialRuntime(die.id)) } : {}),
       ...(flameInstanceId === null ? {} : { flameInstanceId }) };
   }
 
@@ -206,6 +235,9 @@ export class Resolver {
           origin: this.flameOrigin(record.flame, record.dieIds?.[0] ?? null), dieIds: record.dieIds ?? [] });
       else if ((record.type === 'BOSS_FACE_CHANGED' || record.type === 'CURSED_DIE_ROLLED') && record.boss)
         this.v2Roll.effects.push({ type: 'boss', boss: record.boss, change: record.type, dieIds: record.dieIds ?? [] });
+      else if (record.type === 'SPECIAL_DIE_EFFECT' && record.dieType && record.dieIds?.[0] !== undefined)
+        this.v2Roll.effects.push({ type: 'special_die', dieId: record.dieIds[0], dieType: record.dieType,
+          detail: record.message, invocationBefore: record.invocationBefore, invocationAfter: record.invocationAfter });
       return true;
     }
     return false;
@@ -439,6 +471,13 @@ export class Resolver {
     }
     this.emit({ type: 'GOLD_SPENT', amount, message, goldSpendSource });
   }
+  private spendRoundGold(amount: number, message: string, goldSpendSource: 'furnace'): void {
+    if (this.state.phase !== 'round') throw new Error('This Gold may only be spent during an active Round.');
+    this.state.gold -= amount;
+    this.state.stats.goldSpent += amount;
+    this.state.stats.goldSpentBySource[goldSpendSource] += amount;
+    this.emit({ type: 'GOLD_SPENT', amount, message, goldSpendSource });
+  }
   addScore(amount: ExactScore, source: Exclude<ScoreSource, 'hitchhiker'>, message: string, dieIds: number[], hand?: HandId): void {
     this.state.score += amount;
     this.state.stats.scoreBySource[source] += amount;
@@ -517,31 +556,55 @@ export class Resolver {
       const detail = kind === 'loneWolf'
         ? `×${this.format(loneWolfPipsFactor(scoringDice))}: +${this.format(amount)} Pips`
         : kind === 'teamwork' ? `copied +${this.format(amount)} Pips` : `+${this.format(amount)} hand pips`;
-      this.trigger(kind, dieId, face, detail, { hand });
+      if (kind !== 'special' && kind !== 'teamPlayer') this.trigger(kind, dieId, face, detail, { hand });
     }
     applyHandContribution(this.handAccumulator!, contribution);
     this.v2Hand?.pipsContributions.push({
-      source: kind === 'base' ? 'die_base' : kind === 'loneWolf' ? 'lone_wolf' : kind,
+      source: kind === 'base' ? 'die_base' : kind === 'loneWolf' ? 'lone_wolf'
+        : kind === 'special' ? 'special_die' : kind === 'teamPlayer' ? 'team_player' : kind,
       amount, dieId, face: face.rank, role,
     });
     this.emit({ type: role === 'hitchhiker' ? 'HITCHHIKER_ADDED_PIPS' : 'HAND_PIPS_CHANGED',
-      hand, dieIds: [dieId], face: face.rank, amount, enhancement: kind === 'base' ? undefined : kind,
+      hand, dieIds: [dieId], face: face.rank, amount,
+      enhancement: kind === 'base' || kind === 'special' || kind === 'teamPlayer' ? undefined : kind,
       source: playSource === 'jumpingBean' ? 'jumpingBean' : 'hand', playSource,
       pips: this.handAccumulator!.currentPips, multiplier: this.handAccumulator!.currentMultiplier,
       message: `D${dieId + 1}${role === 'hitchhiker' ? ' Hitchhiker' : ''} ${kind === 'teamwork' ? 'Teamwork copied' : 'added'} ${this.format(amount)} Pips` });
   }
 
-  private scoringContributions(participant: ScoringParticipant, scoringDice: number): HandScoreContribution[] {
-    const contributions = ordinaryFaceContributions(participant, scoringDice);
+  private scoringContributions(participant: ScoringParticipant, scoringDice: number,
+    intent?: PlayIntent): HandScoreContribution[] {
+    let contributions = ordinaryFaceContributions(participant, scoringDice);
     const holiday = stacks(participant.face, 'holiday');
-    if (!holiday) return contributions;
-    const succeeded = this.checkProbability('holiday', holiday, [participant.id]);
-    const baseBonusPips = contributions.filter(contribution => contribution.kind === 'bonus')
-      .reduce((sum, contribution) => sum + contribution.amount, 0);
-    this.v2Hand?.sideEffects.push({ type: 'holiday', dieId: participant.id, baseBonusPips,
-      finalBonusPips: succeeded ? baseBonusPips * 3 : baseBonusPips, succeeded });
-    return succeeded ? contributions.map(contribution => contribution.kind === 'bonus'
-      ? { ...contribution, amount: contribution.amount * 3 } : contribution) : contributions;
+    if (holiday) {
+      const succeeded = this.checkProbability('holiday', holiday, [participant.id]);
+      const baseBonusPips = contributions.filter(contribution => contribution.kind === 'bonus')
+        .reduce((sum, contribution) => sum + contribution.amount, 0);
+      this.v2Hand?.sideEffects.push({ type: 'holiday', dieId: participant.id, baseBonusPips,
+        finalBonusPips: succeeded ? baseBonusPips * 3 : baseBonusPips, succeeded });
+      if (succeeded) contributions = contributions.map(contribution => contribution.kind === 'bonus'
+        ? { ...contribution, amount: contribution.amount * 3 } : contribution);
+    }
+    const die = this.collectible(participant.id);
+    const runtime = die ? this.specialRuntime(die.id) : undefined;
+    if (die && runtime) {
+      const specialPips = (die.type === 'bonus' ? 10 * die.level : 0)
+        + (die.type === 'furnace' ? runtime.furnaceUnits * 3 * die.level : 0)
+        + runtime.temporaryPips;
+      if (specialPips) contributions.push({ kind: 'special', role: participant.role,
+        dieId: participant.id, face: participant.face, amount: specialPips });
+    }
+    if (intent?.source === 'manual' && intent.playerSelectedDieIds.includes(participant.id)) {
+      const teamFactor = intent.playerSelectedDieIds.filter(id => id !== participant.id)
+        .map(id => this.collectible(id)).filter((item): item is CollectibleDie => item?.type === 'teamPlayer')
+        .reduce((factor, teamPlayer) => factor * (teamPlayer.level + 1), 1);
+      if (teamFactor > 1) {
+        const subtotal = contributions.reduce((sum, contribution) => sum + contribution.amount, 0);
+        contributions.push({ kind: 'teamPlayer', role: participant.role, dieId: participant.id,
+          face: participant.face, amount: subtotal * (teamFactor - 1) });
+      }
+    }
+    return contributions;
   }
 
   private resolvePersonalTrainerActivation(hand: HandId, id: number, face: Face): boolean | null {
@@ -561,7 +624,7 @@ export class Resolver {
 
   private resolveScoreOccurrence(occurrence: ScoreOccurrence, participants: ScoringParticipant[]): {
     trainerActivation: ScoringParticipant | null;
-    additionalOccurrence: ScoreOccurrence | null;
+    additionalOccurrences: ScoreOccurrence[];
   } {
     const participant: ScoringParticipant = { id: occurrence.dieId, face: occurrence.face, role: occurrence.role };
     const { hand, playSource } = occurrence;
@@ -594,23 +657,67 @@ export class Resolver {
         after: this.handAccumulator!.currentMultiplier, dieId: participant.id, stacks: 1 });
     }
     this.whenScored(participant.id, participant.face, hand, playSource, participant.role);
+    const collectible = this.collectible(participant.id);
+    const runtime = collectible ? this.specialRuntime(collectible.id) : undefined;
+    if (collectible && runtime) {
+      if (collectible.type === 'golden' && runtime.goldenGoldEarned < collectible.level * 3) {
+        runtime.goldenGoldEarned++;
+        this.addGold(1, `D${collectible.id + 1} Golden: +1 Gold`, 'golden', collectible.id);
+        this.emitSpecial(collectible, `Golden earned 1 Gold (${runtime.goldenGoldEarned}/${collectible.level * 3})`, 'score');
+      }
+      if (collectible.type === 'workout') {
+        const growth = 2 * collectible.level;
+        const before = runtime.temporaryPips;
+        runtime.temporaryPips += growth;
+        this.emitSpecial(collectible, `Workout future Pips ${before} → ${runtime.temporaryPips}`, 'score');
+      }
+      if (collectible.type === 'vintage') {
+        const before = collectible.vintageAppreciation;
+        collectible.vintageAppreciation = Math.min(90 * collectible.level, before + collectible.level);
+        this.emitSpecial(collectible, `Vintage appreciation ${before} → ${collectible.vintageAppreciation}`, 'score');
+      }
+      if (collectible.type === 'tank') {
+        const before = runtime.temporaryPips;
+        runtime.temporaryPips += 10 * collectible.level;
+        this.emitSpecial(collectible, `Tank future Pips ${before} → ${runtime.temporaryPips}`, 'score');
+      }
+      if (collectible.type === 'furnace' && runtime.furnaceUnits > 0) {
+        const before = runtime.furnaceUnits;
+        runtime.furnaceUnits--;
+        this.emitSpecial(collectible, `Furnace units ${before} → ${runtime.furnaceUnits}`, 'score');
+      }
+    }
     const trainerActivation = stacks(participant.face, 'personalTrainer') ? participant : null;
+    const additionalOccurrences: ScoreOccurrence[] = [];
     const doubleTime = occurrence.suppressedEffects.includes('doubleTime') ? 0 : stacks(participant.face, 'doubleTime');
     if (doubleTime && this.checkProbability('doubleTime', doubleTime, [participant.id], hand)) {
       this.trigger('doubleTime', participant.id, participant.face, 'scored again', { hand });
-      return {
-        trainerActivation,
-        additionalOccurrence: {
+      additionalOccurrences.push({
           ...occurrence,
-          id: `${occurrence.rootId}:double-time`,
+          id: `${occurrence.rootId}:legacy-double-time:${additionalOccurrences.length + 1}`,
           rootId: occurrence.rootId,
           cause: 'double_time',
           additional: true,
-          suppressedEffects: [...occurrence.suppressedEffects, 'doubleTime'],
-        },
-      };
+          suppressedEffects: [...occurrence.suppressedEffects, 'doubleTime', 'wholeDieDoubleTime'],
+      });
     }
-    return { trainerActivation, additionalOccurrence: null };
+    if (collectible?.type === 'doubleTime' && !occurrence.suppressedEffects.includes('wholeDieDoubleTime')) {
+      const guaranteed = Math.floor(collectible.level / 4);
+      const remainder = collectible.level % 4;
+      const randomExtra = remainder > 0 && probabilityCheck(this.rng, remainder * .25) ? 1 : 0;
+      const extras = guaranteed + randomExtra;
+      this.emitSpecial(collectible, `Double Time created ${extras} additional Score${extras === 1 ? '' : 's'}`,
+        'score', undefined, undefined, { amount: extras });
+      for (let index = 0; index < extras; index++) additionalOccurrences.push({
+        ...occurrence,
+        id: `${occurrence.rootId}:whole-double-time:${index + 1}`,
+        rootId: occurrence.rootId,
+        cause: 'double_time',
+        additional: true,
+        suppressedEffects: [...occurrence.suppressedEffects, 'doubleTime', 'wholeDieDoubleTime'],
+      });
+    }
+    return { trainerActivation, additionalOccurrences };
   }
 
   private resolveScoreOccurrences(resolution: HandResolution): ScoringParticipant[] {
@@ -619,7 +726,7 @@ export class Resolver {
     const trainerActivations: ScoringParticipant[] = [];
     for (const participant of scoringParticipants) {
       const rootId = `${intent.id}:score:${participant.id}`;
-      const pending: ScoreOccurrence[] = [{
+      const root: ScoreOccurrence = {
         id: rootId,
         rootId,
         playId: intent.id,
@@ -633,7 +740,14 @@ export class Resolver {
         playerSelected: intent.playerSelectedDieIds.includes(participant.id),
         additional: false,
         suppressedEffects: [],
-      }];
+      };
+      const pending: ScoreOccurrence[] = [root];
+      const collectible = this.collectible(participant.id);
+      if (collectible?.type === 'loneWolf' && intent.source === 'manual'
+        && intent.playerSelectedDieIds.length === 1 && intent.playerSelectedDieIds[0] === participant.id) {
+        for (let index = 0; index < collectible.level; index++) pending.push({ ...root,
+          id: `${rootId}:lone-wolf:${index + 1}`, cause: 'lone_wolf', additional: true });
+      }
       while (pending.length) {
         const occurrence = pending.shift()!;
         resolution.scoreOccurrences.push(occurrence);
@@ -643,12 +757,12 @@ export class Resolver {
             face: occurrence.face,
             role: occurrence.role,
           };
-          for (const contribution of this.scoringContributions(scoreParticipant, scoringDice))
+          for (const contribution of this.scoringContributions(scoreParticipant, scoringDice, intent))
             this.applyScoringContribution(contribution, intent.hand, intent.source, scoringDice);
         }
         const result = this.resolveScoreOccurrence(occurrence, scoringParticipants);
         if (result.trainerActivation) trainerActivations.push(result.trainerActivation);
-        if (result.additionalOccurrence) pending.push(result.additionalOccurrence);
+        pending.push(...result.additionalOccurrences);
       }
     }
     return trainerActivations;
@@ -660,14 +774,15 @@ export class Resolver {
     for (const die of this.state.dice) {
       const face = activeFace(die);
       const count = stacks(face, 'jackpot');
-      if (!count) continue;
+      const specialPayout = die.owner === 'player' && die.type === 'jackpot' ? 3 * die.level : 0;
+      if (!count && !specialPayout) continue;
       if (!scoring.has(die.id)) {
         this.log({ type: 'ABILITY_EVALUATED', enhancement: 'jackpot', dieIds: [die.id], face: face.rank,
           message: `D${die.id + 1} Jackpot did not trigger: die did not score in winning hand` });
         continue;
       }
       const powerball = this.state.specialOfferEffects.powerballAvailable && this.state.specialOfferEffects.powerballRounds > 0;
-      const payout = powerball ? 50 : count * CONFIG.jackpotGold;
+      const payout = powerball ? 50 : count * CONFIG.jackpotGold + specialPayout;
       if (powerball) {
         this.state.specialOfferEffects.powerballAvailable = false;
         this.state.specialOfferEffects.powerballRounds = 0;
@@ -676,6 +791,7 @@ export class Resolver {
       }
       this.state.stats.triggers.jackpot = (this.state.stats.triggers.jackpot ?? 0) + 1;
       this.addGold(payout, `D${die.id + 1} Jackpot ×${this.format(count)}: +${this.format(payout)} gold`, 'jackpot', die.id, 'jackpot', face.rank);
+      if (specialPayout && die.owner === 'player') this.emitSpecial(die, `Jackpot paid ${payout} Gold`, 'winning_play');
       if (isCursedDie(die)) this.state.stats.hexerEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
         kind: 'jackpot', face: face.rank, amount: payout });
       total += payout;
@@ -756,7 +872,7 @@ export class Resolver {
     const evaluated = candidates.flatMap(candidate => {
       const simulated = activeEncounterDice(this.state).filter(item => !rolling.has(item.id) || item.id === die.id)
         .map(item => item.id === die.id ? { ...item, value: candidate.physicalFace } : item);
-      const hand = handOrder.find(id => !unavailable.has(id) && combinationsForHand(simulated, id)
+      const hand = handOrder.find(id => !unavailable.has(id) && combinationsForHand(simulated, id, this.state.dieRoundState)
         .some(combination => combination.includes(die.id) && required.every(requiredId => combination.includes(requiredId))));
       return hand ? [{ ...candidate, hand }] : [];
     });
@@ -794,6 +910,44 @@ export class Resolver {
     const beforePhysical = die.value;
     const before = activeFace(die).rank;
     const origin = structuredClone(activeFace(die));
+    const collectible = die.owner === 'player' ? die : null;
+    const runtime = collectible ? this.specialRuntime(die.id) : undefined;
+    const specialAllowed = intent.context === 'gameplay' || intent.context === 'settle' || intent.context === 'wardenSetup';
+    const forced = (controller: RollResolution['controller'], target: Rank, controllerDieId: number,
+      locked = true): RollResolution => {
+      const physicalFace = (die.faces.findIndex(face => face.rank === target) + 1 || target) as Rank;
+      return { intent, dieId: die.id, before, beforePhysical, physicalFace, value: target,
+        weighted: false, bumped: false, actualBump: false, clockmakerBump: false, attracted: false,
+        controller, controllerDieId, locked, origin, magicHand: null,
+        specialDieType: collectible?.type };
+    };
+    if (specialAllowed && collectible?.type === 'tank' && runtime && intent.reroll) {
+      const beforePips = runtime.temporaryPips;
+      runtime.temporaryPips += 10 * collectible.level;
+      this.emitSpecial(collectible, `Tank intercepted Reroll; future Pips ${beforePips} → ${runtime.temporaryPips}`,
+        'reroll_intercept');
+      return { ...forced('tank', before, die.id), physicalFace: beforePhysical, intercepted: true };
+    }
+    if (specialAllowed && collectible?.type === 'weighted' && runtime && runtime.invocationsRemaining > 0) {
+      const target = runtime.weightedFace;
+      this.spendInvocation(collectible, `Weighted forced Roll to ${target}`, 'roll_controller');
+      return forced('weightedDie', target, die.id);
+    }
+    if (specialAllowed && collectible?.type === 'magic' && runtime && intent.reroll && runtime.magicArmedFace !== null
+      && runtime.invocationsRemaining > 0) {
+      const target = runtime.magicArmedFace;
+      runtime.magicArmedFace = null;
+      this.spendInvocation(collectible, `Magic forced Reroll to ${target}`, 'roll_controller');
+      return forced('magicDie', target, die.id);
+    }
+    if (specialAllowed && collectible?.type === 'clockwork' && runtime && intent.reroll
+      && runtime.clockworkRolls < 3 * collectible.level) {
+      runtime.clockworkRolls++;
+      const target = (before === 6 ? 1 : before + 1) as Rank;
+      this.emitSpecial(collectible, `Clockwork advanced ${before} → ${target} (${runtime.clockworkRolls}/${3 * collectible.level})`,
+        'roll_controller');
+      return forced('clockworkDie', target, die.id);
+    }
     const actualBump = (allowsRollEnhancements || intent.context === 'wardenSetup') && stacks(origin, 'bump') > 0;
     const clockmakerBump = (intent.context === 'gameplay' || intent.context === 'settle')
       && !this.state.bossSilenced && this.state.boss?.type === 'clockmaker';
@@ -832,6 +986,18 @@ export class Resolver {
       weighted: false, bumped: false, actualBump: false, clockmakerBump: false, attracted: false,
       controller: 'boomerang', origin, magicHand: null,
     };
+    // Transitional precedence: legacy Bump/Clockmaker/Magnetic/Magic/Boomerang remain
+    // locked own-die controllers. Whole-die Magnetic arbitrates only after those controls.
+    if (specialAllowed) {
+      const magnetic = activeEncounterDice(this.state).find((candidate): candidate is CollectibleDie => candidate.owner === 'player'
+        && candidate.type === 'magnetic' && !rolling.has(candidate.id)
+        && (this.specialRuntime(candidate.id)?.invocationsRemaining ?? 0) > 0);
+      if (magnetic) {
+        const target = activeFace(magnetic).rank;
+        this.spendInvocation(magnetic, `Magnetic forced D${die.id + 1} to ${target}`, 'external_roll_controller');
+        return { ...forced('magneticDie', target, magnetic.id, false), attracted: true, specialDieType: magnetic.type };
+      }
+    }
     const previousFaceExcluded = intent.excludeStartingFace;
     return {
       intent, dieId: die.id, before, beforePhysical,
@@ -844,11 +1010,13 @@ export class Resolver {
   private applyPostRollReactions(batch: RollBatchIntent, results: RollResolution[], anchors: readonly number[]):
     Map<number, { from: import('./types').Rank; to: import('./types').Rank }> {
     const allowsRollEnhancements = batch.context === 'gameplay' || batch.context === 'settle';
-    const shifterResults = allowsRollEnhancements ? this.applyLandedShifters(batch.dieIds) : new Map();
+    const rolledIds = results.filter(result => !result.intercepted).map(result => result.dieId);
+    const shifterResults = allowsRollEnhancements ? this.applyLandedShifters(rolledIds) : new Map();
     const triggers: RollTrigger[] = [];
     for (const result of results) {
       const die = this.state.dice.find(item => item.id === result.dieId)!;
       const face = structuredClone(activeFace(die));
+      if (result.intercepted) continue;
       this.emit({ type: 'DIE_ROLLED', dieIds: [die.id], face: face.rank,
         rollSource: batch.manual ? 'manual_reroll' : 'automatic', previousFace: result.before, resultFace: face.rank,
         sameFaceExcluded: batch.manual,
@@ -871,7 +1039,7 @@ export class Resolver {
         this.emit({ type: 'BUMP_ROLL', enhancement: result.actualBump ? 'bump' : undefined,
           boss: result.clockmakerBump ? 'clockmaker' : undefined, dieIds: [die.id], face: face.rank,
           message: `D${die.id + 1} ${result.clockmakerBump ? 'Clockmaker Bump' : 'Bump'} controlled the roll: ${result.before} → ${face.rank}` });
-      } else if (result.attracted) {
+      } else if (result.attracted && result.controller === 'magnetic') {
         this.state.stats.magneticAttractions++;
         this.state.stats.triggers.magnetic = (this.state.stats.triggers.magnetic ?? 0) + 1;
         this.emit({ type: 'MAGNETIC_ATTRACTION', enhancement: 'magnetic', dieIds: [die.id, ...anchors], face: face.rank,
@@ -887,6 +1055,15 @@ export class Resolver {
       }
       if (batch.context === 'gameplay' && stacks(face, 'jumpingBean'))
         triggers.push({ dieId: die.id, face, enhancement: 'jumpingBean' });
+      if (batch.context === 'gameplay' && die.owner === 'player' && die.type === 'freePlay') {
+        const runtime = this.specialRuntime(die.id);
+        if (face.rank !== 7 && runtime && runtime.freePlayUsesByFace[face.rank] < die.level) {
+          runtime.freePlayUsesByFace[face.rank]++;
+          this.emitSpecial(die, `Free Play face ${face.rank} (${runtime.freePlayUsesByFace[face.rank]}/${die.level})`,
+            'post_roll');
+          triggers.push({ dieId: die.id, face, enhancement: 'specialFreePlay', rerollEventId: batch.id });
+        }
+      }
       if (batch.context === 'gameplay' && batch.reroll && !batch.manual
         && stacks(result.origin, 'freePlay') && result.physicalFace === result.beforePhysical)
         triggers.unshift({ dieId: die.id, face, enhancement: 'freePlay', rerollEventId: batch.id });
@@ -927,7 +1104,8 @@ export class Resolver {
     if (attracted.length) {
       for (const anchor of anchors) activeFace(this.state.dice.find(die => die.id === anchor)!).magneticSourceUsed = true;
     }
-    for (const result of results) this.state.dice.find(item => item.id === result.dieId)!.value = result.physicalFace;
+    for (const result of results) if (!result.intercepted)
+      this.state.dice.find(item => item.id === result.dieId)!.value = result.physicalFace;
     const shifterResults = this.applyPostRollReactions(batch, results, anchors);
     const effects = this.v2Roll.effects;
     this.v2Roll = null;
@@ -944,7 +1122,12 @@ export class Resolver {
           weighted: result.weighted && weightedSource ? { sourceFace: weightedSource.rank, stacks: weightedStacks,
             destinationWeight: 1 + weightedStacks } : null,
           bump: result.bumped ? { source: result.clockmakerBump ? 'clockmaker' as const : 'enhancement' as const } : null,
-          magneticAnchorIds: result.attracted ? [...anchors] : [], controller: result.controller,
+          magneticAnchorIds: result.attracted
+            ? result.controller === 'magneticDie' && result.controllerDieId !== undefined ? [result.controllerDieId] : [...anchors]
+            : [], controller: result.controller,
+          ...(result.controllerDieId === undefined ? {} : { controllerDieId: result.controllerDieId }),
+          ...(result.locked === undefined ? {} : { locked: result.locked }),
+          ...(result.intercepted === undefined ? {} : { intercepted: result.intercepted }),
           ...(shifterResults.has(result.dieId) ? { shifter: shifterResults.get(result.dieId)! } : {}),
           ...(result.magicHand ? { magicHand: result.magicHand } : {}),
           ...(this.pendingFlywheel.has(result.dieId) ? { flywheel: { chargeConsumed: true as const,
@@ -960,9 +1143,9 @@ export class Resolver {
     let cursor = 0;
     while (cursor < this.queue.length) {
       const item = this.queue[cursor++];
-      this.trigger(item.enhancement, item.dieId, item.face, item.enhancement === 'weighted'
+      if (item.enhancement !== 'specialFreePlay') this.trigger(item.enhancement, item.dieId, item.face, item.enhancement === 'weighted'
         ? `source face ${item.weightedSourceFace} ×${this.format(item.weightedStacks ?? 0)}; destination weight ${this.format(item.rollWeight ?? 0)}` : '');
-      if (item.enhancement === 'freePlay') {
+      if (item.enhancement === 'freePlay' || item.enhancement === 'specialFreePlay') {
         const hand = UPPER_HAND_BY_FACE[item.face.rank];
         if (!hand) continue;
         this.v2ParentSeq = this.lastV2RollSeq;
@@ -1348,15 +1531,20 @@ export class Resolver {
     this.evaluate();
     if (this.state.phase === 'round' && boss.pendingReinforcements === 0) this.state.decisionId++;
   }
-  play(hand: HandId, dieIds: number[], playSource: HandPlaySource = 'manual', decisionMs: number | null = null): { winning: boolean; beanRecordIndex: number | null } {
+  play(hand: HandId, dieIds: number[], playSource: HandPlaySource = 'manual', decisionMs: number | null = null,
+    qualificationClaims: import('./resolution').QualificationResourceClaim[] = []): { winning: boolean; beanRecordIndex: number | null } {
     const playId = `${this.state.historyV2TimelineId}:${this.state.round}:${this.state.actionJournal.length}:${this.state.historyV2.length}:${playSource}`;
-    return this.resolvePlay(createPlayIntent(playId, hand, orderDieIdsByEncounter(this.state, dieIds), playSource, decisionMs));
+    return this.resolvePlay(createPlayIntent(playId, hand, orderDieIdsByEncounter(this.state, dieIds), playSource, decisionMs,
+      qualificationClaims));
   }
 
   private resolvePlay(intent: PlayIntent): { winning: boolean; beanRecordIndex: number | null } {
     this.v2RecentHand = null;
     const { hand, source: playSource, selectedDieIds: ids } = intent;
-    const qualification = planQualification(activeEncounterDice(this.state), hand, ids);
+    const qualification = planQualification(activeEncounterDice(this.state), hand, ids,
+      { roundState: this.state.dieRoundState, claims: intent.qualificationClaims });
+    if (intent.source === 'manual' && (!qualification.legal || qualification.ambiguousClaims))
+      throw new Error('Committed Play has no unambiguous Qualification plan.');
     const freeBean = playSource === 'jumpingBean';
     const freePlay = playSource !== 'manual';
     const wouldConsumeHand = !freePlay && (this.state.bossSilenced || this.state.boss?.type !== 'marathon');
@@ -1388,6 +1576,16 @@ export class Resolver {
     for (const die of freePlay ? [] : activeEncounterDice(this.state)) {
       if (ids.includes(die.id)) continue;
       const face = structuredClone(activeFace(die));
+      if (die.owner === 'player' && die.type === 'hitchhiker') {
+        const runtime = this.specialRuntime(die.id);
+        if (runtime?.invocationsRemaining) {
+          const before = runtime.invocationsRemaining;
+          runtime.invocationsRemaining--;
+          hitchhikers.push({ id: die.id, face, role: 'hitchhiker' });
+          this.emitSpecial(die, `Hitchhiker joined ${HANDS[hand].name}`, 'play', before, runtime.invocationsRemaining);
+          continue;
+        }
+      }
       const count = stacks(face, 'hitchhiker');
       if (!count || !this.checkProbability('hitchhiker', count, [die.id], hand)) continue;
       hitchhikers.push({ id: die.id, face, role: 'hitchhiker' });
@@ -1423,21 +1621,39 @@ export class Resolver {
     }
     const sustainableParticipant = resolution.wouldConsumeHand ? scoringParticipants.find(participant => {
       const live = activeFace(this.state.dice.find(die => die.id === participant.id)!);
-      return stacks(participant.face, 'sustainable') && (live.sustainableCharges ?? 0) > 0;
+      const die = this.collectible(participant.id);
+      return (stacks(participant.face, 'sustainable') && (live.sustainableCharges ?? 0) > 0)
+        || (die?.type === 'sustainable' && (this.specialRuntime(die.id)?.invocationsRemaining ?? 0) > 0);
     }) : undefined;
     if (sustainableParticipant) {
       const live = activeFace(this.state.dice.find(die => die.id === sustainableParticipant.id)!);
-      live.sustainableCharges!--;
-      sustainableParticipant.face.sustainableCharges = live.sustainableCharges;
+      const die = this.collectible(sustainableParticipant.id);
+      let remaining: number;
+      if (die?.type === 'sustainable') {
+        const runtime = this.specialRuntime(die.id)!;
+        const before = runtime.invocationsRemaining;
+        runtime.invocationsRemaining--;
+        remaining = runtime.invocationsRemaining;
+        this.emitSpecial(die, `${HANDS[hand].name} preserved`, 'hand_consumption', before, remaining);
+      } else {
+        live.sustainableCharges!--;
+        sustainableParticipant.face.sustainableCharges = live.sustainableCharges;
+        remaining = live.sustainableCharges ?? 0;
+      }
       resolution.consumesHand = false;
       this.v2Hand.consumed = false;
-      this.trigger('sustainable', sustainableParticipant.id, structuredClone(live),
-        `${HANDS[hand].name} preserved; ${live.sustainableCharges} charge(s) remain`, { hand });
+      if (die?.type !== 'sustainable') this.trigger('sustainable', sustainableParticipant.id, structuredClone(live),
+        `${HANDS[hand].name} preserved; ${remaining} charge(s) remain`, { hand });
       this.v2Hand.sideEffects.push({ type: 'sustainable', dieId: sustainableParticipant.id, hand,
-        chargesRemaining: live.sustainableCharges ?? 0 });
+        chargesRemaining: remaining });
     }
     this.emit({ type: 'HAND_STARTED', hand, dieIds: ids, playSource, handConsumed: resolution.consumesHand,
       message: `${freePlay ? 'Free-played' : 'Played'} ${HANDS[hand].name} Lv. ${this.format(handLevel)}` });
+    for (const claim of resolution.qualification.resourceClaims) {
+      const die = this.collectible(claim.dieId);
+      if (!die) throw new Error('Qualification claim references a non-collectible die.');
+      this.spendInvocation(die, `${claim.effect} Qualification Invocation spent`, 'qualification');
+    }
     for (const participation of resolution.qualification.effects) {
       const participant = shapeParticipants.find(item => item.id === participation.dieId)!;
       if (participation.effect === 'conjoined') {
@@ -1446,8 +1662,8 @@ export class Resolver {
       } else this.trigger(participation.effect, participant.id, participant.face, 'wild qualification; actual printed pips score');
     }
     const originalContributions = scoringParticipants.flatMap(participant =>
-      this.scoringContributions(participant, scoringParticipants.length));
-    for (const kind of ['base', 'bonus', 'loneWolf'] as const) for (const contribution of originalContributions)
+      this.scoringContributions(participant, scoringParticipants.length, intent));
+    for (const kind of ['base', 'bonus', 'loneWolf', 'special', 'teamPlayer'] as const) for (const contribution of originalContributions)
       if (contribution.kind === kind) this.applyScoringContribution(contribution, hand, playSource, scoringParticipants.length);
     const trainerActivations = this.resolveScoreOccurrences(resolution);
     const { pips, multiplier, xMult, rawScore, score, bossFactor } =
@@ -1544,10 +1760,74 @@ export class Resolver {
     return this.resolvePostPlayRerolls(resolution, winning, beanRecordIndex);
   }
 
+  invokeJumpingBean(dieId: number): void {
+    const die = this.collectible(dieId);
+    if (!die || die.type !== 'jumpingBean') throw new Error('Jumping Bean command requires its equipped die.');
+    const face = activeFace(die);
+    const hand = UPPER_HAND_BY_FACE[face.rank];
+    if (!hand) throw new Error('Jumping Bean requires an ordinary exposed face.');
+    this.spendInvocation(die, `Jumping Bean Free Played ${HANDS[hand].name}`, 'on_command');
+    const outcome = this.play(hand, [die.id], 'jumpingBean');
+    if (outcome.winning) { this.evaluate(); return; }
+    this.rollBatch([die.id], 'Jumping Bean reroll', 'gameplay', false, 'jumping_bean_followup');
+    this.drain();
+    this.evaluate();
+  }
+
+  invokeFlywheel(dieId: number): void {
+    const die = this.collectible(dieId);
+    if (!die || die.type !== 'flywheel') throw new Error('Flywheel command requires its equipped die.');
+    this.spendInvocation(die, 'Flywheel free Reroll', 'on_command');
+    this.rollBatch([die.id], 'Flywheel free reroll', 'gameplay', false, 'other');
+    this.drain();
+    this.evaluate();
+  }
+
+  invokeChameleon(dieId: number): void {
+    const die = this.collectible(dieId);
+    if (!die || die.type !== 'chameleon') throw new Error('Chameleon command requires its equipped die.');
+    const others = rosterDice(this.state).filter(item => item.id !== die.id);
+    if (!others.length) throw new Error('Chameleon requires another equipped die.');
+    const values = others.map(item => activeFace(item).rank);
+    const counts = new Map<Rank, number>();
+    for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+    const maximum = Math.max(...counts.values());
+    const leaders = [...counts].filter(([, count]) => count === maximum).map(([rank]) => rank);
+    const target = leaders.length === 1 ? leaders[0] : values[randomIndex(this.rng, values.length)];
+    const before = activeFace(die).rank;
+    this.spendInvocation(die, `Chameleon changed ${before} → ${target}`, 'on_command');
+    const physicalFace = die.faces.findIndex(face => face.rank === target);
+    die.value = (physicalFace >= 0 ? physicalFace + 1 : target) as Rank;
+    this.emit({ type: 'DIE_FLIPPED', dieIds: [die.id], previousFace: before, resultFace: target, face: target,
+      message: `D${die.id + 1} Chameleon changed face: ${before} → ${target}` });
+    this.evaluate();
+  }
+
+  armMagic(dieId: number, face: Exclude<Rank, 7>): void {
+    const die = this.collectible(dieId);
+    if (!die || die.type !== 'magic') throw new Error('Magic command requires its equipped die.');
+    const runtime = this.specialRuntime(die.id)!;
+    runtime.magicArmedFace = face;
+    this.emitSpecial(die, `Magic armed face ${face} for the next Reroll`, 'on_command',
+      runtime.invocationsRemaining, runtime.invocationsRemaining, { face });
+  }
+
+  feedFurnace(dieId: number, amount: number): void {
+    const die = this.collectible(dieId);
+    if (!die || die.type !== 'furnace') throw new Error('Furnace command requires its equipped die.');
+    const runtime = this.specialRuntime(die.id)!;
+    this.spendRoundGold(amount, `Fed D${die.id + 1} Furnace: -${amount} Gold`, 'furnace');
+    const before = runtime.furnaceUnits;
+    runtime.furnaceUnits += amount;
+    this.emitSpecial(die, `Furnace units ${before} → ${runtime.furnaceUnits}`, 'on_command',
+      undefined, undefined, { amount });
+  }
+
   manualReroll(dieIds: number[]): void {
     const ids = orderDieIdsByEncounter(this.state, [...dieIds]);
     const requiredDieIds = requiredEncounterDieIds(this.state);
-    const startedDeadBoard = !hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state), requiredDieIds);
+    const startedDeadBoard = !hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state), requiredDieIds,
+      this.state.dieRoundState);
     const flywheelIds = ids.filter(id => {
       const face = activeFace(this.state.dice.find(die => die.id === id)!);
       return stacks(face, 'flywheel') > 0 && (face.flywheelCharges ?? 0) > 0;
@@ -1588,7 +1868,8 @@ export class Resolver {
       remaining: this.state.manualRerollsRemaining };
     this.rollBatch(ids, 'Manual gameplay reroll', 'gameplay', true, 'manual');
     this.drain();
-    if (startedDeadBoard && (this.state.score >= this.state.target || hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state), requiredDieIds))) {
+    if (startedDeadBoard && (this.state.score >= this.state.target || hasPlayableHand(activeEncounterDice(this.state),
+      unavailableEncounterHands(this.state), requiredDieIds, this.state.dieRoundState))) {
       record.rescuedDeadBoard = true; round.deadBoardRescues++; this.state.stats.deadBoardRescues++;
       this.emit({ type: 'DEAD_BOARD_RESCUED', dieIds: ids, message: 'Dead board rescued' });
     }
@@ -1782,6 +2063,7 @@ export class Resolver {
       if (flywheel) face.flywheelCharges = flywheel; else delete face.flywheelCharges;
       if (sustainable) face.sustainableCharges = sustainable; else delete face.sustainableCharges;
     }
+    this.state.dieRoundState = resetDieRoundState(rosterDice(this.state));
     const bossType = this.state.bossSchedule[this.state.round]
       ?? (this.state.round > 60 ? bossTypeForRound(this.state.seed, this.state.round) : null);
     if (bossType) this.state.bossSchedule[this.state.round] = bossType;
@@ -2231,7 +2513,8 @@ export class Resolver {
         message: `${bossType ? `${isMiniBossType(bossType) ? 'Mini-Boss' : 'Boss'} defeated` : `Round ${this.format(this.state.round)} cleared`} · Gold ${this.format(summary.goldBefore)} → ${this.format(summary.goldAfter)} (+${this.format(totalGoldEarned)})` });
       this.performInfernoEvaluation();
     } else if (this.state.bossSilenced || this.state.boss?.type !== 'warden' || (this.state.boss.startingDieId !== null && this.state.boss.pendingReinforcements === 0)) {
-      if (hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state), requiredEncounterDieIds(this.state))) return;
+      if (hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state),
+        requiredEncounterDieIds(this.state), this.state.dieRoundState)) return;
       const rerolls = usableManualRerolls(this.state);
       if (rerolls > 0) { this.emit({ type: 'DEAD_BOARD', message: `No playable hands — ${this.format(rerolls)} rerolls remain` }); return; }
       if (this.state.specialOfferEffects.bottledFairyRounds > 0 && !this.state.specialOfferEffects.bottledFairyTriggeredThisRound) {

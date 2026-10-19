@@ -54,7 +54,7 @@ export function legalHandCombinations(
   const required = requiredSelectionDieIds(board);
   const preferred = new Set(preferredManualDieIds);
   const dice = activeEncounterDice(board);
-  const combinations = handOptions(dice, [], required)
+  const combinations = handOptions(dice, [], required, board.dieRoundState)
     .find(option => option.id === hand)?.combinations.map(ids => orderedIds(dice, ids)) ?? [];
   return combinations.sort((a, b) => {
     const aPreferred = preferred.size > 0 && [...preferred].every(id => a.includes(id));

@@ -5,8 +5,8 @@ import type {
 import type { RoundGoalBreakdown } from './goals';
 import type { ExactDecimal, ExactScore } from './scoreMath';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 9 as const;
-export const RUN_HISTORY_V2_RULESET = 'chapter-enhancement-progression-v1' as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 10 as const;
+export const RUN_HISTORY_V2_RULESET = 'collectible-dice-runtime-v1' as const;
 
 export interface RunHistoryV2Coverage {
   complete: boolean;
@@ -43,10 +43,20 @@ export interface HistoryDieState {
   enhancements: Partial<Record<Enhancement, number>>;
   flame: Flame | null;
   flameInstanceId?: FlameInstanceId;
+  specialRuntime?: {
+    invocationsRemaining: number;
+    temporaryPips: number;
+    goldenGoldEarned: number;
+    clockworkRolls: number;
+    furnaceUnits: number;
+    magicArmedFace: Exclude<Rank, 7> | null;
+    weightedFace: Exclude<Rank, 7>;
+    freePlayUsesByFace: Record<Exclude<Rank, 7>, number>;
+  };
 }
 
 export interface PipsContribution {
-  source: 'hand_base' | 'die_base' | 'bonus' | 'lone_wolf' | 'teamwork' | 'hitchhiker';
+  source: 'hand_base' | 'die_base' | 'bonus' | 'lone_wolf' | 'teamwork' | 'hitchhiker' | 'special_die' | 'team_player';
   amount: number;
   dieId?: number;
   face?: Rank;
@@ -88,6 +98,8 @@ export type HandSideEffect =
   | { type: 'gold'; source: GoldSource; amount: number; dieId?: number }
   | { type: 'vintage_growth'; dieId: number; face: Rank; before: number; after: number }
   | { type: 'double_time'; dieId: number; succeeded: boolean }
+  | { type: 'special_die'; dieId: number; dieType: import('./types').DieType; detail: string;
+      invocationBefore?: number; invocationAfter?: number }
   | { type: 'charge'; operation: 'gain' | 'consume_reset' | 'arm' | 'disarm'; before: number; after: number; source?: Flame }
   | { type: 'flame_activation'; flame: Flame; origin: FlameOrigin; dieId?: number; factor?: number }
   | { type: 'enhancement'; enhancement: Enhancement; dieIds: number[]; amount?: number }
@@ -138,7 +150,10 @@ export interface RollResult {
   weighted: null | { sourceFace: Rank; stacks: number; destinationWeight: number };
   bump: null | { source: 'enhancement' | 'clockmaker' };
   magneticAnchorIds: number[];
-  controller: 'clockmaker' | 'bump' | 'magnetic' | 'magic' | 'boomerang' | 'rng';
+  controller: import('./resolution').RollController;
+  controllerDieId?: number;
+  locked?: boolean;
+  intercepted?: boolean;
   shifter?: { from: Rank; to: Rank };
   magicHand?: HandId;
   flywheel?: { chargeConsumed: true; chargesRemaining: number };
@@ -147,7 +162,9 @@ export interface RollResult {
 export type RollEffect =
   | { type: 'charge'; source: Flame; before: number; after: number }
   | { type: 'flame_activation'; flame: Flame; origin: FlameOrigin; dieIds: number[] }
-  | { type: 'boss'; boss: BossType; change: string; dieIds: number[] };
+  | { type: 'boss'; boss: BossType; change: string; dieIds: number[] }
+  | { type: 'special_die'; dieId: number; dieType: import('./types').DieType; detail: string;
+      invocationBefore?: number; invocationAfter?: number };
 
 export interface RollBatchEvent extends RunHistoryV2Envelope {
   kind: 'roll_batch';
