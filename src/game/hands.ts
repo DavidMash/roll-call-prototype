@@ -1,5 +1,6 @@
 import { activeFace, HAND_RANKS } from './dice';
 import { stacks } from './enhancements';
+import type { QualificationEffect, QualificationPlan } from './resolution';
 import type { Die, HandId, HandLevels, HandOption, Rank } from './types';
 
 export interface HandDefinition {
@@ -176,5 +177,31 @@ export function defaultCombination(dice: Die[], hand: HandId, selected: number[]
 }
 export function isValidSelection(dice: Die[], hand: HandId, selected: number[]): boolean {
   return new Set(selected).size === selected.length && combinationsForHand(dice, hand).some(set => sameDice(set, selected));
+}
+
+/**
+ * Purely plans qualification. Legacy wildcards are unlimited, so Stage 1 records their
+ * participation but deliberately produces no resource claims to commit.
+ */
+export function planQualification(dice: Die[], hand: HandId, selected: readonly number[]): QualificationPlan {
+  const requestedDieIds = [...selected];
+  const legal = isValidSelection(dice, hand, requestedDieIds);
+  const selectedDice = requestedDieIds.map(id => dice.find(die => die.id === id)).filter((die): die is Die => !!die);
+  const effects = legal ? selectedDice.flatMap(die => {
+    const face = activeFace(die);
+    const participating: QualificationEffect[] = [];
+    if ((hand === 'smallStraight' || hand === 'largeStraight') && stacks(face, 'missingLink')) participating.push('missingLink');
+    if (HANDS[hand].groups && stacks(face, 'mirror')) participating.push('mirror');
+    if (HANDS[hand].groups && stacks(face, 'conjoined')) participating.push('conjoined');
+    return participating.map(effect => ({ dieId: die.id, face: face.rank, effect }));
+  }) : [];
+  return {
+    hand,
+    requestedDieIds,
+    qualifyingDieIds: legal ? [...requestedDieIds] : [],
+    legal,
+    effects,
+    resourceClaims: [],
+  };
 }
 export const handMultiplier = (hand: HandId, level = 1) => handStats(hand, level).baseMultiplier;

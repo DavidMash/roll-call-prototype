@@ -8,7 +8,7 @@ import {
   HAND_FAMILY_FLAME_IDS, hasOwnedFlame, isChargeFlame, isFlame, ownedFlameIds, recalculateMaxCharge,
   normalizeFlameInstanceRuntime, removeFlameInstance, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier,
 } from './flames';
-import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, isValidSelection } from './hands';
+import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, isValidSelection, planQualification } from './hands';
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
 import { activeEncounterDice, bossSchedule, isBigBossRound, unavailableEncounterHands } from './bosses';
@@ -529,7 +529,7 @@ export function validateAction(state: Board, action: Action): string | null {
       const missing = requiredChargeFlameDieIds(state).filter(id => !action.dieIds.includes(id));
       if (missing.length) return 'Every Charge Flame die must participate while Charge is armed.';
     }
-    if (!isValidSelection(activeEncounterDice(state), action.hand, action.dieIds)) return 'Select a complete valid set of participating dice.';
+    if (!planQualification(activeEncounterDice(state), action.hand, action.dieIds).legal) return 'Select a complete valid set of participating dice.';
     return null;
   }
   if (action.type === 'UNLOCK_WARDEN_DIE') {
