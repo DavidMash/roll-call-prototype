@@ -3,13 +3,13 @@ import { Fragment, useMemo, useState } from 'react';
 import { chapterNumberForRound, chapterRoundForRound } from '../game/chapters';
 import { formatExactScore, formatPlayerNumber, formatScoreProgress } from '../game/copy';
 import { scoringPips } from '../game/dice';
-import { enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS } from '../game/enhancements';
-import { activeFlameId, FLAMES } from '../game/flames';
+import { flameInstances, FLAMES } from '../game/flames';
 import { HANDS, HAND_IDS } from '../game/hands';
 import { createRunHistoryTextV2, exportDebugTrace, exportRunHistoryV2 } from '../game/runHistoryV2Export';
 import { renderRunHistoryV2Event } from '../game/runHistoryV2Renderer';
 import { classifyRunHistoryV2Timelines } from '../game/runHistoryV2Timeline';
 import { activeSpecialOfferStatuses } from '../game/specialOffers';
+import { SPECIAL_DICE } from '../game/specialDice';
 import type { GameState } from '../game/types';
 
 function OverviewStat({ label, value }: { label: string; value: string | number }) {
@@ -55,17 +55,15 @@ export function RunInfoModal({ state, busy, opened, onClose, seedInput, setSeedI
             <OverviewStat label="Score / goal" value={formatScoreProgress(state.score, state.target)} /><OverviewStat label="Gold" value={state.gold} />
             <OverviewStat label="Shop spend" value={state.lifetimeNormalShopGoldSpent} /><OverviewStat label="Flame investment" value={state.stats.totalFlameInvestment} />
             <OverviewStat label="Charge" value={`×${formatPlayerNumber(state.chargeXMult)} / ×${formatPlayerNumber(state.maxCharge)}${state.chargeArmed ? ' armed' : ''}`} />
-            <OverviewStat label="Bonfires" value={state.bonfires.length} /><OverviewStat label="Inferno" value={state.engulfmentLevel} />
+            <OverviewStat label="Bonfires" value={flameInstances(state).filter(flame => flame.stage === 'bonfire').length} /><OverviewStat label="Inferno" value={state.engulfmentLevel} />
             <OverviewStat label="Bean free plays" value={state.stats.jumpingBeanFreePlays.length} /><OverviewStat label="Jackpot Gold" value={state.stats.goldBySource.jackpot} />
             <OverviewStat label="Busts" value={state.stats.busts.length} /><OverviewStat label="Life restores" value={state.stats.lifeRestores.length} />
-            <OverviewStat label="Enhancement sales" value={state.stats.sales.length} /><OverviewStat label="Vintage growth" value={state.stats.vintageGrowth.length} />
+            <OverviewStat label="Dice owned" value={Object.keys(state.diceInventory.instances).length} /><OverviewStat label="Roster dice" value={state.diceInventory.roster.filter(Boolean).length} />
           </SimpleGrid>
           <Text size="sm" mt="md"><strong>Hand levels:</strong> {HAND_IDS.map(hand => `${HANDS[hand].name} ${formatPlayerNumber(state.handLevels[hand])}`).join(' · ')}</Text>
-          <Text size="sm" mt="sm"><strong>Active Flames:</strong> {state.dice.filter(die => activeFlameId(die.flame)).map(die => `D${die.id + 1} ${FLAMES[activeFlameId(die.flame)!].name} ${formatPlayerNumber(die.flame!.investedGold)}/100`).join(' · ') || 'None'}</Text>
-          <Text size="sm"><strong>Bonfires:</strong> {state.bonfires.map(id => FLAMES[id].name).join(' · ') || 'None'}</Text>
+          <Text size="sm" mt="sm"><strong>Active Flames:</strong> {state.flameSlots.flatMap((flame, slot) => flame ? [`Slot ${slot + 1} ${FLAMES[flame.type].name} ${formatPlayerNumber(flame.investedGold)}/100 ${flame.stage}`] : []).join(' · ') || 'None'}</Text>
           <Text size="sm" mt="sm"><strong>Special Offers:</strong> {activeSpecialOfferStatuses(state.specialOfferEffects).join(' · ') || 'None active'}</Text>
           <Text size="sm" mt="sm"><strong>Gold:</strong> base {formatPlayerNumber(state.stats.goldBySource.roundBase)} · rerolls {formatPlayerNumber(state.stats.goldBySource.unusedRerolls)} · interest {formatPlayerNumber(state.stats.goldBySource.interest)} · Boss Reward {formatPlayerNumber(state.stats.goldBySource.bossReward)} · Golden {formatPlayerNumber(state.stats.goldBySource.golden)} · Jackpot {formatPlayerNumber(state.stats.goldBySource.jackpot)}</Text>
-          <Text size="sm" mt="sm"><strong>Probability:</strong> Boomerang {state.stats.probabilityProcs.boomerang.successes}/{state.stats.probabilityProcs.boomerang.checks} · Holiday {state.stats.probabilityProcs.holiday.successes}/{state.stats.probabilityProcs.holiday.checks} · Hitchhiker {state.stats.probabilityProcs.hitchhiker.successes}/{state.stats.probabilityProcs.hitchhiker.checks} · Double Time {state.stats.probabilityProcs.doubleTime.successes}/{state.stats.probabilityProcs.doubleTime.checks} · Trainer {state.stats.personalTrainerSuccesses}/{state.stats.personalTrainerAttempts}</Text>
           <Table.ScrollContainer minWidth={760} mt="md"><Table striped><Table.Thead><Table.Tr><Table.Th>Round</Table.Th><Table.Th>Attempt</Table.Th><Table.Th>Goal</Table.Th><Table.Th>Final</Table.Th><Table.Th>Margin</Table.Th><Table.Th>Reward</Table.Th></Table.Tr></Table.Thead>
             <Table.Tbody>{state.stats.rounds.map((round, index) => <Table.Tr key={`${round.round}:${round.attempt}:${index}`}>
               <Table.Td>{round.round}</Table.Td><Table.Td>{round.attempt}</Table.Td><Table.Td>{formatExactScore(round.target)}</Table.Td>
@@ -75,15 +73,12 @@ export function RunInfoModal({ state, busy, opened, onClose, seedInput, setSeedI
           </Table></Table.ScrollContainer>
         </Tabs.Panel>
         <Tabs.Panel value="dice" pt="md">
-          <Table.ScrollContainer minWidth={650}><Table striped><Table.Thead><Table.Tr><Table.Th>Die</Table.Th><Table.Th>Flame</Table.Th><Table.Th>Face</Table.Th><Table.Th>Pips</Table.Th><Table.Th>Enhancements</Table.Th></Table.Tr></Table.Thead>
+          <Table.ScrollContainer minWidth={650}><Table striped><Table.Thead><Table.Tr><Table.Th>Die</Table.Th><Table.Th>Face</Table.Th><Table.Th>Pips</Table.Th><Table.Th>Rule</Table.Th></Table.Tr></Table.Thead>
             <Table.Tbody>{state.dice.flatMap(die => die.faces.map((face, index) => {
-              const flame = activeFlameId(die.flame); const exposed = die.value === index + 1;
+              const exposed = die.value === index + 1;
               return <Table.Tr key={`${die.id}:${index + 1}`} className={exposed ? 'exposed-face-row' : undefined}>
-                <Table.Td>D{die.id + 1}</Table.Td><Table.Td>{flame ? `${FLAMES[flame].name} ${formatPlayerNumber(die.flame!.investedGold)}/100` : '—'}</Table.Td>
-                <Table.Td>side {index + 1} → {face.rank}{exposed ? ' · exposed' : ''}</Table.Td><Table.Td>{formatPlayerNumber(scoringPips(face))}</Table.Td>
-                <Table.Td>{ENHANCEMENT_IDS.filter(id => face.enhancements[id]).map(id => id === 'vintage'
-                  ? `Vintage · sell ${formatPlayerNumber(enhancementSellValue(face, 'vintage'))}`
-                  : `${ENHANCEMENTS[id].name} ×${formatPlayerNumber(face.enhancements[id]!)}`).join(', ') || '—'}</Table.Td>
+                <Table.Td>#{die.id} · {die.owner === 'player' ? SPECIAL_DICE[die.type].name : 'Cursed Die'}</Table.Td><Table.Td>side {index + 1} → {face.rank}{exposed ? ' · exposed' : ''}</Table.Td><Table.Td>{formatPlayerNumber(scoringPips(face))}</Table.Td>
+                <Table.Td>{face.bossMutation?.kind ?? ('hexerEffect' in face ? face.hexerEffect.kind : '—')}</Table.Td>
               </Table.Tr>;
             }))}</Table.Tbody>
           </Table></Table.ScrollContainer>

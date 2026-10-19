@@ -23,7 +23,7 @@ describe('shared Flame numeric details', () => {
     ['thirdRail', '+0.125 Charge per rolled 3'],
     ['jumpStart', '+0.5 Charge per manual Reroll'],
     ['powerSurge', '×3 current Charge on highest level hand'],
-    ['fluxCapacitor', '×1.25 Charge per pulled Magnetic face'],
+    ['fluxCapacitor', '×1.25 Charge per Roll pulled by a Magnetic die'],
   ])('%s keeps its own Current Effect wording', (flame, currentValue) => {
     expect(flameDetailsPresentation(flame, 25, board())).toMatchObject({ currentLabel: 'Current Effect', currentValue });
   });

@@ -5,6 +5,7 @@ import { Resolver } from '../src/game/effects';
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
 import type { Flame, GameState, SpecialOfferType } from '../src/game/types';
 import { enterRun, goToShopStage, installRunState } from './uiHelpers';
+import { placeFlameInstance } from '../src/game/flames';
 
 const fixedRandom = { next: () => .25 };
 
@@ -42,23 +43,16 @@ async function persistedState(page: Page): Promise<GameState> {
   return page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state, RUN_STORAGE_KEY);
 }
 
-test('Flame selection waits for assignment, then claims and advances exactly once', async ({ page }) => {
+test('Flame selection claims into the first global slot and advances exactly once', async ({ page }) => {
   await installRunState(page, flameReward());
   await enterRun(page);
 
   await page.getByTestId('flame-offer-ultimate').getByRole('button', { name: 'Select Flame' }).click();
-  await expect(page.getByRole('main').getByText('FLAME SELECTION', { exact: true })).toBeVisible();
-  await expect(page.getByTestId('flame-offer-ultimate')).toHaveClass(/selected/);
-
-  await page.getByRole('button', { name: /^Die 1,/ }).evaluate(element => {
-    (element as HTMLButtonElement).click();
-    (element as HTMLButtonElement).click();
-  });
   await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /CONTINUE TO SHOP/i })).toHaveCount(0);
 
   const saved = await persistedState(page);
-  expect(saved.dice[0].flame?.id).toBe('ultimate');
+  expect(saved.flameSlots[0]).toMatchObject({ type: 'ultimate', investedGold: 0, stage: 'ember' });
   expect(saved.actionJournal.filter(action => action.type === 'CHOOSE_FLAME')).toHaveLength(1);
   expect(saved.historyV2.filter(event => event.kind === 'flame_changed'
     && event.change.type === 'acquired')).toHaveLength(1);
@@ -66,32 +60,32 @@ test('Flame selection waits for assignment, then claims and advances exactly onc
 
 test('Flame replacement finishes its confirmation before automatic progression', async ({ page }) => {
   const state = flameReward('ultimate');
-  state.dice[0].flame = { id: 'doubleDown', investedGold: 40 };
+  (['doubleDown', 'minigun', 'hailMary', 'fullOfGrace', 'momentum'] as const)
+    .forEach((flame, slot) => placeFlameInstance(state, flame, slot === 0 ? 40 : 0, slot as 0 | 1 | 2 | 3 | 4));
   await installRunState(page, state);
   await enterRun(page);
 
-  await page.getByTestId('flame-offer-ultimate').getByRole('button', { name: 'Select Flame' }).click();
-  await page.getByRole('button', { name: /^Die 1,/ }).click();
-  const replacement = page.getByRole('dialog', { name: 'Replace Flame?' });
+  await page.getByTestId('flame-offer-ultimate').getByRole('button', { name: 'SELECT TO REPLACE' }).click();
+  await page.getByTestId('flame-replacement-picker').getByRole('button', { name: /Double Down/ }).click();
+  const replacement = page.getByRole('dialog', { name: 'REPLACE A FLAME?' });
   await expect(replacement).toContainText('Double Down');
-  await replacement.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await replacement.getByRole('button', { name: 'CANCEL', exact: true }).click();
   await expect(page.getByRole('main').getByText('FLAME SELECTION', { exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: /^Die 1,/ }).click();
-  await replacement.getByRole('button', { name: 'Replace Flame', exact: true }).evaluate(element => {
+  await page.getByTestId('flame-replacement-picker').getByRole('button', { name: /Double Down/ }).click();
+  await replacement.getByRole('button', { name: 'REPLACE', exact: true }).evaluate(element => {
     (element as HTMLButtonElement).click();
     (element as HTMLButtonElement).click();
   });
   await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
   const saved = await persistedState(page);
-  expect(saved.dice[0].flame).toEqual({ id: 'ultimate', investedGold: 0 });
+  expect(saved.flameSlots[0]).toMatchObject({ type: 'ultimate', investedGold: 0, stage: 'ember' });
   expect(saved.actionJournal.filter(action => action.type === 'CHOOSE_FLAME')).toHaveLength(1);
 });
 
 test('reward skipping is keyboard-safe, cancelable, and single-submit on both reward screens', async ({ page }) => {
   await installRunState(page, flameReward());
   await enterRun(page);
-  await page.getByTestId('flame-offer-ultimate').getByRole('button', { name: 'Select Flame' }).click();
 
   const skip = page.getByRole('button', { name: 'SKIP REWARD', exact: true });
   await skip.focus();
@@ -100,7 +94,7 @@ test('reward skipping is keyboard-safe, cancelable, and single-submit on both re
   await expect(confirmation.getByRole('button', { name: 'GO BACK', exact: true })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(confirmation).toHaveCount(0);
-  await expect(page.getByTestId('flame-offer-ultimate')).toHaveClass(/selected/);
+  await expect(page.getByTestId('flame-offer-ultimate')).toBeVisible();
 
   await skip.click();
   await page.keyboard.press('Escape');

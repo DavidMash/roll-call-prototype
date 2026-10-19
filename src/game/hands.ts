@@ -1,5 +1,4 @@
-import { activeFace, HAND_RANKS } from './dice';
-import { stacks } from './enhancements';
+import { activeFace, HAND_RANKS, isHexerFace, wholeDieEffectSuppressed } from './dice';
 import type { QualificationEffect, QualificationPlan } from './resolution';
 import type { Die, DieRoundState, HandId, HandLevels, HandOption, Rank } from './types';
 
@@ -120,12 +119,21 @@ function subsets<T>(items: T[], size: number): T[][] {
   return [...subsets(tail, size - 1).map(rest => [head, ...rest]), ...subsets(tail, size)];
 }
 
-type QualificationClaim = { dieId: number; effect: QualificationEffect };
+type QualificationClaim = { dieId: number; effect: Exclude<QualificationEffect, 'hexerWild'> };
 const claimed = (claims: readonly QualificationClaim[], dieId: number, effect: QualificationEffect) =>
   claims.some(claim => claim.dieId === dieId && claim.effect === effect);
 
+const hexerStraightWild = (die: Die) => {
+  const face = activeFace(die);
+  return isHexerFace(face) && face.hexerEffect.kind === 'wild';
+};
+const hexerMatchingWild = (die: Die) => {
+  const face = activeFace(die);
+  return isHexerFace(face) && ['wild', 'wildWorkout', 'wildBonus'].includes(face.hexerEffect.kind);
+};
+
 function straightValid(dice: Die[], size: number, claims: readonly QualificationClaim[] = []): boolean {
-  const natural = dice.filter(die => !stacks(activeFace(die), 'missingLink') && !claimed(claims, die.id, 'missingLink'))
+  const natural = dice.filter(die => !hexerStraightWild(die) && !claimed(claims, die.id, 'missingLink'))
     .map(die => activeFace(die).rank);
   if (new Set(natural).size !== natural.length) return false;
   return dice.length === size && HAND_RANKS.slice(0, HAND_RANKS.length - size + 1)
@@ -134,9 +142,9 @@ function straightValid(dice: Die[], size: number, claims: readonly Qualification
 function matchingGroupsValid(dice: Die[], groups: readonly number[], claims: readonly QualificationClaim[] = []): boolean {
   const qualificationFaces = dice.flatMap(die => {
     const face = activeFace(die);
-    return Array.from({ length: stacks(face, 'conjoined') || claimed(claims, die.id, 'conjoined') ? 2 : 1 }, () => ({ die, face }));
+    return Array.from({ length: claimed(claims, die.id, 'conjoined') ? 2 : 1 }, () => ({ die, face }));
   });
-  const natural = qualificationFaces.filter(({ die, face }) => !stacks(face, 'mirror') && !claimed(claims, die.id, 'mirror'))
+  const natural = qualificationFaces.filter(({ die }) => !hexerMatchingWild(die) && !claimed(claims, die.id, 'mirror'))
     .map(({ face }) => face.rank);
   const mirrorCount = qualificationFaces.length - natural.length;
   // Distinct ranks own disjoint slots. Mirror qualification copies fill remaining slots.
@@ -185,8 +193,8 @@ export function isValidSelection(dice: Die[], hand: HandId, selected: number[], 
 }
 
 /**
- * Purely plans qualification. Legacy wildcards are unlimited, so Stage 1 records their
- * participation but deliberately produces no resource claims to commit.
+ * Purely plans qualification. Hexer face rules do not spend resources, so their participation
+ * is recorded without mutating state. Whole-die claims are consumed only after commit.
  */
 export interface QualificationPlanningOptions {
   roundState?: DieRoundState;
@@ -205,7 +213,8 @@ export function planQualification(dice: Die[], hand: HandId, selected: readonly 
   const validShape = new Set(requestedDieIds).size === requestedDieIds.length && selectedDice.length === requestedDieIds.length;
   const rule = HANDS[hand];
   const candidates: QualificationClaim[] = selectedDice.flatMap<QualificationClaim>(die => {
-    if (die.owner !== 'player' || (options.roundState && (options.roundState[die.id]?.invocationsRemaining ?? 0) <= 0)) return [];
+    if (die.owner !== 'player' || wholeDieEffectSuppressed(die)
+      || (options.roundState && (options.roundState[die.id]?.invocationsRemaining ?? 0) <= 0)) return [];
     if ((hand === 'smallStraight' || hand === 'largeStraight') && die.type === 'missingLink')
       return [{ dieId: die.id, effect: 'missingLink' as const }];
     if (rule.groups && die.type === 'mirror') return [{ dieId: die.id, effect: 'mirror' as const }];
@@ -231,9 +240,8 @@ export function planQualification(dice: Die[], hand: HandId, selected: readonly 
   const effects = legal ? selectedDice.flatMap(die => {
     const face = activeFace(die);
     const participating: QualificationEffect[] = [];
-    if ((hand === 'smallStraight' || hand === 'largeStraight') && stacks(face, 'missingLink')) participating.push('missingLink');
-    if (HANDS[hand].groups && stacks(face, 'mirror')) participating.push('mirror');
-    if (HANDS[hand].groups && stacks(face, 'conjoined')) participating.push('conjoined');
+    if ((hand === 'smallStraight' || hand === 'largeStraight') && hexerStraightWild(die)) participating.push('hexerWild');
+    if (HANDS[hand].groups && hexerMatchingWild(die)) participating.push('hexerWild');
     return participating.map(effect => ({ dieId: die.id, face: face.rank, effect }));
   }).concat((chosen ?? []).map(claim => ({ dieId: claim.dieId,
     face: activeFace(selectedDice.find(die => die.id === claim.dieId)!).rank, effect: claim.effect }))) : [];

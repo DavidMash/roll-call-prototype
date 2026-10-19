@@ -1,12 +1,11 @@
 import { normalizeGameState } from '../game/engine';
 import type { GameState } from '../game/types';
 import { TUTORIAL_VERSION, type OnboardingMetadata, type TutorialScenarioState, type TutorialSession } from './types';
-import { reconcileTutorialBindings } from './tutorialBindings';
 import { stringifyExactJson } from '../game/scoreMath';
 
 export const TUTORIAL_RUN_STORAGE_KEY = 'roll-call:tutorial-run';
 export const ONBOARDING_STORAGE_KEY = 'roll-call:onboarding';
-export const TUTORIAL_RUN_STORAGE_VERSION = 3;
+export const TUTORIAL_RUN_STORAGE_VERSION = 4;
 export const ONBOARDING_STORAGE_VERSION = 1;
 
 export type TutorialStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
@@ -22,14 +21,7 @@ export const initialTutorialScenario = (): TutorialScenarioState => ({
   completedBeatIds: [],
   seenLessonIds: [],
   firstFlame: null,
-  firstFlameDieId: null,
-  workoutDieId: null,
-  bonusBinding: null,
-  workoutBinding: null,
-  round2Plan: null,
-  round4Plan: null,
-  vintageShopsSeeded: 0,
-  vintagePurchased: false,
+  firstFlameInstanceId: null,
   safeguardActivations: 0,
   safeguardRerollsGranted: 0,
   suppressedEncounterRound: null,
@@ -75,7 +67,7 @@ export function loadTutorialSession(storage: TutorialStorage | null): TutorialSe
     const saved: unknown = JSON.parse(raw);
     if (!isRecord(saved) || saved.version !== TUTORIAL_RUN_STORAGE_VERSION || !isRecord(saved.session)) return null;
     if (saved.session.tutorialVersion !== TUTORIAL_VERSION || !scenarioIsValid(saved.session.scenario) || !isRecord(saved.session.game)) return null;
-    // normalizeGameState is the engine's compatibility gate. A malformed object
+    // normalizeGameState is the engine's current-schema validation gate. A malformed object
     // may still throw while normalizing, which is intentionally treated as no save.
     const game = normalizeGameState(saved.session.game as unknown as GameState);
     const session = { tutorialVersion: TUTORIAL_VERSION, game,
@@ -83,7 +75,6 @@ export function loadTutorialSession(storage: TutorialStorage | null): TutorialSe
     if (game.flameTutorial.completed && !session.scenario.completedBeatIds.includes('flame-details')) {
       session.scenario.completedBeatIds.push('flame-details');
     }
-    reconcileTutorialBindings(session);
     return session;
   } catch { return null; }
 }

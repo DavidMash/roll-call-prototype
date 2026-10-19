@@ -6,6 +6,7 @@ import { HAND_IDS } from './hands';
 import { purchaseDie } from './diceEconomy';
 import { loadPersistedRun, savePersistedRun } from './persistence';
 import type { GameState, RandomSource } from './types';
+import { flameByType, placeFlameInstance } from './flames';
 
 const constant = (value = .2): RandomSource => ({ next: () => value });
 
@@ -79,14 +80,11 @@ describe('persistent staged Shop', () => {
       storage: state.diceInventory.storage, fusedLevel: state.diceInventory.instances[destination.id].level });
 
     state = go(state, 'training');
-    const training = state.shop!.trainingOffers[0];
-    state = dispatch(state, training.kind === 'team' ? { type: 'TRAIN_ALL_HANDS' }
-      : { type: 'TRAIN_HAND', hand: training.hand }).state;
+    state = dispatch(state, { type: 'TRAIN_HAND', hand: 'pair' }).state;
     const trainedLevels = structuredClone(state.handLevels);
-    state.dice[0].flame = { id: 'ultimate', investedGold: 10 };
-    state.diceInventory.instances[state.dice[0].id].flame = { id: 'ultimate', investedGold: 10 };
+    const flame = placeFlameInstance(state, 'ultimate', 10);
     state = go(state, 'fireKeeping');
-    state = dispatch(state, { type: 'STOKE_FLAME', dieId: state.dice[0].id, amount: 3 }).state;
+    state = dispatch(state, { type: 'STOKE_FLAME', flameInstanceId: flame.instanceId, amount: 3 }).state;
     const goldAfterTransactions = state.gold;
 
     state = go(state, 'training');
@@ -99,7 +97,7 @@ describe('persistent staged Shop', () => {
     expect(state.diceInventory.instances[destination.id].level).toBe(diceSnapshot.fusedLevel);
     expect(state.handLevels).toEqual(trainedLevels);
     expect(activeFace(state.dice[0])).toBeDefined();
-    expect(state.dice[0].flame).toMatchObject({ id: 'ultimate', investedGold: 13 });
+    expect(flameByType(state, 'ultimate')).toMatchObject({ investedGold: 13 });
     expect(state.gold).toBe(goldAfterTransactions);
   });
 
@@ -124,18 +122,33 @@ describe('persistent staged Shop', () => {
     expect(rerolledB.shop!.offers).toEqual(rerolledA.shop!.offers);
   });
 
-  it('keeps stored legacy Flame carriers investable without making them active Round dice', () => {
+  it('captures Training at Shop creation without consuming RNG for the scorecard shape', () => {
+    const balanced = newRun('training-no-rng').state;
+    const shaped = structuredClone(balanced);
+    shaped.handLevels.ones = 20; shaped.handLevels.fullHouse = 14;
+    let balancedCalls = 0; let shapedCalls = 0;
+    new Resolver(balanced, { next: () => { balancedCalls++; return .37; } }).openShop();
+    new Resolver(shaped, { next: () => { shapedCalls++; return .37; } }).openShop();
+    expect(shapedCalls).toBe(balancedCalls);
+    expect(shaped.shop!.offers).toEqual(balanced.shop!.offers);
+    expect(shaped.shop!.trainingSession).toMatchObject({
+      upperLevelsAtEntry: { ones: 20 }, lowerLevelsAtEntry: { fullHouse: 14 },
+    });
+    expect(shaped.historyV2).toContainEqual(expect.objectContaining({ kind: 'training_session_started',
+      shopVisitId: shaped.shop!.visitId, upperBaseline: 4, lowerBaseline: 3 }));
+  });
+
+  it('keeps global Flame investment independent from collection movement', () => {
     let state = openShop('stage-stored-flame');
     const dieId = state.diceInventory.roster[0]!;
-    state.diceInventory.instances[dieId].flame = { id: 'ultimate', investedGold: 5 };
-    state.dice[0].flame = { id: 'ultimate', investedGold: 5 };
+    const flame = placeFlameInstance(state, 'ultimate', 5);
     state = dispatch(state, { type: 'MOVE_DIE', source: { area: 'roster', index: 0 }, destination: { area: 'storage', index: 0 },
       expectedSourceDieId: dieId, expectedDestinationDieId: null }).state;
     expect(state.dice.some(die => die.id === dieId)).toBe(false);
     state = go(go(state, 'training'), 'fireKeeping');
-    const stoked = dispatch(state, { type: 'STOKE_FLAME', dieId, amount: 3 });
+    const stoked = dispatch(state, { type: 'STOKE_FLAME', flameInstanceId: flame.instanceId, amount: 3 });
     expect(stoked.error).toBeUndefined();
-    expect(stoked.state.diceInventory.instances[dieId].flame).toEqual({ id: 'ultimate', investedGold: 8 });
+    expect(flameByType(stoked.state, 'ultimate')).toMatchObject({ investedGold: 8 });
     expect(stoked.state.dice.some(die => die.id === dieId)).toBe(false);
   });
 
@@ -152,8 +165,9 @@ describe('persistent staged Shop', () => {
   });
 
   it('restores a Bust to Dice in the same visit without changing restored RNG or Shop content', () => {
-    let state = go(go(openShop('stage-bust'), 'training'), 'fireKeeping');
-    state.shop!.trainingOffers[0].purchases = 2;
+    let state = go(openShop('stage-bust'), 'training');
+    state = dispatch(state, { type: 'TRAIN_HAND', hand: 'pair' }).state;
+    state = go(state, 'fireKeeping');
     state.shop!.offers[0].purchased = true;
     const visitId = state.shop!.visitId;
     const nextVisitId = state.nextShopVisitId;
@@ -165,6 +179,7 @@ describe('persistent staged Shop', () => {
     expect(returned.nextShopVisitId).toBe(nextVisitId);
     expect(returned.rngState).toBe(checkpointRng);
     expect({ ...returned.shop, stage: shopBefore.stage }).toEqual(shopBefore);
+    expect(returned.shop!.trainingSession).toEqual(shopBefore.trainingSession);
     expect(returned.historyV2.filter(event => event.kind === 'shop_visit_started'
       && event.shopVisitId === visitId)).toHaveLength(1);
     expect(returned.historyV2).toContainEqual(expect.objectContaining({ kind: 'shop_stage_changed',

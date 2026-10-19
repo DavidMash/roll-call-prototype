@@ -65,7 +65,7 @@ test('shared action row keeps manipulation left and progression right on narrow 
   const shop = structuredClone(round);
   shop.phase = 'shop';
   shop.gold = 100;
-  shop.shop = { kind: 'between_rounds', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  shop.shop = { kind: 'between_rounds', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   await installRun(page, shop);
 
   const row = page.getByTestId('run-action-row');
@@ -115,7 +115,7 @@ test('Shop reroll-all batches all five dice and preserves price escalation', asy
   const state = newRun('simultaneous-shop-reroll').state;
   state.phase = 'shop';
   state.gold = 100;
-  state.shop = { kind: 'between_rounds', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { kind: 'between_rounds', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   await installRun(page, state, 'normal');
 
   await page.getByTestId('shop-dice-reroll').click();

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { newRun, dispatch } from './engine';
 import { scoreAnnouncement, scorePresentation } from './scorePresentation';
 import type { GameEvent } from './types';
+import { rosterDice, syncActiveDiceProjection } from './inventory';
 
 describe('score resolution presentation', () => {
   it('begins at authoritative Base Pips and Mult without an empty XMult stage', () => {
@@ -20,18 +21,16 @@ describe('score resolution presentation', () => {
     });
   });
 
-  it('uses typed contribution values and keeps Workout future-only', () => {
+  it('uses typed whole-die Bonus contribution values', () => {
     const state = newRun('score-presentation-effects').state;
     state.target = 1_000_000n;
-    const die = state.dice[0];
+    const die = rosterDice(state)[0];
     die.value = 1;
-    die.faces[0].enhancements.bonus = 1;
-    die.faces[0].enhancements.workout = 1;
+    die.type = 'bonus';
+    syncActiveDiceProjection(state);
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] });
-    const bonus = result.events.find(event => event.type === 'HAND_PIPS_CHANGED' && event.enhancement === 'bonus')!;
-    const workout = result.events.find(event => event.type === 'WORKOUT_INCREMENTED')!;
+    const bonus = result.events.find(event => event.type === 'HAND_PIPS_CHANGED' && event.dieType === 'bonus')!;
     expect(scorePresentation(bonus)).toMatchObject({ pips: bonus.handScore!.currentPips, callout: 'BONUS +10', activeMetric: 'pips' });
-    expect(scorePresentation(workout)).toMatchObject({ pips: workout.handScore!.currentPips, callout: 'WORKOUT +1 FUTURE PIP', activeMetric: null });
   });
 
   it('reveals meaningful XMult and announces the authoritative final summary', () => {

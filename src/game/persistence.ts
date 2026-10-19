@@ -6,7 +6,7 @@ import { stringifyExactJson } from './scoreMath';
 import type { BadDreamCheckpoint, GameState } from './types';
 
 export const RUN_STORAGE_KEY = 'roll-call:active-run';
-export const RUN_STORAGE_VERSION = 14;
+export const RUN_STORAGE_VERSION = 18;
 
 type RunStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
@@ -29,14 +29,7 @@ function hasTemplateShape(value: unknown, template: unknown): boolean {
     return isRecord(value) && Object.entries(template).every(([key, child]) =>
       ((key === 'diceInventory' || key === 'dieRoundState') && Object.hasOwn(value, key) && isRecord(value[key]))
       ||
-      (['maxCharge', 'decisionId', 'sixPackXMult', 'sixPackUpperHandsPlayed', 'handFamilyFlameStages', 'bossSilenced',
-        'engulfmentLevel', 'nextShopVisitId', 'nextFlameInstanceId', 'flameInstanceIds', 'visitId',
-        'specialOfferEffects', 'suppressedPostBossRewardRounds', 'specialOffer', 'badDreamCheckpoint',
-        'freeDicePurchaseAvailable', 'freeTrainingOfferKeys', 'chapterPlans', 'presentedChapters', 'chapterLifecycle', 'scorecardCycleConsumed',
-        'chargeAttribution', 'infernoProgress', 'infernoEvaluation',
-        'historyV2', 'historyV2TimelineId', 'historyV2Coverage', 'debugTrace', 'actionJournal',
-        'nextPlaybackEventId'].includes(key) && !Object.hasOwn(value, key))
-      || (Object.hasOwn(value, key) && hasTemplateShape(value[key], child)));
+      (Object.hasOwn(value, key) && hasTemplateShape(value[key], child)));
   }
   return typeof value === typeof template;
 }
@@ -49,8 +42,6 @@ function isGameState(value: unknown): value is GameState {
   if (!isRecord(value) || typeof value.seed !== 'string' || !value.seed
     || typeof value.phase !== 'string' || !PHASES.has(value.phase)) return false;
   const template = newRun(value.seed).state;
-  delete (template.stats.probabilityProcs as Partial<typeof template.stats.probabilityProcs>).personalTrainer;
-  delete (template.stats.probabilityProcs as Partial<typeof template.stats.probabilityProcs>).doubleTime;
   const { roundCheckpoint: _round, badDreamCheckpoint: _dream, ...baseTemplate } = template;
   if (!hasTemplateShape(value, baseTemplate)) return false;
   if (value.roundCheckpoint !== null && (!isRecord(value.roundCheckpoint) || !isRollbackState(value.roundCheckpoint))) return false;
@@ -61,7 +52,7 @@ function isGameState(value: unknown): value is GameState {
 
 export function compactGameStateForPersistence(state: GameState): GameState {
   const compact = structuredClone(state);
-  // Compatibility-only prose is accepted on load but never carried into current saves.
+  // The V1 prose timeline is a playback surface, not durable analysis history.
   compact.history = [];
   // Ordinary/full trace records are reproduction data, not durable gameplay state.
   const trace = createDebugTrace('bounded');
@@ -70,12 +61,9 @@ export function compactGameStateForPersistence(state: GameState): GameState {
   // Preserve counters and specialist distributions that still have a runtime
   // owner, but drop historical arrays already represented losslessly by V2.
   const empty = createStats(state.seed);
-  compact.stats.purchases = empty.purchases;
-  compact.stats.sales = empty.sales;
   compact.stats.busts = empty.busts;
   compact.stats.mapTransitions = empty.mapTransitions;
   compact.stats.lifeRestores = empty.lifeRestores;
-  compact.stats.vintageGrowth = empty.vintageGrowth;
   compact.stats.trainingPurchases = empty.trainingPurchases;
   compact.stats.flameAcquisitions = empty.flameAcquisitions;
   compact.stats.flameStokes = empty.flameStokes;

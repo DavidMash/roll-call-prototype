@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { activeFace } from './dice';
 import { dispatch, newRun } from './engine';
 import { Resolver } from './effects';
 import { HAND_IDS } from './hands';
 import type { GameState, RandomSource } from './types';
 import { isChapterMapTransition, isPlaybackBarrier } from './playback';
+import { resetDieRoundState } from './specialDice';
+import { rosterDice, syncActiveDiceProjection } from './inventory';
 
 const constant = (value = .99): RandomSource => ({ next: () => value });
 
@@ -22,9 +23,11 @@ function clearState(gold: number): GameState {
 describe('authoritative Round Summary', () => {
   it('reconciles scoring Gold and standard payout for a normal encounter', () => {
     const state = clearState(4);
-    activeFace(state.dice[0]).enhancements.golden = 1;
-    activeFace(state.dice[0]).enhancements.jackpot = 1;
-    const result = dispatch(state, { type: 'PLAY', hand: 'sixes', dieIds: [0] }, constant());
+    rosterDice(state)[0].type = 'golden';
+    rosterDice(state)[1].type = 'jackpot';
+    syncActiveDiceProjection(state);
+    state.dieRoundState = resetDieRoundState(rosterDice(state));
+    const result = dispatch(state, { type: 'PLAY', hand: 'sixes', dieIds: [0, 1] }, constant());
     const summary = result.state.roundSummary!;
     expect(result.state.phase).toBe('roundSummary');
     expect(summary).toMatchObject({ encounterType: 'normal', bossType: null, goldBefore: 4, goldAfter: 17, totalGoldEarned: 13,

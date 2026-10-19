@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { activeFace } from './dice';
 import { DecisionTimer } from './decisionTimer';
 import { Resolver } from './effects';
 import { dispatch, newRun } from './engine';
 import {
   calculateMaxCharge, captureHandStart, fluxCapacitorChargeMultiplier, handXMultContributions,
-  sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, speedDemonMultiplier,
+  placeFlameInstance, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, speedDemonMultiplier,
 } from './flames';
 import type { Flame, GameState, RandomSource, Rank } from './types';
+import { resetDieRoundState } from './specialDice';
+import { rosterDice, syncActiveDiceProjection } from './inventory';
 
 const constant = (value = .99): RandomSource => ({ next: () => value });
 
@@ -20,11 +21,19 @@ function game(values: Rank[] = [1, 2, 3, 4, 5]): GameState {
 }
 
 function flame(state: GameState, dieId: number, id: Flame, investedGold: number): void {
-  state.dice[dieId].flame = { id, investedGold };
+  void dieId;
+  const existing = state.flameSlots.find(instance => instance?.type === id);
+  if (existing) {
+    existing.investedGold = investedGold;
+    existing.stage = investedGold >= 100 ? 'bonfire' : 'ember';
+  } else placeFlameInstance(state, id, investedGold);
 }
 
-function magnetic(state: GameState, dieId: number, physicalFace: Rank): void {
-  state.dice[dieId].faces[physicalFace - 1].enhancements.magnetic = 1;
+function magnetic(state: GameState, dieId: number, level = 1): void {
+  rosterDice(state)[dieId].type = 'magnetic';
+  rosterDice(state)[dieId].level = level;
+  syncActiveDiceProjection(state);
+  state.dieRoundState = resetDieRoundState(rosterDice(state));
 }
 
 describe('Speed Demon', () => {
@@ -109,7 +118,7 @@ describe('Six Pack', () => {
     expect(state.sixPackXMult).toBeCloseTo(3.083333333333);
 
     state.phase = 'shop';
-    state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    state.shop = { offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     new Resolver(state, constant(.8)).startRound();
     expect(state.sixPackXMult).toBe(3.5);
     expect(state.sixPackUpperHandsPlayed).toBe(0);
@@ -117,52 +126,25 @@ describe('Six Pack', () => {
 });
 
 describe('Magnetic source use and Flux Capacitor', () => {
-  it('spends a held source after one successful pull while destinations remain reusable', () => {
+  it('spends whole-die Invocations in deterministic Roster order', () => {
     const state = game([1, 2, 3, 4, 6]);
-    magnetic(state, 4, 6);
-    magnetic(state, 0, 3);
+    magnetic(state, 4, 2);
     const resolver = new Resolver(state, constant(0));
-    resolver.rollBatch([0], 'first pull', 'gameplay');
-    expect(state.dice[0].value).toBe(3);
-    expect(activeFace(state.dice[4]).magneticSourceUsed).toBe(true);
-    expect(state.dice[0].faces[2].magneticSourceUsed).toBeUndefined();
-
-    magnetic(state, 3, 4);
-    resolver.rollBatch([0], 'same destination pulled by another source', 'gameplay');
-    expect(state.dice[0].value).toBe(3);
-    expect(state.stats.magneticAttractions).toBe(2);
-    expect(activeFace(state.dice[3]).magneticSourceUsed).toBe(true);
-  });
-
-  it('lets a pulled Magnetic face remain unused, then act as its own held source', () => {
-    const state = game([1, 2, 3, 4, 6]);
-    magnetic(state, 4, 6);
-    magnetic(state, 0, 3);
-    magnetic(state, 1, 4);
-    const resolver = new Resolver(state, constant(0));
-    resolver.rollBatch([0], 'pull a future source', 'gameplay');
-    expect(state.dice[0].value).toBe(3);
-    expect(activeFace(state.dice[0]).magneticSourceUsed).toBeUndefined();
-
-    resolver.rollBatch([1], 'pulled face uses its own source pull', 'gameplay');
-    expect(state.dice[1].value).toBe(4);
-    expect(activeFace(state.dice[0]).magneticSourceUsed).toBe(true);
-    expect(state.stats.magneticAttractions).toBe(2);
+    resolver.rollBatch([0, 1], 'two pulls', 'gameplay');
+    expect(state.dice.slice(0, 2).map(die => die.value)).toEqual([6, 6]);
+    expect(state.dieRoundState[4].invocationsRemaining).toBe(0);
   });
 
   it('counts all pulled Magnetic faces once per activation for investment-scaled Flux', () => {
     const state = game([1, 2, 3, 4, 6]);
     flame(state, 3, 'fluxCapacitor', 50);
-    magnetic(state, 4, 6);
-    magnetic(state, 0, 2);
-    magnetic(state, 1, 3);
+    magnetic(state, 4, 2);
     const resolver = new Resolver(state, constant(0));
     resolver.rollBatch([0, 1], 'two pulls', 'gameplay');
     expect(fluxCapacitorChargeMultiplier(50, 2)).toBe(2);
     expect(fluxCapacitorChargeMultiplier(100, 1)).toBe(2);
     expect(fluxCapacitorChargeMultiplier(100, 2)).toBe(3);
     expect(fluxCapacitorChargeMultiplier(100, 3)).toBe(4);
-    expect(state.stats.magneticAttractions).toBe(2);
     expect(state.chargeXMult).toBe(2);
     expect(state.stats.flameTriggers.fluxCapacitor).toBe(1);
     expect(calculateMaxCharge(state)).toBe(3);
@@ -174,19 +156,17 @@ describe('Magnetic source use and Flux Capacitor', () => {
     const state = game([1, 2, 3, 4, 6]);
     flame(state, 3, 'fluxCapacitor', 100);
     state.chargeXMult = 4;
-    magnetic(state, 4, 6);
-    magnetic(state, 0, 3);
-    magnetic(state, 1, 4);
+    magnetic(state, 4, 2);
     const resolver = new Resolver(state, constant(0));
     resolver.rollBatch([0, 1], 'clamped pull', 'gameplay');
     expect(state.chargeXMult).toBe(5);
     expect(state.stats.flameTriggers.fluxCapacitor).toBe(1);
-    expect(activeFace(state.dice[4]).magneticSourceUsed).toBe(true);
+    expect(state.dieRoundState[4].invocationsRemaining).toBe(0);
 
     state.phase = 'shop';
-    state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    state.shop = { offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     new Resolver(state, constant(.8)).startRound();
-    expect(state.dice.flatMap(die => die.faces).some(face => face.magneticSourceUsed)).toBe(false);
+    expect(state.dieRoundState[4].invocationsRemaining).toBe(2);
     expect(state.chargeXMult).toBe(1);
   });
 });

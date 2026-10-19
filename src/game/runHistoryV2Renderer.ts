@@ -1,4 +1,3 @@
-import { ENHANCEMENTS } from './enhancements';
 import { FLAMES } from './flames';
 import { HANDS } from './hands';
 import { formatExactScore, formatPlayerNumber } from './copy';
@@ -13,7 +12,7 @@ const label = (value: string) => value.replace(/_/g, ' ').replace(/([a-z])([A-Z]
   .replace(/\b\w/g, character => character.toUpperCase());
 
 const originLabel: Record<FlameOrigin, string> = {
-  ember: 'Ember', bonfire: 'Bonfire', wildfire: 'Wildfire', charge: 'Charge', boss: 'Boss',
+  ember: 'Ember', bonfire: 'Bonfire', charge: 'Charge', boss: 'Boss',
   special_offer: 'Special Offer', external: 'External',
 };
 
@@ -23,25 +22,18 @@ function xMultLabel(contribution: XMultContribution): string {
   const source = contribution.sourceId in FLAMES
     ? FLAMES[contribution.sourceId as keyof typeof FLAMES].name
     : String(contribution.sourceId);
-  const location = contribution.dieId === undefined ? originLabel[contribution.origin]
-    : `${originLabel[contribution.origin]} ${die(contribution.dieId)}`;
+  const location = originLabel[contribution.origin];
   return `${location} ${source} ×${number(contribution.factor)}`;
 }
 
 function sideEffectLabel(effect: HandScoredEvent['sideEffects'][number]): string {
   switch (effect.type) {
-    case 'workout': return `${die(effect.dieId)} Workout ${number(effect.before)}→${number(effect.after)}`;
-    case 'personal_trainer': return `${die(effect.dieId)} Personal Trainer ${HANDS[effect.hand].name} Lv${number(effect.beforeLevel)}→${number(effect.afterLevel)}`;
     case 'gold': return `${effect.dieId === undefined ? '' : `${die(effect.dieId)} `}${label(effect.source)} +${number(effect.amount)} Gold`;
-    case 'vintage_growth': return `${die(effect.dieId)} Vintage ${number(effect.before)}→${number(effect.after)}`;
     case 'double_time': return `${die(effect.dieId)} Double Time ${effect.succeeded ? 'succeeded' : 'failed'}`;
     case 'special_die': return `${die(effect.dieId)} ${label(effect.dieType)} ${effect.detail}`;
     case 'charge': return `Charge ${label(effect.operation)} ×${number(effect.before)}→×${number(effect.after)}`;
     case 'flame_activation': return `${originLabel[effect.origin]} ${FLAMES[effect.flame].name}${effect.factor === undefined ? '' : ` ×${number(effect.factor)}`}`;
-    case 'enhancement': return `${ENHANCEMENTS[effect.enhancement].name}${effect.amount === undefined ? '' : ` ${number(effect.amount)}`}`;
     case 'free_play': return `${die(effect.dieId)} Free Play event ${effect.rerollEventId}`;
-    case 'holiday': return `${die(effect.dieId)} Holiday ${effect.succeeded ? 'succeeded' : 'failed'} · Bonus ${number(effect.baseBonusPips)}→${number(effect.finalBonusPips)} Pips`;
-    case 'furnace': return `${die(effect.dieId)} Furnace ×${number(effect.before)}→×${number(effect.after)}`;
     case 'sustainable': return `${die(effect.dieId)} Sustainable preserved ${HANDS[effect.hand].name} (${number(effect.chargesRemaining)} left)`;
     case 'conjoined': return `${die(effect.dieId)} Conjoined qualified ${HANDS[effect.hand].name}`;
     case 'boss_state': return `${label(effect.boss)} ${label(effect.change)}`;
@@ -53,18 +45,16 @@ export function renderHandScoredV2(event: HandScoredEvent): string {
   const title = `${play} · ${HANDS[event.hand].name} Lv${number(event.level)}`;
   const meaningfulPips = event.pipsContributions.some(item => item.source !== 'hand_base' && item.source !== 'die_base');
   const meaningfulMult = event.multContributions.some(item => item.source !== 'hand_base');
-  const expanded = meaningfulPips || meaningfulMult || event.xMultContributions.length > 0
-    || event.checks.length > 0 || event.sideEffects.length > 0;
+  const expanded = meaningfulPips || meaningfulMult || event.xMultContributions.length > 0 || event.sideEffects.length > 0;
   if (!expanded) return `${title} · ${(event.score.infernoMultiplier ?? 1) > 1 ? `Inferno ×${number(event.score.infernoMultiplier ?? 1)} · ` : ''}${number(event.score.finalPips)} Pips × ${number(event.score.finalMult)} Mult × ${number(event.score.finalXMult * event.score.bossFactor)} XMult = ${number(event.score.awarded)}`;
 
   const dice = event.scoringDice.map(item => `${die(item.dieId)}=${number(item.pips)}`).join(', ');
   const pipsEffects = event.pipsContributions.filter(item => item.source !== 'hand_base' && item.source !== 'die_base')
     .map(item => `${item.dieId === undefined ? '' : `${die(item.dieId)} `}${label(item.source)} +${number(item.amount)}`);
   const multEffects = event.multContributions.filter(item => item.source !== 'hand_base')
-    .map(item => `${label(item.source)}${item.dieId === undefined ? '' : ` ${die(item.dieId)}`} ×${number(item.factor)}`);
+    .map(item => `${label(item.source)} ×${number(item.factor)}`);
   const xMultEffects = event.xMultContributions.map(xMultLabel);
   const other = event.sideEffects.map(sideEffectLabel);
-  if (event.checks.length) other.push(...event.checks.map(check => `${ENHANCEMENTS[check.source].name} ${number(check.chance * 100)}% ${check.succeeded ? '✓' : '✗'}`));
   return [
     title,
     `Dice: ${dice}`,
@@ -79,21 +69,20 @@ export function renderHandScoredV2(event: HandScoredEvent): string {
 export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
   switch (event.kind) {
     case 'run_started': return `RUN · ${event.seed} · schema ${event.schemaVersion} · ${event.ruleset}`;
-    case 'chapter_started': return `CHAPTER ${number(event.chapter)} · ${event.miniBoss} / ${event.boss}`
-      + (event.enhancementProgression ? ` · Enhancement capacity ${number(event.enhancementProgression.capacityBefore)}→${number(event.enhancementProgression.capacityAfter)}`
-        + ` · unlocked ${event.enhancementProgression.newlyUnlocked.join(', ')}` : '');
+    case 'chapter_started': return `CHAPTER ${number(event.chapter)} · ${event.miniBoss} / ${event.boss}`;
     case 'round_attempt_started': {
       const target = event.target as typeof event.target & { final?: number };
       return `ROUND ${number(event.round)} · Attempt ${number(event.attempt)} · Goal ${number(target.finalGoal ?? target.final ?? 0)}${event.boss ? ` · ${event.boss}` : ''}`;
     }
     case 'hand_scored': return renderHandScoredV2(event);
+    case 'special_die_activated': return `SPECIAL DIE · ${label(event.dieType)} Lv${number(event.level)} · ${die(event.dieId)} · ${event.detail}`;
     case 'roll_batch': return `ROLL · ${event.reason} · ${event.results.map(result => `${die(result.dieId)} ${number(result.beforeFace)}→${number(result.afterFace)}`).join(' · ')}`;
     case 'shop_visit_started': return `SHOP VISIT ${number(event.shopVisitId)} · ${event.reason} · ${label(event.initialStage)}`;
     case 'shop_stage_changed': return `SHOP ${number(event.shopVisitId)} · ${label(event.from)} → ${label(event.to)}`;
+    case 'training_session_started': return `TRAINING SESSION · Shop ${number(event.shopVisitId)} · Upper baseline ${number(event.upperBaseline)} · Lower baseline ${number(event.lowerBaseline)}`;
+    case 'team_training_applied': return `TEAM TRAINING · Offer ${number(event.offerId)} · all hands +1`;
     case 'shop_visit_completed': return `SHOP ${number(event.shopVisitId)} COMPLETE · ${label(event.progression)}`;
     case 'shop_offers_presented': return `OFFERS · ${event.pool}${event.shopVisitId === undefined ? '' : ` · Shop ${number(event.shopVisitId)}`}`
-      + (event.pool === 'enhancement' && event.chapter !== undefined
-        ? ` · Chapter ${number(event.chapter)} · capacity ${number(event.maxEnhancementTypesPerFace ?? 0)} · tier ${number(event.highestUnlockedEnhancementTier ?? 0)}` : '')
       + ` · ${event.offers.map(offer => `${offer.contentId} [${offer.rarity}]`).join(', ')}`;
     case 'shop_transaction': {
       const transaction = event.transaction;
@@ -108,21 +97,9 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     }
     case 'flame_changed': return `FLAME · ${event.change.type}${'flame' in event.change ? ` · ${FLAMES[event.change.flame].name}` : ''}`;
     case 'charge_changed': return `CHARGE · ${event.operation} · ×${number(event.before)}→×${number(event.after)}`;
-    case 'engulfment_attempted': return `LEGACY ENGULFMENT · Shop ${number(event.shopVisitId)} · ${event.success ? 'SUCCESS' : 'OFFERING REJECTED'}`;
+    case 'engulfment_attempted': return `ENGULFMENT · Shop ${number(event.shopVisitId)} · ${event.success ? 'SUCCESS' : 'OFFERING REJECTED'}`;
     case 'inferno_evaluated': return `INFERNO EVALUATION · ${event.evaluation.success ? 'READY' : 'NOT YET'} · effective ×${number(event.evaluation.effectiveValue)} / ×${number(event.evaluation.threshold)} · meter ${number((event.evaluation.previousReadiness ?? 0) * 100)}% → ${number(event.evaluation.readiness * 100)}% · ${event.evaluation.flames.length} Flame${event.evaluation.flames.length === 1 ? '' : 's'}`;
     case 'inferno_suspension_changed': return `INFERNO · ${event.suspended ? 'SUSPENDED' : 'REACTIVATED'} · ${event.reason}`;
-    case 'hooded_challenge_changed': {
-      const progress = event.attemptProgress === undefined ? ''
-        : ` · attempt ${number(event.attemptProgress)}${event.target === undefined ? '' : `/${number(event.target)}`}`
-          + `${event.committedProgress === undefined ? '' : ` · committed ${number(event.committedProgress)}`}`
-          + `${event.invalid ? ' · invalid' : ''}`;
-      const rollback = event.rollback
-        ? ` · rollback ${number(event.rollback.attemptProgressBefore)}→${number(event.rollback.attemptProgressAfter)}`
-          + (event.rollback.invalidBefore !== event.rollback.invalidAfter
-            ? ` · invalid ${String(event.rollback.invalidBefore)}→${String(event.rollback.invalidAfter)}` : '')
-        : '';
-      return `HOODED FIGURE · ${event.change}${event.challengeId ? ` · ${event.challengeId}` : ''}${progress}${rollback}`;
-    }
     case 'boss_state_changed': return `BOSS · ${event.boss} · ${event.change}`;
     case 'scorecard_refreshed': return 'SCORECARD · refreshed';
     case 'round_attempt_finished': return `${event.outcome === 'cleared' ? 'CLEAR' : 'BUST'} · ${number(event.score)} / ${number(event.target)}`;

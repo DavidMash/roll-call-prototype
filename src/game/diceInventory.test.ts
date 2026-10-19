@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { activeEncounterDice, ALL_BOSS_TYPES, handIsPhysicallyAttainable } from './bosses';
-import { activeFace, createCollectibleDie } from './dice';
+import { activeEncounterDice, ALL_BOSS_TYPES, createCursedDie, handIsPhysicallyAttainable } from './bosses';
+import { createCollectibleDie } from './dice';
 import { dispatch, newRun } from './engine';
 import { Resolver } from './effects';
 import { HAND_IDS, handOptions, hasPlayableHand } from './hands';
 import { legalHandCombinations } from './selection';
 import {
-  assertDiceInventory, collectibleDieById, encounterDice, ownedDice, rosterDice, rosterSlotOf,
+  activeDieLabel, assertDiceInventory, collectibleDieById, encounterDice, ownedDice, rosterDice, rosterDieLabel, rosterSlotOf,
   grantChapterStorageSlot, rosterTuple, syncActiveDiceProjection,
 } from './inventory';
 import { loadPersistedRun, RUN_STORAGE_KEY, savePersistedRun } from './persistence';
 import { captureRollbackState, restoreRollbackState } from './rollback';
 import { SeededRng } from './rng';
+import { flameByType } from './flames';
 import type { BossType, GameState, Rank } from './types';
 
 const constant = (value = .2) => ({ next: () => value });
@@ -43,7 +44,7 @@ function remapIds(state: GameState, ids: number[]): void {
 
 function startBoss(type: BossType, count: number): { state: GameState; resolver: Resolver } {
   const state = equipCount(newRun(`inventory-${type}-${count}`, constant()).state, count);
-  state.round = ['juggler', 'capitalReturn', 'neglected', 'clockmaker', 'tightrope', 'crawler', 'magician', 'mugger'].includes(type) ? 3 : 6;
+  state.round = ['juggler', 'capitalReturn', 'neglected', 'tightrope', 'crawler', 'magician', 'mugger'].includes(type) ? 3 : 6;
   state.bossSchedule[state.round] = type;
   const resolver = new Resolver(state, constant());
   resolver.startRound();
@@ -76,8 +77,8 @@ describe('collectible dice inventory', () => {
     const malformed = structuredClone(state.diceInventory);
     malformed.roster.pop();
     expect(() => assertDiceInventory(malformed)).toThrow(/exactly 5/);
-    expect(() => assertDiceInventory(state.diceInventory, [{ ...createCollectibleDie(20), id: 0,
-      owner: 'boss', encounterId: 'test' }])).toThrow(/collides/);
+    expect(() => assertDiceInventory(state.diceInventory, [{ ...createCursedDie(), id: 0,
+      encounterId: 'test' }])).toThrow(/collides/);
   });
 
   it('resolves non-contiguous IDs by identity while retaining independent Roster order', () => {
@@ -86,28 +87,36 @@ describe('collectible dice inventory', () => {
     remapIds(state, ids);
     expect(rosterDice(state).map(die => die.id)).toEqual(ids);
     expect(rosterSlotOf(state, 12)).toBe(1);
+    expect(rosterDieLabel(state, 12)).toBe('D2');
+    expect(activeDieLabel(state, 12)).toBe('D2');
+    expect(rosterDieLabel(state, 777)).toBe('Die #777');
     expect(collectibleDieById(state, 999)?.id).toBe(999);
     [4, 4, 4, 2, 6].forEach((value, index) => { rosterDice(state)[index].value = value as Rank; });
     expect(legalHandCombinations(state, 'pair')).toEqual([[105, 12], [105, 999], [12, 999]]);
-    state.phase = 'shop';
-    state.shop = { offers: [{ id: 77, enhancement: 'bonus', purchased: false }], trainingOffers: [],
-      diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
-    state.gold = 100;
-    const bought = dispatch(state, { type: 'BUY', offerId: 77, dieId: 41 }, constant()).state;
-    expect(activeFace(collectibleDieById(bought, 41)!).enhancements.bonus).toBe(1);
-    expect(activeFace(collectibleDieById(bought, 12)!).enhancements.bonus).toBeUndefined();
-    const sold = dispatch(bought, { type: 'SELL_ENHANCEMENT', dieId: 41,
-      face: collectibleDieById(bought, 41)!.value, enhancement: 'bonus' }, constant()).state;
-    expect(activeFace(collectibleDieById(sold, 41)!).enhancements.bonus).toBeUndefined();
-
-    sold.phase = 'flameSelection'; sold.shop = null;
-    sold.flameSelection = { offers: [{ id: 88, flame: 'minigun' }], acquired: false };
-    const acquired = dispatch(sold, { type: 'CHOOSE_FLAME', offerId: 88, dieId: 105 }, constant()).state;
-    expect(collectibleDieById(acquired, 105)?.flame).toMatchObject({ id: 'minigun', investedGold: 0 });
+    state.phase = 'flameSelection'; state.shop = null;
+    state.flameSelection = { offers: [{ id: 88, flame: 'minigun' }], acquired: false };
+    const acquired = dispatch(state, { type: 'CHOOSE_FLAME', offerId: 88 }, constant()).state;
+    expect(flameByType(acquired, 'minigun')).toMatchObject({ type: 'minigun', investedGold: 0 });
     acquired.gold = 10;
     acquired.shop!.stage = 'fireKeeping';
-    const stoked = dispatch(acquired, { type: 'STOKE_FLAME', dieId: 105, amount: 3 }, constant()).state;
-    expect(collectibleDieById(stoked, 105)?.flame).toMatchObject({ id: 'minigun', investedGold: 3 });
+    const stoked = dispatch(acquired, { type: 'STOKE_FLAME', flameInstanceId: flameByType(acquired, 'minigun')!.instanceId, amount: 3 }, constant()).state;
+    expect(flameByType(stoked, 'minigun')).toMatchObject({ type: 'minigun', investedGold: 3 });
+  });
+
+  it('rebuilds the active reference projection from authoritative Roster membership and order', () => {
+    const state = newRun('inventory-projection', constant()).state;
+    remapIds(state, [105, 12, 999, 41, 240]);
+    state.diceInventory.roster = rosterTuple([999, null, 105, 240, 12]);
+    state.diceInventory.storage = [41, null, null];
+    syncActiveDiceProjection(state);
+    expect(state.dice.map(die => die.id)).toEqual([999, 105, 240, 12]);
+    expect(state.dice[0]).toBe(state.diceInventory.instances[999]);
+    expect(state.dice.map(die => activeDieLabel(state, die.id))).toEqual(['D1', 'D2', 'D3', 'D4']);
+    state.diceInventory.roster = rosterTuple([12, 999, 105, 240, null]);
+    state.diceInventory.storage = [41, null, null];
+    syncActiveDiceProjection(state);
+    expect(state.dice.map(die => die.id)).toEqual([12, 999, 105, 240]);
+    expect(state.dice.map(die => activeDieLabel(state, die.id))).toEqual(['D1', 'D2', 'D3', 'D4']);
   });
 
   it('keeps IDs stable through Rolls and Plays and resolves batches in Roster order', () => {
@@ -179,14 +188,13 @@ describe('Storage isolation and encounter-managed dice', () => {
     expect(emptyResolver.rngStateAfterResolution).toBe(occupiedResolver.rngStateAfterResolution);
   });
 
-  it('keeps Storage dice out of Rolls, scoring, Juggler rerolls, Enhancements, and Flames', () => {
+  it('keeps Storage dice out of Rolls, scoring, Juggler rerolls, and whole-die effects', () => {
     const { state } = startBoss('juggler', 4);
     const storedId = state.diceInventory.storage.find((id): id is number => id !== null)!;
     const stored = collectibleDieById(state, storedId)!;
     stored.value = 6;
-    activeFace(stored).enhancements.golden = 3;
-    activeFace(stored).enhancements.hitchhiker = 3;
-    stored.flame = { id: 'minigun', investedGold: 100 };
+    stored.type = 'golden';
+    stored.level = 3;
     rosterDice(state).forEach(die => { die.value = 1; });
     state.target = 1_000_000n; state.stats.rounds.at(-1)!.target = state.target;
     const before = structuredClone(stored);
@@ -196,7 +204,6 @@ describe('Storage isolation and encounter-managed dice', () => {
     expect(juggler?.dieIds).not.toContain(storedId);
     expect(collectibleDieById(result.state, storedId)).toEqual(before);
     expect(result.state.gold).toBe(state.gold);
-    expect(result.state.stats.flameTriggers.minigun).toBeUndefined();
     expect(result.state.dice.map(die => die.id)).not.toContain(storedId);
   });
 

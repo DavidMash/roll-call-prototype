@@ -27,13 +27,17 @@ async function matchRound(page: Page, game: GameState) {
   await ready(page);
   await expect(page.getByTestId('round-score-progress')).toHaveText(`${game.score} / ${game.target}`);
   for (const die of game.dice) {
-    const button = page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1}, face ${die.value},`) });
+    const slot = game.dice.filter(item => item.owner === 'player').findIndex(item => item.id === die.id) + 1;
+    const button = page.getByRole('button', { name: new RegExp(`^Die ${slot}, face ${die.value},`) });
     await expect(button).toBeVisible();
     await expect(button).toHaveAttribute('aria-pressed', 'false');
   }
 }
 async function reroll(page: Page, game: GameState, dieIds: number[]) {
-  for (const id of dieIds) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
+  for (const id of dieIds) {
+    const slot = game.dice.filter(item => item.owner === 'player').findIndex(item => item.id === id) + 1;
+    await page.getByRole('button', { name: new RegExp(`^Die ${slot},`) }).click();
+  }
   await page.getByTestId('manual-reroll').click();
   const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds });
   await matchRound(page, next.state);
@@ -338,9 +342,9 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   expect(game.phase).toBe('shop');
   expect(game.lives).toBe(2);
   expect(game.shop).toEqual(expectedShop);
-  await page.getByRole('button', { name: /^Die 1,/ }).click();
-  await expect(page.getByRole('dialog', { name: /D1 .* MANAGE DIE/ })).toBeVisible();
-  await page.getByRole('dialog', { name: /D1 .* MANAGE DIE/ }).getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'View physical faces for D1' }).click();
+  await expect(page.getByRole('dialog', { name: /D1 .* PHYSICAL FACES/ })).toBeVisible();
+  await page.getByRole('dialog', { name: /D1 .* PHYSICAL FACES/ }).getByRole('button', { name: 'Close' }).click();
   await page.getByTestId('stat-lives').click();
   await expect(page.getByRole('dialog', { name: 'RESTORE LIVES' })).toBeVisible();
   await page.keyboard.press('Escape');

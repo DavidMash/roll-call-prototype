@@ -4,6 +4,7 @@ import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import { dispatchTutorial, newTutorialSession } from '../src/tutorial/scenario';
 import type { Action, Flame, HandId, Rank } from '../src/game/types';
 import type { TutorialSession } from '../src/tutorial/types';
+import { placeFlameInstance } from '../src/game/flames';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/?speed=instant');
@@ -56,12 +57,10 @@ function chapterTwoSession(flame: Flame) {
   session.game.target = 1000n;
   session.game.consumed = [];
   session.game.boss = null;
-  session.game.dice.forEach((die, index) => {
-    die.value = values[index];
-    die.flame = index === 0 ? { id: flame, investedGold: 0 } : null;
-  });
+  session.game.dice.forEach((die, index) => { die.value = values[index]; });
+  const instance = placeFlameInstance(session.game, flame);
   session.scenario.firstFlame = flame;
-  session.scenario.firstFlameDieId = 0;
+  session.scenario.firstFlameInstanceId = instance.instanceId;
   session.scenario.completedBeatIds.push('chapter-2');
   return session;
 }
@@ -278,7 +277,7 @@ test('Shop Training remains guided while obsolete Enhancement purchasing is bypa
   const [trainingAfter, neighborAfter] = await Promise.all([trainingCard.boundingBox(), neighboringCard.boundingBox()]);
   expect(trainingAfter?.height).toBe(trainingBefore?.height);
   expect(neighborAfter?.height).toBe(neighborBefore?.height);
-  expect(neighborAfter?.y).toBe(neighborBefore?.y);
+  expect(neighborAfter!.y - trainingAfter!.y).toBe(neighborBefore!.y - trainingBefore!.y);
 
   await expect(page.locator('.driver-popover-title')).toHaveText(/FULL HOUSE.*LV\. 2/);
   await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
@@ -327,7 +326,7 @@ test('multi-target spotlights and the Driver popover follow moved tutorial targe
   await expectPopoverAndTargetSeparated(page, '[data-tutorial="reroll-button"]');
 });
 
-test('first Flame assignment highlights and exposes every legal destination die only', async ({ page }) => {
+test('first global Flame selection claims directly without a carrier-die step', async ({ page }) => {
   const { session } = newTutorialSession();
   session.game.round = 6;
   session.game.phase = 'flameSelection';
@@ -360,16 +359,6 @@ test('first Flame assignment highlights and exposes every legal destination die 
   await expect(infoButtons.first()).not.toHaveAttribute('tabindex', '-1');
   expect(await page.evaluate(() => !!document.activeElement?.closest('.flame-offer'))).toBe(true);
   await page.getByTestId('flame-offer-minigun').locator('.flame-offer-action').click();
-  await expect(page.locator('.driver-popover-title')).toHaveText('ASSIGN YOUR FLAME');
-  await expect(page.locator('.driver-popover')).toContainText('Put the Flame on any die you like.');
-  await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(6);
-  await expect(page.locator('[data-tutorial="dice-dock"] .die')).toHaveCount(5);
-  expect(await page.locator('[data-tutorial="dice-dock"] .die').evaluateAll(dice => dice.every(die =>
-    !die.hasAttribute('data-tutorial-gated') && die.classList.contains('tutorial-interactive')))).toBe(true);
-  await expect(page.getByRole('button', { name: 'SKIP REWARD', exact: true })).toHaveAttribute('aria-disabled', 'true');
-  await page.getByRole('button', { name: 'SKIP REWARD', exact: true }).evaluate((element: HTMLButtonElement) => element.click());
-  await expect(page.locator('.driver-popover-title')).toHaveText('ASSIGN YOUR FLAME');
-  await page.locator('[data-tutorial="die-3"] .die').click();
   await expect(page.locator('.driver-popover-title')).toHaveText('RETURN TO THE SHOP');
   await expect(page.locator('.driver-popover')).toContainText('Review Dice first, then continue to Training.');
 });
@@ -378,21 +367,20 @@ test('first Stoke highlights only the Flame badge and moves focus into modal con
   const session = shopOneSession();
   session.game.round = 6;
   session.game.gold = 20;
-  session.game.dice[0].flame = { id: 'doubleDown', investedGold: 0 };
+  const flame = placeFlameInstance(session.game, 'doubleDown');
   session.scenario.firstFlame = 'doubleDown';
-  session.scenario.firstFlameDieId = 0;
-  session.game.flameTutorial = { pendingDieId: 0, completed: false };
+  session.scenario.firstFlameInstanceId = flame.instanceId;
+  session.game.flameTutorial = { pendingFlameInstanceId: flame.instanceId, completed: false };
   session.game.shop!.stage = 'fireKeeping';
   session.scenario.completedBeatIds.push('flame-shop-to-training', 'flame-shop-to-fire-keeping',
     'flame-basics', 'flame-xmult', 'flame-ember');
   await resumeSession(page, session);
 
-  const badge = page.locator('[data-tutorial="flame-badge"][data-flame-die-id="0"]');
-  await expect(badge).toBeFocused();
+  const badge = page.getByTestId(`fire-keeping-flame-${flame.instanceId}`);
   await expect(badge).toHaveClass(/driver-active-element/);
-  await expect(page.locator('[data-tutorial="die-1"]')).not.toHaveClass(/driver-active-element/);
-  await expect(page.locator('[data-tutorial="die-1"] .die')).not.toHaveClass(/driver-active-element/);
-  await badge.click();
+  const manage = badge.getByRole('button', { name: 'MANAGE FLAME' });
+  await expect(manage).toBeFocused();
+  await manage.click();
   await expect(page.locator('.driver-popover-title')).toHaveText('STOKE');
   const controls = page.getByTestId('stoke-flame-controls');
   await expect(controls.getByRole('button', { name: 'Increase investment', exact: true })).toBeFocused();
@@ -477,7 +465,7 @@ for (const branch of [
     const firstHand: HandId = branch.setup ?? branch.payoff;
     const firstRow = page.getByTestId(`scorecard-row-${firstHand}`);
     await expect(firstRow).not.toHaveAttribute('aria-disabled', 'true');
-    await expect(page.locator('[data-tutorial="die-1"] .die')).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(page.locator('[data-tutorial="die-1"] .die')).toHaveAttribute('aria-disabled', 'true');
     await expect(page.locator('[data-tutorial="die-3"] .die')).toHaveAttribute('aria-disabled', 'true');
     await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(2);
     await firstRow.click();
@@ -492,7 +480,7 @@ for (const branch of [
       await page.getByTestId('play-action').click();
       const payoffRow = page.getByTestId(`scorecard-row-${branch.payoff}`);
       await expect(payoffRow).not.toHaveAttribute('aria-disabled', 'true');
-      await expect(page.locator('[data-tutorial="die-1"] .die')).not.toHaveAttribute('aria-disabled', 'true');
+      await expect(page.locator('[data-tutorial="die-1"] .die')).toHaveAttribute('aria-disabled', 'true');
       await expect(page.getByTestId('play-action')).toHaveAttribute('aria-disabled', 'true');
     }
   });

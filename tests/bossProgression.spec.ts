@@ -7,6 +7,12 @@ import { handScore } from '../src/game/scoring';
 import type { BigBossType, GameState } from '../src/game/types';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import { enterRun, goToShopStage, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
+import { placeFlameInstance } from '../src/game/flames';
+
+function dieUiLabel(game: GameState, die: GameState['dice'][number]): string {
+  if (die.owner === 'boss') return 'Cursed Die';
+  return `Die ${game.dice.filter(item => item.owner === 'player').findIndex(item => item.id === die.id) + 1}`;
+}
 
 const seedFor = (boss: BigBossType) => {
   for (let index = 0; index < 100; index++) {
@@ -45,7 +51,7 @@ async function playOne(page: Page, game: GameState) {
   const choice = best(game);
   if (!choice) {
     const die = activeEncounterDice(game)[0];
-    await page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) }).click();
+    await page.getByRole('button', { name: new RegExp(`^${dieUiLabel(game, die)},`) }).click();
     await page.getByTestId('manual-reroll').click();
     const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [die.id] }).state;
     await ready(page);
@@ -54,7 +60,7 @@ async function playOne(page: Page, game: GameState) {
   const handRow = page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) });
   await handRow.click();
   for (const die of activeEncounterDice(game)) {
-    const button = page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) });
+    const button = page.getByRole('button', { name: new RegExp(`^${dieUiLabel(game, die)},`) });
     const selected = await button.getAttribute('aria-pressed') === 'true';
     if (selected !== choice.dieIds.includes(die.id)) await button.click();
   }
@@ -69,7 +75,7 @@ async function reachBossShop(page: Page, boss: BigBossType, seed = seedFor(boss)
   game.phase = 'shop';
   game.round = 5;
   game.currentNodeId = 'shop:before-round:6';
-  game.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  game.shop = { offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   game.bossSchedule[6] = boss;
   await page.goto(`/?seed=${seed}&speed=instant`);
   await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
@@ -176,7 +182,7 @@ for (const testCase of [
   { type: 'quickdraw', name: 'QUICKDRAW', preview: 'Reduced Goal, but you can only play a single Lower hand.', hud: '1 Lower shot available' },
   { type: 'fly', name: 'THE FLY', preview: 'Your played hands are weakened until you catch The Fly on the marked Lower hand.', hud: 'Catch:' },
   { type: 'snakeEyes', name: 'SNAKE EYES', preview: 'Scored faces turn into 1s.', hud: 'Scored faces become 1s' },
-  { type: 'infected', name: 'THE INFECTED', preview: 'Infected faces lose 3 Pips and their Enhancements. Played faces become infected.', hud: 'infected face' },
+  { type: 'infected', name: 'THE INFECTED', preview: "Infected faces lose 3 Pips and suppress the die's special effect. Played faces become infected.", hud: 'infected face' },
 ] as const) {
   test(`${testCase.name} preview, HUD, and theme use the boss architecture`, async ({ page }) => {
     let game = await reachBossShop(page, testCase.type);
@@ -346,7 +352,7 @@ test('scorecard Ultimate badges require the Flame or Bonfire and match the domai
   await expect(page.locator('[data-testid^="ultimate-badge-"]')).toHaveCount(0);
 
   game.handLevels.ones = 2;
-  game.dice[0].flame = { id: 'ultimate', investedGold: 50 };
+  const ultimate = placeFlameInstance(game, 'ultimate', 50);
   const expected = ultimateHands(game.handLevels);
   await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, game] as const);
@@ -357,8 +363,7 @@ test('scorecard Ultimate badges require the Flame or Bonfire and match the domai
   await page.getByTestId('ultimate-badge-ones').hover();
   await expect(page.getByText('Your highest level hand.')).toBeVisible();
 
-  game.dice[0].flame = null;
-  game.bonfires.push('ultimate');
+  game.flameSlots[0] = { ...ultimate, investedGold: 100, stage: 'bonfire' };
   await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, game] as const);
   await page.reload();
@@ -394,8 +399,8 @@ test('Warden rolls all dice locked and lets the player choose the first die with
       const value = element.querySelector('.die-number')!.getBoundingClientRect();
       return lock.right <= value.left || lock.left >= value.right || lock.bottom <= value.top || lock.top >= value.bottom;
     })).toBe(true);
-    await expect(die.locator('..').locator('.die-flame-zone')).toHaveCount(1);
-    await expect(die.locator('..').locator('.die-enhancement-strip')).toHaveCount(1);
+    await expect(die.locator('..').locator('.die-flame-zone')).toHaveCount(0);
+    await expect(die.locator('..').locator('.die-enhancement-strip')).toHaveCount(0);
   }
   const face = game.dice[4].value;
   await page.getByRole('button', { name: /^Die 5, face .* locked, selectable to unlock$/ }).click();
@@ -502,7 +507,7 @@ test('Hexer preview keeps its faces secret and encounter fits all six dice on on
   expect(game.dice).toHaveLength(6);
 });
 
-test('Hexer face 7 renders seven pips with Bonus and Mirror and remains freely selectable', async ({ page }) => {
+test('Hexer face 7 renders seven pips with its dedicated Wild Bonus rule and remains freely selectable', async ({ page }) => {
   let game = await reachBossShop(page, 'hexer');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
@@ -521,11 +526,11 @@ test('Hexer face 7 renders seven pips with Bonus and Mirror and remains freely s
   const slot = page.getByTestId('cursed-die-slot');
   await expect(button.locator('.pip-face')).toHaveAttribute('aria-label', 'Cursed Die showing 7');
   await expect(button.locator('.pip')).toHaveCount(7);
-  await expect(slot.getByRole('button', { name: /View Enhancements on Cursed Die face 7/ })).toHaveAccessibleName(/Bonus ×5, Mirror ×1/);
-  await expect(slot.locator('.enhancement-mirror')).toHaveCount(1);
-  await expect(slot.locator('.enhancement-bonus')).toHaveAttribute('title', 'Bonus ×5');
-  await expect(slot.locator('.enhancement-jackpot')).toHaveCount(0);
-  await expect(slot.locator('.enhancement-boomerang')).toHaveCount(0);
+  await slot.getByRole('button', { name: 'View physical faces for Cursed Die' }).click();
+  const faces = page.getByRole('dialog', { name: /CURSED DIE .* PHYSICAL FACES/ });
+  await expect(faces).toContainText('Wild for matching Qualification');
+  await expect(faces).toContainText('+50 Pips when Scored');
+  await faces.getByRole('button', { name: 'Close' }).click();
   await expect(button).toHaveAttribute('aria-pressed', 'false');
   await expect(button).toHaveAttribute('aria-disabled', 'false');
   await button.click();

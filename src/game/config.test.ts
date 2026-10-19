@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG, interestForGold, roundReward } from './config';
 import { newRun } from './engine';
-import { enhancementCost } from './enhancements';
 
 describe('prototype balance configuration', () => {
   it('keeps unrelated balance constants unchanged', () => {
@@ -18,14 +17,11 @@ describe('prototype balance configuration', () => {
       interestCap: 10,
       diceRerollBase: 2,
       offerRerollBase: 3,
-      handTrainingCost: 2,
-      teamTrainingCost: 15,
       rerollCostGrowth: 2,
       bonusPips: 10,
       standaloneMultiplier: 1,
       goldenGold: 1,
       jackpotGold: 3,
-      workoutIncrement: 1,
       tickMs: { normal: 350, fast: 90, instant: 0 },
       resolutionEventCap: 10_000,
     });
@@ -51,8 +47,7 @@ describe('prototype balance configuration', () => {
       .toEqual([0, 0, 1, 4, 5, 5, 6, 9, 10, 10, 10]);
   });
 
-  it('prices Jackpot at three gold and pays three gold per stack', () => {
-    expect(enhancementCost('jackpot')).toBe(3);
+  it('keeps the Jackpot whole-die payout constant', () => {
     expect(CONFIG.jackpotGold).toBe(3);
   });
 });

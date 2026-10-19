@@ -1,7 +1,8 @@
 import { formatExactScore, formatPlayerNumber } from './copy';
-import { ENHANCEMENTS } from './enhancements';
 import { FLAMES } from './flames';
 import { HANDS } from './hands';
+import { SPECIAL_DICE } from './specialDice';
+import { activeDieLabel } from './inventory';
 import type { GameEvent } from './types';
 import type { ExactScore } from './scoreMath';
 
@@ -31,19 +32,19 @@ export function scorePresentation(event: GameEvent | null): ScorePresentation | 
     if (event.type === 'HAND_STARTED') callout = `${HANDS[accumulator.hand].name.toUpperCase()} · LV. ${formatPlayerNumber(accumulator.handLevel)} · BASE`;
     else if (event.type === 'HAND_PIPS_CHANGED') {
       activeMetric = 'pips';
-      callout = event.enhancement
-        ? `${ENHANCEMENTS[event.enhancement].name.toUpperCase()} +${amount(event.amount)}`
-        : `${event.dieIds?.[0] === undefined ? 'DIE' : `D${event.dieIds[0] + 1}`} +${amount(event.amount)} PIPS`;
+      callout = event.dieType
+        ? `${SPECIAL_DICE[event.dieType].name.toUpperCase()} +${amount(event.amount)}`
+        : `${event.dieIds?.[0] === undefined ? 'DIE' : activeDieLabel(event.board, event.dieIds[0])} +${amount(event.amount)} PIPS`;
     } else if (event.type === 'HITCHHIKER_ADDED_PIPS') {
       activeMetric = 'pips';
-      callout = event.enhancement
-        ? `${ENHANCEMENTS[event.enhancement].name.toUpperCase()} +${amount(event.amount)}`
+      callout = event.dieType
+        ? `${SPECIAL_DICE[event.dieType].name.toUpperCase()} +${amount(event.amount)}`
         : `HITCHHIKER +${amount(event.amount)}`;
     } else if (event.type === 'HAND_MULTIPLIER_CHANGED') {
       activeMetric = 'mult';
-      callout = event.enhancement ? ENHANCEMENTS[event.enhancement].name.toUpperCase() : 'MULT UPDATED';
-    } else if (event.type === 'WORKOUT_INCREMENTED') {
-      callout = `WORKOUT +${amount(event.amount)} FUTURE ${event.amount === 1 ? 'PIP' : 'PIPS'}`;
+      callout = event.dieType ? SPECIAL_DICE[event.dieType].name.toUpperCase() : 'MULT UPDATED';
+    } else if (event.type === 'SPECIAL_DIE_EFFECT') {
+      callout = event.dieType ? SPECIAL_DICE[event.dieType].name.toUpperCase() : 'DIE EFFECT';
     } else if (event.type === 'HAND_XMULT_CHANGED') {
       activeMetric = 'xmult';
       const source = event.xMultFactor?.source;

@@ -25,12 +25,12 @@ export const scoreAbs = (value: ExactScore): ExactScore => value < 0n ? -value :
 export const scoreIsZero = (value: ExactScore): boolean => value === 0n;
 
 /**
- * Converts a legacy JSON number without claiming to recover already-lost bits.
+ * Converts a numeric fixture/input without claiming to recover already-lost bits.
  * Safe integers are exact. Unsafe values preserve Number's shortest serialized
  * decimal approximation, expanded out of scientific notation.
  */
 export function scoreFromLegacyNumber(value: number): ExactScore {
-  if (!Number.isFinite(value) || !Number.isInteger(value)) throw new Error(`Invalid legacy score integer: ${value}`);
+  if (!Number.isFinite(value) || !Number.isInteger(value)) throw new Error(`Invalid score integer: ${value}`);
   if (Number.isSafeInteger(value)) return BigInt(value);
   return BigInt(new Decimal(value.toString()).toFixed(0));
 }

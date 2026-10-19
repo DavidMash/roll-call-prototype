@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dispatch, newRun, validateAction } from './engine';
 import {
-  handFamilyFlameTargets, handFamilyFlameMultiplier, standardFlameMultiplier,
+  flameByType, handFamilyFlameTargets, handFamilyFlameMultiplier, placeFlameInstance, standardFlameMultiplier,
 } from './flames';
 import type { Flame, GameState, HandId, RandomSource, Rank } from './types';
 
@@ -20,7 +20,7 @@ function setValues(state: GameState, values: Rank[]): void {
 }
 
 function attach(state: GameState, id: Flame, investedGold = 50): void {
-  state.dice[0].flame = { id, investedGold };
+  placeFlameInstance(state, id, investedGold);
 }
 
 function play(state: GameState, hand: HandId, dieIds: number[]): GameState {
@@ -51,7 +51,7 @@ describe('hand-family setup and payoff Flames', () => {
     setValues(state, [...sequence.payoffValues] as Rank[]);
     state = play(state, sequence.payoff, [...sequence.payoffIds]);
     expect(state.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({
-      source: sequence.id, value: 5, dieId: 0,
+      source: sequence.id, value: 5,
     }));
     expect(state.handFamilyFlameStages[sequence.id]).toBe('spent');
     expect(handFamilyFlameTargets(state)).not.toContain(sequence.payoff);
@@ -72,20 +72,20 @@ describe('hand-family setup and payoff Flames', () => {
     expect(result.handFamilyFlameStages[sequence.id]).toBe('setup');
   });
 
-  it('requires Ember participation to spend the payoff but makes a Bonfire global', () => {
+  it('uses the same global payoff condition for Ember and Bonfire stages', () => {
     let ember = game([6, 2, 2, 3, 3]);
     attach(ember, 'doubleDown', 100);
     ember.handFamilyFlameStages.doubleDown = 'payoff';
     ember = play(ember, 'twoPair', [1, 2, 3, 4]);
-    expect(ember.stats.handScores.at(-1)!.xMultFactors.some(factor => factor.source === 'doubleDown')).toBe(false);
-    expect(ember.handFamilyFlameStages.doubleDown).toBe('payoff');
+    expect(ember.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: 'doubleDown', value: 9 }));
+    expect(ember.handFamilyFlameStages.doubleDown).toBe('spent');
 
     const bonfire = game([6, 2, 2, 3, 3]);
-    bonfire.bonfires = ['doubleDown'];
+    attach(bonfire, 'doubleDown', 100);
     bonfire.handFamilyFlameStages.doubleDown = 'payoff';
     const paid = play(bonfire, 'twoPair', [1, 2, 3, 4]);
     expect(paid.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({
-      source: 'doubleDown', value: 9, dieId: null,
+      source: 'doubleDown', value: 9,
     }));
     expect(paid.handFamilyFlameStages.doubleDown).toBe('spent');
   });
@@ -119,7 +119,7 @@ describe('hand-family setup and payoff Flames', () => {
     attach(state, 'boxSet', 100);
     state.handFamilyFlameStages.boxSet = 'spent';
     state.phase = 'shop';
-    state.shop = { stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    state.shop = { stage: 'fireKeeping', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     const next = dispatch(state, { type: 'NEXT_ROUND' }, constant()).state;
     expect(next.handFamilyFlameStages).toEqual({ boxSet: 'setup' });
     expect(handFamilyFlameTargets(next)).toContain('fourKind');
@@ -132,24 +132,24 @@ describe('Missing Pair and One Short', () => {
     ['missingPair', 'threeKind', [2, 2, 2, 4, 5], [0, 1, 2]],
     ['oneShort', 'smallStraight', [1, 2, 3, 4, 6], [0, 1, 2, 3]],
     ['oneShort', 'fourKind', [2, 2, 2, 2, 5], [0, 1, 2, 3]],
-  ] as const)('%s gives its static scaling to %s with Ember participation', (id, hand, values, dieIds) => {
+  ] as const)('%s gives its static global scaling to %s', (id, hand, values, dieIds) => {
     const state = game([...values] as Rank[]);
     attach(state, id, 50);
     const result = play(state, hand, [...dieIds]);
-    expect(result.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: id, value: 3, dieId: 0 }));
+    expect(result.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: id, value: 3 }));
     expect(handFamilyFlameTargets(result)).toEqual([]);
   });
 
-  it('requires the static Flame die before Bonfire and applies globally afterward', () => {
+  it('applies static Flame conditions globally at both progression stages', () => {
     let ember = game([6, 2, 2, 3, 4]);
     attach(ember, 'missingPair', 100);
     ember = play(ember, 'pair', [1, 2]);
-    expect(ember.stats.handScores.at(-1)!.xMultFactors.some(factor => factor.source === 'missingPair')).toBe(false);
+    expect(ember.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: 'missingPair', value: 5 }));
 
     const bonfire = game([6, 2, 2, 3, 4]);
-    bonfire.bonfires = ['missingPair'];
+    attach(bonfire, 'missingPair', 100);
     const result = play(bonfire, 'pair', [1, 2]);
-    expect(result.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: 'missingPair', value: 5, dieId: null }));
+    expect(result.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: 'missingPair', value: 5 }));
     expect(standardFlameMultiplier(0)).toBe(1);
     expect(standardFlameMultiplier(100)).toBe(5);
     expect(handFamilyFlameMultiplier(0)).toBe(1);
@@ -160,20 +160,19 @@ describe('Missing Pair and One Short', () => {
     let state = game();
     state.phase = 'flameSelection';
     state.flameSelection = { offers: [{ id: 90, flame: id }], acquired: false };
-    state = dispatch(state, { type: 'CHOOSE_FLAME', offerId: 90, dieId: 0 }, constant()).state;
-    expect(state.dice[0].flame).toEqual({ id, investedGold: 0 });
+    state = dispatch(state, { type: 'CHOOSE_FLAME', offerId: 90 }, constant()).state;
+    expect(flameByType(state, id)).toMatchObject({ type: id, investedGold: 0, stage: 'ember' });
 
     state.phase = 'flameSelection';
     state.flameSelection = { offers: [{ id: 91, flame: id }], acquired: false };
-    expect(validateAction(state, { type: 'CHOOSE_FLAME', offerId: 91, dieId: 1 })).toContain('already owned');
+    expect(validateAction(state, { type: 'CHOOSE_FLAME', offerId: 91 })).toContain('already owned');
 
     state.phase = 'shop';
     state.flameSelection = null;
-    state.shop = { stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    state.shop = { stage: 'fireKeeping', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     state.gold = 100;
-    state = dispatch(state, { type: 'STOKE_FLAME', dieId: 0, amount: 100 }, constant()).state;
-    expect(state.dice[0].flame).toBeNull();
-    expect(state.bonfires).toContain(id);
+    state = dispatch(state, { type: 'STOKE_FLAME', flameInstanceId: flameByType(state, id)!.instanceId, amount: 100 }, constant()).state;
+    expect(flameByType(state, id)).toMatchObject({ type: id, investedGold: 100, stage: 'bonfire' });
     expect(state.historyV2).toContainEqual(expect.objectContaining({ kind: 'flame_changed',
       change: expect.objectContaining({ type: 'bonfire_created', flame: id }) }));
   });

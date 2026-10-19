@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { activeFace } from './dice';
 import { dispatch, newRun } from './engine';
 import { Resolver } from './effects';
 import { HAND_IDS } from './hands';
@@ -13,7 +12,9 @@ import {
 } from './specialOffers';
 import { SCREEN_THEMES } from './screenThemes';
 import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
+import { flameByType, placeFlameInstance } from './flames';
 import type { GameState, HandId, RandomSource, RoundSummary, SpecialOfferType } from './types';
+import { rosterDice, syncActiveDiceProjection } from './inventory';
 
 const constant = (value = 0): RandomSource => ({ next: () => value });
 
@@ -73,17 +74,11 @@ describe('alternating Special Offer progression', () => {
     expect(replay.specialOffer.offers).toEqual(state.specialOffer.offers);
   });
 
-  it('centralizes no-effect eligibility checks', () => {
+  it('centralizes Fire Keeper eligibility without legacy face-effect offers', () => {
     const state = offerState('greatFairy');
     expect(specialOfferEligible(state, 'fireKeeper')).toBe(false);
-    expect(specialOfferEligible(state, 'orangeTheory')).toBe(false);
-    expect(specialOfferEligible(state, 'sommelier')).toBe(false);
-    state.dice[0].flame = { id: 'ultimate', investedGold: 20 };
-    state.dice[1].faces[0].enhancements.workout = 2;
-    state.dice[2].faces[0].enhancements.vintage = 1;
+    placeFlameInstance(state, 'ultimate', 20);
     expect(specialOfferEligible(state, 'fireKeeper')).toBe(true);
-    expect(specialOfferEligible(state, 'orangeTheory')).toBe(true);
-    expect(specialOfferEligible(state, 'sommelier')).toBe(true);
   });
 });
 
@@ -92,19 +87,18 @@ describe('immediate and Shop Special Offers', () => {
     let state = choose('onTheHouse');
     expect(activeSpecialOfferStatusItems(state.specialOfferEffects)).toEqual([]);
     expect(state.shop?.freeDicePurchaseAvailable).toBe(true);
-    expect(state.shop?.freeTrainingOfferKeys).toHaveLength(3);
+    expect(state.shop?.trainingSession?.freeTrainingAvailable).toBe(true);
     const dieOffer = state.shop!.offers[0];
     state = dispatch(state, { type: 'BUY_DIE', offerId: dieOffer.id }, constant()).state;
     expect(state.shop?.freeDicePurchaseAvailable).toBe(false);
     expect([...state.historyV2].reverse().find(event => event.kind === 'shop_transaction'
       && event.transaction.type === 'dice_purchased')).toMatchObject({ transaction: { pricePaid: 0 } });
     state = dispatch(state, { type: 'SET_SHOP_STAGE', stage: 'training' }, constant()).state;
-    const training = state.shop!.trainingOffers[0];
-    state = dispatch(state, training.kind === 'team' ? { type: 'TRAIN_ALL_HANDS' } : { type: 'TRAIN_HAND', hand: training.hand }, constant()).state;
+    state = dispatch(state, { type: 'TRAIN_HAND', hand: 'pair' }, constant()).state;
     expect(state.stats.trainingPurchases.at(-1)?.cost).toBe(0);
     state.gold = 100;
-    state = dispatch(state, training.kind === 'team' ? { type: 'TRAIN_ALL_HANDS' } : { type: 'TRAIN_HAND', hand: training.hand }, constant()).state;
-    expect(state.stats.trainingPurchases.at(-1)?.cost).toBe(training.kind === 'team' ? 30 : 4);
+    state = dispatch(state, { type: 'TRAIN_HAND', hand: 'pair' }, constant()).state;
+    expect(state.stats.trainingPurchases.at(-1)?.cost).toBe(4);
     state = dispatch(state, { type: 'SET_SHOP_STAGE', stage: 'dice' }, constant()).state;
     state = dispatch(state, { type: 'REROLL_OFFERS' }, constant()).state;
     expect(state.shop!.freeDicePurchaseAvailable).toBe(false);
@@ -127,26 +121,12 @@ describe('immediate and Shop Special Offers', () => {
     expect(state.actionJournal.at(-1)).toEqual({ type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 });
   });
 
-  it('Sommelier, Orange Theory, and Fire Keeper update every applicable held face deterministically', () => {
-    const wine = offerState('sommelier');
-    wine.dice[0].faces[0].enhancements.vintage = 1;
-    wine.dice[0].faces[0].vintageSellValue = 9;
-    const sommelier = dispatch(wine, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }).state.dice[0].faces[0];
-    expect(sommelier.vintageSellValue).toBe(9);
-    expect(sommelier.vintageSommelierBoosted).toBe(true);
-
-    const workout = offerState('orangeTheory');
-    workout.dice[0].faces[0].enhancements.workout = 3;
-    workout.dice[1].faces[1].enhancements.workout = 1;
-    const trained = dispatch(workout, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }).state;
-    expect(trained.dice[0].faces[0].workoutPips).toBe(15);
-    expect(trained.dice[1].faces[1].workoutPips).toBe(5);
-
+  it('Fire Keeper updates every applicable Flame deterministically', () => {
     for (const [from, to] of [[20, 60], [60, 80], [90, 95]] as const) {
       const ember = offerState('fireKeeper');
-      ember.dice[0].flame = { id: 'ultimate', investedGold: from };
+      placeFlameInstance(ember, 'ultimate', from);
       const stoked = dispatch(ember, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }, constant(0)).state;
-      expect(stoked.dice[0].flame?.investedGold).toBe(to);
+      expect(flameByType(stoked, 'ultimate')?.investedGold).toBe(to);
     }
   });
 });
@@ -159,9 +139,6 @@ describe('temporary Special Offers', () => {
       carePackageRerolls: 2,
       silence: true,
       taxEvasionRounds: 1,
-      cashBonusRounds: 3,
-      powerballRounds: 2,
-      powerballAvailable: true,
       bottledFairyRounds: 2,
       badDreamRounds: 3,
     });
@@ -170,8 +147,6 @@ describe('temporary Special Offers', () => {
       ['carePackage', 'Care Package · 2 Rerolls Left'],
       ['silence', 'Silence · Next Boss'],
       ['taxEvasion', 'Tax Evasion · 1 Round'],
-      ['cashBonus', 'Cash Bonus · 3 Rounds'],
-      ['powerball', 'Powerball · Ready · 2 Rounds'],
       ['bottledFairy', 'Bottled Fairy · 2 Rounds'],
       ['badDream', 'Bad Dream · 3 Rounds'],
     ]);
@@ -339,20 +314,6 @@ describe('temporary Special Offers', () => {
     expect(state.specialOfferEffects.carePackageRerolls).toBe(2);
   });
 
-  it('Cash Bonus pays three Gold per Bonus stack for each scoring face', () => {
-    const state = choose('cashBonus');
-    state.phase = 'round';
-    const first = structuredClone(activeFace(state.dice[0]));
-    first.enhancements.bonus = 3;
-    const second = structuredClone(activeFace(state.dice[1]));
-    second.enhancements.bonus = 1;
-    const resolver = new Resolver(state, constant());
-    resolver.whenScored(0, first, 'ones', 'manual', 'selected');
-    resolver.whenScored(1, second, 'ones', 'manual', 'selected');
-    expect(state.gold).toBe(12);
-    expect(state.stats.goldBySource.cashBonus).toBe(12);
-  });
-
   it('Tax Evasion doubles only Interest and expires by completed encounter', () => {
     const state = choose('taxEvasion');
     state.phase = 'round';
@@ -364,29 +325,6 @@ describe('temporary Special Offers', () => {
     expect(state.lastRoundPayout?.baseGold).toBe(5);
     expect(state.specialOfferEffects.taxEvasionRounds).toBe(2);
     expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Tax Evasion · 2 Rounds');
-  });
-
-  it('Powerball replaces only the first Jackpot activation with 50 Gold and otherwise expires', () => {
-    const state = choose('powerball');
-    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Powerball · Ready · 3 Rounds');
-    state.phase = 'round';
-    activeFace(state.dice[0]).enhancements.jackpot = 3;
-    activeFace(state.dice[1]).enhancements.jackpot = 1;
-    const resolver = new Resolver(state, constant());
-    expect(resolver.resolveJackpot([0, 1])).toBe(53);
-    expect(state.specialOfferEffects.powerballAvailable).toBe(false);
-    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)).toEqual([]);
-
-    const expiring = choose('powerball');
-    expiring.phase = 'round';
-    for (let index = 0; index < 3; index++) {
-      expiring.score = expiring.target;
-      expiring.roundSummary = null;
-      expiring.phase = 'round';
-      new Resolver(expiring, constant()).evaluate();
-    }
-    expect(expiring.specialOfferEffects.powerballRounds).toBe(0);
-    expect(expiring.specialOfferEffects.powerballAvailable).toBe(false);
   });
 
   it('Bottled Fairy refills once per Round only after reserve Rerolls are exhausted', () => {
@@ -514,7 +452,7 @@ describe('temporary Special Offers', () => {
   });
 
   it('expires every unconsumed three-Round effect after three completed encounters', () => {
-    const state = choose('cashBonus');
+    const state = choose('taxEvasion');
     state.specialOfferEffects.taxEvasionRounds = 3;
     state.specialOfferEffects.bottledFairyRounds = 3;
     state.specialOfferEffects.badDreamRounds = 3;
@@ -525,7 +463,7 @@ describe('temporary Special Offers', () => {
       state.score = state.target;
       new Resolver(state, constant()).evaluate();
     }
-    expect(state.specialOfferEffects).toMatchObject({ cashBonusRounds: 0, taxEvasionRounds: 0,
+    expect(state.specialOfferEffects).toMatchObject({ taxEvasionRounds: 0,
       bottledFairyRounds: 0, badDreamRounds: 0 });
     expect(state.badDreamCheckpoint).toBeNull();
   });
@@ -556,7 +494,7 @@ describe('replay and checkpoint Special Offers', () => {
     let state = offerState('timeTravel');
     state.engulfmentLevel = 2;
     state.handLevels.ones = 8;
-    state.bonfires = ['lowball'];
+    placeFlameInstance(state, 'lowball', 100);
     state.infernoEvaluationSuspendedUntilNewFlame = true;
     state = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }, constant()).state;
     expect(state.round).toBe(1);
@@ -566,7 +504,7 @@ describe('replay and checkpoint Special Offers', () => {
     expect(state.currentNodeId).toBe('round:1');
     expect(state.engulfmentLevel).toBe(2);
     expect(state.handLevels.ones).toBe(8);
-    expect(state.bonfires).toEqual(['lowball']);
+    expect(flameByType(state, 'lowball')).toMatchObject({ stage: 'bonfire' });
     expect(state.infernoEvaluationSuspendedUntilNewFlame).toBe(true);
     state.round = 3;
     state.phase = 'roundSummary';
@@ -591,11 +529,12 @@ describe('replay and checkpoint Special Offers', () => {
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.4)).state;
     state.gold = 77;
     state.handLevels.ones = 9;
-    state.dice[0].faces[0].enhancements.vintage = 1;
-    state.dice[0].faces[0].vintageSellValue = 18;
-    state.dice[0].flame = { id: 'ultimate', investedGold: 61 };
+    rosterDice(state)[0].type = 'vintage';
+    rosterDice(state)[0].vintageAppreciation = 18;
+    syncActiveDiceProjection(state);
+    placeFlameInstance(state, 'ultimate', 61);
     state.engulfmentLevel = 3;
-    state.bonfires = ['lowball'];
+    placeFlameInstance(state, 'lowball', 100);
     state.lives = 1;
     state.target = 1_000_000n;
     state.consumed = [...HAND_IDS];
@@ -608,10 +547,10 @@ describe('replay and checkpoint Special Offers', () => {
     expect(state.lives).toBe(1);
     expect(state.gold).toBe(77);
     expect(state.handLevels.ones).toBe(9);
-    expect(state.dice[0].faces[0]).toMatchObject({ enhancements: { vintage: 1 }, vintageSellValue: 18 });
-    expect(state.dice[0].flame).toEqual({ id: 'ultimate', investedGold: 61 });
+    expect(state.dice[0]).toMatchObject({ type: 'vintage', vintageAppreciation: 18 });
+    expect(flameByType(state, 'ultimate')).toMatchObject({ investedGold: 61 });
     expect(state.engulfmentLevel).toBe(3);
-    expect(state.bonfires).toEqual(['lowball']);
+    expect(flameByType(state, 'lowball')).toMatchObject({ stage: 'bonfire' });
     expect(state.infernoEvaluationSuspendedUntilNewFlame).toBe(true);
     expect(state.badDreamCheckpoint).toBeNull();
     expect(state.specialOfferEffects.badDreamRounds).toBe(0);
@@ -637,7 +576,7 @@ describe('replay and checkpoint Special Offers', () => {
   });
 
   it('keeps the canonical player-facing descriptions exact', () => {
-    expect(SPECIAL_OFFERS.onTheHouse.description).toBe('Your first Dice purchase and initial Training purchases in the next Shop are free.');
+    expect(SPECIAL_OFFERS.onTheHouse.description).toBe('Your first Dice purchase and first individual Training purchase in the next Shop are free.');
     expect(SPECIAL_OFFERS.timeTravel.description).toBe('Replay this Chapter from Round 1 with your current build.');
     expect(SPECIAL_OFFERS.badDream.description).toBe('If your run ends in the next 3 Rounds, return to the post-R3 Shop with your current build and 1 Life.');
   });

@@ -117,7 +117,7 @@ describe('Goal beautification', () => {
 describe('Boss Goal modifiers', () => {
   it('preserves every existing modifier definition', () => {
     expect(Object.fromEntries(ALL_BOSS_TYPES.map(boss => [boss, bossGoalModifier(boss)]))).toEqual({
-      juggler: 1, capitalReturn: 1, neglected: 1, clockmaker: 1, tightrope: 0.5, crawler: 1,
+      juggler: 1, capitalReturn: 1, neglected: 1, tightrope: 0.5, crawler: 1,
       magician: 1, mugger: 1, caller: 1, warden: 1, hexer: 1, marathon: 3, quickdraw: 1 / 3,
       fly: 1, snakeEyes: 1, infected: 1,
     });

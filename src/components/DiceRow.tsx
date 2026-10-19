@@ -1,6 +1,6 @@
 import { Die } from './Die';
 import type { CSSProperties } from 'react';
-import type { Die as PhysicalDie, Flame, GameEvent, Rank } from '../game/types';
+import type { Die as PhysicalDie, GameEvent, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
 import type { ExactScore } from '../game/scoreMath';
 
@@ -22,8 +22,7 @@ interface Props {
   wardenSelectableIds?: number[];
   wardenChoiceMode?: boolean;
   onClick: (dieId: number) => void;
-  onEnhancements: (dieId: number) => void;
-  onFlame: (dieId: number, flame: Flame) => void;
+  onDetails: (dieId: number) => void;
   detailsDisabled?: boolean;
   fetchTarget?: { dieId: number; physicalFace: Rank } | null;
   onDropOffer?: (offerId: number, dieId: number) => void;
@@ -31,25 +30,25 @@ interface Props {
 export function DiceRow({ dice, rosterSlotById = {}, display, selected = [], event, disabled, eligibleIds, restrictToEligible = false,
   ineligibleReasons = {}, actionableIneligibleIds = [], lockedIds = [], lockedReasons = {}, lockedUntilByDieId = {}, detailsDisabled = false,
   wardenLockedIds = [], wardenSelectableIds = [], wardenChoiceMode = false,
-  onClick, onEnhancements, onFlame, onDropOffer, fetchTarget }: Props) {
+  onClick, onDetails, onDropOffer, fetchTarget }: Props) {
   return <div className="dice-row" data-dice-count={dice.length}
     style={{ '--dice-columns': dice.length } as CSSProperties}>{dice.map(die => {
     const involved = event?.dieIds?.includes(die.id) ?? false;
     const resolving = involved && (event?.type === 'HAND_PIPS_CHANGED' || event?.type === 'HITCHHIKER_ADDED_PIPS'
-      || event?.type === 'HAND_XMULT_CHANGED' || event?.type === 'WORKOUT_INCREMENTED');
+      || event?.type === 'HAND_XMULT_CHANGED' || event?.type === 'SPECIAL_DIE_EFFECT');
     return <Die key={die.id} die={die} rosterSlot={rosterSlotById[die.id]} display={display}
       fetchTarget={fetchTarget}
       selected={selected.includes(die.id)} highlighted={involved && event?.type !== 'DIE_ROLLED'}
       rolling={involved && event?.type === 'DICE_REROLL_STARTED'}
       resolving={resolving}
-      ability={involved ? event?.enhancement : undefined} flameAbility={involved ? event?.flame : undefined}
+      ability={involved ? event?.dieType : undefined} flameAbility={involved ? event?.flame : undefined}
       disabled={disabled || (wardenChoiceMode && !wardenLockedIds.includes(die.id))} eligible={eligibleIds?.includes(die.id)}
       wardenLocked={wardenLockedIds.includes(die.id)} wardenSelectable={wardenSelectableIds.includes(die.id)}
       unlockAt={lockedUntilByDieId[die.id]}
       lockedReason={lockedIds.includes(die.id) ? lockedReasons[die.id] ?? 'This die is required.' : undefined}
       ineligibleReason={restrictToEligible && !eligibleIds?.includes(die.id) ? ineligibleReasons[die.id] ?? 'This face is not eligible.' : undefined}
       allowIneligibleClick={actionableIneligibleIds.includes(die.id)} onClick={() => onClick(die.id)}
-      detailsDisabled={detailsDisabled} onEnhancements={() => onEnhancements(die.id)} onFlame={flame => onFlame(die.id, flame)}
+      detailsDisabled={detailsDisabled} onDetails={() => onDetails(die.id)}
       onDropOffer={onDropOffer ? offerId => onDropOffer(offerId, die.id) : undefined} />;
   })}</div>;
 }

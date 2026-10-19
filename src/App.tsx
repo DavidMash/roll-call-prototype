@@ -85,12 +85,12 @@ export default function App() {
     && chapterNumberForRound(board.round) <= 2 && !tutorialPaused && currentTutorialBeat === null
     && selectedOffer === null && selectedFlameOffer === null;
   const contextualFlameCue: TutorialBeat | null = runMode === 'normal' && board.phase === 'shop' && board.shop?.stage === 'fireKeeping'
-    && board.flameTutorial.pendingDieId !== null && !board.flameTutorial.completed ? {
+    && board.flameTutorial.pendingFlameInstanceId !== null && !board.flameTutorial.completed ? {
       id: 'first-flame-ember', title: 'NEW EMBER',
       body: ['Stoke Flames in the Shop. At 100 Gold, they become Bonfires.'],
-      target: `[data-tutorial="flame-badge"][data-flame-die-id="${board.flameTutorial.pendingDieId}"]`,
-      highlightTargets: [`[data-tutorial="flame-badge"][data-flame-die-id="${board.flameTutorial.pendingDieId}"]`],
-      interactiveTargets: [`[data-tutorial="flame-badge"][data-flame-die-id="${board.flameTutorial.pendingDieId}"]`],
+      target: `[data-testid="fire-keeping-flame-${board.flameTutorial.pendingFlameInstanceId}"]`,
+      highlightTargets: [`[data-testid="fire-keeping-flame-${board.flameTutorial.pendingFlameInstanceId}"]`],
+      interactiveTargets: [`[data-testid="fire-keeping-flame-${board.flameTutorial.pendingFlameInstanceId}"]`],
       blocking: false, gateInteractions: false, actionLabel: 'GOT IT',
       completion: { kind: 'acknowledge' },
     } : null;
@@ -107,7 +107,7 @@ export default function App() {
   function submit(action: Action) {
     if (busy) return;
     if (!game.submit(action)) return;
-    if (!['BUY_DIE', 'MOVE_DIE', 'FUSE_DICE', 'SELL_DIE', 'SELL_ENHANCEMENT', 'STOKE_FLAME', 'RESTORE_LIFE', 'DISMISS_FLAME_TUTORIAL', 'UNLOCK_SHOP_EXIT'].includes(action.type)) setSelectedOffer(null);
+    if (!['BUY_DIE', 'MOVE_DIE', 'FUSE_DICE', 'SELL_DIE', 'STOKE_FLAME', 'RESTORE_LIFE', 'DISMISS_FLAME_TUTORIAL', 'UNLOCK_SHOP_EXIT'].includes(action.type)) setSelectedOffer(null);
     setSelectedFlameOffer(null);
     if (action.type !== 'TOGGLE_CHARGE') setSelection(emptySelection());
   }
@@ -155,10 +155,10 @@ export default function App() {
     setRunMode(null);
   }
   function openFlameDetails(target: FlameDetailsTarget) {
-    if (target.kind === 'ember' && target.dieId === state.flameTutorial.pendingDieId && !state.flameTutorial.completed) {
+    if (target.kind === 'ember' && target.flameInstanceId === state.flameTutorial.pendingFlameInstanceId && !state.flameTutorial.completed) {
       submit({ type: 'DISMISS_FLAME_TUTORIAL' });
     } else if (runMode === 'tutorial' && target.kind === 'ember'
-      && target.dieId === tutorialGame.session.scenario.firstFlameDieId
+      && target.flameInstanceId === tutorialGame.session.scenario.firstFlameInstanceId
       && !tutorialGame.session.scenario.completedBeatIds.includes('flame-details')) {
       tutorialGame.completeBeat('flame-details');
     }
@@ -171,8 +171,8 @@ export default function App() {
       if (!closing) return;
       const selector = closing.kind === 'offer'
         ? `[data-testid="flame-offer-${closing.flame}"] .flame-offer-info`
-        : closing.kind === 'ember' && closing.dieId !== undefined
-          ? `[data-tutorial="flame-badge"][data-flame-die-id="${closing.dieId}"]`
+        : closing.flameInstanceId !== undefined
+          ? `[data-testid="fire-keeping-flame-${closing.flameInstanceId}"]`
           : null;
       if (selector) document.querySelector<HTMLElement>(selector)?.focus();
     }, 0);

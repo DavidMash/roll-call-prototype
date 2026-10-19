@@ -29,7 +29,6 @@ export function BossPanel({ board }: { board: Board }) {
       case 'capitalReturn': return 'Lower hands cost 1 Gold';
       case 'neglected': return boss.restored ? 'Neglected hands restored'
         : `${formatPlayerNumber(boss.handsPlayed)} of 6 hands played`;
-      case 'clockmaker': return 'Every roll Bumps';
       case 'tightrope': return '0 Rerolls · half Goal';
       case 'crawler': return 'Only 1 scoring die rerolls';
       case 'magician': return `${formatPlayerNumber(boss.completedHands.length)} of ${formatPlayerNumber(boss.calledHands.length)} calls completed`;

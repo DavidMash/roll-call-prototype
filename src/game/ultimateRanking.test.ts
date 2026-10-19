@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { captureHandStart, handXMultContributions, standardFlameMultiplier } from './flames';
+import { captureHandStart, handXMultContributions, placeFlameInstance, standardFlameMultiplier } from './flames';
 import { HAND_IDS, initialHandLevels, rankedHands, trainedBaselineStrength, ultimateHands } from './hands';
 import { newRun } from './engine';
 
@@ -47,7 +47,7 @@ describe('Ultimate Hand ranking', () => {
   it('keeps the existing investment curve and snapshots qualification at hand start', () => {
     expect([0, 25, 50, 75, 100].map(standardFlameMultiplier)).toEqual([1, 2, 3, 4, 5]);
     const state = newRun('ultimate-snapshot', constant()).state;
-    state.bonfires = ['ultimate'];
+    placeFlameInstance(state, 'ultimate', 100);
 
     const qualifiedSnapshot = captureHandStart(state, 'fiveKind', [0, 1, 2, 3, 4]);
     for (const hand of HAND_IDS) state.handLevels[hand] = hand === 'fiveKind' ? 1 : 10;
@@ -55,7 +55,7 @@ describe('Ultimate Hand ranking', () => {
       .toMatchObject([{ source: 'ultimate', value: 5, dieId: null }]);
 
     const unqualifiedState = newRun('ultimate-snapshot-unqualified', constant()).state;
-    unqualifiedState.bonfires = ['ultimate'];
+    placeFlameInstance(unqualifiedState, 'ultimate', 100);
     const unqualifiedSnapshot = captureHandStart(unqualifiedState, 'fullHouse', [0, 1, 2, 3, 4]);
     unqualifiedState.handLevels.fullHouse = 10;
     expect(handXMultContributions(unqualifiedSnapshot, 'fullHouse', 1, [0, 1, 2, 3, 4])).toEqual([]);

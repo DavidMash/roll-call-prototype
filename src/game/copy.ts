@@ -4,7 +4,6 @@ import { Decimal, scoreFromString, type ExactScore } from './scoreMath';
 export const EMPTY_TEXT = {
   none: 'None',
   value: '—',
-  enhancements: 'No Enhancements',
   flameSlot: 'Empty Flame Slot',
   score: 'No Score',
 } as const;

@@ -1,6 +1,6 @@
-import { ENHANCEMENTS } from './enhancements';
 import { FLAMES } from './flames';
 import { HANDS, HAND_IDS } from './hands';
+import { SPECIAL_DICE } from './specialDice';
 import { formatExactScore, formatPlayerNumber } from './copy';
 import { RUN_HISTORY_V2_RULESET, RUN_HISTORY_V2_SCHEMA_VERSION } from './runHistoryV2';
 import { renderGroupedRunHistoryV2 } from './runHistoryV2Renderer';
@@ -33,9 +33,21 @@ export function renderRunSummaryV2(state: GameState): string {
   const largest = experienced.largestHand
     ? `${HANDS[experienced.largestHand.hand].name} ${number(experienced.largestHand.score)} · R${number(experienced.largestHand.round)} A${number(experienced.largestHand.attempt)}${experienced.largestHand.abandoned ? ' · rolled back' : ''}`
     : 'None';
-  const build = canonical.retainedEnhancements.map(item => `D${item.dieId + 1}/side ${item.side}: ${Object.entries(item.enhancements)
-    .map(([id, count]) => `${ENHANCEMENTS[id as keyof typeof ENHANCEMENTS].name} ×${number(count ?? 0)}`).join(', ')}`).join(' · ') || 'None';
-  const embers = canonical.currentEmbers.map(item => `D${item.dieId + 1} ${FLAMES[item.flame].name} ${number(item.investedGold)}/100`).join(' · ') || 'None';
+  const dieBuildLabel = (item: typeof canonical.ownedDice[number]) => `${SPECIAL_DICE[item.dieType].name} Lv${item.level}`
+    + (item.vintageAppreciation > 0 ? ` (+${number(item.vintageAppreciation)} Vintage)` : '')
+    + ` [ID #${item.dieId}]`;
+  const roster = canonical.ownedDice.filter(item => item.rosterSlot !== null)
+    .sort((a, b) => a.rosterSlot! - b.rosterSlot!).map(item => `R${item.rosterSlot! + 1} ${dieBuildLabel(item)}`).join(' · ') || 'None';
+  const storage = canonical.ownedDice.filter(item => item.storageSlot !== null)
+    .sort((a, b) => a.storageSlot! - b.storageSlot!).map(item => `S${item.storageSlot! + 1} ${dieBuildLabel(item)}`).join(' · ') || 'Empty';
+  const flames = canonical.flameSlots.map(item => `Slot ${item.slot + 1} ${FLAMES[item.flame.type].name} ${item.flame.stage} ${number(item.flame.investedGold)}/100`).join(' · ') || 'None';
+  const diceEconomy = Object.entries(experienced.diceEconomy.byType)
+    .map(([type, metric]) => `${SPECIAL_DICE[type as keyof typeof SPECIAL_DICE].name}: bought ${metric.purchased}, sold ${metric.sold}, fused ${metric.fused}`).join(' · ') || 'None';
+  const training = Object.entries(experienced.trainingByHand)
+    .map(([hand, metric]) => `${HANDS[hand as keyof typeof HANDS].name}: ${metric.purchases} purchase${metric.purchases === 1 ? '' : 's'}, ${number(metric.goldSpent)} Gold, max tier ${metric.maximumRelativeTier}, max quote ${number(metric.maximumNormalPrice)}`).join(' · ') || 'None';
+  const specialDice = Object.entries(experienced.specialDice)
+    .filter(([type]) => type !== 'normal')
+    .map(([type, metric]) => `${SPECIAL_DICE[type as keyof typeof SPECIAL_DICE].name}: ${metric.activations} activations, ${metric.invocationsSpent} Invocations, ${metric.commandUses} commands, ${metric.scoreOccurrences} Scores (${metric.additionalScores} additional)`).join(' · ') || 'None';
   const shares = experienced.largestHandShare;
   return [
     'ROLL CALL · RUN HISTORY V2',
@@ -53,28 +65,31 @@ export function renderRunSummaryV2(state: GameState): string {
     'FINAL CANONICAL BUILD',
     `Inferno: Level ${number(canonical.infernoLevel)} · ×${number(canonical.infernoMultiplier)}`,
     `Hand levels: ${HAND_IDS.map(hand => `${HANDS[hand].name} ${number(canonical.finalHandLevels[hand] ?? 1)}`).join(' · ')}`,
-    `Enhancements: ${build}`,
-    `Embers: ${embers}`,
-    `Bonfires: ${canonical.bonfires.map(flame => FLAMES[flame].name).join(' · ') || 'None'}`,
+    `Active Roster: ${roster}`,
+    `Storage: ${storage}`,
+    `Flame slots: ${flames}`,
     `Flame timeline experienced: ${experienced.flameTimeline.map(item => `R${item.round} ${item.type}${item.flame ? ` ${FLAMES[item.flame].name}` : ''}${item.abandoned ? ' [rolled back]' : ''}`).join(' · ') || 'None'}`,
     '',
     'ECONOMY · CANONICAL',
     `Final Gold: ${number(canonical.finalGold)}`,
     `Earned: ${entries(canonical.goldEarnedBySource)}`,
     `Spent: ${entries(canonical.goldSpentByCategory)}`,
-    `Training spend: individual ${number(canonical.trainingGoldSpent.individual)} · Team ${number(canonical.trainingGoldSpent.team)}`,
-    `Vintage revenue experienced: ${number(experienced.vintageRevenue)} · Shop reroll spend experienced: ${number(experienced.shopRerollSpend)}`,
+    `Training spend: ${number(canonical.trainingGoldSpent)} Gold`,
+    `Dice economy: ${number(experienced.diceEconomy.purchases)} purchases / ${number(experienced.diceEconomy.purchaseGold)} Gold · ${number(experienced.diceEconomy.sales)} sales / ${number(experienced.diceEconomy.saleGold)} Gold · ${number(experienced.diceEconomy.moves)} moves · ${number(experienced.diceEconomy.fusions)} fusions`,
+    `Dice types: ${diceEconomy}`,
+    `Training by hand: ${training}`,
+    `Shop reroll spend experienced: ${number(experienced.shopRerollSpend)}`,
     '',
     'BALANCE',
     offerLine('Dice offers', experienced.offerImpressions.dice),
-    offerLine('Legacy Enhancement offers', experienced.offerImpressions.enhancement),
     offerLine('Flame offers', experienced.offerImpressions.flame),
     offerLine('Special Offer impressions', experienced.offerImpressions.special_offer),
-    `Enhancement purchases by rarity: ${entries(experienced.enhancementPurchasesByRarity)}`,
     `Hands used: ${entries(experienced.handUsage)}`,
     `Score by hand: ${entries(experienced.scoreByHand)}`,
     `Largest-hand share: median ${shares.median === null ? '—' : percent(shares.median)} · P90 ${shares.p90 === null ? '—' : percent(shares.p90)} · max ${shares.maximum === null ? '—' : percent(shares.maximum)} · >50% ${shares.over50Percent}/${shares.samples} · >80% ${shares.over80Percent}/${shares.samples}`,
     `Flame activations: ${entries(experienced.flameActivations)}`,
+    `Flame lifecycle: acquired ${number(experienced.flameLifecycle.acquired)} · replaced ${number(experienced.flameLifecycle.replaced)} · invested ${number(experienced.flameLifecycle.stokedGold)} Gold · Bonfires ${number(experienced.flameLifecycle.bonfires)} · Engulfed ${number(experienced.flameLifecycle.engulfed)}`,
+    `Special dice: ${specialDice}`,
     `Charge: armed ${number(experienced.charge.arms)} · consumed ${number(experienced.charge.consumes)} · resets ${number(experienced.charge.resets)}`,
     `Boss outcomes: ${entries(experienced.bossOutcomes)} · Special Offers: ${entries(experienced.specialOffers)}`,
   ].join('\n');

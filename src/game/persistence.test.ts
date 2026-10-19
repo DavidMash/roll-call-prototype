@@ -3,6 +3,7 @@ import { newRun } from './engine';
 import { compactGameStateForPersistence, isResumableRun, loadPersistedRun, RUN_STORAGE_KEY, RUN_STORAGE_VERSION, savePersistedRun } from './persistence';
 import { stringifyExactJson } from './scoreMath';
 import { createInfernoEvaluation, infernoMeterTransition } from './engulfment';
+import { placeFlameInstance } from './flames';
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -19,9 +20,7 @@ describe('run persistence', () => {
       evaluationIndex: 4, previousReadiness: .75,
       recentMessageIds: ['close-01', 'close-02'], recentAction: 'flame_invested',
     };
-    state.dice[0].flame = { id: 'vineyard', investedGold: 40 };
-    state.flameInstanceIds.vineyard = 1;
-    state.nextFlameInstanceId = 2;
+    placeFlameInstance(state, 'vineyard', 40);
     state.infernoEvaluation = createInfernoEvaluation(state);
     state.phase = 'inferno';
     expect(savePersistedRun(storage, state)).toBe(true);

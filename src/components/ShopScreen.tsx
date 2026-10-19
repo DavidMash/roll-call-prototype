@@ -5,15 +5,15 @@ import { dieEffectDescription, dieSellBreakdown, firstPurchaseSlot, fusionEffect
 import { SPECIAL_DICE } from '../game/specialDice';
 import type { Action, Board, CollectibleDie, DiceInventory, DiceSlotRef, GameEvent } from '../game/types';
 import { ScoreResolution } from './ScoreResolution';
-import { TrainingCard } from './TrainingCard';
+import { TrainingScorecard } from './TrainingScorecard';
 import { BossPreview } from './BossPanel';
 import { BOSSES } from '../game/bosses';
 import { formatPlayerNumber } from '../game/copy';
-import { dicePurchaseIsFree, trainingOfferIsFree } from '../game/specialOffers';
+import { dicePurchaseIsFree } from '../game/specialOffers';
 import { chapterLabel, chapterRoundForRound } from '../game/chapters';
 import { RunActionLayout, RunActionPortal } from './RunActionRow';
 import { RarityBadge } from './RarityBadge';
-import { activeFlameId, activeFlameInvestment, FLAMES } from '../game/flames';
+import { FLAMES } from '../game/flames';
 import type { FlameDetailsTarget } from './FlameDetailsModal';
 
 const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
@@ -68,16 +68,6 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
   const exitLockStartedAt = useRef(Date.now());
   const rosterCount = inventory.roster.filter(id => id !== null).length;
   const collectionFull = firstPurchaseSlot(inventory) === null;
-  const ownedSlots = [
-    ...inventory.roster.map((_id, index) => ({ area: 'roster' as const, index })),
-    ...inventory.storage.map((_id, index) => ({ area: 'storage' as const, index })),
-  ];
-  const carriedFlames = ownedSlots.flatMap(slot => {
-    const id = slotValue(inventory, slot);
-    const die = id === null || id === undefined ? null : inventory.instances[id] ?? null;
-    const flame = activeFlameId(die?.flame);
-    return die && flame ? [{ die, flame, slot }] : [];
-  });
   useEffect(() => {
     if (shop.exitUnlocked !== false || busy) return;
     const remaining = Math.max(0, 1000 - (Date.now() - exitLockStartedAt.current));
@@ -215,34 +205,30 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
     </Paper>}
 
     {stage === 'training' && <Paper p="xs" className="shop-section training-shop-section" data-testid="training-shop" data-tutorial="hand-training">
-      <Group justify="space-between" className="section-heading"><Text fw={700} size="sm" tt="uppercase" lts=".08em">Training</Text></Group>
-      <div className="shop-grid training-grid">{shop.trainingOffers.map(item => <TrainingCard
-        key={item.kind === 'team' ? 'team' : item.hand} offer={item} handLevels={board.handLevels} gold={board.gold} busy={busy} free={trainingOfferIsFree(shop, item)}
-        onTrain={() => submit(item.kind === 'team' ? { type: 'TRAIN_ALL_HANDS' } : { type: 'TRAIN_HAND', hand: item.hand })} />)}</div>
+      <Group justify="space-between" className="section-heading"><div><Text fw={700} size="sm" tt="uppercase" lts=".08em">Training</Text>
+        <Text size="xs" c="dimmed">Training gets more expensive as a hand rises above the rest of its section. Keeping your scorecard balanced keeps Training affordable.</Text></div></Group>
+      <TrainingScorecard handLevels={board.handLevels} shop={shop} gold={board.gold} busy={busy}
+        onTrain={hand => submit({ type: 'TRAIN_HAND', hand })} />
     </Paper>}
 
     {stage === 'fireKeeping' && <Paper p="xs" className="shop-section fire-keeping-section" data-testid="fire-keeping-shop">
       <Group justify="space-between" className="section-heading"><div><Text fw={700} size="sm" tt="uppercase" lts=".08em">Fire Keeping</Text>
-        <Text size="xs" c="dimmed">Invest Gold in carried Embers. At 100 Gold, an Ember becomes a Bonfire.</Text></div></Group>
-      {carriedFlames.length === 0 && board.bonfires.length === 0
-        ? <Paper p="md" withBorder ta="center"><Text fw={750}>NO FLAMES TO TEND</Text><Text size="sm" c="dimmed">Flame rewards are earned separately after Big Bosses.</Text></Paper>
-        : <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" className="fire-keeping-grid">
-          {carriedFlames.map(({ die, flame, slot }) => {
-            const investment = activeFlameInvestment(die.flame);
-            return <Card key={`ember-${die.id}`} withBorder p="sm" className="fire-keeping-card" data-testid={`fire-keeping-ember-${die.id}`}>
-              <Group justify="space-between"><div><Text size="xs" c="dimmed" fw={800}>{slotName(slot).toUpperCase()}</Text>
-                <Text fw={850}>{FLAMES[flame].name}</Text></div><Badge color="orange" variant="light">EMBER</Badge></Group>
-              <Group justify="space-between" mt="xs"><Text size="xs">Investment</Text><Text size="xs" fw={800}>{investment} / 100 Gold</Text></Group>
-              <Progress value={investment} color="orange" size="sm" mt={4} />
-              <Button mt="sm" color="orange" variant="light" disabled={busy} onClick={() => openFlameDetails({ flame, kind: 'ember', dieId: die.id })}>MANAGE FLAME</Button>
-            </Card>;
-          })}
-          {board.bonfires.map(flame => <Card key={`bonfire-${flame}`} withBorder p="sm" className="fire-keeping-card bonfire" data-testid={`fire-keeping-bonfire-${flame}`}>
-            <Group justify="space-between"><Text fw={850}>{FLAMES[flame].name}</Text><Badge color="red" variant="light">BONFIRE</Badge></Group>
-            <Text size="sm" c="dimmed" mt="xs">Fully invested and active at full strength.</Text>
-            <Button mt="sm" color="red" variant="light" disabled={busy} onClick={() => openFlameDetails({ flame, kind: 'bonfire' })}>VIEW BONFIRE</Button>
+        <Text size="xs" c="dimmed">Maintain up to five global Flames. Their written conditions are complete; investment strengthens their effects. At 100 Gold, an Ember becomes a Bonfire in the same slot.</Text></div></Group>
+      {board.flameSlots.every(flame => flame === null) && <Text size="sm" c="dimmed" ta="center" my="xs">No Flames to tend yet. Flame rewards are earned separately after Big Bosses.</Text>}
+      <SimpleGrid cols={{ base: 1, sm: 5 }} spacing="xs" className="fire-keeping-grid" data-testid="global-flame-slots">
+          {board.flameSlots.map((flame, slot) => flame ? <Card key={`flame-${flame.instanceId}`} withBorder p="sm"
+            className={`fire-keeping-card ${flame.stage}`} data-testid={`fire-keeping-flame-${flame.instanceId}`}>
+            <Group justify="space-between"><div><Text size="xs" c="dimmed" fw={800}>FLAME SLOT {slot + 1}</Text>
+              <Text fw={850}>{FLAMES[flame.type].name}</Text></div><Badge color={flame.stage === 'bonfire' ? 'red' : 'orange'} variant="light">{flame.stage.toUpperCase()}</Badge></Group>
+            <Text size="xs" c="dimmed" mt={4}>{FLAMES[flame.type].description}</Text>
+            <Group justify="space-between" mt="xs"><Text size="xs">Investment</Text><Text size="xs" fw={800}>{flame.investedGold} / 100 Gold</Text></Group>
+            <Progress value={flame.investedGold} color={flame.stage === 'bonfire' ? 'red' : 'orange'} size="sm" mt={4} />
+            <Button mt="sm" color={flame.stage === 'bonfire' ? 'red' : 'orange'} variant="light" disabled={busy}
+              onClick={() => openFlameDetails({ flameInstanceId: flame.instanceId, kind: flame.stage })}>{flame.stage === 'bonfire' ? 'VIEW BONFIRE' : 'MANAGE FLAME'}</Button>
+          </Card> : <Card key={`empty-${slot}`} withBorder p="sm" className="fire-keeping-card empty" data-testid={`fire-keeping-empty-${slot}`}>
+            <Text size="xs" c="dimmed" fw={800}>FLAME SLOT {slot + 1}</Text><Text c="dimmed" ta="center" my="md">EMPTY</Text>
           </Card>)}
-        </SimpleGrid>}
+        </SimpleGrid>
     </Paper>}
 
     <RunActionPortal><RunActionLayout className="shop-action-dock"
@@ -280,10 +266,9 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
       {saleSlot && saleDie && <Stack><Text fw={850}>{SPECIAL_DICE[saleDie.type].name} D6 · Lv{saleDie.level}</Text>
         {saleSlot.area === 'roster' && rosterCount < 6 && <Paper p="sm" withBorder><Text fw={800}>EMPTY ROSTER SLOT</Text>
           <Text size="sm">Selling this die will leave you with only {rosterCount - 1} dice equipped. Some hands may become impossible to Play.</Text></Paper>}
-        {saleDie.flame && <Text c="orange">This die carries a Flame and cannot be sold until that Flame is moved or completed.</Text>}
         <Text size="xl" fw={900}>+{dieSellBreakdown(saleDie).total} GOLD</Text>
         <Group justify="flex-end"><Button variant="default" onClick={() => setSaleSlot(null)}>CANCEL</Button>
-          <Button color="yellow" disabled={!!saleDie.flame || (saleSlot.area === 'roster' && rosterCount <= 1)}
+          <Button color="yellow" disabled={saleSlot.area === 'roster' && rosterCount <= 1}
             onClick={() => { submit({ type: 'SELL_DIE', slot: saleSlot, expectedDieId: saleDie.id }); setSaleSlot(null); setSelectedSlot(null); }}>{saleSlot.area === 'roster' ? 'SELL ANYWAY' : 'SELL'}</Button></Group>
       </Stack>}
     </Modal>

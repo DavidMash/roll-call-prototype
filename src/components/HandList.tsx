@@ -1,6 +1,6 @@
 import { Badge, Button, Text, Tooltip } from '@mantine/core';
 import { handStats, HANDS, HAND_IDS, LOWER_HAND_IDS, relativeHandStrengthTiers, ultimateHands, UPPER_HAND_IDS } from '../game/hands';
-import { activeFlameId, handFamilyFlameTargets } from '../game/flames';
+import { handFamilyFlameTargets, hasOwnedFlame } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
 import { EMPTY_TEXT, formatExactScore, formatPlayerNumber, formatScoreEquation } from '../game/copy';
@@ -37,8 +37,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
   onSelect: (hand: HandId) => void; onSubmit: () => void;
 }) {
   const ultimate = new Set(ultimateHands(board.handLevels));
-  const ownsUltimate = board.bonfires.includes('ultimate')
-    || board.dice.some(die => activeFlameId(die.flame) === 'ultimate');
+  const ownsUltimate = hasOwnedFlame(board, 'ultimate');
   const flameTargets = new Set(handFamilyFlameTargets(board));
   const strengthTiers = relativeHandStrengthTiers(board.handLevels, hands);
   return <section className="scorecard-section" aria-labelledby={`scorecard-${title.toLowerCase()}`}>

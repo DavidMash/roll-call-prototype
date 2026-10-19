@@ -41,7 +41,8 @@ export function winningSettleRun() {
       } else if (game.phase === 'flameSelection') {
         action = game.flameSelection!.acquired
           ? { type: 'CONTINUE_FLAME_SELECTION' }
-          : { type: 'CHOOSE_FLAME', offerId: game.flameSelection!.offers[0].id, dieId: Math.floor(game.round / 3 - 1) % 5 };
+          : { type: 'CHOOSE_FLAME', offerId: game.flameSelection!.offers[0].id,
+              ...(game.flameSlots.every(slot => slot !== null) ? { replaceSlot: 0 as const } : {}) };
       } else if (game.phase === 'specialOffer') {
         const offer = game.specialOffer!.offers.find(item => item.type !== 'timeTravel') ?? game.specialOffer!.offers[0];
         action = game.specialOffer!.acquired ? { type: 'CONTINUE_SPECIAL_OFFER' }

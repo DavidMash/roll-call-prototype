@@ -5,7 +5,7 @@ import type { ExactDecimal, ExactScore } from './scoreMath';
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type Rarity = 'common' | 'uncommon' | 'rare';
 export type BigBossType = 'caller' | 'warden' | 'hexer' | 'marathon' | 'quickdraw' | 'fly' | 'snakeEyes' | 'infected';
-export type MiniBossType = 'juggler' | 'capitalReturn' | 'neglected' | 'clockmaker'
+export type MiniBossType = 'juggler' | 'capitalReturn' | 'neglected'
   | 'tightrope' | 'crawler' | 'magician' | 'mugger';
 export type BossType = BigBossType | MiniBossType;
 export interface ChapterPlan {
@@ -14,12 +14,6 @@ export interface ChapterPlan {
   boss: BigBossType;
 }
 export type RunNodeType = 'normal_round' | 'mini_boss_round' | 'boss_round' | 'shop' | 'flame_selection' | 'special_offer';
-export type Enhancement =
-  | 'bonus' | 'jumpingBean' | 'golden' | 'workout'
-  | 'missingLink' | 'mirror' | 'magnetic' | 'boomerang' | 'sticky' | 'slippy'
-  | 'hitchhiker' | 'weighted' | 'jackpot' | 'personalTrainer' | 'bump' | 'vintage'
-  | 'teamwork' | 'loneWolf' | 'doubleTime' | 'tank' | 'freePlay'
-  | 'shifter' | 'flywheel' | 'holiday' | 'magic' | 'conjoined' | 'furnace' | 'sustainable';
 export type Flame =
   | 'ultimate' | 'minigun' | 'hailMary' | 'fullOfGrace'
   | 'momentum' | 'thirdRail' | 'jumpStart' | 'powerSurge'
@@ -28,6 +22,15 @@ export type Flame =
   | 'hotStreak' | 'lowball' | 'straightShooter' | 'doubleDown'
   | 'threesCompany' | 'boxSet' | 'missingPair' | 'oneShort';
 export type FlameInstanceId = number;
+export type FlameStage = 'ember' | 'bonfire';
+export type FlameSlotIndex = 0 | 1 | 2 | 3 | 4;
+export interface FlameInstance {
+  instanceId: FlameInstanceId;
+  type: Flame;
+  investedGold: number;
+  stage: FlameStage;
+}
+export type FlameSlots = [FlameInstance | null, FlameInstance | null, FlameInstance | null, FlameInstance | null, FlameInstance | null];
 export type DieId = number;
 export type DieType =
   | 'normal' | 'bonus' | 'workout' | 'vintage' | 'golden'
@@ -39,11 +42,13 @@ export type DiceRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
 export type HandId =
   | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes'
   | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
+export type UpperHandId = 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes';
+export type LowerHandId = Exclude<HandId, UpperHandId>;
 export type Phase = 'round' | 'roundSummary' | 'inferno' | 'bust' | 'flameSelection' | 'specialOffer' | 'shop' | 'lost' | 'error';
 export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker' | 'boss';
 export type HandPlaySource = 'manual' | 'jumpingBean' | 'freePlay';
-export type GoldSource = 'golden' | 'jackpot' | 'enhancementSale' | 'diceSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward' | 'specialOffer' | 'cashBonus';
-export type GoldSpendSource = 'enhancement' | 'dicePurchase' | 'shopDiceReroll' | 'enhancementReroll' | 'diceOfferReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore' | 'furnace';
+export type GoldSource = 'golden' | 'jackpot' | 'diceSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward' | 'specialOffer';
+export type GoldSpendSource = 'dicePurchase' | 'shopDiceReroll' | 'diceOfferReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore' | 'furnace';
 export type HandLevels = Record<HandId, number>;
 export type HandFamilyFlameStage = 'setup' | 'payoff' | 'spent';
 
@@ -89,13 +94,11 @@ export interface NeglectedBossState {
   handsPlayed: number;
   restored: boolean;
 }
-export interface ClockmakerBossState { type: 'clockmaker' }
 export interface TightropeBossState { type: 'tightrope' }
 export interface CrawlerBossState { type: 'crawler' }
 export interface MagicianBossState {
   type: 'magician';
   missingDieId: number | null;
-  hiddenFlame: ActiveFlame | null;
   calledHands: HandId[];
   completedHands: HandId[];
   returned: boolean;
@@ -103,13 +106,14 @@ export interface MagicianBossState {
 export interface MuggerBossState { type: 'mugger'; hiddenHand: HandId; revealedHand: HandId | null; spent: boolean }
 export type BossRuntimeState = CallerBossState | WardenBossState | HexerBossState | MarathonBossState
   | QuickdrawBossState | FlyBossState | SnakeEyesBossState | InfectedBossState
-  | JugglerBossState | CapitalReturnBossState | NeglectedBossState | ClockmakerBossState
+  | JugglerBossState | CapitalReturnBossState | NeglectedBossState
   | TightropeBossState | CrawlerBossState | MagicianBossState | MuggerBossState;
 
 export interface XMultFactor {
   source: Flame | 'charge';
   value: number;
   dieId: number | null;
+  flameInstanceId?: FlameInstanceId;
   detail?: string;
   input?: number;
 }
@@ -151,27 +155,29 @@ export interface HandScoreRecord {
   consumedHand: boolean;
 }
 
-export interface Face {
+export type BossFaceMutation =
+  | { kind: 'snakeEyes'; originalRank: Rank }
+  | { kind: 'infected' };
+
+export interface PhysicalFace {
   rank: Rank;
-  workoutPips: number;
-  enhancements: Partial<Record<Enhancement, number>>;
-  weightedTarget?: Rank;
-  /** Base accrued Vintage value. Sommelier is applied separately at sale/display time. */
-  vintageSellValue?: number;
-  vintageSommelierBoosted?: boolean;
-  snakeEyed?: boolean;
-  infected?: boolean;
-  snakeEyesOriginalRank?: Rank;
-  magneticSourceUsed?: boolean;
-  /** Original value while Shifter has temporarily changed this physical face. */
-  shifterBaseRank?: Rank;
-  /** Persistent per-instance Furnace factor. */
-  furnaceMultiplier?: number;
-  /** Round-local charges; persisted only to support mid-Round resume. */
-  flywheelCharges?: number;
-  sustainableCharges?: number;
+  bossMutation?: BossFaceMutation;
 }
-export interface ActiveFlame { id: Flame; investedGold: number }
+
+/** Hexer-only authored face rules, separate from collectible whole-die effects. */
+export type HexerFaceEffect =
+  | { kind: 'goldenWeighted'; target: Exclude<Rank, 7> }
+  | { kind: 'wild' }
+  | { kind: 'wildWorkout'; growthPips: number }
+  | { kind: 'workoutClockwork'; growthPips: number }
+  | { kind: 'wildBonus'; bonusPips: number };
+
+export interface HexerFace extends PhysicalFace {
+  hexerEffect: HexerFaceEffect;
+  temporaryPips: number;
+}
+
+export type Face = PhysicalFace | HexerFace;
 export interface StandaloneScoreRecord {
   round: number;
   dieId: number;
@@ -182,8 +188,10 @@ export interface StandaloneScoreRecord {
   rawScore: ExactDecimal;
   score: ExactScore;
 }
-interface PhysicalDieState { id: DieId; value: Rank; faces: Face[]; flame: ActiveFlame | null }
-export interface CollectibleDie extends PhysicalDieState {
+export interface CollectibleDie {
+  id: DieId;
+  value: Rank;
+  faces: PhysicalFace[];
   owner: 'player';
   type: DieType;
   level: number;
@@ -192,7 +200,10 @@ export interface CollectibleDie extends PhysicalDieState {
   /** Persistent player configuration copied into each Weighted Round runtime. */
   weightedFace: Exclude<Rank, 7>;
 }
-export interface EncounterDie extends PhysicalDieState {
+export interface EncounterDie {
+  id: DieId;
+  value: Rank;
+  faces: HexerFace[];
   owner: 'boss';
   encounterId: string;
 }
@@ -222,46 +233,44 @@ export interface DieRoundRuntime {
 export type DieRoundState = Record<DieId, DieRoundRuntime>;
 export interface DiceOffer {
   id: number;
-  /** Current-schema Dice fields. Legacy Enhancement fixtures may omit them. */
-  dieType?: Exclude<DieType, 'normal'>;
-  rarity?: DiceRarity;
-  price?: number;
-  /** Legacy fixture/runtime support only; normal Shops never generate this field. */
-  enhancement?: Enhancement;
+  dieType: Exclude<DieType, 'normal'>;
+  rarity: DiceRarity;
+  price: number;
   purchased: boolean;
 }
-/** @deprecated Use DiceOffer. Retained for legacy fixture components during the runtime cutoff. */
-export type Offer = DiceOffer;
 export type DiceSlotRef = { area: 'roster' | 'storage'; index: number };
-export interface HandTrainingOffer { kind: 'hand'; hand: HandId; purchases: number }
-export interface TeamTrainingOffer { kind: 'team'; purchases: number }
-export type TrainingOffer = HandTrainingOffer | TeamTrainingOffer;
 export type ShopStage = 'dice' | 'training' | 'fireKeeping';
+export interface FrozenTrainingSession {
+  upperLevelsAtEntry: Record<UpperHandId, number>;
+  lowerLevelsAtEntry: Record<LowerHandId, number>;
+  upperBaseline: number;
+  lowerBaseline: number;
+  purchasesByHand: Record<HandId, number>;
+  /** On The House: the first individual Training purchase in this visit costs no Gold. */
+  freeTrainingAvailable: boolean;
+}
 export interface Shop {
   /** Monotonic identity for one semantic Shop visit, including Bust/Bad Dream returns. */
   visitId?: number;
-  /** The authoritative section of this persistent Shop visit currently being viewed. Legacy fixtures normalize to Dice. */
+  /** The authoritative section of this persistent Shop visit currently being viewed. */
   stage?: ShopStage;
   /** Lifecycle ownership; post-Boss Shops remain in the completed Chapter until NEXT_CHAPTER. */
   kind?: 'between_rounds' | 'post_boss';
   /** False only during the one-second progression lock for this concrete Shop entry. */
   exitUnlocked?: boolean;
   offers: DiceOffer[];
-  trainingOffers: TrainingOffer[];
+  /** Frozen when this semantic Shop visit is created and retained through navigation/Bust restoration. */
+  trainingSession?: FrozenTrainingSession;
   diceRerolls: number;
   offerRerolls: number;
   lifeRestores: number;
   /** On The House: the first collectible-die purchase in this visit costs no Gold. */
   freeDicePurchaseAvailable?: boolean;
-  /** Legacy fixture support only. */
-  freeEnhancementOfferIds?: number[];
-  freeTrainingOfferKeys?: string[];
 }
 export interface FlameOffer { id: number; flame: Flame }
 export interface FlameSelection { offers: FlameOffer[]; acquired: boolean }
 export type SpecialOfferType = 'onTheHouse' | 'greatFairy' | 'focus' | 'timeTravel' | 'carePackage'
-  | 'silence' | 'sommelier' | 'taxEvasion' | 'fireKeeper' | 'cashBonus' | 'orangeTheory'
-  | 'powerball' | 'bottledFairy' | 'badDream' | 'semester';
+  | 'silence' | 'taxEvasion' | 'fireKeeper' | 'bottledFairy' | 'badDream' | 'teamTraining';
 export interface SpecialOffer { id: number; type: SpecialOfferType; hand?: HandId }
 export interface SpecialOfferSelection { offers: SpecialOffer[]; acquired: boolean; chosen?: SpecialOffer }
 export interface ChapterLifecycleState {
@@ -273,23 +282,15 @@ export interface SpecialOfferEffects {
   carePackageRerolls: number;
   silence: boolean;
   taxEvasionRounds: number;
-  cashBonusRounds: number;
-  powerballRounds: number;
-  powerballAvailable: boolean;
   bottledFairyRounds: number;
   bottledFairyTriggeredThisRound: boolean;
   badDreamRounds: number;
-  semesterShopsRemaining: number;
 }
 
 export type ChallengeId = 'fiveAlive' | 'theLongWay' | 'upperClass' | 'lowerClass' | 'varietyPack'
   | 'closeCall' | 'noTakebacks' | 'upperManagement' | 'rollCall' | 'lowProfile' | 'oppositesAttract'
   | 'beanSalad' | 'bonusRound' | 'goldRush' | 'agedToPerfection' | 'magneticPersonality'
   | 'jackpot' | 'getYourRepsIn' | 'fullyLoaded';
-/** Historical Run History V2 parsing only. New gameplay never creates Wildfires. */
-export type WildfireResolved =
-  | { kind: 'xMult'; baseMax: number; max: number }
-  | { kind: 'charge'; gain?: number; ratio?: number; coefficient?: number; maxCharge: number };
 export interface BadDreamCheckpoint {
   chapter: number;
 }
@@ -401,19 +402,20 @@ export interface Board {
   bust: BustSummary | null;
   /** Playback-only terminal dice. Never used as authoritative gameplay state. */
   bustPresentationDice: Die[] | null;
-  flameTutorial: { pendingDieId: number | null; completed: boolean };
+  flameTutorial: { pendingFlameInstanceId: FlameInstanceId | null; completed: boolean };
   manualRerollsRemaining: number;
   specialOfferEffects: SpecialOfferEffects;
-  /** Legacy save-migration input; current runs use chapterLifecycle. */
-  suppressedPostBossRewardRounds: number[];
-  /** Derived active encounter projection in Roster order; never collection authority. */
+  /**
+   * Active encounter reference projection in Roster order. Player entries alias the
+   * authoritative inventory instances; array membership and order never establish ownership.
+   */
   dice: Die[];
   /** Round-attempt resources for equipped collectible dice, keyed by stable die ID. */
   dieRoundState: DieRoundState;
-  bonfires: Flame[];
-  /** Current owned instance for each Flame type, preserved across Ember/Bonfire progression. */
-  flameInstanceIds: Partial<Record<Flame, FlameInstanceId>>;
-  chargeAttribution: Partial<Record<Flame, number>>;
+  /** The sole authoritative live Flame inventory. Slots never compact implicitly. */
+  flameSlots: FlameSlots;
+  /** Charge gained by each stable Flame instance. */
+  chargeAttribution: Partial<Record<FlameInstanceId, number>>;
   infernoProgress: InfernoProgressState;
   infernoEvaluation: InfernoEvaluationState | null;
   infernoEvaluationSuspendedUntilNewFlame: boolean;
@@ -474,12 +476,6 @@ export interface ManualRerollStats {
 export interface RoundSummaryRecord extends RoundSummary {
   shown: boolean;
 }
-export interface Purchase { round: number; enhancement: Enhancement; dieId: number; face: Rank; cost: number; stacksApplied?: number }
-export interface EnhancementSale {
-  round: number; enhancement: Enhancement; dieId: number; face: Rank; stacksSold: number;
-  baseSellPrice: number; totalProceeds: number; goldBefore: number; goldAfter: number;
-  vintageSellValue?: number;
-}
 export interface BustRecord {
   round: number; attempt: number; score: ExactScore; target: ExactScore; shortfall: ExactScore;
   livesBefore: number; livesAfter: number; checkpointRestored: boolean; returnedToShop: boolean;
@@ -518,16 +514,12 @@ export interface WardenEventRecord {
 }
 export interface HexerEventRecord {
   round: number; attempt: number;
-  kind: 'roll' | 'manual_reroll' | 'hand' | 'jumping_bean' | 'workout' | 'seven' | 'jackpot' | 'sticky';
+  kind: 'roll' | 'manual_reroll' | 'hand' | 'jumping_bean' | 'workout' | 'seven';
   face?: Rank; hand?: HandId; amount?: number;
 }
 export interface LifeRestorePurchase {
   round: number; purchaseNumber: number; cost: number; goldBefore: number; goldAfter: number;
   livesBefore: number; livesAfter: number; lifetimeSpendBefore: number; lifetimeSpendAfter: number;
-}
-export interface VintageGrowthRecord {
-  round: number; attempt: number; dieId: number; face: Rank; hand: HandId; playSource: HandPlaySource;
-  participation: 'selected' | 'hitchhiker'; from: number; to: number;
 }
 export interface TrainingPurchase {
   round: number;
@@ -535,19 +527,29 @@ export interface TrainingPurchase {
   fromLevel?: number;
   toLevel?: number;
   cost: number;
+  shopVisitId?: number;
+  family?: 'upper' | 'lower';
+  frozenBaseline?: number;
+  relativeTier?: number;
+  normalPrice?: number | null;
+  waivedByOnTheHouse?: boolean;
+  purchaseCount?: number;
 }
-export interface FlameAcquisition { round: number; dieId: number; flame: Flame; replaced: Flame | null }
+export interface FlameAcquisition {
+  round: number; slot: FlameSlotIndex; instanceId: FlameInstanceId; flame: Flame;
+  replaced: { instanceId: FlameInstanceId; flame: Flame; stage: FlameStage; investedGold: number } | null;
+}
 export type FlameStokeSource = 'flame_selection' | 'shop';
 export interface FlameStoke {
   round: number;
-  dieId: number;
+  slot: FlameSlotIndex;
+  instanceId: FlameInstanceId;
   flame: Flame;
   amount: number;
   from: number;
   total: number;
   source: FlameStokeSource;
 }
-export interface ProbabilityProcStats { checks: number; successes: number; failures: number; stacksAtCheck: number[] }
 export interface JumpingBeanPlayRecord {
   round: number;
   dieId: number;
@@ -561,18 +563,14 @@ export interface JumpingBeanPlayRecord {
   previousPlayCount: number;
   handPlayCountAfter: number;
   consumedHand: false;
-  stickyPreventedReroll: boolean;
   followupRerolled: boolean;
   roundCleared: boolean;
   jackpotPayout: number;
-  personalTrainerSucceeded: boolean | null;
 }
 export interface RunStats {
   seed: string;
   roundReached: number;
   rounds: RoundStats[];
-  purchases: Purchase[];
-  sales: EnhancementSale[];
   busts: BustRecord[];
   mapTransitions: MapTransitionRecord[];
   bossEncounters: BossEncounterRecord[];
@@ -580,7 +578,6 @@ export interface RunStats {
   wardenEvents: WardenEventRecord[];
   hexerEvents: HexerEventRecord[];
   lifeRestores: LifeRestorePurchase[];
-  vintageGrowth: VintageGrowthRecord[];
   trainingPurchases: TrainingPurchase[];
   trainingPurchasesTotal: number;
   trainingGoldSpent: number;
@@ -592,17 +589,9 @@ export interface RunStats {
   chargeArmed: number;
   chargeConsumed: number;
   chargeResets: number;
-  personalTrainerAttempts: number;
-  personalTrainerSuccesses: number;
-  personalTrainerLevelsGranted: number;
   hotStreakCharges: number;
   hotStreakSkippedHands: { round: number; hand: HandId }[];
   lifetimeNormalShopGoldSpent: number;
-  magneticAnchorBatches: number;
-  magneticAttractions: number;
-  bumpControlledRolls: number;
-  enhancedFaces: string[];
-  enhancementShopRerolls: number;
   diceOfferRerolls: number;
   shopDiceRerolls: number;
   manualRerollActions: number;
@@ -613,8 +602,6 @@ export interface RunStats {
   goldBySource: Record<GoldSource, number>;
   goldSpent: number;
   goldSpentBySource: Record<GoldSpendSource, number>;
-  triggers: Partial<Record<Enhancement, number>>;
-  probabilityProcs: Record<'boomerang' | 'holiday' | 'hitchhiker' | 'personalTrainer' | 'doubleTime' | 'sticky', ProbabilityProcStats>;
   scoreBySource: Record<ScoreSource, ExactScore>;
   handScores: HandScoreRecord[];
   jumpingBeanFreePlays: JumpingBeanPlayRecord[];
@@ -626,13 +613,13 @@ export interface RunStats {
   resolutionError: string | null;
 }
 export type EventType =
-  | 'CHAPTER_STARTED' | 'MAP_TRANSITION' | 'ROUND_STARTED' | 'BOSS_STARTED' | 'BOSS_CLEARED' | 'HAND_STARTED' | 'ABILITY_TRIGGERED' | 'ABILITY_CHECKED' | 'ABILITY_EVALUATED'
+  | 'CHAPTER_STARTED' | 'MAP_TRANSITION' | 'ROUND_STARTED' | 'BOSS_STARTED' | 'BOSS_CLEARED' | 'HAND_STARTED' | 'ABILITY_EVALUATED'
   | 'HAND_PIPS_CHANGED' | 'HAND_MULTIPLIER_CHANGED' | 'HITCHHIKER_ADDED_PIPS'
   | 'HAND_SCORE_FINALIZED' | 'STANDALONE_SCORE_CALCULATED' | 'SCORE_ROUNDING_AUDIT'
-  | 'SCORE_ADDED' | 'GOLD_ADDED' | 'WORKOUT_INCREMENTED'
+  | 'SCORE_ADDED' | 'GOLD_ADDED'
   | 'DICE_REROLL_STARTED' | 'DIE_ROLLED' | 'DIE_FLIPPED' | 'HAND_CONSUMED' | 'SCORECARD_REFRESHED' | 'ROUND_CLEARED'
   | 'ROUND_SUMMARY_SHOWN'
-  | 'SHOP_OPENED' | 'OFFER_PURCHASED' | 'TRAINING_PURCHASED' | 'OFFERS_REFRESHED' | 'GOLD_SPENT'
+  | 'SHOP_OPENED' | 'TRAINING_PURCHASED' | 'OFFERS_REFRESHED' | 'GOLD_SPENT'
   | 'FLAME_SELECTION_OPENED' | 'FLAME_OFFERS_REFRESHED' | 'FLAME_ACQUIRED' | 'FLAME_REPLACED'
   | 'SPECIAL_OFFER_OPENED' | 'SPECIAL_OFFER_SELECTED' | 'SPECIAL_EFFECT_TRIGGERED'
   | 'SPECIAL_OFFER_SKIPPED'
@@ -640,7 +627,6 @@ export type EventType =
   | 'TARGET_PRACTICE_SELECTED' | 'CHARGE_CHANGED' | 'CHARGE_ARMED' | 'HOT_STREAK_CHANGED'
   | 'SPEED_DEMON_REVEALED' | 'SIX_PACK_CHANGED'
   | 'FETCH_TARGET_CHANGED'
-  | 'ENHANCEMENT_SOLD' | 'VINTAGE_GROWN' | 'MAGNETIC_ATTRACTION' | 'BUMP_ROLL'
   | 'JUMPING_BEAN_FREE_PLAY' | 'JUMPING_BEAN_FOLLOWUP'
   | 'ROUND_BUST' | 'SHOP_REOPENED_AFTER_BUST' | 'ROUND_RETRY_STARTED' | 'LIFE_RESTORED' | 'FLAME_TUTORIAL_COMPLETED'
   | 'CALLER_CALLED' | 'CALLER_CHANGED' | 'WARDEN_UNLOCK_TARGET' | 'WARDEN_REINFORCEMENT' | 'CURSED_DIE_ROLLED'
@@ -653,7 +639,6 @@ export interface EventRecord {
   type: EventType;
   message: string;
   dieIds?: number[];
-  enhancement?: Enhancement;
   flame?: Flame;
   boss?: BossType;
   hands?: HandId[];
@@ -665,9 +650,6 @@ export interface EventRecord {
   chapterNumber?: number;
   chapterMiniBoss?: MiniBossType;
   chapterBoss?: BigBossType;
-  enhancementCapacityBefore?: number;
-  enhancementCapacityAfter?: number;
-  newlyUnlockedEnhancements?: Enhancement[];
   hand?: HandId;
   playSource?: HandPlaySource;
   handConsumed?: boolean;
@@ -704,7 +686,6 @@ export interface EventRecord {
   bossRewardGold?: number;
   goldenGold?: number;
   jackpotGold?: number;
-  probability?: { enhancement: 'boomerang' | 'holiday' | 'hitchhiker' | 'personalTrainer' | 'doubleTime' | 'sticky'; stacks: number; chance: number; succeeded: boolean };
   decisionMs?: number;
   terminalDice?: { dieId: number; physicalFace: Rank; face: Rank; pips: number }[];
   bustPresentationUsedFrozenDice?: boolean;
@@ -721,7 +702,7 @@ export interface BustSummary {
   livesAfter: number;
 }
 export interface GameStateBase extends Board {
-  /** Authoritative owned-die collection. Board.dice is only the active encounter projection. */
+  /** Authoritative owned-die collection. Board.dice is only the active encounter reference projection. */
   diceInventory: DiceInventory;
   /** Temporary, non-owned dice created by the current encounter. */
   encounterDice: EncounterDie[];
@@ -748,9 +729,12 @@ export interface GameState extends GameStateBase {
   roundCheckpoint: RollbackState | null;
   badDreamCheckpoint: BadDreamCheckpoint | null;
 }
-export type EngulfmentAssetRef =
-  | { kind: 'ember'; flame: Flame; instanceId: FlameInstanceId; dieId: number }
-  | { kind: 'bonfire'; flame: Flame; instanceId: FlameInstanceId };
+export interface EngulfmentAssetRef {
+  kind: FlameStage;
+  flame: Flame;
+  instanceId: FlameInstanceId;
+  slot: FlameSlotIndex;
+}
 export type Action =
   | { type: 'PLAY'; hand: HandId; dieIds: number[]; decisionMs?: number;
       qualificationClaims?: { dieId: DieId; effect: 'mirror' | 'missingLink' | 'conjoined' }[] }
@@ -765,18 +749,14 @@ export type Action =
   | { type: 'UNLOCK_WARDEN_DIE'; dieId: number }
   | { type: 'TOGGLE_CHARGE'; hand?: HandId | null; dieIds?: number[] }
   | { type: 'BUY_DIE'; offerId: number }
-  /** Legacy fixture/runtime action. New-schema Shops never expose Enhancement offers. */
-  | { type: 'BUY'; offerId: number; dieId: number }
   | { type: 'MOVE_DIE'; source: DiceSlotRef; destination: DiceSlotRef;
       expectedSourceDieId: DieId; expectedDestinationDieId: DieId | null }
   | { type: 'FUSE_DICE'; source: DiceSlotRef; destination: DiceSlotRef;
       expectedSourceDieId: DieId; expectedDestinationDieId: DieId }
   | { type: 'SELL_DIE'; slot: DiceSlotRef; expectedDieId: DieId }
-  | { type: 'SELL_ENHANCEMENT'; dieId: number; face: Rank; enhancement: Enhancement }
   | { type: 'TRAIN_HAND'; hand: HandId }
-  | { type: 'TRAIN_ALL_HANDS' }
-  | { type: 'CHOOSE_FLAME'; offerId: number; dieId: number }
-  | { type: 'STOKE_FLAME'; dieId: number; amount: number }
+  | { type: 'CHOOSE_FLAME'; offerId: number; replaceSlot?: FlameSlotIndex }
+  | { type: 'STOKE_FLAME'; flameInstanceId: FlameInstanceId; amount: number }
   | { type: 'CONTINUE_ROUND_SUMMARY' }
   | { type: 'CONTINUE_INFERNO_EVALUATION' }
   | { type: 'ENGULF_NOW' }

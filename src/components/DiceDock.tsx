@@ -1,11 +1,10 @@
-import { Modal, Button, Group, Paper, Text } from '@mantine/core';
-import { useState } from 'react';
+import { Button, Group, Paper, Text } from '@mantine/core';
 import { validateAction } from '../game/engine';
-import { activeFlameId, FLAMES, hasChargeBonfire, hasOwnedChargeFlame, isChargeFlame } from '../game/flames';
+import { hasOwnedChargeFlame } from '../game/flames';
 import { activeEncounterDice } from '../game/bosses';
 import { normalizeBoardSelection, toggleBoardDie } from '../game/selection';
 import type { Selection } from '../game/selection';
-import type { Action, Board, Flame, GameEvent } from '../game/types';
+import type { Action, Board, GameEvent } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
 import { DiceRow } from './DiceRow';
 import type { FaceDetailsTarget } from './FaceDetailsModal';
@@ -13,7 +12,7 @@ import type { FlameDetailsTarget } from './FlameDetailsModal';
 import { formatPlayerNumber } from '../game/copy';
 
 export function DiceDock({ board, event, busy, actionsEnabled, cinematic, display, selection, setSelection,
-  selectedFlameOffer, submit, openFaceDetails, openFlameDetails }: {
+  selectedFlameOffer: _selectedFlameOffer, submit, openFaceDetails, openFlameDetails: _openFlameDetails }: {
   board: Board;
   event: GameEvent | null;
   busy: boolean;
@@ -29,7 +28,6 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
   openFaceDetails: (target: FaceDetailsTarget) => void;
   openFlameDetails: (target: FlameDetailsTarget) => void;
 }) {
-  const [replacementDieId, setReplacementDieId] = useState<number | null>(null);
   const wardenBoss = board.phase === 'round' && !board.bossSilenced && board.boss?.type === 'warden' ? board.boss : null;
   const rosterProjection = board.dice.filter(die => die.owner === 'player');
   const rosterSlotById = Object.fromEntries(rosterProjection.map((die, slot) => [die.id, slot]));
@@ -42,22 +40,13 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
     ? selection.dieIds[0] : null;
   const effectiveSelection = board.phase === 'round' && !awaitingWardenChoice
     ? normalizeBoardSelection(board, selection) : { dieIds: [], hand: null } satisfies Selection;
-  const flameOffer = board.phase === 'flameSelection' && !board.flameSelection?.acquired
-    ? board.flameSelection?.offers.find(item => item.id === selectedFlameOffer) : undefined;
   const lockedUntilByDieId = wardenBoss?.nextUnlockTarget === null || wardenBoss?.nextUnlockTarget === undefined
     ? undefined : Object.fromEntries(wardenLockedIds.map(id => [id, wardenBoss.nextUnlockTarget!]));
   const chargeAction: Action = { type: 'TOGGLE_CHARGE', hand: effectiveSelection.hand, dieIds: effectiveSelection.dieIds };
   const canToggleCharge = validateAction(board, chargeAction) === null;
-  const chargeDieIds = board.phase === 'round' ? activeEncounterDice(board)
-    .filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id) : [];
-  const missingChargeDie = !hasChargeBonfire(board) && chargeDieIds.some(id => !effectiveSelection.dieIds.includes(id));
   const chargeAtMax = board.chargeXMult >= board.maxCharge - 1e-9;
 
   function changeRoundSelection(next: Selection) {
-    if (board.chargeArmed && !hasChargeBonfire(board)) {
-      const chargeIds = dice.filter(die => die.flame && isChargeFlame(die.flame.id)).map(die => die.id);
-      if (chargeIds.some(id => !next.dieIds.includes(id))) submit({ type: 'TOGGLE_CHARGE', hand: next.hand, dieIds: next.dieIds });
-    }
     setSelection(next);
   }
   function clickDie(dieId: number) {
@@ -72,23 +61,11 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
       openFaceDetails({ dieId, face: die.value });
       return;
     }
-    if (board.phase === 'flameSelection' && flameOffer) {
-      if (activeFlameId(die.flame)) setReplacementDieId(dieId);
-      else submit({ type: 'CHOOSE_FLAME', offerId: flameOffer.id, dieId });
-    }
   }
-  function openEnhancements(dieId: number) {
+  function openDetails(dieId: number) {
     const die = board.dice.find(item => item.id === dieId);
     if (die) openFaceDetails({ dieId, face: die.value });
   }
-  function openFlame(dieId: number, flame: Flame) { openFlameDetails({ flame, kind: 'ember', dieId }); }
-  function confirmReplacement() {
-    if (!flameOffer || replacementDieId === null || !actionsEnabled) return;
-    submit({ type: 'CHOOSE_FLAME', offerId: flameOffer.id, dieId: replacementDieId });
-    setReplacementDieId(null);
-  }
-  const replacing = replacementDieId === null ? null : board.dice.find(die => die.id === replacementDieId) ?? null;
-  const replacingFlame = activeFlameId(replacing?.flame);
 
   return <>
     <Paper component="section" p="xs" className={`dice-dock gameplay-dock${cinematic ? ' cinematic' : ''}`} data-tutorial="dice-dock"
@@ -102,8 +79,6 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
             ? `⚡ ×${formatPlayerNumber(board.chargeXMult)} ARMED`
             : chargeAtMax ? `⚡ MAX CHARGE ×${formatPlayerNumber(board.maxCharge)}`
               : `CHARGE ×${formatPlayerNumber(board.chargeXMult)} / ×${formatPlayerNumber(board.maxCharge)}`}</span>
-          {chargeAtMax && missingChargeDie && !board.chargeArmed
-            && <span className="charge-guidance" data-testid="charge-guidance">SELECT CHARGE DIE TO USE</span>}
         </Text>
         <Button className={`charge-action${chargeAtMax ? ' is-max' : ''}`} size="compact-xs"
           color={board.chargeArmed ? 'orange' : 'yellow'} variant={board.chargeArmed || chargeAtMax ? 'filled' : 'light'}
@@ -115,16 +90,11 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
         rosterSlotById={rosterSlotById}
         fetchTarget={board.fetchTarget}
         detailsDisabled={cinematic} selected={selectedWardenDieId === null ? effectiveSelection.dieIds : [selectedWardenDieId]}
-        eligibleIds={flameOffer ? dice.map(die => die.id) : undefined}
+        eligibleIds={undefined}
         wardenLockedIds={wardenLockedIds} wardenSelectableIds={awaitingWardenChoice ? wardenLockedIds : []}
         wardenChoiceMode={awaitingWardenChoice}
         lockedUntilByDieId={lockedUntilByDieId}
-        onClick={clickDie} onEnhancements={openEnhancements} onFlame={openFlame} />
-      {flameOffer && <div className="dice-dock-context flame">{FLAMES[flameOffer.flame].name} selected · choose a die</div>}
+        onClick={clickDie} onDetails={openDetails} />
     </Paper>
-    <Modal opened={replacementDieId !== null} onClose={() => setReplacementDieId(null)} title="Replace Flame?" centered transitionProps={{ duration: 0 }}>
-      {replacingFlame && flameOffer && <><Text>Replace <strong>{FLAMES[replacingFlame].name}</strong> with <strong>{FLAMES[flameOffer.flame].name}</strong>?</Text>
-        <Group justify="flex-end" mt="lg"><Button variant="default" onClick={() => setReplacementDieId(null)}>Cancel</Button><Button color="orange" onClick={confirmReplacement}>Replace Flame</Button></Group></>}
-    </Modal>
   </>;
 }

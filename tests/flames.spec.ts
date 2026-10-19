@@ -1,455 +1,106 @@
 import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
-import { dispatch, newRun } from '../src/game/engine';
-import { FLAMES, standardFlameMultiplier } from '../src/game/flames';
-import { handOptions, HANDS } from '../src/game/hands';
-import { handScore } from '../src/game/scoring';
-import type { Action, GameState } from '../src/game/types';
-import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
-import { CONFIG } from '../src/game/config';
-import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
-import { enterRun, goToShopStage, installRunState, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
+import { newRun } from '../src/game/engine';
+import { flameByType, placeFlameInstance } from '../src/game/flames';
+import type { Flame, GameState } from '../src/game/types';
+import { enterRun, goToShopStage, installRunState } from './uiHelpers';
+import { RUN_STORAGE_KEY } from '../src/game/persistence';
 
-function bestHand(game: GameState, requiredDie?: number, requireHistory = false) {
-  const dice = activeEncounterDice(game);
-  const callerHand = game.boss?.type === 'caller' && !game.boss.satisfied ? game.boss.calledHand : null;
-  return handOptions(dice, unavailableEncounterHands(game)).filter(option => !option.consumed)
-    .flatMap(option => option.combinations
-      .filter(dieIds => requiredDie === undefined || dieIds.includes(requiredDie))
-      .map(dieIds => ({ hand: option.id, dieIds,
-        score: handScore(dice, option.id, dieIds, game.handLevels[option.id]).score })))
-    .filter(choice => !requireHistory || game.handPlayCounts[choice.hand] > 0)
-    .filter(choice => game.boss?.type !== 'hexer' || choice.dieIds.includes(game.boss.cursedDieId))
-    .sort((a, b) => (callerHand ? Number(b.hand === callerHand) - Number(a.hand === callerHand) : 0)
-      || (b.score > a.score ? 1 : b.score < a.score ? -1 : 0))[0];
-}
-function automaticAction(game: GameState): Extract<Action, { type: 'PLAY' | 'MANUAL_REROLL' | 'UNLOCK_WARDEN_DIE' }> {
-  if (game.boss?.type === 'warden' && game.boss.pendingReinforcements > 0) {
-    const activeDieIds = game.boss.activeDieIds;
-    const die = game.dice.find(item => item.owner === 'player' && !activeDieIds.includes(item.id))!;
-    return { type: 'UNLOCK_WARDEN_DIE', dieId: die.id };
-  }
-  const choice = bestHand(game);
-  if (game.boss?.type === 'caller' && !game.boss.satisfied && choice?.hand !== game.boss.calledHand && game.manualRerollsRemaining > 0) {
-    return { type: 'MANUAL_REROLL', dieIds: [activeEncounterDice(game)[0].id] };
-  }
-  return choice ? { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }
-    : { type: 'MANUAL_REROLL', dieIds: [activeEncounterDice(game)[0].id] };
+function reward(flame: Flame = 'ultimate'): GameState {
+  const state = newRun(`global-flame-reward-${flame}`).state;
+  state.phase = 'flameSelection';
+  state.shop = null;
+  state.flameSelection = { offers: [{ id: 51, flame }], acquired: false };
+  state.flameTutorial.completed = true;
+  return state;
 }
 
-// Rarity consumes authoritative RNG, so this snapshot intentionally pins the
-// post-rarity seed instead of spending ~30 seconds rediscovering it per test.
-const flameSeed = () => 'flame-browser-86';
-
-async function ready(page: Page) {
-  await page.locator('main').waitFor();
-  await enterRun(page);
-  for (let barrier = 0; barrier < 2; barrier++) {
-    await expect(page.getByText(/^EVENT \d+ \/ \d+$/)).toHaveCount(0);
-    const bustContinue = page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true });
-    if (await bustContinue.count()) { await bustContinue.click(); continue; }
-    const map = page.getByTestId('run-map-transition');
-    if (await map.count()) {
-      await page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true }).evaluate(element => (element as HTMLElement).click());
-      await expect(map).toHaveCount(0);
-      continue;
-    }
-    break;
-  }
-}
-
-function flameRewardState(seed: string) {
-  let game = newRun(seed).state;
-  while (game.phase !== 'flameSelection') {
-    if (game.phase === 'round') {
-      game = dispatch(game, automaticAction(game)).state;
-    } else if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
-    else if (game.phase === 'shop') game = dispatch(game, game.shop?.stage === 'dice'
-      ? { type: 'SET_SHOP_STAGE', stage: 'training' }
-      : game.shop?.stage === 'training' ? { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }
-        : game.shop?.exitUnlocked === false ? { type: 'UNLOCK_SHOP_EXIT' }
-          : game.bust ? { type: 'RETRY_ROUND' }
-            : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
-    else if (game.phase === 'specialOffer') {
-      const offer = game.specialOffer!.offers.find(item => item.type !== 'timeTravel') ?? game.specialOffer!.offers[0];
-      game = dispatch(game, game.specialOffer!.acquired
-        ? { type: 'CONTINUE_SPECIAL_OFFER' }
-        : { type: 'CHOOSE_SPECIAL_OFFER', offerId: offer.id }).state;
-    }
-    else throw new Error(`Unexpected phase before Flame Selection: ${game.phase}`);
-  }
-  return game;
-}
-
-async function reachReward(page: Page, seed: string) {
-  const game = flameRewardState(seed);
-  await installRunState(page, game);
-  await ready(page);
-  return game;
-}
-
-test('Flame investment input supports typing and arrows, then normalizes to affordable capacity on mobile', async ({ page }) => {
-  const state = newRun('flame-stepper-mobile').state;
-  state.phase = 'shop';
-  state.shop = { visitId: 1, kind: 'between_rounds', stage: 'fireKeeping', exitUnlocked: true, offers: [], trainingOffers: [],
-    diceRerolls: 0, offerRerolls: 0, lifeRestores: 0, freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
-  state.gold = 2;
-  state.dice[0].flame = { id: 'vineyard', investedGold: 97 };
-  state.flameInstanceIds = { vineyard: 1 };
-  state.flameTutorial = { pendingDieId: null, completed: true };
+test('Flame reward fills the first empty global slot without asking for a carrier die', async ({ page }) => {
+  const state = reward();
+  placeFlameInstance(state, 'minigun', 20, 0);
+  placeFlameInstance(state, 'hailMary', 100, 2);
   await installRunState(page, state);
   await enterRun(page);
-  await page.setViewportSize({ width: 320, height: 700 });
-  await page.getByTestId('active-flame-vineyard').click();
-  const dialog = page.getByRole('dialog', { name: FLAMES.vineyard.name });
-  const stepper = dialog.getByRole('spinbutton', { name: `Stoke amount for ${FLAMES.vineyard.name}` });
-  const increase = dialog.getByRole('button', { name: 'Increase investment' });
-  const decrease = dialog.getByRole('button', { name: 'Decrease investment' });
-  await expect(stepper).toHaveAttribute('type', 'number');
-  await expect(stepper).toHaveAttribute('inputmode', 'numeric');
-  await expect(stepper).toHaveAttribute('min', '0');
-  await expect(stepper).toHaveAttribute('max', '2');
-  await expect(stepper).toHaveAttribute('step', '1');
-  await expect(stepper).toHaveValue('0');
 
-  await stepper.fill('1');
-  await expect(stepper).toHaveValue('1');
-  await stepper.fill('');
-  await expect(stepper).toHaveValue('');
-  await expect(dialog.getByRole('button', { name: 'STOKE 0 GOLD', exact: true })).toBeDisabled();
+  await expect(page.getByTestId('global-flame-slots')).toContainText('2 / 5');
+  await page.getByTestId('flame-offer-ultimate').getByRole('button', { name: 'SELECT FLAME' }).click();
+  await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
 
-  await expect(decrease).toBeDisabled();
-  await increase.click();
-  await expect(stepper).toHaveValue('1');
-  await increase.click();
-  await expect(stepper).toHaveValue('2');
-  await expect(increase).toBeDisabled();
-  await decrease.click();
-  await expect(stepper).toHaveValue('1');
-
-  await stepper.fill('99');
-  await stepper.blur();
-  await expect(stepper).toHaveValue('2');
-  await stepper.fill('1.5');
-  await expect(stepper).toHaveValue('2');
-  await stepper.fill('-1');
-  await expect(stepper).toHaveValue('2');
-
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await stepper.fill('999');
-  await dialog.getByRole('button', { name: 'STOKE 2 GOLD', exact: true }).click();
-  await expect(dialog).toContainText('99 / 100');
-  await expect(page.getByTestId('stat-gold').getByText('0', { exact: true })).toBeVisible();
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state as GameState, RUN_STORAGE_KEY);
+  expect(saved.flameSlots[1]).toMatchObject({ type: 'ultimate', investedGold: 0, stage: 'ember' });
+  expect(saved.flameSlots).toHaveLength(5);
 });
 
-test('Flame Selection has fixed offers, preserves faces, reveals XMult, and previews Minigun', async ({ page }) => {
-  test.setTimeout(120_000);
-  const seed = flameSeed();
-  let game = await reachReward(page, seed);
-  const generatedMinigun = game.flameSelection!.offers.find(item => item.flame === 'minigun');
-  if (!generatedMinigun) {
-    game.flameSelection!.offers[0].flame = 'minigun';
-    await installRunState(page, game);
-    await ready(page);
-  }
-  await expect(page.getByRole('main').getByText('FLAME SELECTION', { exact: true })).toBeVisible();
-  await expect(page.getByText('Active Embers', { exact: true })).toHaveCount(0);
-  await expect(page.locator('[data-testid^="flame-offer-"]')).toHaveCount(3);
+test('a full fire requires an explicit replacement confirmation and leaves a hole-free five-slot layout', async ({ page }) => {
+  const state = reward('ultimate');
+  (['minigun', 'hailMary', 'fullOfGrace', 'momentum', 'thirdRail'] as const)
+    .forEach((type, slot) => placeFlameInstance(state, type, 10 + slot, slot as 0 | 1 | 2 | 3 | 4));
+  await installRunState(page, state);
+  await enterRun(page);
+
+  await page.getByTestId('flame-offer-ultimate').getByRole('button', { name: 'SELECT TO REPLACE' }).click();
+  await page.getByTestId('flame-replacement-picker').getByRole('button', { name: /Full of Grace/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'REPLACE A FLAME?' });
+  await expect(dialog).toContainText('lose 12 invested Gold');
+  await dialog.getByRole('button', { name: 'REPLACE', exact: true }).click();
+  await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state as GameState, RUN_STORAGE_KEY);
+  expect(saved.flameSlots[2]).toMatchObject({ type: 'ultimate', investedGold: 0, stage: 'ember' });
+  expect(saved.flameSlots.filter(Boolean)).toHaveLength(5);
+});
+
+test('Fire Keeping renders exactly five global slots and stokes an instance in place into Bonfire', async ({ page }) => {
+  const state = newRun('global-fire-keeping').state;
+  state.gold = 10;
+  const flame = placeFlameInstance(state, 'doubleDown', 99, 3);
+  state.phase = 'shop';
+  state.shop = { stage: 'dice', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  await installRunState(page, state);
+  await enterRun(page);
+  await goToShopStage(page, 'fireKeeping');
+
+  await expect(page.locator('.fire-keeping-card')).toHaveCount(5);
+  const card = page.getByTestId(`fire-keeping-flame-${flame.instanceId}`);
+  await expect(card).toContainText('EMBER');
+  await card.getByRole('button', { name: 'MANAGE FLAME' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Double Down' });
+  await dialog.getByRole('button', { name: 'Increase investment' }).click();
+  await dialog.getByRole('button', { name: 'STOKE 1 GOLD' }).click();
+  await expect(card).toContainText('BONFIRE');
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state as GameState, RUN_STORAGE_KEY);
+  expect(saved.flameSlots[3]).toMatchObject({ instanceId: flame.instanceId, type: 'doubleDown', investedGold: 100, stage: 'bonfire' });
+  expect(saved.flameSlots[0]).toBeNull();
+});
+
+test('global Flame details remain available during a Round without appearing on a die', async ({ page }) => {
+  const state = newRun('global-flame-round-details').state;
+  placeFlameInstance(state, 'momentum', 25, 4);
+  await installRunState(page, state);
+  await enterRun(page);
+
+  await expect(page.locator('.die-flame-cap')).toHaveCount(0);
+  await page.getByRole('button', { name: /View Momentum ember details/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Momentum' });
+  await expect(dialog).toContainText('Investment: 25 / 100 Gold');
+  await expect(dialog).toContainText('Current Effect: +0.125 Charge per hand');
+  await expect(dialog.getByLabel('Stoke amount for Momentum')).toHaveCount(0);
+});
+
+test('global Flame state survives a responsive reload with exact instance identity and slot', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  expect(await page.locator('.flame-offers').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(3);
-  expect(await page.locator('.dice-dock .dice-row').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(5);
-  const mobileLayout = await page.evaluate(() => ({
-    offerHeights: [...document.querySelectorAll<HTMLElement>('.flame-offer')].map(card => card.getBoundingClientRect().height),
-    offerNameHeights: [...document.querySelectorAll<HTMLElement>('.flame-offer-name')].map(name => name.getBoundingClientRect().height),
-    dieCardTops: [...document.querySelectorAll<HTMLElement>('.dice-dock .die-slot')].map(card => Math.round(card.getBoundingClientRect().top)),
-    dieHeights: [...document.querySelectorAll<HTMLElement>('.dice-dock .die')].map(die => die.getBoundingClientRect().height),
-  }));
-  expect(Math.max(...mobileLayout.offerHeights) - Math.min(...mobileLayout.offerHeights)).toBeLessThan(2);
-  expect(Math.max(...mobileLayout.offerNameHeights)).toBeLessThan(40);
-  expect(new Set(mobileLayout.dieCardTops).size).toBe(1);
-  expect(Math.max(...mobileLayout.dieHeights)).toBeLessThanOrEqual(62);
-  await expect(page.locator('.flame-offer .flame-offer-info').first()).toBeVisible();
-  await expect(page.getByTestId('flame-die-4')).toBeVisible();
-  await expect(page.locator('.dice-dock .die-number')).toHaveCount(5);
-  await page.screenshot({ path: test.info().outputPath('flame-selection-mobile.png'), fullPage: true });
-  await setDiceDisplay(page, 'PIPS');
-  await expect(page.locator('.dice-dock .pip-face')).toHaveCount(5);
-  const rewardFaces = game.dice.map(die => die.value);
+  const state = newRun('global-flame-reload').state;
+  const flame = placeFlameInstance(state, 'fetch', 44, 2);
+  state.fetchTarget = { dieId: state.dice[1].id, physicalFace: 4 };
+  await installRunState(page, state);
+  await enterRun(page);
+  await page.reload();
+  await enterRun(page);
 
-  await expect(page.getByRole('button', { name: /Reroll.*Gold/ })).toHaveCount(0);
-  expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
-  await expect(page.getByTestId('stat-gold').getByText(String(game.gold), { exact: true })).toBeVisible();
-
-  const offer = game.flameSelection!.offers.find(item => item.flame === 'minigun')!;
-  const card = page.getByTestId('flame-offer-minigun');
-  await expect(card).not.toContainText(FLAMES.minigun.description);
-  await card.getByRole('button', { name: new RegExp(`About ${FLAMES.minigun.name}`) }).click();
-  await expect(page.getByRole('dialog', { name: FLAMES.minigun.name })).toContainText(FLAMES.minigun.description);
-  await page.keyboard.press('Escape');
-  await card.getByRole('button', { name: 'Select Flame', exact: true }).click();
-  await page.getByRole('button', { name: /^Die 1,/ }).click();
-  game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId: 0 }).state;
-  await ready(page);
-
-  expect(game.phase).toBe('shop');
-  await expect(page.getByTestId('active-flame-minigun')).toHaveAccessibleName('View Minigun Flame details, Ember at 0 of 100 Gold');
-  await expect(page.getByRole('button', { name: /CONTINUE TO SHOP/i })).toHaveCount(0);
-  await goToShopStage(page, 'fireKeeping');
-  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
-  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
-  await page.screenshot({ path: test.info().outputPath('flame-selection-claimed-shop-mobile.png'), fullPage: true });
-  expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
-  await expect(page.getByRole('button', { name: new RegExp(`^Die 1, face ${rewardFaces[0]},.*Ember ${FLAMES.minigun.name}`) })).toBeVisible();
-  await expect(page.locator('.driver-popover')).toContainText('NEW EMBER');
-  await expect(page.locator('.driver-popover').getByRole('button', { name: 'GOT IT', exact: true })).toBeVisible();
-  const flameBadge = page.getByTestId('active-flame-minigun');
-  await expect(flameBadge).toHaveClass(/driver-active-element/);
-  await expect(page.getByTestId('flame-die-0')).not.toHaveClass(/driver-active-element/);
-  await expect(page.locator('.driver-popover')).toContainText('Stoke Flames in the Shop. At 100 Gold, they become Bonfires.');
-  await expect(page.locator('.flame-tutorial-anchor')).toHaveCount(0);
-  await expect(page.getByTestId('active-flame-minigun')).toBeVisible();
-  await expect(page.locator('[data-testid^="flame-offer-"]')).toHaveCount(0);
-
-  const goldBeforeStoke = game.gold;
-  await flameBadge.click();
-  game = dispatch(game, { type: 'DISMISS_FLAME_TUTORIAL' }).state;
-  await ready(page);
-  await expect(page.locator('.driver-popover')).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  await goToShopStage(page, 'fireKeeping');
-  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
-  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
-  await flameBadge.click();
-  const shopStoke = page.getByRole('dialog', { name: FLAMES.minigun.name });
-  const amountControl = shopStoke.getByRole('spinbutton', { name: `Stoke amount for ${FLAMES.minigun.name}` });
-  await expect(amountControl).toHaveAttribute('type', 'number');
-  for (let step = 0; step < 2; step++) await shopStoke.getByRole('button', { name: 'Increase investment' }).click();
-  await expect(amountControl).toHaveValue('2');
-  await expect(shopStoke.getByText(/AFTER STOKE · 2\/100/)).toBeVisible();
-  await shopStoke.getByRole('button', { name: 'STOKE 2 GOLD', exact: true }).click();
-  game = dispatch(game, { type: 'STOKE_FLAME', dieId: 0, amount: 2 }).state;
-  await ready(page);
-  expect(game.gold).toBe(goldBeforeStoke - 2);
-  expect(game.dice[0].flame?.investedGold).toBe(2);
-  expect(game.stats.flameStokes.at(-1)?.source).toBe('shop');
-  await expect(shopStoke).toContainText('2 / 100');
-  await expect(shopStoke).toContainText('BONFIRE AT 100');
-  await page.keyboard.press('Escape');
-  await page.keyboard.press('Escape');
-
-  await page.getByRole('button', { name: 'NEXT CHAPTER', exact: true }).click();
-  if (game.shop?.exitUnlocked === false) game = dispatch(game, { type: 'UNLOCK_SHOP_EXIT' }).state;
-  game = dispatch(game, { type: 'NEXT_CHAPTER' }).state;
-  await ready(page);
-  const choice = bestHand(game, 0, true)!;
-  await page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) }).click();
-  for (const die of game.dice) {
-    const target = page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},`) });
-    const selected = await target.getAttribute('aria-pressed') === 'true';
-    if (selected !== choice.dieIds.includes(die.id)) await target.click();
-  }
-  const expectedFlameFactor = Number(standardFlameMultiplier(2).toFixed(4));
-  await expect(page.getByTestId(`well-trained-preview-${choice.hand}`)).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toContainText(`× ${expectedFlameFactor} =`);
-  await page.setViewportSize({ width: 500, height: 520 });
-  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-  const panel = page.getByTestId('live-score-panel');
-  await expect(panel).toBeInViewport();
-  await page.clock.install({ time: new Date('2026-09-24T12:00:00Z') });
-  await setPlaybackSpeed(page, 'NORMAL');
-  await page.getByRole('button', { name: /^(PLAY|LAST PLAY[?.])$/ }).click();
-  const result = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds });
-  const xMultIndex = result.events.findIndex(event => event.type === 'HAND_XMULT_CHANGED' && event.flame === 'minigun');
-  expect(xMultIndex).toBeGreaterThan(0);
-  await page.clock.runFor(CONFIG.tickMs.normal * xMultIndex);
-  await expect(page.getByTestId('hand-xmult')).toHaveText(String(result.events[xMultIndex].handScore!.currentXMult));
-  await expect(panel).toBeInViewport();
-  expect(await page.evaluate(() => window.scrollY)).toBe(0);
-  expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight
-    && document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-});
-
-test('Flame Selection only acquires while Shop Manage Die supports arbitrary Stoke and optional acquisition', async ({ page }) => {
-  test.setTimeout(180_000);
-  const seed = flameSeed();
-  let game = await reachReward(page, seed);
-  const rewardFaces = game.dice.map(die => die.value);
-  const offer = game.flameSelection!.offers[0];
-  await page.getByTestId(`flame-offer-${offer.flame}`).getByRole('button', { name: 'Select Flame' }).click();
-  await page.getByRole('button', { name: /^Die 1,/ }).click();
-  game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId: 0 }).state;
-  await ready(page);
-  const active = page.getByTestId(`active-flame-${offer.flame}`);
-  await expect(active).toHaveAccessibleName(`View ${FLAMES[offer.flame].name} Flame details, Ember at 0 of 100 Gold`);
-  expect(game.phase).toBe('shop');
-  expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
-  await goToShopStage(page, 'fireKeeping');
-  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
-  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
-  await expect(page.locator('.driver-popover')).toContainText('NEW EMBER');
-  await page.locator('.driver-popover').getByRole('button', { name: 'GOT IT', exact: true }).click();
-  game = dispatch(game, { type: 'DISMISS_FLAME_TUTORIAL' }).state;
-  await ready(page);
-  await expect(page.locator('.driver-popover')).toHaveCount(0);
-  await active.click();
-  const stoke = page.getByRole('dialog', { name: FLAMES[offer.flame].name });
-  await expect(stoke).toContainText('BONFIRE AT 100');
-  await expect(stoke).not.toContainText('Full strength');
-  await expect(stoke).not.toContainText('At Bonfire');
-  const amountControl = stoke.getByRole('spinbutton', { name: `Stoke amount for ${FLAMES[offer.flame].name}` });
-  await expect(amountControl).toHaveAttribute('type', 'number');
-  for (let step = 0; step < 7; step++) await stoke.getByRole('button', { name: 'Increase investment' }).click();
-  await expect(amountControl).toHaveValue('7');
-  await stoke.getByRole('button', { name: 'Decrease investment' }).click();
-  await expect(amountControl).toHaveValue('6');
-  await stoke.getByRole('button', { name: 'Increase investment' }).click();
-  await page.setViewportSize({ width: 320, height: 700 });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await stoke.getByRole('button', { name: 'STOKE 7 GOLD', exact: true }).click();
-  game = dispatch(game, { type: 'STOKE_FLAME', dieId: 0, amount: 7 }).state;
-  await ready(page);
-  await expect(stoke).toContainText('7 / 100');
-  await page.keyboard.press('Escape');
-  await page.keyboard.press('Escape');
-
-  // A separate deterministic run can use the same primary action without taking an offer.
-  await page.evaluate(key => localStorage.removeItem(key), RUN_STORAGE_KEY);
-  game = await reachReward(page, seed);
-  await page.getByRole('button', { name: 'SKIP REWARD', exact: true }).click();
-  const confirmation = page.getByRole('dialog', { name: 'Skip this reward?' });
-  await expect(confirmation).toContainText("You haven't claimed a reward. Are you sure you want to continue without one?");
-  await confirmation.getByRole('button', { name: 'SKIP REWARD', exact: true }).click();
-  game = dispatch(game, { type: 'SKIP_FLAME_SELECTION' }).state;
-  await ready(page);
-  expect(game.phase).toBe('shop');
-  expect(game.historyV2).toContainEqual(expect.objectContaining({ kind: 'flame_changed', change: { type: 'skipped' } }));
-});
-
-test('arming and canceling Charge preserves the selected hand and dice', async ({ page }) => {
-  const seed = 'charge-selection-preservation';
-  const game = newRun(seed).state;
-  game.dice[0].flame = { id: 'momentum', investedGold: 50 };
-  game.chargeXMult = 3;
-  game.dice.forEach(die => { die.value = 1; });
-  const choice = bestHand(game)!;
-
-  await page.setViewportSize({ width: 320, height: 568 });
-  await page.goto('/');
-  await page.evaluate(({ key, version, state }) => localStorage.setItem(key, JSON.stringify({ version, state }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)), {
-    key: RUN_STORAGE_KEY,
-    version: RUN_STORAGE_VERSION,
-    state: game,
-  });
-  await page.goto(`/?seed=${seed}&speed=instant`);
-  await ready(page);
-  await expect(page.getByTestId('charge-status')).toHaveText('⚡ MAX CHARGE ×3');
-  await expect(page.getByTestId('charge-guidance')).toHaveText('SELECT CHARGE DIE TO USE');
-  await expect(page.getByTestId('dice-dock').getByTestId('charge-dock-controls')).toBeVisible();
-  await expect(page.getByTestId('run-action-row').getByTestId('charge-dock-controls')).toHaveCount(0);
-  const dockGeometry = await page.evaluate(() => {
-    const charge = document.querySelector<HTMLElement>('[data-testid="charge-dock-controls"]')!.getBoundingClientRect();
-    const dice = document.querySelector<HTMLElement>('.dice-dock .dice-row')!.getBoundingClientRect();
-    const dock = document.querySelector<HTMLElement>('[data-testid="dice-dock"]')!.getBoundingClientRect();
-    const actions = document.querySelector<HTMLElement>('[data-testid="run-action-row"]')!.getBoundingClientRect();
-    const play = document.querySelector<HTMLElement>('[data-testid="play-action"]')!.getBoundingClientRect();
-    return { chargeBottom: charge.bottom, diceTop: dice.top, dockBottom: dock.bottom,
-      actionTop: actions.top, actionBottom: actions.bottom, playTop: play.top, playBottom: play.bottom };
-  });
-  expect(dockGeometry.chargeBottom).toBeLessThanOrEqual(dockGeometry.diceTop + 1);
-  expect(dockGeometry.dockBottom).toBeLessThanOrEqual(dockGeometry.actionTop + 1);
-  expect(dockGeometry.playTop).toBeGreaterThanOrEqual(dockGeometry.actionTop);
-  expect(dockGeometry.playBottom).toBeLessThanOrEqual(dockGeometry.actionBottom);
-  await expect(page.getByTestId('play-action')).toBeInViewport();
-
-  const handRow = page.getByTestId(`scorecard-row-${choice.hand}`);
-  await handRow.click();
-  for (const die of game.dice) {
-    const dieButton = page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},`) });
-    const selected = await dieButton.getAttribute('aria-pressed') === 'true';
-    if (selected !== choice.dieIds.includes(die.id)) await dieButton.click();
-  }
-  await expect(handRow).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByTestId('charge-guidance')).toHaveCount(0);
-
-  const chargeButton = page.getByRole('button', { name: 'ARM CHARGE', exact: true });
-  await chargeButton.click();
-  await ready(page);
-  await expect(page.getByTestId('charge-status')).toHaveText('⚡ ×3 ARMED');
-  await expect(handRow).toHaveAttribute('aria-pressed', 'true');
-  for (const dieId of choice.dieIds) {
-    await expect(page.getByRole('button', { name: new RegExp(`^Die ${dieId + 1},`) })).toHaveAttribute('aria-pressed', 'true');
-  }
-
-  await page.getByRole('button', { name: 'DISARM', exact: true }).click();
-  await ready(page);
-  await expect(handRow).toHaveAttribute('aria-pressed', 'true');
-  for (const dieId of choice.dieIds) {
-    await expect(page.getByRole('button', { name: new RegExp(`^Die ${dieId + 1},`) })).toHaveAttribute('aria-pressed', 'true');
-  }
-
-  await chargeButton.click();
-  await ready(page);
-  await page.getByRole('button', { name: /^Die 1,/ }).click();
-  await ready(page);
-  await expect(page.getByRole('button', { name: 'ARM CHARGE', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Die 1,/ })).toHaveAttribute('aria-pressed', 'false');
-});
-
-test('Speed Demon meter pauses in modals, stays out of preview, and reveals the frozen Play factor', async ({ page }) => {
-  const seed = 'speed-demon-browser';
-  const game = newRun(seed).state;
-  game.dice.forEach(die => { die.value = 1; });
-  game.dice[0].flame = { id: 'speedDemon', investedGold: 100 };
-  game.target = 1_000_000n;
-  game.stats.rounds[0].target = game.target;
-
-  await page.goto('/');
-  await page.evaluate(({ key, version, state }) => localStorage.setItem(key, JSON.stringify({ version, state }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)), {
-    key: RUN_STORAGE_KEY,
-    version: RUN_STORAGE_VERSION,
-    state: game,
-  });
-  await page.clock.install({ time: new Date('2026-09-29T12:00:00Z') });
-  await page.clock.pauseAt(new Date('2026-09-29T12:00:01Z'));
-  await page.goto(`/?seed=${seed}&speed=normal`);
-  await ready(page);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByTestId('scorecard-row-ones').click();
-  const play = page.getByTestId('play-action');
-  const previewText = await play.textContent();
-  await expect(page.getByTestId('speed-demon-meter')).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-
-  await page.clock.runFor(1500);
-  await openMenuItem(page, 'How to Play');
-  await expect(page.getByRole('dialog', { name: 'How to Play' })).toBeVisible();
-  const beforePause = await page.locator('.speed-demon-meter-fill').getAttribute('style');
-  await page.clock.runFor(4000);
-  expect(await page.locator('.speed-demon-meter-fill').getAttribute('style')).toBe(beforePause);
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: 'How to Play' })).toHaveCount(0);
-  await page.clock.runFor(4000);
-  await expect(play).toHaveText(previewText!);
-
-  await play.evaluate(element => (element as HTMLElement).click());
-  const storedAction = await page.evaluate(key => {
-    const saved = JSON.parse(localStorage.getItem(key)!).state as GameState;
-    return saved.actionJournal.at(-1)!;
-  }, RUN_STORAGE_KEY);
-  if (storedAction.type !== 'PLAY' || storedAction.decisionMs === undefined) throw new Error('Missing frozen Speed Demon decision time');
-  expect(storedAction.decisionMs).toBeGreaterThanOrEqual(5400);
-  expect(storedAction.decisionMs).toBeLessThan(6000);
-  const result = dispatch(game, storedAction);
-  const revealIndex = result.events.findIndex(event => event.type === 'SPEED_DEMON_REVEALED');
-  expect(revealIndex).toBeGreaterThan(0);
-  let revealed = false;
-  for (let index = 0; index <= result.events.length; index++) {
-    if (await page.getByTestId('speed-demon-reveal').count()) { revealed = true; break; }
-    await page.clock.runFor(CONFIG.tickMs.normal);
-  }
-  expect(revealed).toBe(true);
-  await expect(page.getByTestId('speed-demon-reveal')).toHaveText(/SPEED DEMON ×/);
-  await page.clock.runFor(CONFIG.tickMs.normal);
-  await expect(play).not.toHaveText(previewText!);
+  await page.getByRole('button', { name: /View Fetch ember details/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Fetch' })).toContainText('Investment: 44 / 100 Gold');
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state as GameState, RUN_STORAGE_KEY);
+  expect(flameByType(saved, 'fetch')).toMatchObject({ instanceId: flame.instanceId });
+  expect(saved.fetchTarget).toEqual(state.fetchTarget);
+  expect(saved.flameSlots[2]?.instanceId).toBe(flame.instanceId);
 });

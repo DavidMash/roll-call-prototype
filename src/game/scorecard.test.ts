@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { activeFace } from './dice';
 import { dispatch, newRun } from './engine';
 import { handStats, HAND_IDS, LOWER_HAND_IDS, relativeHandStrengthTiers, startingBasePips, UPPER_HAND_IDS } from './hands';
 import { handScore } from './scoring';
 import type { GameState, HandId, Rank } from './types';
+import { resetDieRoundState } from './specialDice';
+import { rosterDice, syncActiveDiceProjection } from './inventory';
 
 const constant = (value = 0.99) => ({ next: () => value });
 function sequence(...values: number[]) {
@@ -83,14 +84,12 @@ describe('authoritative current-round scorecard totals', () => {
 
   it('keeps categories separate and resets the round-local breakdown next round', () => {
     let game = board([4, 4, 2, 5, 6]);
-    activeFace(game.dice[0]).enhancements.sticky = 1;
-    activeFace(game.dice[1]).enhancements.sticky = 1;
     game = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant()).state;
     game.dice.forEach((die, index) => { die.value = [1, 2, 3, 4, 6][index] as Rank; });
     game = dispatch(game, { type: 'PLAY', hand: 'smallStraight', dieIds: [0, 1, 2, 3] }, constant()).state;
     expect(game.scoreByHand).toEqual({ pair: 24n, smallStraight: 50n });
     game.phase = 'shop';
-    game.shop = { stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    game.shop = { stage: 'fireKeeping', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     const next = dispatch(game, { type: 'NEXT_ROUND' }, constant()).state;
     expect(next.scoreByHand).toEqual({});
     expect(next.effectScore).toBe(BigInt(0n));
@@ -98,9 +97,11 @@ describe('authoritative current-round scorecard totals', () => {
 
   it('attributes Jumping Bean free-play score to its Upper category, not Effect Score', () => {
     const game = board([1, 2, 3, 4, 5]);
-    game.dice[0].faces[5].enhancements.jumpingBean = 1;
-    game.dice[0].faces[5].enhancements.sticky = 1;
-    const result = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] }, sequence(0.99, 0));
+    rosterDice(game)[0].type = 'jumpingBean';
+    syncActiveDiceProjection(game);
+    game.dieRoundState = resetDieRoundState(rosterDice(game));
+    game.dice[0].value = 6;
+    const result = dispatch(game, { type: 'INVOKE_JUMPING_BEAN', dieId: 0 }, sequence(0.99, 0));
     expect(result.state.scoreByHand).toEqual({ sixes: 13n });
     expect(result.state.effectScore).toBe(BigInt(0n));
     expect(result.state.score).toBe(BigInt(13n));

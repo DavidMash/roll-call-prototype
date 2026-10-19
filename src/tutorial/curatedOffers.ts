@@ -15,14 +15,6 @@ function replaceDie(state: GameState, dieType: SpecialDieType, slot = 0): void {
   else state.shop.offers.push(offer);
 }
 
-function replaceTraining(state: GameState, hand: HandId): void {
-  if (!state.shop || state.shop.trainingOffers.some(offer => offer.kind === 'hand' && offer.hand === hand)) return;
-  const target = state.shop.trainingOffers[0];
-  const offer = { kind: 'hand' as const, hand, purchases: 0 };
-  if (target) state.shop.trainingOffers[0] = offer;
-  else state.shop.trainingOffers.push(offer);
-}
-
 function specialOffers(state: GameState, specs: readonly (SpecialOfferType | { type: 'focus'; hand: HandId })[]): SpecialOffer[] {
   return specs.map(spec => typeof spec === 'string'
     ? { id: nextId(state), type: spec }
@@ -37,7 +29,6 @@ export function curateTutorialOffers(state: GameState, scenario: TutorialScenari
   if (state.phase === 'shop' && state.shop) {
     // The Shop after a completed round retains that round number.
     if (state.round === 1) {
-      replaceTraining(state, 'fullHouse');
       if (state.shop.offerRerolls === 0) {
         const ids = state.shop.offers.map(offer => offer.id);
         state.shop.offers = (['bonus', 'magnetic', 'jackpot'] as const)
@@ -47,16 +38,13 @@ export function curateTutorialOffers(state: GameState, scenario: TutorialScenari
     }
     if (state.round === 3) replaceDie(state, 'workout', 0);
 
-    const shopAfterFirst = state.round >= 2 && state.round <= 11;
-    const eligibleIndex = state.round - 2;
-    if (shopAfterFirst && eligibleIndex % 2 === 0 && !scenario.vintagePurchased && state.shop.offerRerolls === 0) {
+    if (state.round >= 2 && state.round <= 11 && (state.round - 2) % 2 === 0 && state.shop.offerRerolls === 0)
       replaceDie(state, 'vintage', state.round === 3 ? 1 : 0);
-    }
   }
 
   if (state.phase === 'specialOffer' && state.specialOffer && !state.specialOffer.acquired) {
     if (state.round === 3) state.specialOffer.offers = specialOffers(state, ['carePackage', { type: 'focus', hand: 'fullHouse' }, 'onTheHouse']);
-    if (state.round === 9) state.specialOffer.offers = specialOffers(state, ['orangeTheory', 'cashBonus', 'fireKeeper']);
+    if (state.round === 9) state.specialOffer.offers = specialOffers(state, ['teamTraining', 'bottledFairy', 'fireKeeper']);
   }
 
   if (state.phase === 'flameSelection' && state.flameSelection && !state.flameSelection.acquired) {

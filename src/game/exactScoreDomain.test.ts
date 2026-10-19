@@ -16,11 +16,11 @@ const HUGE_GOAL = 59_604_644_775_390_625n;
 
 function historyHand(seq: number, hand: 'ones' | 'twos', awarded: bigint, before: bigint): HandScoredEvent {
   return { seq, kind: 'hand_scored', round: 1, attempt: 1, actionId: seq, timelineId: 0,
-    hand, level: 1, playSource: 'manual', selectedDice: [0], scoringDice: [], consumed: true,
+    hand, level: 1, playSource: 'manual', selectedDice: [0], scoringDice: [], scoreOccurrences: [], consumed: true,
     score: { infernoMultiplier: 1n, basePips: 1, finalPips: 1, baseMult: 1, finalMult: 1,
       finalXMult: 1, bossFactor: 1, raw: awarded.toString(), awarded, rounding: { mode: 'nearest_integer', delta: '0' } },
     roundScore: { before, afterAward: before + awarded, after: before + awarded },
-    pipsContributions: [], multContributions: [], xMultContributions: [], checks: [], sideEffects: [] };
+    pipsContributions: [], multContributions: [], xMultContributions: [], sideEffects: [] };
 }
 
 function scoringBoundary(scoreBefore: bigint): GameState {

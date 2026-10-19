@@ -11,11 +11,10 @@ export const DICE_RARITIES: Record<DiceRarity, { label: string; className: strin
   legendary: { label: 'Legendary', className: 'rarity-legendary' },
 };
 
-export type OfferRaritySystem = 'enhancement' | 'flame' | 'specialOffer';
+export type OfferRaritySystem = 'flame' | 'specialOffer';
 export type RarityWeights = Readonly<Record<Rarity, number>>;
 
 export const OFFER_RARITY_WEIGHTS: Readonly<Record<OfferRaritySystem, RarityWeights>> = {
-  enhancement: { common: 50, uncommon: 35, rare: 15 },
   flame: { common: 50, uncommon: 35, rare: 15 },
   specialOffer: { common: 50, uncommon: 35, rare: 15 },
 };

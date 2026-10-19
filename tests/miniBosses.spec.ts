@@ -5,6 +5,7 @@ import { HAND_IDS } from '../src/game/hands';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import type { GameState, MiniBossType, RandomSource } from '../src/game/types';
 import { enterRun } from './uiHelpers';
+import { placeFlameInstance } from '../src/game/flames';
 
 const constant = (value = .2): RandomSource => ({ next: () => value });
 
@@ -13,7 +14,7 @@ function shopBeforeMini(type: MiniBossType): GameState {
   state.phase = 'shop';
   state.round = 2;
   state.currentNodeId = 'shop:before-round:3';
-  state.shop = { stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { stage: 'fireKeeping', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   state.bossSchedule[3] = type;
   return state;
 }
@@ -107,7 +108,7 @@ test('Magician presents all calls while the missing die is absent', async ({ pag
   state.consumed.push(completed);
   for (const hand of HAND_IDS) state.handLevels[hand] = 1;
   state.handLevels[completed] = 5;
-  state.bonfires = ['ultimate'];
+  placeFlameInstance(state, 'ultimate', 100);
   await install(page, state);
   const completedRow = page.getByTestId(`scorecard-row-${completed}`);
   await expect(completedRow).toHaveAttribute('data-strength-tier', 'strongest');

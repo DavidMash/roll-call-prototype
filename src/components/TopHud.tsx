@@ -73,10 +73,10 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
     {board.phase === 'round' && <Progress data-testid="round-goal-progress"
       value={board.target > 0n ? Math.min(100, exactRatioNumber(board.score, board.target) * 100) : 0} size={4} radius={0}
       aria-label="Round Goal progress" aria-valuetext={`${formatExactScore(board.score)} of ${formatExactScore(board.target)} points toward the Goal`} />}
-    {board.bonfires.length > 0 && <Group gap={4} px="xs" py={3} className="bonfire-strip" data-tutorial="bonfires" aria-label="Active Bonfires">
-      <Text size="xs" fw={700} c="orange">BONFIRES</Text>{board.bonfires.map(id => <Badge component="button" type="button" key={id}
-        size="xs" color="red" variant="light" className="flame-detail-trigger" aria-label={`View ${FLAMES[id].name} Flame details`}
-        onClick={() => openFlameDetails({ flame: id, kind: 'bonfire' })}>🔥 {FLAMES[id].shortName}</Badge>)}
+    {board.flameSlots.some(Boolean) && <Group gap={4} px="xs" py={3} className="bonfire-strip" data-tutorial="flames" aria-label="Active Flames">
+      <Text size="xs" fw={700} c="orange">FLAMES</Text>{board.flameSlots.flatMap(flame => flame ? [<Badge component="button" type="button" key={flame.instanceId}
+        data-testid={`active-flame-${flame.instanceId}`} size="xs" color={flame.stage === 'bonfire' ? 'red' : 'orange'} variant="light" className="flame-detail-trigger" aria-label={`View ${FLAMES[flame.type].name} ${flame.stage} details`}
+        onClick={() => openFlameDetails({ flameInstanceId: flame.instanceId, kind: flame.stage })}>🔥 {FLAMES[flame.type].shortName}</Badge>] : [])}
     </Group>}
     {board.engulfmentLevel > 0 && <Group gap="xs" px="xs" py={3}
       className="inferno-strip" aria-label="Inferno status">

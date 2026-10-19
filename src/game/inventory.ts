@@ -48,9 +48,25 @@ export function encounterDice(state: Pick<GameState, 'diceInventory' | 'encounte
   return [...rosterDice(state), ...state.encounterDice];
 }
 
-/** Rebuilds the legacy Board projection from authoritative collection state. */
+/**
+ * Rebuilds the active encounter reference projection from authoritative collection state.
+ * Player entries intentionally alias inventory instances so Round mutations update the one
+ * die object; the projection array itself never owns collection membership or Roster order.
+ */
 export function syncActiveDiceProjection(state: DiceCollectionState): void {
   state.dice = encounterDice(state);
+}
+
+/** Player-facing position for an equipped die. Stable collectible IDs are never display positions. */
+export function rosterDieLabel(state: Pick<GameState, 'diceInventory'>, id: DieId): string {
+  const slot = rosterSlotOf(state, id);
+  return slot === null ? `Die #${id}` : `D${slot + 1}`;
+}
+
+/** Player-facing position for an active Board projection, including playback snapshots. */
+export function activeDieLabel(state: Pick<GameState, 'dice'>, id: DieId): string {
+  const slot = state.dice.filter(die => die.owner === 'player').findIndex(die => die.id === id);
+  return slot < 0 ? `Die #${id}` : `D${slot + 1}`;
 }
 
 export function orderDieIdsByEncounter<T extends DieId>(state: Pick<GameState, 'diceInventory' | 'encounterDice'>,

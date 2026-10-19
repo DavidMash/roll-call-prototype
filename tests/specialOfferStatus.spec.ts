@@ -22,9 +22,6 @@ test('active Special Offers render compact responsive status badges with canonic
     carePackageRerolls: 2,
     silence: true,
     taxEvasionRounds: 1,
-    cashBonusRounds: 3,
-    powerballRounds: 2,
-    powerballAvailable: true,
     bottledFairyRounds: 2,
     bottledFairyTriggeredThisRound: true,
     badDreamRounds: 3,
@@ -42,8 +39,6 @@ test('active Special Offers render compact responsive status badges with canonic
     ['carePackage', 'Care Package · 2 Rerolls Left'],
     ['silence', 'Silence · Next Boss'],
     ['taxEvasion', 'Tax Evasion · 1 Round'],
-    ['cashBonus', 'Cash Bonus · 3 Rounds'],
-    ['powerball', 'Powerball · Ready · 2 Rounds'],
     ['bottledFairy', 'Bottled Fairy · 2 Rounds'],
     ['badDream', 'Bad Dream · 3 Rounds'],
   ] as const) {

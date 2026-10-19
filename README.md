@@ -1,194 +1,107 @@
 # Roll Call prototype
 
-Roll Call is a deterministic React/TypeScript/Vite dice roguelike. The domain engine resolves actions synchronously and emits immutable events and board snapshots; React only plays those snapshots. Playback speed cannot change outcomes.
+Roll Call is a deterministic React/TypeScript/Vite dice roguelike. The domain engine resolves typed actions synchronously, records structured history, and emits immutable board snapshots for React playback. Playback speed and UI state cannot change an outcome.
 
-The browser keeps one active run in local storage. Refreshing the page or returning without a `seed` query resumes the latest settled game state; when no saved run exists, the game generates a random seed. An interrupted event playback or map transition is skipped. A matching `?seed=` resumes that save, while a different explicit seed starts a fresh run and replaces it. Starting, restarting, or generating a run also replaces the saved run. Playback speed, selections, dialogs, and other transient UI state are not saved.
+## Current game model
 
-## Rounds, lives, and Busts
+A run owns collectible D6s with stable IDs. `diceInventory.instances` is the die-object authority, while five fixed Roster slots and expandable Storage slots are the location authority. New runs start with five Normal D6s equipped and three empty Storage slots; completing a Chapter adds one Storage slot. A die ID is never a Roster position.
 
-Choose a legal Yahtzee-style hand, select its physical dice, and play it. A played category is consumed for the round. Each attempt grants three manual die rerolls, charged once per selected die. A manual gameplay reroll always changes that die's printed face: the engine removes the current face from the normal seeded weighted distribution and samples once. Automatic, effect-driven, Boss-entry, and Shop rolls may still repeat naturally; Bump keeps its deterministic precedence.
+`Board.dice` is the active encounter reference projection. Its player entries alias the equipped inventory instances in Roster order, followed by any tagged temporary encounter dice. The array is rebuilt from inventory/encounter authority and must never be used to infer ownership or Storage membership. This compact projection is retained for resolution, playback, and Round UI.
 
-A run starts with `3 / 3` lives. When score is below target, no legal unconsumed hand remains, and no manual rerolls remain, the attempt Busts. The engine restores the checkpoint captured when the player committed to the attempt, subtracts one life, increments the attempt number, and pauses on a Bust screen until the player continues to the restored Shop. The failed round does not restart automatically: the player may continue preparing, then explicitly choose `RETRY ROUND N`. Each attempt uses a deterministic seed derived from the run seed, round, and attempt, so retries are reproducible but do not repeat the same roll stream. A Bust that reduces lives to zero ends the run without reopening the Shop.
+Collectible dice have one whole-die type and a level. Normal D6s remain level 1. Special dice can be bought, sold, moved between Roster and Storage, and fused with an identical type; the destination ID survives and levels add. The Shop uses rarity-first seeded offer generation. Storage dice do not Roll, Score, activate, or participate in encounter logic.
 
-The checkpoint prevents failed-attempt farming. Score, consumed hands, dice, normal Round rerolls, gameplay Gold, Charge, Hot Streak, Workout, Personal Trainer levels, hand history, Vintage growth, and other attempt changes roll back. Spent Care Package rerolls are run-level consumables and are not refunded. The Shop's offers, purchased cards, reroll progression, exposed faces, Gold, enhancements, Flames, and training return exactly as committed; it does not refresh or grant another reward. Shop changes made after a Bust become the checkpoint for the next retry, so earlier purchases stay committed and new purchases, sales, Stoke, and life restoration persist into that attempt.
+## Play, Score, and Roll
 
-Scoring remains:
+The resolver keeps these concepts separate:
+
+- Qualification is a pure legality plan. Invocation claims are spent only when a Play commits.
+- A Play commits selected dice to one hand. A normal Play consumes the hand unless preserved and schedules post-Play rerolls.
+- A Free Play scores without normal hand consumption or automatic post-Play rerolls.
+- A Score occurrence represents one die genuinely scoring. Hitchhiker adds a scorer; Lone Wolf and Double Time add occurrences. Double Time occurrences suppress only further Double Time recursion.
+- A Roll intent records the die, batch, reason, and whether it is an initial Roll or Reroll.
+- Roll arbitration selects one controller without extra RNG. The face is installed before post-Roll reactions enqueue generated actions.
+
+Scoring is authoritative domain arithmetic:
 
 ```text
-round(Pips × Mult × XMult)
+round(Inferno × Pips × Mult × XMult × Boss factor)
 ```
 
-Every XMult contribution is a multiplicative factor composed centrally. Ordinary Mult still comes from trained hand Base Mult.
+Hand Base Pips and Base Mult come from the trained hand level. Whole-die effects contribute through the typed Score, Qualification, Roll-controller, and post-Roll boundaries.
 
-## Run map and Boss cadence
+## Rounds, Busts, and persistence
 
-Progression follows one linear route. Each six-Round Chapter has a Mini-Boss and Special Offer at Round 3, then a Big Boss and Flame Selection at Round 6. The existing Shop after that reward is the Chapter's final destination (`shop:after-round:6`, and so on); it remains in the completed Chapter until the player chooses `NEXT CHAPTER`. A local map transition fades in before every normal Round, Boss, and Shop, while reward transitions stay attached to their Boss. Forward travel lights the connector from left to right in the destination theme; falling back after a Bust relights the last connector in Shop gold from right to left. It continues when the player clicks Continue or after three seconds. Normal Rounds use blue (`#3B82F6`), Shops gold (`#F59E0B`), Flame Selections red (`#EF4444`), and Special Offers emerald (`#2ED68F`) over the shared dark foundation.
+Each attempt starts with three manual reroll charges. A manual Reroll excludes the die's current ordinary face from the seeded distribution. Automatic and controller-driven Rolls follow their explicit rules.
 
-Every third round is a Boss encounter. Boss assignment is deterministic from the run seed and uses shuffled eight-boss bags: The Caller, The Warden, The Hexer, The Marathon, Quickdraw, The Fly, Snake Eyes, and The Infected all occur before a reshuffle, with boundary repeats avoided. The assignment is stored in run state, shown in the immediately preceding Shop, and remains stable on retry. Clearing a Mini-Boss grants a fixed 15 Gold Boss Reward; clearing a Big Boss grants a fixed 20 Gold Boss Reward. Clearing one proceeds through Round Summary, its tier-specific reward, and then the same single Shop. After a Big Boss, Chapter advancement and the next Chapter splash occur only when that final Shop's `NEXT CHAPTER` action is used.
+When the score is below the target and no legal hand or reroll remains, the attempt Busts. The Round checkpoint restores the committed build and Shop visit, subtracts a life, and increments the attempt number. Players return to the same semantic Shop before retrying. Attempt-local score, consumed hands, exposed faces, Invocations, temporary die growth, Charge, and other Round state roll back; committed collection, Training, and Fire Keeping transactions remain.
 
-Base Goals progress in three-round blocks. Each block derives a Boss anchor directly from `200 × (1.30³)^block`, pretty-rounds that anchor, then uses `1/2`, `5/6`, and `1` for the block's two normal Rounds and Boss Round. The first block is exactly `100 → 175 → 200`. Targets below 1,000 round to the nearest 25; targets from 1,000–9,999 round to 50; targets from 10,000–99,999 round to 500; and the increment grows by ×10 for each additional order of magnitude. Boss-specific modifiers apply after this base Goal is selected.
+The browser stores one active current-schema run. Persistence is deliberately versioned without old-prototype migration. A mismatched schema is rejected and a new run may be started. Rollback snapshots preserve inventory slots, stable die IDs, Shop session state, global Flames, and RNG state.
 
-### The Caller
+## Shop
 
-The Caller (purple/magenta) continuously chooses an unused category from Ones through Sixes, Pair, Two Pair, Three of a Kind, Small Straight, and Full House. Calls are due on manual hands 3, 6, 9, and so on. An early answer reveals the next Call immediately without moving its deadline earlier. A matching Jumping Bean answers for free and does not advance the manual-hand counter. On a wrong hand at the deadline, that hand scores first; if it reaches the Boss target the encounter clears without a penalty, otherwise the current round score is halved and rounded before a new Call begins.
+One authoritative Shop visit has one `visitId` and a persisted stage:
 
-### The Warden
+```text
+DICE → TRAINING → FIRE KEEPING
+```
 
-The Warden (cyan/teal) rolls all five player dice at encounter start, resolves only their landing mechanics, and then locks all five on those faces. The player chooses any die and confirms `UNLOCK DIE`. The four additional-die costs are frozen from the current Hand Training stats and the theoretical baseline capacity of the naturally possible hands, using ideal natural dice contribution and the game's five-point target interval. The first cost is capped by the two weakest Upper-hand baselines and half the Pair baseline; the second is clamped between twice the first cost and the Pair baseline. The final two costs use baseline capacity normally. If their cumulative total exceeds half the Boss Goal, all four costs are scaled proportionally so the final die unlocks at the rounded halfway point. Flames, Bonfires, XMult, Bonus, Workout growth, wild-card effects, and other enhancements do not inflate the schedule. Reaching an unlock target pauses play and allows another locked die to be chosen, unless the Boss target has been reached—in that case the encounter clears immediately. Unlocking retains the rolled face and is never a roll. Every remaining lock shows the same current target. Locked dice cannot score, be manually rerolled, trigger gameplay effects, or contribute attached Flames; global Bonfires remain active. A retry restores the pre-attempt state, rerolls all five for the new attempt, and returns to the initial choice.
+Navigation consumes no RNG and does not rebuild offers or session state. Bust restoration keeps the visit and returns its view to DICE.
 
-### The Hexer
+- DICE has three persistent seeded offers plus Roster/Storage movement, selling, fusion, details, and Weighted configuration.
+- TRAINING displays the scorecard and allows every hand to be trained repeatedly.
+- FIRE KEEPING manages the five global Flame slots and is the only stage that exits to the next attempt.
 
-The Hexer (toxic green) adds a temporary boss-owned Cursed Die that must genuinely participate in every manual scoring hand. It remains freely selectable and rerollable like every other die; scorecard rows only become playable when a valid combination can include it. Its authored faces are:
+Special Offers and Flame Selection are post-Boss rewards outside the normal staged Shop.
 
-| Face | Enhancements |
-|---:|---|
-| 1 | Golden 1, Weighted → 6 |
-| 2 | Golden 1, Weighted → 5 |
-| 3 | Golden 1, Weighted → 4 |
-| 4 | Missing Link, Mirror |
-| 5 | Workout 5, Mirror |
-| 6 | Workout 10, Bump |
-| 7 | Bonus 5, Mirror |
+## Training
 
-Bump on face 6 advances `6 → 7` and does not wrap. Seven is a genuine rank, so Small Straight recognizes `4-5-6-7` and Large Straight recognizes `3-4-5-6-7`. The Cursed Die cannot own Flames and is removed after a clear or failed-attempt rollback.
+At semantic Shop creation, Training freezes all six Upper and all eight Lower entry levels. Each family's baseline is its rounded arithmetic mean. A hand at or below its frozen baseline costs 2 Gold; each level above the baseline doubles the next cost:
 
-### The Marathon
+```text
+relativeTier = max(0, currentLevel - frozenBaseline)
+cost = 2 × 2^relativeTier
+```
 
-The Marathon triples the normal target. A manually played hand enters a seven-manual-play cooldown instead of being permanently consumed; each later manual hand reduces existing cooldowns by one. Jumping Bean free plays neither enter nor advance cooldowns.
+Training one hand never changes another hand's quote during that visit. On The House waives the first individual Training purchase. Team Training is an Uncommon Special Offer that raises every hand by one before the next Shop captures its baselines.
 
-### Quickdraw
+## Flames and Inferno
 
-Quickdraw uses one third of the normal target, rounded to the normal five-point target interval. Only one Lower-section hand can be manually played during the attempt; Upper hands remain normal, and the Lower shot is optional.
+The player has five global Flame slots. A Flame has stable instance identity, type, slot, investment, and Ember/Bonfire stage; it is never carried by a die. Acquisition fills the first empty slot or explicitly replaces a chosen occupied slot. Fire Keeping accepts positive whole-Gold investments. At 100 invested Gold an Ember becomes a Bonfire in the same slot and keeps its identity.
 
-### The Fly
+A Flame's written condition is its complete activation condition. Investment scales strength without changing that condition. Charge gains are attributed to Flame instance IDs. Engulfment consumes selected Flame instances, advances permanent Inferno level on success, and unifies Upper and Lower hand levels as defined by the frozen evaluation. Inferno contributes an exact `25^level` multiplier.
 
-The Fly marks an unused Lower row. All hands score with a final `×0.5` Boss factor until that marked hand is played; the catching hand and every later hand score in full. Every non-catching hand, including Jumping Bean, moves the Fly to another unused Lower row when possible.
+## Bosses
 
-### Snake Eyes
+Boss selection is deterministic and stored in the Chapter plan. Every current Boss is safe with one to five equipped dice and ignores Storage.
 
-After every scoring hand, Snake Eyes deterministically converts up to two eligible participating physical faces into genuine value-1 faces for that attempt. Enhancements stay attached to those physical sides. Mutations roll back on Bust and disappear after the encounter.
+- Caller selects only physically attainable calls.
+- Warden derives its lock/reinforcement schedule from the encounter's equipped Roster.
+- Hexer adds a tagged negative-ID Cursed Die with seven authored boss faces. Its face rules are dedicated encounter mechanics, not collectible effects.
+- Marathon applies hand cooldowns; Quickdraw permits one Lower shot; Fly targets attainable Lower hands.
+- Snake Eyes changes a scored physical face to 1 for the attempt.
+- Infected marks physical faces and suppresses the exposed collectible effect while applying its Pips penalty.
+- Juggler, Capital Return, Neglected, Tightrope, Crawler, Magician, and Mugger use explicit boss runtime state and current pipeline hooks.
 
-### The Infected
+Temporary boss dice occupy a separate identity namespace, are never owned, and never enter Roster or Storage.
 
-One physical face on every player die starts infected. An infected face keeps its value for hand qualification but contributes 3 fewer Pips, to a minimum of 0; the penalty applies after permanent face-Pip gains such as Workout. Its attached enhancements are disabled, while whole-die Flames and Bonfires still work. An exposed infected face spreads to clean landing faces on other dice using one snapshot generation per roll batch. Infection rolls back on Bust and disappears after the encounter.
+## History and debugging
 
-## Gold and the Shop
+Run History V2 is the balance-analysis authority. It records semantic Shop visits, offer impressions, Dice transactions, Roster-at-Round-start snapshots, Score occurrences, special-die activations and Invocation changes, Roll controllers, Training sessions/purchases, global Flame lifecycle, Charge attribution, Engulfment, Boss state, exact scores, economy, and rollback timelines.
 
-The normal Shop is the only place Gold is spent. It contains enhancement purchases and refreshes, Hand Training, paid dice rerolls, Flame Stoke controls, and life restoration. Individual Hand Training offers are repeatable within a Shop and cost `2, 4, 8, 16…` independently per hand. Team Training can replace one of the three training slots, raises every hand by one level, and costs `15, 30, 60, 120…` independently. A newly reached Shop resets training prices; returning to the same Shop after a Bust preserves them. Gold may still be earned during scoring.
+The text export begins with Result, Final Build, Economy, and Balance summaries, followed by the chronological canonical/experienced history. Stable IDs remain visible in deep history where lifecycle joins matter; player-facing Round labels use Roster positions.
 
-Every successful clear pays, in order:
+Debug traces are bounded reproduction data. Persistence compacts verbose playback/history arrays that already have a structured V2 owner while preserving critical diagnostics.
 
-- 5 base Gold;
-- 1 Gold per unused manual reroll;
-- `min(10, floor(heldGold / 5))` interest using the pre-payout Gold snapshot;
-- Escalating Boss Reward after successfully defeating a Boss: 10 Gold on round 3, 11 on round 6, 12 on round 9, and so on.
-
-A failed attempt pays none of these rewards. Interest is +1 per 5 Gold held, reaches its +10 maximum at 50 Gold, and is snapshotted after scoring Gold effects but before base, reroll, interest, or Boss Reward payouts are added. The maximum standard normal-round payout is 18 Gold; the Boss maximum rises with its round, excluding scoring Gold such as Golden and Jackpot.
-
-Every successful encounter pauses on a concise Round Summary before the next map transition. Its domain-owned snapshot shows score/target, Gold before and after, total Gold earned, and reconciled aggregate rows for Base Reward, unused rerolls, interest, Golden, Jackpot, other gameplay Gold, and Boss Reward when applicable. Bust attempts never create a successful summary.
-
-Lost lives can be restored one at a time only in a normal Shop. Each newly reached Shop starts the prices at `25, 40, 60, 90, 130, 180, 240, 310, 390, 480…`; after 390, each new increment is 10 larger than the prior increment. A Bust return preserves the same Shop's escalation, while the next new Shop resets it to 25. Lives cannot exceed three.
-
-Lifetime normal-Shop spending includes enhancement purchases, Hand Training, both paid Shop rerolls, and life restoration. Flame Stoke does not count. Enhancement sales are income and do not reduce or increase historical spending.
-
-## Enhancements and selling
-
-Enhancements attach to the exposed physical face. A face holds at most three distinct types; extra stacks of an existing type use no additional slot. Clicking a die with no offer selected opens Manage Die for all six faces and its Ember. A fourth-type attempt opens Manage Die on the full face and preserves the pending offer, allowing a sale followed by immediate application.
-
-Enhancements, Flames, and Special Offers each have one fixed Common, Uncommon, or Rare classification. Rarity changes offer frequency only—not price, strength, stack limits, or Flame investment. Normal three-card sets roll rarity first from system-specific weights and contain at most one Rare; authored tutorial offers bypass random rarity generation.
-
-Selling removes every stack of the selected enhancement type from that face. Normal stack sales pay `stack count × base sell price`. Sale prices and purchase prices are authoritative enhancement metadata.
-
-| Enhancement | Buy | Base sell / stack |
-|---|---:|---:|
-| Sticky | 2 | 1 |
-| Slippy | 2 | 1 |
-| Jumping Bean | 2 | 1 |
-| Golden | 2 | 1 |
-| Missing Link | 2 | 1 |
-| Mirror | 2 | 1 |
-| Hitchhiker | 2 | 1 |
-| Bump | 2 | 1 |
-| Bonus | 3 | 1 |
-| Workout | 3 | 2 |
-| Magnetic | 3 | 2 |
-| Weighted | 3 | 2 |
-| Jackpot | 3 | 1 |
-| Vintage | 3 | dynamic |
-| Personal Trainer | 8 | 4 |
-
-Sticky and Slippy now cost 2 Gold; their gameplay behavior is unchanged.
-
-While held, a showing Magnetic face pulls eligible rolling dice onto their Magnetic faces. A physical Magnetic face can perform this source pull once per Round; being pulled does not spend its source use, destinations do not exhaust, and source use resets at the start of each Round. Bump retains roll-resolution priority.
-
-Jumping Bean and Magnetic remain nonstackable on a Face, and each is limited to one Face per physical die. Different dice may each carry their own Jumping Bean and Magnetic Face.
-
-### Vintage
-
-Vintage is unique and non-stackable. A new instance starts with a 0-Gold sell value and has no direct scoring effect. Whenever its physical face participates in a resolved scoring hand, its sell value increases by 3 Gold exactly once. Selected dice, successful Hitchhikers, and Jumping Bean free plays qualify; rolls, displayed faces, failed Hitchhikers, Shop rolls, and Flame Selection rolls do not. Separate Bean-chain hand resolutions may each grow it.
-
-Vintage's base sell value is capped at 30 Gold. Sommelier marks currently held, unboosted Vintage faces with a persistent ×2 modifier, for an effective maximum of 60 Gold; later Vintage purchases are not automatically boosted, and the modifier cannot stack. Selling pays the actual boosted value and deletes that accumulated state; repurchasing starts at 0. Failed-attempt growth rolls back with the round checkpoint.
-
-### Personal Trainer
-
-Personal Trainer is stackable to three. Each scoring face checks independently after its hand's score is awarded, starting from a 50%, 75%, or 87.5% base chance and scaling down according to the played hand's level relative to the full scorecard. Lowest-level hands retain the full base chance, average-level hands use 75% of it, above-average hands fall off more quickly, and the effective chance never drops below 1%. Each check recalculates immediately before it rolls, so one success can affect the next check in the same hand. A success raises that hand by one level. Selected scoring dice, successful Hitchhikers, and Jumping Bean free plays qualify; rolls and merely exposed faces do not. Multiple successes can train one hand multiple times, and failed-attempt gains roll back with the round checkpoint.
-
-## Special Offers
-
-Cash Bonus pays 3 Gold per Bonus stack whenever Bonus activates during its three-Round window. Semester guarantees exactly one Team Training offer in each of the next three genuinely entered Shops; it does not change the offer's price, and reopening the same checkpoint Shop after a Bust does not consume another Shop.
-
-## Flame Selections, Embers, and Bonfires
-
-Big Boss clears add the fixed 20 Gold Boss Reward, show the Round Summary, and then open Flame Selection before the Shop. This screen only allows the player to select one of the three deterministic distinct offers and assign it to a physical die, or skip. Mini-Boss clears add the fixed 15 Gold Boss Reward and instead present three distinct seeded Special Offers requiring one choice. There are no paid offer rerolls and no Stoke controls on either reward screen. If every Flame is currently owned as an Ember or Bonfire, Flame Selection reports that all Flames are collected and continues normally to the Shop; a replaced Ember becomes eligible for a later selection again.
-
-New Flames begin as 0-Gold Embers. The immediately following Shop shows a one-time controlled tooltip on the first Flame’s die, teaching the player to click the die, Stoke it, and reach Bonfire at 100 Gold. All Flame investment occurs through Manage Die in a normal Shop. Arbitrary positive whole-Gold Stoke amounts are supported and do not count toward lifetime normal-Shop spending.
-
-At exactly 100 invested Gold an Ember becomes a global Bonfire, detaches from its die, and cannot be reacquired. Replacing an active Ember during a later Flame Selection destroys its investment. The threshold and all Flame formulas remain unchanged.
-
-Let `p = investedGold / 100`, clamped to `[0, 1]`. Every XMult Flame returns a factor and scoring applies `XMult *= factor`.
-
-| Flame | Active rule |
-|---|---|
-| Ultimate | The single highest-ranked hand: `1 + 4p`, max ×5 |
-| Minigun | Ones–Sixes: `1 + 4p`, max ×5 |
-| Hail Mary | Zero rerolls: `1 + 4p`, max ×5 |
-| Full of Grace | LAST PLAY (zero rerolls and exactly one playable hand): `1 + 4p`, max ×5 |
-| Momentum | Each manually played or Jumping Bean hand adds `0.5p` Charge |
-| Third Rail | Each gameplay die that rolls a 3 adds `0.5p` Charge |
-| Jump Start | Each manual Reroll spent adds `2p` Charge |
-| Power Surge | The single Ultimate-ranked hand triples current Charge |
-| Speed Demon | Actual unblocked decision time: full strength for 1 second, then smooth decay to ×1 at about 10 seconds; peak `1 + 4p` (×5 maximum) |
-| Six Pack | Starts each Round at `S = 1 + 5p`; after `n` played Upper hands its factor is `1 + (S - 1)(1 - n/6)`, floored at ×1 |
-| Flux Capacitor | One Magnetic source activation that pulls `m` Magnetic faces multiplies current Charge by `1 + mp`, clamped to Max Charge |
-| Fat Cat | A scoring Golden or Jackpot face enables `1 + 4p`, max ×5 |
-| Vineyard | A scoring Vintage face enables `1 + 4p`, max ×5 |
-| Fetch | The marked persistent physical face scores for `1 + 4p`, max ×5, then moves |
-| Target Practice | Targeted Lower hand: `1 + 8p`, max ×9 |
-| Hot Streak | `1 + successfulCharges × p` |
-| Lowball | `1 + 2 × (printedFaceTier − 1) × p`, max ×5 |
-| Straight Shooter | Play Small Straight, then pay once on Large Straight: `1 + 8p`, max ×9 |
-| Double Down | Play Pair, then pay once on Two Pair: `1 + 8p`, max ×9 |
-| Three’s Company | Play Three of a Kind, then pay once on Full House: `1 + 8p`, max ×9 |
-| Box Set | Play Four of a Kind, then pay once on Five of a Kind: `1 + 8p`, max ×9 |
-| Missing Pair | Pair/Three of a Kind: `1 + 4p`, max ×5 |
-| One Short | Small Straight/Four of a Kind: `1 + 4p`, max ×5 |
-
-Each owned Charge-family Flame contributes `1 + 4p` Max Charge. Their capacity stacks into one shared meter. Before any Charge-family Bonfire, every attached family die must participate in the hand that spends Charge; any family Bonfire unlocks global use.
-
-## Dice visuals and live scoring
-
-Physical die faces use a shared scalable pip layout in gameplay, the Shop, Manage Die, Flame Selection, and Warden choices. Faces 1–6 use standard real-die arrangements; the Hexer's impossible 7 uses the six-pip arrangement plus a center pip. Numeric face and scoring labels remain available in details and accessibility text. During Round and Boss gameplay, the live Pips / Mult / XMult panel sticks immediately below the measured global HUD while the scorecard scrolls.
-
-## Telemetry and validation
-
-Run Info exports schema 17 / `flame-magnetic-sequences-v1`, including route transitions, destination and direction, boss assignment and attempts, Round Summary Gold reconciliation, manual-reroll face exclusion, Caller calls and outcomes, Warden unlock targets and choices, Hexer die activity, round attempts, Bust/checkpoint lifecycle, economy, enhancements, Vintage growth, source-aware scoring, Flame factors and sequence stages, Magnetic source use, Stoke records, and Shop spending.
-
-Validation commands:
+## Project commands
 
 ```sh
-npm test
+npm install
+npm run dev
 npm run typecheck
+npm test
 npm run build
 npm run test:browser
 git diff --check
 ```
+
+Unit/component tests use Vitest. Browser flows use Playwright. Seeded tests should assert exact state/events and must not add incidental RNG calls.

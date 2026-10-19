@@ -1,10 +1,8 @@
 import { Alert, Button, Group, Modal, Paper, Stack, Text } from '@mantine/core';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { validateAction } from '../game/engine';
-import {
-  activeFlameId, captureHandStart, composeXMult, handXMultContributions, hasChargeBonfire,
-  hasOwnedFlame, isChargeFlame, isGuaranteedWinningPlay, speedDemonMultiplier,
-} from '../game/flames';
+import { captureHandStart, composeXMult, handXMultContributions,
+  hasOwnedFlame, isGuaranteedWinningPlay, speedDemonMultiplier } from '../game/flames';
 import { hasPlayableHand, HANDS, planQualification } from '../game/hands';
 import { finalizeScore, handScore } from '../game/scoring';
 import { canPlay, normalizeBoardSelection, selectBoardHand } from '../game/selection';
@@ -91,8 +89,6 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const rerollVisualResourceText = `${board.manualRerollsRemaining} LEFT${carePackageRerolls ? ` + ${carePackageRerolls}` : ''}`;
   const normalRerollFill = Math.max(0, Math.min(1, board.manualRerollsRemaining / CONFIG.manualRerollsPerRound));
   const deadBoard = !hasPlayableHand(encounterDice, unavailableHands, requiredDieIds, board.dieRoundState);
-  const chargeDieIds = encounterDice.filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id);
-  const chargeGloballyUnlocked = hasChargeBonfire(board);
   const speedStrength = (speedDemonMultiplier(100, decisionMs) - 1) / 4;
   const speedReveal = event?.type === 'SPEED_DEMON_REVEALED' ? event : null;
   const scorecardRefreshing = event?.type === 'SCORECARD_REFRESHED';
@@ -116,9 +112,6 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     commitPlay();
   }
   function changeSelection(next: Selection) {
-    if (board.chargeArmed && !chargeGloballyUnlocked && chargeDieIds.some(id => !next.dieIds.includes(id))) {
-      submit({ type: 'TOGGLE_CHARGE', hand: next.hand, dieIds: next.dieIds });
-    }
     setSelection(next);
   }
   const idleText = effectiveSelection.hand

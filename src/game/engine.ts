@@ -1,30 +1,28 @@
-import { CONFIG, diceRerollCost, handTrainingCost, lifeRestoreCost, offerRerollCost, teamTrainingCost } from './config';
-import { activeFace, createDiceInventory } from './dice';
+import { CONFIG, diceRerollCost, lifeRestoreCost, offerRerollCost } from './config';
+import { createDiceInventory, wholeDieEffectSuppressed } from './dice';
 import { Resolver } from './effects';
 import type { ResolverOptions } from './effects';
-import { enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, placementError, stacks, VINTAGE_BASE_SELL_CAP } from './enhancements';
 import {
-  activeFlameId, activeFlameInvestment, assignFlameInstance, flameEffectText, flameStokeLimits, FLAMES, hasChargeBonfire, hasOwnedChargeFlame,
-  HAND_FAMILY_FLAME_IDS, hasOwnedFlame, isChargeFlame, isFlame, ownedFlameIds, recalculateMaxCharge,
-  normalizeFlameInstanceRuntime, removeFlameInstance, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier,
+  createFlameInstance, emptyFlameSlots, flameByType, flameEffectText, flameInstances, flameStokeLimits, FLAMES, hasOwnedChargeFlame,
+  HAND_FAMILY_FLAME_IDS, hasOwnedFlame, isFlame, ownedFlameIds, recalculateMaxCharge,
+  normalizeFlameInstanceRuntime, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier,
 } from './flames';
-import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, isValidSelection, planQualification } from './hands';
+import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, planQualification } from './hands';
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
 import { activeEncounterDice, bossSchedule, isBigBossRound, unavailableEncounterHands } from './bosses';
 import { chapterNumberForRound, ensureChapterPlan } from './chapters';
-import { postBossShopNodeAfter } from './progression';
 import { formatPlayerNumber } from './copy';
-import { rarityLabel } from './rarity';
 import { appendCriticalDiagnostic, appendDebugTrace, createDebugTrace, normalizeDebugTrace, type DebugTraceMode } from './debugTrace';
 import { isRollbackState } from './rollback';
-import { assertDiceInventory, collectibleDieById, ownedDice, rosterDice, syncActiveDiceProjection } from './inventory';
+import { assertDiceInventory, collectibleDieById, ownedDice, rosterDice, rosterDieLabel, syncActiveDiceProjection } from './inventory';
 import { normalizeDieRoundRuntime, resetDieRoundState } from './specialDice';
-import { dicePurchaseIsFree, enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey, usableManualRerolls } from './specialOffers';
+import { dicePurchaseIsFree, initialSpecialOfferEffects, usableManualRerolls } from './specialOffers';
+import { createTrainingSession, quoteTraining } from './training';
 import { canFuse, dieSellBreakdown, firstPurchaseSlot, purchaseDie, setSlotValue, slotExists, slotValue } from './diceEconomy';
 import { Decimal, exactInferno, scoreFromUnknown, type ExactScore } from './scoreMath';
 import { getEncounterGoalBreakdown, targetForRound } from './goals';
-import type { Action, Board, GameState, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
+import type { Action, Board, FlameSlotIndex, GameState, RandomSource, Resolution, Shop } from './types';
 
 const exact = (value: unknown, fallback: ExactScore = 0n): ExactScore => value === undefined || value === null
   ? fallback : scoreFromUnknown(value);
@@ -67,8 +65,6 @@ function normalizeHistoricalScores(state: GameState): void {
   state.historyV2 ??= [];
   state.stats.rounds ??= [];
   state.stats.scoreBySource ??= { hand: 0n, jumpingBean: 0n, hitchhiker: 0n, boss: 0n };
-  state.stats.probabilityProcs.boomerang ??= { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] };
-  state.stats.probabilityProcs.holiday ??= { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] };
   state.stats.handScores ??= [];
   state.stats.standaloneScores ??= [];
   state.stats.jumpingBeanFreePlays ??= [];
@@ -151,17 +147,13 @@ function normalizeHistoricalScores(state: GameState): void {
 
 const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`${seed}:round:${round}:attempt:${attempt}`);
 
-function normalizedTrainingOffer(offer: TrainingOffer | { hand: HandId; purchased?: boolean }): TrainingOffer {
-  if ('kind' in offer) {
-    const purchases = Number.isFinite(offer.purchases) ? Math.max(0, Math.floor(offer.purchases)) : 0;
-    return { ...offer, purchases };
-  }
-  return { kind: 'hand', hand: offer.hand, purchases: offer.purchased ? 1 : 0 };
-}
-
-function normalizeShop(shop: Shop, state: Pick<Board, 'nextShopVisitId'>): void {
+function normalizeShop(shop: Shop, state: Pick<Board, 'nextShopVisitId' | 'handLevels'>): void {
   if (!shop.stage || !['dice', 'training', 'fireKeeping'].includes(shop.stage)) shop.stage = 'dice';
-  shop.trainingOffers = shop.trainingOffers.map(offer => normalizedTrainingOffer(offer));
+  if (shop.trainingSession) {
+    for (const hand of HAND_IDS) shop.trainingSession.purchasesByHand[hand] = Math.max(0,
+      Math.floor(shop.trainingSession.purchasesByHand[hand] ?? 0));
+    shop.trainingSession.freeTrainingAvailable = shop.trainingSession.freeTrainingAvailable === true;
+  }
   shop.lifeRestores = Math.max(0, Math.floor(shop.lifeRestores ?? 0));
   if (!Number.isInteger(shop.visitId) || (shop.visitId ?? 0) < 1) shop.visitId = state.nextShopVisitId++;
   else state.nextShopVisitId = Math.max(state.nextShopVisitId, shop.visitId! + 1);
@@ -171,36 +163,27 @@ function normalizeSpecialRuntime(state: Board): void {
   if (!state) return;
   state.specialOfferEffects = { ...initialSpecialOfferEffects(), ...(state.specialOfferEffects ?? {}) };
   state.specialOfferEffects.carePackageRerolls = Math.max(0, Math.floor(state.specialOfferEffects.carePackageRerolls));
-  for (const key of ['taxEvasionRounds', 'cashBonusRounds', 'powerballRounds', 'bottledFairyRounds', 'badDreamRounds'] as const)
+  for (const key of ['taxEvasionRounds', 'bottledFairyRounds', 'badDreamRounds'] as const)
     state.specialOfferEffects[key] = Math.max(0, Math.floor(state.specialOfferEffects[key]));
-  state.specialOfferEffects.semesterShopsRemaining = Math.max(0, Math.floor(state.specialOfferEffects.semesterShopsRemaining));
-  state.suppressedPostBossRewardRounds ??= [];
   state.bossSilenced ??= false;
   state.specialOffer ??= null;
 }
 
 function normalizeBossRuntime(state: Board): void {
   if (state.boss?.type !== 'neglected') return;
-  const legacy = state.boss as typeof state.boss & { handsPlayed?: number; restored?: boolean };
-  legacy.handsPlayed = Math.max(0, Math.min(6,
-    Math.floor(typeof legacy.handsPlayed === 'number' && Number.isFinite(legacy.handsPlayed) ? legacy.handsPlayed : 0)));
-  legacy.restored = legacy.restored === true;
+  state.boss.handsPlayed = Math.max(0, Math.min(6,
+    Math.floor(typeof state.boss.handsPlayed === 'number' && Number.isFinite(state.boss.handsPlayed) ? state.boss.handsPlayed : 0)));
+  state.boss.restored = state.boss.restored === true;
 }
 
 function normalizeChapterLifecycle(state: Board): void {
   state.chapterLifecycle ??= {};
-  for (const round of state.suppressedPostBossRewardRounds ?? []) {
-    const chapter = chapterNumberForRound(round);
-    state.chapterLifecycle[chapter] = { specialOfferConsumed: true };
-  }
-  state.suppressedPostBossRewardRounds = [];
   for (const lifecycle of Object.values(state.chapterLifecycle)) if (lifecycle)
     lifecycle.specialOfferConsumed = !!lifecycle.specialOfferConsumed;
 }
 
-function normalizeSixPackRuntime(state: Pick<Board, 'dice' | 'bonfires' | 'sixPackXMult' | 'sixPackUpperHandsPlayed'>): void {
-  const startingFactor = state.bonfires.includes('sixPack') ? sixPackStartingMultiplier(100)
-    : sixPackStartingMultiplier(activeFlameInvestment(state.dice.find(die => activeFlameId(die.flame) === 'sixPack')?.flame ?? null));
+function normalizeSixPackRuntime(state: Pick<Board, 'flameSlots' | 'sixPackXMult' | 'sixPackUpperHandsPlayed'>): void {
+  const startingFactor = sixPackStartingMultiplier(flameByType(state, 'sixPack')?.investedGold ?? 0);
   const missingCount = state.sixPackUpperHandsPlayed === undefined;
   const inferred = startingFactor <= 1 ? 0 : Math.round(6 * (startingFactor - Math.max(1, state.sixPackXMult ?? 1)) / (startingFactor - 1));
   state.sixPackUpperHandsPlayed = Math.max(0, Math.min(6, Math.floor(missingCount ? inferred : state.sixPackUpperHandsPlayed)));
@@ -208,7 +191,7 @@ function normalizeSixPackRuntime(state: Pick<Board, 'dice' | 'bonfires' | 'sixPa
     : Math.max(1, state.sixPackXMult ?? 1);
 }
 
-function normalizeHandFamilyFlameRuntime(state: Pick<Board, 'dice' | 'bonfires' | 'handFamilyFlameStages'>): void {
+function normalizeHandFamilyFlameRuntime(state: Pick<Board, 'flameSlots' | 'handFamilyFlameStages'>): void {
   const stages = state.handFamilyFlameStages ?? {};
   const owned = ownedFlameIds(state);
   state.handFamilyFlameStages = Object.fromEntries(HAND_FAMILY_FLAME_IDS.filter(id => owned.has(id)).map(id => {
@@ -236,7 +219,7 @@ function normalizeSilencedBossGoal(state: GameState): void {
 export function normalizeGameState(state: GameState): GameState {
   const next = structuredClone(state);
   if (!next.diceInventory || !Array.isArray(next.encounterDice))
-    throw new Error('This saved run predates the collectible-dice inventory schema.');
+    throw new Error('Saved run does not match the current collectible-dice schema.');
   assertDiceInventory(next.diceInventory, next.encounterDice);
   syncActiveDiceProjection(next);
   next.dieRoundState ??= {};
@@ -264,10 +247,7 @@ export function normalizeGameState(state: GameState): GameState {
   }
   next.nextShopVisitId = Math.max(1, Math.floor(next.nextShopVisitId ?? 1));
   next.nextFlameInstanceId = Math.max(1, Math.floor(next.nextFlameInstanceId ?? 1));
-  next.flameInstanceIds ??= {};
-  const legacyStats = next.stats as typeof next.stats & { actions?: Action[] };
-  next.actionJournal ??= structuredClone(legacyStats.actions ?? []);
-  delete legacyStats.actions;
+  normalizeFlameInstanceRuntime(next);
   next.nextPlaybackEventId = Math.max(0, Math.floor(next.nextPlaybackEventId
     ?? (next.history.length ? Math.max(...next.history.map(record => record.id)) + 1 : 0)));
   next.historyV2 ??= [];
@@ -286,61 +266,14 @@ export function normalizeGameState(state: GameState): GameState {
   normalizeSpecialRuntime(next);
   normalizeSilencedBossGoal(next);
   normalizeChapterLifecycle(next);
-  const legacy = next as GameState & { flameReward?: GameState['flameSelection'] };
-  if (!next.flameSelection && legacy.flameReward) next.flameSelection = legacy.flameReward;
-  delete legacy.flameReward;
-  if ((next.phase as string) === 'flameReward') next.phase = 'flameSelection';
-  for (const die of [...ownedDice(next), ...next.encounterDice]) {
-    die.owner ??= 'player';
-    for (const face of die.faces) {
-      const legacyMagnetic = face as typeof face & { magneticUsed?: boolean; magneticDestinationUsed?: boolean };
-      delete legacyMagnetic.magneticUsed;
-      delete legacyMagnetic.magneticDestinationUsed;
-      delete (face.enhancements as Record<string, number | undefined>).multiplier;
-      for (const id of ENHANCEMENT_IDS) {
-        const value = face.enhancements[id];
-        if (value === undefined) continue;
-        const normalized = Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
-        const cap = ENHANCEMENTS[id].maxStacks;
-        const clamped = cap === null ? normalized : Math.min(normalized, cap);
-        if (clamped > 0) face.enhancements[id] = clamped;
-        else delete face.enhancements[id];
-      }
-      if ((face.enhancements.vintage ?? 0) > 0) {
-        face.vintageSellValue = Math.min(VINTAGE_BASE_SELL_CAP, Math.max(0, Math.floor(face.vintageSellValue ?? 0)));
-        if (face.vintageSommelierBoosted) face.vintageSommelierBoosted = true;
-        else delete face.vintageSommelierBoosted;
-      } else {
-        delete face.vintageSellValue;
-        delete face.vintageSommelierBoosted;
-      }
-      if ((face.enhancements.furnace ?? 0) > 0 && face.furnaceMultiplier !== undefined)
-        face.furnaceMultiplier = Math.max(1, Number(face.furnaceMultiplier));
-      else if (!(face.enhancements.furnace ?? 0)) delete face.furnaceMultiplier;
-      if ((face.enhancements.flywheel ?? 0) > 0) face.flywheelCharges = Math.min(stacks(face, 'flywheel'), Math.max(0, Math.floor(face.flywheelCharges ?? 0)));
-      else delete face.flywheelCharges;
-      if ((face.enhancements.sustainable ?? 0) > 0) face.sustainableCharges = Math.min(stacks(face, 'sustainable'), Math.max(0, Math.floor(face.sustainableCharges ?? 0)));
-      else delete face.sustainableCharges;
-    }
-    const rawFlame = die.flame as unknown;
-    const rawId = typeof rawFlame === 'string' ? rawFlame
-      : rawFlame && typeof rawFlame === 'object' && 'id' in rawFlame ? (rawFlame as { id: unknown }).id : null;
-    if (rawId === 'charge') die.flame = typeof rawFlame === 'object'
-      ? { id: 'momentum', investedGold: activeFlameInvestment(rawFlame) } : { id: 'momentum', investedGold: 0 };
-    const id = activeFlameId(die.flame);
-    die.flame = id ? { id, investedGold: activeFlameInvestment(die.flame) } : null;
-  }
-  next.bonfires = [...new Set(next.bonfires.map(id => (id as string) === 'charge' ? 'momentum' : id).filter(isFlame))];
-  normalizeFlameInstanceRuntime(next);
   if (next.shop) {
-    next.shop.offers = next.shop.offers.filter(offer => (offer.dieType && offer.rarity && offer.price !== undefined)
-      || (offer.enhancement && isEnhancement(offer.enhancement)));
+    next.shop.offers = next.shop.offers.filter(offer => offer.dieType && offer.rarity && offer.price !== undefined);
     normalizeShop(next.shop, next);
     if (!next.shop.kind && next.phase === 'shop' && !next.bust && isBigBossRound(next.round)) next.shop.kind = 'post_boss';
   }
   if (next.roundCheckpoint) {
     if (!isRollbackState(next.roundCheckpoint))
-      throw new Error('This saved run predates the collectible-dice rollback schema.');
+      throw new Error('Saved checkpoint does not match the current rollback schema.');
     assertDiceInventory(next.roundCheckpoint.diceInventory, next.roundCheckpoint.encounterDice);
     const checkpoint = next.roundCheckpoint.board;
     if (typeof checkpoint.target === 'number' && !Number.isSafeInteger(checkpoint.target))
@@ -355,7 +288,7 @@ export function normalizeGameState(state: GameState): GameState {
     checkpoint.bustPresentationDice ??= null;
     checkpoint.nextShopVisitId = Math.max(1, Math.floor(checkpoint.nextShopVisitId ?? 1));
     checkpoint.nextFlameInstanceId = Math.max(1, Math.floor(checkpoint.nextFlameInstanceId ?? next.nextFlameInstanceId));
-    checkpoint.flameInstanceIds ??= structuredClone(next.flameInstanceIds);
+    normalizeFlameInstanceRuntime(checkpoint);
     normalizeBossRuntime(checkpoint);
     checkpoint.scorecardCycleConsumed ??= checkpoint.consumed.filter(hand =>
       checkpoint.bossSilenced || checkpoint.boss?.type !== 'neglected'
@@ -370,31 +303,6 @@ export function normalizeGameState(state: GameState): GameState {
       checkpoint.target = targetForRound(checkpoint.round);
     normalizeChapterLifecycle(checkpoint);
     if (checkpoint.shop) normalizeShop(checkpoint.shop, checkpoint);
-    for (const die of checkpoint.dice) {
-      for (const face of die.faces) {
-        const legacyMagnetic = face as typeof face & { magneticUsed?: boolean; magneticDestinationUsed?: boolean };
-        delete legacyMagnetic.magneticUsed;
-        delete legacyMagnetic.magneticDestinationUsed;
-        if ((face.enhancements.vintage ?? 0) > 0) {
-          face.vintageSellValue = Math.min(VINTAGE_BASE_SELL_CAP, Math.max(0, Math.floor(face.vintageSellValue ?? 0)));
-          if (face.vintageSommelierBoosted) face.vintageSommelierBoosted = true;
-          else delete face.vintageSommelierBoosted;
-        } else {
-          delete face.vintageSellValue;
-          delete face.vintageSommelierBoosted;
-        }
-      }
-      const rawFlame = die.flame as unknown;
-      const rawId = typeof rawFlame === 'string' ? rawFlame
-        : rawFlame && typeof rawFlame === 'object' && 'id' in rawFlame ? (rawFlame as { id: unknown }).id : null;
-      if (rawId === 'charge') die.flame = typeof rawFlame === 'object'
-        ? { id: 'momentum', investedGold: activeFlameInvestment(rawFlame) } : { id: 'momentum', investedGold: 0 };
-      const id = activeFlameId(die.flame);
-      die.flame = id ? { id, investedGold: activeFlameInvestment(die.flame) } : null;
-    }
-    checkpoint.bonfires = [...new Set(checkpoint.bonfires
-      .map(id => (id as string) === 'charge' ? 'momentum' : id).filter(isFlame))];
-    normalizeFlameInstanceRuntime(checkpoint);
     recalculateMaxCharge(checkpoint);
     checkpoint.decisionId = Math.max(0, Math.floor(checkpoint.decisionId ?? 0));
     normalizeSixPackRuntime(checkpoint);
@@ -421,34 +329,10 @@ export function normalizeGameState(state: GameState): GameState {
   next.lives = Math.max(0, Math.min(CONFIG.maxLives, Math.floor(next.lives ?? CONFIG.maxLives)));
   next.roundAttemptNumber = Math.max(1, Math.floor(next.roundAttemptNumber ?? 1));
   next.bust ??= null;
-  next.flameTutorial ??= { pendingDieId: null, completed: false };
+  next.flameTutorial ??= { pendingFlameInstanceId: null, completed: false };
   next.roundCheckpoint ??= null;
   next.badDreamCheckpoint ??= null;
-  next.stats.sales ??= [];
   next.stats.mapTransitions ??= [];
-  next.stats.mapTransitions = next.stats.mapTransitions.map(record => ({ ...record,
-    nodeType: (record.nodeType as string) === 'flame_reward' ? 'flame_selection' : record.nodeType }));
-  // Version-1 saves could already have announced the next Chapter while the
-  // post-Boss Shop was active. Move that persisted boundary back without
-  // touching the materialized Chapter plan or the Shop's RNG-backed contents.
-  if (next.phase === 'shop' && !next.bust && isBigBossRound(next.round) && next.shop?.kind === 'post_boss') {
-    const nextChapter = chapterNumberForRound(next.round) + 1;
-    const legacyShopId = `shop:before-round:${next.round + 1}`;
-    if (next.currentNodeId === legacyShopId) next.currentNodeId = postBossShopNodeAfter(next.round).id;
-    next.presentedChapters = next.presentedChapters.filter(chapter => chapter !== nextChapter);
-    const filteredHistory = next.history.filter(record => !(record.type === 'CHAPTER_STARTED'
-      && record.chapterNumber === nextChapter && record.round === next.round));
-    if (filteredHistory.length !== next.history.length)
-      next.history = filteredHistory.map((record, id) => ({ ...record, id }));
-    for (const transition of next.stats.mapTransitions) {
-      if (transition.toNode === legacyShopId && transition.round === next.round + 1)
-        Object.assign(transition, { toNode: postBossShopNodeAfter(next.round).id, round: next.round });
-    }
-    for (const record of next.history) {
-      if (record.type === 'MAP_TRANSITION' && record.toNode === legacyShopId)
-        Object.assign(record, { toNode: postBossShopNodeAfter(next.round).id, round: next.round });
-    }
-  }
   next.stats.bossEncounters ??= [];
   next.stats.callerEvents ??= [];
   next.stats.wardenEvents ??= [];
@@ -459,42 +343,15 @@ export function normalizeGameState(state: GameState): GameState {
     checkpointRestored: bust.checkpointRestored ?? true,
     returnedToShop: bust.returnedToShop ?? bust.livesAfter > 0 }));
   next.stats.lifeRestores ??= [];
-  next.stats.vintageGrowth ??= [];
-  next.stats.probabilityProcs.personalTrainer ??= { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] };
-  next.stats.probabilityProcs.doubleTime ??= { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] };
-  next.stats.rounds = next.stats.rounds.map(round => {
-    const legacyPayout = round.payout as (typeof round.payout & { flameBonusGold?: number }) | null;
-    const payout = legacyPayout ? { ...legacyPayout,
-      bossRewardGold: legacyPayout.bossRewardGold ?? legacyPayout.flameBonusGold ?? 0 } : null;
-    if (payout) delete (payout as { flameBonusGold?: number }).flameBonusGold;
-    return { ...round, attempt: round.attempt ?? 1, goldBefore: round.goldBefore ?? next.gold,
-      goldBySourceBefore: round.goldBySourceBefore ?? structuredClone(next.stats.goldBySource), payout };
-  });
-  const legacyLastPayout = next.lastRoundPayout as (typeof next.lastRoundPayout & { flameBonusGold?: number }) | null;
-  if (legacyLastPayout) {
-    next.lastRoundPayout = { ...legacyLastPayout,
-      bossRewardGold: legacyLastPayout.bossRewardGold ?? legacyLastPayout.flameBonusGold ?? 0 };
-    delete (next.lastRoundPayout as { flameBonusGold?: number }).flameBonusGold;
-  }
-  next.stats.flameStokes ??= ((next.stats as unknown as { flameDonations?: GameState['stats']['flameStokes'] }).flameDonations ?? []);
+  next.stats.rounds = next.stats.rounds.map(round => ({ ...round, attempt: round.attempt ?? 1,
+    goldBefore: round.goldBefore ?? next.gold,
+    goldBySourceBefore: round.goldBySourceBefore ?? structuredClone(next.stats.goldBySource) }));
+  next.stats.flameStokes ??= [];
   next.stats.flameStokes = next.stats.flameStokes.map(stoke => ({ ...stoke,
     from: stoke.from ?? Math.max(0, stoke.total - stoke.amount),
-    source: (stoke.source as string) === 'flame_reward' ? 'flame_selection' : stoke.source ?? 'flame_selection' }));
-  const legacyGold = next.stats.goldBySource as Record<string, number>;
-  next.stats.goldBySource.bossReward ??= legacyGold.flameBonus ?? 0;
-  delete legacyGold.flameBonus;
-  next.history = next.history.map(record => {
-    if ((record.type as string) !== 'FLAME_REWARD_OPENED' && (record.nodeType as string) !== 'flame_reward') return record;
-    return { ...record,
-      type: (record.type as string) === 'FLAME_REWARD_OPENED' ? 'FLAME_SELECTION_OPENED' as const : record.type,
-      nodeType: (record.nodeType as string) === 'flame_reward' ? 'flame_selection' as const : record.nodeType };
-  });
-  next.actionJournal = next.actionJournal.map(action => (action.type as string) === 'CONTINUE_FLAME_REWARD'
-    ? { type: 'CONTINUE_FLAME_SELECTION' } : action);
-  next.stats.goldBySource.enhancementSale ??= 0;
+    source: stoke.source ?? 'flame_selection' }));
   next.stats.goldBySource.diceSale ??= 0;
   next.stats.goldBySource.specialOffer ??= 0;
-  next.stats.goldBySource.cashBonus ??= 0;
   next.stats.goldSpentBySource.lifeRestore ??= 0;
   next.stats.goldSpentBySource.dicePurchase ??= 0;
   next.stats.goldSpentBySource.diceOfferReroll ??= 0;
@@ -505,9 +362,6 @@ export function normalizeGameState(state: GameState): GameState {
   recalculateMaxCharge(next);
   return next;
 }
-
-const requiredChargeFlameDieIds = (state: Board) => activeEncounterDice(state)
-  .filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id);
 
 export function validateAction(state: Board | GameState, action: Action): string | null {
   if (action.type === 'CONTINUE_ROUND_SUMMARY') return state.phase === 'roundSummary' && !!state.roundSummary
@@ -525,11 +379,7 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (!action.dieIds.length) return 'Select at least one die to reroll.';
     if (new Set(action.dieIds).size !== action.dieIds.length
       || action.dieIds.some(id => !Number.isInteger(id) || !activeEncounterDice(state).some(die => die.id === id))) return 'Select distinct unlocked dice that are on the board.';
-    const paidDice = action.dieIds.filter(id => {
-      const die = activeEncounterDice(state).find(item => item.id === id)!;
-      const face = activeFace(die);
-      return !stacks(face, 'flywheel') || (face.flywheelCharges ?? 0) <= 0;
-    }).length;
+    const paidDice = action.dieIds.length;
     if (paidDice > usableManualRerolls(state)) return 'Not enough manual rerolls for these dice.';
     return null;
   }
@@ -546,6 +396,8 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (die.type !== expected) return `That die cannot perform ${action.type}.`;
     const runtime = state.dieRoundState[die.id];
     if (!runtime) return 'That die has no active Round state.';
+    if (action.type !== 'DISARM_MAGIC' && wholeDieEffectSuppressed(die))
+      return "That die's special effect is suppressed while its infected face is exposed.";
     if (action.type !== 'FEED_FURNACE' && action.type !== 'DISARM_MAGIC' && runtime.invocationsRemaining <= 0) return 'That die has no Invocations remaining.';
     if (action.type === 'INVOKE_CHAMELEON' && !state.dice.some(item => item.owner === 'player' && item.id !== die.id))
       return 'Chameleon requires another equipped die.';
@@ -577,10 +429,6 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (unavailableEncounterHands(state).includes(action.hand)) return state.boss?.type === 'marathon'
       ? 'That hand is still cooling down.' : state.boss?.type === 'quickdraw' ? 'Quickdraw has no Lower shot remaining.' : 'That hand has already been consumed.';
     if (!state.bossSilenced && state.boss?.type === 'hexer' && !action.dieIds.includes(state.boss.cursedDieId)) return 'The Cursed Die must participate in every hand.';
-    if (state.chargeArmed && !hasChargeBonfire(state)) {
-      const missing = requiredChargeFlameDieIds(state).filter(id => !action.dieIds.includes(id));
-      if (missing.length) return 'Every Charge Flame die must participate while Charge is armed.';
-    }
     const qualification = planQualification(activeEncounterDice(state), action.hand, action.dieIds,
       { roundState: state.dieRoundState, claims: action.qualificationClaims });
     if (!qualification.legal) return 'Select a complete valid set of participating dice.';
@@ -598,23 +446,16 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (state.phase !== 'round') return 'Charge can only be armed during a gameplay round.';
     if (!hasOwnedChargeFlame(state)) return 'This run does not own a Charge Flame.';
     if (!state.chargeArmed && state.chargeXMult <= 1) return 'Charge has no stored bonus yet.';
-    if (!state.chargeArmed && !hasChargeBonfire(state)) {
-      const required = requiredChargeFlameDieIds(state);
-      const selected = action.dieIds ?? [];
-      if (!required.length || required.some(id => !selected.includes(id)) || !action.hand
-        || !isValidSelection(activeEncounterDice(state), action.hand, selected, state.dieRoundState))
-        return 'Select every Charge Flame die in the intended hand before arming Charge.';
-    }
     return null;
   }
   if (action.type === 'STOKE_FLAME') {
     if (state.phase !== 'shop' || !state.shop) return 'Flames can only be Stoked in a normal Shop.';
     if (state.shop.stage !== 'fireKeeping') return 'Flames can only be Stoked during Fire Keeping.';
-    const die = 'diceInventory' in state ? collectibleDieById(state, action.dieId)
-      : state.dice.find(item => item.id === action.dieId && item.owner === 'player');
-    if (!die?.flame || !activeFlameId(die.flame)) return 'Choose an active Flame to invest in.';
+    const flame = flameInstances(state).find(item => item.instanceId === action.flameInstanceId);
+    if (!flame) return 'Choose an active Flame to invest in.';
+    if (flame.stage !== 'ember') return 'That Flame is already a Bonfire.';
     if (!Number.isInteger(action.amount) || action.amount <= 0) return 'Stoking requires a positive whole Gold amount.';
-    const limits = flameStokeLimits(state, action.dieId);
+    const limits = flameStokeLimits(state, action.flameInstanceId);
     if (action.amount > limits.affordableAmount) return 'Not enough Gold to Stoke that Ember.';
     if (action.amount > limits.remainingCapacity) return 'A Flame cannot hold more than 100 invested Gold.';
     return null;
@@ -624,10 +465,16 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (action.type === 'CHOOSE_FLAME') {
       if (state.flameSelection.acquired) return 'Only one new Flame may be acquired per selection.';
       const offer = state.flameSelection.offers.find(item => item.id === action.offerId);
-      if (!offer || !state.dice.some(die => die.id === action.dieId && die.owner === 'player')) return 'Choose an available Flame and a physical die.';
+      if (!offer) return 'Choose an available Flame.';
       if (hasOwnedFlame(state as GameState, offer.flame)) return 'That Flame type is already owned by this run.';
+      const firstEmpty = state.flameSlots.findIndex(slot => slot === null);
+      if (firstEmpty < 0) {
+        if (action.replaceSlot === undefined) return 'Choose a Flame slot to replace.';
+        if (action.replaceSlot < 0 || action.replaceSlot >= 5 || !state.flameSlots[action.replaceSlot])
+          return 'Choose an occupied Flame slot to replace.';
+      } else if (action.replaceSlot !== undefined) return 'An empty Flame slot is available.';
     } else if (action.type === 'CONTINUE_FLAME_SELECTION' && !state.flameSelection.acquired)
-      return 'A Flame must be assigned before legacy continuation.';
+      return 'Choose a Flame or skip the Flame reward before continuing.';
     else if (action.type === 'SKIP_FLAME_SELECTION' && state.flameSelection.acquired)
       return 'The Flame reward has already been claimed.';
     return null;
@@ -682,21 +529,6 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (state.gold < cost) return 'Not enough Gold for this die.';
     return null;
   }
-  if (action.type === 'BUY') {
-    if (state.shop.stage !== 'dice') return 'Shop dice and legacy Enhancements are available during the Dice stage.';
-    const offer = state.shop.offers.find(item => item.id === action.offerId);
-    const die = state.dice.find(item => item.id === action.dieId);
-    if (offer?.dieType && offer.rarity && offer.price !== undefined) {
-      if (offer.purchased) return 'Choose an available Dice offer.';
-      if (!('diceInventory' in state) || !firstPurchaseSlot(state.diceInventory)) return 'Collection full.';
-      if (state.gold < (dicePurchaseIsFree(state.shop) ? 0 : offer.price)) return 'Not enough Gold for this die.';
-      return null;
-    }
-    if (!offer?.enhancement || offer.purchased || !die) return 'Choose an available offer and a physical die.';
-    const cost = enhancementOfferIsFree(state.shop, offer.id) ? 0 : enhancementCost(offer.enhancement);
-    if (state.gold < cost) return 'Not enough Gold for this Enhancement.';
-    return placementError(die, activeFace(die), offer.enhancement, chapterNumberForRound(state.round));
-  }
   if (action.type === 'MOVE_DIE' || action.type === 'FUSE_DICE') {
     if (state.shop.stage !== 'dice') return 'The collection can only be reorganized during the Dice stage.';
     if (!('diceInventory' in state)) return 'The authoritative Dice inventory is required.';
@@ -714,7 +546,6 @@ export function validateAction(state: Board | GameState, action: Action): string
       const source = collectibleDieById(state, sourceId);
       const destination = collectibleDieById(state, destinationId);
       if (!source || !destination || !canFuse(source, destination)) return 'Only two matching special dice can Fuse.';
-      if (source.flame && destination.flame) return 'Move one carried Flame before Fusing these dice.';
       const rosterAfter = [...state.diceInventory.roster];
       if (action.source.area === 'roster') rosterAfter[action.source.index] = null;
       if (!rosterAfter.some(id => id !== null)) return 'At least one die must remain equipped.';
@@ -733,14 +564,8 @@ export function validateAction(state: Board | GameState, action: Action): string
       return 'The collection changed before that sale could be completed.';
     const die = collectibleDieById(state, action.expectedDieId);
     if (!die) return 'Choose an owned die.';
-    if (die.flame) return 'Move or complete this die’s carried Flame before selling it.';
     if (action.slot.area === 'roster' && rosterDice(state).length <= 1) return 'The final equipped die cannot be sold.';
     return null;
-  }
-  if (action.type === 'SELL_ENHANCEMENT') {
-    if (state.shop.stage !== 'dice') return 'Legacy Enhancements can only be managed during the Dice stage.';
-    const die = state.dice.find(item => item.id === action.dieId);
-    if (!die || !Number.isInteger(action.face) || !stacks(die.faces[action.face - 1], action.enhancement)) return 'Choose an Enhancement on that Face.';
   }
   if (action.type === 'RESTORE_LIFE') {
     if (state.lives >= CONFIG.maxLives) return 'All lives are already restored.';
@@ -748,15 +573,9 @@ export function validateAction(state: Board | GameState, action: Action): string
   }
   if (action.type === 'TRAIN_HAND') {
     if (state.shop.stage !== 'training') return 'Hands can only be trained during the Training stage.';
-    const offer = state.shop.trainingOffers.find(item => item.kind === 'hand' && item.hand === action.hand);
-    if (!offer) return 'Choose an available hand training offer.';
-    if (state.gold < (trainingOfferIsFree(state.shop, offer) ? 0 : handTrainingCost(offer.purchases))) return 'Not enough Gold to train this hand.';
-  }
-  if (action.type === 'TRAIN_ALL_HANDS') {
-    if (state.shop.stage !== 'training') return 'Team Training is only available during the Training stage.';
-    const offer = state.shop.trainingOffers.find(item => item.kind === 'team');
-    if (!offer) return 'Choose an available Team Training offer.';
-    if (state.gold < (trainingOfferIsFree(state.shop, offer) ? 0 : teamTrainingCost(offer.purchases))) return 'Not enough Gold for Team Training.';
+    const quote = quoteTraining(state.shop.trainingSession ?? createTrainingSession(state.handLevels), state.handLevels, action.hand);
+    if (quote.actualPrice === null) return 'This hand is too specialized to train safely.';
+    if (state.gold < quote.actualPrice) return 'Not enough Gold to train this hand.';
   }
   if (action.type === 'REROLL_DICE') {
     if (state.shop.stage !== 'dice') return 'Shop dice can only be rerolled during the Dice stage.';
@@ -824,15 +643,15 @@ export function newRun(seed: string, random?: RandomSource, options?: { debugTra
     score: 0n, gold: CONFIG.startingGold, lives: CONFIG.maxLives, engulfmentLevel: 0, nextShopVisitId: 1,
     nextFlameInstanceId: 1, roundAttemptNumber: 1,
     bossSchedule: {}, chapterPlans: {}, presentedChapters: [], chapterLifecycle: {}, boss: null, bossSilenced: false, currentNodeId: '',
-    bust: null, bustPresentationDice: null, flameTutorial: { pendingDieId: null, completed: false },
-    diceInventory, encounterDice: [], dice: [], dieRoundState: resetDieRoundState(Object.values(diceInventory.instances)), bonfires: [], flameInstanceIds: {},
+    bust: null, bustPresentationDice: null, flameTutorial: { pendingFlameInstanceId: null, completed: false },
+    diceInventory, encounterDice: [], dice: [], dieRoundState: resetDieRoundState(Object.values(diceInventory.instances)), flameSlots: emptyFlameSlots(),
     chargeAttribution: {}, infernoProgress: { evaluationIndex: 0, previousReadiness: null, recentMessageIds: [], recentAction: 'none' },
     infernoEvaluation: null, infernoEvaluationSuspendedUntilNewFlame: false, chargeXMult: 1, maxCharge: 1,
     chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
     fetchTarget: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
     scoreByHand: {}, effectScore: 0n, lastRoundPayout: null, roundSummary: null, flameSelection: null, specialOffer: null,
-    manualRerollsRemaining: CONFIG.manualRerollsPerRound, specialOfferEffects: initialSpecialOfferEffects(), suppressedPostBossRewardRounds: [],
+    manualRerollsRemaining: CONFIG.manualRerollsPerRound, specialOfferEffects: initialSpecialOfferEffects(),
     nextOfferId: 0, nextPlaybackEventId: 0, stats: createStats(seed), actionJournal: [], history: [], historyV2: [], historyV2TimelineId: 0,
     historyV2Coverage: { complete: true, firstRound: 1, firstActionId: 0, firstSeq: 0 },
     debugTrace: createDebugTrace(options?.debugTraceMode),
@@ -873,7 +692,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const die = collectibleDieById(next, action.dieId)!;
         die.weightedFace = action.face;
         resolver.emit({ type: 'SPECIAL_DIE_EFFECT', dieIds: [die.id], dieType: die.type, dieLevel: die.level,
-          face: action.face, effectCause: 'configuration', message: `D${die.id + 1} Weighted target set to ${action.face}` });
+          face: action.face, effectCause: 'configuration', message: `${rosterDieLabel(next, die.id)} Weighted target set to ${action.face}` });
         break;
       }
       case 'UNLOCK_WARDEN_DIE': resolver.unlockWardenDie(action.dieId); break;
@@ -896,37 +715,6 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
           rarity: offer.rarity!, listedPrice: offer.price!, pricePaid: cost, destination: slot } });
         break;
       }
-      case 'BUY': {
-        const offer = next.shop!.offers.find(item => item.id === action.offerId)!;
-        if (offer.dieType && offer.rarity && offer.price !== undefined) {
-          const cost = dicePurchaseIsFree(next.shop!) ? 0 : offer.price;
-          if (cost) resolver.spendGold(cost, `Bought ${offer.dieType} D6: −${formatPlayerNumber(cost)} Gold`, 'dicePurchase');
-          next.shop!.freeDicePurchaseAvailable = false;
-          const { die: purchased, slot } = purchaseDie(next.diceInventory, offer.dieType);
-          offer.purchased = true;
-          syncActiveDiceProjection(next);
-          resolver.emitV2({ kind: 'shop_transaction', transaction: { type: 'dice_purchased', shopVisitId: next.shop!.visitId!,
-            offerId: offer.id, dieId: purchased.id, dieType: purchased.type, level: purchased.level, rarity: offer.rarity,
-            listedPrice: offer.price, pricePaid: cost, destination: slot } });
-          break;
-        }
-        const enhancement = offer.enhancement!;
-        const die = collectibleDieById(next, action.dieId)!;
-        const face = activeFace(die);
-        const cost = enhancementOfferIsFree(next.shop!, offer.id) ? 0 : enhancementCost(enhancement);
-        if (cost) resolver.spendGold(cost, `Bought ${ENHANCEMENTS[enhancement].name}: −${formatPlayerNumber(cost)} Gold`, 'enhancement');
-        next.shop!.freeEnhancementOfferIds = (next.shop!.freeEnhancementOfferIds ?? []).filter(id => id !== offer.id);
-        face.enhancements[enhancement] = (face.enhancements[enhancement] ?? 0) + 1;
-        if (enhancement === 'vintage') { face.vintageSellValue = 0; delete face.vintageSommelierBoosted; }
-        if (enhancement === 'furnace') face.furnaceMultiplier = 1;
-        offer.purchased = true;
-        next.stats.purchases.push({ round: next.round, enhancement, dieId: die.id, face: face.rank, cost, stacksApplied: 1 });
-        const key = `D${die.id + 1}:${face.rank}`;
-        if (!next.stats.enhancedFaces.includes(key)) next.stats.enhancedFaces.push(key);
-        resolver.emit({ type: 'OFFER_PURCHASED', enhancement, rarity: ENHANCEMENTS[enhancement].rarity,
-          dieIds: [die.id], face: face.rank, message: `${ENHANCEMENTS[enhancement].name} added to D${die.id + 1} face ${face.rank}` });
-        break;
-      }
       case 'MOVE_DIE': {
         const sourceId = slotValue(next.diceInventory, action.source)!;
         const destinationId = slotValue(next.diceInventory, action.destination) ?? null;
@@ -945,8 +733,6 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         destination.level += source.level;
         if (destination.type === 'vintage') destination.vintageAppreciation = Math.min(
           destination.vintageAppreciation + source.vintageAppreciation, 90 * destination.level);
-        if (!destination.flame && source.flame) destination.flame = source.flame;
-        source.flame = null;
         delete next.diceInventory.instances[source.id];
         delete next.dieRoundState[source.id];
         setSlotValue(next.diceInventory, action.source, null);
@@ -970,76 +756,57 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
           vintageAppreciation: sale.vintageAppreciation, proceeds: sale.total } });
         break;
       }
-      case 'SELL_ENHANCEMENT': {
-        const die = collectibleDieById(next, action.dieId)!;
-        const face = die.faces[action.face - 1];
-        const stacksSold = stacks(face, action.enhancement);
-        const definition = ENHANCEMENTS[action.enhancement];
-        const totalProceeds = enhancementSellValue(face, action.enhancement);
-        const goldBefore = next.gold;
-        const vintageSellValue = action.enhancement === 'vintage' ? totalProceeds : undefined;
-        delete face.enhancements[action.enhancement];
-        if (action.enhancement === 'vintage') { delete face.vintageSellValue; delete face.vintageSommelierBoosted; }
-        if (action.enhancement === 'furnace') delete face.furnaceMultiplier;
-        if (action.enhancement === 'flywheel') delete face.flywheelCharges;
-        if (action.enhancement === 'sustainable') delete face.sustainableCharges;
-        resolver.addGold(totalProceeds, `Sold ${definition.name} ×${formatPlayerNumber(stacksSold)}: +${formatPlayerNumber(totalProceeds)} Gold`, 'enhancementSale', die.id, action.enhancement, face.rank);
-        next.stats.sales.push({ round: next.round, enhancement: action.enhancement, dieId: die.id, face: face.rank, stacksSold,
-          baseSellPrice: definition.baseSellPrice, totalProceeds, goldBefore, goldAfter: next.gold, vintageSellValue });
-        resolver.emit({ type: 'ENHANCEMENT_SOLD', enhancement: action.enhancement, dieIds: [die.id], face: face.rank,
-          amount: totalProceeds, message: `Sold all ${formatPlayerNumber(stacksSold)} ${definition.name} stack${stacksSold === 1 ? '' : 's'} from D${die.id + 1} face ${face.rank} for ${formatPlayerNumber(totalProceeds)} Gold` });
-        break;
-      }
       case 'CHOOSE_FLAME': {
         const offer = next.flameSelection!.offers.find(item => item.id === action.offerId)!;
-        const die = collectibleDieById(next, action.dieId)!;
-        const replaced = activeFlameId(die.flame);
         const firstFlame = ownedFlameIds(next).size === 0;
-        if (replaced) removeFlameInstance(next, replaced);
-        die.flame = { id: offer.flame, investedGold: 0 };
-        const instanceId = assignFlameInstance(next, offer.flame);
+        const emptySlot = next.flameSlots.findIndex(item => item === null);
+        const slot = (emptySlot >= 0 ? emptySlot : action.replaceSlot!) as FlameSlotIndex;
+        const replaced = next.flameSlots[slot] ? structuredClone(next.flameSlots[slot]!) : null;
+        const flame = createFlameInstance(next, offer.flame);
+        next.flameSlots[slot] = flame;
+        const instanceId = flame.instanceId;
         if (next.infernoEvaluationSuspendedUntilNewFlame) {
           next.infernoEvaluationSuspendedUntilNewFlame = false;
           resolver.emitV2({ kind: 'inferno_suspension_changed', suspended: false,
             reason: 'new_flame_acquired', flame: offer.flame, instanceId });
         }
         next.infernoProgress.recentAction = 'flame_acquired';
-        if (replaced === 'fetch') next.fetchTarget = null;
-        if (offer.flame === 'fetch') resolver.setFetchTarget(die.id, null);
+        if (replaced?.type === 'fetch') next.fetchTarget = null;
+        if (offer.flame === 'fetch') resolver.setFetchTarget(null);
         normalizeHandFamilyFlameRuntime(next);
         recalculateMaxCharge(next);
         next.flameSelection!.acquired = true;
-        next.stats.flameAcquisitions.push({ round: next.round, dieId: die.id, flame: offer.flame, replaced });
-        if (firstFlame && !next.flameTutorial.completed) next.flameTutorial.pendingDieId = die.id;
-        resolver.emit({ type: replaced ? 'FLAME_REPLACED' : 'FLAME_ACQUIRED', flame: offer.flame, rarity: FLAMES[offer.flame].rarity, dieIds: [die.id],
-          message: replaced ? `D${die.id + 1} replaced ${FLAMES[replaced].name} with ${FLAMES[offer.flame].name} [${rarityLabel(FLAMES[offer.flame].rarity)}]; prior investment was lost`
-            : `D${die.id + 1} acquired ${FLAMES[offer.flame].name} [${rarityLabel(FLAMES[offer.flame].rarity)}] as a 0-Gold ember` });
+        next.stats.flameAcquisitions.push({ round: next.round, slot, instanceId, flame: offer.flame,
+          replaced: replaced ? { instanceId: replaced.instanceId, flame: replaced.type,
+            stage: replaced.stage, investedGold: replaced.investedGold } : null });
+        if (firstFlame && !next.flameTutorial.completed) next.flameTutorial.pendingFlameInstanceId = instanceId;
+        resolver.emit({ type: replaced ? 'FLAME_REPLACED' : 'FLAME_ACQUIRED', flame: offer.flame, rarity: FLAMES[offer.flame].rarity,
+          message: replaced ? `Flame slot ${slot + 1} replaced ${FLAMES[replaced.type].name} with ${FLAMES[offer.flame].name}; prior investment was lost`
+            : `Flame slot ${slot + 1} acquired ${FLAMES[offer.flame].name} as a 0-Gold Ember` });
         resolver.openShop();
         break;
       }
       case 'STOKE_FLAME': {
-        const die = collectibleDieById(next, action.dieId)!;
-        const id = activeFlameId(die.flame)!;
-        const flame = die.flame = { id, investedGold: activeFlameInvestment(die.flame) };
+        const flame = flameInstances(next).find(item => item.instanceId === action.flameInstanceId)!;
+        const id = flame.type;
+        const slot = next.flameSlots.findIndex(item => item?.instanceId === flame.instanceId) as FlameSlotIndex;
         const source = 'shop' as const;
         const from = flame.investedGold;
-        resolver.spendGold(action.amount, `Stoked ${FLAMES[flame.id].name}: −${formatPlayerNumber(action.amount)} Gold (Shop)`, 'flameInvestment');
+        resolver.spendGold(action.amount, `Stoked ${FLAMES[id].name}: −${formatPlayerNumber(action.amount)} Gold (Shop)`, 'flameInvestment');
         flame.investedGold += action.amount;
         next.infernoProgress.recentAction = 'flame_invested';
         recalculateMaxCharge(next);
-        next.stats.flameStokes.push({ round: next.round, dieId: die.id, flame: flame.id, amount: action.amount,
+        next.stats.flameStokes.push({ round: next.round, slot, instanceId: flame.instanceId, flame: id, amount: action.amount,
           from, total: flame.investedGold, source });
         next.stats.totalFlameInvestment += action.amount;
-        resolver.emit({ type: 'FLAME_INVESTED', flame: flame.id, dieIds: [die.id], amount: action.amount,
-          message: `Stoked ${FLAMES[flame.id].name}: ${formatPlayerNumber(from)} → ${formatPlayerNumber(flame.investedGold)} / 100 · ${flameEffectText(flame.id, flame.investedGold, next)}` });
+        resolver.emit({ type: 'FLAME_INVESTED', flame: id, amount: action.amount,
+          message: `Stoked ${FLAMES[id].name}: ${formatPlayerNumber(from)} → ${formatPlayerNumber(flame.investedGold)} / 100 · ${flameEffectText(id, flame.investedGold, next)}` });
         if (flame.investedGold === 100) {
-          const id = flame.id;
-          die.flame = null;
-          if (!next.bonfires.includes(id)) next.bonfires.push(id);
+          flame.stage = 'bonfire';
           next.infernoProgress.recentAction = 'bonfire_created';
           recalculateMaxCharge(next);
-          resolver.emit({ type: 'BONFIRE_CREATED', flame: id, dieIds: [die.id],
-            message: `${FLAMES[id].name} became a Bonfire and detached from D${die.id + 1}` });
+          resolver.emit({ type: 'BONFIRE_CREATED', flame: id,
+            message: `${FLAMES[id].name} became a Bonfire in Flame slot ${slot + 1}` });
         }
         break;
       }
@@ -1090,35 +857,23 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       }
       case 'UNLOCK_SHOP_EXIT': next.shop!.exitUnlocked = true; break;
       case 'TRAIN_HAND': {
-        const offer = next.shop!.trainingOffers.find(item => item.kind === 'hand' && item.hand === action.hand)!;
+        const session = next.shop!.trainingSession ??= createTrainingSession(next.handLevels);
         const fromLevel = next.handLevels[action.hand];
         const toLevel = fromLevel + 1;
-        const key = trainingOfferKey(offer);
-        const cost = trainingOfferIsFree(next.shop!, offer) ? 0 : handTrainingCost(offer.purchases);
+        const quote = quoteTraining(session, next.handLevels, action.hand);
+        const cost = quote.actualPrice!;
         if (cost) resolver.spendGold(cost, `Trained ${HANDS[action.hand].name} to level ${formatPlayerNumber(toLevel)}: −${formatPlayerNumber(cost)} gold`, 'handTraining');
-        next.shop!.freeTrainingOfferKeys = (next.shop!.freeTrainingOfferKeys ?? []).filter(item => item !== key);
+        session.freeTrainingAvailable = false;
         next.handLevels[action.hand] = toLevel;
-        offer.purchases++;
-        next.stats.trainingPurchases.push({ round: next.round, hand: action.hand, fromLevel, toLevel, cost });
+        session.purchasesByHand[action.hand] = quote.purchaseCount + 1;
+        next.stats.trainingPurchases.push({ round: next.round, hand: action.hand, fromLevel, toLevel, cost,
+          shopVisitId: next.shop!.visitId, family: quote.family, frozenBaseline: quote.frozenBaseline,
+          relativeTier: quote.relativeTier, normalPrice: quote.normalPrice,
+          waivedByOnTheHouse: quote.waivedByOnTheHouse, purchaseCount: quote.purchaseCount + 1 });
         next.stats.trainingPurchasesTotal++;
         next.stats.trainingGoldSpent += cost;
         resolver.emit({ type: 'TRAINING_PURCHASED', hand: action.hand, goldSpendSource: 'handTraining', amount: cost,
-          message: `${HANDS[action.hand].name} trained to level ${formatPlayerNumber(toLevel)} · next training ${formatPlayerNumber(handTrainingCost(offer.purchases))} Gold` });
-        break;
-      }
-      case 'TRAIN_ALL_HANDS': {
-        const offer = next.shop!.trainingOffers.find(item => item.kind === 'team')!;
-        const key = trainingOfferKey(offer);
-        const cost = trainingOfferIsFree(next.shop!, offer) ? 0 : teamTrainingCost(offer.purchases);
-        if (cost) resolver.spendGold(cost, `Team Training: −${formatPlayerNumber(cost)} gold`, 'handTraining');
-        next.shop!.freeTrainingOfferKeys = (next.shop!.freeTrainingOfferKeys ?? []).filter(item => item !== key);
-        for (const hand of HAND_IDS) next.handLevels[hand]++;
-        offer.purchases++;
-        next.stats.trainingPurchases.push({ round: next.round, hand: 'all', cost });
-        next.stats.trainingPurchasesTotal++;
-        next.stats.trainingGoldSpent += cost;
-        resolver.emit({ type: 'TRAINING_PURCHASED', goldSpendSource: 'handTraining', amount: cost,
-          message: `Team Training raised every hand by 1 level · next training ${formatPlayerNumber(teamTrainingCost(offer.purchases))} Gold` });
+          message: `${HANDS[action.hand].name} trained to level ${formatPlayerNumber(toLevel)}` });
         break;
       }
       case 'RESTORE_LIFE': {
@@ -1137,7 +892,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         break;
       }
       case 'DISMISS_FLAME_TUTORIAL':
-        next.flameTutorial = { pendingDieId: null, completed: true };
+        next.flameTutorial = { pendingFlameInstanceId: null, completed: true };
         resolver.emit({ type: 'FLAME_TUTORIAL_COMPLETED', message: 'First-Flame shop tutorial completed' });
         break;
       case 'RETRY_ROUND':
@@ -1145,11 +900,11 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         resolver.startRound(true); break;
       case 'NEXT_CHAPTER':
         resolver.emitV2({ kind: 'shop_visit_completed', shopVisitId: next.shop!.visitId!, stage: 'fireKeeping', progression: 'next_chapter' });
-        if (next.flameTutorial.pendingDieId !== null && !next.flameTutorial.completed) next.flameTutorial = { pendingDieId: null, completed: true };
+        if (next.flameTutorial.pendingFlameInstanceId !== null && !next.flameTutorial.completed) next.flameTutorial = { pendingFlameInstanceId: null, completed: true };
         next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
       case 'NEXT_ROUND':
         resolver.emitV2({ kind: 'shop_visit_completed', shopVisitId: next.shop!.visitId!, stage: 'fireKeeping', progression: 'next_round' });
-        if (next.flameTutorial.pendingDieId !== null && !next.flameTutorial.completed) next.flameTutorial = { pendingDieId: null, completed: true };
+        if (next.flameTutorial.pendingFlameInstanceId !== null && !next.flameTutorial.completed) next.flameTutorial = { pendingFlameInstanceId: null, completed: true };
         next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
     }
   }, random, rngStateOverride, options);

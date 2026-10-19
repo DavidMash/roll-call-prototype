@@ -1,52 +1,41 @@
-import { activeFlameId } from './flames';
 import type { Board, GameState, RunStats } from './types';
 import { toExactJsonValue } from './scoreMath';
-import { ownedDice } from './inventory';
 
 export function createStats(seed: string): RunStats {
   return {
-    seed, roundReached: 1, rounds: [], purchases: [], sales: [], busts: [],
+    seed, roundReached: 1, rounds: [], busts: [],
     mapTransitions: [], bossEncounters: [], callerEvents: [], wardenEvents: [], hexerEvents: [],
-    lifeRestores: [], vintageGrowth: [],
+    lifeRestores: [],
     trainingPurchases: [], trainingPurchasesTotal: 0, trainingGoldSpent: 0,
     flameAcquisitions: [], flameStokes: [], totalFlameInvestment: 0, flameTriggers: {},
     chargeGained: 0, chargeArmed: 0,
-    chargeConsumed: 0, chargeResets: 0, personalTrainerAttempts: 0, personalTrainerSuccesses: 0,
-    personalTrainerLevelsGranted: 0, hotStreakCharges: 0, hotStreakSkippedHands: [],
-    lifetimeNormalShopGoldSpent: 0, magneticAnchorBatches: 0, magneticAttractions: 0,
-    bumpControlledRolls: 0, enhancedFaces: [], enhancementShopRerolls: 0, diceOfferRerolls: 0, shopDiceRerolls: 0,
+    chargeConsumed: 0, chargeResets: 0, hotStreakCharges: 0, hotStreakSkippedHands: [],
+    lifetimeNormalShopGoldSpent: 0, diceOfferRerolls: 0, shopDiceRerolls: 0,
     goldEarned: 0,
-    goldBySource: { golden: 0, jackpot: 0, enhancementSale: 0, diceSale: 0, roundBase: 0, unusedRerolls: 0, interest: 0, bossReward: 0, specialOffer: 0, cashBonus: 0 },
+    goldBySource: { golden: 0, jackpot: 0, diceSale: 0, roundBase: 0, unusedRerolls: 0, interest: 0, bossReward: 0, specialOffer: 0 },
     goldSpent: 0,
-    goldSpentBySource: { enhancement: 0, dicePurchase: 0, shopDiceReroll: 0, enhancementReroll: 0, diceOfferReroll: 0, handTraining: 0, flameInvestment: 0, lifeRestore: 0, furnace: 0 },
+    goldSpentBySource: { dicePurchase: 0, shopDiceReroll: 0, diceOfferReroll: 0, handTraining: 0, flameInvestment: 0, lifeRestore: 0, furnace: 0 },
     manualRerollActions: 0, manualDiceRerolled: 0, manualRerolls: [], deadBoardRescues: 0,
-    triggers: {}, probabilityProcs: {
-      sticky: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
-      boomerang: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
-      holiday: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
-      hitchhiker: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
-      personalTrainer: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
-      doubleTime: { checks: 0, successes: 0, failures: 0, stacksAtCheck: [] },
-    }, scoreBySource: { hand: 0n, jumpingBean: 0n, hitchhiker: 0n, boss: 0n },
+    scoreBySource: { hand: 0n, jumpingBean: 0n, hitchhiker: 0n, boss: 0n },
     handScores: [], jumpingBeanFreePlays: [], standaloneScores: [], handBonusPips: 0, hitchhikerPipsContributed: 0,
     loss: null, resolutionError: null,
   };
 }
 export function boardSnapshot(state: GameState): Board {
   const { phase, round, target, score, gold, lives, engulfmentLevel, nextShopVisitId, nextFlameInstanceId, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, bustPresentationDice, flameTutorial,
-    manualRerollsRemaining, specialOfferEffects, suppressedPostBossRewardRounds, bossSilenced, dice, dieRoundState, bonfires, flameInstanceIds, chargeAttribution, infernoProgress, infernoEvaluation, infernoEvaluationSuspendedUntilNewFlame, chargeXMult, maxCharge, decisionId, sixPackXMult, sixPackUpperHandsPlayed,
+    manualRerollsRemaining, specialOfferEffects, bossSilenced, dice, dieRoundState, flameSlots, chargeAttribution, infernoProgress, infernoEvaluation, infernoEvaluationSuspendedUntilNewFlame, chargeXMult, maxCharge, decisionId, sixPackXMult, sixPackUpperHandsPlayed,
     chargeArmed, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, lifetimeNormalShopGoldSpent, consumed, scorecardCycleConsumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, fetchTarget, lastRoundPayout, roundSummary, shop, flameSelection, specialOffer } = state;
   return structuredClone({ phase, round, target, score, gold, lives, engulfmentLevel, nextShopVisitId, nextFlameInstanceId, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, bustPresentationDice, flameTutorial,
-    manualRerollsRemaining, specialOfferEffects, suppressedPostBossRewardRounds, bossSilenced, dice, dieRoundState, bonfires, flameInstanceIds, chargeAttribution, infernoProgress, infernoEvaluation, infernoEvaluationSuspendedUntilNewFlame,
+    manualRerollsRemaining, specialOfferEffects, bossSilenced, dice, dieRoundState, flameSlots, chargeAttribution, infernoProgress, infernoEvaluation, infernoEvaluationSuspendedUntilNewFlame,
     chargeXMult, maxCharge, chargeArmed, decisionId, sixPackXMult, sixPackUpperHandsPlayed, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, lifetimeNormalShopGoldSpent, consumed, scorecardCycleConsumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, fetchTarget, lastRoundPayout, roundSummary, shop, flameSelection, specialOffer });
 }
 export function exportRun(state: GameState) {
-  return toExactJsonValue({ schemaVersion: 22, scoringModel: 'exact-score-domain-v1', ...state.stats,
+  return toExactJsonValue({ schemaVersion: 26, scoringModel: 'whole-dice-only-v1', ...state.stats,
     actions: structuredClone(state.actionJournal),
     scoreByHand: structuredClone(state.scoreByHand),
-    bonfires: [...state.bonfires], finalHandLevels: structuredClone(state.handLevels),
-    finalFlames: ownedDice(state).map(die => ({ dieId: die.id, flame: activeFlameId(die.flame), investedGold: die.flame?.investedGold ?? 0 })),
+    finalHandLevels: structuredClone(state.handLevels),
+    finalFlameSlots: structuredClone(state.flameSlots),
     rngState: state.rngState, board: boardSnapshot(state) });
 }

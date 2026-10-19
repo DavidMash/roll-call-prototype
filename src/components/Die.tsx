@@ -1,13 +1,10 @@
 import { Paper, Text } from '@mantine/core';
 import { activeFace, scoringPips } from '../game/dice';
-import { ENHANCEMENTS, ENHANCEMENT_IDS } from '../game/enhancements';
-import { activeFlameId, activeFlameInvestment, FLAMES } from '../game/flames';
-import type { Die as PhysicalDie, Enhancement, Flame, Rank } from '../game/types';
+import type { Die as PhysicalDie, DieType, Flame, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
 import { PipFace } from './PipFace';
 import { formatExactScore, formatPlayerNumber } from '../game/copy';
 import type { ExactScore } from '../game/scoreMath';
-import { EnhancementSymbol } from './EnhancementIdentity';
 
 interface Props {
   die: PhysicalDie;
@@ -17,7 +14,7 @@ interface Props {
   highlighted: boolean;
   rolling: boolean;
   resolving?: boolean;
-  ability?: Enhancement;
+  ability?: DieType;
   flameAbility?: Flame;
   disabled: boolean;
   detailsDisabled?: boolean;
@@ -29,36 +26,26 @@ interface Props {
   lockedReason?: string;
   allowIneligibleClick?: boolean;
   onClick: () => void;
-  onEnhancements: () => void;
-  onFlame: (flame: Flame) => void;
+  onDetails: () => void;
   onDropOffer?: (offerId: number) => void;
   fetchTarget?: { dieId: number; physicalFace: Rank } | null;
 }
 
-export function Die({ die, rosterSlot, display, selected, highlighted, rolling, resolving = false, ability, flameAbility, disabled, detailsDisabled = false, eligible,
-  wardenLocked = false, wardenSelectable = false, unlockAt, ineligibleReason, lockedReason, allowIneligibleClick = false,
-  onClick, onEnhancements, onFlame, onDropOffer, fetchTarget }: Props) {
+export function Die({ die, rosterSlot, display, selected, highlighted, rolling, resolving = false, ability, flameAbility, disabled,
+  detailsDisabled = false, eligible, wardenLocked = false, wardenSelectable = false, unlockAt, ineligibleReason,
+  lockedReason, allowIneligibleClick = false, onClick, onDetails, onDropOffer, fetchTarget }: Props) {
   const face = activeFace(die);
-  const enhancements = ENHANCEMENT_IDS.filter(id => (face.enhancements[id] ?? 0) > 0)
-    .sort((a, b) => (face.enhancements[b] ?? 0) - (face.enhancements[a] ?? 0));
   const pips = scoringPips(face);
-  const flameId = activeFlameId(die.flame);
-  const flameInvestment = activeFlameInvestment(die.flame);
-  const enhancementSummary = enhancements.map(id => `${ENHANCEMENTS[id].name} ×${formatPlayerNumber(face.enhancements[id]!)}`).join(', ');
-  const interactionDisabled = disabled || (wardenLocked && !wardenSelectable) || !!lockedReason || (!!ineligibleReason && !allowIneligibleClick);
+  const mutation = face.bossMutation;
+  const interactionDisabled = disabled || (wardenLocked && !wardenSelectable) || !!lockedReason
+    || (!!ineligibleReason && !allowIneligibleClick);
   const playerLabel = `D${(rosterSlot ?? 0) + 1}`;
   const dieLabel = die.owner === 'boss' ? 'Cursed Die' : `Die ${(rosterSlot ?? 0) + 1}`;
-  const temporaryStates = [
-    face.snakeEyed ? 'Snake-Eyed temporary face' : '',
-    face.infected ? 'infected face; 3 fewer Pips; Enhancements disabled' : '',
-    face.magneticSourceUsed && face.enhancements.magnetic ? 'Magnetic source pull used this Round' : '',
-  ].filter(Boolean);
+  const temporaryState = mutation?.kind === 'snakeEyes' ? 'Snake-Eyed temporary face'
+    : mutation?.kind === 'infected' ? 'infected face; 3 fewer Pips; die effect suppressed' : '';
   const isFetchTarget = fetchTarget?.dieId === die.id && fetchTarget.physicalFace === die.value;
   const dieDetails = `${dieLabel}, face ${formatPlayerNumber(face.rank)}, ${formatPlayerNumber(pips)} Pips`
-    + `${temporaryStates.length ? `, ${temporaryStates.join(', ')}` : ''}`
-    + `${flameId ? `, Ember ${FLAMES[flameId].name}, ${formatPlayerNumber(flameInvestment)} of 100 Gold` : ''}`
-    + `${isFetchTarget ? ', Fetch target' : ''}`
-    + `${enhancementSummary ? `, ${enhancementSummary}` : ''}`;
+    + `${temporaryState ? `, ${temporaryState}` : ''}${isFetchTarget ? ', Fetch target' : ''}`;
   const accessibilityLabel = wardenLocked
     ? `${dieDetails}, locked${unlockAt === undefined ? '' : ` until ${formatExactScore(unlockAt)} points`}${wardenSelectable ? ', selectable to unlock' : ''}`
     : `${dieDetails}${lockedReason ? `, required: ${lockedReason}` : ineligibleReason ? `, unavailable: ${ineligibleReason}` : ''}`;
@@ -67,17 +54,8 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
   return <div className={`die-wrap die-slot${detailsDisabled ? ' details-disabled' : ''}`} data-die-id={die.id}
     data-tutorial={die.owner === 'player' ? `die-${(rosterSlot ?? 0) + 1}` : undefined}
     data-testid={die.owner === 'player' ? `flame-die-${die.id}` : 'cursed-die-slot'}>
-    <div className="die-flame-zone">
-      {flameId && <button type="button" className="die-flame-cap" disabled={detailsDisabled} data-tutorial="flame-badge"
-        data-flame-die-id={die.id}
-        data-testid={`active-flame-${flameId}`}
-        aria-label={`View ${FLAMES[flameId].name} Flame details, Ember at ${formatPlayerNumber(flameInvestment)} of 100 Gold`}
-        onClick={() => onFlame(flameId)}>
-        <span aria-hidden="true">🔥</span><span>{FLAMES[flameId].shortName}</span><strong>· {formatPlayerNumber(flameInvestment)}</strong>
-      </button>}
-    </div>
     <Paper component="button" type="button" withBorder
-      className={`die ${die.owner === 'boss' ? 'cursed-die' : ''} ${face.snakeEyed ? 'snake-eyed-face' : ''} ${face.infected ? 'infected-face' : ''} ${face.magneticSourceUsed ? 'magnetic-used' : ''} ${selected ? 'selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${resolving ? 'resolving' : ''} ${triggered ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''} ${wardenLocked ? 'warden-locked' : ''}`}
+      className={`die ${die.owner === 'boss' ? 'cursed-die' : ''} ${mutation?.kind === 'snakeEyes' ? 'snake-eyed-face' : ''} ${mutation?.kind === 'infected' ? 'infected-face' : ''} ${selected ? 'selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${resolving ? 'resolving' : ''} ${triggered ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''} ${wardenLocked ? 'warden-locked' : ''}`}
       disabled={interactionDisabled} aria-disabled={interactionDisabled} aria-pressed={selected}
       title={wardenLocked ? `${dieLabel} locked${unlockAt === undefined ? '' : ` until ${formatExactScore(unlockAt)} points`}${wardenSelectable ? ' · choose to unlock' : ''}` : lockedReason ?? ineligibleReason}
       aria-label={accessibilityLabel} data-locked-until={unlockAt?.toString()} data-resolving={resolving || undefined}
@@ -91,20 +69,16 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
       }}>
       <Text size="xs" c="dimmed" className="die-id">{die.owner === 'boss' ? 'CURSED' : playerLabel}</Text>
       {wardenLocked && <div className="die-lock-overlay" aria-hidden="true"><span>🔒</span><span>{unlockAt === undefined ? 'SELECT' : `${formatExactScore(unlockAt)} PTS`}</span></div>}
-      {face.snakeEyed && <span className="boss-face-badge" aria-hidden="true" title="Snake Eyes">S</span>}
-      {face.infected && <span className="boss-face-badge infected" aria-hidden="true" title="Infected">!</span>}
-      {face.magneticSourceUsed && <span className="die-state-dot" aria-hidden="true" title="Magnetic pull used">●</span>}
+      {mutation?.kind === 'snakeEyes' && <span className="boss-face-badge" aria-hidden="true" title="Snake Eyes">S</span>}
+      {mutation?.kind === 'infected' && <span className="boss-face-badge infected" aria-hidden="true" title="Infected">!</span>}
       {isFetchTarget && <span className="fetch-face-badge" aria-hidden="true" title="Fetch target">FETCH</span>}
       {display === 'pips'
         ? <PipFace value={face.rank} label={`${dieLabel} showing ${face.rank}`} />
         : <Text component="span" className="die-number" role="img" aria-label={`${dieLabel} showing ${face.rank}`}>{face.rank}</Text>}
     </Paper>
-    <button type="button" className={`die-enhancement-strip${enhancements.length ? '' : ' empty'}`} disabled={detailsDisabled}
-      aria-label={`View Enhancements on ${die.owner === 'boss' ? 'Cursed Die' : playerLabel} face ${face.rank}${enhancementSummary ? `: ${enhancementSummary}` : ': none'}`}
-      onClick={onEnhancements}>
-      {enhancements.length ? enhancements.slice(0, 6).map(id => <EnhancementSymbol key={id} enhancement={id}
-        stacks={face.enhancements[id]!} decorative className={face.infected ? 'disabled' : ''} />)
-        : <span className="enhancement-strip-empty" aria-hidden="true">· · ·</span>}
+    <button type="button" className="die-face-details" disabled={detailsDisabled}
+      aria-label={`View physical faces for ${die.owner === 'boss' ? 'Cursed Die' : playerLabel}`} onClick={onDetails}>
+      FACES
     </button>
   </div>;
 }

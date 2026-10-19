@@ -195,7 +195,7 @@ test('expanded current Round preserves a substantially large formatted target wi
   state.round = targetRound - 1;
   state.phase = 'shop';
   state.currentNodeId = `shop:before-round:${targetRound}`;
-  state.shop = { kind: 'between_rounds', stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { kind: 'between_rounds', stage: 'fireKeeping', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   state.bust = null;
 
   await page.goto(`/?seed=${state.seed}&speed=normal`);
@@ -225,7 +225,7 @@ test('the post-Boss Shop stays in the completed Chapter until NEXT CHAPTER start
   state.round = 6;
   state.phase = 'flameSelection';
   state.currentNodeId = 'flame:after-round:6';
-  state.flameSelection = { offers: [], acquired: true };
+  state.flameSelection = { offers: [{ id: 1, flame: 'ultimate' }], acquired: false };
   state.shop = null;
   state.roundSummary = null;
   state.presentedChapters = [1];
@@ -235,6 +235,7 @@ test('the post-Boss Shop stays in the completed Chapter until NEXT CHAPTER start
 
   await page.goto(`/?seed=${state.seed}&speed=normal`);
   await installRun(page, state);
+  await page.getByTestId('flame-offer-ultimate').getByRole('button', { name: 'SELECT FLAME' }).click();
 
   const map = page.getByTestId('run-map-transition');
   await expect(map).toBeVisible();
@@ -256,6 +257,7 @@ test('the post-Boss Shop stays in the completed Chapter until NEXT CHAPTER start
   await expect(page.locator('.shop-summary').getByText('SHOP', { exact: true })).toBeVisible();
   await expect(page.getByTestId('stat-round')).toContainText('C1 R6');
   await goToShopStage(page, 'fireKeeping');
+  await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
   await expect(page.getByRole('button', { name: 'NEXT CHAPTER', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'NEXT ROUND', exact: true })).toHaveCount(0);
   await expect(page.getByTestId('chapter-splash')).toHaveCount(0);

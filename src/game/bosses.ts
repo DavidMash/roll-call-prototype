@@ -31,12 +31,6 @@ export const BOSSES: Record<BossType, BossDefinition> = {
     primary: '#64748B',
     secondary: '#CBD5E1',
   },
-  clockmaker: {
-    name: 'THE CLOCKMAKER',
-    shortRule: 'Every roll gets Bumped up one face.',
-    primary: '#0EA5E9',
-    secondary: '#7DD3FC',
-  },
   tightrope: {
     name: 'THE TIGHTROPE',
     shortRule: 'Start with 0 Rerolls. Goal is halved.',
@@ -105,7 +99,7 @@ export const BOSSES: Record<BossType, BossDefinition> = {
   },
   infected: {
     name: 'THE INFECTED',
-    shortRule: 'Infected faces lose 3 Pips and their Enhancements. Played faces become infected.',
+    shortRule: "Infected faces lose 3 Pips and suppress the die's special effect. Played faces become infected.",
     primary: '#DC2626',
     secondary: '#FB7185',
   },
@@ -113,7 +107,7 @@ export const BOSSES: Record<BossType, BossDefinition> = {
 
 export const BOSS_TYPES: BigBossType[] = ['caller', 'warden', 'hexer', 'marathon', 'quickdraw', 'fly', 'snakeEyes', 'infected'];
 export const MINI_BOSS_TYPES: MiniBossType[] = [
-  'juggler', 'capitalReturn', 'neglected', 'clockmaker', 'tightrope', 'crawler', 'magician', 'mugger',
+  'juggler', 'capitalReturn', 'neglected', 'tightrope', 'crawler', 'magician', 'mugger',
 ];
 export const ALL_BOSS_TYPES: BossType[] = [...MINI_BOSS_TYPES, ...BOSS_TYPES];
 export const CALLER_HAND_POOL: HandId[] = [
@@ -297,7 +291,6 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
         restored: false,
       };
     }
-    case 'clockmaker': return { type };
     case 'tightrope': return { type };
     case 'crawler': return { type };
     case 'magician': {
@@ -307,7 +300,7 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
       const missingDieId = dieIds.length > 1 ? dieIds.splice(Math.floor(rng.next() * dieIds.length), 1)[0] : null;
       const upper = [...UPPER_HAND_IDS];
       const calledHands = Array.from({ length: 3 }, () => upper.splice(Math.floor(rng.next() * upper.length), 1)[0]);
-      return { type, missingDieId, hiddenFlame: null, calledHands, completedHands: [], returned: missingDieId === null };
+      return { type, missingDieId, calledHands, completedHands: [], returned: missingDieId === null };
     }
     case 'mugger': {
       const rng = miniBossRng(seed, round, type);
@@ -343,24 +336,20 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
   }
 }
 
-const face = (rank: Rank, enhancements: Die['faces'][number]['enhancements'], weightedTarget?: Rank) =>
-  ({ rank, workoutPips: 0, enhancements, ...(weightedTarget ? { weightedTarget } : {}) });
-
 export function createCursedDie(): import('./types').EncounterDie {
   return {
     id: CURSED_DIE_ID,
     owner: 'boss',
     encounterId: 'hexer:cursed',
     value: 1,
-    flame: null,
     faces: [
-      face(1, { golden: 1, weighted: 1 }, 6),
-      face(2, { golden: 1, weighted: 1 }, 5),
-      face(3, { golden: 1, weighted: 1 }, 4),
-      face(4, { missingLink: 1, mirror: 1 }),
-      face(5, { workout: 5, mirror: 1 }),
-      face(6, { workout: 10, bump: 1 }),
-      face(7, { bonus: 5, mirror: 1 }),
+      { rank: 1, temporaryPips: 0, hexerEffect: { kind: 'goldenWeighted', target: 6 } },
+      { rank: 2, temporaryPips: 0, hexerEffect: { kind: 'goldenWeighted', target: 5 } },
+      { rank: 3, temporaryPips: 0, hexerEffect: { kind: 'goldenWeighted', target: 4 } },
+      { rank: 4, temporaryPips: 0, hexerEffect: { kind: 'wild' } },
+      { rank: 5, temporaryPips: 0, hexerEffect: { kind: 'wildWorkout', growthPips: 10 } },
+      { rank: 6, temporaryPips: 0, hexerEffect: { kind: 'workoutClockwork', growthPips: 20 } },
+      { rank: 7, temporaryPips: 0, hexerEffect: { kind: 'wildBonus', bonusPips: 50 } },
     ],
   };
 }
@@ -432,11 +421,8 @@ export const isLastPlay = (state: Pick<Board, 'boss' | 'consumed' | 'scorecardCy
 
 export function cleanupTemporaryBossFaces(dice: Die[]): void {
   for (const die of dice.filter(item => item.owner === 'player')) die.faces.forEach((face, index) => {
-    if (face.snakeEyed) face.rank = face.snakeEyesOriginalRank ?? (index + 1) as Rank;
-    delete face.snakeEyed;
-    delete face.snakeEyesOriginalRank;
-    delete face.infected;
-    delete face.magneticSourceUsed;
+    if (face.bossMutation?.kind === 'snakeEyes') face.rank = face.bossMutation.originalRank ?? (index + 1) as Rank;
+    delete face.bossMutation;
   });
 }
 

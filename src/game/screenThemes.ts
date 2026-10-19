@@ -31,7 +31,6 @@ export const SCREEN_THEMES: Record<ScreenThemeId, ScreenTheme> = {
   juggler: theme('juggler', 'THE JUGGLER', '◌', '#2ED68F', '#86EFAC'),
   capitalReturn: theme('capitalReturn', 'CAPITAL RETURN', '¢', '#D97706', '#FBBF24'),
   neglected: theme('neglected', 'THE NEGLECTED', '−', '#64748B', '#CBD5E1'),
-  clockmaker: theme('clockmaker', 'THE CLOCKMAKER', '↻', '#0EA5E9', '#7DD3FC'),
   tightrope: theme('tightrope', 'THE TIGHTROPE', '─', '#EAB308', '#FEF08A'),
   crawler: theme('crawler', 'THE CRAWLER', '⌁', '#65A30D', '#BEF264'),
   magician: theme('magician', 'THE MAGICIAN', '✦', '#7C3AED', '#C4B5FD'),

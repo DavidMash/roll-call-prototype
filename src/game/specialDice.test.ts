@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activeFace, createCollectibleDie } from './dice';
+import { createCollectibleDie } from './dice';
 import { dispatch, newRun } from './engine';
 import { Resolver } from './effects';
 import { combinationsForHand, planQualification } from './hands';
@@ -8,6 +8,7 @@ import { loadPersistedRun, RUN_STORAGE_KEY, savePersistedRun } from './persisten
 import { captureRollbackState, restoreRollbackState } from './rollback';
 import { resetDieRoundState, SPECIAL_DICE, SPECIAL_DIE_TYPES } from './specialDice';
 import type { DieType, GameState, RandomSource, Rank } from './types';
+import { placeFlameInstance } from './flames';
 
 const constant = (value = 0): RandomSource => ({ next: () => value });
 function game(): GameState {
@@ -118,35 +119,21 @@ describe('whole-die Score effects', () => {
     expect(lv3.stats.handScores[0].pips - lv1.stats.handScores[0].pips).toBe(20);
   });
 
-  it('re-applies whole-die Bonus on a genuine Double Time Score occurrence', () => {
-    const state = game(); values(state, [1, 2, 3, 4, 5]); const die = makeSpecial(state, 0, 'bonus', 2);
-    activeFace(die).enhancements.doubleTime = 20;
-    score(state, 'ones', [0], 0);
-    expect(state.stats.handScores[0].pips).toBe(7 + 21 + 21);
-  });
+  it('scales Golden, Workout, and Vintage across genuine repeated Scores', () => {
+    const golden = game(); values(golden, [1, 2, 3, 4, 5]); makeSpecial(golden, 0, 'golden', 2);
+    for (let index = 0; index < 7; index++) new Resolver(golden, constant()).play('ones', [0], 'freePlay');
+    expect(golden.stats.goldBySource.golden).toBe(6);
+    expect(golden.dieRoundState[0].goldenGoldEarned).toBe(6);
 
-  it('applies Workout only to subsequent Score occurrences and scales growth', () => {
-    const state = game(); values(state, [1, 2, 3, 4, 5]); const die = makeSpecial(state, 0, 'workout', 2);
-    activeFace(die).enhancements.doubleTime = 20;
-    score(state, 'ones', [0], 0);
-    expect(state.dieRoundState[0].temporaryPips).toBe(8);
-    expect(state.stats.handScores[0].pips).toBe(7 + 1 + (1 + 4));
-  });
+    const workout = game(); values(workout, [1, 2, 3, 4, 5]); makeSpecial(workout, 0, 'workout', 2);
+    for (let index = 0; index < 3; index++) new Resolver(workout, constant()).play('ones', [0], 'freePlay');
+    expect(workout.stats.handScores.map(hand => hand.pips)).toEqual([8, 12, 16]);
+    expect(workout.dieRoundState[0].temporaryPips).toBe(12);
 
-  it('persists level-scaled Vintage appreciation through additional Scores', () => {
-    const state = game(); values(state, [1, 2, 3, 4, 5]); const die = makeSpecial(state, 0, 'vintage', 3);
-    activeFace(die).enhancements.doubleTime = 20;
-    score(state, 'ones', [0], 0);
-    expect(die.vintageAppreciation).toBe(6);
-  });
-
-  it('pays Golden for genuine additional Scores up to its per-Round cap', () => {
-    const state = game(); values(state, [1, 2, 3, 4, 5]); const die = makeSpecial(state, 0, 'golden');
-    activeFace(die).enhancements.doubleTime = 20;
-    score(state, 'ones', [0], 0);
-    values(state, [1, 2, 3, 4, 5]); score(state, 'ones', [0], 0);
-    expect(state.dieRoundState[0].goldenGoldEarned).toBe(3);
-    expect(state.stats.goldBySource.golden).toBe(3);
+    const vintage = game(); values(vintage, [1, 2, 3, 4, 5]); makeSpecial(vintage, 0, 'vintage', 2);
+    new Resolver(vintage, constant()).play('ones', [0], 'freePlay');
+    new Resolver(vintage, constant()).play('ones', [0], 'freePlay');
+    expect(vintage.diceInventory.instances[0].vintageAppreciation).toBe(4);
   });
 
   it('adds Hitchhiker as a non-selected scorer and spends one Invocation', () => {
@@ -176,21 +163,19 @@ describe('whole-die Score effects', () => {
     expect(hand?.kind === 'hand_scored' ? hand.pipsContributions.filter(item => item.dieId === 0) : []).toHaveLength(4);
   });
 
-  it('Double Time uses guaranteed quarters, one remainder check, and suppresses only itself', () => {
-    const state = game(); values(state, [1, 2, 3, 4, 5]); const die = makeSpecial(state, 0, 'doubleTime', 5);
-    activeFace(die).enhancements.golden = 1;
+  it('Double Time uses guaranteed quarters, one remainder check, and cannot recurse', () => {
+    const state = game(); values(state, [1, 2, 3, 4, 5]); makeSpecial(state, 0, 'doubleTime', 5);
     score(state, 'ones', [0], 0);
     expect(state.stats.handScores[0].pips).toBe(7 + 3);
-    expect(state.stats.goldBySource.golden).toBe(3);
     const hand = [...state.historyV2].reverse().find(event => event.kind === 'hand_scored');
     const activations = hand?.kind === 'hand_scored'
       ? hand.sideEffects.filter(effect => effect.type === 'special_die' && effect.dieType === 'doubleTime') : [];
     expect(activations).toHaveLength(1);
   });
 
-  it('keeps carrier-Flame hand resolution intact around generated Score occurrences', () => {
-    const state = game(); values(state, [1, 2, 3, 4, 5]); const die = makeSpecial(state, 0, 'doubleTime', 4);
-    die.flame = { id: 'minigun', investedGold: 100 };
+  it('keeps global Flame hand resolution intact around generated Score occurrences', () => {
+    const state = game(); values(state, [1, 2, 3, 4, 5]); makeSpecial(state, 0, 'doubleTime', 4);
+    placeFlameInstance(state, 'minigun', 100);
     score(state, 'ones', [0]);
     expect(state.stats.handScores[0]).toMatchObject({ pips: 9, xMult: 5 });
   });

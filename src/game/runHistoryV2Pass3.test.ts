@@ -131,7 +131,6 @@ describe('Run History V2 Pass 3 ownership', () => {
     expect(compact.historyV2).toEqual(state.historyV2);
     expect(compact.actionJournal).toEqual(state.actionJournal);
     expect(compact.stats.handScores).toEqual([]);
-    expect(compact.stats.purchases).toEqual([]);
     expect(compact.debugTrace).toMatchObject({ mode: 'bounded', records: [], critical: state.debugTrace.critical });
     expect(compact.roundCheckpoint).not.toHaveProperty('historyV2');
     expect(compact.roundCheckpoint).not.toHaveProperty('debugTrace');

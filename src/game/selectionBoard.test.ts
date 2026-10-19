@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createCursedDie } from './bosses';
-import { activeFace } from './dice';
 import { newRun } from './engine';
 import {
   boardHandAvailable, emptySelection, legalHandCombinations, selectBoardHand, toggleBoardDie,
 } from './selection';
 import type { Selection } from './selection';
 import type { GameState, Rank } from './types';
+import { resetDieRoundState } from './specialDice';
+import { rosterDice, syncActiveDiceProjection } from './inventory';
 
 function game(values: Rank[]): GameState {
   const state = newRun('board-selection', { next: () => 0 }).state;
@@ -29,7 +30,8 @@ describe('board-based hand availability and scorecard cycling', () => {
 
   it('prefers highest projected score, then cycles every Pair combination and deselects', () => {
     const state = game([4, 4, 4, 2, 6]);
-    activeFace(state.dice[1]).enhancements.bonus = 1;
+    rosterDice(state)[1].type = 'bonus';
+    syncActiveDiceProjection(state);
     expect(legalHandCombinations(state, 'pair')).toEqual([[0, 1], [1, 2], [0, 2]]);
     let selection = selectBoardHand(state, emptySelection(), 'pair');
     expect(selection.dieIds).toEqual([0, 1]);
@@ -42,7 +44,8 @@ describe('board-based hand availability and scorecard cycling', () => {
 
   it('prioritizes compatible manual dice before projected score', () => {
     const state = game([4, 4, 4, 2, 6]);
-    activeFace(state.dice[1]).enhancements.bonus = 1;
+    rosterDice(state)[1].type = 'bonus';
+    syncActiveDiceProjection(state);
     const manual = { hand: null, dieIds: [2], intent: 'manual' as const };
     expect(selectBoardHand(state, manual, 'pair').dieIds).toEqual([1, 2]);
   });
@@ -58,8 +61,10 @@ describe('board-based hand availability and scorecard cycling', () => {
 
   it('cycles evaluator-qualified Missing Link organizations', () => {
     const state = game([1, 2, 3, 6, 6]);
-    activeFace(state.dice[3]).enhancements.missingLink = 1;
-    activeFace(state.dice[4]).enhancements.missingLink = 1;
+    rosterDice(state)[3].type = 'missingLink';
+    rosterDice(state)[4].type = 'missingLink';
+    syncActiveDiceProjection(state);
+    state.dieRoundState = resetDieRoundState(rosterDice(state));
     const combinations = legalHandCombinations(state, 'smallStraight');
     expect(combinations).toContainEqual([0, 1, 2, 3]);
     expect(combinations).toContainEqual([0, 1, 2, 4]);

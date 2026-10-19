@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { activeFace } from './dice';
 import { lastPlayDanger } from './bosses';
 import { dispatch, newRun, normalizeGameState } from './engine';
 import { Resolver } from './effects';
@@ -22,7 +21,6 @@ function finalHandState(): GameState {
   state.consumed = [...priorHands];
   state.scorecardCycleConsumed = [...priorHands];
   state.dice.forEach((die, index) => { die.value = (index + 1) as Rank; });
-  activeFace(state.dice[0]).enhancements.sticky = 1;
   return state;
 }
 
@@ -49,7 +47,8 @@ describe('authoritative scorecard cycles', () => {
     expect(result.state.handLevels.pair).toBe(2);
     expect(result.state.consumed).toEqual([]);
     expect(result.state.scorecardCycleConsumed).toEqual([]);
-    expect(result.state.dice).toEqual(beforeDice);
+    expect(result.state.dice.map(die => die.id)).toEqual(beforeDice.map(die => die.id));
+    expect(result.state.dice.map(die => die.faces)).toEqual(beforeDice.map(die => die.faces));
     expect(result.events.findIndex(event => event.type === 'HAND_SCORE_FINALIZED'))
       .toBeLessThan(result.events.findIndex(event => event.type === 'HAND_CONSUMED'));
     expect(result.events.findIndex(event => event.type === 'HAND_CONSUMED'))

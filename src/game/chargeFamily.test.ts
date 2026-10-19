@@ -3,9 +3,11 @@ import { dispatch, newRun, validateAction } from './engine';
 import { Resolver } from './effects';
 import {
   calculateMaxCharge, jumpStartChargeGain, maxChargeContribution, momentumChargeGain,
-  recalculateMaxCharge, thirdRailChargeGain,
+  flameByType, placeFlameInstance, recalculateMaxCharge, removeFlameInstance, thirdRailChargeGain,
 } from './flames';
 import { ultimateHands } from './hands';
+import { resetDieRoundState } from './specialDice';
+import { rosterDice, syncActiveDiceProjection } from './inventory';
 import type { Flame, GameState, RandomSource, Rank } from './types';
 
 const constant = (value = .99): RandomSource => ({ next: () => value });
@@ -20,8 +22,12 @@ function game(values: Rank[] = [1, 2, 3, 4, 5]): GameState {
   state.stats.rounds[0].target = state.target;
   return state;
 }
-function flame(state: GameState, dieId: number, id: Flame, investedGold: number): void {
-  state.dice[dieId].flame = { id, investedGold };
+function flame(state: GameState, _dieId: number, id: Flame, investedGold: number): void {
+  const existing = flameByType(state, id);
+  if (existing) {
+    existing.investedGold = investedGold;
+    existing.stage = investedGold >= 100 ? 'bonfire' : 'ember';
+  } else placeFlameInstance(state, id, investedGold);
 }
 
 describe('Charge-family generation', () => {
@@ -37,10 +43,11 @@ describe('Charge-family generation', () => {
   it('counts a Jumping Bean free play for Momentum', () => {
     const state = game([6, 2, 4, 5, 6]);
     flame(state, 1, 'momentum', 100);
-    state.dice[0].faces[2].enhancements.jumpingBean = 1;
-    const resolver = new Resolver(state, sequence(.4, .99));
-    resolver.rollBatch([0], 'Bean setup', 'gameplay');
-    resolver.drain();
+    rosterDice(state)[0].type = 'jumpingBean';
+    syncActiveDiceProjection(state);
+    state.dieRoundState = resetDieRoundState(rosterDice(state));
+    const result = dispatch(state, { type: 'INVOKE_JUMPING_BEAN', dieId: 0 }, sequence(.4, .99));
+    Object.assign(state, result.state);
     expect(state.stats.jumpingBeanFreePlays).toHaveLength(1);
     expect(state.chargeXMult).toBe(1.5);
   });
@@ -54,7 +61,7 @@ describe('Charge-family generation', () => {
     expect(state.chargeXMult).toBe(2);
 
     state.phase = 'shop';
-    state.shop = { stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    state.shop = { stage: 'fireKeeping', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     const nextRound = dispatch(state, { type: 'NEXT_ROUND' }, constant(.4)).state;
     expect(nextRound.dice.every(die => die.value === 3)).toBe(true);
     expect(nextRound.chargeXMult).toBe(3.5);
@@ -112,14 +119,15 @@ describe('Power Surge', () => {
   });
 
   it('qualifies a Jumping Bean free play against the same highest-hand selection', () => {
-    const state = game([6, 2, 4, 5, 6]);
+    const state = game([3, 2, 4, 5, 6]);
     flame(state, 1, 'powerSurge', 100);
     state.handLevels.threes = 2;
     state.chargeXMult = 2;
-    state.dice[0].faces[2].enhancements.jumpingBean = 1;
-    const resolver = new Resolver(state, sequence(.4, .99));
-    resolver.rollBatch([0], 'Bean setup', 'gameplay');
-    resolver.drain();
+    rosterDice(state)[0].type = 'jumpingBean';
+    syncActiveDiceProjection(state);
+    state.dieRoundState = resetDieRoundState(rosterDice(state));
+    const result = dispatch(state, { type: 'INVOKE_JUMPING_BEAN', dieId: 0 }, sequence(.4, .99));
+    Object.assign(state, result.state);
     expect(ultimateHands(state.handLevels)).toEqual(['threes']);
     expect(state.chargeXMult).toBe(5);
     expect(state.stats.flameTriggers.powerSurge).toBe(1);
@@ -141,35 +149,33 @@ describe('Max Charge and shared spending', () => {
     const state = game();
     state.phase = 'flameSelection';
     state.flameSelection = { offers: [{ id: 10, flame: 'momentum' }], acquired: false };
-    let acquired = dispatch(state, { type: 'CHOOSE_FLAME', offerId: 10, dieId: 0 }).state;
+    let acquired = dispatch(state, { type: 'CHOOSE_FLAME', offerId: 10 }).state;
     expect(acquired.maxCharge).toBe(1);
     flame(acquired, 1, 'thirdRail', 100);
     recalculateMaxCharge(acquired);
     acquired.chargeXMult = 6;
-    acquired.dice[1].flame = null;
+    removeFlameInstance(acquired, flameByType(acquired, 'thirdRail')!.instanceId);
     recalculateMaxCharge(acquired);
     expect(acquired.maxCharge).toBe(1);
     expect(acquired.chargeXMult).toBe(1);
   });
 
-  it('requires every local family die, disarms when selection clears, and revalidates on commit', () => {
+  it('allows Charge spending without carrier participants and keeps it armed across unrelated rerolls', () => {
     let state = game([4, 4, 5, 2, 6]);
     flame(state, 0, 'momentum', 100);
     flame(state, 1, 'jumpStart', 100);
     state.chargeXMult = 2;
-    expect(validateAction(state, { type: 'TOGGLE_CHARGE', hand: 'fours', dieIds: [0] }))
-      .toContain('every Charge Flame die');
-    expect(validateAction(state, { type: 'TOGGLE_CHARGE', hand: 'pair', dieIds: [0, 1] })).toBeNull();
-    state = dispatch(state, { type: 'TOGGLE_CHARGE', hand: 'pair', dieIds: [0, 1] }).state;
-    expect(validateAction(state, { type: 'PLAY', hand: 'fours', dieIds: [0] })).toContain('must participate');
-    state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0] }, constant()).state;
-    expect(state.chargeArmed).toBe(false);
+    expect(validateAction(state, { type: 'TOGGLE_CHARGE', hand: 'fours', dieIds: [0] })).toBeNull();
+    state = dispatch(state, { type: 'TOGGLE_CHARGE', hand: 'fours', dieIds: [0] }).state;
+    state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [1] }, constant()).state;
+    expect(state.chargeArmed).toBe(true);
+    expect(validateAction(state, { type: 'PLAY', hand: 'fours', dieIds: [0] })).toBeNull();
   });
 
-  it('lets any Charge-family Bonfire globally unlock spending even with another local family die', () => {
+  it('keeps Ember and Bonfire Charge activation carrier-independent', () => {
     let state = game([4, 4, 5, 2, 6]);
     flame(state, 0, 'momentum', 100);
-    state.bonfires = ['thirdRail'];
+    flame(state, 1, 'thirdRail', 100);
     state.chargeXMult = 2;
     expect(validateAction(state, { type: 'TOGGLE_CHARGE', hand: 'fives', dieIds: [2] })).toBeNull();
     state = dispatch(state, { type: 'TOGGLE_CHARGE', hand: 'fives', dieIds: [2] }).state;
@@ -178,7 +184,7 @@ describe('Max Charge and shared spending', () => {
 
   it('applies armed Charge to the committed hand and resets the shared meter', () => {
     let state = game([1, 2, 4, 5, 6]);
-    state.bonfires = ['thirdRail'];
+    flame(state, 0, 'thirdRail', 100);
     state.chargeXMult = 3;
     state = dispatch(state, { type: 'TOGGLE_CHARGE', hand: 'ones', dieIds: [0] }).state;
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.99));

@@ -11,6 +11,13 @@ import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import { enterRun, goToShopStage, installRunState, openGameMenu, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 import { specialOfferName } from '../src/game/specialOffers';
 import { chapterLabel } from '../src/game/chapters';
+import { resetDieRoundState } from '../src/game/specialDice';
+import { rosterDice, syncActiveDiceProjection } from '../src/game/inventory';
+
+function dieUiLabel(dice: GameState['dice'], die: GameState['dice'][number]): string {
+  if (die.owner === 'boss') return 'Cursed Die';
+  return `Die ${dice.filter(item => item.owner === 'player').findIndex(item => item.id === die.id) + 1}`;
+}
 
 async function expectCenteredPips(die: Locator) {
   const dieBox = await die.boundingBox();
@@ -96,7 +103,7 @@ async function matchBoard(page: Page, game: GameState) {
     );
   }
   const visibleDice = game.bustPresentationDice ?? (game.phase === 'round' ? activeEncounterDice(game) : game.dice);
-  for (const die of visibleDice) await expect(page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`}, face ${activeFace(die).rank},`) })).toBeVisible();
+  for (const die of visibleDice) await expect(page.getByRole('button', { name: new RegExp(`^${dieUiLabel(visibleDice, die)}, face ${activeFace(die).rank},`) })).toBeVisible();
 }
 async function progressSpecialOffer(page: Page, game: GameState): Promise<GameState> {
   if (game.specialOffer!.acquired) {
@@ -114,7 +121,7 @@ async function playBest(page: Page, game: GameState): Promise<GameState> {
   if (game.boss?.type === 'warden' && game.boss.pendingReinforcements > 0) {
     const activeDieIds = game.boss.activeDieIds;
     const die = game.dice.find(item => item.owner === 'player' && !activeDieIds.includes(item.id))!;
-    await page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},.*selectable to unlock$`) }).click();
+    await page.getByRole('button', { name: new RegExp(`^${dieUiLabel(game.dice, die)},.*selectable to unlock$`) }).click();
     await page.getByRole('button', { name: 'UNLOCK DIE', exact: true }).click();
     const next = dispatch(game, { type: 'UNLOCK_WARDEN_DIE', dieId: die.id }).state;
     await matchBoard(page, next);
@@ -123,7 +130,7 @@ async function playBest(page: Page, game: GameState): Promise<GameState> {
   const choice = bestHand(game);
   if (game.boss?.type === 'caller' && !game.boss.satisfied && choice?.hand !== game.boss.calledHand && game.manualRerollsRemaining > 0) {
     const die = activeEncounterDice(game)[0];
-    await page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},`) }).click();
+    await page.getByRole('button', { name: new RegExp(`^${dieUiLabel(game.dice, die)},`) }).click();
     await page.getByTestId('manual-reroll').click();
     const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [die.id] }).state;
     await matchBoard(page, next);
@@ -131,7 +138,7 @@ async function playBest(page: Page, game: GameState): Promise<GameState> {
   }
   if (!choice) {
     const die = activeEncounterDice(game)[0];
-    await page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) }).click();
+    await page.getByRole('button', { name: new RegExp(`^${dieUiLabel(game.dice, die)},`) }).click();
     await page.getByTestId('manual-reroll').click();
     const next = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [die.id] }).state;
     await matchBoard(page, next);
@@ -140,7 +147,7 @@ async function playBest(page: Page, game: GameState): Promise<GameState> {
   const handRow = page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) });
   await handRow.click();
   for (const die of activeEncounterDice(game)) {
-    const target = page.getByRole('button', { name: new RegExp(`^${die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`},`) });
+    const target = page.getByRole('button', { name: new RegExp(`^${dieUiLabel(game.dice, die)},`) });
     const selected = await target.getAttribute('aria-pressed') === 'true';
     if (selected !== choice.dieIds.includes(die.id)) await target.click();
   }
@@ -172,28 +179,13 @@ function findTrainingSeed() {
     if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
     if (game.phase !== 'shop' || game.bust) continue;
     game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
-    for (const offer of game.shop!.trainingOffers) {
-      if (offer.kind !== 'hand') continue;
-      const trained = dispatch(game, { type: 'TRAIN_HAND', hand: offer.hand }).state;
-      const next = dispatch(unlockShopExit(trained), { type: 'NEXT_ROUND' }).state;
-      const option = handOptions(next.dice, next.consumed).find(item => item.id === offer.hand && !item.consumed);
-      if (option) {
-        const scored = handScore(next.dice, offer.hand, option.combinations[0], 2);
-        if (!Number.isInteger(scored.rawScore) && scored.score < next.target) return { seed, hand: offer.hand };
-      }
+    const next = dispatch(unlockShopExit(game), { type: 'NEXT_ROUND' }).state;
+    for (const option of handOptions(next.dice, next.consumed).filter(item => !item.consumed)) {
+      const scored = handScore(next.dice, option.id, option.combinations[0], 2);
+      if (!Number.isInteger(scored.rawScore) && scored.score < next.target) return { seed, hand: option.id };
     }
   }
   throw new Error('No suitable Hand Training seed found');
-}
-function findTeamTrainingSeed() {
-  for (let i = 0; i < 1000; i++) {
-    const seed = `team-training-browser-${i}`;
-    let game = newRun(seed).state;
-    for (let step = 0; step < 12 && game.phase === 'round'; step++) game = dispatch(game, automaticAction(game)).state;
-    if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
-    if (game.phase === 'shop' && !game.bust && game.shop!.trainingOffers.some(offer => offer.kind === 'team')) return seed;
-  }
-  throw new Error('No Team Training seed found');
 }
 function highInterestState() {
   for (let index = 0; index < 500; index++) {
@@ -214,7 +206,8 @@ function highInterestState() {
       } else if (game.phase === 'flameSelection') {
         game = game.flameSelection!.acquired
           ? dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state
-          : dispatch(game, { type: 'CHOOSE_FLAME', offerId: game.flameSelection!.offers[0].id, dieId: 0 }).state;
+          : dispatch(game, { type: 'CHOOSE_FLAME', offerId: game.flameSelection!.offers[0].id,
+              ...(game.flameSlots.every(slot => slot !== null) ? { replaceSlot: 0 as const } : {}) }).state;
       } else if (game.phase === 'specialOffer') {
         const offer = game.specialOffer!.offers.find(item => item.type !== 'timeTravel') ?? game.specialOffer!.offers[0];
         game = dispatch(game, game.specialOffer!.acquired
@@ -397,7 +390,7 @@ test('header omits redundant phase labels and always reserves the menu on narrow
     structuredClone(base),
     Object.assign(structuredClone(base), {
       phase: 'shop' as const,
-      shop: { kind: 'between_rounds' as const, offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 },
+      shop: { kind: 'between_rounds' as const, offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 },
     }),
     Object.assign(structuredClone(base), {
       phase: 'flameSelection' as const,
@@ -430,7 +423,7 @@ test('header omits redundant phase labels and always reserves the menu on narrow
   }
 });
 
-test('physical dice default to numerals and persist the Pips preference across gameplay, Shop, and Manage Die', async ({ page }) => {
+test('physical dice default to numerals and persist the Pips preference across gameplay, Shop, and face details', async ({ page }) => {
   const game = newRun('pip-browser').state;
   await page.goto('/?seed=pip-browser&speed=instant');
   await matchBoard(page, game);
@@ -449,8 +442,8 @@ test('physical dice default to numerals and persist the Pips preference across g
   await expect(page.locator('.pip-face')).toHaveCount(5);
   const shop = await reachShop(page, findShopSeed());
   await expect(page.locator('.dice-dock .pip-face')).toHaveCount(5);
-  await page.getByRole('button', { name: /^Die 1,/ }).click();
-  const manager = page.getByRole('dialog', { name: /D1 .* MANAGE DIE/ });
+  await page.getByRole('button', { name: 'View physical faces for D1' }).click();
+  const manager = page.getByRole('dialog', { name: /D1 .* PHYSICAL FACES/ });
   for (let face = 1; face <= 6; face++) await expect(manager.getByTestId(`manage-face-${face}`).locator('.pip')).toHaveCount(face);
   expect(shop.phase).toBe('shop');
 });
@@ -564,24 +557,21 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   const hand = fixture.hand;
   const level1 = handStats(hand, 1);
   const level2 = handStats(hand, 2);
-  const level3 = handStats(hand, 3);
   await goToShopStage(page, 'training');
   game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
-  await expect(page.locator('[data-testid^="training-offer-"]')).toHaveCount(3);
-  await expect(page.getByTestId(`training-pips-${hand}`)).toHaveText(`${level1.basePips} → ${level2.basePips} Pips`);
-  await expect(page.getByTestId(`training-mult-${hand}`)).toHaveText(`×${level1.baseMultiplier} → ×${level2.baseMultiplier} Mult`);
+  await expect(page.locator('[data-testid^="training-offer-"]')).toHaveCount(14);
+  await expect(page.getByTestId(`training-stats-${hand}`)).toHaveText(`Lv. 1 · ${level1.basePips} × ${level1.baseMultiplier}`);
 
   const goldBefore = game.gold;
   await page.getByTestId(`train-${hand}`).click();
   game = dispatch(game, { type: 'TRAIN_HAND', hand }).state;
   await matchBoard(page, game);
-  expect(game.gold).toBe(goldBefore - CONFIG.handTrainingCost);
+  expect(game.gold).toBe(goldBefore - 2);
   expect(game.handLevels[hand]).toBe(2);
   await expect(page.getByTestId(`train-${hand}`)).toBeEnabled();
-  await expect(page.getByTestId(`training-offer-${hand}`)).toContainText('Trained ×1');
+  await expect(page.getByTestId(`training-offer-${hand}`)).toContainText('TRAINED ×1');
   await expect(page.getByTestId(`train-${hand}`)).toHaveText('TRAIN · 4 GOLD');
-  await expect(page.getByTestId(`training-pips-${hand}`)).toHaveText(`${level2.basePips} → ${level3.basePips} Pips`);
-  await expect(page.getByTestId(`training-mult-${hand}`)).toHaveText(`×${level2.baseMultiplier} → ×${level3.baseMultiplier} Mult`);
+  await expect(page.getByTestId(`training-stats-${hand}`)).toHaveText(`Lv. 2 · ${level2.basePips} × ${level2.baseMultiplier}`);
 
   await goToShopStage(page, 'fireKeeping');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
@@ -637,25 +627,18 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   await expect(page.getByTestId('round-score-progress')).toHaveText(`${scored.score} / ${game.target}`);
 });
 
-test('Team Training occupies one existing slot and presents itself as a special all-hands offer', async ({ page }) => {
+test('Training uses a compact fourteen-hand scorecard on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await reachShop(page, findTeamTrainingSeed());
+  await reachShop(page, findShopSeed());
   await goToShopStage(page, 'training');
-  await expect(page.locator('[data-testid^="training-offer-"]')).toHaveCount(3);
-  const team = page.getByTestId('training-offer-team');
-  await expect(team).toHaveClass(/team-training-card/);
-  await expect(team).toContainText('TEAM TRAINING');
-  await expect(team.getByRole('button', { name: 'About Team Training' })).toBeVisible();
-  await expect(page.getByTestId('train-team')).toHaveText('TRAIN ALL · 15 GOLD');
-  expect(await page.locator('.training-grid').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(3);
+  await expect(page.locator('[data-testid^="training-offer-"]')).toHaveCount(14);
+  await expect(page.getByTestId('training-scorecard')).toBeVisible();
+  await expect(page.getByTestId('training-offer-team')).toHaveCount(0);
+  await expect(page.getByText('Frozen baseline · Lv. 1')).toHaveCount(2);
   await expect(page.locator('.dice-offer-grid .dice-offer')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  const shopLayout = await page.evaluate(() => ({
-    trainingHeights: [...document.querySelectorAll<HTMLElement>('.training-grid .training-card')].map(card => card.getBoundingClientRect().height),
-    dieHeights: [...document.querySelectorAll<HTMLElement>('.dice-dock .die')].map(die => die.getBoundingClientRect().height),
-  }));
-  expect(Math.max(...shopLayout.trainingHeights) - Math.min(...shopLayout.trainingHeights)).toBeLessThan(2);
-  expect(Math.max(...shopLayout.dieHeights)).toBeLessThanOrEqual(62);
+  expect(await page.locator('.training-scorecard .scorecard-grid')
+    .evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(1);
   await expect(page.locator('.roster-grid .collection-slot')).toHaveCount(0);
   await expect(page.locator('.storage-grid .collection-slot')).toHaveCount(0);
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -785,10 +768,19 @@ test('full seeded run: select/play, clear, buy a collectible die, reroll dice, n
         game = dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state;
       } else {
         const offer = game.flameSelection!.offers[0];
-        const dieId = game.dice.find(die => !die.flame)?.id ?? 0;
-        await page.getByTestId(`flame-offer-${offer.flame}`).getByRole('button', { name: 'Select Flame' }).click();
-        await page.getByRole('button', { name: new RegExp(`^Die ${dieId + 1},`) }).click();
-        game = dispatch(game, { type: 'CHOOSE_FLAME', offerId: offer.id, dieId }).state;
+        const full = game.flameSlots.every(slot => slot !== null);
+        await page.getByTestId(`flame-offer-${offer.flame}`).getByRole('button', {
+          name: full ? 'SELECT TO REPLACE' : 'SELECT FLAME',
+        }).click();
+        if (full) {
+          await page.getByTestId('flame-replacement-picker').getByRole('button').first().click();
+          await page.getByRole('dialog').getByRole('button', { name: 'REPLACE' }).click();
+        }
+        game = dispatch(game, {
+          type: 'CHOOSE_FLAME',
+          offerId: offer.id,
+          ...(full ? { replaceSlot: 0 as const } : {}),
+        }).state;
       }
       await matchBoard(page, game);
     } else if (game.phase === 'specialOffer') {
@@ -942,35 +934,6 @@ test('same-type collection interaction requires explicit Fusion, Swap, or Cancel
   await expect(second).toContainText('Lv3');
 });
 
-test('legacy authored Enhancements remain inspectable and sellable without a purchase path', async ({ page }) => {
-  let game = await reachShop(page, findShopSeed());
-  game.round = 31;
-  game.engulfmentLevel = 0;
-  activeFace(game.dice[0]).enhancements = {
-    bonus: 2, golden: 1, workout: 1, vintage: 1, boomerang: 3, hitchhiker: 1,
-  };
-  await installRunState(page, game);
-  await matchBoard(page, game);
-
-  const strip = page.getByTestId('flame-die-0').locator('.die-enhancement-strip');
-  await expect(strip.locator('.enhancement-icon')).toHaveCount(6);
-  const geometry = await strip.locator('.enhancement-icon').evaluateAll(elements => ({
-    rows: new Set(elements.map(element => Math.round(element.getBoundingClientRect().top))).size,
-    columns: new Set(elements.map(element => Math.round(element.getBoundingClientRect().left))).size,
-  }));
-  expect(geometry).toEqual({ rows: 2, columns: 3 });
-
-  await page.setViewportSize({ width: 320, height: 700 });
-  await page.getByRole('button', { name: /^Die 1,/ }).click();
-  const manager = page.getByRole('dialog', { name: 'D1 — MANAGE DIE' });
-  const faceTile = manager.getByTestId(`manage-face-${game.dice[0].value}`);
-  await expect(faceTile).toContainText('LEGACY ENHANCEMENTS 6');
-  await faceTile.click();
-  await expect(manager.locator('.face-detail-item')).toHaveCount(6);
-  await expect(manager.getByRole('button', { name: /^Sell / })).toHaveCount(6);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-});
-
 test('ambiguous physical dice can be changed and filtering never ends the run', async ({ page }) => {
   let seed = '';
   let game: GameState | undefined;
@@ -997,10 +960,10 @@ test('ambiguous physical dice can be changed and filtering never ends the run', 
   game = dispatch(game!, { type: 'PLAY', hand: 'threeKind', dieIds }).state;
   await matchBoard(page, game);
   if (game.phase === 'round') {
-    for (const die of game.dice) await page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},`) }).click();
+    for (const die of game.dice) await page.getByRole('button', { name: new RegExp(`^${dieUiLabel(game.dice, die)},`) }).click();
     await expect(page.getByRole('heading', { name: 'Run Over' })).toHaveCount(0);
     for (const die of game.dice) {
-      const button = page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1},`) });
+      const button = page.getByRole('button', { name: new RegExp(`^${dieUiLabel(game.dice, die)},`) });
       if (await button.getAttribute('aria-pressed') === 'true') await button.click();
     }
   }
@@ -1133,55 +1096,23 @@ test('settled progress resumes across reloads and return visits with seed-aware 
   await matchBoard(page, generated);
 });
 
-test('Jumping Bean visibly triggers and rerolls on the next initial gameplay roll', async ({ page }) => {
-  let game = await reachShop(page, findShopSeed());
-  for (const face of game.dice[0].faces) face.enhancements.jumpingBean = 1;
-  game = unlockShopExit(game);
+test('Jumping Bean runs its Free Play and explicit reroll only when invoked On Command', async ({ page }) => {
+  const game = newRun('jumping-bean-command-browser').state;
+  rosterDice(game)[0].type = 'jumpingBean';
+  syncActiveDiceProjection(game);
+  game.dieRoundState = resetDieRoundState(rosterDice(game));
   await installRunState(page, game);
   await matchBoard(page, game);
-  const next = dispatch(game, { type: 'NEXT_ROUND' });
-  await page.clock.install({ time: new Date('2026-09-18T12:00:00Z') });
-  await page.clock.pauseAt(new Date('2026-09-18T12:00:01Z'));
-  await setPlaybackSpeed(page, 'NORMAL');
-  await page.getByRole('button', { name: 'NEXT ROUND' }).click();
-  // Observe the transient ability tick deterministically instead of hoping the
-  // real-time assertion polling catches its 350 ms display window.
-  const beanIndex = next.events.findIndex(event => event.type === 'JUMPING_BEAN_FREE_PLAY');
-  expect(beanIndex).toBeGreaterThanOrEqual(0);
-  for (let index = 0; index <= beanIndex; index++) {
-    if (next.events[index].type === 'MAP_TRANSITION') {
-      await expect(page.getByTestId('run-map-transition')).toBeVisible();
-      await page.getByTestId('run-action-row').getByRole('button', { name: 'Continue', exact: true }).click();
-      await page.clock.runFor(281);
-      await expect(page.getByTestId('run-map-transition')).toHaveCount(0);
-    } else {
-      const event = next.events[index];
-      await expect(page.getByTestId('round-score-progress')).toHaveText(
-        `${event.board.score.toLocaleString('en-US')} / ${event.board.target.toLocaleString('en-US')}`,
-      );
-      if (index < beanIndex) await page.clock.runFor(CONFIG.tickMs.normal);
-    }
-  }
-  const freePlay = next.events[beanIndex];
-  await expect(page.locator('.resolution .score-tick')).toHaveText(`●JUMPING BEAN · FREE ${HANDS[freePlay.hand!].name.toUpperCase()}`);
-  await expect(page.locator('.dice-dock .die.pulse')).toHaveCount(1);
-  await expect(page.locator('.dice-dock .enhancement-jumpingBean')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Skip playback' }).click();
-  await page.clock.runFor(500);
+  const next = dispatch(game, { type: 'INVOKE_JUMPING_BEAN', dieId: 0 });
+  const bean = page.getByTestId('special-die-control-0');
+  await expect(bean).toContainText('1 / 1 Invocations');
+  await bean.getByRole('button', { name: 'ON COMMAND' }).click();
   await matchBoard(page, next.state);
-  if (next.state.phase === 'round') {
-    await expect(page.getByTestId('scorecard-effect-score')).toHaveCount(0);
-    await expect(page.getByTestId(`scorecard-score-${freePlay.hand}`)).toHaveText(String(next.state.scoreByHand[freePlay.hand!]));
-    await expect(page.getByTestId(`scorecard-row-${freePlay.hand}`)).not.toHaveAttribute('data-state', 'consumed');
-    await expect(page.getByTestId('round-score-progress')).toHaveText(
-      `${next.state.score.toLocaleString('en-US')} / ${next.state.target.toLocaleString('en-US')}`,
-    );
-  } else {
-    await expect(page.getByTestId('round-summary')).toBeVisible();
-  }
   expect(next.state.stats.scoreBySource.jumpingBean).toBeGreaterThan(0);
   expect(next.state.effectScore).toBe(BigInt(0n));
-  expect(next.events.filter(event => event.type === 'DIE_ROLLED' && event.dieIds?.includes(0)).length).toBeGreaterThan(1);
+  expect(next.events.some(event => event.type === 'JUMPING_BEAN_FREE_PLAY')).toBe(true);
+  expect(next.events.some(event => event.type === 'DIE_ROLLED' && event.dieIds?.includes(0))).toBe(true);
+  await expect(bean).toContainText('0 / 1 Invocations');
 });
 
 test('active mobile gameplay stays inside the viewport with a two-column scorecard', async ({ page }) => {

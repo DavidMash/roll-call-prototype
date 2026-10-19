@@ -25,7 +25,7 @@ describe('Chapter Storage unlock presentation', () => {
     expect(html).toContain('+1 STORAGE SLOT');
     expect(html).not.toContain('ENHANCEMENT CAPACITY');
     expect(html).not.toContain('NEW ENHANCEMENTS');
-    expect(event.enhancementCapacityBefore).toBeUndefined();
-    expect(event.newlyUnlockedEnhancements).toBeUndefined();
+    expect(Object.keys(event)).not.toContain('enhancementCapacityBefore');
+    expect(Object.keys(event)).not.toContain('newlyUnlockedEnhancements');
   });
 });

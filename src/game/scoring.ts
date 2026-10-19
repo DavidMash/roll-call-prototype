@@ -1,6 +1,5 @@
 import { CONFIG } from './config';
-import { activeFace, baseScoringPips, scoringPips } from './dice';
-import { loneWolfPipsFactor, stacks, tankMultiplierFactor } from './enhancements';
+import { activeFace, scoringPips } from './dice';
 import { handStats } from './hands';
 import { exactInferno, exactWeightedFactorAverage, finalizeExactScore, type ExactScore } from './scoreMath';
 import type { Die, Face, HandId, HandScoreAccumulator } from './types';
@@ -9,27 +8,22 @@ export const INFERNO_BASE = 25;
 export const infernoMultiplier = (level: number): ExactScore => exactInferno(Math.max(0, Math.floor(level)));
 
 export interface HandScoreContribution {
-  kind: 'base' | 'bonus' | 'loneWolf' | 'teamwork' | 'special' | 'teamPlayer';
+  kind: 'base' | 'special' | 'teamPlayer';
   role: 'selected' | 'hitchhiker';
   dieId: number;
   face: Face;
   amount: number;
+  /** Effect owners when another die's Score receives this contribution. */
+  sourceDieIds?: number[];
 }
 
 export type ScoringParticipant = { id: number; face: Face; role: 'selected' | 'hitchhiker' };
 
 /** Pips intrinsic to one genuine face-scoring activation, before terminal Teamwork copies. */
 export function ordinaryFaceContributions(participant: ScoringParticipant, scoringDice: number): HandScoreContribution[] {
-  const base = baseScoringPips(participant.face);
-  const bonus = stacks(participant.face, 'bonus') * CONFIG.bonusPips;
-  const factor = stacks(participant.face, 'loneWolf') ? loneWolfPipsFactor(scoringDice) : 1;
-  const contributions: HandScoreContribution[] = [
-    { kind: 'base', role: participant.role, dieId: participant.id, face: participant.face, amount: base },
-  ];
-  if (bonus) contributions.push({ kind: 'bonus', role: participant.role, dieId: participant.id, face: participant.face, amount: bonus });
-  const loneWolf = (base + bonus) * (factor - 1);
-  if (loneWolf) contributions.push({ kind: 'loneWolf', role: participant.role, dieId: participant.id, face: participant.face, amount: loneWolf });
-  return contributions;
+  void scoringDice;
+  return [{ kind: 'base', role: participant.role, dieId: participant.id,
+    face: participant.face, amount: scoringPips(participant.face) }];
 }
 
 export const resolvedOrdinaryPips = (participant: ScoringParticipant, scoringDice: number): number =>
@@ -63,13 +57,12 @@ export function handContributions(dice: Die[], selectedIds: number[], hitchhiker
     .filter(die => selected.has(die.id) || hitchhikers.has(die.id))
     .map(die => ({ dieId: die.id, face: structuredClone(activeFace(die)), role: selected.has(die.id) ? 'selected' as const : 'hitchhiker' as const }));
   const contributions = scorers.flatMap(item => ordinaryFaceContributions({ id: item.dieId, face: item.face, role: item.role }, scorers.length));
-  return (['base', 'bonus', 'loneWolf'] as const).flatMap(kind => contributions.filter(contribution => contribution.kind === kind));
+  return contributions;
 }
 
 export function applyHandContribution(accumulator: HandScoreAccumulator, contribution: HandScoreContribution): void {
   if (accumulator.finalScore !== null) throw new Error('Cannot change a finalized hand score.');
   accumulator.currentPips += contribution.amount;
-  if (contribution.kind === 'bonus') accumulator.bonusPips += contribution.amount;
   if (contribution.role === 'hitchhiker') accumulator.hitchhikerPips += contribution.amount;
 }
 
@@ -98,19 +91,6 @@ export function finalizeHandScore(accumulator: HandScoreAccumulator, bossFactor 
 export function handScore(dice: Die[], hand: HandId, dieIds: number[], level = 1) {
   const accumulator = createHandAccumulator(hand, dieIds, level);
   for (const contribution of handContributions(dice, dieIds)) applyHandContribution(accumulator, contribution);
-  const selected = new Set(dieIds);
-  const participants: ScoringParticipant[] = [...dice]
-    .filter(die => selected.has(die.id))
-    .map(die => ({ id: die.id, face: structuredClone(activeFace(die)), role: 'selected' }));
-  for (const participant of participants) {
-    if (stacks(participant.face, 'teamwork')) applyHandContribution(accumulator, {
-      kind: 'teamwork', role: participant.role, dieId: participant.id, face: participant.face,
-      amount: participants.filter(other => other.id !== participant.id)
-        .reduce((sum, other) => sum + resolvedOrdinaryPips(other, participants.length), 0),
-    });
-    const tank = stacks(participant.face, 'tank');
-    if (tank) applyHandMultiplier(accumulator, tankMultiplierFactor(tank));
-  }
   const { xMult: _xMult, ...score } = finalizeHandScore(accumulator);
   return score;
 }

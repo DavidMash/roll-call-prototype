@@ -1,6 +1,6 @@
 import { chapterNumberForRound } from './chapters';
 import {
-  activeFlameId, activeFlameInvestment, currentFlameInstanceId, handFamilyFlameMultiplier,
+  handFamilyFlameMultiplier,
   HOT_STREAK_SEQUENCE, hotStreakMultiplier, isChargeFlame, lowballMultiplier, maxChargeContribution,
   sixPackStartingMultiplier, speedDemonMultiplier, standardFlameMultiplier, targetPracticeMultiplier,
 } from './flames';
@@ -21,22 +21,13 @@ export const INFERNO_CLOSE_READINESS = 0.8;
 export const INFERNO_SUSPENSION_MESSAGE = 'The Inferno will return when you have more Flames to offer.';
 export { infernoMultiplier, INFERNO_BASE };
 
-export const engulfmentAssetKey = (asset: EngulfmentAssetRef): string => asset.kind === 'ember'
-  ? `ember:${asset.instanceId}:${asset.flame}:${asset.dieId}`
-  : `bonfire:${asset.instanceId}:${asset.flame}`;
+export const engulfmentAssetKey = (asset: EngulfmentAssetRef): string =>
+  `${asset.kind}:${asset.instanceId}:${asset.flame}:${asset.slot}`;
 
-export function ownedEngulfmentAssets(state: Pick<Board, 'dice' | 'bonfires' | 'flameInstanceIds'>): EngulfmentAssetRef[] {
-  return [
-    ...state.dice.filter(die => die.owner === 'player' && activeFlameId(die.flame) !== null).flatMap(die => {
-      const flame = activeFlameId(die.flame)!;
-      const instanceId = currentFlameInstanceId(state, flame);
-      return instanceId === null ? [] : [{ kind: 'ember' as const, flame, instanceId, dieId: die.id }];
-    }),
-    ...state.bonfires.flatMap(flame => {
-      const instanceId = currentFlameInstanceId(state, flame);
-      return instanceId === null ? [] : [{ kind: 'bonfire' as const, flame, instanceId }];
-    }),
-  ];
+export function ownedEngulfmentAssets(state: Pick<Board, 'flameSlots'>): EngulfmentAssetRef[] {
+  return state.flameSlots.flatMap((flame, slot) => flame
+    ? [{ kind: flame.stage, flame: flame.type, instanceId: flame.instanceId, slot: slot as import('./types').FlameSlotIndex }]
+    : []);
 }
 
 export const engulfmentSucceeds = (offeringMultiplier: number): boolean =>
@@ -163,7 +154,7 @@ function maximumFlameFactorOnHand(flame: Flame, hand: HandId): number {
  * attribution rule. The best legal hand is the collection's ceiling.
  */
 export function maximumPossibleEngulfmentReadiness(
-  state: Pick<Board, 'dice' | 'bonfires' | 'flameInstanceIds'>,
+  state: Pick<Board, 'flameSlots'>,
   assets: readonly EngulfmentAssetRef[] = ownedEngulfmentAssets(state),
 ): number {
   if (!assets.length) return 0;
@@ -270,12 +261,12 @@ export function classifyInfernoTrend(readiness: number, previousReadiness: numbe
 }
 
 export function classifyInfernoWeakness(
-  assets: readonly EngulfmentAssetRef[], readiness: number, state: Pick<GameState, 'dice'>,
+  assets: readonly EngulfmentAssetRef[], readiness: number, state: Pick<GameState, 'flameSlots'>,
 ): InfernoWeakness {
   if (readiness >= INFERNO_CLOSE_READINESS) return 'close';
   if (assets.length <= 1) return 'quantity';
-  const averageInvestment = assets.reduce((sum, asset) => sum + (asset.kind === 'bonfire' ? 100
-    : activeFlameInvestment(state.dice.find(die => die.id === asset.dieId)?.flame ?? null)), 0) / assets.length;
+  const averageInvestment = assets.reduce((sum, asset) => sum
+    + (state.flameSlots[asset.slot]?.instanceId === asset.instanceId ? state.flameSlots[asset.slot]!.investedGold : 0), 0) / assets.length;
   return averageInvestment < 60 ? 'investment' : 'utilization';
 }
 
@@ -325,8 +316,7 @@ export function createInfernoEvaluation(state: GameState): InfernoEvaluationStat
     ? 'contribution_improved' : trend === 'worsening' && state.infernoProgress.recentAction === 'none'
       ? 'contribution_declined' : state.infernoProgress.recentAction;
   const diagnostics = assets.map(asset => ({ asset: structuredClone(asset), status: asset.kind,
-    investment: asset.kind === 'bonfire' ? 100
-      : activeFlameInvestment(state.dice.find(die => die.id === asset.dieId)?.flame ?? null),
+    investment: state.flameSlots[asset.slot]?.instanceId === asset.instanceId ? state.flameSlots[asset.slot]!.investedGold : 0,
     hiddenStrength: evaluateEngulfmentOffering(state, [asset]).offeringMultiplier }));
   const strongestFirst = diagnostics.slice().sort((left, right) =>
     right.hiddenStrength - left.hiddenStrength || left.asset.instanceId - right.asset.instanceId).map(item => item.asset);

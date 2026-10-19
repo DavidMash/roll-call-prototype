@@ -1,10 +1,9 @@
 import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands } from './bosses';
-import {
-  activeFlameId, captureHandStart, composeXMult, handXMultContributions, hasChargeBonfire, isChargeFlame,
-} from './flames';
+import { activeFace, scoringPips, wholeDieEffectSuppressed } from './dice';
+import { captureHandStart, composeXMult, handXMultContributions } from './flames';
 import { handOptions, HAND_IDS, isValidSelection, sameDice } from './hands';
 import { finalizeScore, handScore } from './scoring';
-import type { Board, Die, HandId } from './types';
+import type { Board, CollectibleDie, Die, HandId } from './types';
 import { scoreCompare, type ExactScore } from './scoreMath';
 
 export interface Selection { dieIds: number[]; hand: HandId | null; intent?: 'hand' | 'manual' }
@@ -25,19 +24,27 @@ const compareIds = (dice: readonly Die[], a: number[], b: number[]) => {
 
 /** Every die that authoritative encounter/Charge rules require in a committed hand. */
 export function requiredSelectionDieIds(board: Board): number[] {
-  const required = requiredEncounterDieIds(board);
-  if (board.chargeArmed && !hasChargeBonfire(board)) {
-    required.push(...board.dice.filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id));
-  }
-  return orderedIds(board.dice, [...new Set(required)]);
+  return orderedIds(board.dice, [...new Set(requiredEncounterDieIds(board))]);
 }
 
 function projectedCombinationScore(board: Board, hand: HandId, dieIds: number[], decisionMs = 0): ExactScore {
   const dice = activeEncounterDice(board);
   const base = handScore(dice, hand, dieIds, board.handLevels[hand]);
+  const selected = dice.filter((die): die is CollectibleDie => dieIds.includes(die.id) && die.owner === 'player');
+  const deterministicWholeDiePips = selected.reduce((total, die) => {
+    if (wholeDieEffectSuppressed(die)) return total;
+    const runtime = board.dieRoundState[die.id];
+    const special = (die.type === 'bonus' ? 10 * die.level : 0)
+      + (die.type === 'furnace' ? (runtime?.furnaceUnits ?? 0) * 3 * die.level : 0)
+      + (runtime?.temporaryPips ?? 0);
+    const teamFactor = selected.filter(other => other.id !== die.id && other.type === 'teamPlayer'
+      && !wholeDieEffectSuppressed(other)).reduce((factor, teamPlayer) => factor * (teamPlayer.level + 1), 1);
+    return total + special + (scoringPips(activeFace(die)) + special) * (teamFactor - 1);
+  }, 0);
   const snapshot = captureHandStart(board, hand, dieIds, decisionMs);
   const xMult = composeXMult(handXMultContributions(snapshot, hand, board.handLevels[hand], dieIds));
-  return finalizeScore(base.pips, base.multiplier, xMult * snapshot.bossFactor, snapshot.infernoMultiplier).finalScore;
+  return finalizeScore(base.pips + deterministicWholeDiePips, base.multiplier,
+    xMult * snapshot.bossFactor, snapshot.infernoMultiplier).finalScore;
 }
 
 /**

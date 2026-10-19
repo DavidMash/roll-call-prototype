@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { dispatch, newRun } from './engine';
 import { HAND_IDS } from './hands';
 import { playbackBoard, rollBatchPresentation, SCORECARD_REFRESH_HOLD_MS, scoreSummaryJump } from './playback';
+import { resetDieRoundState } from './specialDice';
+import { rosterDice, syncActiveDiceProjection } from './inventory';
 
 describe('score summary playback checkpoint', () => {
   it('lands Instant and Skip on the final authoritative hand boxes before the batch ends', () => {
@@ -56,17 +58,20 @@ describe('simultaneous roll batch presentation', () => {
     expect(rollBatchPresentation(result.events, batch.settleIndex + 1)).toBeNull();
   });
 
-  it('keeps non-dice state on each authoritative effect frame while projecting settled faces', () => {
-    const state = newRun('simultaneous-clockmaker-roll').state;
-    state.boss = { type: 'clockmaker' };
+  it('keeps non-dice state on a whole-die controller frame while projecting settled faces', () => {
+    const state = newRun('simultaneous-clockwork-roll').state;
+    rosterDice(state)[0].type = 'clockwork';
+    syncActiveDiceProjection(state);
+    state.dieRoundState = resetDieRoundState(rosterDice(state));
+    state.dice[0].value = 1;
     const result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0, 1] }, { next: () => 0 });
-    const bumpIndex = result.events.findIndex(event => event.type === 'BUMP_ROLL');
-    const batch = rollBatchPresentation(result.events, bumpIndex)!;
-    const presented = playbackBoard(result.events, bumpIndex, result.state);
+    const resultIndex = result.events.findIndex(event => event.type === 'DIE_ROLLED');
+    const batch = rollBatchPresentation(result.events, resultIndex)!;
+    const presented = playbackBoard(result.events, resultIndex, result.state);
 
     expect(batch.dieIds).toEqual([0, 1]);
-    expect(result.events.filter(event => event.type === 'BUMP_ROLL').map(event => event.dieIds)).toEqual([[0], [1]]);
-    expect(presented.score).toBe(BigInt(result.events[bumpIndex].board.score));
+    expect(result.state.dice[0].value).toBe(2);
+    expect(presented.score).toBe(BigInt(result.events[resultIndex].board.score));
     expect(presented.dice.slice(0, 2).map(die => die.value))
       .toEqual(result.events[batch.settleIndex].board.dice.slice(0, 2).map(die => die.value));
   });
@@ -80,7 +85,7 @@ describe('simultaneous roll batch presentation', () => {
     const shopState = newRun('simultaneous-shop').state;
     shopState.phase = 'shop';
     shopState.gold = 100;
-    shopState.shop = { kind: 'between_rounds', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    shopState.shop = { kind: 'between_rounds', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     const cases = [
       { result: newRun('simultaneous-opening'), reason: 'Initial round roll', ids: [0, 1, 2, 3, 4] },
       { result: dispatch(postHandState, { type: 'PLAY', hand: 'fourKind', dieIds: [0, 1, 2, 3] }), reason: 'Post-hand reroll', ids: [0, 1, 2, 3] },

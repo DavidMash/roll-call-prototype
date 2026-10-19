@@ -1,5 +1,5 @@
 import type { RollReason } from './runHistoryV2';
-import type { DieType, Enhancement, Face, HandId, HandPlaySource, Rank } from './types';
+import type { DieType, Face, HandId, HandPlaySource, Rank } from './types';
 
 export type PlayCause = 'player' | 'free_play_effect' | 'jumping_bean';
 
@@ -19,7 +19,7 @@ export interface PlayIntent {
   qualificationClaims: QualificationResourceClaim[];
 }
 
-export type QualificationEffect = 'mirror' | 'missingLink' | 'conjoined';
+export type QualificationEffect = 'mirror' | 'missingLink' | 'conjoined' | 'hexerWild';
 
 export interface QualificationEffectParticipation {
   dieId: number;
@@ -30,7 +30,7 @@ export interface QualificationEffectParticipation {
 /** Reserved for future Invocation-backed wildcards. Legacy qualification effects make no claims. */
 export interface QualificationResourceClaim {
   dieId: number;
-  effect: QualificationEffect;
+  effect: Exclude<QualificationEffect, 'hexerWild'>;
   resource: 'invocation';
   amount: number;
 }
@@ -48,7 +48,7 @@ export interface QualificationPlan {
 }
 
 export type ScoreOccurrenceCause = 'play_selection' | 'hitchhiker' | 'double_time' | 'lone_wolf';
-export type ScoreEffectSuppression = Enhancement | 'wholeDieDoubleTime';
+export type ScoreEffectSuppression = 'wholeDieDoubleTime';
 
 /** One genuine scoring activation by one die within a Play. */
 export interface ScoreOccurrence {
@@ -70,7 +70,7 @@ export interface ScoreOccurrence {
 
 export type RollContext = 'gameplay' | 'settle' | 'wardenSetup' | 'shop' | 'flameSelection';
 export type RollController = 'tank' | 'weightedDie' | 'clockworkDie' | 'magicDie' | 'magneticDie'
-  | 'clockmaker' | 'bump' | 'magnetic' | 'magic' | 'boomerang' | 'rng';
+  | 'hexerWeighted' | 'hexerClockwork' | 'rng';
 
 export interface RollBatchIntent {
   id: string;
@@ -108,13 +108,9 @@ export interface RollResolution {
   physicalFace: Rank;
   value: Rank;
   weighted: boolean;
-  bumped: boolean;
-  actualBump: boolean;
-  clockmakerBump: boolean;
   attracted: boolean;
   controller: RollController;
   origin: Face;
-  magicHand: HandId | null;
   controllerDieId?: number;
   locked?: boolean;
   intercepted?: boolean;

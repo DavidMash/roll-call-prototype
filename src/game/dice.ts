@@ -1,25 +1,30 @@
 import { CONFIG } from './config';
-import { stacks } from './enhancements';
-import type { CollectibleDie, DiceInventory, Die, DieType, Face, RandomSource, Rank } from './types';
+import type { CollectibleDie, DiceInventory, Die, DieType, Face, HexerFace, PhysicalFace, RandomSource, Rank } from './types';
 import { INITIAL_STORAGE_SLOT_COUNT, rosterTuple } from './inventory';
 
 export const RANKS: Rank[] = [1, 2, 3, 4, 5, 6];
 export const HAND_RANKS: Rank[] = [1, 2, 3, 4, 5, 6, 7];
 export const activeFace = (die: Die): Face => die.faces[die.value - 1];
+export const isHexerFace = (face: Face): face is HexerFace => 'hexerEffect' in face;
+export const isInfectedFace = (face: Face): boolean => face.bossMutation?.kind === 'infected';
+export const isSnakeEyesFace = (face: Face): boolean => face.bossMutation?.kind === 'snakeEyes';
+/** Infected suppresses the whole-die effect only while that physical face is exposed. */
+export const wholeDieEffectSuppressed = (die: Die): boolean => die.owner === 'player' && isInfectedFace(activeFace(die));
 export const oppositeFace = (rank: Rank): Rank => {
   if (rank === 7) throw new Error('The Cursed 7 has no ordinary opposite face.');
   return (7 - rank) as Rank;
 };
-export const baseScoringPips = (face: Face) =>
-  Math.max(0, (face.snakeEyed ? 1 : face.rank) + face.workoutPips - (face.infected ? CONFIG.infectedFacePipPenalty : 0));
-export const scoringPips = (face: Face) => baseScoringPips(face) + stacks(face, 'bonus') * CONFIG.bonusPips;
+export const baseScoringPips = (face: Face) => Math.max(0,
+  face.rank + (isHexerFace(face) ? face.temporaryPips : 0) - (isInfectedFace(face) ? CONFIG.infectedFacePipPenalty : 0));
+export const scoringPips = (face: Face) => baseScoringPips(face)
+  + (isHexerFace(face) && face.hexerEffect.kind === 'wildBonus' ? face.hexerEffect.bonusPips : 0);
 export function createCollectibleDie(id: number, type: DieType = 'normal', level = 1): CollectibleDie {
   if (!Number.isSafeInteger(level) || level < 1 || (type === 'normal' && level !== 1))
     throw new Error('Collectible die level must be a positive integer; Normal dice remain level 1.');
   return {
-    id, value: 1, flame: null, owner: 'player', type, level,
+    id, value: 1, owner: 'player', type, level,
     vintageAppreciation: 0, weightedFace: 6,
-    faces: RANKS.map(rank => ({ rank, workoutPips: 0, enhancements: {} })),
+    faces: RANKS.map(rank => ({ rank } satisfies PhysicalFace)),
   };
 }
 /** Convenience factory for rules/tests that operate on a standalone active Roster. */
@@ -38,18 +43,13 @@ export function createDiceInventory(): DiceInventory {
 }
 export const rollWeights = (die: Die, excludedFace?: Rank): number[] => (die.owner === 'boss'
   ? die.faces.map(destination => 1 + die.faces.reduce((weight, source) =>
-    weight + (source.weightedTarget === destination.rank ? stacks(source, 'weighted') : 0), 0))
-  : RANKS.map(rank => 1 + stacks(die.faces[oppositeFace(rank) - 1], 'weighted')))
+    weight + (source.hexerEffect.kind === 'goldenWeighted' && source.hexerEffect.target === destination.rank ? 1 : 0), 0))
+  : RANKS.map(() => 1))
   .map((weight, index) => index + 1 === excludedFace ? 0 : weight);
 export const weightedSourceFace = (die: Die, destination: Rank): Face | undefined => die.owner === 'boss'
-  ? die.faces.find(face => face.weightedTarget === destination && stacks(face, 'weighted'))
-  : die.faces[oppositeFace(destination) - 1];
-export function rollPhysicalDie(die: Die, rng: RandomSource, excludedFace?: Rank,
-  suppressBump = false): { physicalFace: Rank; value: Rank; weighted: boolean } {
-  if (!suppressBump && stacks(activeFace(die), 'bump')) {
-    const physicalFace = (die.owner === 'boss' ? Math.min(7, die.value + 1) : die.value === 6 ? 1 : die.value + 1) as Rank;
-    return { physicalFace, value: die.faces[physicalFace - 1].rank, weighted: false };
-  }
+  ? die.faces.find(face => face.hexerEffect.kind === 'goldenWeighted' && face.hexerEffect.target === destination)
+  : undefined;
+export function rollPhysicalDie(die: Die, rng: RandomSource, excludedFace?: Rank): { physicalFace: Rank; value: Rank; weighted: boolean } {
   const weights = rollWeights(die, excludedFace);
   const totalWeight = weights.reduce((a, b) => a + b, 0);
   if (totalWeight <= 0) throw new Error('A die roll must have at least one eligible face.');
