@@ -4,10 +4,10 @@ import { dispatch, newRun } from './engine';
 import { combinationsForHand, defaultCombination, HAND_IDS, handOptions, hasPlayableHand, isValidSelection, HANDS } from './hands';
 import { handScore } from './scoring';
 import { canPlay, emptySelection, selectHand, toggleDie } from './selection';
-import type { Die, Enhancement, GameState, Rank } from './types';
+import type { CollectibleDie, Enhancement, GameState, Rank } from './types';
 
 const rng = () => ({ next: () => 0.99 });
-function dice(values: Rank[], mirrors: number[] = []): Die[] {
+function dice(values: Rank[], mirrors: number[] = []): CollectibleDie[] {
   const board = createDice();
   board.forEach((die, index) => { die.value = values[index]; });
   mirrors.forEach(id => { activeFace(board[id]).enhancements.mirror = 1; });
@@ -15,7 +15,9 @@ function dice(values: Rank[], mirrors: number[] = []): Die[] {
 }
 function game(values: Rank[]): GameState {
   const state = newRun('pair-test', rng()).state;
-  state.dice = dice(values);
+  const active = dice(values);
+  for (const die of active) state.diceInventory.instances[die.id] = die;
+  state.dice = active;
   state.target = 100000n;
   state.stats.rounds[0].target = state.target;
   return state;

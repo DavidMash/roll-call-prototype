@@ -120,7 +120,8 @@ export const CALLER_HAND_POOL: HandId[] = [
   'ones', 'twos', 'threes', 'fours', 'fives', 'sixes',
   'pair', 'twoPair', 'threeKind', 'smallStraight', 'fullHouse',
 ];
-export const CURSED_DIE_ID = CONFIG.diceCount;
+/** Encounter-managed IDs use a negative namespace and can never collide with collectible IDs. */
+export const CURSED_DIE_ID = -1;
 
 export const isMiniBossRound = (round: number) => round > 0 && round % 6 === 3;
 export const isBigBossRound = (round: number) => round > 0 && round % 6 === 0;
@@ -161,14 +162,21 @@ export function bossSchedule(seed: string, throughRound = 60): Partial<Record<nu
   return schedule;
 }
 
-export function callerHandForRound(seed: string, round: number): HandId {
+export const handIsPhysicallyAttainable = (hand: HandId, dieCount: number): boolean => {
+  const definition = HANDS[hand];
+  return dieCount > 0 && (definition.rank !== undefined || definition.size! <= dieCount);
+};
+
+export function callerHandForRound(seed: string, round: number, dieCount: number = CONFIG.diceCount): HandId {
   const rng = new SeededRng(hashSeed(`${seed}:boss:${round}:caller-hand`));
-  return CALLER_HAND_POOL[Math.floor(rng.next() * CALLER_HAND_POOL.length)];
+  const eligible = CALLER_HAND_POOL.filter(hand => handIsPhysicallyAttainable(hand, dieCount));
+  return eligible[Math.floor(rng.next() * eligible.length)];
 }
 
-export function flyHandForRound(seed: string, round: number): HandId {
+export function flyHandForRound(seed: string, round: number, dieCount: number = CONFIG.diceCount): HandId | null {
   const rng = new SeededRng(hashSeed(`${seed}:boss:${round}:fly-hand`));
-  return LOWER_HAND_IDS[Math.floor(rng.next() * LOWER_HAND_IDS.length)];
+  const eligible = LOWER_HAND_IDS.filter(hand => handIsPhysicallyAttainable(hand, dieCount));
+  return eligible.length ? eligible[Math.floor(rng.next() * eligible.length)] : null;
 }
 
 export function bossGoalModifier(type: BossType): number {
@@ -233,20 +241,27 @@ export function wardenUnlockCost(
   return normalCost;
 }
 
-export function wardenUnlockCosts(handLevels: HandLevels, consumed: HandId[], goal: ExactScore): ExactScore[] {
+export function wardenUnlockCosts(handLevels: HandLevels, consumed: HandId[], goal: ExactScore,
+  equippedDice: number = CONFIG.diceCount): ExactScore[] {
   const costs: ExactScore[] = [];
-  for (let activeDice = 1; activeDice < CONFIG.diceCount; activeDice++) {
+  for (let activeDice = 1; activeDice < equippedDice; activeDice++) {
     costs.push(wardenUnlockCost(handLevels, consumed, activeDice, costs[0] ?? 0));
   }
+  if (!costs.length) return costs;
   const cumulativeCost = costs.reduce((sum, cost) => sum + cost, 0n);
   const halfwayGoal = roundPositiveRatioToStep(goal, 2n, WARDEN_STEP);
   if (cumulativeCost <= halfwayGoal) return costs;
 
   const scaled = costs.map(cost => roundPositiveRatioToStep(cost * halfwayGoal, cumulativeCost, WARDEN_STEP));
   scaled[0] = scaled[0] < WARDEN_STEP ? WARDEN_STEP : scaled[0];
-  scaled[1] = scaled[1] < scaled[0] * 2n ? scaled[0] * 2n : scaled[1];
-  scaled[2] = scaled[2] < scaled[1] ? scaled[1] : scaled[2];
-  scaled[3] = halfwayGoal - scaled[0] - scaled[1] - scaled[2];
+  if (scaled.length === 4) {
+    scaled[1] = scaled[1] < scaled[0] * 2n ? scaled[0] * 2n : scaled[1];
+    scaled[2] = scaled[2] < scaled[1] ? scaled[1] : scaled[2];
+    scaled[3] = halfwayGoal - scaled[0] - scaled[1] - scaled[2];
+  } else {
+    const prior = scaled.slice(0, -1).reduce((sum, cost) => sum + cost, 0n);
+    scaled[scaled.length - 1] = halfwayGoal > prior ? halfwayGoal - prior : WARDEN_STEP;
+  }
   return scaled;
 }
 
@@ -259,6 +274,7 @@ export function wardenUnlockTarget(currentScore: ExactScore, handLevels: HandLev
 export interface BossRuntimeContext {
   handPlayCounts?: Record<HandId, number>;
   playerDieIds?: number[];
+  eligibleHands?: HandId[];
 }
 
 function miniBossRng(seed: string, round: number, type: MiniBossType): SeededRng {
@@ -272,9 +288,11 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
     case 'neglected': {
       const counts = context.handPlayCounts ?? Object.fromEntries(HAND_IDS.map(hand => [hand, 0])) as Record<HandId, number>;
       const order = new Map(HAND_IDS.map((hand, index) => [hand, index]));
+      const eligible = context.eligibleHands ?? HAND_IDS;
+      const restrictionCount = Math.min(2, Math.max(0, eligible.length - 1));
       return {
         type,
-        neglectedHands: [...HAND_IDS].sort((a, b) => counts[a] - counts[b] || order.get(a)! - order.get(b)!).slice(0, 2),
+        neglectedHands: [...eligible].sort((a, b) => counts[a] - counts[b] || order.get(a)! - order.get(b)!).slice(0, restrictionCount),
         handsPlayed: 0,
         restored: false,
       };
@@ -284,12 +302,12 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
     case 'crawler': return { type };
     case 'magician': {
       const rng = miniBossRng(seed, round, type);
-      const dieIds = context.playerDieIds?.length ? [...context.playerDieIds].sort((a, b) => a - b)
+      const dieIds = context.playerDieIds?.length ? [...context.playerDieIds]
         : Array.from({ length: CONFIG.diceCount }, (_, index) => index);
-      const missingDieId = dieIds.splice(Math.floor(rng.next() * dieIds.length), 1)[0];
+      const missingDieId = dieIds.length > 1 ? dieIds.splice(Math.floor(rng.next() * dieIds.length), 1)[0] : null;
       const upper = [...UPPER_HAND_IDS];
       const calledHands = Array.from({ length: 3 }, () => upper.splice(Math.floor(rng.next() * upper.length), 1)[0]);
-      return { type, missingDieId, hiddenFlame: null, calledHands, completedHands: [], returned: false };
+      return { type, missingDieId, hiddenFlame: null, calledHands, completedHands: [], returned: missingDieId === null };
     }
     case 'mugger': {
       const rng = miniBossRng(seed, round, type);
@@ -297,7 +315,7 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
     }
     case 'caller': return {
       type,
-      calledHand: callerHandForRound(seed, round),
+      calledHand: callerHandForRound(seed, round, context.playerDieIds?.length ?? CONFIG.diceCount),
       playsRemaining: 3,
       satisfied: false,
       satisfyingSource: null,
@@ -308,6 +326,7 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
     };
     case 'warden': return {
       type,
+      encounterDieIds: [...(context.playerDieIds ?? Array.from({ length: CONFIG.diceCount }, (_, index) => index))],
       activeDieIds: [],
       startingDieId: null,
       nextUnlockTarget: null,
@@ -318,7 +337,7 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
     case 'hexer': return { type, cursedDieId: CURSED_DIE_ID };
     case 'marathon': return { type, cooldowns: {} };
     case 'quickdraw': return { type, lowerShotUsed: false, playedLowerHand: null };
-    case 'fly': return { type, flyHand: flyHandForRound(seed, round), caught: false, moves: 0 };
+    case 'fly': return { type, flyHand: flyHandForRound(seed, round, context.playerDieIds?.length ?? CONFIG.diceCount), caught: false, moves: 0 };
     case 'snakeEyes': return { type, mutatedFaces: [] };
     case 'infected': return { type, infectedFaces: [] };
   }
@@ -327,10 +346,11 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
 const face = (rank: Rank, enhancements: Die['faces'][number]['enhancements'], weightedTarget?: Rank) =>
   ({ rank, workoutPips: 0, enhancements, ...(weightedTarget ? { weightedTarget } : {}) });
 
-export function createCursedDie(): Die {
+export function createCursedDie(): import('./types').EncounterDie {
   return {
     id: CURSED_DIE_ID,
     owner: 'boss',
+    encounterId: 'hexer:cursed',
     value: 1,
     flame: null,
     faces: [

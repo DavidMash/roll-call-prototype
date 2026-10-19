@@ -151,7 +151,8 @@ describe('Fat Cat, Vineyard, and Fetch', () => {
     const state = scoringState();
     state.bonfires = ['fetch'];
     state.fetchTarget = { dieId: 2, physicalFace: 4 };
-    state.dice.push({ id: 99, owner: 'boss', value: 4, flame: null, faces: state.dice[0].faces.map(face => structuredClone(face)) });
+    state.dice.push({ id: 99, owner: 'boss', encounterId: 'test:boss', value: 4, flame: null,
+      faces: state.dice[0].faces.map(face => structuredClone(face)) });
     const result = dispatch(state, { type: 'PLAY', hand: 'threeKind', dieIds: [0, 1, 2] }, constant(.999));
     expect(result.state.stats.handScores[0].xMultFactors).toContainEqual(expect.objectContaining({ source: 'fetch', value: 5, dieId: null }));
     expect(result.state.fetchTarget?.dieId).toBeLessThan(5);

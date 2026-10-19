@@ -120,7 +120,7 @@ export function createPlayIntent(
   source: HandPlaySource,
   decisionMs: number | null,
 ): PlayIntent {
-  const selectedDieIds = [...dieIds].sort((a, b) => a - b);
+  const selectedDieIds = [...dieIds];
   return {
     id,
     hand,

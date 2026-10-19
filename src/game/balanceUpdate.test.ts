@@ -28,7 +28,7 @@ describe('focused balance update', () => {
     state.target = 1n;
     state.stats.rounds[0].target = 1n;
     state.boss = {
-      type: 'warden', activeDieIds: [0], startingDieId: 0, nextUnlockTarget: 1n,
+      type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0], startingDieId: 0, nextUnlockTarget: 1n,
       unlockCosts: [1n, 1n, 1n, 1n], unlockTargets: [1n], pendingReinforcements: 0,
     };
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.8));

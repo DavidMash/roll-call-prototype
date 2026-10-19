@@ -27,7 +27,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const encounterDice = activeEncounterDice(board);
   const wardenBoss = !board.bossSilenced && board.boss?.type === 'warden' ? board.boss : null;
   const wardenDice = wardenBoss
-    ? board.dice.filter(die => die.owner === 'player').sort((a, b) => a.id - b.id)
+    ? board.dice.filter(die => die.owner === 'player')
     : null;
   const wardenLockedIds = wardenBoss && wardenDice
     ? wardenDice.filter(die => !wardenBoss.activeDieIds.includes(die.id)).map(die => die.id)
@@ -152,7 +152,8 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     <RunActionPortal><Paper className="gameplay-actions-panel" p="xs">
         <div className="gameplay-actions">
           {awaitingWardenChoice && <Text size="xs" c="dimmed" className="selection-preview">
-            {selectedWardenDieId === null ? 'Choose a Locked Die to Unlock' : `D${selectedWardenDieId + 1} will keep its current Face`}
+            {selectedWardenDieId === null ? 'Choose a Locked Die to Unlock'
+              : `D${board.dice.filter(die => die.owner === 'player').findIndex(die => die.id === selectedWardenDieId) + 1} will keep its current Face`}
           </Text>}
           <RunActionLayout className="round-action-layout"
             left={!awaitingWardenChoice ? <>

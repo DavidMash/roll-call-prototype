@@ -1,5 +1,5 @@
 import { CONFIG, diceRerollCost, handTrainingCost, lifeRestoreCost, offerRerollCost, teamTrainingCost } from './config';
-import { activeFace, createDice } from './dice';
+import { activeFace, createDiceInventory } from './dice';
 import { Resolver } from './effects';
 import type { ResolverOptions } from './effects';
 import { enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, isEnhancement, placementError, stacks, VINTAGE_BASE_SELL_CAP } from './enhancements';
@@ -18,10 +18,11 @@ import { formatPlayerNumber } from './copy';
 import { rarityLabel } from './rarity';
 import { appendCriticalDiagnostic, appendDebugTrace, createDebugTrace, normalizeDebugTrace, type DebugTraceMode } from './debugTrace';
 import { isRollbackState } from './rollback';
+import { assertDiceInventory, collectibleDieById, ownedDice, syncActiveDiceProjection } from './inventory';
 import { enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey, usableManualRerolls } from './specialOffers';
 import { Decimal, exactInferno, scoreFromUnknown, type ExactScore } from './scoreMath';
 import { getEncounterGoalBreakdown, targetForRound } from './goals';
-import type { Action, Board, GameState, GameStateBase, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
+import type { Action, Board, GameState, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
 
 const exact = (value: unknown, fallback: ExactScore = 0n): ExactScore => value === undefined || value === null
   ? fallback : scoreFromUnknown(value);
@@ -231,6 +232,10 @@ function normalizeSilencedBossGoal(state: GameState): void {
 
 export function normalizeGameState(state: GameState): GameState {
   const next = structuredClone(state);
+  if (!next.diceInventory || !Array.isArray(next.encounterDice))
+    throw new Error('This saved run predates the collectible-dice inventory schema.');
+  assertDiceInventory(next.diceInventory, next.encounterDice);
+  syncActiveDiceProjection(next);
   if (typeof next.target === 'number' && !Number.isSafeInteger(next.target))
     next.target = targetForRound(next.round, next.boss?.type ?? next.bossSchedule?.[next.round] ?? null);
   normalizeBoardScores(next);
@@ -279,7 +284,7 @@ export function normalizeGameState(state: GameState): GameState {
   if (!next.flameSelection && legacy.flameReward) next.flameSelection = legacy.flameReward;
   delete legacy.flameReward;
   if ((next.phase as string) === 'flameReward') next.phase = 'flameSelection';
-  for (const die of next.dice) {
+  for (const die of [...ownedDice(next), ...next.encounterDice]) {
     die.owner ??= 'player';
     for (const face of die.faces) {
       const legacyMagnetic = face as typeof face & { magneticUsed?: boolean; magneticDestinationUsed?: boolean };
@@ -327,10 +332,9 @@ export function normalizeGameState(state: GameState): GameState {
     if (!next.shop.kind && next.phase === 'shop' && !next.bust && isBigBossRound(next.round)) next.shop.kind = 'post_boss';
   }
   if (next.roundCheckpoint) {
-    const legacy = next.roundCheckpoint as unknown as GameStateBase;
-    if (!isRollbackState(next.roundCheckpoint)) next.roundCheckpoint = {
-      board: boardSnapshot(legacy as GameState), rngState: legacy.rngState, nextOfferId: legacy.nextOfferId,
-    };
+    if (!isRollbackState(next.roundCheckpoint))
+      throw new Error('This saved run predates the collectible-dice rollback schema.');
+    assertDiceInventory(next.roundCheckpoint.diceInventory, next.roundCheckpoint.encounterDice);
     const checkpoint = next.roundCheckpoint.board;
     if (typeof checkpoint.target === 'number' && !Number.isSafeInteger(checkpoint.target))
       checkpoint.target = targetForRound(checkpoint.round,
@@ -492,7 +496,7 @@ export function normalizeGameState(state: GameState): GameState {
 }
 
 const requiredChargeFlameDieIds = (state: Board) => activeEncounterDice(state)
-  .filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id).sort((a, b) => a - b);
+  .filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id);
 
 export function validateAction(state: Board, action: Action): string | null {
   if (action.type === 'CONTINUE_ROUND_SUMMARY') return state.phase === 'roundSummary' && !!state.roundSummary
@@ -637,6 +641,8 @@ export function validateAction(state: Board, action: Action): string | null {
 function execute(state: GameState, run: (resolver: Resolver) => void, random?: RandomSource, rngStateOverride?: number,
   options?: ResolverOptions): Resolution {
   const next = structuredClone(state);
+  assertDiceInventory(next.diceInventory, next.encounterDice);
+  syncActiveDiceProjection(next);
   if (rngStateOverride !== undefined) next.rngState = rngStateOverride;
   const rngBefore = next.rngState;
   const seeded = new SeededRng(next.rngState);
@@ -676,12 +682,14 @@ function rejectedActionHasLegacyMigration(state: GameState, normalized: GameStat
 }
 
 export function newRun(seed: string, random?: RandomSource, options?: { debugTraceMode?: DebugTraceMode }): Resolution {
+  const diceInventory = createDiceInventory();
   const state: GameState = {
     phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: BigInt(CONFIG.baseTarget),
     score: 0n, gold: CONFIG.startingGold, lives: CONFIG.maxLives, engulfmentLevel: 0, nextShopVisitId: 1,
     nextFlameInstanceId: 1, roundAttemptNumber: 1,
     bossSchedule: {}, chapterPlans: {}, presentedChapters: [], chapterLifecycle: {}, boss: null, bossSilenced: false, currentNodeId: '',
-    bust: null, bustPresentationDice: null, flameTutorial: { pendingDieId: null, completed: false }, dice: createDice(), bonfires: [], flameInstanceIds: {},
+    bust: null, bustPresentationDice: null, flameTutorial: { pendingDieId: null, completed: false },
+    diceInventory, encounterDice: [], dice: [], bonfires: [], flameInstanceIds: {},
     chargeAttribution: {}, infernoProgress: { evaluationIndex: 0, previousReadiness: null, recentMessageIds: [], recentAction: 'none' },
     infernoEvaluation: null, infernoEvaluationSuspendedUntilNewFlame: false, chargeXMult: 1, maxCharge: 1,
     chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
@@ -727,7 +735,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         break;
       case 'BUY': {
         const offer = next.shop!.offers.find(item => item.id === action.offerId)!;
-        const die = next.dice[action.dieId];
+        const die = collectibleDieById(next, action.dieId)!;
         const face = activeFace(die);
         const cost = enhancementOfferIsFree(next.shop!, offer.id) ? 0 : enhancementCost(offer.enhancement);
         if (cost) resolver.spendGold(cost, `Bought ${ENHANCEMENTS[offer.enhancement].name} [${rarityLabel(ENHANCEMENTS[offer.enhancement].rarity)}]: −${formatPlayerNumber(cost)} gold`, 'enhancement');
@@ -744,7 +752,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         break;
       }
       case 'SELL_ENHANCEMENT': {
-        const die = next.dice[action.dieId];
+        const die = collectibleDieById(next, action.dieId)!;
         const face = die.faces[action.face - 1];
         const stacksSold = stacks(face, action.enhancement);
         const definition = ENHANCEMENTS[action.enhancement];
@@ -765,7 +773,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       }
       case 'CHOOSE_FLAME': {
         const offer = next.flameSelection!.offers.find(item => item.id === action.offerId)!;
-        const die = next.dice[action.dieId];
+        const die = collectibleDieById(next, action.dieId)!;
         const replaced = activeFlameId(die.flame);
         const firstFlame = ownedFlameIds(next).size === 0;
         if (replaced) removeFlameInstance(next, replaced);
@@ -791,7 +799,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         break;
       }
       case 'STOKE_FLAME': {
-        const die = next.dice[action.dieId];
+        const die = collectibleDieById(next, action.dieId)!;
         const id = activeFlameId(die.flame)!;
         const flame = die.flame = { id, investedGold: activeFlameInvestment(die.flame) };
         const source = 'shop' as const;

@@ -3,6 +3,7 @@ import { activeFlameId } from './flames';
 import { ENHANCEMENTS } from './enhancements';
 import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
 import { infernoMultiplier } from './scoring';
+import { ownedDice } from './inventory';
 import type {
   Enhancement, Flame, GoldSource, GoldSpendSource, HandId, Rarity, SpecialOfferType, GameState,
 } from './types';
@@ -165,13 +166,13 @@ function canonicalFromState(state: GameState | undefined, events: readonly RunHi
     highestClearedRoundScore: cleared.reduce((highest, round) => round.score > highest ? round.score : highest, 0n),
     goldEarnedBySource: earned,
     goldSpentByCategory: spent,
-    retainedEnhancements: state?.dice.filter(die => die.owner === 'player').flatMap(die => die.faces.flatMap((face, index) =>
+    retainedEnhancements: state ? ownedDice(state).flatMap(die => die.faces.flatMap((face, index) =>
       Object.keys(face.enhancements).length ? [{ dieId: die.id, side: index + 1, rank: face.rank,
-        enhancements: structuredClone(face.enhancements) }] : [])) ?? [],
-    currentEmbers: state?.dice.flatMap(die => {
+        enhancements: structuredClone(face.enhancements) }] : [])) : [],
+    currentEmbers: state ? ownedDice(state).flatMap(die => {
       const flame = activeFlameId(die.flame);
-      return die.owner === 'player' && flame ? [{ dieId: die.id, flame, investedGold: die.flame?.investedGold ?? 0 }] : [];
-    }) ?? [],
+      return flame ? [{ dieId: die.id, flame, investedGold: die.flame?.investedGold ?? 0 }] : [];
+    }) : [],
     bonfires: [...(state?.bonfires ?? [])],
     retainedPurchases, retainedTrainingPurchases,
     trainingGoldSpent: { individual: individualTraining, team: teamTraining },

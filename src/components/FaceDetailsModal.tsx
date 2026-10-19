@@ -33,6 +33,8 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
   }, [target?.dieId, target?.face]);
   if (!die) return null;
   const currentDie = die;
+  const rosterSlot = board.dice.filter(item => item.owner === 'player').findIndex(item => item.id === die.id);
+  const dieCode = `D${rosterSlot + 1}`;
   const face = die.faces[focusedFace - 1];
   const ids = ENHANCEMENT_IDS.filter(id => (face.enhancements[id] ?? 0) > 0);
   const shop = board.phase === 'shop' ? board.shop : null;
@@ -62,10 +64,10 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
 
   return <>
     <Modal opened={target !== null} onClose={onClose}
-      title={board.phase === 'shop' ? `D${die.id + 1} — MANAGE DIE` : `D${die.id + 1} · FACE ${focusedFace}`}
+      title={board.phase === 'shop' ? `${dieCode} — MANAGE DIE` : `${dieCode} · FACE ${focusedFace}`}
       size="lg" centered transitionProps={{ duration: 0 }} data-testid="face-details-modal">
       <Stack gap="sm">
-        {board.phase === 'shop' && <SimpleGrid cols={{ base: 3, sm: 6 }} spacing="xs" className="manage-face-grid" aria-label={`Faces on D${die.id + 1}`}>
+        {board.phase === 'shop' && <SimpleGrid cols={{ base: 3, sm: 6 }} spacing="xs" className="manage-face-grid" aria-label={`Faces on ${dieCode}`}>
           {die.faces.map((candidate, index) => {
             const physicalFace = index + 1 as Rank;
             const faceIds = ENHANCEMENT_IDS.filter(id => (candidate.enhancements[id] ?? 0) > 0);
@@ -74,10 +76,10 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
             const isFetchTarget = board.fetchTarget?.dieId === die.id && board.fetchTarget.physicalFace === physicalFace;
             return <Paper component="button" type="button" key={physicalFace} withBorder p="xs" data-testid={`manage-face-${physicalFace}`}
               className={`manage-face-tile ${focusedFace === physicalFace ? 'focused' : ''} ${die.value === physicalFace ? 'exposed-face' : ''}`}
-              aria-label={`D${die.id + 1} face ${physicalFace}${isFetchTarget ? ', Fetch target' : ''}${enhancementLabel ? `. Enhancements: ${enhancementLabel}` : '. No Enhancements'}`}
+              aria-label={`${dieCode} face ${physicalFace}${isFetchTarget ? ', Fetch target' : ''}${enhancementLabel ? `. Enhancements: ${enhancementLabel}` : '. No Enhancements'}`}
               aria-pressed={focusedFace === physicalFace} onClick={() => setFocusedFace(physicalFace)}>
-              {diceDisplay === 'pips' ? <PipFace value={candidate.rank} compact label={`D${die.id + 1} face ${physicalFace}`} />
-                : <span className="manage-face-number" aria-label={`D${die.id + 1} face ${physicalFace}`}>{candidate.rank}</span>}
+              {diceDisplay === 'pips' ? <PipFace value={candidate.rank} compact label={`${dieCode} face ${physicalFace}`} />
+                : <span className="manage-face-number" aria-label={`${dieCode} face ${physicalFace}`}>{candidate.rank}</span>}
               <strong>FACE {physicalFace}</strong>
               {die.value === physicalFace && <span className="manage-face-exposed">EXPOSED</span>}
               {isFetchTarget && <span className="manage-face-fetch">FETCH</span>}
@@ -90,7 +92,7 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
         </SimpleGrid>}
 
         <div className="face-details-heading">
-          <Text size="xs" fw={850} tt="uppercase" c="dimmed">D{die.id + 1} · FACE {focusedFace}</Text>
+          <Text size="xs" fw={850} tt="uppercase" c="dimmed">{dieCode} · FACE {focusedFace}</Text>
           <Text fw={850}>Enhancements {faceEnhancementTypes(face).length} / {capacity}</Text>
         </div>
         {offer && isExposed && offerError?.startsWith('This Face is full.') && <Alert color="orange" title="FACE FULL">Sell an Enhancement to make room.</Alert>}
@@ -113,7 +115,7 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
                 <div className="face-detail-item-copy"><Text fw={800}><EnhancementIdentity enhancement={id} stacks={stacks} /></Text>
                   <Text size="sm" c="dimmed">{ENHANCEMENTS[id].description}</Text>{dynamic && <Text size="xs" c="teal" mt={3}>{dynamic}</Text>}</div>
                 {shopActions && <EnhancementSellButton value={sellValue} disabled={busy}
-                  ariaLabel={`Sell ${ENHANCEMENTS[id].name} from D${die.id + 1} face ${focusedFace} for ${sellValue} Gold`}
+                  ariaLabel={`Sell ${ENHANCEMENTS[id].name} from ${dieCode} face ${focusedFace} for ${sellValue} Gold`}
                   onClick={() => requestSale(id)} />}
               </Group>
             </Paper>;

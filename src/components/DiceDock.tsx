@@ -36,7 +36,9 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
 }) {
   const [replacementDieId, setReplacementDieId] = useState<number | null>(null);
   const wardenBoss = board.phase === 'round' && !board.bossSilenced && board.boss?.type === 'warden' ? board.boss : null;
-  const wardenDice = wardenBoss ? board.dice.filter(die => die.owner === 'player').sort((a, b) => a.id - b.id) : null;
+  const rosterProjection = board.dice.filter(die => die.owner === 'player');
+  const rosterSlotById = Object.fromEntries(rosterProjection.map((die, slot) => [die.id, slot]));
+  const wardenDice = wardenBoss ? rosterProjection : null;
   const dice = board.bustPresentationDice ? board.dice
     : board.phase === 'round' ? wardenDice ?? activeEncounterDice(board) : board.dice.filter(die => die.owner === 'player');
   const wardenLockedIds = wardenBoss && wardenDice ? wardenDice.filter(die => !wardenBoss.activeDieIds.includes(die.id)).map(die => die.id) : [];
@@ -142,6 +144,7 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
         </Button>
       </Group>}
       <DiceRow dice={dice} display={display} event={event} disabled={busy || !actionsEnabled}
+        rosterSlotById={rosterSlotById}
         fetchTarget={board.fetchTarget}
         detailsDisabled={cinematic} selected={selectedWardenDieId === null ? effectiveSelection.dieIds : [selectedWardenDieId]}
         eligibleIds={board.phase === 'shop' ? eligibleIds : flameOffer ? dice.map(die => die.id) : undefined}

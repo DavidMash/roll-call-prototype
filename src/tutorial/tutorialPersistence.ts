@@ -6,7 +6,7 @@ import { stringifyExactJson } from '../game/scoreMath';
 
 export const TUTORIAL_RUN_STORAGE_KEY = 'roll-call:tutorial-run';
 export const ONBOARDING_STORAGE_KEY = 'roll-call:onboarding';
-export const TUTORIAL_RUN_STORAGE_VERSION = 2;
+export const TUTORIAL_RUN_STORAGE_VERSION = 3;
 export const ONBOARDING_STORAGE_VERSION = 1;
 
 export type TutorialStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
@@ -73,7 +73,7 @@ export function loadTutorialSession(storage: TutorialStorage | null): TutorialSe
     const raw = storage.getItem(TUTORIAL_RUN_STORAGE_KEY);
     if (!raw) return null;
     const saved: unknown = JSON.parse(raw);
-    if (!isRecord(saved) || (saved.version !== 1 && saved.version !== TUTORIAL_RUN_STORAGE_VERSION) || !isRecord(saved.session)) return null;
+    if (!isRecord(saved) || saved.version !== TUTORIAL_RUN_STORAGE_VERSION || !isRecord(saved.session)) return null;
     if (saved.session.tutorialVersion !== TUTORIAL_VERSION || !scenarioIsValid(saved.session.scenario) || !isRecord(saved.session.game)) return null;
     // normalizeGameState is the engine's compatibility gate. A malformed object
     // may still throw while normalizing, which is intentionally treated as no save.

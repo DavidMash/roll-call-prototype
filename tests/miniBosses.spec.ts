@@ -144,7 +144,7 @@ test('Mini-Boss summary labels its reward and continues to Special Offer', async
 
   await expect(page.getByRole('heading', { name: 'MINI-BOSS DEFEATED' })).toBeVisible();
   await expect(page.getByTestId('summary-gold-breakdown')).toContainText('Mini-Boss Reward');
-  await expect(page.getByTestId('summary-gold-breakdown')).toContainText('+10');
+  await expect(page.getByTestId('summary-gold-breakdown')).toContainText('+15');
   await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
   await expect(page.getByTestId('run-map-transition')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'SPECIAL OFFER' })).toBeVisible();

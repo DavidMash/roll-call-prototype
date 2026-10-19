@@ -121,7 +121,7 @@ describe('exact score persistence and structured history', () => {
     state.engulfmentLevel = 12;
     state.scoreByHand.ones = HUGE_GOAL - 2n;
     state.stats.scoreBySource.hand = HUGE_GOAL - 1n;
-    state.boss = { type: 'warden', activeDieIds: [0], startingDieId: 0, nextUnlockTarget: HUGE_GOAL,
+    state.boss = { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0], startingDieId: 0, nextUnlockTarget: HUGE_GOAL,
       unlockCosts: [HUGE_GOAL], unlockTargets: [HUGE_GOAL], pendingReinforcements: 0 };
     const store = storage();
     expect(savePersistedRun(store, state)).toBe(true);

@@ -107,7 +107,7 @@ describe('authoritative scorecard cycles', () => {
   it.each<[string, BossRuntimeState]>([
     ['Caller', { type: 'caller', calledHand: 'twos', playsRemaining: 2, satisfied: false,
       satisfyingSource: null, callsCompleted: 0, callsMissed: 0, manualHandsPlayed: 1, callDeadline: 3 }],
-    ['Warden', { type: 'warden', activeDieIds: [0, 1, 2, 3, 4], startingDieId: 0,
+    ['Warden', { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0, 1, 2, 3, 4], startingDieId: 0,
       nextUnlockTarget: null, unlockCosts: [], unlockTargets: [20n, 40n], pendingReinforcements: 0 }],
     ['Quickdraw', { type: 'quickdraw', lowerShotUsed: false, playedLowerHand: null }],
     ['Fly', { type: 'fly', flyHand: 'pair', caught: false, moves: 2 }],

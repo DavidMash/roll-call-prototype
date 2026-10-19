@@ -547,7 +547,7 @@ test('Boss clear shows its Boss Reward summary and transitions directly to Flame
   expect(game.phase).toBe('roundSummary');
   await expect(page.getByRole('heading', { name: 'BOSS DEFEATED' })).toBeVisible();
   await expect(page.getByTestId('summary-gold-breakdown')).toContainText('Boss Reward');
-  await expect(page.getByTestId('summary-gold-breakdown')).toContainText('+11');
+  await expect(page.getByTestId('summary-gold-breakdown')).toContainText('+20');
   await expect(page.getByText('Flame Bonus')).toHaveCount(0);
   await expect(page.locator('[data-screen-theme="hexer"]')).toBeVisible();
 

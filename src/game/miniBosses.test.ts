@@ -303,13 +303,15 @@ describe('Mini-Boss mechanics', () => {
     const seed = 'mini-magician';
     const preview = createBossRuntime(seed, 3, 'magician');
     if (preview.type !== 'magician') throw new Error('Magician fixture failed.');
+    if (preview.missingDieId === null) throw new Error('Five-die Magician fixture must remove a die.');
+    const missingDieId = preview.missingDieId;
     const state = miniBossRound('magician', game => {
       game.seed = seed;
-      game.dice[preview.missingDieId].flame = { id: 'momentum', investedGold: 100 };
+      game.dice[missingDieId].flame = { id: 'momentum', investedGold: 100 };
     });
     if (state.boss?.type !== 'magician') throw new Error('Magician fixture failed.');
     expect(activeEncounterDice(state)).toHaveLength(4);
-    expect(state.dice[state.boss.missingDieId].flame).toBeNull();
+    expect(state.dice[missingDieId].flame).toBeNull();
     expect(state.maxCharge).toBe(1);
     state.target = 1_000_000n;
     const calls = [...state.boss.calledHands].reverse();
@@ -332,9 +334,11 @@ describe('Mini-Boss mechanics', () => {
     const seed = 'mini-magician-checkpoint';
     const preview = createBossRuntime(seed, 3, 'magician');
     if (preview.type !== 'magician') throw new Error('Magician fixture failed.');
+    if (preview.missingDieId === null) throw new Error('Five-die Magician fixture must remove a die.');
+    const missingDieId = preview.missingDieId;
     let state = miniBossRound('magician', game => {
       game.seed = seed;
-      game.dice[preview.missingDieId].flame = { id: 'momentum', investedGold: 50 };
+      game.dice[missingDieId].flame = { id: 'momentum', investedGold: 50 };
     });
     expect(state.roundCheckpoint?.board.dice[preview.missingDieId].flame).toMatchObject({ id: 'momentum', investedGold: 50 });
     state.target = 1_000_000n;

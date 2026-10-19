@@ -165,7 +165,7 @@ describe('Run History V2 roll batches', () => {
     expect(played.events.some(event => event.type === 'DIE_ROLLED')).toBe(true);
 
     const warden = game();
-    warden.boss = { type: 'warden', activeDieIds: [0], startingDieId: 0, nextUnlockTarget: 5n,
+    warden.boss = { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0], startingDieId: 0, nextUnlockTarget: 5n,
       unlockCosts: [5n, 10n, 25n, 60n], unlockTargets: [5n], pendingReinforcements: 1 };
     const unlocked = dispatch(warden, { type: 'UNLOCK_WARDEN_DIE', dieId: 1 }, constant());
     expect(unlocked.state.historyV2.some(event => event.kind === 'boss_state_changed'

@@ -43,8 +43,8 @@ describe('resolution architecture boundaries', () => {
     const manual = createPlayIntent('play:1', 'threeKind', [2, 0, 1], 'manual', 125);
     expect(manual).toMatchObject({
       id: 'play:1', hand: 'threeKind', source: 'manual', cause: 'player',
-      selectedDieIds: [0, 1, 2], originalSelectedDieIds: [0, 1, 2],
-      playerSelectedDieIds: [0, 1, 2], decisionMs: 125,
+      selectedDieIds: [2, 0, 1], originalSelectedDieIds: [2, 0, 1],
+      playerSelectedDieIds: [2, 0, 1], decisionMs: 125,
     });
     const generated = createPlayIntent('play:2', 'sixes', [4], 'jumpingBean', null);
     expect(generated).toMatchObject({

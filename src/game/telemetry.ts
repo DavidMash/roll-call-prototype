@@ -1,6 +1,7 @@
 import { activeFlameId } from './flames';
 import type { Board, GameState, RunStats } from './types';
 import { toExactJsonValue } from './scoreMath';
+import { ownedDice } from './inventory';
 
 export function createStats(seed: string): RunStats {
   return {
@@ -46,6 +47,6 @@ export function exportRun(state: GameState) {
     actions: structuredClone(state.actionJournal),
     scoreByHand: structuredClone(state.scoreByHand),
     bonfires: [...state.bonfires], finalHandLevels: structuredClone(state.handLevels),
-    finalFlames: state.dice.filter(die => die.owner === 'player').map(die => ({ dieId: die.id, flame: activeFlameId(die.flame), investedGold: die.flame?.investedGold ?? 0 })),
+    finalFlames: ownedDice(state).map(die => ({ dieId: die.id, flame: activeFlameId(die.flame), investedGold: die.flame?.investedGold ?? 0 })),
     rngState: state.rngState, board: boardSnapshot(state) });
 }

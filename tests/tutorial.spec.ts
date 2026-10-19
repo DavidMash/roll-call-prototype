@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ONBOARDING_STORAGE_KEY, TUTORIAL_RUN_STORAGE_KEY } from '../src/tutorial/tutorialPersistence';
+import { ONBOARDING_STORAGE_KEY, TUTORIAL_RUN_STORAGE_KEY, TUTORIAL_RUN_STORAGE_VERSION } from '../src/tutorial/tutorialPersistence';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import { dispatchTutorial, newTutorialSession } from '../src/tutorial/scenario';
 import type { Action, Flame, HandId, Rank } from '../src/game/types';
@@ -40,8 +40,8 @@ function shopOneSession() {
 }
 
 async function resumeSession(page: import('@playwright/test').Page, session: TutorialSession) {
-  await page.evaluate(([key, saved]) => localStorage.setItem(key, JSON.stringify({ version: 1, session: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
-    [TUTORIAL_RUN_STORAGE_KEY, session] as const);
+  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, session: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
+    [TUTORIAL_RUN_STORAGE_KEY, TUTORIAL_RUN_STORAGE_VERSION, session] as const);
   await page.reload();
   await page.getByRole('button', { name: 'CONTINUE TUTORIAL', exact: true }).click();
   await expect(page.locator('.driver-popover')).toBeVisible();
@@ -440,8 +440,8 @@ test('Tutorial Shop progression nudge waits for five neutral seconds and stops a
     session.game.shop!.kind = kind;
     session.scenario.completedBeatIds.push('chapter-2');
     if (round > 12) session.scenario.completedBeatIds.push('curriculum-complete');
-    await page.evaluate(([key, saved]) => localStorage.setItem(key, JSON.stringify({ version: 1, session: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
-      [TUTORIAL_RUN_STORAGE_KEY, session] as const);
+    await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, session: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
+      [TUTORIAL_RUN_STORAGE_KEY, TUTORIAL_RUN_STORAGE_VERSION, session] as const);
     await page.reload();
     await page.getByRole('button', { name: 'CONTINUE TUTORIAL', exact: true }).click();
     const action = page.getByTestId('shop-progression-action');

@@ -38,7 +38,7 @@ export const resolvedOrdinaryPips = (participant: ScoringParticipant, scoringDic
 export function createHandAccumulator(hand: HandId, dieIds: number[], level = 1, infernoMultiplier: ExactScore = 1n): HandScoreAccumulator {
   const stats = handStats(hand, level);
   return {
-    hand, handLevel: level, infernoMultiplier, dieIds: [...dieIds].sort((a, b) => a - b),
+    hand, handLevel: level, infernoMultiplier, dieIds: [...dieIds],
     basePips: stats.basePips, baseMultiplier: stats.baseMultiplier,
     currentPips: stats.basePips, currentMultiplier: stats.baseMultiplier,
     xMultFactors: [], currentXMult: 1, bossFactor: 1,
@@ -59,7 +59,7 @@ export function scoreWeightedMultiplier(observations: readonly { factor: number;
 export function handContributions(dice: Die[], selectedIds: number[], hitchhikerIds: number[] = []): HandScoreContribution[] {
   const selected = new Set(selectedIds);
   const hitchhikers = new Set(hitchhikerIds);
-  const scorers = [...dice].sort((a, b) => a.id - b.id)
+  const scorers = [...dice]
     .filter(die => selected.has(die.id) || hitchhikers.has(die.id))
     .map(die => ({ dieId: die.id, face: structuredClone(activeFace(die)), role: selected.has(die.id) ? 'selected' as const : 'hitchhiker' as const }));
   const contributions = scorers.flatMap(item => ordinaryFaceContributions({ id: item.dieId, face: item.face, role: item.role }, scorers.length));
@@ -99,7 +99,7 @@ export function handScore(dice: Die[], hand: HandId, dieIds: number[], level = 1
   const accumulator = createHandAccumulator(hand, dieIds, level);
   for (const contribution of handContributions(dice, dieIds)) applyHandContribution(accumulator, contribution);
   const selected = new Set(dieIds);
-  const participants: ScoringParticipant[] = [...dice].sort((a, b) => a.id - b.id)
+  const participants: ScoringParticipant[] = [...dice]
     .filter(die => selected.has(die.id))
     .map(die => ({ id: die.id, face: structuredClone(activeFace(die)), role: 'selected' }));
   for (const participant of participants) {

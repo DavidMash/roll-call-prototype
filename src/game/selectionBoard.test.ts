@@ -102,7 +102,7 @@ describe('encounter-aware combinations', () => {
 
   it('excludes Warden-locked dice and preserves Neglected, Marathon, and Quickdraw restrictions', () => {
     const warden = game([4, 4, 4, 2, 6]);
-    warden.boss = { type: 'warden', activeDieIds: [0, 1], startingDieId: 0, nextUnlockTarget: null,
+    warden.boss = { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0, 1], startingDieId: 0, nextUnlockTarget: null,
       unlockCosts: [], unlockTargets: [], pendingReinforcements: 0 };
     expect(legalHandCombinations(warden, 'pair')).toEqual([[0, 1]]);
 

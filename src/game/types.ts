@@ -28,6 +28,8 @@ export type Flame =
   | 'hotStreak' | 'lowball' | 'straightShooter' | 'doubleDown'
   | 'threesCompany' | 'boxSet' | 'missingPair' | 'oneShort';
 export type FlameInstanceId = number;
+export type DieId = number;
+export type DieType = 'normal';
 export type HandId =
   | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes'
   | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
@@ -58,6 +60,8 @@ export interface CallerBossState {
 }
 export interface WardenBossState {
   type: 'warden';
+  /** The equipped player dice that belong to this encounter, in Roster order. */
+  encounterDieIds: number[];
   activeDieIds: number[];
   startingDieId: number | null;
   nextUnlockTarget: ExactScore | null;
@@ -84,7 +88,7 @@ export interface TightropeBossState { type: 'tightrope' }
 export interface CrawlerBossState { type: 'crawler' }
 export interface MagicianBossState {
   type: 'magician';
-  missingDieId: number;
+  missingDieId: number | null;
   hiddenFlame: ActiveFlame | null;
   calledHands: HandId[];
   completedHands: HandId[];
@@ -172,7 +176,26 @@ export interface StandaloneScoreRecord {
   rawScore: ExactDecimal;
   score: ExactScore;
 }
-export interface Die { id: number; value: Rank; faces: Face[]; flame: ActiveFlame | null; owner: 'player' | 'boss' }
+interface PhysicalDieState { id: DieId; value: Rank; faces: Face[]; flame: ActiveFlame | null }
+export interface CollectibleDie extends PhysicalDieState {
+  owner: 'player';
+  type: DieType;
+  level: number;
+}
+export interface EncounterDie extends PhysicalDieState {
+  owner: 'boss';
+  encounterId: string;
+}
+export type Die = CollectibleDie | EncounterDie;
+export type RosterSlots = [DieId | null, DieId | null, DieId | null, DieId | null, DieId | null];
+export interface DiceInventory {
+  instances: Record<DieId, CollectibleDie>;
+  roster: RosterSlots;
+  storage: Array<DieId | null>;
+  nextDieId: number;
+  /** Chapter numbers whose one-time completion slot has already been granted. */
+  storageAwardedChapters: number[];
+}
 export interface Offer { id: number; enhancement: Enhancement; purchased: boolean }
 export interface HandTrainingOffer { kind: 'hand'; hand: HandId; purchases: number }
 export interface TeamTrainingOffer { kind: 'team'; purchases: number }
@@ -341,6 +364,7 @@ export interface Board {
   specialOfferEffects: SpecialOfferEffects;
   /** Legacy save-migration input; current runs use chapterLifecycle. */
   suppressedPostBossRewardRounds: number[];
+  /** Derived active encounter projection in Roster order; never collection authority. */
   dice: Die[];
   bonfires: Flame[];
   /** Current owned instance for each Flame type, preserved across Ember/Bonfire progression. */
@@ -647,6 +671,10 @@ export interface BustSummary {
   livesAfter: number;
 }
 export interface GameStateBase extends Board {
+  /** Authoritative owned-die collection. Board.dice is only the active encounter projection. */
+  diceInventory: DiceInventory;
+  /** Temporary, non-owned dice created by the current encounter. */
+  encounterDice: EncounterDie[];
   seed: string;
   rngState: number;
   nextOfferId: number;
@@ -661,6 +689,8 @@ export interface GameStateBase extends Board {
 }
 export interface RollbackState {
   board: Board;
+  diceInventory: DiceInventory;
+  encounterDice: EncounterDie[];
   rngState: number;
   nextOfferId: number;
 }

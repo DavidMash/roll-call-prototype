@@ -11,6 +11,7 @@ import { EnhancementSymbol } from './EnhancementIdentity';
 
 interface Props {
   die: PhysicalDie;
+  rosterSlot?: number;
   display: DiceDisplay;
   selected: boolean;
   highlighted: boolean;
@@ -34,7 +35,7 @@ interface Props {
   fetchTarget?: { dieId: number; physicalFace: Rank } | null;
 }
 
-export function Die({ die, display, selected, highlighted, rolling, resolving = false, ability, flameAbility, disabled, detailsDisabled = false, eligible,
+export function Die({ die, rosterSlot, display, selected, highlighted, rolling, resolving = false, ability, flameAbility, disabled, detailsDisabled = false, eligible,
   wardenLocked = false, wardenSelectable = false, unlockAt, ineligibleReason, lockedReason, allowIneligibleClick = false,
   onClick, onEnhancements, onFlame, onDropOffer, fetchTarget }: Props) {
   const face = activeFace(die);
@@ -45,7 +46,8 @@ export function Die({ die, display, selected, highlighted, rolling, resolving = 
   const flameInvestment = activeFlameInvestment(die.flame);
   const enhancementSummary = enhancements.map(id => `${ENHANCEMENTS[id].name} ×${formatPlayerNumber(face.enhancements[id]!)}`).join(', ');
   const interactionDisabled = disabled || (wardenLocked && !wardenSelectable) || !!lockedReason || (!!ineligibleReason && !allowIneligibleClick);
-  const dieLabel = die.owner === 'boss' ? 'Cursed Die' : `Die ${die.id + 1}`;
+  const playerLabel = `D${(rosterSlot ?? 0) + 1}`;
+  const dieLabel = die.owner === 'boss' ? 'Cursed Die' : `Die ${(rosterSlot ?? 0) + 1}`;
   const temporaryStates = [
     face.snakeEyed ? 'Snake-Eyed temporary face' : '',
     face.infected ? 'infected face; 3 fewer Pips; Enhancements disabled' : '',
@@ -63,7 +65,7 @@ export function Die({ die, display, selected, highlighted, rolling, resolving = 
   const triggered = ability || flameAbility;
 
   return <div className={`die-wrap die-slot${detailsDisabled ? ' details-disabled' : ''}`} data-die-id={die.id}
-    data-tutorial={die.owner === 'player' ? `die-${die.id + 1}` : undefined}
+    data-tutorial={die.owner === 'player' ? `die-${(rosterSlot ?? 0) + 1}` : undefined}
     data-testid={die.owner === 'player' ? `flame-die-${die.id}` : 'cursed-die-slot'}>
     <div className="die-flame-zone">
       {flameId && <button type="button" className="die-flame-cap" disabled={detailsDisabled} data-tutorial="flame-badge"
@@ -87,7 +89,7 @@ export function Die({ die, display, selected, highlighted, rolling, resolving = 
         const raw = event.dataTransfer.getData('application/x-roll-call-offer');
         if (raw !== '' && Number.isInteger(Number(raw))) onDropOffer(Number(raw));
       }}>
-      <Text size="xs" c="dimmed" className="die-id">{die.owner === 'boss' ? 'CURSED' : `D${die.id + 1}`}</Text>
+      <Text size="xs" c="dimmed" className="die-id">{die.owner === 'boss' ? 'CURSED' : playerLabel}</Text>
       {wardenLocked && <div className="die-lock-overlay" aria-hidden="true"><span>🔒</span><span>{unlockAt === undefined ? 'SELECT' : `${formatExactScore(unlockAt)} PTS`}</span></div>}
       {face.snakeEyed && <span className="boss-face-badge" aria-hidden="true" title="Snake Eyes">S</span>}
       {face.infected && <span className="boss-face-badge infected" aria-hidden="true" title="Infected">!</span>}
@@ -98,7 +100,7 @@ export function Die({ die, display, selected, highlighted, rolling, resolving = 
         : <Text component="span" className="die-number" role="img" aria-label={`${dieLabel} showing ${face.rank}`}>{face.rank}</Text>}
     </Paper>
     <button type="button" className={`die-enhancement-strip${enhancements.length ? '' : ' empty'}`} disabled={detailsDisabled}
-      aria-label={`View Enhancements on ${die.owner === 'boss' ? 'Cursed Die' : `D${die.id + 1}`} face ${face.rank}${enhancementSummary ? `: ${enhancementSummary}` : ': none'}`}
+      aria-label={`View Enhancements on ${die.owner === 'boss' ? 'Cursed Die' : playerLabel} face ${face.rank}${enhancementSummary ? `: ${enhancementSummary}` : ': none'}`}
       onClick={onEnhancements}>
       {enhancements.length ? enhancements.slice(0, 6).map(id => <EnhancementSymbol key={id} enhancement={id}
         stacks={face.enhancements[id]!} decorative className={face.infected ? 'disabled' : ''} />)

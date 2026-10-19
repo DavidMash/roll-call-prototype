@@ -167,13 +167,15 @@ export function flameStokeLimits(state: Pick<Board, 'dice' | 'gold'>, dieId: num
     maximumAmount: Math.min(remainingCapacity, affordableAmount) };
 }
 
-type FlameInstanceRuntime = Pick<Board, 'dice' | 'bonfires' | 'boss' | 'flameInstanceIds' | 'nextFlameInstanceId'>;
+type FlameInstanceRuntime = Pick<Board, 'dice' | 'bonfires' | 'boss' | 'flameInstanceIds' | 'nextFlameInstanceId'>
+  & Partial<Pick<GameState, 'diceInventory'>>;
 
 export function normalizeFlameInstanceRuntime(state: FlameInstanceRuntime): void {
   state.flameInstanceIds ??= {};
   state.nextFlameInstanceId = Math.max(1, Math.floor(state.nextFlameInstanceId ?? 1));
+  const collectionDice = state.diceInventory ? Object.values(state.diceInventory.instances) : state.dice;
   const owned = new Set<Flame>([
-    ...state.dice.map(die => activeFlameId(die.flame)).filter((id): id is Flame => id !== null),
+    ...collectionDice.map(die => activeFlameId(die.flame)).filter((id): id is Flame => id !== null),
     ...state.bonfires,
     ...(state.boss?.type === 'magician' && activeFlameId(state.boss.hiddenFlame)
       ? [activeFlameId(state.boss.hiddenFlame)!] : []),
@@ -220,7 +222,7 @@ export const hasChargeBonfire = (state: Pick<Board, 'bonfires'>) => state.bonfir
 export const hasOwnedChargeFlame = (state: Pick<Board, 'dice' | 'bonfires'>) =>
   hasChargeBonfire(state) || state.dice.some(die => isChargeFlame(activeFlameId(die.flame)));
 export const chargeFlameDieIds = (state: Pick<Board, 'dice'>) => state.dice
-  .filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id).sort((a, b) => a - b);
+  .filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id);
 export function calculateMaxCharge(state: Pick<Board, 'dice' | 'bonfires'>): number {
   const emberCapacity = state.dice.reduce((sum, die) => isChargeFlame(activeFlameId(die.flame))
     ? sum + maxChargeContribution(activeFlameInvestment(die.flame)) : sum, 0);

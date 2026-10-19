@@ -6,6 +6,7 @@ import type { ExactScore } from '../game/scoreMath';
 
 interface Props {
   dice: PhysicalDie[];
+  rosterSlotById?: Record<number, number>;
   display: DiceDisplay;
   selected?: number[];
   event: GameEvent | null;
@@ -27,7 +28,7 @@ interface Props {
   fetchTarget?: { dieId: number; physicalFace: Rank } | null;
   onDropOffer?: (offerId: number, dieId: number) => void;
 }
-export function DiceRow({ dice, display, selected = [], event, disabled, eligibleIds, restrictToEligible = false,
+export function DiceRow({ dice, rosterSlotById = {}, display, selected = [], event, disabled, eligibleIds, restrictToEligible = false,
   ineligibleReasons = {}, actionableIneligibleIds = [], lockedIds = [], lockedReasons = {}, lockedUntilByDieId = {}, detailsDisabled = false,
   wardenLockedIds = [], wardenSelectableIds = [], wardenChoiceMode = false,
   onClick, onEnhancements, onFlame, onDropOffer, fetchTarget }: Props) {
@@ -36,7 +37,7 @@ export function DiceRow({ dice, display, selected = [], event, disabled, eligibl
     const involved = event?.dieIds?.includes(die.id) ?? false;
     const resolving = involved && (event?.type === 'HAND_PIPS_CHANGED' || event?.type === 'HITCHHIKER_ADDED_PIPS'
       || event?.type === 'HAND_XMULT_CHANGED' || event?.type === 'WORKOUT_INCREMENTED');
-    return <Die key={die.id} die={die} display={display}
+    return <Die key={die.id} die={die} rosterSlot={rosterSlotById[die.id]} display={display}
       fetchTarget={fetchTarget}
       selected={selected.includes(die.id)} highlighted={involved && event?.type !== 'DIE_ROLLED'}
       rolling={involved && event?.type === 'DICE_REROLL_STARTED'}

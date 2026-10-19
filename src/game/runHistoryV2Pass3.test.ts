@@ -26,7 +26,7 @@ describe('Run History V2 Pass 3 ownership', () => {
     const state = newRun('rollback-owner').state;
     const rollback = captureRollbackState(state);
     const traceBefore = state.debugTrace.records.length;
-    expect(Object.keys(rollback).sort()).toEqual(['board', 'nextOfferId', 'rngState']);
+    expect(Object.keys(rollback).sort()).toEqual(['board', 'diceInventory', 'encounterDice', 'nextOfferId', 'rngState']);
     for (const excluded of ['history', 'historyV2', 'stats', 'debugTrace', 'actionJournal', 'roundCheckpoint',
       'badDreamCheckpoint', 'events']) expect(stringifyExactJson(rollback)).not.toContain(`"${excluded}"`);
 

@@ -13,7 +13,7 @@ import { probabilityCheck, randomIndex } from './rng';
 import { OFFER_RARITY_WEIGHTS, rarityFirstSelection, rarityLabel } from './rarity';
 import { applyHandContribution, applyHandMultiplier, applyXMult, createHandAccumulator, finalizeHandScore, ordinaryFaceContributions, resolvedOrdinaryPips, type HandScoreContribution, type ScoringParticipant } from './scoring';
 import { boardSnapshot } from './telemetry';
-import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie,
+import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie, handIsPhysicallyAttainable,
   isBigBossRound, isCursedDie, isMiniBossType, requiredEncounterDieIds, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
 import { getEncounterGoalBreakdown } from './goals';
 import { encounterNode, flameNodeAfter, postBossShopNodeAfter, shopNodeBefore, specialOfferNodeAfter, timeTravelDestinationRound } from './progression';
@@ -41,6 +41,7 @@ import type {
 } from './runHistoryV2';
 import { Decimal, roundPositiveScoreHalf, type ExactScore } from './scoreMath';
 import { createPlayIntent, createRollBatchIntent, createRollIntent } from './resolution';
+import { grantChapterStorageSlot, orderDieIdsByEncounter, rosterDice, rosterSlotOf, syncActiveDiceProjection } from './inventory';
 import type { PlayIntent, QualificationPlan, RollBatchIntent, RollContext, RollIntent, RollResolution, ScoreOccurrence } from './resolution';
 
 type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean' | 'freePlay'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number; rerollEventId?: string };
@@ -108,7 +109,9 @@ export class Resolver {
     const face = faceSnapshot ?? activeFace(die);
     const flame = activeFlameId(die.flame);
     const flameInstanceId = flame ? currentFlameInstanceId(this.state, flame) : null;
-    return { dieId, owner: die.owner, physicalFace: die.value, face: face.rank, pips: scoringPips(face),
+    return { dieId, owner: die.owner, rosterSlot: die.owner === 'player' ? rosterSlotOf(this.state, dieId) : null,
+      ...(die.owner === 'player' ? { collectibleType: die.type, level: die.level } : { encounterId: die.encounterId }),
+      physicalFace: die.value, face: face.rank, pips: scoringPips(face),
       enhancements: { ...face.enhancements }, flame,
       ...(flameInstanceId === null ? {} : { flameInstanceId }) };
   }
@@ -394,7 +397,7 @@ export class Resolver {
       ? this.state.dice.find(die => die.owner === 'player' && activeFlameId(die.flame) === 'fetch')
       : this.state.dice.find(die => die.owner === 'player' && die.id === attachedDieId);
     const global = this.state.bonfires.includes('fetch');
-    const dice = fetchDie ? [fetchDie] : global ? this.state.dice.filter(die => die.owner === 'player' && die.id >= 0 && die.id < CONFIG.diceCount) : [];
+    const dice = fetchDie ? [fetchDie] : global ? rosterDice(this.state) : [];
     const targets = dice.flatMap(die => die.faces.slice(0, 6).map((_, index) => ({ dieId: die.id, physicalFace: (index + 1) as import('./types').Rank })))
       .filter(target => !previous || target.dieId !== previous.dieId || target.physicalFace !== previous.physicalFace);
     if (!targets.length) { this.state.fetchTarget = null; return; }
@@ -456,7 +459,7 @@ export class Resolver {
     if (this.state.bossSilenced) return;
     const boss = this.state.boss;
     if (boss?.type !== 'warden' || boss.nextUnlockTarget === null || boss.pendingReinforcements > 0
-      || boss.activeDieIds.length >= CONFIG.diceCount || this.state.score < boss.nextUnlockTarget) return;
+      || boss.activeDieIds.length >= boss.encounterDieIds.length || this.state.score < boss.nextUnlockTarget) return;
     boss.pendingReinforcements++;
     this.state.stats.wardenEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
       kind: 'target', threshold: boss.nextUnlockTarget, activeDice: boss.activeDieIds.length });
@@ -654,7 +657,7 @@ export class Resolver {
   resolveJackpot(scoringDieIds: number[]): number {
     const scoring = new Set(scoringDieIds);
     let total = 0;
-    for (const die of [...this.state.dice].sort((a, b) => a.id - b.id)) {
+    for (const die of this.state.dice) {
       const face = activeFace(die);
       const count = stacks(face, 'jackpot');
       if (!count) continue;
@@ -899,7 +902,7 @@ export class Resolver {
 
   rollBatch(dieIds: number[], reason: string, context: RollContext, _excludeStartingFace = false,
     reasonId: RollReason = 'other'): void {
-    const ids = [...new Set(dieIds)].sort((a, b) => a - b);
+    const ids = orderDieIdsByEncounter(this.state, [...new Set(dieIds)]);
     if (!ids.length) return;
     const parentSeq = this.v2ParentSeq;
     this.v2ParentSeq = undefined;
@@ -1013,7 +1016,8 @@ export class Resolver {
     if (boss?.type !== 'caller') return;
     boss.manualHandsPlayed ??= Math.max(0, 3 - boss.playsRemaining);
     boss.callDeadline ??= boss.manualHandsPlayed + boss.playsRemaining;
-    let candidates = CALLER_HAND_POOL.filter(hand => !this.state.consumed.includes(hand));
+    let candidates = CALLER_HAND_POOL.filter(hand => !this.state.consumed.includes(hand)
+      && handIsPhysicallyAttainable(hand, rosterDice(this.state).length));
     if (previous && candidates.length > 1) candidates = candidates.filter(hand => hand !== previous);
     if (!candidates.length) return;
     boss.calledHand = candidates[randomIndex(this.rng, candidates.length)];
@@ -1124,7 +1128,8 @@ export class Resolver {
     const boss = this.state.boss;
     if (boss?.type !== 'fly' || boss.caught || boss.flyHand === null) return;
     const previous = boss.flyHand;
-    let candidates = LOWER_HAND_IDS.filter(hand => !this.state.consumed.includes(hand));
+    let candidates = LOWER_HAND_IDS.filter(hand => !this.state.consumed.includes(hand)
+      && handIsPhysicallyAttainable(hand, rosterDice(this.state).length));
     if (candidates.length > 1) candidates = candidates.filter(hand => hand !== previous);
     if (!candidates.length) { boss.flyHand = null; return; }
     boss.flyHand = candidates[randomIndex(this.rng, candidates.length)];
@@ -1157,7 +1162,7 @@ export class Resolver {
     this.emit({ type: 'BOSS_HAND_CHANGED', boss: boss.type, hand, amount: boss.completedHands.length,
       message: `The Magician call completed: ${HANDS[hand].name} (${this.format(boss.completedHands.length)} / 3)` });
     if (boss.completedHands.length < boss.calledHands.length) return false;
-    const die = this.state.dice.find(item => item.id === boss.missingDieId);
+    const die = boss.missingDieId === null ? undefined : this.state.dice.find(item => item.id === boss.missingDieId);
     if (!die) throw new Error('The Magician could not return its missing die.');
     die.flame = boss.hiddenFlame;
     boss.hiddenFlame = null;
@@ -1172,7 +1177,7 @@ export class Resolver {
   private restoreMagicianDie(): void {
     const boss = this.state.boss;
     if (boss?.type !== 'magician' || boss.returned) return;
-    const die = this.state.dice.find(item => item.id === boss.missingDieId);
+    const die = boss.missingDieId === null ? undefined : this.state.dice.find(item => item.id === boss.missingDieId);
     if (die) die.flame = boss.hiddenFlame;
     boss.hiddenFlame = null;
     boss.returned = true;
@@ -1181,7 +1186,7 @@ export class Resolver {
 
   private jugglerRerolls(hand: HandId): number[] | null {
     if (this.state.bossSilenced || this.state.boss?.type !== 'juggler' || !UPPER_HAND_IDS.includes(hand)) return null;
-    const dieIds = this.state.dice.filter(die => die.owner === 'player').map(die => die.id).sort((a, b) => a - b);
+    const dieIds = rosterDice(this.state).map(die => die.id);
     this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'juggler', hand, dieIds, bossState: 'triggered',
       message: `The Juggler rerolls all dice after ${HANDS[hand].name}` });
     return dieIds;
@@ -1324,9 +1329,9 @@ export class Resolver {
     if (starting) boss.startingDieId = dieId;
     boss.pendingReinforcements--;
     if (!boss.unlockCosts.length) {
-      boss.unlockCosts = wardenUnlockCosts(this.state.handLevels, this.state.consumed, this.state.target);
+      boss.unlockCosts = wardenUnlockCosts(this.state.handLevels, this.state.consumed, this.state.target, boss.encounterDieIds.length);
     }
-    boss.nextUnlockTarget = boss.activeDieIds.length < CONFIG.diceCount
+    boss.nextUnlockTarget = boss.activeDieIds.length < boss.encounterDieIds.length
       ? boss.unlockCosts.slice(0, boss.activeDieIds.length).reduce((sum, cost) => sum + cost, 0n)
       : null;
     if (boss.nextUnlockTarget !== null) boss.unlockTargets.push(boss.nextUnlockTarget);
@@ -1345,7 +1350,7 @@ export class Resolver {
   }
   play(hand: HandId, dieIds: number[], playSource: HandPlaySource = 'manual', decisionMs: number | null = null): { winning: boolean; beanRecordIndex: number | null } {
     const playId = `${this.state.historyV2TimelineId}:${this.state.round}:${this.state.actionJournal.length}:${this.state.historyV2.length}:${playSource}`;
-    return this.resolvePlay(createPlayIntent(playId, hand, dieIds, playSource, decisionMs));
+    return this.resolvePlay(createPlayIntent(playId, hand, orderDieIdsByEncounter(this.state, dieIds), playSource, decisionMs));
   }
 
   private resolvePlay(intent: PlayIntent): { winning: boolean; beanRecordIndex: number | null } {
@@ -1380,7 +1385,7 @@ export class Resolver {
     const round = this.state.stats.rounds.at(-1)!;
     round.lastHand = hand; round.lastAction = freeBean ? 'JUMPING_BEAN' : 'PLAY';
     const hitchhikers: { id: number; face: Face; role: 'hitchhiker' }[] = [];
-    for (const die of freePlay ? [] : [...activeEncounterDice(this.state)].sort((a, b) => a.id - b.id)) {
+    for (const die of freePlay ? [] : activeEncounterDice(this.state)) {
       if (ids.includes(die.id)) continue;
       const face = structuredClone(activeFace(die));
       const count = stacks(face, 'hitchhiker');
@@ -1388,7 +1393,7 @@ export class Resolver {
       hitchhikers.push({ id: die.id, face, role: 'hitchhiker' });
       this.trigger('hitchhiker', die.id, face, `×${this.format(count)} joined ${HANDS[hand].name}`, { hand });
     }
-    const scoringParticipants = [...shapeParticipants, ...hitchhikers].sort((a, b) => a.id - b.id);
+    const scoringParticipants = [...shapeParticipants, ...hitchhikers];
     const scoringIds = scoringParticipants.map(item => item.id);
     const resolution: HandResolution = {
       intent,
@@ -1540,7 +1545,7 @@ export class Resolver {
   }
 
   manualReroll(dieIds: number[]): void {
-    const ids = [...dieIds].sort((a, b) => a - b);
+    const ids = orderDieIdsByEncounter(this.state, [...dieIds]);
     const requiredDieIds = requiredEncounterDieIds(this.state);
     const startedDeadBoard = !hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state), requiredDieIds);
     const flywheelIds = ids.filter(id => {
@@ -1611,12 +1616,15 @@ export class Resolver {
     base.bust = null;
     if (base.boss?.type === 'magician' && !base.boss.returned) {
       const missingDieId = base.boss.missingDieId;
-      const missingDie = base.dice.find(die => die.id === missingDieId);
+      const missingDie = missingDieId === null ? undefined : base.dice.find(die => die.id === missingDieId);
       if (missingDie) missingDie.flame = base.boss.hiddenFlame;
+      const ownedMissingDie = missingDieId === null ? undefined : checkpoint.diceInventory.instances[missingDieId];
+      if (ownedMissingDie) ownedMissingDie.flame = base.boss.hiddenFlame;
       recalculateMaxCharge(base);
     }
     base.boss = null;
     base.dice = base.dice.filter(die => die.owner === 'player');
+    checkpoint.encounterDice = [];
     this.state.roundCheckpoint = checkpoint;
   }
   private resolveBust(): void {
@@ -1764,8 +1772,9 @@ export class Resolver {
       before: chargeBeforeRoundReset, after: 1, dieIds: [] });
     this.v2LastCharge = 1;
     this.state.flameSelection = null; this.state.specialOffer = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
-    this.state.dice = this.state.dice.filter(die => die.owner === 'player');
-    for (const die of this.state.dice) for (const face of die.faces) {
+    this.state.encounterDice = [];
+    syncActiveDiceProjection(this.state);
+    for (const die of rosterDice(this.state)) for (const face of die.faces) {
       delete face.magneticSourceUsed;
       if (face.shifterBaseRank !== undefined) { face.rank = face.shifterBaseRank; delete face.shifterBaseRank; }
       const flywheel = stacks(face, 'flywheel');
@@ -1786,7 +1795,8 @@ export class Resolver {
     this.state.target = targetBreakdown.finalGoal;
     this.state.boss = bossType ? createBossRuntime(this.state.seed, this.state.round, bossType, {
       handPlayCounts: this.state.handPlayCounts,
-      playerDieIds: this.state.dice.filter(die => die.owner === 'player').map(die => die.id),
+      playerDieIds: rosterDice(this.state).map(die => die.id),
+      eligibleHands: HAND_IDS.filter(hand => HANDS[hand].rank !== undefined || HANDS[hand].size! <= rosterDice(this.state).length),
     }) : null;
     this.state.bossSilenced = bossSilenced;
     if (this.state.bossSilenced) this.state.specialOfferEffects.silence = false;
@@ -1795,14 +1805,17 @@ export class Resolver {
     if (!this.state.bossSilenced && this.state.boss?.type === 'tightrope') this.state.manualRerollsRemaining = 0;
     if (!this.state.bossSilenced && this.state.boss?.type === 'magician') {
       const missingDieId = this.state.boss.missingDieId;
-      const missingDie = this.state.dice.find(die => die.id === missingDieId);
-      if (!missingDie) throw new Error('The Magician requires a player die to disappear.');
-      this.state.boss.hiddenFlame = missingDie.flame;
-      missingDie.flame = null;
-      recalculateMaxCharge(this.state);
+      if (missingDieId !== null) {
+        const missingDie = this.state.dice.find(die => die.id === missingDieId);
+        if (!missingDie) throw new Error('The Magician requires an equipped player die to disappear.');
+        this.state.boss.hiddenFlame = missingDie.flame;
+        missingDie.flame = null;
+        recalculateMaxCharge(this.state);
+      }
     }
     if (!this.state.bossSilenced && this.state.boss?.type === 'warden') {
-      this.state.boss.unlockCosts = wardenUnlockCosts(this.state.handLevels, [], this.state.target);
+      this.state.boss.unlockCosts = wardenUnlockCosts(this.state.handLevels, [], this.state.target,
+        this.state.boss.encounterDieIds.length);
     }
     const sixPackInvestment = this.state.bonfires.includes('sixPack') ? 100
       : activeFlameInvestment(this.state.dice.find(die => activeFlameId(die.flame) === 'sixPack')?.flame ?? null);
@@ -1836,7 +1849,9 @@ export class Resolver {
       if (!this.state.bossSilenced && boss.type === 'caller') this.emit({ type: 'CALLER_CALLED', boss: 'caller', hand: boss.calledHand, amount: 3,
         message: `The Caller demands ${HANDS[boss.calledHand].name} within 3 plays` });
       if (!this.state.bossSilenced && boss.type === 'magician') this.emit({ type: 'BOSS_HAND_CHANGED', boss: boss.type,
-        message: `The Magician calls ${boss.calledHands.map(hand => HANDS[hand].name).join(', ')}; D${boss.missingDieId + 1} disappeared` });
+        message: boss.missingDieId === null
+          ? `The Magician calls ${boss.calledHands.map(hand => HANDS[hand].name).join(', ')}; the final die remains`
+          : `The Magician calls ${boss.calledHands.map(hand => HANDS[hand].name).join(', ')}; D${boss.missingDieId + 1} disappeared` });
       if (!this.state.bossSilenced && boss.type === 'neglected') this.emit({ type: 'BOSS_HAND_CHANGED', boss: boss.type,
         hands: [...boss.neglectedHands], amount: 0, bossState: 'restricted',
         message: `The Neglected disabled ${boss.neglectedHands.map(hand => HANDS[hand].name).join(' and ')} until 6 hands have been played` });
@@ -1844,10 +1859,13 @@ export class Resolver {
     if (!this.state.boss) this.emit({ type: retry ? 'ROUND_RETRY_STARTED' : 'ROUND_STARTED',
       message: `Round ${this.format(this.state.round)} — Attempt ${this.format(this.state.roundAttemptNumber)} — goal ${this.format(this.state.target)}; Charge reset to ×1` });
     this.selectTargetPractice();
-    if (!this.state.bossSilenced && this.state.boss?.type === 'hexer') this.state.dice.push(createCursedDie());
+    if (!this.state.bossSilenced && this.state.boss?.type === 'hexer') {
+      this.state.encounterDice.push(createCursedDie());
+      syncActiveDiceProjection(this.state);
+    }
     this.v2ParentSeq = v2RoundStarted.seq;
     if (!this.state.bossSilenced && this.state.boss?.type === 'warden') {
-      const playerDice = this.state.dice.filter(die => die.owner === 'player').sort((a, b) => a.id - b.id);
+      const playerDice = rosterDice(this.state);
       if (!playerDice.length) throw new Error('The Warden requires at least one player die.');
       this.rollBatch(playerDice.map(die => die.id), 'Warden opening roll', 'wardenSetup', false, 'warden_opening');
     } else this.rollBatch(activeEncounterDice(this.state).map(die => die.id), 'Initial round roll', 'gameplay', false, 'initial_round');
@@ -1975,10 +1993,14 @@ export class Resolver {
     this.state.infernoEvaluation = null;
     this.continuePostRoundFlow();
   }
+  private clearEncounterDice(): void {
+    cleanupTemporaryBossFaces(this.state.dice);
+    this.state.encounterDice = [];
+    syncActiveDiceProjection(this.state);
+  }
   openShop(direction: 'forward' | 'backward' = 'forward'): void {
     this.restoreMagicianDie();
-    cleanupTemporaryBossFaces(this.state.dice);
-    this.state.dice = this.state.dice.filter(die => die.owner === 'player');
+    this.clearEncounterDice();
     this.state.boss = null; this.state.bossSilenced = false;
     this.state.phase = 'shop'; this.state.flameSelection = null; this.state.specialOffer = null; this.state.roundSummary = null;
     const postBoss = isBigBossRound(this.state.round);
@@ -2011,8 +2033,7 @@ export class Resolver {
   }
   openFlameSelection(): void {
     this.restoreMagicianDie();
-    cleanupTemporaryBossFaces(this.state.dice);
-    this.state.dice = this.state.dice.filter(die => die.owner === 'player');
+    this.clearEncounterDice();
     this.state.boss = null; this.state.bossSilenced = false;
     this.state.phase = 'flameSelection'; this.state.shop = null; this.state.specialOffer = null; this.state.roundSummary = null;
     this.state.flameSelection = { offers: [], acquired: false };
@@ -2027,8 +2048,7 @@ export class Resolver {
       return;
     }
     this.restoreMagicianDie();
-    cleanupTemporaryBossFaces(this.state.dice);
-    this.state.dice = this.state.dice.filter(die => die.owner === 'player');
+    this.clearEncounterDice();
     this.state.boss = null; this.state.bossSilenced = false;
     this.state.phase = 'specialOffer'; this.state.shop = null; this.state.flameSelection = null; this.state.roundSummary = null;
     this.state.specialOffer = { offers: [], acquired: false };
@@ -2171,6 +2191,8 @@ export class Resolver {
       }
       this.emit({ type: 'ROUND_CLEARED', message: `Round ${this.format(this.state.round)} cleared with ${this.format(this.state.score)} / ${this.format(this.state.target)}` });
       const bossType = this.state.boss?.type ?? null;
+      if (bossType && isBigBossRound(this.state.round))
+        grantChapterStorageSlot(this.state.diceInventory, chapterNumberForRound(this.state.round));
       const bossRewardLabel = bossType && isMiniBossType(bossType) ? 'Mini-Boss Reward' : 'Boss Reward';
       const heldGoldSnapshot = this.state.gold;
       const payout = { baseGold: roundReward(), unusedRerollGold: Math.max(0, this.state.manualRerollsRemaining - Math.max(0, this.options.nonPayingManualRerolls ?? 0)),

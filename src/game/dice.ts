@@ -1,6 +1,7 @@
 import { CONFIG } from './config';
 import { stacks } from './enhancements';
-import type { Die, Face, RandomSource, Rank } from './types';
+import type { CollectibleDie, DiceInventory, Die, Face, RandomSource, Rank } from './types';
+import { INITIAL_STORAGE_SLOT_COUNT, rosterTuple } from './inventory';
 
 export const RANKS: Rank[] = [1, 2, 3, 4, 5, 6];
 export const HAND_RANKS: Rank[] = [1, 2, 3, 4, 5, 6, 7];
@@ -12,11 +13,25 @@ export const oppositeFace = (rank: Rank): Rank => {
 export const baseScoringPips = (face: Face) =>
   Math.max(0, (face.snakeEyed ? 1 : face.rank) + face.workoutPips - (face.infected ? CONFIG.infectedFacePipPenalty : 0));
 export const scoringPips = (face: Face) => baseScoringPips(face) + stacks(face, 'bonus') * CONFIG.bonusPips;
-export function createDice(): Die[] {
-  return Array.from({ length: CONFIG.diceCount }, (_, id) => ({
-    id, value: 1, flame: null, owner: 'player' as const,
+export function createCollectibleDie(id: number): CollectibleDie {
+  return {
+    id, value: 1, flame: null, owner: 'player', type: 'normal', level: 1,
     faces: RANKS.map(rank => ({ rank, workoutPips: 0, enhancements: {} })),
-  }));
+  };
+}
+/** Convenience factory for rules/tests that operate on a standalone active Roster. */
+export function createDice(): CollectibleDie[] {
+  return Array.from({ length: CONFIG.diceCount }, (_, id) => createCollectibleDie(id));
+}
+export function createDiceInventory(): DiceInventory {
+  const dice = createDice();
+  return {
+    instances: Object.fromEntries(dice.map(die => [die.id, die])),
+    roster: rosterTuple(dice.map(die => die.id)),
+    storage: Array.from({ length: INITIAL_STORAGE_SLOT_COUNT }, () => null),
+    nextDieId: dice.length,
+    storageAwardedChapters: [],
+  };
 }
 export const rollWeights = (die: Die, excludedFace?: Rank): number[] => (die.owner === 'boss'
   ? die.faces.map(destination => 1 + die.faces.reduce((weight, source) =>

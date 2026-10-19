@@ -187,7 +187,7 @@ describe('tutorial scenario', () => {
     session.game.manualRerollsRemaining = 0;
     session.game.dice.forEach(die => { die.value = 1; });
     session.game.consumed = ['twos', 'threes', 'fours', 'fives', 'sixes', 'pair', 'twoPair', 'threeKind', 'fullHouse', 'fourKind', 'fiveKind', 'smallStraight', 'largeStraight'];
-    session.game.boss = { type: 'warden', activeDieIds: [0], startingDieId: 0, nextUnlockTarget: null,
+    session.game.boss = { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0], startingDieId: 0, nextUnlockTarget: null,
       unlockCosts: [20n, 40n, 60n, 80n], unlockTargets: [], pendingReinforcements: 0 };
     const current = session.game.stats.rounds.at(-1)!;
     current.round = 12;

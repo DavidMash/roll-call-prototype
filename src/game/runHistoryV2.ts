@@ -33,6 +33,10 @@ export interface RunHistoryV2Envelope {
 export interface HistoryDieState {
   dieId: number;
   owner: 'player' | 'boss';
+  rosterSlot: number | null;
+  collectibleType?: import('./types').DieType;
+  level?: number;
+  encounterId?: string;
   physicalFace: Rank;
   face: Rank;
   pips: number;

@@ -10,10 +10,15 @@ import { scoreCompare, type ExactScore } from './scoreMath';
 export interface Selection { dieIds: number[]; hand: HandId | null; intent?: 'hand' | 'manual' }
 export const emptySelection = (): Selection => ({ dieIds: [], hand: null });
 
-const sortedIds = (ids: number[]) => [...ids].sort((a, b) => a - b);
-const compareIds = (a: number[], b: number[]) => {
+const orderedIds = (dice: readonly Die[], ids: readonly number[]) => {
+  const order = new Map(dice.map((die, index) => [die.id, index]));
+  return [...ids].sort((a, b) => (order.get(a) ?? Number.MAX_SAFE_INTEGER) - (order.get(b) ?? Number.MAX_SAFE_INTEGER));
+};
+const compareIds = (dice: readonly Die[], a: number[], b: number[]) => {
+  const order = new Map(dice.map((die, index) => [die.id, index]));
   for (let index = 0; index < Math.min(a.length, b.length); index++) {
-    if (a[index] !== b[index]) return a[index] - b[index];
+    if (a[index] !== b[index]) return (order.get(a[index]) ?? Number.MAX_SAFE_INTEGER)
+      - (order.get(b[index]) ?? Number.MAX_SAFE_INTEGER);
   }
   return a.length - b.length;
 };
@@ -24,7 +29,7 @@ export function requiredSelectionDieIds(board: Board): number[] {
   if (board.chargeArmed && !hasChargeBonfire(board)) {
     required.push(...board.dice.filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id));
   }
-  return [...new Set(required)].sort((a, b) => a - b);
+  return orderedIds(board.dice, [...new Set(required)]);
 }
 
 function projectedCombinationScore(board: Board, hand: HandId, dieIds: number[], decisionMs = 0): ExactScore {
@@ -48,23 +53,25 @@ export function legalHandCombinations(
   if (board.phase !== 'round' || unavailableEncounterHands(board).includes(hand)) return [];
   const required = requiredSelectionDieIds(board);
   const preferred = new Set(preferredManualDieIds);
-  const combinations = handOptions(activeEncounterDice(board), [], required)
-    .find(option => option.id === hand)?.combinations.map(sortedIds) ?? [];
+  const dice = activeEncounterDice(board);
+  const combinations = handOptions(dice, [], required)
+    .find(option => option.id === hand)?.combinations.map(ids => orderedIds(dice, ids)) ?? [];
   return combinations.sort((a, b) => {
     const aPreferred = preferred.size > 0 && [...preferred].every(id => a.includes(id));
     const bPreferred = preferred.size > 0 && [...preferred].every(id => b.includes(id));
     if (aPreferred !== bPreferred) return aPreferred ? -1 : 1;
     const scoreDifference = scoreCompare(projectedCombinationScore(board, hand, b, decisionMs),
       projectedCombinationScore(board, hand, a, decisionMs));
-    return scoreDifference || compareIds(a, b);
+    return scoreDifference || compareIds(dice, a, b);
   });
 }
 
 export const boardHandAvailable = (board: Board, hand: HandId) => legalHandCombinations(board, hand).length > 0;
 
 export function normalizeBoardSelection(board: Board, selection: Selection): Selection {
-  const active = new Set(activeEncounterDice(board).map(die => die.id));
-  const dieIds = sortedIds(selection.dieIds.filter(id => active.has(id)));
+  const dice = activeEncounterDice(board);
+  const active = new Set(dice.map(die => die.id));
+  const dieIds = orderedIds(dice, selection.dieIds.filter(id => active.has(id)));
   const hand = selection.hand && legalHandCombinations(board, selection.hand)
     .some(combination => sameDice(combination, dieIds)) ? selection.hand : null;
   return { dieIds, hand, intent: selection.intent };
@@ -88,7 +95,7 @@ export function selectBoardHand(board: Board, selection: Selection, hand: HandId
 export function toggleBoardDie(board: Board, selection: Selection, id: number): Selection {
   const dieIds = selection.dieIds.includes(id)
     ? selection.dieIds.filter(dieId => dieId !== id)
-    : sortedIds([...selection.dieIds, id]);
+    : orderedIds(activeEncounterDice(board), [...selection.dieIds, id]);
   if (!dieIds.length) return emptySelection();
   if (selection.hand && legalHandCombinations(board, selection.hand)
     .some(combination => sameDice(combination, dieIds))) {
@@ -100,7 +107,7 @@ export function toggleBoardDie(board: Board, selection: Selection, id: number): 
 }
 
 export function toggleDie(dice: Die[], consumed: HandId[], selection: Selection, id: number, requiredDieIds: number[] = []): Selection {
-  const dieIds = selection.dieIds.includes(id) ? selection.dieIds.filter(die => die !== id) : [...selection.dieIds, id].sort((a, b) => a - b);
+  const dieIds = selection.dieIds.includes(id) ? selection.dieIds.filter(die => die !== id) : orderedIds(dice, [...selection.dieIds, id]);
   const options = handOptions(dice, consumed, dieIds).filter(option => !option.consumed
     && option.combinations.some(set => requiredDieIds.every(required => set.includes(required))));
   const completed = options.filter(option => option.combinations.some(set => sameDice(set, dieIds)));
