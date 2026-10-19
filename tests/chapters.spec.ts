@@ -4,7 +4,7 @@ import { newRun } from '../src/game/engine';
 import { targetForRound } from '../src/game/goals';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import type { GameState } from '../src/game/types';
-import { enterRun } from './uiHelpers';
+import { enterRun, goToShopStage } from './uiHelpers';
 
 async function installRun(page: import('@playwright/test').Page, state: GameState) {
   await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
@@ -195,7 +195,7 @@ test('expanded current Round preserves a substantially large formatted target wi
   state.round = targetRound - 1;
   state.phase = 'shop';
   state.currentNodeId = `shop:before-round:${targetRound}`;
-  state.shop = { kind: 'between_rounds', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { kind: 'between_rounds', stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   state.bust = null;
 
   await page.goto(`/?seed=${state.seed}&speed=normal`);
@@ -255,6 +255,7 @@ test('the post-Boss Shop stays in the completed Chapter until NEXT CHAPTER start
   await expect(map).toHaveCount(0);
   await expect(page.locator('.shop-summary').getByText('SHOP', { exact: true })).toBeVisible();
   await expect(page.getByTestId('stat-round')).toContainText('C1 R6');
+  await goToShopStage(page, 'fireKeeping');
   await expect(page.getByRole('button', { name: 'NEXT CHAPTER', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'NEXT ROUND', exact: true })).toHaveCount(0);
   await expect(page.getByTestId('chapter-splash')).toHaveCount(0);
@@ -263,11 +264,10 @@ test('the post-Boss Shop stays in the completed Chapter until NEXT CHAPTER start
   const splash = page.getByTestId('chapter-splash');
   await expect(splash).toHaveAttribute('data-chapter', '2');
   await expect(splash).toHaveText(/CHAPTER 2/);
-  const unlock = splash.getByTestId('chapter-enhancement-unlock');
-  await expect(unlock).toContainText('ENHANCEMENT CAPACITY');
-  await expect(unlock).toContainText('1 → 2');
-  await expect(unlock).toContainText('NEW ENHANCEMENTS');
-  for (const name of ['Hitchhiker', 'Weighted', 'Bump', 'Magnetic', 'Jackpot']) await expect(unlock).toContainText(name);
+  const unlock = splash.getByTestId('chapter-storage-unlock');
+  await expect(unlock).toContainText('COLLECTION EXPANDED');
+  await expect(unlock).toContainText('+1 STORAGE SLOT');
+  await expect(unlock).not.toContainText('ENHANCEMENT');
   await expect(map).toBeVisible({ timeout: 4_000 });
   await expect(map.locator('.map-kicker')).toHaveText('CHAPTER 2');
   await expect(map.locator('.run-map-track')).toHaveAttribute('data-chapter', '2');

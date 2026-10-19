@@ -106,7 +106,10 @@ describe('Run History V2 Pass 3 ownership', () => {
       state.manualRerollsRemaining = 0;
       state = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, { next: () => 0 }).state;
       checkpointSizes.push(Buffer.byteLength(stringifyExactJson(state.roundCheckpoint)));
-      if (attempt === 0) state = dispatch(state, { type: 'RETRY_ROUND' }, { next: () => 0 }).state;
+      if (attempt === 0) {
+        state.shop!.stage = 'fireKeeping';
+        state = dispatch(state, { type: 'RETRY_ROUND' }, { next: () => 0 }).state;
+      }
     }
     const classified = classifyRunHistoryV2Timelines(state.historyV2, state.historyV2Coverage);
     expect(classified.ranges.filter(range => range.reason === 'bust')).toHaveLength(2);

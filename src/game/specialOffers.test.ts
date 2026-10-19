@@ -13,7 +13,6 @@ import {
 } from './specialOffers';
 import { SCREEN_THEMES } from './screenThemes';
 import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
-import { eligibleEnhancements } from './enhancements';
 import type { GameState, HandId, RandomSource, RoundSummary, SpecialOfferType } from './types';
 
 const constant = (value = 0): RandomSource => ({ next: () => value });
@@ -31,8 +30,12 @@ function offerState(type: SpecialOfferType, hand?: HandId): GameState {
 const choose = (type: SpecialOfferType, hand?: HandId, random: RandomSource = constant()) =>
   dispatch(offerState(type, hand), { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }, random).state;
 
-const unlockShop = (state: GameState, random: RandomSource = constant()) => state.shop?.exitUnlocked === false
-  ? dispatch(state, { type: 'UNLOCK_SHOP_EXIT' }, random).state : state;
+const unlockShop = (state: GameState, random: RandomSource = constant()) => {
+  let next = state.shop?.exitUnlocked === false ? dispatch(state, { type: 'UNLOCK_SHOP_EXIT' }, random).state : state;
+  if (next.shop?.stage === 'dice') next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'training' }, random).state;
+  if (next.shop?.stage === 'training') next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }, random).state;
+  return next;
+};
 
 function carePackageRound(random: RandomSource = constant(.4)): GameState {
   const state = unlockShop(choose('carePackage'), random);
@@ -88,21 +91,23 @@ describe('immediate and Shop Special Offers', () => {
   it('On The House makes only initial displayed purchases free once', () => {
     let state = choose('onTheHouse');
     expect(activeSpecialOfferStatusItems(state.specialOfferEffects)).toEqual([]);
-    expect(state.shop?.freeEnhancementOfferIds).toHaveLength(3);
+    expect(state.shop?.freeDicePurchaseAvailable).toBe(true);
     expect(state.shop?.freeTrainingOfferKeys).toHaveLength(3);
-    const enhancement = state.shop!.offers[0];
-    state = dispatch(state, { type: 'BUY', offerId: enhancement.id, dieId: 0 }, constant()).state;
-    expect(state.stats.purchases.at(-1)?.cost).toBe(0);
+    const dieOffer = state.shop!.offers[0];
+    state = dispatch(state, { type: 'BUY_DIE', offerId: dieOffer.id }, constant()).state;
+    expect(state.shop?.freeDicePurchaseAvailable).toBe(false);
+    expect([...state.historyV2].reverse().find(event => event.kind === 'shop_transaction'
+      && event.transaction.type === 'dice_purchased')).toMatchObject({ transaction: { pricePaid: 0 } });
+    state = dispatch(state, { type: 'SET_SHOP_STAGE', stage: 'training' }, constant()).state;
     const training = state.shop!.trainingOffers[0];
     state = dispatch(state, training.kind === 'team' ? { type: 'TRAIN_ALL_HANDS' } : { type: 'TRAIN_HAND', hand: training.hand }, constant()).state;
     expect(state.stats.trainingPurchases.at(-1)?.cost).toBe(0);
     state.gold = 100;
     state = dispatch(state, training.kind === 'team' ? { type: 'TRAIN_ALL_HANDS' } : { type: 'TRAIN_HAND', hand: training.hand }, constant()).state;
     expect(state.stats.trainingPurchases.at(-1)?.cost).toBe(training.kind === 'team' ? 30 : 4);
-    const initialFreeIds = [...(state.shop!.freeEnhancementOfferIds ?? [])];
+    state = dispatch(state, { type: 'SET_SHOP_STAGE', stage: 'dice' }, constant()).state;
     state = dispatch(state, { type: 'REROLL_OFFERS' }, constant()).state;
-    expect(state.shop!.offers.every(offer => !initialFreeIds.includes(offer.id))).toBe(true);
-    expect(state.shop!.offers.every(offer => !(state.shop!.freeEnhancementOfferIds ?? []).includes(offer.id))).toBe(true);
+    expect(state.shop!.freeDicePurchaseAvailable).toBe(false);
   });
 
   it('Great Fairy restores Lives or grants 15 Gold at full Lives', () => {
@@ -259,7 +264,7 @@ describe('temporary Special Offers', () => {
     expect(result.events.find(event => event.type === 'SHOP_REOPENED_AFTER_BUST')?.message)
       .toContain('3 Rerolls left · Care Package 0');
 
-    state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.4)).state;
+    state = dispatch(unlockShop(state), { type: 'RETRY_ROUND' }, constant(.4)).state;
     expect(state).toMatchObject({
       phase: 'round',
       manualRerollsRemaining: 3,
@@ -290,7 +295,7 @@ describe('temporary Special Offers', () => {
     expect(state.phase).toBe('shop');
     expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
 
-    state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.4)).state;
+    state = dispatch(unlockShop(state), { type: 'RETRY_ROUND' }, constant(.4)).state;
     expect(state.boss?.type).toBe('tightrope');
     expect(state.manualRerollsRemaining).toBe(0);
     expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
@@ -426,15 +431,15 @@ describe('temporary Special Offers', () => {
         finalGoal: targetForRound(6) }));
   });
 
-  it('On The House generates its next Shop Enhancement offers from the current Chapter pool', () => {
+  it('On The House generates chapter-independent Dice offers', () => {
     const state = offerState('onTheHouse');
     state.round = 9;
     state.presentedChapters = [1, 2];
     const chosen = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }, constant()).state;
     expect(chosen.phase).toBe('shop');
-    expect(chosen.shop!.offers.every(offer => eligibleEnhancements(2).includes(offer.enhancement))).toBe(true);
-    expect([...chosen.historyV2].reverse().find(event => event.kind === 'shop_offers_presented' && event.pool === 'enhancement'))
-      .toMatchObject({ chapter: 2, maxEnhancementTypesPerFace: 2, highestUnlockedEnhancementTier: 1 });
+    expect(chosen.shop!.offers.every(offer => !!offer.dieType)).toBe(true);
+    expect([...chosen.historyV2].reverse().find(event => event.kind === 'shop_offers_presented' && event.pool === 'dice'))
+      .toMatchObject({ offers: expect.any(Array) });
   });
 
   it.each(['tightrope', 'quickdraw'] as const)('Silence gives %s the neutral Goal', boss => {
@@ -501,7 +506,7 @@ describe('temporary Special Offers', () => {
     expect(state.specialOfferEffects.silence).toBe(true);
     expect(state.target).toBe(neutral);
 
-    state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.3)).state;
+    state = dispatch(unlockShop(state), { type: 'RETRY_ROUND' }, constant(.3)).state;
     expect(state.boss?.type).toBe('marathon');
     expect(state.bossSilenced).toBe(true);
     expect(state.target).toBe(neutral);
@@ -632,7 +637,7 @@ describe('replay and checkpoint Special Offers', () => {
   });
 
   it('keeps the canonical player-facing descriptions exact', () => {
-    expect(SPECIAL_OFFERS.onTheHouse.description).toBe('The next Shop’s initial displayed purchases are free.');
+    expect(SPECIAL_OFFERS.onTheHouse.description).toBe('Your first Dice purchase and initial Training purchases in the next Shop are free.');
     expect(SPECIAL_OFFERS.timeTravel.description).toBe('Replay this Chapter from Round 1 with your current build.');
     expect(SPECIAL_OFFERS.badDream.description).toBe('If your run ends in the next 3 Rounds, return to the post-R3 Shop with your current build and 1 Life.');
   });

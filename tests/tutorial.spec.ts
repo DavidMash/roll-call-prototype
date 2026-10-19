@@ -255,11 +255,12 @@ test('Three of a Kind uses separate highlights and gates PLAY until selection is
   await expect(page.getByRole('dialog', { name: 'Menu' })).toBeVisible();
 });
 
-test('Shop Training and Bonus placement expose only the current atomic action', async ({ page }) => {
+test('Shop Training remains guided while obsolete Enhancement purchasing is bypassed', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  const session = shopOneSession();
+  let session = shopOneSession();
   session.game.dice[1].value = 2;
-  session.scenario.completedBeatIds.push('shop1-training');
+  session = act(session, { type: 'SET_SHOP_STAGE', stage: 'training' });
+  session.scenario.completedBeatIds.push('shop1-to-training', 'shop1-training');
   await resumeSession(page, session);
 
   const trainingCard = page.locator('[data-tutorial="training-fullHouse"]');
@@ -279,54 +280,28 @@ test('Shop Training and Bonus placement expose only the current atomic action', 
   expect(neighborAfter?.height).toBe(neighborBefore?.height);
   expect(neighborAfter?.y).toBe(neighborBefore?.y);
 
-  for (const title of ['FULL HOUSE · LV. 2', 'ENHANCEMENTS', '+ BONUS']) {
-    await expect(page.locator('.driver-popover')).toContainText(title);
-    await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
-  }
-  await expect(page.locator('.driver-popover-title')).toHaveText('BUY + BONUS');
-  await expect(page.locator('[data-tutorial="enhancement-bonus"] .offer-action')).not.toHaveAttribute('aria-disabled', 'true');
-  await expect(page.locator('[data-tutorial="enhancement-bonus"] .offer-action')).toHaveClass(/tutorial-interactive/);
-  await expect(page.locator('[data-tutorial^="enhancement-"]:not([data-tutorial="enhancement-bonus"]) .offer-action').first()).toHaveAttribute('aria-disabled', 'true');
-  await page.locator('[data-tutorial="enhancement-bonus"] .offer-action').click();
-  await expect(page.locator('.driver-popover-title')).toHaveText('PUT IT HERE');
-  await expect(page.locator('.driver-popover')).toContainText('Put + Bonus on this 2.');
-  await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(2);
-  await expect(page.locator('[data-tutorial="enhancement-bonus"] .offer-action')).toHaveAttribute('aria-disabled', 'true');
-  await expect(page.locator('[data-tutorial="die-2"] .die')).not.toHaveAttribute('aria-disabled', 'true');
-  await expect(page.locator('[data-tutorial="die-2"] .die')).toHaveClass(/tutorial-interactive/);
-  await page.locator('[data-tutorial="die-1"] .die').evaluate((element: HTMLButtonElement) => element.click());
-  await expect(page.locator('.driver-popover-title')).toHaveText('PUT IT HERE');
-  await page.locator('[data-tutorial="die-2"] .die').click();
-  await expect(page.locator('.driver-popover')).toContainText('face of the die');
-  const savedBinding = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).session.scenario.bonusBinding,
-    TUTORIAL_RUN_STORAGE_KEY);
-  expect(savedBinding).toEqual({ dieId: 1, faceRank: 2 });
+  await expect(page.locator('.driver-popover-title')).toHaveText(/FULL HOUSE.*LV\. 2/);
+  await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
+  await expect(page.locator('.driver-popover-title')).toHaveText('FIRE KEEPING');
+  await expect(page.locator('.driver-popover')).toContainText('Continue through Fire Keeping before starting the next Round.');
+  await expect(page.locator('.dice-offer')).toHaveCount(0);
+  await expect(page.getByTestId('training-shop')).toBeVisible();
+  await expect(page.getByTestId('dice-shop')).toHaveCount(0);
+  await expect(page.locator('[data-tutorial^="enhancement-"]')).toHaveCount(0);
 });
 
-test('Workout purchase and placement use separate guided targets', async ({ page }) => {
+test('obsolete Workout shopping lesson cannot reappear in a resumed tutorial', async ({ page }) => {
   const session = shopOneSession();
   session.game.round = 3;
   session.game.gold = 20;
-  session.game.shop!.offers[0] = { ...session.game.shop!.offers[0], enhancement: 'workout', purchased: false };
-  session.game.dice[0].value = 5;
-  session.scenario.workoutDieId = 0;
-  session.scenario.completedBeatIds.push('shop-r4-workout-info');
-  await resumeSession(page, session);
-
-  await expect(page.locator('.driver-popover-title')).toHaveText('BUY ▲ WORKOUT');
-  await page.locator('[data-tutorial="enhancement-workout"] .offer-action').click();
-  await expect(page.locator('.driver-popover-title')).toHaveText('PLACE ▲ WORKOUT');
-  await expect(page.locator('.driver-popover')).toContainText('Put it on this 5.');
-  await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(2);
-  await expect(page.locator('[data-tutorial="die-1"] .die')).not.toHaveAttribute('aria-disabled', 'true');
-  await expect(page.locator('[data-tutorial="die-1"] .die')).toHaveClass(/tutorial-interactive/);
-  await expect(page.locator('[data-tutorial="die-2"] .die')).toHaveAttribute('aria-disabled', 'true');
-  await page.locator('[data-tutorial="die-1"] .die').click();
+  session.scenario.completedBeatIds.push('shop1-training');
+  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, session: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
+    [TUTORIAL_RUN_STORAGE_KEY, TUTORIAL_RUN_STORAGE_VERSION, session] as const);
+  await page.reload();
+  await page.getByRole('button', { name: 'CONTINUE TUTORIAL', exact: true }).click();
   await expect(page.locator('.driver-popover')).toHaveCount(0);
-  await expect(page.locator('[data-tutorial="die-1"] .die')).not.toHaveAttribute('data-tutorial-gated');
-  const savedBinding = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).session.scenario.workoutBinding,
-    TUTORIAL_RUN_STORAGE_KEY);
-  expect(savedBinding).toEqual({ dieId: 0, faceRank: 5 });
+  await expect(page.getByText('BUY ▲ WORKOUT', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.dice-offer')).toHaveCount(3);
 });
 
 test('multi-target spotlights and the Driver popover follow moved tutorial targets', async ({ page }) => {
@@ -395,7 +370,8 @@ test('first Flame assignment highlights and exposes every legal destination die 
   await page.getByRole('button', { name: 'SKIP REWARD', exact: true }).evaluate((element: HTMLButtonElement) => element.click());
   await expect(page.locator('.driver-popover-title')).toHaveText('ASSIGN YOUR FLAME');
   await page.locator('[data-tutorial="die-3"] .die').click();
-  await expect(page.locator('.driver-popover-title')).toHaveText('FLAMES');
+  await expect(page.locator('.driver-popover-title')).toHaveText('RETURN TO THE SHOP');
+  await expect(page.locator('.driver-popover')).toContainText('Review Dice first, then continue to Training.');
 });
 
 test('first Stoke highlights only the Flame badge and moves focus into modal controls', async ({ page }) => {
@@ -406,7 +382,9 @@ test('first Stoke highlights only the Flame badge and moves focus into modal con
   session.scenario.firstFlame = 'doubleDown';
   session.scenario.firstFlameDieId = 0;
   session.game.flameTutorial = { pendingDieId: 0, completed: false };
-  session.scenario.completedBeatIds.push('flame-basics', 'flame-xmult', 'flame-ember');
+  session.game.shop!.stage = 'fireKeeping';
+  session.scenario.completedBeatIds.push('flame-shop-to-training', 'flame-shop-to-fire-keeping',
+    'flame-basics', 'flame-xmult', 'flame-ember');
   await resumeSession(page, session);
 
   const badge = page.locator('[data-tutorial="flame-badge"][data-flame-die-id="0"]');
@@ -438,6 +416,7 @@ test('Tutorial Shop progression nudge waits for five neutral seconds and stops a
     session.game.phase = 'shop';
     session.game.bust = null;
     session.game.shop!.kind = kind;
+    session.game.shop!.stage = 'fireKeeping';
     session.scenario.completedBeatIds.push('chapter-2');
     if (round > 12) session.scenario.completedBeatIds.push('curriculum-complete');
     await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, session: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
@@ -476,6 +455,7 @@ test('Shop progression nudge is not used in a normal run', async ({ page }) => {
   await page.clock.install();
   const session = shopOneSession();
   session.game.round = 2;
+  session.game.shop!.stage = 'fireKeeping';
   await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, session.game] as const);
   await page.reload();

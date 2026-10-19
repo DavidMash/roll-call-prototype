@@ -14,7 +14,7 @@ const constant = (value = 0): RandomSource => ({ next: () => value });
 function bossRound(type: BossType, random: RandomSource = constant(.55)): GameState {
   const state = newRun(`expansion-${type}`, constant(.2)).state;
   state.phase = 'shop';
-  state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   state.round = 2;
   state.currentNodeId = 'shop:before-round:3';
   state.bossSchedule[3] = type;
@@ -307,6 +307,7 @@ describe('Snake Eyes', () => {
     expect(state.phase).toBe('shop');
     expect(state.dice.every(die => die.faces.every((face, index) => face.rank === index + 1 && !face.snakeEyed))).toBe(true);
     expect(state.dice.every(die => die.faces.every(face => face.snakeEyesOriginalRank === undefined))).toBe(true);
+    state.shop!.stage = 'fireKeeping';
     const retry = dispatch(state, { type: 'RETRY_ROUND' }, constant(.55)).state;
     expect(retry.boss).toMatchObject({ type: 'snakeEyes', mutatedFaces: [] });
     expect(retry.dice.every(die => die.faces.every(face => !face.snakeEyed))).toBe(true);
@@ -429,6 +430,7 @@ describe('The Infected', () => {
     new Resolver(state, constant(.2)).evaluate();
     expect(state.phase).toBe('shop');
     expect(state.dice.every(die => die.faces.every(face => !face.infected))).toBe(true);
+    state.shop!.stage = 'fireKeeping';
     state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.55)).state;
     expect(state.boss?.type).toBe('infected');
     expect(state.dice.every(die => die.faces.every(face => !face.infected))).toBe(true);
@@ -453,6 +455,7 @@ describe('boss attempt-local runtime rollback', () => {
     state.manualRerollsRemaining = 0;
     new Resolver(state, constant(.2)).evaluate();
     expect(state.phase).toBe('shop');
+    state.shop!.stage = 'fireKeeping';
     state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.55)).state;
     if (type === 'marathon') expect(state.boss).toMatchObject({ type, cooldowns: {} });
     if (type === 'quickdraw') expect(state.boss).toMatchObject({ type, lowerShotUsed: false, playedLowerHand: null });

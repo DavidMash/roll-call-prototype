@@ -1,7 +1,7 @@
 import { Badge, Button, Group, Modal, Progress, Stack, Text } from '@mantine/core';
 import { useEffect, useState } from 'react';
 import { activeFlameId, activeFlameInvestment, flameDetailsPresentation, flameEffectText, flameStokeLimits, FLAMES } from '../game/flames';
-import type { Action, Board, Flame } from '../game/types';
+import type { Action, Board, DiceInventory, Flame } from '../game/types';
 import { formatPlayerNumber } from '../game/copy';
 import { RarityBadge } from './RarityBadge';
 
@@ -11,8 +11,9 @@ export interface FlameDetailsTarget {
   dieId?: number;
 }
 
-export function FlameDetailsModal({ board, target, busy, actionsEnabled, onClose, submit }: {
+export function FlameDetailsModal({ board, inventory, target, busy, actionsEnabled, onClose, submit }: {
   board: Board;
+  inventory?: DiceInventory;
   target: FlameDetailsTarget | null;
   busy: boolean;
   actionsEnabled: boolean;
@@ -20,19 +21,20 @@ export function FlameDetailsModal({ board, target, busy, actionsEnabled, onClose
   submit: (action: Action) => void;
 }) {
   const [stokeDraft, setStokeDraft] = useState('0');
-  const die = target?.dieId === undefined ? null : board.dice.find(item => item.id === target.dieId) ?? null;
+  const die = target?.dieId === undefined ? null
+    : inventory?.instances[target.dieId] ?? board.dice.find(item => item.id === target.dieId) ?? null;
   const activeId = activeFlameId(die?.flame);
   const flameId = target?.flame ?? null;
   const isEmber = target?.kind === 'ember' && !!die && activeId === flameId;
   const invested = target?.kind === 'bonfire' ? 100 : isEmber ? activeFlameInvestment(die.flame) : 0;
-  const maxStoke = isEmber ? flameStokeLimits(board, die.id).maximumAmount : 0;
+  const maxStoke = isEmber ? flameStokeLimits(board, die.id, inventory).maximumAmount : 0;
   function normalizedAmount(value: string): number {
     if (!/^\d+$/.test(value)) return 0;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? Math.max(0, Math.min(Math.floor(parsed), maxStoke)) : maxStoke;
   }
   const amount = normalizedAmount(stokeDraft);
-  const canStoke = isEmber && board.phase === 'shop' && actionsEnabled;
+  const canStoke = isEmber && board.phase === 'shop' && board.shop?.stage === 'fireKeeping' && actionsEnabled;
   useEffect(() => { setStokeDraft('0'); }, [target?.dieId, target?.flame, target?.kind]);
   if (!flameId) return null;
   const definition = FLAMES[flameId];

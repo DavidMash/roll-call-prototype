@@ -152,6 +152,7 @@ describe('Pair resolution and loss integration', () => {
     expect(result.state.scoreByHand[hand]).toBe(score);
     const shop = dispatch(result.state, { type: 'CONTINUE_ROUND_SUMMARY' }, { next: () => 0.99 }).state;
     shop.shop!.exitUnlocked = true;
+    shop.shop!.stage = 'fireKeeping';
     const rolls = [0.2, 0.2, 0.6, 0.6, 0.99];
     let index = 0;
     const next = dispatch(shop, { type: 'NEXT_ROUND' }, { next: () => rolls[index++] ?? 0.99 });

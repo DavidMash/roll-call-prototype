@@ -84,7 +84,7 @@ export default function App() {
   const tutorialProgressNudgeEligible = runMode === 'tutorial' && board.phase === 'shop' && !!board.shop && !board.bust
     && chapterNumberForRound(board.round) <= 2 && !tutorialPaused && currentTutorialBeat === null
     && selectedOffer === null && selectedFlameOffer === null;
-  const contextualFlameCue: TutorialBeat | null = runMode === 'normal' && board.phase === 'shop'
+  const contextualFlameCue: TutorialBeat | null = runMode === 'normal' && board.phase === 'shop' && board.shop?.stage === 'fireKeeping'
     && board.flameTutorial.pendingDieId !== null && !board.flameTutorial.completed ? {
       id: 'first-flame-ember', title: 'NEW EMBER',
       body: ['Stoke Flames in the Shop. At 100 Gold, they become Bonfires.'],
@@ -107,7 +107,7 @@ export default function App() {
   function submit(action: Action) {
     if (busy) return;
     if (!game.submit(action)) return;
-    if (!['BUY', 'SELL_ENHANCEMENT', 'STOKE_FLAME', 'RESTORE_LIFE', 'DISMISS_FLAME_TUTORIAL', 'UNLOCK_SHOP_EXIT'].includes(action.type)) setSelectedOffer(null);
+    if (!['BUY_DIE', 'MOVE_DIE', 'FUSE_DICE', 'SELL_DIE', 'SELL_ENHANCEMENT', 'STOKE_FLAME', 'RESTORE_LIFE', 'DISMISS_FLAME_TUTORIAL', 'UNLOCK_SHOP_EXIT'].includes(action.type)) setSelectedOffer(null);
     setSelectedFlameOffer(null);
     if (action.type !== 'TOGGLE_CHARGE') setSelection(emptySelection());
   }
@@ -200,8 +200,8 @@ export default function App() {
         : board.phase === 'flameSelection' && board.flameSelection ? <FlameSelectionScreen board={board} event={event} busy={busy}
         selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} openFlameDetails={openFlameDetails} />
         : board.phase === 'specialOffer' && board.specialOffer ? <SpecialOfferScreen board={board} busy={busy} submit={submit} />
-        : board.phase === 'shop' && board.shop ? <ShopScreen board={board} event={event} busy={busy}
-        selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} submit={submit} skip={game.skip}
+        : board.phase === 'shop' && board.shop ? <ShopScreen board={board} inventory={state.diceInventory} event={event} busy={busy}
+        submit={submit} skip={game.skip} openFlameDetails={openFlameDetails}
         tutorialProgressNudgeEligible={tutorialProgressNudgeEligible} />
       : (board.phase === 'bust' || (board.phase === 'lost' && board.bust)) ? <BustScreen board={board}
           onContinue={event?.type === 'ROUND_BUST' && (board.bust?.livesAfter ?? 0) > 0 ? game.continuePlayback : undefined}
@@ -219,7 +219,7 @@ export default function App() {
     </main>
     {board.phase !== 'inferno' && <DiceDock board={diceBoard} event={event} busy={busy} actionsEnabled={dockActionsEnabled} cinematic={showingChapterSplash}
       display={diceDisplay} selection={selection} setSelection={setSelection}
-      selectedOffer={selectedOffer} setSelectedOffer={setSelectedOffer} selectedFlameOffer={selectedFlameOffer}
+      selectedFlameOffer={selectedFlameOffer}
       submit={submit} openFaceDetails={setFaceDetails} openFlameDetails={openFlameDetails} />}
     {board.phase !== 'inferno' && <RunActionRow setTarget={setActionRowTarget} />}
     <RunInfoModal state={state} busy={busy} opened={runInfoOpen} onClose={() => setRunInfoOpen(false)}
@@ -228,10 +228,10 @@ export default function App() {
     <HelpModal opened={helpOpen} onClose={() => setHelpOpen(false)} />
     <RestoreLivesModal board={board} opened={restoreLivesOpen && board.phase === 'shop'} busy={busy}
       onClose={() => setRestoreLivesOpen(false)} submit={submit} />
-    <FaceDetailsModal board={board} target={faceDetails} diceDisplay={diceDisplay} selectedOffer={selectedOffer}
-      setSelectedOffer={setSelectedOffer} busy={busy} actionsEnabled={!busy && !showingChapterSplash && !showingMap}
+    <FaceDetailsModal board={board} target={faceDetails} diceDisplay={diceDisplay}
+      busy={busy} actionsEnabled={!busy && !showingChapterSplash && !showingMap}
       onClose={() => setFaceDetails(null)} submit={submit} />
-    <FlameDetailsModal board={board} target={flameDetails} busy={busy} actionsEnabled={!busy && !showingChapterSplash && !showingMap}
+    <FlameDetailsModal board={board} inventory={state.diceInventory} target={flameDetails} busy={busy} actionsEnabled={!busy && !showingChapterSplash && !showingMap}
       onClose={closeFlameDetails} submit={submit} />
     {runMode === 'tutorial' && <TutorialDirector session={tutorialGame.session}
       uiState={tutorialUiState}

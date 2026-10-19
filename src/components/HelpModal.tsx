@@ -1,12 +1,12 @@
 import { Modal, SimpleGrid, Stack, Tabs, Text, Title } from '@mantine/core';
 import { CONFIG } from '../game/config';
-import { ENHANCEMENTS, ENHANCEMENT_IDS } from '../game/enhancements';
+import { dieEffectDescription } from '../game/diceEconomy';
 import { FLAMES, FLAME_IDS, isChargeFlame } from '../game/flames';
 import { HANDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from '../game/hands';
 import { BOSSES, BOSS_TYPES, MINI_BOSS_TYPES } from '../game/bosses';
 import type { HandId } from '../game/types';
 import { SPECIAL_OFFERS, SPECIAL_OFFER_IDS } from '../game/specialOffers';
-import { EnhancementIdentity } from './EnhancementIdentity';
+import { SPECIAL_DICE, SPECIAL_DIE_TYPES } from '../game/specialDice';
 import { RarityBadge } from './RarityBadge';
 
 const LOWER_HAND_RULES: Partial<Record<HandId, string>> = {
@@ -27,7 +27,7 @@ function RuleSection({ title, children }: { title: string; children: React.React
 export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () => void }) {
   return <Modal opened={opened} onClose={onClose} title="How to Play" size="xl" centered transitionProps={{ duration: 0 }}>
     <Tabs defaultValue="play">
-      <Tabs.List grow><Tabs.Tab value="play">How to Play</Tabs.Tab><Tabs.Tab value="scoring">Scoring</Tabs.Tab><Tabs.Tab value="hands">Hands</Tabs.Tab><Tabs.Tab value="enhancements">Enhancements</Tabs.Tab><Tabs.Tab value="flames">Flames</Tabs.Tab><Tabs.Tab value="offers">Offers</Tabs.Tab><Tabs.Tab value="bosses">Bosses</Tabs.Tab><Tabs.Tab value="shop">Shop</Tabs.Tab></Tabs.List>
+      <Tabs.List grow><Tabs.Tab value="play">How to Play</Tabs.Tab><Tabs.Tab value="scoring">Scoring</Tabs.Tab><Tabs.Tab value="hands">Hands</Tabs.Tab><Tabs.Tab value="dice">Dice</Tabs.Tab><Tabs.Tab value="flames">Flames</Tabs.Tab><Tabs.Tab value="offers">Offers</Tabs.Tab><Tabs.Tab value="bosses">Bosses</Tabs.Tab><Tabs.Tab value="shop">Shop</Tabs.Tab></Tabs.List>
       <Tabs.Panel value="play" pt="md"><Stack gap="xs">
         <RuleSection title="PLAY HANDS">Choose a hand, select the dice that score, and Play.</RuleSection>
         <RuleSection title="CLEAR THE GOAL">Reach the Goal before you run out of playable hands and Rerolls.</RuleSection>
@@ -50,8 +50,8 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
           <Text size="sm" fw={700}>{HANDS[hand].name}</Text><Text size="xs" c="dimmed">{LOWER_HAND_RULES[hand]}</Text>
         </div>)}</SimpleGrid></div>
       </Stack></Tabs.Panel>
-      <Tabs.Panel value="enhancements" pt="md"><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{ENHANCEMENT_IDS.map(id => <div key={id} className="help-item" data-testid={`help-enhancement-${id}`}>
-        <Text size="sm" fw={700}><EnhancementIdentity enhancement={id} /> <RarityBadge rarity={ENHANCEMENTS[id].rarity} compact /></Text><Text size="xs" c="dimmed">{ENHANCEMENTS[id].description}</Text>
+      <Tabs.Panel value="dice" pt="md"><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{SPECIAL_DIE_TYPES.filter(id => id !== 'normal').map(id => <div key={id} className="help-item" data-testid={`help-die-${id}`}>
+        <Text size="sm" fw={700}>{SPECIAL_DICE[id].name} D6 <RarityBadge rarity={SPECIAL_DICE[id].rarity!} compact /></Text><Text size="xs" c="dimmed">{dieEffectDescription(id, 1)}</Text>
       </div>)}</SimpleGrid></Tabs.Panel>
       <Tabs.Panel value="flames" pt="md"><Stack gap="sm">
         <Text size="sm">Flames begin as Embers. Stoke them in the Shop; at 100 Gold, an Ember becomes a Bonfire and works globally.</Text>
@@ -68,7 +68,7 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
           <Text size="sm" fw={700}>{BOSSES[id].name}</Text><Text size="xs" c="dimmed">{BOSSES[id].shortRule}</Text>
         </div>)}</SimpleGrid></div>
       </Stack></Tabs.Panel>
-      <Tabs.Panel value="shop" pt="md"><Text size="sm">Spend Gold between Rounds to train hands, buy Enhancements, Stoke Flames, reroll offers, and restore Lives.</Text></Tabs.Panel>
+      <Tabs.Panel value="shop" pt="md"><Text size="sm">Spend Gold between Rounds to buy collectible Dice, organize your Roster and Storage, train hands, Stoke Flames, reroll offers, and restore Lives.</Text></Tabs.Panel>
     </Tabs>
   </Modal>;
 }

@@ -111,7 +111,7 @@ describe('Run History V2 hand scoring', () => {
     ]);
     expect(event.score.awarded).toBe(result.state.stats.handScores.at(-1)!.score);
     const rendered = renderHandScoredV2(event);
-    expect(rendered).toContain('Ember D1 Vineyard ×3');
+    expect(rendered).toContain('Ember Die #0 Vineyard ×3');
     expect(rendered).toContain('Bonfire Lowball ×3');
     expect(rendered).toContain('Bonfire Box Set');
     expect(rendered).toContain('Charge ×3');
@@ -184,13 +184,15 @@ describe('Run History V2 lifecycle, timeline, renderer, and summary', () => {
     expect(current.historyV2.some(event => event.kind === 'scorecard_refreshed')).toBe(true);
 
     current.phase = 'shop'; current.gold = 200; current.lives = 2;
-    current.shop = { kind: 'between_rounds', offers: [{ id: 501, enhancement: 'bonus', purchased: false }],
+    current.shop = { stage: 'dice', kind: 'between_rounds', offers: [{ id: 501, enhancement: 'bonus', purchased: false }],
       trainingOffers: [{ kind: 'hand', hand: 'pair', purchases: 0 }], diceRerolls: 0, offerRerolls: 0,
       lifeRestores: 0, freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
     current = dispatch(current, { type: 'BUY', offerId: 501, dieId: 0 }, constant()).state;
+    current = dispatch(current, { type: 'SET_SHOP_STAGE', stage: 'training' }, constant()).state;
     current = dispatch(current, { type: 'TRAIN_HAND', hand: 'pair' }, constant()).state;
     current = dispatch(current, { type: 'RESTORE_LIFE' }, constant()).state;
     current.dice[0].flame = { id: 'ultimate', investedGold: 99 };
+    current = dispatch(current, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }, constant()).state;
     current = dispatch(current, { type: 'STOKE_FLAME', dieId: 0, amount: 1 }, constant()).state;
     expect(current.historyV2.some(event => event.kind === 'shop_transaction'
       && event.transaction.type === 'enhancement_purchased')).toBe(true);
@@ -207,6 +209,7 @@ describe('Run History V2 lifecycle, timeline, renderer, and summary', () => {
     const bustRestore = busted.historyV2.find(event => event.kind === 'checkpoint_restored' && event.reason === 'bust');
     expect(bustRestore).toMatchObject({ fromTimelineId: 0, toTimelineId: 1 });
     expect(new Set(busted.historyV2.map(event => event.timelineId))).toEqual(new Set([0, 1]));
+    busted.shop!.stage = 'fireKeeping';
     busted = dispatch(busted, { type: 'RETRY_ROUND' }, constant()).state;
     expect(busted.historyV2.some(event => event.kind === 'round_attempt_started' && event.attempt === 2 && event.timelineId === 1)).toBe(true);
 
@@ -215,6 +218,7 @@ describe('Run History V2 lifecycle, timeline, renderer, and summary', () => {
     dream.specialOffer = { offers: [{ id: 700, type: 'badDream' }], acquired: false };
     dream = dispatch(dream, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 700 }, constant()).state;
     dream = dispatch(dream, { type: 'UNLOCK_SHOP_EXIT' }, constant()).state;
+    dream.shop!.stage = 'fireKeeping';
     dream = dispatch(dream, { type: 'NEXT_ROUND' }, constant()).state;
     dream.lives = 1;
     dream = forceBust(dream);
@@ -247,7 +251,7 @@ describe('Run History V2 lifecycle, timeline, renderer, and summary', () => {
     expect(summary.experienced.scoreByHand.pair).toBe(shop.scoreByHand.pair);
     expect(summary.experienced.goldEarnedBySource.golden).toBe(shop.stats.goldBySource.golden);
     expect(summary.experienced.goldEarnedBySource.roundBase).toBe(shop.stats.goldBySource.roundBase);
-    expect(summary.experienced.offerImpressions.enhancement.total).toBe(3);
+    expect(summary.experienced.offerImpressions.dice.total).toBe(3);
     expect(summary.experienced.largestHand?.score).toBe(shop.stats.handScores.at(-1)?.score);
   });
 
@@ -306,9 +310,11 @@ describe('Run History V2 instrumentation safety and size', () => {
         : { type: 'CHOOSE_SPECIAL_OFFER', offerId: state.specialOffer!.offers[0].id };
       else if (state.phase === 'inferno') action = state.infernoEvaluation?.success
         ? { type: 'NOT_YET' } : { type: 'CONTINUE_INFERNO_EVALUATION' };
-      else if (state.phase === 'shop') action = state.shop?.exitUnlocked === false ? { type: 'UNLOCK_SHOP_EXIT' }
-        : state.bust ? { type: 'RETRY_ROUND' }
-          : state.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' };
+      else if (state.phase === 'shop') action = state.shop?.stage === 'dice' ? { type: 'SET_SHOP_STAGE', stage: 'training' }
+        : state.shop?.stage === 'training' ? { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }
+          : state.shop?.exitUnlocked === false ? { type: 'UNLOCK_SHOP_EXIT' }
+            : state.bust ? { type: 'RETRY_ROUND' }
+              : state.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' };
       else if (state.phase === 'bust') action = { type: 'RETRY_ROUND' };
       else break;
       const result = dispatch(state, action);

@@ -5,7 +5,7 @@ import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
 import { infernoMultiplier } from './scoring';
 import { ownedDice } from './inventory';
 import type {
-  Enhancement, Flame, GoldSource, GoldSpendSource, HandId, Rarity, SpecialOfferType, GameState,
+  DiceRarity, Enhancement, Flame, GoldSource, GoldSpendSource, HandId, Rarity, SpecialOfferType, GameState,
 } from './types';
 import type { RunHistoryV2Coverage, RunHistoryV2Event } from './runHistoryV2';
 import { exactRatioNumber, scoreMax, type ExactScore } from './scoreMath';
@@ -16,7 +16,7 @@ type LargestHand = null | { round: number; attempt: number; hand: HandId; score:
 
 export interface OfferImpressions {
   total: number;
-  byRarity: Counts<Rarity>;
+  byRarity: Counts<DiceRarity>;
   bySource: Record<string, number>;
 }
 
@@ -45,7 +45,7 @@ export interface ExperiencedRunMetrics {
   highestHandLevels: Counts<HandId>;
   goldEarnedBySource: Counts<GoldSource>;
   goldSpentByCategory: Counts<GoldSpendSource>;
-  offerImpressions: Record<'enhancement' | 'flame' | 'special_offer', OfferImpressions>;
+  offerImpressions: Record<'enhancement' | 'dice' | 'flame' | 'special_offer', OfferImpressions>;
   enhancementPurchasesByRarity: Counts<Rarity>;
   trainingPurchases: number;
   trainingGoldSpent: number;
@@ -113,7 +113,7 @@ function initialExperienced(): ExperiencedRunMetrics {
     roundsCleared: 0, attempts: 0, busts: 0, bustsByChapter: {}, livesLost: 0, livesRestored: 0,
     largestHand: null, largestCanonicalTimelineHand: null, highestRoundScore: 0n, highestClearedRoundScore: 0n,
     handUsage: {}, scoreByHand: {}, highestHandLevels: {}, goldEarnedBySource: {}, goldSpentByCategory: {},
-    offerImpressions: { enhancement: emptyOffers(), flame: emptyOffers(), special_offer: emptyOffers() },
+    offerImpressions: { enhancement: emptyOffers(), dice: emptyOffers(), flame: emptyOffers(), special_offer: emptyOffers() },
     enhancementPurchasesByRarity: {}, trainingPurchases: 0, trainingGoldSpent: 0,
     individualTrainingGoldSpent: 0, teamTrainingGoldSpent: 0, vintageRevenue: 0,
     shopRerollSpend: 0, flameTimeline: [], flameActivations: {},
@@ -131,9 +131,9 @@ function canonicalFromState(state: GameState | undefined, events: readonly RunHi
   const cleared = canonical.filter((event): event is Extract<RunHistoryV2Event, { kind: 'round_attempt_finished' }> =>
     event.kind === 'round_attempt_finished' && event.outcome === 'cleared');
   const scoreByHand: ScoreCounts<HandId> = {};
-  const earned: Record<GoldSource, number> = { golden: 0, jackpot: 0, enhancementSale: 0, roundBase: 0,
+  const earned: Record<GoldSource, number> = { golden: 0, jackpot: 0, enhancementSale: 0, diceSale: 0, roundBase: 0,
     unusedRerolls: 0, interest: 0, bossReward: 0, specialOffer: 0, cashBonus: 0 };
-  const spent: Record<GoldSpendSource, number> = { enhancement: 0, shopDiceReroll: 0, enhancementReroll: 0,
+  const spent: Record<GoldSpendSource, number> = { enhancement: 0, dicePurchase: 0, shopDiceReroll: 0, enhancementReroll: 0, diceOfferReroll: 0,
     handTraining: 0, flameInvestment: 0, lifeRestore: 0, furnace: 0 };
   let retainedPurchases = 0;
   let retainedTrainingPurchases = 0;
@@ -177,8 +177,8 @@ function canonicalFromState(state: GameState | undefined, events: readonly RunHi
     retainedPurchases, retainedTrainingPurchases,
     trainingGoldSpent: { individual: individualTraining, team: teamTraining },
     retainedOffers: {
-      enhancements: state?.shop?.offers.filter(offer => !offer.purchased).map(offer => ({ enhancement: offer.enhancement,
-        rarity: ENHANCEMENTS[offer.enhancement].rarity })) ?? [],
+      enhancements: state?.shop?.offers.filter(offer => !offer.purchased && !!offer.enhancement).map(offer => ({ enhancement: offer.enhancement!,
+        rarity: ENHANCEMENTS[offer.enhancement!].rarity })) ?? [],
       training: state?.shop?.trainingOffers.length ?? 0,
     },
   };
@@ -254,7 +254,8 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
           add(experienced.goldEarnedBySource, source, amount);
         if (transaction.type === 'gold_spent') {
           add(experienced.goldSpentByCategory, transaction.source, transaction.amount);
-          if (transaction.source === 'shopDiceReroll' || transaction.source === 'enhancementReroll') experienced.shopRerollSpend += transaction.amount;
+          if (transaction.source === 'shopDiceReroll' || transaction.source === 'enhancementReroll'
+            || transaction.source === 'diceOfferReroll') experienced.shopRerollSpend += transaction.amount;
         }
         if (transaction.type === 'enhancement_purchased') add(experienced.enhancementPurchasesByRarity, transaction.rarity, 1);
         if (transaction.type === 'enhancement_sold' && transaction.enhancement === 'vintage') experienced.vintageRevenue += transaction.proceeds;

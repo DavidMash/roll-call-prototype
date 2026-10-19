@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { newRun } from '../src/game/engine';
+import { dispatch, newRun } from '../src/game/engine';
 import { activeFace } from '../src/game/dice';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import type { GameState, RoundSummary } from '../src/game/types';
-import { enterRun } from './uiHelpers';
+import { enterRun, goToShopStage } from './uiHelpers';
 
 async function installRun(page: import('@playwright/test').Page, state: GameState) {
   await page.goto(`/?seed=${state.seed}&speed=instant`);
@@ -99,7 +99,7 @@ test('Shop uses the same face and Flame modals for authoritative Sell and Stoke 
   const state = detailedState('dice-dock-shop-actions');
   state.phase = 'shop';
   state.gold = 20;
-  state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { stage: 'dice', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   await page.setViewportSize({ width: 320, height: 700 });
   await installRun(page, state);
   const slot = page.getByTestId('flame-die-0');
@@ -150,6 +150,7 @@ test('Shop uses the same face and Flame modals for authoritative Sell and Stoke 
   await faceModal.getByRole('button', { name: 'Close' }).click();
   await expect(slot.locator('.enhancement-vintage')).toHaveCount(0);
 
+  await goToShopStage(page, 'fireKeeping');
   await slot.getByRole('button', { name: 'View Straight Shooter Flame details, Ember at 35 of 100 Gold' }).click();
   const flameModal = page.getByRole('dialog', { name: 'Straight Shooter' });
   for (let step = 0; step < 2; step++) await flameModal.getByRole('button', { name: 'Increase investment' }).click();
@@ -173,7 +174,7 @@ test('shared Flame details show Charge capacity and keep Round, Shop, and Bonfir
 
   state.phase = 'shop';
   state.gold = 20;
-  state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   await installRun(page, state);
   await page.getByRole('button', { name: 'View Momentum Flame details, Ember at 25 of 100 Gold' }).click();
   modal = page.getByRole('dialog', { name: 'Momentum' });
@@ -188,6 +189,27 @@ test('shared Flame details show Charge capacity and keep Round, Shop, and Bonfir
   await expect(modal).toContainText('Investment: 100 / 100 Gold');
   await expect(modal).toContainText('Max Flame Contribution: +5 Max Charge');
   await expect(modal.getByLabel('Stoke amount for Momentum')).toHaveCount(0);
+});
+
+test('Fire Keeping exposes a stored carrier Flame without adding that die to the active dock', async ({ page }) => {
+  let state = newRun('stored-flame-fire-keeping').state;
+  state.phase = 'shop';
+  state.gold = 20;
+  state.shop = { stage: 'dice', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  const dieId = state.diceInventory.roster[0]!;
+  state.diceInventory.instances[dieId].flame = { id: 'momentum', investedGold: 25 };
+  state.dice[0].flame = { id: 'momentum', investedGold: 25 };
+  state = dispatch(state, { type: 'MOVE_DIE', source: { area: 'roster', index: 0 }, destination: { area: 'storage', index: 0 },
+    expectedSourceDieId: dieId, expectedDestinationDieId: null }).state;
+  state = dispatch(state, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
+  state = dispatch(state, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
+  await installRun(page, state);
+
+  await expect(page.getByTestId('dice-dock').locator('.die')).toHaveCount(4);
+  const ember = page.getByTestId(`fire-keeping-ember-${dieId}`);
+  await expect(ember).toContainText('STORAGE 1');
+  await ember.getByRole('button', { name: 'MANAGE FLAME' }).click();
+  await expect(page.getByRole('dialog', { name: 'Momentum' }).getByLabel('Stoke amount for Momentum')).toBeVisible();
 });
 
 test('one mounted dock carries unchanged faces through Summary, Map, and Shop', async ({ page }) => {
@@ -224,6 +246,7 @@ test('one mounted dock carries unchanged faces through Summary, Map, and Shop', 
   expect(await dockHandle!.evaluate(element => element === document.querySelector('[data-testid="dice-dock"]'))).toBe(true);
   await expect(dock.locator('.die-number')).toHaveText(faces);
   await expect(page.locator('[data-testid="dice-dock"]')).toHaveCount(1);
+  await goToShopStage(page, 'fireKeeping');
   await expect(actionRow.getByRole('button', { name: 'NEXT ROUND', exact: true })).toBeVisible();
   expect(await actionRow.evaluate(element => {
     const row = element.getBoundingClientRect();

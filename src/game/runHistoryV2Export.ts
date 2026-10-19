@@ -7,7 +7,7 @@ import { renderGroupedRunHistoryV2 } from './runHistoryV2Renderer';
 import { summarizeRunHistoryV2, type OfferImpressions } from './runHistoryV2Summary';
 import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
 import { infernoMultiplier } from './scoring';
-import type { GameState, Rarity } from './types';
+import type { DiceRarity, GameState } from './types';
 import { toExactJsonValue } from './scoreMath';
 
 const number = (value: number | bigint) => typeof value === 'bigint' ? formatExactScore(value) : formatPlayerNumber(value);
@@ -16,7 +16,7 @@ const entries = (record: Record<string, number | bigint> | Partial<Record<string
 const percent = (value: number) => `${number(value * 100)}%`;
 
 function offerLine(label: string, offers: OfferImpressions): string {
-  const rarities = (Object.entries(offers.byRarity) as [Rarity, number][])
+  const rarities = (Object.entries(offers.byRarity) as [DiceRarity, number][])
     .map(([rarity, count]) => `${rarity} ${number(count)} (${offers.total ? percent(count / offers.total) : '0%'})`).join(' · ');
   const sources = Object.entries(offers.bySource)
     .map(([source, count]) => `${source} ${number(count)} (${offers.total ? percent(count / offers.total) : '0%'})`).join(' · ');
@@ -66,7 +66,8 @@ export function renderRunSummaryV2(state: GameState): string {
     `Vintage revenue experienced: ${number(experienced.vintageRevenue)} · Shop reroll spend experienced: ${number(experienced.shopRerollSpend)}`,
     '',
     'BALANCE',
-    offerLine('Enhancement offers', experienced.offerImpressions.enhancement),
+    offerLine('Dice offers', experienced.offerImpressions.dice),
+    offerLine('Legacy Enhancement offers', experienced.offerImpressions.enhancement),
     offerLine('Flame offers', experienced.offerImpressions.flame),
     offerLine('Special Offer impressions', experienced.offerImpressions.special_offer),
     `Enhancement purchases by rarity: ${entries(experienced.enhancementPurchasesByRarity)}`,

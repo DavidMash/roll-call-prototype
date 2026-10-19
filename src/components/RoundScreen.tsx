@@ -1,11 +1,11 @@
-import { Alert, Button, Group, Paper, Stack, Text } from '@mantine/core';
+import { Alert, Button, Group, Modal, Paper, Stack, Text } from '@mantine/core';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { validateAction } from '../game/engine';
 import {
   activeFlameId, captureHandStart, composeXMult, handXMultContributions, hasChargeBonfire,
   hasOwnedFlame, isChargeFlame, isGuaranteedWinningPlay, speedDemonMultiplier,
 } from '../game/flames';
-import { hasPlayableHand, HANDS } from '../game/hands';
+import { hasPlayableHand, HANDS, planQualification } from '../game/hands';
 import { finalizeScore, handScore } from '../game/scoring';
 import { canPlay, normalizeBoardSelection, selectBoardHand } from '../game/selection';
 import type { Selection } from '../game/selection';
@@ -19,6 +19,8 @@ import { formatPlayerNumber, formatScoreEquation, formatScoreProgress, playActio
 import { DecisionTimer } from '../game/decisionTimer';
 import { usableManualRerolls } from '../game/specialOffers';
 import { RunActionLayout, RunActionPortal } from './RunActionRow';
+import { SpecialDiceControls } from './SpecialDiceControls';
+import { SPECIAL_DICE } from '../game/specialDice';
 
 export function RoundScreen({ board, event, busy, inputBlocked, selection, setSelection, submit, skip }: {
   board: Board; event: GameEvent | null; busy: boolean; inputBlocked: boolean;
@@ -36,6 +38,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const speedDemonOwned = hasOwnedFlame(board, 'speedDemon');
   const decisionTimer = useRef(new DecisionTimer());
   const [decisionMs, setDecisionMs] = useState(0);
+  const [qualificationChoiceOpen, setQualificationChoiceOpen] = useState(false);
   const blocked = inputBlocked || awaitingWardenChoice;
   useLayoutEffect(() => {
     const now = performance.now();
@@ -58,8 +61,12 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     ? selection.dieIds[0] : null;
   const effectiveSelection = awaitingWardenChoice ? { dieIds: [], hand: null } satisfies Selection
     : normalizeBoardSelection(board, selection);
+  const qualification = effectiveSelection.hand ? planQualification(encounterDice, effectiveSelection.hand, effectiveSelection.dieIds,
+    { roundState: board.dieRoundState }) : null;
+  const validationError = effectiveSelection.hand
+    ? validateAction(board, { type: 'PLAY', hand: effectiveSelection.hand, dieIds: effectiveSelection.dieIds }) : null;
   const valid = canPlay(encounterDice, unavailableHands, effectiveSelection, requiredDieIds)
-    && validateAction(board, { type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds }) === null;
+    && !!qualification?.legal && (validationError === null || validationError === 'Choose which qualification die should spend its Invocation.');
   const preview = valid ? (() => {
     const hand = effectiveSelection.hand!;
     const base = handScore(encounterDice, hand, effectiveSelection.dieIds, board.handLevels[hand]);
@@ -97,10 +104,16 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
       return formatScoreEquation(event.handScore.currentPips, event.handScore.currentMultiplier, effectiveXMult, score,
         event.handScore.infernoMultiplier);
     })() : null;
-  function submitPlay() {
-    const action: Action = { type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds };
+  function commitPlay(claims?: { dieId: number; effect: 'mirror' | 'missingLink' | 'conjoined' }[]) {
+    const action: Action = { type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds,
+      ...(claims ? { qualificationClaims: claims } : {}) };
     if (speedDemonOwned) action.decisionMs = decisionTimer.current.freeze(performance.now());
     submit(action);
+    setQualificationChoiceOpen(false);
+  }
+  function submitPlay() {
+    if (qualification?.ambiguousClaims) { setQualificationChoiceOpen(true); return; }
+    commitPlay();
   }
   function changeSelection(next: Selection) {
     if (board.chargeArmed && !chargeGloballyUnlocked && chargeDieIds.some(id => !next.dieIds.includes(id))) {
@@ -143,6 +156,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
       {board.hotStreakGoal && <Text size="xs"><strong>🔥 HOT STREAK → {HANDS[board.hotStreakGoal].name}</strong></Text>}
       {board.targetPracticeHand && <Text size="xs"><strong>◎ TARGET: {HANDS[board.targetPracticeHand].name}</strong></Text>}
     </Group></Paper>}
+    <SpecialDiceControls board={board} busy={busy} submit={submit} />
     <Paper className={`scorecard-panel${scorecardRefreshing ? ' is-refreshing' : ''}`} p="xs">
       <HandScorecard board={board} selection={effectiveSelection} busy={busy || awaitingWardenChoice} canSubmit={valid && !busy && !awaitingWardenChoice}
         submitPreview={preview}
@@ -184,5 +198,17 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
               </Button>} />
         </div>
     </Paper></RunActionPortal>
+    <Modal opened={qualificationChoiceOpen} onClose={() => setQualificationChoiceOpen(false)}
+      title="HOW SHOULD THIS HAND QUALIFY?" centered>
+      <Stack gap="xs">{qualification?.claimOptions.map((option, index) => <Button key={index} variant="default" fullWidth
+        onClick={() => commitPlay(option.map(claim => ({ dieId: claim.dieId, effect: claim.effect })))}>
+        {option.map(claim => {
+          const die = board.dice.find(item => item.id === claim.dieId);
+          const rosterSlot = board.dice.filter(item => item.owner === 'player').findIndex(item => item.id === claim.dieId);
+          const remaining = board.dieRoundState[claim.dieId]?.invocationsRemaining ?? 0;
+          return `${die?.owner === 'player' ? SPECIAL_DICE[die.type].name : claim.effect} D6${rosterSlot < 0 ? '' : ` · Roster ${rosterSlot + 1}`}${die?.owner === 'player' ? ` · Lv${die.level}` : ''} — ${remaining} Invocation${remaining === 1 ? '' : 's'} remaining · ${claim.effect === 'missingLink' ? 'Straight wildcard' : claim.effect === 'conjoined' ? 'matching presence' : 'matching wildcard'}`;
+        }).join(' + ')}
+      </Button>)}<Button variant="subtle" color="gray" onClick={() => setQualificationChoiceOpen(false)}>CANCEL</Button></Stack>
+    </Modal>
   </Stack>;
 }

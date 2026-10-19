@@ -4,12 +4,11 @@ import { newRun, dispatch } from '../src/game/engine';
 import { activeFace } from '../src/game/dice';
 import { handOptions, handStats, HANDS, HAND_IDS, LOWER_HAND_IDS, relativeHandStrengthTiers, UPPER_HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
-import { enhancementCost, ENHANCEMENTS } from '../src/game/enhancements';
 import { CONFIG } from '../src/game/config';
-import type { Action, Enhancement, GameState } from '../src/game/types';
+import type { Action, DieType, GameState } from '../src/game/types';
 import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
-import { enterRun, installRunState, openGameMenu, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
+import { enterRun, goToShopStage, installRunState, openGameMenu, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 import { specialOfferName } from '../src/game/specialOffers';
 import { chapterLabel } from '../src/game/chapters';
 
@@ -49,7 +48,10 @@ function automaticAction(game: GameState): Action {
     : { type: 'MANUAL_REROLL', dieIds: [activeEncounterDice(game)[0].id] };
 }
 function unlockShopExit(game: GameState): GameState {
-  return game.shop?.exitUnlocked === false ? dispatch(game, { type: 'UNLOCK_SHOP_EXIT' }).state : game;
+  let next = game.shop?.exitUnlocked === false ? dispatch(game, { type: 'UNLOCK_SHOP_EXIT' }).state : game;
+  if (next.shop?.stage === 'dice') next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
+  if (next.shop?.stage === 'training') next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
+  return next;
 }
 async function ready(page: Page) {
   await page.locator('main').waitFor();
@@ -148,7 +150,7 @@ async function playBest(page: Page, game: GameState): Promise<GameState> {
   await matchBoard(page, next);
   return next;
 }
-function findShopSeed(required?: Enhancement) {
+function findShopSeed(required?: DieType) {
   for (let i = 0; i < 1000; i++) {
     const seed = `browser-${i}`;
     let game = newRun(seed).state;
@@ -156,7 +158,7 @@ function findShopSeed(required?: Enhancement) {
       game = dispatch(game, automaticAction(game)).state;
     }
     if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
-    if (game.phase === 'shop' && !game.bust && (!required || game.shop!.offers.some(offer => offer.enhancement === required))) return seed;
+    if (game.phase === 'shop' && !game.bust && (!required || game.shop!.offers.some(offer => offer.dieType === required))) return seed;
   }
   throw new Error('No suitable shop seed found');
 }
@@ -169,6 +171,7 @@ function findTrainingSeed() {
     }
     if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
     if (game.phase !== 'shop' || game.bust) continue;
+    game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
     for (const offer of game.shop!.trainingOffers) {
       if (offer.kind !== 'hand') continue;
       const trained = dispatch(game, { type: 'TRAIN_HAND', hand: offer.hand }).state;
@@ -192,27 +195,6 @@ function findTeamTrainingSeed() {
   }
   throw new Error('No Team Training seed found');
 }
-function findBoomerangStackSeed() {
-  for (let i = 0; i < 3000; i++) {
-    const seed = `boomerang-stack-${i}`;
-    let game = newRun(seed).state;
-    for (let step = 0; step < 12 && game.phase === 'round'; step++) {
-      game = dispatch(game, automaticAction(game)).state;
-    }
-    if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
-    if (game.phase !== 'shop' || game.bust) continue;
-    const first = game.shop!.offers.find(offer => offer.enhancement === 'boomerang');
-    if (!first) continue;
-    const purchase = dispatch(game, { type: 'BUY', offerId: first.id, dieId: 0 });
-    if (purchase.state === game) continue;
-    game = purchase.state;
-    const reroll = dispatch(game, { type: 'REROLL_OFFERS' });
-    if (reroll.state === game) continue;
-    game = reroll.state;
-    if (game.shop!.offers.some(offer => offer.enhancement === 'boomerang')) return seed;
-  }
-  throw new Error('No shop seed found for a repeated Boomerang purchase');
-}
 function highInterestState() {
   for (let index = 0; index < 500; index++) {
     const seed = `interest-browser-${index}`;
@@ -224,9 +206,11 @@ function highInterestState() {
       } else if (game.phase === 'roundSummary') {
         game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
       } else if (game.phase === 'shop') {
-        game = dispatch(game, game.shop?.exitUnlocked === false ? { type: 'UNLOCK_SHOP_EXIT' }
-          : game.bust ? { type: 'RETRY_ROUND' }
-            : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
+        game = dispatch(game, game.shop?.stage === 'dice' ? { type: 'SET_SHOP_STAGE', stage: 'training' }
+          : game.shop?.stage === 'training' ? { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }
+            : game.shop?.exitUnlocked === false ? { type: 'UNLOCK_SHOP_EXIT' }
+              : game.bust ? { type: 'RETRY_ROUND' }
+                : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
       } else if (game.phase === 'flameSelection') {
         game = game.flameSelection!.acquired
           ? dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state
@@ -396,21 +380,12 @@ test('compact HUD, Run Info and Help keep secondary information off the gameplay
   await expect(help).toContainText('Pips × Mult × XMult = Score');
   await expect(help).not.toContainText('pre-attempt');
   await expect(help).not.toContainText('interpolation');
-  await help.getByRole('tab', { name: 'Enhancements' }).click();
-  await expect(help.getByText('Jackpot', { exact: true })).toBeVisible();
-  await expect(help.getByText('Gain +3 Gold if this face scores in the hand that clears the Round.')).toBeVisible();
-  await expect(help.getByText('Multiplier', { exact: true })).toHaveCount(0);
-  await expect(help.getByText('Loose Cannon', { exact: true })).toHaveCount(0);
-  const bumpHelp = help.getByTestId('help-enhancement-bump');
-  await expect(bumpHelp.locator('.enhancement-bump')).toContainText(ENHANCEMENTS.bump.symbol);
-  await expect(bumpHelp).toContainText('next roll moves up one face');
-  await expect(help.getByText('Vintage', { exact: true })).toBeVisible();
-  const goldenHelp = help.getByTestId('help-enhancement-golden');
-  const jackpotHelp = help.getByTestId('help-enhancement-jackpot');
-  await expect(goldenHelp.locator('.enhancement-golden')).toContainText(ENHANCEMENTS.golden.symbol);
-  await expect(goldenHelp).toContainText('Gain +1 Gold');
-  await expect(jackpotHelp.locator('.enhancement-jackpot')).toContainText(ENHANCEMENTS.jackpot.symbol);
-  await expect(jackpotHelp).toContainText('Gain +3 Gold');
+  await help.getByRole('tab', { name: 'Dice' }).click();
+  await expect(help.getByTestId('help-die-jackpot')).toContainText('+3 Gold');
+  await expect(help.getByTestId('help-die-golden')).toContainText('3 Gold/Round');
+  await expect(help.getByTestId('help-die-magic')).toContainText('Legendary');
+  await expect(help.getByText('Boomerang', { exact: true })).toHaveCount(0);
+  await expect(help.getByText('Personal Trainer', { exact: true })).toHaveCount(0);
 });
 
 test('header omits redundant phase labels and always reserves the menu on narrow screens', async ({ page }) => {
@@ -590,6 +565,8 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   const level1 = handStats(hand, 1);
   const level2 = handStats(hand, 2);
   const level3 = handStats(hand, 3);
+  await goToShopStage(page, 'training');
+  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
   await expect(page.locator('[data-testid^="training-offer-"]')).toHaveCount(3);
   await expect(page.getByTestId(`training-pips-${hand}`)).toHaveText(`${level1.basePips} → ${level2.basePips} Pips`);
   await expect(page.getByTestId(`training-mult-${hand}`)).toHaveText(`×${level1.baseMultiplier} → ×${level2.baseMultiplier} Mult`);
@@ -606,6 +583,7 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   await expect(page.getByTestId(`training-pips-${hand}`)).toHaveText(`${level2.basePips} → ${level3.basePips} Pips`);
   await expect(page.getByTestId(`training-mult-${hand}`)).toHaveText(`×${level2.baseMultiplier} → ×${level3.baseMultiplier} Mult`);
 
+  await goToShopStage(page, 'fireKeeping');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = unlockShopExit(game);
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
@@ -662,35 +640,24 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
 test('Team Training occupies one existing slot and presents itself as a special all-hands offer', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await reachShop(page, findTeamTrainingSeed());
+  await goToShopStage(page, 'training');
   await expect(page.locator('[data-testid^="training-offer-"]')).toHaveCount(3);
   const team = page.getByTestId('training-offer-team');
   await expect(team).toHaveClass(/team-training-card/);
   await expect(team).toContainText('TEAM TRAINING');
   await expect(team.getByRole('button', { name: 'About Team Training' })).toBeVisible();
   await expect(page.getByTestId('train-team')).toHaveText('TRAIN ALL · 15 GOLD');
-  for (const selector of ['.training-grid', '.enhancement-grid']) {
-    const columns = await page.locator(selector).evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length);
-    expect(columns).toBe(3);
-  }
+  expect(await page.locator('.training-grid').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(3);
+  await expect(page.locator('.dice-offer-grid .dice-offer')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   const shopLayout = await page.evaluate(() => ({
     trainingHeights: [...document.querySelectorAll<HTMLElement>('.training-grid .training-card')].map(card => card.getBoundingClientRect().height),
-    enhancementHeights: [...document.querySelectorAll<HTMLElement>('.enhancement-grid .offer')].map(card => card.getBoundingClientRect().height),
-    enhancementNameHeights: [...document.querySelectorAll<HTMLElement>('.enhancement-grid .offer-name')].map(name => name.getBoundingClientRect().height),
     dieHeights: [...document.querySelectorAll<HTMLElement>('.dice-dock .die')].map(die => die.getBoundingClientRect().height),
   }));
   expect(Math.max(...shopLayout.trainingHeights) - Math.min(...shopLayout.trainingHeights)).toBeLessThan(2);
-  expect(Math.max(...shopLayout.enhancementHeights) - Math.min(...shopLayout.enhancementHeights)).toBeLessThan(2);
-  expect(Math.max(...shopLayout.enhancementNameHeights)).toBeLessThan(40);
   expect(Math.max(...shopLayout.dieHeights)).toBeLessThanOrEqual(62);
-  const enhancement = page.locator('.enhancement-grid .offer').first();
-  const enhancementName = await enhancement.locator('.enhancement-identity-name').textContent();
-  const info = enhancement.getByRole('button', { name: `About ${enhancementName}` });
-  await expect(info.locator('.info-circle-icon')).toBeVisible();
-  await info.click();
-  await expect(page.getByRole('tooltip')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await expect(page.locator('.roster-grid .collection-slot')).toHaveCount(0);
+  await expect(page.locator('.storage-grid .collection-slot')).toHaveCount(0);
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await expect(page.locator('.phase-sticky-header')).toBeInViewport();
   await expect(page.locator('.shop-action-dock')).toBeInViewport();
@@ -700,10 +667,11 @@ test('Team Training occupies one existing slot and presents itself as a special 
   await page.screenshot({ path: test.info().outputPath('shop-mobile.png'), fullPage: true });
 });
 
-test('mobile Shop shell keeps its HUD, incoming encounter, controls, action, and persistent dice in one viewport', async ({ page }) => {
+test('mobile staged Shop keeps each section, navigation, and the active Dice Dock usable', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const game = await reachShop(page, findShopSeed());
   game.round = 2;
+  game.gold = 100;
   await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, game] as const);
   await page.reload();
@@ -724,91 +692,72 @@ test('mobile Shop shell keeps its HUD, incoming encounter, controls, action, and
 
   const header = page.locator('.phase-sticky-header');
   const boss = page.getByTestId('boss-preview');
-  const training = page.locator('[data-tutorial="hand-training"]');
   await expect(header).toContainText('SHOP');
   await expect(header).toContainText('Prepare for');
   await expect(boss).toBeVisible();
-  await expect(training).toBeVisible();
-  await expect(page.getByRole('button', { name: 'NEXT ROUND', exact: true })).toBeInViewport();
+  await expect(page.getByTestId('shop-stage-indicator')).toBeVisible();
+  await expect(page.getByTestId('training-shop')).toHaveCount(0);
+  await expect(page.getByTestId('fire-keeping-shop')).toHaveCount(0);
+  await expect(page.getByTestId('shop-stage-continue')).toBeInViewport();
+  await expect(page.getByTestId('shop-stage-continue')).toContainText('CONTINUE TO TRAINING');
   await expect(page.getByRole('button', { name: /^REROLL ALL DICE FOR \d+ GOLD$/ })).toBeVisible();
   await expect(page.getByTestId('dice-dock')).toBeInViewport();
   await expect(page.locator('.dice-row')).toHaveCount(1);
   await expect(page.getByTestId('shop-dice-controls')).toHaveCount(0);
   await expect(page.getByTestId('dice-dock').locator('.die')).toHaveCount(5);
 
-  const layout = await page.evaluate(() => {
-    const box = (selector: string) => {
-      const rect = document.querySelector<HTMLElement>(selector)!.getBoundingClientRect();
-      return { top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left, height: rect.height };
-    };
-    const main = document.querySelector<HTMLElement>('main')!;
-    const app = document.querySelector<HTMLElement>('.app-container')!;
-    const dock = document.querySelector<HTMLElement>('[data-testid="dice-dock"]')!;
-    const headerStyle = getComputedStyle(document.querySelector<HTMLElement>('.phase-sticky-header')!);
-    return {
-      innerHeight: window.innerHeight,
-      documentHeight: document.documentElement.scrollHeight,
-      bodyHeight: document.body.scrollHeight,
-      mainClientHeight: main.clientHeight,
-      mainScrollHeight: main.scrollHeight,
-      mainScrollTop: main.scrollTop,
-      app: box('.app-container'),
-      hud: box('.top-hud'),
-      main: box('main'),
-      header: box('.phase-sticky-header'),
-      boss: box('[data-testid="boss-preview"]'),
-      training: box('[data-tutorial="hand-training"]'),
-      action: box('.shop-action-dock'),
-      dock: box('[data-testid="dice-dock"]'),
-      headerPosition: headerStyle.position,
-      headerTop: headerStyle.top,
-      appPaddingBottom: Number.parseFloat(getComputedStyle(app).paddingBottom),
-      dockPaddingBottom: Number.parseFloat(getComputedStyle(dock).paddingBottom),
-    };
-  });
-  expect(layout.documentHeight).toBeLessThanOrEqual(layout.innerHeight);
-  expect(layout.bodyHeight).toBeLessThanOrEqual(layout.innerHeight);
-  expect(layout.app.bottom).toBeLessThanOrEqual(layout.innerHeight);
-  expect(layout.mainScrollHeight).toBeLessThanOrEqual(layout.mainClientHeight + 1);
-  expect(layout.mainScrollTop).toBe(0);
-  expect(layout.header.top).toBeGreaterThanOrEqual(layout.hud.bottom);
-  expect(layout.header.bottom).toBeLessThanOrEqual(layout.boss.top);
-  expect(layout.boss.bottom).toBeLessThanOrEqual(layout.training.top);
-  expect(layout.dock.bottom).toBeLessThanOrEqual(layout.action.top);
-  expect(layout.action.bottom).toBeLessThanOrEqual(layout.innerHeight);
-  expect(layout.headerPosition).toBe('sticky');
-  expect(layout.headerTop).toBe('0px');
-  expect(layout.appPaddingBottom).toBeLessThanOrEqual(4);
-  expect(layout.dockPaddingBottom).toBe(5);
+  await expect(page.getByTestId('dice-shop')).toBeVisible();
+  await expect(page.locator('.dice-offer')).toHaveCount(3);
+  await expect(page.locator('.roster-grid .collection-slot')).toHaveCount(5);
+  await expect(page.locator('.storage-grid .collection-slot')).toHaveCount(3);
+  const purchasedOffer = game.shop!.offers[0];
+  await page.getByTestId(`dice-offer-${purchasedOffer.id}`).getByRole('button', { name: /BUY/ }).click();
+  await expect(page.getByTestId(`dice-offer-${purchasedOffer.id}`)).toContainText('PURCHASED');
+  await expect(page.getByTestId('shop-stage-gold')).toContainText(`${100 - purchasedOffer.price!} GOLD`);
+  await goToShopStage(page, 'training');
+  await expect(page.getByTestId('training-shop')).toBeInViewport();
+  await expect(page.getByTestId('dice-shop')).toHaveCount(0);
+  await expect(page.getByTestId('shop-stage-gold')).toContainText(`${100 - purchasedOffer.price!} GOLD`);
+  await goToShopStage(page, 'dice');
+  await expect(page.getByTestId(`dice-offer-${purchasedOffer.id}`)).toContainText('PURCHASED');
+  await goToShopStage(page, 'fireKeeping');
+  await expect(page.getByTestId('fire-keeping-shop')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'NEXT ROUND', exact: true })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('shop-shell-mobile.png'), fullPage: true });
 
-  await page.getByRole('button', { name: /^Die 1,/ }).click();
-  await expect(page.getByRole('dialog', { name: /D1 .* MANAGE DIE/ })).toBeVisible();
+  await goToShopStage(page, 'dice');
+  await page.getByTestId('collection-slot-roster-0').getByRole('button', { name: 'DETAILS' }).click();
+  await expect(page.getByRole('dialog', { name: 'DIE DETAILS' })).toContainText('Normal D6');
 });
 
-test('full seeded run: select/play, clear, buy onto a face, reroll dice, next round, lose and export', async ({ page, context }) => {
+test('full seeded run: select/play, clear, buy a collectible die, reroll dice, next round, lose and export', async ({ page, context }) => {
   // Bad Dream can intentionally replay the second half of a Chapter before this full-run fixture loses.
   test.setTimeout(240_000);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  const seed = findShopSeed('boomerang');
+  const seed = findShopSeed('bonus');
   let game = await reachShop(page, seed);
-  game = unlockShopExit(game);
+  if (game.shop?.exitUnlocked === false) game = dispatch(game, { type: 'UNLOCK_SHOP_EXIT' }).state;
   await page.screenshot({ path: test.info().outputPath('shop-desktop.png'), fullPage: true });
-  await expect(page.locator('.offer')).toHaveCount(3);
-  const offer = game.shop!.offers.find(item => item.enhancement === 'boomerang')!;
-  await page.getByTestId('offer-boomerang').getByRole('button', { name: 'SELECT OR DRAG' }).click();
-  const physicalFace = game.dice[0].value;
-  await page.getByRole('button', { name: /^Die 1,/ }).click();
-  game = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 0 }).state;
-  await matchBoard(page, game);
-  await expect(page.getByTestId('offer-boomerang').getByRole('button', { name: 'Purchased' })).toBeDisabled();
-  expect(game.dice[0].faces[physicalFace - 1].enhancements.boomerang).toBe(1);
+  await expect(page.locator('.dice-offer')).toHaveCount(3);
+  const offer = game.shop!.offers.find(item => item.dieType === 'bonus')!;
+  if (game.gold < offer.price! + 2) {
+    game.gold = offer.price! + 2;
+    await installRunState(page, game);
+    await enterRun(page);
+  }
+  await page.getByTestId(`dice-offer-${offer.id}`).getByRole('button', { name: /BUY/ }).click();
+  game = dispatch(game, { type: 'BUY_DIE', offerId: offer.id }).state;
+  await expect(page.getByTestId('stat-gold').getByText(String(game.gold), { exact: true })).toBeVisible();
+  await expect(page.getByTestId(`dice-offer-${offer.id}`).getByRole('button', { name: 'PURCHASED' })).toBeDisabled();
+  const purchasedId = game.diceInventory.storage.find(id => id !== null)!;
+  expect(game.diceInventory.instances[purchasedId]).toMatchObject({ type: 'bonus', level: 1 });
   await page.getByRole('button', { name: 'REROLL ALL DICE FOR 2 GOLD', exact: true }).click();
   game = dispatch(game, { type: 'REROLL_DICE' }).state;
   await matchBoard(page, game);
   await expect(page.getByRole('button', { name: 'REROLL ALL DICE FOR 4 GOLD', exact: true })).toBeVisible();
+  await goToShopStage(page, 'fireKeeping');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = unlockShopExit(game);
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
@@ -821,13 +770,14 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
       await matchBoard(page, game);
     }
     else if (game.phase === 'shop') {
+      await goToShopStage(page, 'fireKeeping');
+      game = unlockShopExit(game);
       const action = game.bust ? { type: 'RETRY_ROUND' as const }
         : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' as const } : { type: 'NEXT_ROUND' as const };
       const progression = page.getByRole('button', { name: game.bust ? `RETRY ROUND ${game.round}`
         : game.shop?.kind === 'post_boss' ? 'NEXT CHAPTER' : 'NEXT ROUND' });
       await expect(progression).toBeEnabled();
       await progression.evaluate((element: HTMLButtonElement) => element.click());
-      if (game.shop?.exitUnlocked === false) game = dispatch(game, { type: 'UNLOCK_SHOP_EXIT' }).state;
       game = dispatch(game, action).state;
       await matchBoard(page, game);
     } else if (game.phase === 'flameSelection') {
@@ -861,8 +811,9 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
   expect(data.exportType).toBe('roll_call_run_history_v2');
   expect(data.identity.seed).toBe(seed);
   expect(data.summary.canonical.outcome).toBe('lost');
-  expect(data.summary.canonical.retainedEnhancements).toContainEqual(expect.objectContaining({ dieId: 0,
-    enhancements: expect.objectContaining({ boomerang: 1 }) }));
+  expect(data.events).toContainEqual(expect.objectContaining({ kind: 'shop_transaction', transaction: expect.objectContaining({
+    type: 'dice_purchased', dieId: purchasedId, dieType: 'bonus',
+  }) }));
   expect(data.events.some((event: { kind: string }) => event.kind === 'hand_scored')).toBe(true);
   await runInfo.getByRole('tab', { name: /History/ }).click();
   await runInfo.getByRole('button', { name: 'COPY RUN HISTORY' }).click();
@@ -885,11 +836,10 @@ test('full seeded run: select/play, clear, buy onto a face, reroll dice, next ro
   expect(errors).toEqual([]);
 });
 
-test('native drag-and-drop purchase and enhancement refresh', async ({ page }) => {
+test('native drag-and-drop moves collection dice and Dice-offer rerolls stay authoritative', async ({ page }) => {
   let game = await reachShop(page, findShopSeed('bonus'));
-  const offer = game.shop!.offers.find(item => item.enhancement === 'bonus')!;
-  const target = page.getByRole('button', { name: /^Die 3,/ });
-  const source = page.getByTestId('offer-bonus');
+  const source = page.getByTestId('collection-slot-roster-0');
+  const target = page.getByTestId('collection-slot-storage-0');
   await source.scrollIntoViewIfNeeded();
   const from = (await source.boundingBox())!;
   await page.mouse.move(from.x + 10, from.y + 10);
@@ -901,113 +851,98 @@ test('native drag-and-drop purchase and enhancement refresh', async ({ page }) =
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 });
   await page.mouse.move(to.x + to.width / 2 + 1, to.y + to.height / 2 + 1);
   await page.mouse.up();
-  game = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 2 }).state;
-  await matchBoard(page, game);
-  await expect(page.getByTestId('offer-bonus').getByRole('button', { name: 'Purchased' })).toBeDisabled();
-  // Restart an independently reproducible shop with its complete reward to refresh offers.
-  game = await reachShop(page, findShopSeed());
-  await page.getByRole('button', { name: 'REROLL OFFERS · 3 GOLD', exact: true }).click();
+  game = dispatch(game, { type: 'MOVE_DIE', source: { area: 'roster', index: 0 }, destination: { area: 'storage', index: 0 },
+    expectedSourceDieId: 0, expectedDestinationDieId: null }).state;
+  await expect(page.getByTestId('collection-slot-roster-0').getByText('EMPTY SLOT')).toBeVisible();
+  await expect(page.getByTestId('collection-slot-storage-0')).toHaveAttribute('data-die-id', '0');
+  const oldOfferIds = game.shop!.offers.map(offer => offer.id);
+  await page.getByRole('button', { name: 'REROLL DICE OFFERS · 3 GOLD', exact: true }).click();
   game = dispatch(game, { type: 'REROLL_OFFERS' }).state;
-  await matchBoard(page, game);
-  await expect(page.locator('.offer')).toHaveCount(3);
-  await expect(page.getByRole('button', { name: 'REROLL OFFERS · 6 GOLD', exact: true })).toBeVisible();
-  for (const item of game.shop!.offers) {
-    const card = page.getByTestId(`offer-${item.enhancement}`);
-    await expect(card.getByText(ENHANCEMENTS[item.enhancement].name, { exact: true })).toBeVisible();
-    await expect(card.locator(`.enhancement-${item.enhancement}`).first()).toContainText(ENHANCEMENTS[item.enhancement].symbol);
-  }
+  await expect(page.getByTestId('stat-gold').getByText(String(game.gold), { exact: true })).toBeVisible();
+  await expect(page.locator('.dice-offer')).toHaveCount(3);
+  await expect(page.getByRole('button', { name: 'REROLL DICE OFFERS · 6 GOLD', exact: true })).toBeVisible();
+  expect(game.shop!.offers.map(offer => offer.id)).not.toEqual(oldOfferIds);
 });
 
-test('Vintage offer and Manage Die expose its authoritative dynamic sell value', async ({ page }) => {
+test('Vintage collectible details expose its authoritative appreciation and sell value', async ({ page }) => {
   let game = await reachShop(page, findShopSeed('vintage'));
-  const offer = game.shop!.offers.find(item => item.enhancement === 'vintage')!;
-  const card = page.getByTestId('offer-vintage');
-  await expect(card).toContainText('3 GOLD');
-  await card.getByRole('button', { name: 'About Vintage' }).click();
-  await expect(page.getByRole('tooltip')).toContainText(ENHANCEMENTS.vintage.description);
-  await page.keyboard.press('Escape');
-  await card.getByRole('button', { name: 'SELECT OR DRAG' }).click();
-  await page.getByRole('button', { name: /^Die 1,/ }).click();
-  game = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 0 }).state;
-  await matchBoard(page, game);
-  await page.getByRole('button', { name: /^Die 1,/ }).click();
-  const manager = page.getByRole('dialog', { name: 'D1 — MANAGE DIE' });
-  const face = activeFace(game.dice[0]).rank;
-  await expect(manager.getByTestId(`manage-face-${face}`)).toHaveAccessibleName(/Vintage, 1 stack/);
-  await expect(manager.getByTestId(`manage-face-${face}`).locator('.enhancement-vintage')).toContainText(ENHANCEMENTS.vintage.symbol);
-  await expect(manager).toContainText('Current sell value: 0 Gold');
-  await expect(manager.getByRole('button', { name: `Sell Vintage from D1 face ${face} for 0 Gold`, exact: true })).toBeVisible();
-});
-
-test('mobile Enhancement offers keep the longest canonical symbol and name inside the card', async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 700 });
-  const game = await reachShop(page, findShopSeed());
-  game.engulfmentLevel = 4;
-  game.shop!.offers[0].enhancement = 'personalTrainer';
+  game.gold = 100;
   await installRunState(page, game);
   await matchBoard(page, game);
-  const card = page.getByTestId('offer-personalTrainer');
-  await expect(card.getByText('Personal Trainer', { exact: true })).toBeVisible();
-  await expect(card.locator('.enhancement-personalTrainer').first()).toContainText(ENHANCEMENTS.personalTrainer.symbol);
+  const offer = game.shop!.offers.find(item => item.dieType === 'vintage')!;
+  const card = page.getByTestId(`dice-offer-${offer.id}`);
+  await expect(card).toContainText('BUY · 10 GOLD');
+  await card.getByRole('button', { name: /BUY/ }).click();
+  game = dispatch(game, { type: 'BUY_DIE', offerId: offer.id }).state;
+  const vintageId = game.diceInventory.storage[0]!;
+  game.diceInventory.instances[vintageId].vintageAppreciation = 7;
+  await installRunState(page, game);
+  await matchBoard(page, game);
+  const slot = page.getByTestId('collection-slot-storage-0');
+  await expect(slot).toContainText('+7 appreciation');
+  await expect(slot).toContainText('Sell 12 Gold');
+  await slot.getByRole('button', { name: 'DETAILS' }).click();
+  const details = page.getByRole('dialog', { name: 'DIE DETAILS' });
+  await expect(details).toContainText('Vintage appreciation: +7 Gold');
+  await expect(details).toContainText('Current sell value: 12 Gold');
+});
+
+test('mobile Dice offers keep long names and Legendary rarity inside the card', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  const game = await reachShop(page, findShopSeed('conjoined'));
+  const offer = game.shop!.offers.find(item => item.dieType === 'conjoined')!;
+  const card = page.getByTestId(`dice-offer-${offer.id}`);
+  await expect(card.getByText('Conjoined D6', { exact: true })).toBeVisible();
+  await expect(card).toContainText('Legendary');
+  await expect(card).toContainText('40 GOLD');
   expect(await card.evaluate(element => {
     const cardRect = element.getBoundingClientRect();
-    const identity = element.querySelector('.offer-enhancement-identity')!.getBoundingClientRect();
+    const identity = element.querySelector('.mantine-Group-root')!.getBoundingClientRect();
     return document.documentElement.scrollWidth <= innerWidth
       && identity.left >= cardRect.left - 1 && identity.right <= cardRect.right + 1;
   })).toBe(true);
 });
 
-test('stackable enhancement purchases show a single readable count badge', async ({ page }) => {
-  let game = await reachShop(page, findBoomerangStackSeed());
-  const requiredGold = enhancementCost('boomerang') * 2 + 3;
-  if (game.gold < requiredGold) {
-    game.gold = requiredGold;
-    await installRunState(page, game);
-    await matchBoard(page, game);
-  }
-  await setDiceDisplay(page, 'PIPS');
-  const startingGold = game.gold;
-  const first = game.shop!.offers.find(offer => offer.enhancement === 'boomerang')!;
-  await page.getByTestId('offer-boomerang').getByRole('button', { name: 'SELECT OR DRAG' }).click();
-  const physical = page.getByRole('button', { name: /^Die 1,/ });
-  await physical.click();
-  game = dispatch(game, { type: 'BUY', offerId: first.id, dieId: 0 }).state;
-  await matchBoard(page, game);
+test('same-type collection interaction requires explicit Fusion, Swap, or Cancel', async ({ page }) => {
+  let game = await reachShop(page, findShopSeed());
+  Object.assign(game.diceInventory.instances[0], { type: 'bonus', level: 2 });
+  Object.assign(game.diceInventory.instances[1], { type: 'bonus', level: 1 });
+  await installRunState(page, game);
+  await enterRun(page);
+  await expect(page.getByTestId('stat-gold').getByText(String(game.gold), { exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'REROLL OFFERS · 3 GOLD', exact: true }).click();
-  game = dispatch(game, { type: 'REROLL_OFFERS' }).state;
-  await matchBoard(page, game);
-  const second = game.shop!.offers.find(offer => offer.enhancement === 'boomerang')!;
-  await page.getByTestId('offer-boomerang').getByRole('button', { name: 'SELECT OR DRAG' }).click();
-  await physical.click();
-  game = dispatch(game, { type: 'BUY', offerId: second.id, dieId: 0 }).state;
-  await matchBoard(page, game);
+  const first = page.getByTestId('collection-slot-roster-0');
+  const second = page.getByTestId('collection-slot-roster-1');
+  await first.locator('.collection-slot-main').click();
+  await second.locator('.collection-slot-main').click();
+  let modal = page.getByRole('dialog', { name: 'FUSE DICE?' });
+  await expect(modal).toContainText('Bonus D6 Lv1 + Bonus D6 Lv2');
+  await expect(modal).toContainText('+10 Pips → +30 Pips');
+  await modal.getByRole('button', { name: 'CANCEL' }).click();
+  expect(game.diceInventory.roster.slice(0, 2)).toEqual([0, 1]);
 
-  const physicalSlot = page.getByTestId('flame-die-0');
-  await expect(physicalSlot.locator('.enhancement-boomerang')).toHaveAttribute('title', 'Boomerang ×2');
-  await expect(physicalSlot.locator('.enhancement-boomerang')).toContainText('×2');
-  await expectCenteredPips(physical);
-  expect(game.dice[0].faces[game.dice[0].value - 1].enhancements.boomerang).toBe(2);
-  expect(game.gold).toBe(startingGold - 9); // two 3-Gold Boomerang stacks and one 3-Gold offer reroll
-  const face = game.dice[0].value;
-  await expect(page.getByText('Manage faces', { exact: true })).toHaveCount(0);
-  await physical.click();
-  const manager = page.getByRole('dialog', { name: 'D1 — MANAGE DIE' });
-  await expect(manager).toBeVisible();
-  await expect(manager.locator('.manage-face-tile')).toHaveCount(6);
-  await expect(manager.getByTestId(`manage-face-${face}`)).toContainText('ENHANCEMENTS 1 / 1');
-  await manager.getByRole('button', { name: `Sell Boomerang from D1 face ${face} for 2 Gold`, exact: true }).click();
-  const confirmation = page.getByRole('dialog', { name: /SELL BOOMERANG\s*\?/ });
-  await expect(confirmation).toContainText('+2 GOLD');
-  await confirmation.getByRole('button', { name: 'Confirm sale of Boomerang for 2 Gold', exact: true }).click();
-  game = dispatch(game, { type: 'SELL_ENHANCEMENT', dieId: 0, face, enhancement: 'boomerang' }).state;
-  await manager.getByRole('button', { name: 'Close', exact: true }).click();
-  await matchBoard(page, game);
-  await expect(physicalSlot.locator('.enhancement-boomerang')).toHaveCount(0);
-  expect(game.gold).toBe(startingGold - 7);
+  await first.locator('.collection-slot-main').click();
+  await second.locator('.collection-slot-main').click();
+  modal = page.getByRole('dialog', { name: 'FUSE DICE?' });
+  await modal.getByRole('button', { name: 'SWAP' }).click();
+  game = dispatch(game, { type: 'MOVE_DIE', source: { area: 'roster', index: 0 }, destination: { area: 'roster', index: 1 },
+    expectedSourceDieId: 0, expectedDestinationDieId: 1 }).state;
+  await expect(first).toHaveAttribute('data-die-id', '1');
+  await expect(second).toHaveAttribute('data-die-id', '0');
+
+  await first.locator('.collection-slot-main').click();
+  await second.locator('.collection-slot-main').click();
+  modal = page.getByRole('dialog', { name: 'FUSE DICE?' });
+  await expect(modal).toContainText('+20 Pips → +30 Pips');
+  await modal.getByRole('button', { name: 'FUSE' }).click();
+  game = dispatch(game, { type: 'FUSE_DICE', source: { area: 'roster', index: 0 }, destination: { area: 'roster', index: 1 },
+    expectedSourceDieId: 1, expectedDestinationDieId: 0 }).state;
+  await expect(first.getByText('EMPTY SLOT')).toBeVisible();
+  await expect(second).toHaveAttribute('data-die-id', '0');
+  await expect(second).toContainText('Lv3');
 });
 
-test('six Enhancement types fit in two rows and remain manageable on mobile', async ({ page }) => {
+test('legacy authored Enhancements remain inspectable and sellable without a purchase path', async ({ page }) => {
   let game = await reachShop(page, findShopSeed());
   game.round = 31;
   game.engulfmentLevel = 0;
@@ -1029,7 +964,7 @@ test('six Enhancement types fit in two rows and remain manageable on mobile', as
   await page.getByRole('button', { name: /^Die 1,/ }).click();
   const manager = page.getByRole('dialog', { name: 'D1 — MANAGE DIE' });
   const faceTile = manager.getByTestId(`manage-face-${game.dice[0].value}`);
-  await expect(faceTile).toContainText('ENHANCEMENTS 6 / 6');
+  await expect(faceTile).toContainText('LEGACY ENHANCEMENTS 6');
   await faceTile.click();
   await expect(manager.locator('.face-detail-item')).toHaveCount(6);
   await expect(manager.getByRole('button', { name: /^Sell / })).toHaveCount(6);
@@ -1201,9 +1136,9 @@ test('settled progress resumes across reloads and return visits with seed-aware 
 test('Jumping Bean visibly triggers and rerolls on the next initial gameplay roll', async ({ page }) => {
   let game = await reachShop(page, findShopSeed());
   for (const face of game.dice[0].faces) face.enhancements.jumpingBean = 1;
+  game = unlockShopExit(game);
   await installRunState(page, game);
   await matchBoard(page, game);
-  game = unlockShopExit(game);
   const next = dispatch(game, { type: 'NEXT_ROUND' });
   await page.clock.install({ time: new Date('2026-09-18T12:00:00Z') });
   await page.clock.pauseAt(new Date('2026-09-18T12:00:01Z'));

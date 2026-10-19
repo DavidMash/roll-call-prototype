@@ -1,12 +1,12 @@
 import type {
-  BossType, ChallengeId, Enhancement, EngulfmentAssetRef, Flame, FlameInstanceId, GoldSource, GoldSpendSource, HandId, HandPlaySource,
-  InfernoEvaluationState, Rarity, Rank, RunNodeType, SpecialOfferType, WildfireResolved,
+  BossType, ChallengeId, DiceRarity, DiceSlotRef, DieType, Enhancement, EngulfmentAssetRef, Flame, FlameInstanceId, GoldSource, GoldSpendSource, HandId, HandPlaySource,
+  InfernoEvaluationState, Rarity, Rank, RunNodeType, ShopStage, SpecialOfferType, WildfireResolved,
 } from './types';
 import type { RoundGoalBreakdown } from './goals';
 import type { ExactDecimal, ExactScore } from './scoreMath';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 10 as const;
-export const RUN_HISTORY_V2_RULESET = 'collectible-dice-runtime-v1' as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 12 as const;
+export const RUN_HISTORY_V2_RULESET = 'staged-shop-shell-v1' as const;
 
 export interface RunHistoryV2Coverage {
   complete: boolean;
@@ -209,6 +209,21 @@ export interface ShopVisitStartedEvent extends RunHistoryV2Envelope {
   kind: 'shop_visit_started';
   shopVisitId: number;
   reason: 'normal' | 'bust' | 'bad_dream';
+  initialStage: ShopStage;
+}
+
+export interface ShopStageChangedEvent extends RunHistoryV2Envelope {
+  kind: 'shop_stage_changed';
+  shopVisitId: number;
+  from: ShopStage;
+  to: ShopStage;
+}
+
+export interface ShopVisitCompletedEvent extends RunHistoryV2Envelope {
+  kind: 'shop_visit_completed';
+  shopVisitId: number;
+  stage: 'fireKeeping';
+  progression: 'next_round' | 'retry_round' | 'next_chapter';
 }
 
 export interface EngulfmentOfferingTelemetry {
@@ -247,9 +262,11 @@ export interface EngulfmentAttemptedEvent extends RunHistoryV2Envelope {
 
 export interface ShopOffersPresentedEvent extends RunHistoryV2Envelope {
   kind: 'shop_offers_presented';
-  pool: 'enhancement' | 'flame' | 'special_offer';
+  pool: 'enhancement' | 'dice' | 'flame' | 'special_offer';
   reason: 'initial' | 'reroll' | 'reward';
-  offers: { id: number; contentId: Enhancement | Flame | SpecialOfferType; rarity: Rarity }[];
+  /** Present for normal-Shop Dice impressions so transactions can be joined to one persistent visit. */
+  shopVisitId?: number;
+  offers: { id: number; contentId: Enhancement | DieType | Flame | SpecialOfferType; rarity: Rarity | DiceRarity; price?: number }[];
   chapter?: number;
   maxEnhancementTypesPerFace?: number;
   highestUnlockedEnhancementTier?: number;
@@ -262,6 +279,15 @@ export type ShopTransaction =
   | { type: 'gold_spent'; source: GoldSpendSource; amount: number }
   | { type: 'enhancement_purchased'; enhancement: Enhancement; rarity: Rarity; dieId: number; face: Rank; cost: number }
   | { type: 'enhancement_sold'; enhancement: Enhancement; dieId: number; face: Rank; proceeds: number }
+  | { type: 'dice_purchased'; shopVisitId: number; offerId: number; dieId: number; dieType: DieType; level: number;
+      rarity: DiceRarity; listedPrice: number; pricePaid: number; destination: DiceSlotRef }
+  | { type: 'dice_sold'; dieId: number; dieType: DieType; level: number; source: DiceSlotRef;
+      baseSellValue: number; vintageAppreciation: number; proceeds: number }
+  | { type: 'dice_moved'; source: DiceSlotRef; destination: DiceSlotRef; sourceDieId: number; destinationDieId: number | null }
+  | { type: 'dice_fused'; sourceId: number; sourceType: DieType; sourceLevel: number; destinationId: number;
+      destinationType: DieType; destinationLevel: number; resultingLevel: number; destination: DiceSlotRef;
+      vintageAppreciation: number }
+  | { type: 'dice_offers_rerolled'; cost: number; oldOfferIds: number[]; newOfferIds: number[]; rerollCount: number }
   | { type: 'training'; hand: HandId | 'all'; cost: number; fromLevel?: number; toLevel?: number }
   | { type: 'life_restored'; cost: number; livesBefore: number; livesAfter: number }
   | { type: 'special_offer_selected'; offer: SpecialOfferType; rarity: Rarity; hand?: HandId };
@@ -404,7 +430,8 @@ export interface MapTransitionV2Event extends RunHistoryV2Envelope {
 }
 
 export type RunHistoryV2Event = RunStartedEvent | ChapterStartedEvent | RoundAttemptStartedEvent | RollBatchEvent
-  | HandScoredEvent | ShopVisitStartedEvent | ShopOffersPresentedEvent | ShopTransactionEvent | FlameChangedEvent | ChargeChangedEvent
+  | HandScoredEvent | ShopVisitStartedEvent | ShopStageChangedEvent | ShopVisitCompletedEvent
+  | ShopOffersPresentedEvent | ShopTransactionEvent | FlameChangedEvent | ChargeChangedEvent
   | EngulfmentAttemptedEvent | InfernoEvaluatedEvent | InfernoSuspensionChangedEvent
   | HoodedChallengeChangedEvent | BossStateChangedEvent | ScorecardRefreshedEvent | RoundAttemptFinishedEvent
   | CheckpointRestoredEvent | RunFinishedEvent | ErrorEvent | MapTransitionV2Event;

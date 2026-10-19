@@ -1,6 +1,6 @@
 import { bossRewardForEncounter, CONFIG, interestForGold, roundReward } from './config';
 import { activeFace, rollPhysicalDie, scoringPips, weightedSourceFace } from './dice';
-import { diminishingHalfChance, eligibleEnhancements, ENHANCEMENTS, enhancementsUnlockedInChapter, highestUnlockedEnhancementTier, loneWolfPipsFactor, maxEnhancementTypesPerFace, personalTrainerChance, stacks, tankMultiplierFactor, VINTAGE_BASE_SELL_CAP } from './enhancements';
+import { diminishingHalfChance, ENHANCEMENTS, loneWolfPipsFactor, personalTrainerChance, stacks, tankMultiplierFactor, VINTAGE_BASE_SELL_CAP } from './enhancements';
 import {
   activeFlameId, activeFlameInvestment, captureHandStart, currentFlameInstanceId, eligibleFlameIds, FLAMES, handXMultContributions,
   fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, hasChargeBonfire, HOT_STREAK_SEQUENCE,
@@ -11,6 +11,7 @@ import {
 import { combinationsForHand, hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, planQualification, rankedHands, UPPER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
 import { OFFER_RARITY_WEIGHTS, rarityFirstSelection, rarityLabel } from './rarity';
+import { createDiceOffers } from './diceEconomy';
 import { applyHandContribution, applyHandMultiplier, applyXMult, createHandAccumulator, finalizeHandScore, ordinaryFaceContributions, resolvedOrdinaryPips, type HandScoreContribution, type ScoringParticipant } from './scoring';
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie, handIsPhysicallyAttainable,
@@ -43,7 +44,7 @@ import { Decimal, roundPositiveScoreHalf, type ExactScore } from './scoreMath';
 import { createPlayIntent, createRollBatchIntent, createRollIntent } from './resolution';
 import { grantChapterStorageSlot, orderDieIdsByEncounter, rosterDice, rosterSlotOf, syncActiveDiceProjection } from './inventory';
 import type { PlayIntent, QualificationPlan, RollBatchIntent, RollContext, RollIntent, RollResolution, ScoreOccurrence } from './resolution';
-import { resetDieRoundState } from './specialDice';
+import { resetDieRoundState, SPECIAL_DICE } from './specialDice';
 
 type RollTrigger = { dieId: number; face: Face; enhancement: 'weighted' | 'jumpingBean' | 'freePlay' | 'specialFreePlay'; weightedStacks?: number; rollWeight?: number; weightedSourceFace?: number; rerollEventId?: string };
 type V2HandDraft = {
@@ -77,7 +78,9 @@ export interface ResolverOptions {
   /** Test-only parity switch; gameplay and legacy instrumentation must remain identical when V2 is disabled. */
   disableHistoryV2?: boolean;
 }
-const NORMAL_SHOP_SPEND = new Set<GoldSpendSource>(['enhancement', 'shopDiceReroll', 'enhancementReroll', 'handTraining', 'lifeRestore']);
+const NORMAL_SHOP_SPEND = new Set<GoldSpendSource>([
+  'enhancement', 'dicePurchase', 'shopDiceReroll', 'enhancementReroll', 'diceOfferReroll', 'handTraining', 'lifeRestore',
+]);
 const UPPER_HAND_BY_FACE: Partial<Record<import('./types').Rank, HandId>> = {
   1: 'ones', 2: 'twos', 3: 'threes', 4: 'fours', 5: 'fives', 6: 'sixes',
 };
@@ -278,7 +281,7 @@ export class Resolver {
         break;
       case 'OFFER_PURCHASED': {
         const purchase = this.state.stats.purchases.at(-1);
-        if (record.enhancement && record.rarity && record.dieIds?.[0] !== undefined && record.face && purchase)
+        if (record.enhancement && record.rarity && record.rarity !== 'legendary' && record.dieIds?.[0] !== undefined && record.face && purchase)
           this.emitV2({ kind: 'shop_transaction', transaction: { type: 'enhancement_purchased', enhancement: record.enhancement,
             rarity: record.rarity, dieId: record.dieIds[0], face: record.face, cost: purchase.cost } });
         break;
@@ -296,7 +299,7 @@ export class Resolver {
       }
       case 'SPECIAL_OFFER_SELECTED': {
         const offer = this.state.specialOffer?.chosen;
-        if (offer && record.rarity) this.emitV2({ kind: 'shop_transaction', transaction: {
+        if (offer && record.rarity && record.rarity !== 'legendary') this.emitV2({ kind: 'shop_transaction', transaction: {
           type: 'special_offer_selected', offer: offer.type, rarity: record.rarity, hand: offer.hand } });
         break;
       }
@@ -309,7 +312,7 @@ export class Resolver {
       case 'FLAME_ACQUIRED':
       case 'FLAME_REPLACED': {
         const acquisition = this.state.stats.flameAcquisitions.at(-1);
-        if (record.flame && record.rarity && record.dieIds?.[0] !== undefined) this.emitV2({ kind: 'flame_changed',
+        if (record.flame && record.rarity && record.rarity !== 'legendary' && record.dieIds?.[0] !== undefined) this.emitV2({ kind: 'flame_changed',
           change: { type: record.type === 'FLAME_ACQUIRED' ? 'acquired' : 'replaced', flame: record.flame,
             instanceId: currentFlameInstanceId(this.state, record.flame) ?? undefined,
             dieId: record.dieIds[0], rarity: record.rarity, ...(acquisition?.replaced ? { replaced: acquisition.replaced } : {}) } });
@@ -398,15 +401,8 @@ export class Resolver {
     const plan = ensureChapterPlan(this.state, chapterNumber);
     if (this.state.presentedChapters.includes(chapterNumber)) return;
     this.state.presentedChapters.push(chapterNumber);
-    const capacityBefore = maxEnhancementTypesPerFace(chapterNumber - 1);
-    const capacityAfter = maxEnhancementTypesPerFace(chapterNumber);
-    const newlyUnlockedEnhancements = enhancementsUnlockedInChapter(chapterNumber);
-    const enhancementProgression = chapterNumber >= 2 && chapterNumber <= 6
-      ? { enhancementCapacityBefore: capacityBefore, enhancementCapacityAfter: capacityAfter,
-        newlyUnlockedEnhancements } : {};
     this.emit({
       type: 'CHAPTER_STARTED', chapterNumber, chapterMiniBoss: plan.miniBoss, chapterBoss: plan.boss,
-      ...enhancementProgression,
       message: `Chapter ${chapterNumber} entered`,
     });
   }
@@ -1883,9 +1879,9 @@ export class Resolver {
     // session that launched it. Bust restoration reopens this Shop without
     // generating offers, reroll allowances, exposed faces, or rewards.
     base.phase = 'shop';
-    base.shop ??= { visitId: base.nextShopVisitId++,
+    base.shop ??= { visitId: base.nextShopVisitId++, stage: 'dice',
       offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
-      freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
+      freeDicePurchaseAvailable: false, freeTrainingOfferKeys: [] };
     // Once the next Chapter has started, a Bust restores this as that Round's
     // retry Shop even when its contents originated in the prior post-Boss Shop.
     if (base.shop.kind) base.shop.kind = 'between_rounds';
@@ -1977,8 +1973,8 @@ export class Resolver {
       this.state.roundCheckpoint.board.specialOfferEffects,
       persistentSpecialOfferState,
     );
-    this.state.shop ??= { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
-      freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
+    this.state.shop ??= { stage: 'dice', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
+      freeDicePurchaseAvailable: false, freeTrainingOfferKeys: [] };
     this.state.shop.lifeRestores ??= 0;
     this.nextTimeline('bust', this.state.round, failure.livesAfter > 0 ? failure.attempt + 1 : failure.attempt);
     this.state.lives = failure.livesAfter;
@@ -1995,10 +1991,12 @@ export class Resolver {
     if (failure.livesAfter > 0) {
       this.state.bustPresentationDice = null;
       this.state.phase = 'shop';
-      this.state.shop!.visitId = this.state.nextShopVisitId++;
+      const priorStage = this.state.shop!.stage ?? 'dice';
+      this.state.shop!.stage = 'dice';
       this.state.currentNodeId = failedNodeId;
       this.mapTransition(shopNodeBefore(failure.round), 'backward');
-      this.emitV2({ kind: 'shop_visit_started', shopVisitId: this.state.shop!.visitId, reason: 'bust' });
+      if (priorStage !== 'dice') this.emitV2({ kind: 'shop_stage_changed', shopVisitId: this.state.shop!.visitId!,
+        from: priorStage, to: 'dice' });
       this.emit({ type: 'SHOP_REOPENED_AFTER_BUST',
         message: `Round ${this.format(failure.round)} attempt ${this.format(failure.attempt)} checkpoint restored · ${this.format(this.state.manualRerollsRemaining)} Rerolls left · Care Package ${this.format(this.state.specialOfferEffects.carePackageRerolls)} · returned to the same Shop · prepare for attempt ${this.format(failure.attempt + 1)}` });
     } else {
@@ -2157,19 +2155,13 @@ export class Resolver {
     if (this.state.phase === 'round') this.state.decisionId++;
   }
   freshOffers(reason: 'initial' | 'reroll' = 'initial'): void {
-    const chapter = chapterNumberForRound(this.state.round);
-    const pool = eligibleEnhancements(chapter);
-    const selected = rarityFirstSelection(pool, 3, id => ENHANCEMENTS[id].rarity,
-      OFFER_RARITY_WEIGHTS.enhancement, this.rng);
-    this.state.shop!.offers = selected.map(enhancement => ({ id: this.state.nextOfferId++, enhancement, purchased: false }));
-    const offerSet = selected.map(id => ({ name: ENHANCEMENTS[id].name, rarity: ENHANCEMENTS[id].rarity }));
+    this.state.shop!.offers = createDiceOffers(this.rng, () => this.state.nextOfferId++);
+    const offerSet = this.state.shop!.offers.map(offer => ({ name: SPECIAL_DICE[offer.dieType!].name, rarity: offer.rarity! }));
     this.log({ type: 'OFFERS_REFRESHED', offerSet,
-      message: `Enhancement offers: ${offerSet.map(item => `${item.name} [${rarityLabel(item.rarity)}]`).join(', ')}` });
-    this.emitV2({ kind: 'shop_offers_presented', pool: 'enhancement', reason,
-      chapter, maxEnhancementTypesPerFace: maxEnhancementTypesPerFace(chapter),
-      highestUnlockedEnhancementTier: highestUnlockedEnhancementTier(chapter), eligibleEnhancements: [...pool],
-      offers: this.state.shop!.offers.map(offer => ({ id: offer.id, contentId: offer.enhancement,
-        rarity: ENHANCEMENTS[offer.enhancement].rarity })) });
+      message: `Dice offers: ${offerSet.map(item => `${item.name} D6 [${item.rarity}]`).join(', ')}` });
+    this.emitV2({ kind: 'shop_offers_presented', pool: 'dice', reason, shopVisitId: this.state.shop!.visitId,
+      offers: this.state.shop!.offers.map(offer => ({ id: offer.id, contentId: offer.dieType!,
+        rarity: offer.rarity!, price: offer.price! })) });
   }
   freshTrainingOffers(): void {
     const pool: (HandId | 'team')[] = [...HAND_IDS, 'team'];
@@ -2287,15 +2279,15 @@ export class Resolver {
     this.state.phase = 'shop'; this.state.flameSelection = null; this.state.specialOffer = null; this.state.roundSummary = null;
     const postBoss = isBigBossRound(this.state.round);
     const visitId = this.state.nextShopVisitId++;
-    this.state.shop = { visitId, kind: postBoss ? 'post_boss' : 'between_rounds', exitUnlocked: false,
+    this.state.shop = { visitId, stage: 'dice', kind: postBoss ? 'post_boss' : 'between_rounds', exitUnlocked: false,
       offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
-      freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
+      freeDicePurchaseAvailable: false, freeTrainingOfferKeys: [] };
     const upcomingRound = this.state.round + 1;
     const upcomingBoss = this.state.bossSchedule[upcomingRound];
     if (upcomingBoss) this.state.bossSchedule[upcomingRound] = upcomingBoss;
     this.mapTransition(postBoss ? postBossShopNodeAfter(this.state.round) : shopNodeBefore(upcomingRound), direction);
     this.emitV2({ kind: 'shop_visit_started', shopVisitId: visitId,
-      reason: direction === 'backward' ? 'bad_dream' : 'normal' });
+      reason: direction === 'backward' ? 'bad_dream' : 'normal', initialStage: 'dice' });
     this.freshOffers(); this.freshTrainingOffers();
     if (this.state.specialOfferEffects.semesterShopsRemaining > 0) {
       if (!this.state.shop.trainingOffers.some(offer => offer.kind === 'team')) {
@@ -2306,7 +2298,7 @@ export class Resolver {
         message: `Semester guaranteed Team Training · ${this.state.specialOfferEffects.semesterShopsRemaining} future Shop${this.state.specialOfferEffects.semesterShopsRemaining === 1 ? '' : 's'} left` });
     }
     if (this.state.specialOfferEffects.onTheHouse) {
-      this.state.shop.freeEnhancementOfferIds = this.state.shop.offers.map(offer => offer.id);
+      this.state.shop.freeDicePurchaseAvailable = true;
       this.state.shop.freeTrainingOfferKeys = this.state.shop.trainingOffers.map(trainingOfferKey);
       this.state.specialOfferEffects.onTheHouse = false;
       this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', message: 'On The House made this Shop’s initial displayed purchases free' });

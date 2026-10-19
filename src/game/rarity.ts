@@ -1,10 +1,14 @@
 import { randomIndex } from './rng';
-import type { RandomSource, Rarity } from './types';
+import type { DiceRarity, RandomSource, Rarity } from './types';
 
 export const RARITIES: Record<Rarity, { label: string; className: string }> = {
   common: { label: 'Common', className: 'rarity-common' },
   uncommon: { label: 'Uncommon', className: 'rarity-uncommon' },
   rare: { label: 'Rare', className: 'rarity-rare' },
+};
+export const DICE_RARITIES: Record<DiceRarity, { label: string; className: string }> = {
+  ...RARITIES,
+  legendary: { label: 'Legendary', className: 'rarity-legendary' },
 };
 
 export type OfferRaritySystem = 'enhancement' | 'flame' | 'specialOffer';
@@ -53,3 +57,6 @@ export function rarityFirstSelection<T>(
 
 export const rarityLabel = (rarity: Rarity) => RARITIES[rarity].label;
 export const rarityClassName = (rarity: Rarity) => RARITIES[rarity].className;
+
+export const diceRarityLabel = (rarity: DiceRarity) => DICE_RARITIES[rarity].label;
+export const diceRarityClassName = (rarity: DiceRarity) => DICE_RARITIES[rarity].className;

@@ -6,7 +6,7 @@ import { stringifyExactJson } from './scoreMath';
 import type { BadDreamCheckpoint, GameState } from './types';
 
 export const RUN_STORAGE_KEY = 'roll-call:active-run';
-export const RUN_STORAGE_VERSION = 11;
+export const RUN_STORAGE_VERSION = 14;
 
 type RunStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
@@ -32,7 +32,7 @@ function hasTemplateShape(value: unknown, template: unknown): boolean {
       (['maxCharge', 'decisionId', 'sixPackXMult', 'sixPackUpperHandsPlayed', 'handFamilyFlameStages', 'bossSilenced',
         'engulfmentLevel', 'nextShopVisitId', 'nextFlameInstanceId', 'flameInstanceIds', 'visitId',
         'specialOfferEffects', 'suppressedPostBossRewardRounds', 'specialOffer', 'badDreamCheckpoint',
-        'freeEnhancementOfferIds', 'freeTrainingOfferKeys', 'chapterPlans', 'presentedChapters', 'chapterLifecycle', 'scorecardCycleConsumed',
+        'freeDicePurchaseAvailable', 'freeTrainingOfferKeys', 'chapterPlans', 'presentedChapters', 'chapterLifecycle', 'scorecardCycleConsumed',
         'chargeAttribution', 'infernoProgress', 'infernoEvaluation',
         'historyV2', 'historyV2TimelineId', 'historyV2Coverage', 'debugTrace', 'actionJournal',
         'nextPlaybackEventId'].includes(key) && !Object.hasOwn(value, key))

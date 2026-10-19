@@ -22,9 +22,16 @@ function forceBust(state: GameState, rng: RandomSource = constant()): ReturnType
 function shop(seed = 'economy-shop'): GameState {
   const state = newRun(seed, constant(0.2)).state;
   state.phase = 'shop';
-  state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   state.flameSelection = null;
   return state;
+}
+
+function fireKeeping(state: GameState): GameState {
+  let next = state;
+  if (next.shop?.stage === 'dice') next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'training' }, constant()).state;
+  if (next.shop?.stage === 'training') next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }, constant()).state;
+  return next;
 }
 function clearIntoShop(state: GameState): GameState {
   state.target = 1n;
@@ -45,14 +52,14 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     state = forceBust(state).state;
     expect(state).toMatchObject({ phase: 'shop', lives: 2, round, target, score: 0n, roundAttemptNumber: 2 });
     expect(state.bust).toMatchObject({ attempt: 1, livesBefore: 3, livesAfter: 2 });
-    state = dispatch(state, { type: 'RETRY_ROUND' }).state;
+    state = dispatch(fireKeeping(state), { type: 'RETRY_ROUND' }).state;
     expect(state).toMatchObject({ phase: 'round', lives: 2, round, target, roundAttemptNumber: 2, manualRerollsRemaining: 3 });
     expect(state.consumed).toEqual([]);
     expect(state.dice.map(die => die.value)).not.toEqual(attemptOneDice);
 
     state = forceBust(state).state;
     expect(state).toMatchObject({ phase: 'shop', lives: 1, roundAttemptNumber: 3 });
-    state = dispatch(state, { type: 'RETRY_ROUND' }).state;
+    state = dispatch(fireKeeping(state), { type: 'RETRY_ROUND' }).state;
     state = forceBust(state).state;
     expect(state).toMatchObject({ phase: 'lost', lives: 0, round, roundAttemptNumber: 3 });
     expect(state.bust).toMatchObject({ livesBefore: 1, livesAfter: 0 });
@@ -64,7 +71,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
   });
 
   it('reproduces retry outcomes for the same seed while making attempt RNG distinct', () => {
-    const retry = () => dispatch(forceBust(newRun('retry-rng').state).state, { type: 'RETRY_ROUND' }).state;
+    const retry = () => dispatch(fireKeeping(forceBust(newRun('retry-rng').state).state), { type: 'RETRY_ROUND' }).state;
     const first = retry();
     const second = retry();
     expect(first.dice.map(die => die.value)).toEqual(second.dice.map(die => die.value));
@@ -77,6 +84,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     const state = shop('same-bust-shop');
     state.gold = 37;
     state.shop = {
+      stage: 'fireKeeping',
       offers: [{ id: 41, enhancement: 'bonus', purchased: true }, { id: 42, enhancement: 'workout', purchased: false }],
       trainingOffers: [
         { kind: 'hand', hand: 'ones', purchases: 2 },
@@ -92,7 +100,8 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     state.dice[1].flame = { id: 'fatCat', investedGold: 23 };
     state.handLevels.ones = 2;
     const expectedShop = structuredClone(state.shop);
-    expectedShop.visitId = 2;
+    expectedShop.visitId = 1;
+    expectedShop.stage = 'dice';
     const expectedDice = structuredClone(state.dice);
 
     const attempt = dispatch(state, { type: 'NEXT_ROUND' }, constant(0.2)).state;
@@ -142,7 +151,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     state = dispatch(state, { type: 'BUY', offerId: 7, dieId: 0 }).state;
     const boughtFace = activeFace(state.dice[0]).rank;
     expect(state.gold).toBe(17);
-    state = dispatch(state, { type: 'RETRY_ROUND' }, constant(0.2)).state;
+    state = dispatch(fireKeeping(state), { type: 'RETRY_ROUND' }, constant(0.2)).state;
     expect(state.roundAttemptNumber).toBe(2);
     state = forceBust(state).state;
     expect(state).toMatchObject({ phase: 'shop', roundAttemptNumber: 3, gold: 17 });
@@ -158,7 +167,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     const soldRank = activeFace(state.dice[0]).rank;
     state = dispatch(state, { type: 'SELL_ENHANCEMENT', dieId: 0, face: soldRank, enhancement: 'workout' }).state;
     expect(state.gold).toBe(12);
-    state = dispatch(state, { type: 'RETRY_ROUND' }, constant(0.2)).state;
+    state = dispatch(fireKeeping(state), { type: 'RETRY_ROUND' }, constant(0.2)).state;
     state = forceBust(state).state;
     expect(state.gold).toBe(12);
     expect(state.dice[0].faces[soldRank - 1].enhancements.workout).toBeUndefined();
@@ -172,7 +181,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     expect(state.lives).toBe(2);
     state = dispatch(state, { type: 'RESTORE_LIFE' }).state;
     expect(state).toMatchObject({ lives: 3, gold: 75, shop: { lifeRestores: 1 } });
-    state = dispatch(state, { type: 'RETRY_ROUND' }, constant(0.2)).state;
+    state = dispatch(fireKeeping(state), { type: 'RETRY_ROUND' }, constant(0.2)).state;
     state = forceBust(state).state;
     expect(state).toMatchObject({ phase: 'shop', lives: 2, gold: 75, roundAttemptNumber: 3, shop: { lifeRestores: 1 } });
     expect(lifeRestoreCost(state.shop!.lifeRestores)).toBe(40);
@@ -224,7 +233,7 @@ describe('lives, Bust checkpoint, and retry RNG', () => {
     state.roundCheckpoint = compactCheckpoint(state);
     const busted = forceBust(state).state;
     expect(busted.stats.goldBySource).toMatchObject({ roundBase: 0, unusedRerolls: 0, interest: 0, bossReward: 0 });
-    state = dispatch(busted, { type: 'RETRY_ROUND' }, constant(0.2)).state;
+    state = dispatch(fireKeeping(busted), { type: 'RETRY_ROUND' }, constant(0.2)).state;
     state.target = 1n;
     state.stats.rounds.at(-1)!.target = 1n;
     const cursedId = state.boss?.type === 'hexer' ? state.boss.cursedDieId : null;
@@ -257,6 +266,7 @@ describe('life restoration economy', () => {
 
   it('escalates multiple purchases within the same Shop', () => {
     let state = shop();
+    state.shop!.stage = 'dice';
     state.lives = 2;
     state.gold = 1000;
     const expected = [25, 40, 60, 90];
@@ -291,7 +301,7 @@ describe('life restoration economy', () => {
     state = dispatch(state, { type: 'RESTORE_LIFE' }).state;
     state = forceBust(dispatch(state, { type: 'NEXT_ROUND' }, constant(0.2)).state).state;
     state = dispatch(state, { type: 'RESTORE_LIFE' }).state;
-    state = dispatch(state, { type: 'RETRY_ROUND' }, constant(0.2)).state;
+    state = dispatch(fireKeeping(state), { type: 'RETRY_ROUND' }, constant(0.2)).state;
     state = clearIntoShop(state);
 
     expect(state).toMatchObject({ phase: 'shop', shop: { lifeRestores: 0 } });
@@ -344,6 +354,7 @@ describe('enhancement selling and Vintage', () => {
 
   it('sells all stacks, pays immediately, frees the slot, and never rewrites spend history', () => {
     let state = shop();
+    state.shop!.stage = 'dice';
     state.gold = 10;
     state.lifetimeNormalShopGoldSpent = 50;
     state.stats.lifetimeNormalShopGoldSpent = 50;
@@ -420,6 +431,7 @@ describe('enhancement selling and Vintage', () => {
 
   it('caps Vintage base sell value at 30 and repurchase starts again at 0', () => {
     let state = shop('vintage-sale');
+    state.shop!.stage = 'dice';
     state.gold = 20;
     const face = activeFace(state.dice[0]);
     face.enhancements.vintage = 1;
@@ -445,6 +457,7 @@ describe('Flame Selection spending boundary and tutorial state', () => {
     state = dispatch(state, { type: 'CHOOSE_FLAME', offerId: 1, dieId: 2 }).state;
     expect(state.flameTutorial).toEqual({ pendingDieId: 2, completed: false });
     expect(state.phase).toBe('shop');
+    state = fireKeeping(state);
     expect(validateAction(state, { type: 'STOKE_FLAME', dieId: 2, amount: 1 })).toBeNull();
     expect(state.flameTutorial.pendingDieId).toBe(2);
     state = dispatch(state, { type: 'DISMISS_FLAME_TUTORIAL' }).state;
@@ -460,6 +473,7 @@ describe('Flame Selection spending boundary and tutorial state', () => {
     state.shop = null;
     state = dispatch(state, { type: 'CHOOSE_FLAME', offerId: 1, dieId: 2 }).state;
     expect(state.flameTutorial).toEqual({ pendingDieId: 2, completed: false });
+    state = fireKeeping(state);
     state = dispatch(state, { type: 'UNLOCK_SHOP_EXIT' }, constant(0.2)).state;
     state = dispatch(state, { type: 'NEXT_CHAPTER' }, constant(0.2)).state;
     expect(state.flameTutorial).toEqual({ pendingDieId: null, completed: true });

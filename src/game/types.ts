@@ -42,8 +42,8 @@ export type HandId =
 export type Phase = 'round' | 'roundSummary' | 'inferno' | 'bust' | 'flameSelection' | 'specialOffer' | 'shop' | 'lost' | 'error';
 export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker' | 'boss';
 export type HandPlaySource = 'manual' | 'jumpingBean' | 'freePlay';
-export type GoldSource = 'golden' | 'jackpot' | 'enhancementSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward' | 'specialOffer' | 'cashBonus';
-export type GoldSpendSource = 'enhancement' | 'shopDiceReroll' | 'enhancementReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore' | 'furnace';
+export type GoldSource = 'golden' | 'jackpot' | 'enhancementSale' | 'diceSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward' | 'specialOffer' | 'cashBonus';
+export type GoldSpendSource = 'enhancement' | 'dicePurchase' | 'shopDiceReroll' | 'enhancementReroll' | 'diceOfferReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore' | 'furnace';
 export type HandLevels = Record<HandId, number>;
 export type HandFamilyFlameStage = 'setup' | 'payoff' | 'spent';
 
@@ -220,22 +220,40 @@ export interface DieRoundRuntime {
   weightedFace: Exclude<Rank, 7>;
 }
 export type DieRoundState = Record<DieId, DieRoundRuntime>;
-export interface Offer { id: number; enhancement: Enhancement; purchased: boolean }
+export interface DiceOffer {
+  id: number;
+  /** Current-schema Dice fields. Legacy Enhancement fixtures may omit them. */
+  dieType?: Exclude<DieType, 'normal'>;
+  rarity?: DiceRarity;
+  price?: number;
+  /** Legacy fixture/runtime support only; normal Shops never generate this field. */
+  enhancement?: Enhancement;
+  purchased: boolean;
+}
+/** @deprecated Use DiceOffer. Retained for legacy fixture components during the runtime cutoff. */
+export type Offer = DiceOffer;
+export type DiceSlotRef = { area: 'roster' | 'storage'; index: number };
 export interface HandTrainingOffer { kind: 'hand'; hand: HandId; purchases: number }
 export interface TeamTrainingOffer { kind: 'team'; purchases: number }
 export type TrainingOffer = HandTrainingOffer | TeamTrainingOffer;
+export type ShopStage = 'dice' | 'training' | 'fireKeeping';
 export interface Shop {
   /** Monotonic identity for one semantic Shop visit, including Bust/Bad Dream returns. */
   visitId?: number;
+  /** The authoritative section of this persistent Shop visit currently being viewed. Legacy fixtures normalize to Dice. */
+  stage?: ShopStage;
   /** Lifecycle ownership; post-Boss Shops remain in the completed Chapter until NEXT_CHAPTER. */
   kind?: 'between_rounds' | 'post_boss';
   /** False only during the one-second progression lock for this concrete Shop entry. */
   exitUnlocked?: boolean;
-  offers: Offer[];
+  offers: DiceOffer[];
   trainingOffers: TrainingOffer[];
   diceRerolls: number;
   offerRerolls: number;
   lifeRestores: number;
+  /** On The House: the first collectible-die purchase in this visit costs no Gold. */
+  freeDicePurchaseAvailable?: boolean;
+  /** Legacy fixture support only. */
   freeEnhancementOfferIds?: number[];
   freeTrainingOfferKeys?: string[];
 }
@@ -585,6 +603,7 @@ export interface RunStats {
   bumpControlledRolls: number;
   enhancedFaces: string[];
   enhancementShopRerolls: number;
+  diceOfferRerolls: number;
   shopDiceRerolls: number;
   manualRerollActions: number;
   manualDiceRerolled: number;
@@ -661,13 +680,13 @@ export interface EventRecord {
   source?: ScoreSource;
   goldSource?: GoldSource;
   goldSpendSource?: GoldSpendSource;
-  rarity?: Rarity;
+  rarity?: DiceRarity;
   dieType?: DieType;
   dieLevel?: number;
   invocationBefore?: number;
   invocationAfter?: number;
   effectCause?: string;
-  offerSet?: { name: string; rarity: Rarity }[];
+  offerSet?: { name: string; rarity: DiceRarity }[];
   face?: Rank;
   rollSource?: 'manual_reroll' | 'automatic';
   rollReason?: RollReason;
@@ -740,11 +759,19 @@ export type Action =
   | { type: 'INVOKE_CHAMELEON'; dieId: DieId }
   | { type: 'INVOKE_FLYWHEEL'; dieId: DieId }
   | { type: 'ARM_MAGIC'; dieId: DieId; face: Exclude<Rank, 7> }
+  | { type: 'DISARM_MAGIC'; dieId: DieId }
   | { type: 'FEED_FURNACE'; dieId: DieId; amount: number }
   | { type: 'SET_WEIGHTED_FACE'; dieId: DieId; face: Exclude<Rank, 7> }
   | { type: 'UNLOCK_WARDEN_DIE'; dieId: number }
   | { type: 'TOGGLE_CHARGE'; hand?: HandId | null; dieIds?: number[] }
+  | { type: 'BUY_DIE'; offerId: number }
+  /** Legacy fixture/runtime action. New-schema Shops never expose Enhancement offers. */
   | { type: 'BUY'; offerId: number; dieId: number }
+  | { type: 'MOVE_DIE'; source: DiceSlotRef; destination: DiceSlotRef;
+      expectedSourceDieId: DieId; expectedDestinationDieId: DieId | null }
+  | { type: 'FUSE_DICE'; source: DiceSlotRef; destination: DiceSlotRef;
+      expectedSourceDieId: DieId; expectedDestinationDieId: DieId }
+  | { type: 'SELL_DIE'; slot: DiceSlotRef; expectedDieId: DieId }
   | { type: 'SELL_ENHANCEMENT'; dieId: number; face: Rank; enhancement: Enhancement }
   | { type: 'TRAIN_HAND'; hand: HandId }
   | { type: 'TRAIN_ALL_HANDS' }
@@ -764,6 +791,7 @@ export type Action =
   | { type: 'RETRY_ROUND' }
   | { type: 'REROLL_DICE' }
   | { type: 'REROLL_OFFERS' }
+  | { type: 'SET_SHOP_STAGE'; stage: ShopStage }
   | { type: 'UNLOCK_SHOP_EXIT' }
   | { type: 'NEXT_CHAPTER' }
   | { type: 'NEXT_ROUND' };

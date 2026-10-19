@@ -168,6 +168,7 @@ describe('Golden and Workout', () => {
     expect(result.state.dice[4].faces[4].workoutPips).toBe(2);
     result.state.phase = 'shop';
     result.state.shop = shop().shop;
+    result.state.shop!.stage = 'fireKeeping';
     const next = dispatch(result.state, { type: 'NEXT_ROUND' }, constant());
     expect(next.state.dice[4].faces[4].workoutPips).toBe(2);
     expect(next.state.gold).toBe(2);
@@ -385,6 +386,7 @@ describe('round boundaries and losing', () => {
       const postReward = progressed.state;
       expect(postReward.phase).toBe('shop');
       postReward.shop!.exitUnlocked = true;
+      postReward.shop!.stage = 'fireKeeping';
       const next = dispatch(postReward, { type: 'NEXT_ROUND' }, constant());
       expect(next.state.phase).toBe('round');
       expect(next.state.round).toBe(round + 1);
@@ -431,10 +433,11 @@ describe('round boundaries and losing', () => {
     expect(result.state.stats.triggers.jumpingBean).toBe(1);
     const shopState = dispatch(result.state, { type: 'CONTINUE_ROUND_SUMMARY' }, constant()).state;
     expect(shopState.shop!.offers).toHaveLength(3);
-    expect(new Set(shopState.shop!.offers.map(o => o.enhancement)).size).toBe(3);
+    expect(shopState.shop!.offers.every(offer => !!offer.dieType)).toBe(true);
   });
   it('initial-roll effects can clear a round after the complete chain', () => {
     const game = shop();
+    game.shop!.stage = 'fireKeeping';
     enhance(game, 0, 'jumpingBean', 1, 6);
     enhance(game, 0, 'bonus', 17, 6);
     const result = dispatch(game, { type: 'NEXT_ROUND' }, sequence(0.99, 0, 0, 0, 0, 0));
@@ -526,13 +529,14 @@ describe('shop', () => {
     expect(diceRerollCost(game.shop!.diceRerolls)).toBe(8);
     expect(offerRerollCost(game.shop!.offerRerolls)).toBe(12);
     expect(game.stats.shopDiceRerolls).toBe(2);
-    expect(game.stats.enhancementShopRerolls).toBe(2);
+    expect(game.stats.diceOfferRerolls).toBe(2);
     game.gold = 0;
     expect(dispatch(game, { type: 'REROLL_DICE' }).error).toBeTruthy();
     expect(dispatch(game, { type: 'REROLL_OFFERS' }).error).toBeTruthy();
   });
   it('resets costs for the next shop', () => {
     const game = shop();
+    game.shop!.stage = 'fireKeeping';
     game.shop!.diceRerolls = 4;
     game.shop!.offerRerolls = 3;
     enhance(game, 0, 'jumpingBean', 1, 6);
@@ -576,7 +580,17 @@ describe('reproducibility and end-to-end domain flow', () => {
             ? { type: 'CONTINUE_FLAME_SELECTION' as const }
             : { type: 'CHOOSE_FLAME' as const, offerId: a.flameSelection!.offers[0].id, dieId: 0 };
           a = dispatch(a, action).state; b = dispatch(b, action).state;
-        } else if (a.phase === 'shop') {
+      } else if (a.phase === 'shop') {
+        if (a.shop?.stage === 'dice') {
+          a = dispatch(a, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
+          b = dispatch(b, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
+          continue;
+        }
+        if (a.shop?.stage === 'training') {
+          a = dispatch(a, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
+          b = dispatch(b, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
+          continue;
+        }
         if (a.shop?.exitUnlocked === false) {
           a = dispatch(a, { type: 'UNLOCK_SHOP_EXIT' }).state;
           b = dispatch(b, { type: 'UNLOCK_SHOP_EXIT' }).state;
@@ -613,13 +627,18 @@ describe('reproducibility and end-to-end domain flow', () => {
             ? dispatch(game, { type: 'CONTINUE_FLAME_SELECTION' }).state
             : dispatch(game, { type: 'CHOOSE_FLAME', offerId: game.flameSelection!.offers[0].id, dieId: seed % 5 }).state;
         } else if (game.phase === 'shop') {
-          if (game.bust) { game = dispatch(game, { type: 'RETRY_ROUND' }).state; continue; }
           if (game.shop?.exitUnlocked === false) { game = dispatch(game, { type: 'UNLOCK_SHOP_EXIT' }).state; continue; }
-          clears++;
-          for (const offer of game.shop!.offers) {
-            const bought = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 0 });
-            if (!bought.error) { game = bought.state; purchases++; }
+          if (game.shop?.stage === 'dice') {
+            clears++;
+            for (const offer of game.shop!.offers) {
+              const bought = dispatch(game, { type: 'BUY', offerId: offer.id, dieId: 0 });
+              if (!bought.error) { game = bought.state; purchases++; }
+            }
+            game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
+            continue;
           }
+          if (game.shop?.stage === 'training') { game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state; continue; }
+          if (game.bust) { game = dispatch(game, { type: 'RETRY_ROUND' }).state; continue; }
           game = dispatch(game, game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
         } else throw new Error(`Unexpected ${game.phase}`);
       }

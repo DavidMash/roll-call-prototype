@@ -99,10 +99,10 @@ describe('rarity-first generation', () => {
     new Resolver(state, constant(.2)).freshOffers();
     expect(state.shop.offers).toHaveLength(3);
     const offers = [...state.historyV2].reverse().find(event => event.kind === 'shop_offers_presented'
-      && event.pool === 'enhancement');
+      && event.pool === 'dice');
     expect(offers).toMatchObject({ kind: 'shop_offers_presented', offers: expect.any(Array) });
     expect(offers?.kind === 'shop_offers_presented' ? offers.offers.every(offer =>
-      ['common', 'uncommon', 'rare'].includes(offer.rarity)) : false).toBe(true);
+      ['common', 'uncommon', 'rare', 'legendary'].includes(offer.rarity)) : false).toBe(true);
   });
 });
 

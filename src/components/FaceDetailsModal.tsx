@@ -1,24 +1,20 @@
-import { Alert, Button, Group, Modal, Paper, SimpleGrid, Stack, Text } from '@mantine/core';
+import { Button, Group, Modal, Paper, SimpleGrid, Stack, Text } from '@mantine/core';
 import { useEffect, useState } from 'react';
-import { diminishingHalfChance, enhancementCost, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, faceEnhancementTypes, furnaceMultiplier, maxEnhancementTypesPerFace, placementError, tankMultiplierFactor } from '../game/enhancements';
-import { enhancementOfferIsFree } from '../game/specialOffers';
+import { diminishingHalfChance, enhancementSellValue, ENHANCEMENTS, ENHANCEMENT_IDS, faceEnhancementTypes, furnaceMultiplier, tankMultiplierFactor } from '../game/enhancements';
 import type { Action, Board, Enhancement, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
 import { formatPercentage, formatPlayerNumber } from '../game/copy';
 import { PipFace } from './PipFace';
 import { enhancementAccessibleName, EnhancementIdentity, EnhancementSymbol } from './EnhancementIdentity';
 import { EnhancementSellButton } from './EnhancementSellButton';
-import { chapterNumberForRound } from '../game/chapters';
 
 export interface FaceDetailsTarget { dieId: number; face: Rank }
 interface SaleTarget { enhancement: Enhancement; stacks: number }
 
-export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, setSelectedOffer, busy, actionsEnabled, onClose, submit }: {
+export function FaceDetailsModal({ board, target, diceDisplay, busy, actionsEnabled, onClose, submit }: {
   board: Board;
   target: FaceDetailsTarget | null;
   diceDisplay: DiceDisplay;
-  selectedOffer: number | null;
-  setSelectedOffer: (id: number | null) => void;
   busy: boolean;
   actionsEnabled: boolean;
   onClose: () => void;
@@ -37,14 +33,6 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
   const dieCode = `D${rosterSlot + 1}`;
   const face = die.faces[focusedFace - 1];
   const ids = ENHANCEMENT_IDS.filter(id => (face.enhancements[id] ?? 0) > 0);
-  const shop = board.phase === 'shop' ? board.shop : null;
-  const offer = shop?.offers.find(item => item.id === selectedOffer && !item.purchased);
-  const isExposed = die.value === focusedFace;
-  const chapter = chapterNumberForRound(board.round);
-  const capacity = maxEnhancementTypesPerFace(chapter);
-  const offerError = offer && isExposed ? placementError(die, face, offer.enhancement, chapter) : null;
-  const offerCostAvailable = !!(offer && shop && (enhancementOfferIsFree(shop, offer.id) || board.gold >= enhancementCost(offer.enhancement)));
-  const canApply = actionsEnabled && isExposed && !!offer && !offerError && offerCostAvailable;
   const shopActions = board.phase === 'shop' && actionsEnabled;
   const saleProceeds = saleTarget ? enhancementSellValue(face, saleTarget.enhancement) : null;
   function requestSale(enhancement: Enhancement) {
@@ -54,12 +42,6 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
     if (!saleTarget) return;
     submit({ type: 'SELL_ENHANCEMENT', dieId: currentDie.id, face: focusedFace, enhancement: saleTarget.enhancement });
     setSaleTarget(null);
-  }
-  function applyOffer() {
-    if (!offer || !canApply) return;
-    submit({ type: 'BUY', offerId: offer.id, dieId: currentDie.id });
-    setSelectedOffer(null);
-    onClose();
   }
 
   return <>
@@ -83,7 +65,7 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
               <strong>FACE {physicalFace}</strong>
               {die.value === physicalFace && <span className="manage-face-exposed">EXPOSED</span>}
               {isFetchTarget && <span className="manage-face-fetch">FETCH</span>}
-              <small>ENHANCEMENTS {typeCount} / {capacity}</small>
+              <small>LEGACY ENHANCEMENTS {typeCount}</small>
               <span className="manage-face-enhancements" data-testid={`manage-face-enhancements-${physicalFace}`}>
                 {faceIds.map(id => <EnhancementSymbol key={id} enhancement={id} stacks={candidate.enhancements[id]!} decorative />)}
               </span>
@@ -93,9 +75,8 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
 
         <div className="face-details-heading">
           <Text size="xs" fw={850} tt="uppercase" c="dimmed">{dieCode} · FACE {focusedFace}</Text>
-          <Text fw={850}>Enhancements {faceEnhancementTypes(face).length} / {capacity}</Text>
+          <Text fw={850}>Legacy Enhancements {faceEnhancementTypes(face).length}</Text>
         </div>
-        {offer && isExposed && offerError?.startsWith('This Face is full.') && <Alert color="orange" title="FACE FULL">Sell an Enhancement to make room.</Alert>}
         <Stack gap="xs" className="face-detail-list">
           {ids.map(id => {
             const stacks = face.enhancements[id]!;
@@ -123,7 +104,6 @@ export function FaceDetailsModal({ board, target, diceDisplay, selectedOffer, se
         </Stack>
         <Group justify="space-between">
           <Button variant="default" onClick={onClose}>Close</Button>
-          {offer && isExposed && <Button color="teal" disabled={busy || !canApply} onClick={applyOffer}>Apply <EnhancementIdentity enhancement={offer.enhancement} /></Button>}
         </Group>
       </Stack>
     </Modal>

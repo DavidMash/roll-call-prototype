@@ -14,7 +14,7 @@ function board(values: Rank[] = [1, 2, 3, 4, 5]): GameState {
 }
 function shop(): GameState {
   const state = board(); state.phase = 'shop'; state.gold = 100;
-  state.shop = { diceRerolls: 0, offerRerolls: 0, lifeRestores: 0, trainingOffers: [], offers: [] };
+  state.shop = { stage: 'dice', diceRerolls: 0, offerRerolls: 0, lifeRestores: 0, trainingOffers: [], offers: [] };
   return state;
 }
 function offer(state: GameState, id: number, enhancement: Enhancement) { state.shop!.offers.push({ id, enhancement, purchased: false }); }
@@ -82,6 +82,7 @@ describe('flat round Gold economy', () => {
     let state = shop(); state = dispatch(state, { type: 'REROLL_DICE' }, constant()).state;
     state = dispatch(state, { type: 'REROLL_DICE' }, constant()).state;
     expect(state.shop?.diceRerolls).toBe(2); expect(state.stats.lifetimeNormalShopGoldSpent).toBe(6);
+    state.shop!.stage = 'fireKeeping';
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant()).state;
     state.target = 1n; state.dice.forEach(die => { die.value = 1; });
     state = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant()).state;

@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 import { dispatch, newRun } from '../src/game/engine';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import type { GameState } from '../src/game/types';
-import { enterRun } from './uiHelpers';
+import { enterRun, goToShopStage } from './uiHelpers';
 
 async function installRun(page: Page, state: GameState, speed: 'normal' | 'fast' | 'instant' = 'instant') {
   await page.goto(`/?seed=${state.seed}&speed=${speed}`);
@@ -71,14 +71,18 @@ test('shared action row keeps manipulation left and progression right on narrow 
   const row = page.getByTestId('run-action-row');
   await expect(page.getByTestId('shop-dice-controls')).toHaveCount(0);
   await expect(row.getByRole('button', { name: 'REROLL ALL DICE FOR 2 GOLD', exact: true })).toHaveCount(1);
-  await expect(row.getByRole('button', { name: 'NEXT ROUND', exact: true })).toBeVisible();
+  await expect(page.getByTestId('shop-stage-continue')).toContainText('CONTINUE TO TRAINING');
   const shopLayout = await actionGeometry(page);
   expect(shopLayout.left - shopLayout.rowLeft).toBeLessThan(12);
   expect(shopLayout.rowRight - shopLayout.rightRight).toBeLessThan(12);
   expect(shopLayout.leftRight).toBeLessThanOrEqual(shopLayout.right);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
+  await goToShopStage(page, 'fireKeeping');
+  await expect(row.getByRole('button', { name: 'NEXT ROUND', exact: true })).toBeVisible();
+
   shop.shop.kind = 'post_boss';
+  shop.shop.stage = 'fireKeeping';
   await installRun(page, shop);
   await expect(row.getByRole('button', { name: 'NEXT CHAPTER', exact: true })).toBeVisible();
   await expect(row.getByRole('button', { name: 'NEXT ROUND', exact: true })).toHaveCount(0);

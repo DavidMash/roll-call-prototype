@@ -12,7 +12,7 @@ export const SPECIAL_OFFER_IDS: readonly SpecialOfferType[] = [
 
 export interface SpecialOfferDefinition { name: string; description: string; rarity: Rarity }
 export const SPECIAL_OFFERS: Record<SpecialOfferType, SpecialOfferDefinition> = {
-  onTheHouse: { name: 'On The House', description: 'The next Shop’s initial displayed purchases are free.', rarity: 'uncommon' },
+  onTheHouse: { name: 'On The House', description: 'Your first Dice purchase and initial Training purchases in the next Shop are free.', rarity: 'uncommon' },
   greatFairy: { name: 'Great Fairy', description: 'Restore all Lives. If already full, gain 15 Gold.', rarity: 'common' },
   focus: { name: 'Focus: [HAND]', description: 'Train [HAND] 4 times for free.', rarity: 'common' },
   timeTravel: { name: 'Time Travel', description: 'Replay this Chapter from Round 1 with your current build.', rarity: 'rare' },
@@ -107,6 +107,8 @@ export function focusOffer(id: number, hand: HandId): SpecialOffer {
 }
 
 export const trainingOfferKey = (offer: TrainingOffer): string => offer.kind === 'team' ? 'team' : `hand:${offer.hand}`;
+export const dicePurchaseIsFree = (shop: Shop): boolean => shop.freeDicePurchaseAvailable === true;
+/** Legacy authored-fixture support; new Shops never populate Enhancement offers. */
 export const enhancementOfferIsFree = (shop: Shop, offerId: number): boolean => (shop.freeEnhancementOfferIds ?? []).includes(offerId);
 export const trainingOfferIsFree = (shop: Shop, offer: TrainingOffer): boolean => (shop.freeTrainingOfferKeys ?? []).includes(trainingOfferKey(offer));
 

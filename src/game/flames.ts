@@ -3,7 +3,7 @@ import { magneticPullCapable, stacks } from './enhancements';
 import { lastPlayDanger } from './bosses';
 import { LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from './hands';
 import { finalizeScore, handScore, infernoMultiplier } from './scoring';
-import type { ActiveFlame, Board, Die, Flame, FlameInstanceId, GameState, HandId, Rarity, XMultFactor } from './types';
+import type { ActiveFlame, Board, Die, DiceInventory, Flame, FlameInstanceId, GameState, HandId, Rarity, XMultFactor } from './types';
 import { formatPlayerNumber } from './copy';
 import type { ExactScore } from './scoreMath';
 
@@ -158,8 +158,10 @@ export interface FlameStokeLimits {
 }
 
 /** Shared investment limits used by both action validation and the Shop control. */
-export function flameStokeLimits(state: Pick<Board, 'dice' | 'gold'>, dieId: number): FlameStokeLimits {
-  const die = state.dice.find(item => item.id === dieId && item.owner === 'player');
+export function flameStokeLimits(state: Pick<Board, 'dice' | 'gold'> & Partial<Pick<GameState, 'diceInventory'>>,
+  dieId: number, inventory?: DiceInventory): FlameStokeLimits {
+  const die = (inventory ?? state.diceInventory)?.instances[dieId]
+    ?? state.dice.find(item => item.id === dieId && item.owner === 'player');
   const remainingCapacity = die?.flame && activeFlameId(die.flame)
     ? Math.max(0, 100 - activeFlameInvestment(die.flame)) : 0;
   const affordableAmount = Math.max(0, Math.floor(state.gold));

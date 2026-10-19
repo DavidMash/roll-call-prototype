@@ -124,7 +124,7 @@ describe('tutorial guided interaction beats', () => {
     });
   });
 
-  it('separates Training, Bonus, and Workout purchase targets from placement targets', () => {
+  it('keeps Training guidance while bypassing obsolete Enhancement purchase and placement targets', () => {
     let { session } = newTutorialSession();
     session = action(session, { type: 'MANUAL_REROLL', dieIds: [1] });
     session = action(session, { type: 'PLAY', hand: 'threeKind', dieIds: [0, 1, 2] });
@@ -133,31 +133,18 @@ describe('tutorial guided interaction beats', () => {
     session = action(session, { type: 'PLAY', hand: 'fives', dieIds: [3] });
     session = action(session, { type: 'PLAY', hand: 'smallStraight', dieIds: [0, 1, 2, 3] });
     session = action(session, { type: 'CONTINUE_ROUND_SUMMARY' });
+    session = action(session, { type: 'SET_SHOP_STAGE', stage: 'training' });
     session.scenario.completedBeatIds.push('welcome', 'goal', 'scorecard', 'c1-r1-nice', 'c1-r1-pips-mult',
       'c1-r1-after-play', 'c1-r1-payout', 'c1-r1-payout-rerolls', 'shop1-training');
     expect(activeTutorialBeat(session, ui())).toMatchObject({ id: R.training,
       interactiveTargets: ['[data-tutorial="training-fullHouse"] .training-action'] });
 
     session = action(session, { type: 'TRAIN_HAND', hand: 'fullHouse' });
-    session.scenario.completedBeatIds.push('shop1-training-result', 'shop1-enhancements', 'shop1-bonus-info');
-    const bonus = session.game.shop!.offers.find(offer => offer.enhancement === 'bonus')!;
-    expect(activeTutorialBeat(session, ui())).toMatchObject({ id: 'shop1-select-bonus', completion: { kind: 'selection' } });
-    expect(activeTutorialBeat(session, ui({ selectedOffer: bonus.id }))).toMatchObject({
-      id: R.bonus,
-      body: [`Put + Bonus on this ${session.scenario.bonusBinding!.faceRank}.`],
-      interactiveTargets: ['[data-tutorial="die-2"] .die'],
-    });
-
-    session.game.round = 3;
-    session.scenario.completedBeatIds.push(R.bonus, 'shop-r4-workout-info');
-    session.scenario.workoutBinding = { dieId: 0, faceRank: session.game.dice[0].value };
-    session.game.shop!.offers[0] = { ...session.game.shop!.offers[0], enhancement: 'workout', purchased: false };
-    const workoutId = session.game.shop!.offers[0].id;
-    expect(activeTutorialBeat(session, ui())).toMatchObject({ id: 'shop-r4-select-workout' });
-    expect(activeTutorialBeat(session, ui({ selectedOffer: workoutId }))).toMatchObject({
-      id: R.workout,
-      interactiveTargets: ['[data-tutorial="die-1"] .die'],
-    });
+    session.scenario.completedBeatIds.push('shop1-training-result');
+    expect(session.scenario.completedBeatIds).toContain(R.bonus);
+    expect(session.scenario.completedBeatIds).toContain(R.workout);
+    expect(activeTutorialBeat(session, ui())?.id).not.toBe('shop1-select-bonus');
+    expect(activeTutorialBeat(session, ui())?.id).not.toBe('shop-r4-select-workout');
   });
 
   it('returns control after the first scored hand instead of prescribing later Round 1 hands', () => {
@@ -260,7 +247,7 @@ describe('tutorial guided interaction beats', () => {
     const { session } = newTutorialSession();
     session.game.round = 6;
     session.game.phase = 'shop';
-    session.game.shop = { kind: 'post_boss', offers: [], trainingOffers: [], diceRerolls: 0,
+    session.game.shop = { stage: 'fireKeeping', kind: 'post_boss', offers: [], trainingOffers: [], diceRerolls: 0,
       offerRerolls: 0, lifeRestores: 0 };
     session.game.flameTutorial = { pendingDieId: 3, completed: false };
     session.scenario.firstFlame = 'doubleDown';

@@ -1,9 +1,9 @@
 import { Badge } from '@mantine/core';
-import { rarityClassName, rarityLabel } from '../game/rarity';
-import type { Rarity } from '../game/types';
+import { diceRarityClassName, diceRarityLabel } from '../game/rarity';
+import type { DiceRarity } from '../game/types';
 
-export function RarityBadge({ rarity, compact = false }: { rarity: Rarity; compact?: boolean }) {
-  return <Badge component="span" className={`rarity-badge ${rarityClassName(rarity)}`} size={compact ? 'xs' : 'sm'} variant="light">
-    {rarityLabel(rarity)}
+export function RarityBadge({ rarity, compact = false }: { rarity: DiceRarity; compact?: boolean }) {
+  return <Badge component="span" className={`rarity-badge ${diceRarityClassName(rarity)}`} size={compact ? 'xs' : 'sm'} variant="light">
+    {diceRarityLabel(rarity)}
   </Badge>;
 }

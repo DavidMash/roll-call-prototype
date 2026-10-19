@@ -92,7 +92,7 @@ describe('manual reroll resource', () => {
     enhance(game, 0, 'jumpingBean', 6);
     enhance(game, 0, 'sticky', 6);
     game.phase = 'shop';
-    game.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    game.shop = { stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     const result = dispatch(game, { type: 'NEXT_ROUND' }, sequence(0.99, 0.99, 0.99, 0.99, 0.99, 0, 0));
     expect(result.events[0].board.manualRerollsRemaining).toBe(3);
     expect(result.state.manualRerollsRemaining).toBe(3);

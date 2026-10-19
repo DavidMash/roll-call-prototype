@@ -28,6 +28,7 @@ function shopState(gold = 200, includeTeam = false): GameState {
     .map(hand => ({ kind: 'hand', hand: hand as HandId, purchases: 0 }));
   if (includeTeam) trainingOffers[2] = { kind: 'team', purchases: 0 };
   game.shop = {
+    stage: 'training',
     offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
     trainingOffers,
   };
@@ -237,6 +238,7 @@ describe('Hand Training purchases and persistence', () => {
     game = dispatch(game, { type: 'TRAIN_HAND', hand: 'pair' }).state;
     game = dispatch(game, { type: 'TRAIN_HAND', hand: 'pair' }).state;
     game = dispatch(game, { type: 'TRAIN_ALL_HANDS' }).state;
+    game.shop!.stage = 'fireKeeping';
     game = dispatch(game, { type: 'NEXT_ROUND' }, constant()).state;
     game = forceBust(game);
     expect(game.phase).toBe('shop');
@@ -252,6 +254,7 @@ describe('Hand Training purchases and persistence', () => {
     let game = shopState(100, true);
     game = dispatch(game, { type: 'TRAIN_HAND', hand: 'pair' }).state;
     game = dispatch(game, { type: 'TRAIN_ALL_HANDS' }).state;
+    game.shop!.stage = 'fireKeeping';
     game = dispatch(game, { type: 'NEXT_ROUND' }, constant()).state;
     game.dice.forEach(die => { die.value = 6; });
     game = dispatch(game, { type: 'PLAY', hand: 'fiveKind', dieIds: [0, 1, 2, 3, 4] }, constant()).state;
@@ -308,6 +311,7 @@ describe('seeded Training offer generation', () => {
     const firstRngState = a.rngState;
     a = dispatch(a, { type: 'UNLOCK_SHOP_EXIT' }).state;
     b = dispatch(b, { type: 'UNLOCK_SHOP_EXIT' }).state;
+    a.shop!.stage = 'fireKeeping'; b.shop!.stage = 'fireKeeping';
     a = dispatch(a, { type: 'NEXT_ROUND' }).state;
     b = dispatch(b, { type: 'NEXT_ROUND' }).state;
     a.dice.forEach(die => { die.value = 6; });

@@ -57,7 +57,7 @@ describe.each(['jumpingBean', 'magnetic'] as const)('%s per-die placement limit'
       submit: () => {}, openFaceDetails: () => {}, openFlameDetails: () => {},
     })));
     const name = enhancement === 'jumpingBean' ? 'Jumping Bean' : 'Magnetic';
-    expect(html).toContain(`aria-label="Die 1, face 2, 2 Pips, unavailable: ${name} is limited to one Face per Die."`);
+    expect(html).not.toContain(`unavailable: ${name} is limited to one Face per Die.`);
     expect(html).toContain('aria-label="Die 2, face 2, 2 Pips"');
   });
 });

@@ -13,7 +13,7 @@ function shopBeforeMini(type: MiniBossType): GameState {
   state.phase = 'shop';
   state.round = 2;
   state.currentNodeId = 'shop:before-round:3';
-  state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   state.bossSchedule[3] = type;
   return state;
 }

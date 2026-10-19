@@ -7,7 +7,8 @@ import { chapterNumberForRound, chapterRoundForRound } from './chapters';
 import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
 
 const number = (value: number | bigint) => typeof value === 'bigint' ? formatExactScore(value) : formatPlayerNumber(value);
-const die = (id: number) => `D${id + 1}`;
+// A collectible ID is stable identity, not a Roster position.
+const die = (id: number) => `Die #${id}`;
 const label = (value: string) => value.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
   .replace(/\b\w/g, character => character.toUpperCase());
 
@@ -87,12 +88,24 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     }
     case 'hand_scored': return renderHandScoredV2(event);
     case 'roll_batch': return `ROLL · ${event.reason} · ${event.results.map(result => `${die(result.dieId)} ${number(result.beforeFace)}→${number(result.afterFace)}`).join(' · ')}`;
-    case 'shop_visit_started': return `SHOP VISIT ${number(event.shopVisitId)} · ${event.reason}`;
-    case 'shop_offers_presented': return `OFFERS · ${event.pool}`
+    case 'shop_visit_started': return `SHOP VISIT ${number(event.shopVisitId)} · ${event.reason} · ${label(event.initialStage)}`;
+    case 'shop_stage_changed': return `SHOP ${number(event.shopVisitId)} · ${label(event.from)} → ${label(event.to)}`;
+    case 'shop_visit_completed': return `SHOP ${number(event.shopVisitId)} COMPLETE · ${label(event.progression)}`;
+    case 'shop_offers_presented': return `OFFERS · ${event.pool}${event.shopVisitId === undefined ? '' : ` · Shop ${number(event.shopVisitId)}`}`
       + (event.pool === 'enhancement' && event.chapter !== undefined
         ? ` · Chapter ${number(event.chapter)} · capacity ${number(event.maxEnhancementTypesPerFace ?? 0)} · tier ${number(event.highestUnlockedEnhancementTier ?? 0)}` : '')
       + ` · ${event.offers.map(offer => `${offer.contentId} [${offer.rarity}]`).join(', ')}`;
-    case 'shop_transaction': return `SHOP · ${event.transaction.type} · ${'amount' in event.transaction ? number(event.transaction.amount) : ''}`.trim();
+    case 'shop_transaction': {
+      const transaction = event.transaction;
+      switch (transaction.type) {
+        case 'dice_purchased': return `DICE PURCHASE · offer ${number(transaction.offerId)} · Die #${number(transaction.dieId)} ${label(transaction.dieType)} Lv${number(transaction.level)} · ${number(transaction.pricePaid)} Gold · ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)}`;
+        case 'dice_sold': return `DICE SALE · Die #${number(transaction.dieId)} ${label(transaction.dieType)} Lv${number(transaction.level)} · ${number(transaction.proceeds)} Gold · ${label(transaction.source.area)} ${number(transaction.source.index + 1)}`;
+        case 'dice_moved': return `DICE MOVE · ${label(transaction.source.area)} ${number(transaction.source.index + 1)} → ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)} · source #${number(transaction.sourceDieId)}${transaction.destinationDieId === null ? '' : ` · destination #${number(transaction.destinationDieId)}`}`;
+        case 'dice_fused': return `DICE FUSION · source #${number(transaction.sourceId)} Lv${number(transaction.sourceLevel)} → destination #${number(transaction.destinationId)} Lv${number(transaction.destinationLevel)}→${number(transaction.resultingLevel)} · ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)}`;
+        case 'dice_offers_rerolled': return `DICE OFFERS REROLLED · ${number(transaction.cost)} Gold · ${transaction.oldOfferIds.join(',')} → ${transaction.newOfferIds.join(',')} · reroll ${number(transaction.rerollCount)}`;
+        default: return `SHOP · ${transaction.type} · ${'amount' in transaction ? number(transaction.amount) : ''}`.trim();
+      }
+    }
     case 'flame_changed': return `FLAME · ${event.change.type}${'flame' in event.change ? ` · ${FLAMES[event.change.flame].name}` : ''}`;
     case 'charge_changed': return `CHARGE · ${event.operation} · ×${number(event.before)}→×${number(event.after)}`;
     case 'engulfment_attempted': return `LEGACY ENGULFMENT · Shop ${number(event.shopVisitId)} · ${event.success ? 'SUCCESS' : 'OFFERING REJECTED'}`;

@@ -105,6 +105,7 @@ describe('collectible dice inventory', () => {
     const acquired = dispatch(sold, { type: 'CHOOSE_FLAME', offerId: 88, dieId: 105 }, constant()).state;
     expect(collectibleDieById(acquired, 105)?.flame).toMatchObject({ id: 'minigun', investedGold: 0 });
     acquired.gold = 10;
+    acquired.shop!.stage = 'fireKeeping';
     const stoked = dispatch(acquired, { type: 'STOKE_FLAME', dieId: 105, amount: 3 }, constant()).state;
     expect(collectibleDieById(stoked, 105)?.flame).toMatchObject({ id: 'minigun', investedGold: 3 });
   });

@@ -102,7 +102,7 @@ describe('Run History V2 characterization', () => {
     state.phase = 'shop';
     state.gold = 200;
     state.lives = 2;
-    state.shop = { kind: 'between_rounds', offers: [{ id: 101, enhancement: 'bonus', purchased: false }],
+    state.shop = { stage: 'dice', kind: 'between_rounds', offers: [{ id: 101, enhancement: 'bonus', purchased: false }],
       trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
       freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
 
@@ -110,6 +110,7 @@ describe('Run History V2 characterization', () => {
     const rerolled = dispatch(bought, { type: 'REROLL_OFFERS' }, constant()).state;
     const restored = dispatch(rerolled, { type: 'RESTORE_LIFE' }, constant()).state;
     restored.dice[0].flame = { id: 'ultimate', investedGold: 99 };
+    restored.shop!.stage = 'fireKeeping';
     const stoked = dispatch(restored, { type: 'STOKE_FLAME', dieId: 0, amount: 1 }, constant()).state;
 
     const transactions = stoked.historyV2.flatMap(event => event.kind === 'shop_transaction' ? [event.transaction.type] : []);
@@ -136,7 +137,7 @@ describe('Run History V2 characterization', () => {
       {
         "historyEntries": 0,
         "legacyHistoryBytes": 2,
-        "runStatsBytes": 2825,
+        "runStatsBytes": 2909,
       }
     `);
   });

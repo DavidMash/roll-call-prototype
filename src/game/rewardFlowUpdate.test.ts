@@ -104,6 +104,7 @@ describe('Shop entry progression lock', () => {
     state = dispatch(state, { type: 'BUY', offerId: offer.id, dieId: 0 }, constant()).state;
     expect(state.shop?.exitUnlocked).toBe(false);
     state = dispatch(state, { type: 'UNLOCK_SHOP_EXIT' }, constant()).state;
+    state.shop!.stage = 'fireKeeping';
     expect(validateAction(state, { type: 'NEXT_ROUND' })).toBeNull();
     expect(dispatch(state, { type: 'UNLOCK_SHOP_EXIT' }, constant()).error).toContain('already available');
   });

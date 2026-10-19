@@ -4,7 +4,7 @@ import { dispatch, newRun } from '../src/game/engine';
 import { hasPlayableHand, handOptions, HANDS, HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
-import { enterRun, setPlaybackSpeed } from './uiHelpers';
+import { enterRun, goToShopStage, setPlaybackSpeed } from './uiHelpers';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 
 async function ready(page: Page) {
@@ -100,6 +100,10 @@ function deadBoardRun(rescue: boolean) {
         game = dispatch(game, action).state;
       }
       if (game.phase === 'shop') {
+        game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
+        prefix.push({ type: 'SET_SHOP_STAGE', stage: 'training' });
+        game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
+        prefix.push({ type: 'SET_SHOP_STAGE', stage: 'fireKeeping' });
         const action: Action = game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' };
         prefix.push(action);
         game = dispatch(game, action).state;
@@ -258,6 +262,9 @@ test('Bust UI and retry keep a depleted Care Package reserve depleted', async ({
   await expect(page.getByTestId('bust-shop-banner')).toBeVisible();
   await expect(page.getByTestId('special-effect-carePackage')).toHaveCount(0);
 
+  await goToShopStage(page, 'fireKeeping');
+  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
+  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
   await page.getByRole('button', { name: `RETRY ROUND ${game.round}`, exact: true }).click();
   game = dispatch(game, { type: 'RETRY_ROUND' }).state;
   await matchRound(page, game);
@@ -298,7 +305,7 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   const failedRound = game.round;
   const expectedShop = structuredClone(game.roundCheckpoint?.board.shop);
   expect(expectedShop).toBeTruthy();
-  expectedShop!.visitId = (expectedShop!.visitId ?? 0) + 1;
+  expectedShop!.stage = 'dice';
   const bustResult = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] });
   const bustEventIndex = bustResult.events.findIndex(event => event.type === 'ROUND_BUST');
   const terminalDice = bustResult.events[bustEventIndex].board.bustPresentationDice!;
@@ -327,7 +334,7 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   await expect(page.getByTestId('bust-shop-banner')).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/C\d+ R\d+ BUST/)).toBeVisible();
   await expect(page.getByText('1 Life Lost', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: `RETRY ROUND ${game.round}`, exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: `RETRY ROUND ${game.round}`, exact: true })).toHaveCount(0);
   expect(game.phase).toBe('shop');
   expect(game.lives).toBe(2);
   expect(game.shop).toEqual(expectedShop);
@@ -337,6 +344,9 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   await page.getByTestId('stat-lives').click();
   await expect(page.getByRole('dialog', { name: 'RESTORE LIVES' })).toBeVisible();
   await page.keyboard.press('Escape');
+  await goToShopStage(page, 'fireKeeping');
+  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
+  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
   await page.getByRole('button', { name: `RETRY ROUND ${failedRound}`, exact: true }).click();
   game = dispatch(game, { type: 'RETRY_ROUND' }).state;
   await matchRound(page, game);

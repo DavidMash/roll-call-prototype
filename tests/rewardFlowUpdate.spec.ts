@@ -4,7 +4,7 @@ import { newRun } from '../src/game/engine';
 import { Resolver } from '../src/game/effects';
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
 import type { Flame, GameState, SpecialOfferType } from '../src/game/types';
-import { enterRun, installRunState } from './uiHelpers';
+import { enterRun, goToShopStage, installRunState } from './uiHelpers';
 
 const fixedRandom = { next: () => .25 };
 
@@ -141,7 +141,8 @@ test('Special Offers apply and advance atomically under repeated input', async (
     (element as HTMLButtonElement).click();
   });
   await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: /CONTINUE/i })).toHaveCount(0);
+  await expect(page.getByTestId('shop-stage-dice')).toHaveAttribute('data-active', 'true');
+  await expect(page.getByTestId('shop-stage-continue')).toContainText('CONTINUE TO TRAINING');
   const saved = await persistedState(page);
   expect(saved.specialOfferEffects.carePackageRerolls).toBe(3);
   expect(saved.actionJournal.filter(action => action.type === 'CHOOSE_SPECIAL_OFFER')).toHaveLength(1);
@@ -156,13 +157,14 @@ test('Shop exit stays disabled for one second and Shop interactions do not resta
   await installRunState(page, state);
   await enterRun(page);
 
-  const next = page.getByTestId('shop-progression-action');
-  await expect(next).toBeDisabled();
   await page.clock.fastForward(500);
   const offer = state.shop!.offers[0];
-  await page.getByTestId(`offer-${offer.enhancement}`).getByRole('button', { name: 'SELECT OR DRAG' }).click();
-  await page.getByRole('button', { name: /^Die 1,/ }).click();
-  await expect(page.getByTestId(`offer-${offer.enhancement}`)).toContainText('PURCHASED');
+  await page.getByTestId(`dice-offer-${offer.id}`).getByRole('button', { name: /BUY/ }).click();
+  await expect(page.getByTestId(`dice-offer-${offer.id}`)).toContainText('PURCHASED');
+
+  await goToShopStage(page, 'fireKeeping');
+  const next = page.getByTestId('shop-progression-action');
+  await expect(next).toBeDisabled();
 
   await page.clock.fastForward(499);
   await expect(next).toBeDisabled();
@@ -180,6 +182,7 @@ test('post-Boss Shop locks NEXT CHAPTER on entry', async ({ page }) => {
   await page.clock.pauseAt(clockStart);
   await installRunState(page, shopState('post_boss'));
   await enterRun(page);
+  await goToShopStage(page, 'fireKeeping');
   const next = page.getByRole('button', { name: 'NEXT CHAPTER', exact: true });
   await expect(next).toBeDisabled();
   await page.clock.fastForward(1000);

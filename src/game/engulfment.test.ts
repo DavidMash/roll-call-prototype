@@ -378,7 +378,7 @@ describe('Inferno evaluation and explicit Engulfment', () => {
   it('does not reactivate suspension for stoking, Bonfire conversion, save/load, or Bust rollback', () => {
     let state = newRun('suspension-persistence').state;
     state.phase = 'shop';
-    state.shop = { visitId: 1, kind: 'between_rounds', exitUnlocked: true, offers: [], trainingOffers: [],
+    state.shop = { visitId: 1, stage: 'fireKeeping', kind: 'between_rounds', exitUnlocked: true, offers: [], trainingOffers: [],
       diceRerolls: 0, offerRerolls: 0, lifeRestores: 0, freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
     state.gold = 10;
     state.dice[0].flame = { id: 'vineyard', investedGold: 98 };

@@ -220,6 +220,10 @@ export function newTutorialSession(): { session: TutorialSession; resolution: Re
     event.board.chapterPlans[2] = { chapterNumber: 2, miniBoss: 'juggler', boss: 'warden' };
   }
   const scenario = initialTutorialScenario();
+  // The Stage 4 tutorial deliberately bypasses obsolete face-Enhancement shopping lessons.
+  for (const id of ['shop1-enhancements', 'shop1-bonus-info', 'shop1-select-bonus', REQUIRED_BEATS.bonus,
+    'shop1-face-persistence', 'shop-r4-workout-info', 'shop-r4-select-workout', REQUIRED_BEATS.workout,
+    'c1-r4-workout-result']) complete(scenario, id);
   curateTutorialOffers(resolution.state, scenario);
   patchFinalEvent(resolution);
   return { session: { tutorialVersion: TUTORIAL_VERSION, game: resolution.state, scenario }, resolution };
@@ -236,7 +240,9 @@ export function tutorialActionError(session: TutorialSession, action: Action): s
     if (!requires(REQUIRED_BEATS.reroll) && requires(REQUIRED_BEATS.threeKind) && (action.type !== 'PLAY' || action.hand !== 'threeKind' || action.dieIds.some(id => ![0, 1, 2].includes(id)))) return 'Play Three of a Kind with the three 1s.';
   }
   if (state.phase === 'shop' && state.round === 1) {
-    if (requires(REQUIRED_BEATS.training) && (action.type !== 'TRAIN_HAND' || action.hand !== 'fullHouse')) return 'Train Full House once.';
+    if (requires(REQUIRED_BEATS.training) && state.shop?.stage === 'dice') {
+      if (action.type !== 'SET_SHOP_STAGE' || action.stage !== 'training') return 'Continue to Training first.';
+    } else if (requires(REQUIRED_BEATS.training) && (action.type !== 'TRAIN_HAND' || action.hand !== 'fullHouse')) return 'Train Full House once.';
     if (!requires(REQUIRED_BEATS.training) && requires(REQUIRED_BEATS.bonus)) {
       const binding = scenario.bonusBinding;
       if (!binding || !bindingIsCurrent(session, binding)) return null;

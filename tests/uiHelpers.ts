@@ -43,3 +43,28 @@ export async function openMenuItem(page: Page, item: 'Run Info' | 'How to Play')
   const menu = await openGameMenu(page);
   await menu.getByRole('button', { name: item, exact: true }).click();
 }
+
+export async function goToShopStage(page: Page, stage: 'dice' | 'training' | 'fireKeeping') {
+  const active = async (testId: string) => (await page.getByTestId(testId).getAttribute('data-active')) === 'true';
+  const waitForActive = (testId: string) => page.getByTestId(testId).waitFor({ state: 'visible' })
+    .then(() => page.waitForFunction(id => document.querySelector(`[data-testid="${id}"]`)?.getAttribute('data-active') === 'true', testId));
+  if (stage === 'dice') {
+    if (await active('shop-stage-fire-keeping')) {
+      await page.getByTestId('shop-stage-back').click();
+      await waitForActive('shop-stage-training');
+    }
+    if (await active('shop-stage-training')) {
+      await page.getByTestId('shop-stage-back').click();
+      await waitForActive('shop-stage-dice');
+    }
+    return;
+  }
+  if (await active('shop-stage-dice')) {
+    await page.getByTestId('shop-stage-continue').click();
+    await waitForActive('shop-stage-training');
+  }
+  if (stage === 'fireKeeping' && await active('shop-stage-training')) {
+    await page.getByTestId('shop-stage-continue').click();
+    await waitForActive('shop-stage-fire-keeping');
+  }
+}

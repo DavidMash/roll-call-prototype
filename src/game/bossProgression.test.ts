@@ -11,7 +11,7 @@ const constant = (value = 0): RandomSource => ({ next: () => value });
 function bossRound(type: BossType): GameState {
   const state = newRun(`boss-${type}`, constant(.2)).state;
   state.phase = 'shop';
-  state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   state.round = 2;
   state.currentNodeId = 'shop:before-round:3';
   state.bossSchedule[3] = type;
@@ -109,6 +109,7 @@ describe('The Caller', () => {
     expect(state.stats.mapTransitions.slice(-2).map(item => [item.toNode, item.direction])).toEqual([
       ['boss:3', 'forward'], ['shop:before-round:3', 'backward'],
     ]);
+    state.shop!.stage = 'fireKeeping';
     state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.55)).state;
     expect(state.boss).toMatchObject({ type: 'caller', calledHand: deterministicCall, playsRemaining: 3, satisfied: false });
   });
@@ -118,7 +119,7 @@ describe('The Warden', () => {
   it('derives safeguards from the final rounded Goal', () => {
     const state = newRun('warden-rounded-goal', constant(.2)).state;
     state.phase = 'shop';
-    state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    state.shop = { stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     state.round = 5;
     state.currentNodeId = 'shop:before-round:6';
     state.bossSchedule[6] = 'warden';
@@ -269,7 +270,7 @@ describe('The Warden', () => {
   it('resolves opening landing mechanics but suppresses opening gameplay and Flame effects', () => {
     const state = newRun('warden-opening-effects', constant(.2)).state;
     state.phase = 'shop';
-    state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    state.shop = { stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     state.round = 2;
     state.currentNodeId = 'shop:before-round:3';
     state.bossSchedule[3] = 'warden';
@@ -294,6 +295,7 @@ describe('The Warden', () => {
     state.manualRerollsRemaining = 0;
     new Resolver(state, constant(.2)).evaluate();
     expect(state.phase).toBe('shop');
+    state.shop!.stage = 'fireKeeping';
     state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.55)).state;
     expect(state.boss).toMatchObject({ type: 'warden', startingDieId: null, activeDieIds: [],
       nextUnlockTarget: null, unlockTargets: [], pendingReinforcements: 1 });
@@ -415,6 +417,7 @@ describe('The Hexer', () => {
     expect(state.phase).toBe('shop');
     expect(state.dice).toHaveLength(5);
     expect(state.dice.every(die => die.owner === 'player')).toBe(true);
+    state.shop!.stage = 'fireKeeping';
     state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.55)).state;
     expect(state.boss?.type).toBe('hexer');
     expect(state.dice.filter(die => die.owner === 'boss')).toHaveLength(1);

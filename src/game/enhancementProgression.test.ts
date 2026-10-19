@@ -11,6 +11,7 @@ import { combinationsForHand } from './hands';
 import { HAND_IDS } from './hands';
 import { loadPersistedRun, savePersistedRun } from './persistence';
 import { hashSeed, SeededRng } from './rng';
+import { SPECIAL_DICE } from './specialDice';
 import type { GameState, RandomSource, Rank } from './types';
 
 const constant = (value: number): RandomSource => ({ next: () => value });
@@ -82,7 +83,7 @@ describe('Chapter Enhancement progression', () => {
     expect([1, 2, 3].map(diminishingHalfChance)).toEqual([.5, .75, .875]);
   });
 
-  it('filters every fresh and rerolled offer set to the current cumulative Chapter pool', () => {
+  it('replaces live Enhancement generation with three chapter-independent special-die offers', () => {
     for (let chapter = 1; chapter <= 7; chapter++) {
       const state = game();
       state.round = (chapter - 1) * 6 + 1;
@@ -93,19 +94,19 @@ describe('Chapter Enhancement progression', () => {
       for (let refresh = 0; refresh < 20; refresh++) {
         resolver.freshOffers(refresh ? 'reroll' : 'initial');
         expect(state.shop.offers).toHaveLength(3);
-        expect(new Set(state.shop.offers.map(offer => offer.enhancement))).toHaveLength(3);
-        expect(state.shop.offers.every(offer => eligibleEnhancements(chapter).includes(offer.enhancement))).toBe(true);
+        expect(state.shop.offers.every(offer => !!offer.dieType
+          && SPECIAL_DICE[offer.dieType].rarity === offer.rarity)).toBe(true);
       }
       const presented = [...state.historyV2].reverse().find(event => event.kind === 'shop_offers_presented');
-      expect(presented?.kind === 'shop_offers_presented' ? presented : null).toMatchObject({
-        chapter, maxEnhancementTypesPerFace: Math.min(6, chapter),
-        highestUnlockedEnhancementTier: Math.min(5, chapter - 1),
-        eligibleEnhancements: eligibleEnhancements(chapter),
-      });
+      expect(presented?.kind === 'shop_offers_presented' ? presented : null).toMatchObject({ pool: 'dice' });
+      if (presented?.kind === 'shop_offers_presented') {
+        expect(presented.chapter).toBeUndefined();
+        expect(presented.eligibleEnhancements).toBeUndefined();
+      }
     }
   });
 
-  it('repeatedly fills unique early-Chapter offers when no Rare Enhancement is eligible', () => {
+  it('allows duplicate types and all rarities from the first Chapter', () => {
     for (const chapter of [1, 2]) {
       const state = game();
       state.round = (chapter - 1) * 6 + 1;
@@ -115,8 +116,7 @@ describe('Chapter Enhancement progression', () => {
       for (let refresh = 0; refresh < 100; refresh++) {
         resolver.freshOffers(refresh ? 'reroll' : 'initial');
         expect(state.shop.offers).toHaveLength(3);
-        expect(new Set(state.shop.offers.map(offer => offer.enhancement))).toHaveLength(3);
-        expect(state.shop.offers.every(offer => ENHANCEMENTS[offer.enhancement].rarity !== 'rare')).toBe(true);
+        expect(state.shop.offers.every(offer => !!offer.dieType)).toBe(true);
       }
     }
   });

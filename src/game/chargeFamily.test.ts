@@ -54,7 +54,7 @@ describe('Charge-family generation', () => {
     expect(state.chargeXMult).toBe(2);
 
     state.phase = 'shop';
-    state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    state.shop = { stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     const nextRound = dispatch(state, { type: 'NEXT_ROUND' }, constant(.4)).state;
     expect(nextRound.dice.every(die => die.value === 3)).toBe(true);
     expect(nextRound.chargeXMult).toBe(3.5);

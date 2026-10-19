@@ -18,9 +18,10 @@ import { formatPlayerNumber } from './copy';
 import { rarityLabel } from './rarity';
 import { appendCriticalDiagnostic, appendDebugTrace, createDebugTrace, normalizeDebugTrace, type DebugTraceMode } from './debugTrace';
 import { isRollbackState } from './rollback';
-import { assertDiceInventory, collectibleDieById, ownedDice, syncActiveDiceProjection } from './inventory';
+import { assertDiceInventory, collectibleDieById, ownedDice, rosterDice, syncActiveDiceProjection } from './inventory';
 import { normalizeDieRoundRuntime, resetDieRoundState } from './specialDice';
-import { enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey, usableManualRerolls } from './specialOffers';
+import { dicePurchaseIsFree, enhancementOfferIsFree, initialSpecialOfferEffects, trainingOfferIsFree, trainingOfferKey, usableManualRerolls } from './specialOffers';
+import { canFuse, dieSellBreakdown, firstPurchaseSlot, purchaseDie, setSlotValue, slotExists, slotValue } from './diceEconomy';
 import { Decimal, exactInferno, scoreFromUnknown, type ExactScore } from './scoreMath';
 import { getEncounterGoalBreakdown, targetForRound } from './goals';
 import type { Action, Board, GameState, HandId, RandomSource, Resolution, Shop, TrainingOffer } from './types';
@@ -159,6 +160,7 @@ function normalizedTrainingOffer(offer: TrainingOffer | { hand: HandId; purchase
 }
 
 function normalizeShop(shop: Shop, state: Pick<Board, 'nextShopVisitId'>): void {
+  if (!shop.stage || !['dice', 'training', 'fireKeeping'].includes(shop.stage)) shop.stage = 'dice';
   shop.trainingOffers = shop.trainingOffers.map(offer => normalizedTrainingOffer(offer));
   shop.lifeRestores = Math.max(0, Math.floor(shop.lifeRestores ?? 0));
   if (!Number.isInteger(shop.visitId) || (shop.visitId ?? 0) < 1) shop.visitId = state.nextShopVisitId++;
@@ -331,7 +333,8 @@ export function normalizeGameState(state: GameState): GameState {
   next.bonfires = [...new Set(next.bonfires.map(id => (id as string) === 'charge' ? 'momentum' : id).filter(isFlame))];
   normalizeFlameInstanceRuntime(next);
   if (next.shop) {
-    next.shop.offers = next.shop.offers.filter(offer => isEnhancement(offer.enhancement));
+    next.shop.offers = next.shop.offers.filter(offer => (offer.dieType && offer.rarity && offer.price !== undefined)
+      || (offer.enhancement && isEnhancement(offer.enhancement)));
     normalizeShop(next.shop, next);
     if (!next.shop.kind && next.phase === 'shop' && !next.bust && isBigBossRound(next.round)) next.shop.kind = 'post_boss';
   }
@@ -489,9 +492,13 @@ export function normalizeGameState(state: GameState): GameState {
   next.actionJournal = next.actionJournal.map(action => (action.type as string) === 'CONTINUE_FLAME_REWARD'
     ? { type: 'CONTINUE_FLAME_SELECTION' } : action);
   next.stats.goldBySource.enhancementSale ??= 0;
+  next.stats.goldBySource.diceSale ??= 0;
   next.stats.goldBySource.specialOffer ??= 0;
   next.stats.goldBySource.cashBonus ??= 0;
   next.stats.goldSpentBySource.lifeRestore ??= 0;
+  next.stats.goldSpentBySource.dicePurchase ??= 0;
+  next.stats.goldSpentBySource.diceOfferReroll ??= 0;
+  next.stats.diceOfferRerolls ??= 0;
   next.decisionId = Math.max(0, Math.floor(next.decisionId ?? 0));
   normalizeSixPackRuntime(next);
   normalizeHandFamilyFlameRuntime(next);
@@ -502,7 +509,7 @@ export function normalizeGameState(state: GameState): GameState {
 const requiredChargeFlameDieIds = (state: Board) => activeEncounterDice(state)
   .filter(die => isChargeFlame(activeFlameId(die.flame))).map(die => die.id);
 
-export function validateAction(state: Board, action: Action): string | null {
+export function validateAction(state: Board | GameState, action: Action): string | null {
   if (action.type === 'CONTINUE_ROUND_SUMMARY') return state.phase === 'roundSummary' && !!state.roundSummary
     ? null : 'A completed encounter summary is required.';
   if (action.type === 'CONTINUE_INFERNO_EVALUATION') return state.phase === 'inferno' && !!state.infernoEvaluation
@@ -527,24 +534,26 @@ export function validateAction(state: Board, action: Action): string | null {
     return null;
   }
   if (action.type === 'INVOKE_JUMPING_BEAN' || action.type === 'INVOKE_CHAMELEON'
-    || action.type === 'INVOKE_FLYWHEEL' || action.type === 'ARM_MAGIC' || action.type === 'FEED_FURNACE') {
+    || action.type === 'INVOKE_FLYWHEEL' || action.type === 'ARM_MAGIC' || action.type === 'DISARM_MAGIC' || action.type === 'FEED_FURNACE') {
     if (state.phase !== 'round') return 'Special die commands can only be used during an active Round.';
-    const die = state.dice.find(item => item.id === action.dieId && item.owner === 'player');
+    const die = 'diceInventory' in state ? collectibleDieById(state, action.dieId)
+      : state.dice.find(item => item.id === action.dieId && item.owner === 'player');
     if (!die || die.owner !== 'player') return 'Choose an equipped collectible die.';
     const expected = action.type === 'INVOKE_JUMPING_BEAN' ? 'jumpingBean'
       : action.type === 'INVOKE_CHAMELEON' ? 'chameleon'
         : action.type === 'INVOKE_FLYWHEEL' ? 'flywheel'
-          : action.type === 'ARM_MAGIC' ? 'magic' : 'furnace';
+          : action.type === 'ARM_MAGIC' || action.type === 'DISARM_MAGIC' ? 'magic' : 'furnace';
     if (die.type !== expected) return `That die cannot perform ${action.type}.`;
     const runtime = state.dieRoundState[die.id];
     if (!runtime) return 'That die has no active Round state.';
-    if (action.type !== 'FEED_FURNACE' && runtime.invocationsRemaining <= 0) return 'That die has no Invocations remaining.';
+    if (action.type !== 'FEED_FURNACE' && action.type !== 'DISARM_MAGIC' && runtime.invocationsRemaining <= 0) return 'That die has no Invocations remaining.';
     if (action.type === 'INVOKE_CHAMELEON' && !state.dice.some(item => item.owner === 'player' && item.id !== die.id))
       return 'Chameleon requires another equipped die.';
     if (action.type === 'ARM_MAGIC') {
       if (![1, 2, 3, 4, 5, 6].includes(action.face)) return 'Choose a valid Magic face.';
       if (runtime.magicArmedFace !== null) return 'Magic is already armed for its next Reroll.';
     }
+    if (action.type === 'DISARM_MAGIC' && runtime.magicArmedFace === null) return 'Magic is not armed.';
     if (action.type === 'FEED_FURNACE') {
       if (!Number.isSafeInteger(action.amount) || action.amount <= 0) return 'Feed Furnace a positive whole Gold amount.';
       if (runtime.furnaceUnits + action.amount > 5) return 'Furnace can hold at most 5 units.';
@@ -554,8 +563,10 @@ export function validateAction(state: Board, action: Action): string | null {
   }
   if (action.type === 'SET_WEIGHTED_FACE') {
     if (state.phase !== 'shop') return 'Choose the Weighted face before the next Round.';
-    const die = state.dice.find(item => item.id === action.dieId && item.owner === 'player');
-    if (!die || die.owner !== 'player' || die.type !== 'weighted') return 'Choose an equipped Weighted die.';
+    if (!state.shop || state.shop.stage !== 'dice') return 'Configure Weighted dice from the Dice Shop stage.';
+    const die = 'diceInventory' in state ? collectibleDieById(state, action.dieId)
+      : state.dice.find(item => item.id === action.dieId && item.owner === 'player');
+    if (!die || die.owner !== 'player' || die.type !== 'weighted') return 'Choose an owned Weighted die.';
     if (![1, 2, 3, 4, 5, 6].includes(action.face)) return 'Choose a valid Weighted face.';
     return null;
   }
@@ -598,7 +609,9 @@ export function validateAction(state: Board, action: Action): string | null {
   }
   if (action.type === 'STOKE_FLAME') {
     if (state.phase !== 'shop' || !state.shop) return 'Flames can only be Stoked in a normal Shop.';
-    const die = state.dice.find(item => item.id === action.dieId && item.owner === 'player');
+    if (state.shop.stage !== 'fireKeeping') return 'Flames can only be Stoked during Fire Keeping.';
+    const die = 'diceInventory' in state ? collectibleDieById(state, action.dieId)
+      : state.dice.find(item => item.id === action.dieId && item.owner === 'player');
     if (!die?.flame || !activeFlameId(die.flame)) return 'Choose an active Flame to invest in.';
     if (!Number.isInteger(action.amount) || action.amount <= 0) return 'Stoking requires a positive whole Gold amount.';
     const limits = flameStokeLimits(state, action.dieId);
@@ -631,6 +644,13 @@ export function validateAction(state: Board, action: Action): string | null {
     return null;
   }
   if (state.phase !== 'shop' || !state.shop) return 'This action requires an open shop.';
+  if (action.type === 'SET_SHOP_STAGE') {
+    if (action.stage === state.shop.stage) return 'That Shop stage is already open.';
+    const legal = (state.shop.stage === 'dice' && action.stage === 'training')
+      || (state.shop.stage === 'training' && (action.stage === 'dice' || action.stage === 'fireKeeping'))
+      || (state.shop.stage === 'fireKeeping' && action.stage === 'training');
+    return legal ? null : 'Move through the Shop one stage at a time.';
+  }
   if (action.type === 'UNLOCK_SHOP_EXIT') {
     if (state.shop.exitUnlocked !== false) return 'Shop progression is already available.';
     return null;
@@ -638,6 +658,8 @@ export function validateAction(state: Board, action: Action): string | null {
   if (state.shop.exitUnlocked === false
     && (action.type === 'NEXT_CHAPTER' || action.type === 'NEXT_ROUND' || action.type === 'RETRY_ROUND'))
     return 'Shop progression is available one second after entry.';
+  if ((action.type === 'NEXT_CHAPTER' || action.type === 'NEXT_ROUND' || action.type === 'RETRY_ROUND')
+    && state.shop.stage !== 'fireKeeping') return 'Finish the Shop from Fire Keeping.';
   if (action.type === 'RETRY_ROUND' && (!state.bust || state.lives <= 0))
     return 'A returned Bust Shop is required to retry the round.';
   if (action.type === 'NEXT_CHAPTER') {
@@ -647,15 +669,76 @@ export function validateAction(state: Board, action: Action): string | null {
   if (action.type === 'NEXT_ROUND' && state.shop.kind === 'post_boss' && !state.bust)
     return 'Use Next Chapter after the final post-Boss Shop.';
   if (action.type === 'NEXT_ROUND' && state.bust) return 'Use Retry Round after preparing for the failed round.';
+  if ((action.type === 'NEXT_ROUND' || action.type === 'NEXT_CHAPTER' || action.type === 'RETRY_ROUND')
+    && 'diceInventory' in state && rosterDice(state).length === 0) return 'Equip at least one die before starting a Round.';
+  if (action.type === 'BUY_DIE') {
+    if (state.shop.stage !== 'dice') return 'Dice can only be purchased during the Dice stage.';
+    if (!('diceInventory' in state)) return 'The authoritative Dice inventory is required.';
+    const offer = state.shop.offers.find(item => item.id === action.offerId);
+    if (!offer || offer.purchased || !offer.dieType || !offer.rarity || offer.price === undefined)
+      return 'Choose an available Dice offer.';
+    if (!firstPurchaseSlot(state.diceInventory)) return 'Collection full.';
+    const cost = dicePurchaseIsFree(state.shop) ? 0 : offer.price;
+    if (state.gold < cost) return 'Not enough Gold for this die.';
+    return null;
+  }
   if (action.type === 'BUY') {
+    if (state.shop.stage !== 'dice') return 'Shop dice and legacy Enhancements are available during the Dice stage.';
     const offer = state.shop.offers.find(item => item.id === action.offerId);
     const die = state.dice.find(item => item.id === action.dieId);
-    if (!offer || offer.purchased || !die) return 'Choose an available offer and a physical die.';
+    if (offer?.dieType && offer.rarity && offer.price !== undefined) {
+      if (offer.purchased) return 'Choose an available Dice offer.';
+      if (!('diceInventory' in state) || !firstPurchaseSlot(state.diceInventory)) return 'Collection full.';
+      if (state.gold < (dicePurchaseIsFree(state.shop) ? 0 : offer.price)) return 'Not enough Gold for this die.';
+      return null;
+    }
+    if (!offer?.enhancement || offer.purchased || !die) return 'Choose an available offer and a physical die.';
     const cost = enhancementOfferIsFree(state.shop, offer.id) ? 0 : enhancementCost(offer.enhancement);
     if (state.gold < cost) return 'Not enough Gold for this Enhancement.';
     return placementError(die, activeFace(die), offer.enhancement, chapterNumberForRound(state.round));
   }
+  if (action.type === 'MOVE_DIE' || action.type === 'FUSE_DICE') {
+    if (state.shop.stage !== 'dice') return 'The collection can only be reorganized during the Dice stage.';
+    if (!('diceInventory' in state)) return 'The authoritative Dice inventory is required.';
+    if (!slotExists(state.diceInventory, action.source) || !slotExists(state.diceInventory, action.destination))
+      return 'Choose valid collection slots.';
+    const sourceId = slotValue(state.diceInventory, action.source);
+    const destinationId = slotValue(state.diceInventory, action.destination);
+    if (sourceId !== action.expectedSourceDieId || destinationId !== action.expectedDestinationDieId)
+      return 'The collection changed before that action could be completed.';
+    if (sourceId === null || sourceId === undefined) return 'Choose a die to move.';
+    if (action.source.area === action.destination.area && action.source.index === action.destination.index)
+      return 'Choose a different destination slot.';
+    if (action.type === 'FUSE_DICE') {
+      if (destinationId === null || destinationId === undefined) return 'Fusion requires two dice.';
+      const source = collectibleDieById(state, sourceId);
+      const destination = collectibleDieById(state, destinationId);
+      if (!source || !destination || !canFuse(source, destination)) return 'Only two matching special dice can Fuse.';
+      if (source.flame && destination.flame) return 'Move one carried Flame before Fusing these dice.';
+      const rosterAfter = [...state.diceInventory.roster];
+      if (action.source.area === 'roster') rosterAfter[action.source.index] = null;
+      if (!rosterAfter.some(id => id !== null)) return 'At least one die must remain equipped.';
+    } else {
+      const rosterAfter = [...state.diceInventory.roster];
+      if (action.source.area === 'roster') rosterAfter[action.source.index] = destinationId ?? null;
+      if (action.destination.area === 'roster') rosterAfter[action.destination.index] = sourceId;
+      if (!rosterAfter.some(id => id !== null)) return 'At least one die must remain equipped.';
+    }
+    return null;
+  }
+  if (action.type === 'SELL_DIE') {
+    if (state.shop.stage !== 'dice') return 'Dice can only be sold during the Dice stage.';
+    if (!('diceInventory' in state)) return 'The authoritative Dice inventory is required.';
+    if (!slotExists(state.diceInventory, action.slot) || slotValue(state.diceInventory, action.slot) !== action.expectedDieId)
+      return 'The collection changed before that sale could be completed.';
+    const die = collectibleDieById(state, action.expectedDieId);
+    if (!die) return 'Choose an owned die.';
+    if (die.flame) return 'Move or complete this die’s carried Flame before selling it.';
+    if (action.slot.area === 'roster' && rosterDice(state).length <= 1) return 'The final equipped die cannot be sold.';
+    return null;
+  }
   if (action.type === 'SELL_ENHANCEMENT') {
+    if (state.shop.stage !== 'dice') return 'Legacy Enhancements can only be managed during the Dice stage.';
     const die = state.dice.find(item => item.id === action.dieId);
     if (!die || !Number.isInteger(action.face) || !stacks(die.faces[action.face - 1], action.enhancement)) return 'Choose an Enhancement on that Face.';
   }
@@ -664,17 +747,25 @@ export function validateAction(state: Board, action: Action): string | null {
     if (state.gold < lifeRestoreCost(state.shop.lifeRestores)) return 'Not enough Gold to restore a Life.';
   }
   if (action.type === 'TRAIN_HAND') {
+    if (state.shop.stage !== 'training') return 'Hands can only be trained during the Training stage.';
     const offer = state.shop.trainingOffers.find(item => item.kind === 'hand' && item.hand === action.hand);
     if (!offer) return 'Choose an available hand training offer.';
     if (state.gold < (trainingOfferIsFree(state.shop, offer) ? 0 : handTrainingCost(offer.purchases))) return 'Not enough Gold to train this hand.';
   }
   if (action.type === 'TRAIN_ALL_HANDS') {
+    if (state.shop.stage !== 'training') return 'Team Training is only available during the Training stage.';
     const offer = state.shop.trainingOffers.find(item => item.kind === 'team');
     if (!offer) return 'Choose an available Team Training offer.';
     if (state.gold < (trainingOfferIsFree(state.shop, offer) ? 0 : teamTrainingCost(offer.purchases))) return 'Not enough Gold for Team Training.';
   }
-  if (action.type === 'REROLL_DICE' && state.gold < diceRerollCost(state.shop.diceRerolls)) return 'Not enough Gold to reroll Shop dice.';
-  if (action.type === 'REROLL_OFFERS' && state.gold < offerRerollCost(state.shop.offerRerolls)) return 'Not enough Gold to reroll offers.';
+  if (action.type === 'REROLL_DICE') {
+    if (state.shop.stage !== 'dice') return 'Shop dice can only be rerolled during the Dice stage.';
+    if (state.gold < diceRerollCost(state.shop.diceRerolls)) return 'Not enough Gold to reroll Shop dice.';
+  }
+  if (action.type === 'REROLL_OFFERS') {
+    if (state.shop.stage !== 'dice') return 'Dice offers can only be rerolled during the Dice stage.';
+    if (state.gold < offerRerollCost(state.shop.offerRerolls)) return 'Not enough Gold to reroll offers.';
+  }
   return null;
 }
 
@@ -687,7 +778,10 @@ function execute(state: GameState, run: (resolver: Resolver) => void, random?: R
   const rngBefore = next.rngState;
   const seeded = new SeededRng(next.rngState);
   const resolver = new Resolver(next, random ?? seeded, options);
-  try { run(resolver); }
+  try {
+    run(resolver);
+    assertDiceInventory(next.diceInventory, next.encounterDice);
+  }
   catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[Roll Call engine] ${message}`);
@@ -710,7 +804,9 @@ function rejectedActionHasLegacyMigration(state: GameState, normalized: GameStat
   const comparable = structuredClone(normalized);
   if (state.shop && comparable.shop) {
     const allocatedVisit = !Object.hasOwn(state.shop, 'visitId');
+    const allocatedStage = !Object.hasOwn(state.shop, 'stage');
     if (allocatedVisit) delete comparable.shop.visitId;
+    if (allocatedStage) delete comparable.shop.stage;
     // Hand-built current-state fixtures and pre-feature callers may omit only
     // the new Shop lifecycle fields. Those additions are not a reason for a
     // rejected action to return a different object.
@@ -771,6 +867,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       case 'INVOKE_CHAMELEON': resolver.invokeChameleon(action.dieId); break;
       case 'INVOKE_FLYWHEEL': resolver.invokeFlywheel(action.dieId); break;
       case 'ARM_MAGIC': resolver.armMagic(action.dieId, action.face); break;
+      case 'DISARM_MAGIC': next.dieRoundState[action.dieId].magicArmedFace = null; break;
       case 'FEED_FURNACE': resolver.feedFurnace(action.dieId, action.amount); break;
       case 'SET_WEIGHTED_FACE': {
         const die = collectibleDieById(next, action.dieId)!;
@@ -786,22 +883,91 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         resolver.emit({ type: 'CHARGE_ARMED', xMult: next.chargeXMult,
           message: `Charge ${next.chargeArmed ? `armed at ×${resolver.format(next.chargeXMult)}` : 'disarmed'}` });
         break;
+      case 'BUY_DIE': {
+        const offer = next.shop!.offers.find(item => item.id === action.offerId)!;
+        const cost = dicePurchaseIsFree(next.shop!) ? 0 : offer.price!;
+        if (cost) resolver.spendGold(cost, `Bought ${offer.dieType!} D6: −${formatPlayerNumber(cost)} Gold`, 'dicePurchase');
+        next.shop!.freeDicePurchaseAvailable = false;
+        const { die, slot } = purchaseDie(next.diceInventory, offer.dieType!);
+        offer.purchased = true;
+        syncActiveDiceProjection(next);
+        resolver.emitV2({ kind: 'shop_transaction', transaction: { type: 'dice_purchased',
+          shopVisitId: next.shop!.visitId!, offerId: offer.id, dieId: die.id, dieType: die.type, level: die.level,
+          rarity: offer.rarity!, listedPrice: offer.price!, pricePaid: cost, destination: slot } });
+        break;
+      }
       case 'BUY': {
         const offer = next.shop!.offers.find(item => item.id === action.offerId)!;
+        if (offer.dieType && offer.rarity && offer.price !== undefined) {
+          const cost = dicePurchaseIsFree(next.shop!) ? 0 : offer.price;
+          if (cost) resolver.spendGold(cost, `Bought ${offer.dieType} D6: −${formatPlayerNumber(cost)} Gold`, 'dicePurchase');
+          next.shop!.freeDicePurchaseAvailable = false;
+          const { die: purchased, slot } = purchaseDie(next.diceInventory, offer.dieType);
+          offer.purchased = true;
+          syncActiveDiceProjection(next);
+          resolver.emitV2({ kind: 'shop_transaction', transaction: { type: 'dice_purchased', shopVisitId: next.shop!.visitId!,
+            offerId: offer.id, dieId: purchased.id, dieType: purchased.type, level: purchased.level, rarity: offer.rarity,
+            listedPrice: offer.price, pricePaid: cost, destination: slot } });
+          break;
+        }
+        const enhancement = offer.enhancement!;
         const die = collectibleDieById(next, action.dieId)!;
         const face = activeFace(die);
-        const cost = enhancementOfferIsFree(next.shop!, offer.id) ? 0 : enhancementCost(offer.enhancement);
-        if (cost) resolver.spendGold(cost, `Bought ${ENHANCEMENTS[offer.enhancement].name} [${rarityLabel(ENHANCEMENTS[offer.enhancement].rarity)}]: −${formatPlayerNumber(cost)} gold`, 'enhancement');
+        const cost = enhancementOfferIsFree(next.shop!, offer.id) ? 0 : enhancementCost(enhancement);
+        if (cost) resolver.spendGold(cost, `Bought ${ENHANCEMENTS[enhancement].name}: −${formatPlayerNumber(cost)} Gold`, 'enhancement');
         next.shop!.freeEnhancementOfferIds = (next.shop!.freeEnhancementOfferIds ?? []).filter(id => id !== offer.id);
-        face.enhancements[offer.enhancement] = (face.enhancements[offer.enhancement] ?? 0) + 1;
-        if (offer.enhancement === 'vintage') { face.vintageSellValue = 0; delete face.vintageSommelierBoosted; }
-        if (offer.enhancement === 'furnace') face.furnaceMultiplier = 1;
+        face.enhancements[enhancement] = (face.enhancements[enhancement] ?? 0) + 1;
+        if (enhancement === 'vintage') { face.vintageSellValue = 0; delete face.vintageSommelierBoosted; }
+        if (enhancement === 'furnace') face.furnaceMultiplier = 1;
         offer.purchased = true;
-        next.stats.purchases.push({ round: next.round, enhancement: offer.enhancement, dieId: die.id, face: face.rank, cost, stacksApplied: 1 });
+        next.stats.purchases.push({ round: next.round, enhancement, dieId: die.id, face: face.rank, cost, stacksApplied: 1 });
         const key = `D${die.id + 1}:${face.rank}`;
         if (!next.stats.enhancedFaces.includes(key)) next.stats.enhancedFaces.push(key);
-        resolver.emit({ type: 'OFFER_PURCHASED', enhancement: offer.enhancement, rarity: ENHANCEMENTS[offer.enhancement].rarity, dieIds: [die.id], face: face.rank,
-          message: `${ENHANCEMENTS[offer.enhancement].name} [${rarityLabel(ENHANCEMENTS[offer.enhancement].rarity)}] added to D${die.id + 1} face ${face.rank}` });
+        resolver.emit({ type: 'OFFER_PURCHASED', enhancement, rarity: ENHANCEMENTS[enhancement].rarity,
+          dieIds: [die.id], face: face.rank, message: `${ENHANCEMENTS[enhancement].name} added to D${die.id + 1} face ${face.rank}` });
+        break;
+      }
+      case 'MOVE_DIE': {
+        const sourceId = slotValue(next.diceInventory, action.source)!;
+        const destinationId = slotValue(next.diceInventory, action.destination) ?? null;
+        setSlotValue(next.diceInventory, action.source, destinationId);
+        setSlotValue(next.diceInventory, action.destination, sourceId);
+        syncActiveDiceProjection(next);
+        resolver.emitV2({ kind: 'shop_transaction', transaction: { type: 'dice_moved', source: action.source,
+          destination: action.destination, sourceDieId: sourceId, destinationDieId: destinationId } });
+        break;
+      }
+      case 'FUSE_DICE': {
+        const source = collectibleDieById(next, action.expectedSourceDieId)!;
+        const destination = collectibleDieById(next, action.expectedDestinationDieId)!;
+        const sourceLevel = source.level;
+        const destinationLevel = destination.level;
+        destination.level += source.level;
+        if (destination.type === 'vintage') destination.vintageAppreciation = Math.min(
+          destination.vintageAppreciation + source.vintageAppreciation, 90 * destination.level);
+        if (!destination.flame && source.flame) destination.flame = source.flame;
+        source.flame = null;
+        delete next.diceInventory.instances[source.id];
+        delete next.dieRoundState[source.id];
+        setSlotValue(next.diceInventory, action.source, null);
+        syncActiveDiceProjection(next);
+        resolver.emitV2({ kind: 'shop_transaction', transaction: { type: 'dice_fused', sourceId: source.id,
+          sourceType: source.type, sourceLevel, destinationId: destination.id, destinationType: destination.type,
+          destinationLevel, resultingLevel: destination.level, destination: action.destination,
+          vintageAppreciation: destination.vintageAppreciation } });
+        break;
+      }
+      case 'SELL_DIE': {
+        const die = collectibleDieById(next, action.expectedDieId)!;
+        const sale = dieSellBreakdown(die);
+        setSlotValue(next.diceInventory, action.slot, null);
+        delete next.diceInventory.instances[die.id];
+        delete next.dieRoundState[die.id];
+        syncActiveDiceProjection(next);
+        resolver.addGold(sale.total, `Sold ${die.type} D6 Lv${die.level}: +${sale.total} Gold`, 'diceSale', die.id);
+        resolver.emitV2({ kind: 'shop_transaction', transaction: { type: 'dice_sold', dieId: die.id,
+          dieType: die.type, level: die.level, source: action.slot, baseSellValue: sale.base,
+          vintageAppreciation: sale.vintageAppreciation, proceeds: sale.total } });
         break;
       }
       case 'SELL_ENHANCEMENT': {
@@ -904,13 +1070,24 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         next.stats.shopDiceRerolls++;
         resolver.rollBatch(next.dice.map(die => die.id), 'Shop dice reroll', 'shop', false, 'shop');
         break;
-      case 'REROLL_OFFERS':
-        resolver.spendGold(offerRerollCost(next.shop!.offerRerolls), 'Paid for enhancement reroll', 'enhancementReroll');
+      case 'REROLL_OFFERS': {
+        const cost = offerRerollCost(next.shop!.offerRerolls);
+        const oldOfferIds = next.shop!.offers.map(offer => offer.id);
+        resolver.spendGold(cost, 'Paid for Dice offer reroll', 'diceOfferReroll');
         next.shop!.offerRerolls++;
-        next.stats.enhancementShopRerolls++;
+        next.stats.diceOfferRerolls++;
         resolver.freshOffers('reroll');
-        resolver.emit({ type: 'OFFERS_REFRESHED', message: 'Three fresh distinct enhancement offers' });
+        resolver.emitV2({ kind: 'shop_transaction', transaction: { type: 'dice_offers_rerolled', cost,
+          oldOfferIds, newOfferIds: next.shop!.offers.map(offer => offer.id), rerollCount: next.shop!.offerRerolls } });
+        resolver.emit({ type: 'OFFERS_REFRESHED', message: 'Three fresh Dice offers' });
         break;
+      }
+      case 'SET_SHOP_STAGE': {
+        const from = next.shop!.stage ?? 'dice';
+        next.shop!.stage = action.stage;
+        resolver.emitV2({ kind: 'shop_stage_changed', shopVisitId: next.shop!.visitId!, from, to: action.stage });
+        break;
+      }
       case 'UNLOCK_SHOP_EXIT': next.shop!.exitUnlocked = true; break;
       case 'TRAIN_HAND': {
         const offer = next.shop!.trainingOffers.find(item => item.kind === 'hand' && item.hand === action.hand)!;
@@ -963,11 +1140,15 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         next.flameTutorial = { pendingDieId: null, completed: true };
         resolver.emit({ type: 'FLAME_TUTORIAL_COMPLETED', message: 'First-Flame shop tutorial completed' });
         break;
-      case 'RETRY_ROUND': resolver.startRound(true); break;
+      case 'RETRY_ROUND':
+        resolver.emitV2({ kind: 'shop_visit_completed', shopVisitId: next.shop!.visitId!, stage: 'fireKeeping', progression: 'retry_round' });
+        resolver.startRound(true); break;
       case 'NEXT_CHAPTER':
+        resolver.emitV2({ kind: 'shop_visit_completed', shopVisitId: next.shop!.visitId!, stage: 'fireKeeping', progression: 'next_chapter' });
         if (next.flameTutorial.pendingDieId !== null && !next.flameTutorial.completed) next.flameTutorial = { pendingDieId: null, completed: true };
         next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
       case 'NEXT_ROUND':
+        resolver.emitV2({ kind: 'shop_visit_completed', shopVisitId: next.shop!.visitId!, stage: 'fireKeeping', progression: 'next_round' });
         if (next.flameTutorial.pendingDieId !== null && !next.flameTutorial.completed) next.flameTutorial = { pendingDieId: null, completed: true };
         next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
     }

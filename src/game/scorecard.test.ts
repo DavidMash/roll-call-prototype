@@ -90,7 +90,7 @@ describe('authoritative current-round scorecard totals', () => {
     game = dispatch(game, { type: 'PLAY', hand: 'smallStraight', dieIds: [0, 1, 2, 3] }, constant()).state;
     expect(game.scoreByHand).toEqual({ pair: 24n, smallStraight: 50n });
     game.phase = 'shop';
-    game.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    game.shop = { stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     const next = dispatch(game, { type: 'NEXT_ROUND' }, constant()).state;
     expect(next.scoreByHand).toEqual({});
     expect(next.effectScore).toBe(BigInt(0n));

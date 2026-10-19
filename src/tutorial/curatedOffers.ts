@@ -1,16 +1,18 @@
 import type { Flame, GameState, HandId, SpecialOffer, SpecialOfferType } from '../game/types';
 import type { TutorialScenarioState } from './types';
+import { diePurchasePrice, specialDieRarity, type SpecialDieType } from '../game/diceEconomy';
 
 function nextId(state: GameState): number { return state.nextOfferId++; }
 
-function replaceEnhancement(state: GameState, enhancement: import('../game/types').Enhancement, slot = 0): void {
+function replaceDie(state: GameState, dieType: SpecialDieType, slot = 0): void {
   if (!state.shop || state.shop.offerRerolls > 0) return;
-  const existing = state.shop.offers.find(offer => offer.enhancement === enhancement);
+  const existing = state.shop.offers.find(offer => offer.dieType === dieType);
   if (existing) return;
   const target = state.shop.offers[Math.min(slot, Math.max(0, state.shop.offers.length - 1))];
   const id = target?.id ?? nextId(state);
-  if (target) Object.assign(target, { enhancement, purchased: false });
-  else state.shop.offers.push({ id, enhancement, purchased: false });
+  const offer = { id, dieType, rarity: specialDieRarity(dieType), price: diePurchasePrice(dieType), purchased: false };
+  if (target) state.shop.offers[state.shop.offers.indexOf(target)] = offer;
+  else state.shop.offers.push(offer);
 }
 
 function replaceTraining(state: GameState, hand: HandId): void {
@@ -39,15 +41,16 @@ export function curateTutorialOffers(state: GameState, scenario: TutorialScenari
       if (state.shop.offerRerolls === 0) {
         const ids = state.shop.offers.map(offer => offer.id);
         state.shop.offers = (['bonus', 'magnetic', 'jackpot'] as const)
-          .map((enhancement, index) => ({ id: ids[index] ?? nextId(state), enhancement, purchased: false }));
+          .map((dieType, index) => ({ id: ids[index] ?? nextId(state), dieType,
+            rarity: specialDieRarity(dieType), price: diePurchasePrice(dieType), purchased: false }));
       }
     }
-    if (state.round === 3) replaceEnhancement(state, 'workout', 0);
+    if (state.round === 3) replaceDie(state, 'workout', 0);
 
     const shopAfterFirst = state.round >= 2 && state.round <= 11;
     const eligibleIndex = state.round - 2;
     if (shopAfterFirst && eligibleIndex % 2 === 0 && !scenario.vintagePurchased && state.shop.offerRerolls === 0) {
-      replaceEnhancement(state, 'vintage', state.round === 3 ? 1 : 0);
+      replaceDie(state, 'vintage', state.round === 3 ? 1 : 0);
     }
   }
 

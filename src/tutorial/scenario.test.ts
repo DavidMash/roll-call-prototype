@@ -9,6 +9,11 @@ import { buildRound2Plan, reconcileTutorialBindings } from './tutorialBindings';
 
 function act(session: ReturnType<typeof newTutorialSession>['session'], action: Action) {
   let current = session;
+  if (current.game.phase === 'shop'
+    && (action.type === 'NEXT_ROUND' || action.type === 'NEXT_CHAPTER' || action.type === 'RETRY_ROUND')) {
+    if (current.game.shop?.stage === 'dice') current = dispatchTutorial(current, { type: 'SET_SHOP_STAGE', stage: 'training' }).session;
+    if (current.game.shop?.stage === 'training') current = dispatchTutorial(current, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).session;
+  }
   if (current.game.phase === 'shop' && current.game.shop?.exitUnlocked === false
     && (action.type === 'NEXT_ROUND' || action.type === 'NEXT_CHAPTER' || action.type === 'RETRY_ROUND')) {
     const unlocked = dispatchTutorial(current, { type: 'UNLOCK_SHOP_EXIT' });
@@ -45,7 +50,7 @@ describe('tutorial scenario', () => {
     expect(session.game.gold).toBe(7);
   });
 
-  it('curates Shop 1 and C1 R2 while purchases and enhancement triggers stay authoritative', () => {
+  it('curates Shop 1 Dice offers and C1 R2 without teaching face-Enhancement purchasing', () => {
     let { session } = newTutorialSession();
     session = act(session, { type: 'MANUAL_REROLL', dieIds: [1] });
     session = act(session, { type: 'PLAY', hand: 'threeKind', dieIds: [0, 1, 2] });
@@ -56,26 +61,24 @@ describe('tutorial scenario', () => {
     session = act(session, { type: 'CONTINUE_ROUND_SUMMARY' });
 
     expect(session.game.shop?.trainingOffers).toContainEqual({ kind: 'hand', hand: 'fullHouse', purchases: 0 });
-    expect(session.game.shop?.offers.map(offer => offer.enhancement)).toEqual(['bonus', 'magnetic', 'jackpot']);
-    const bonus = session.game.shop?.offers.find(offer => offer.enhancement === 'bonus');
+    expect(session.game.shop?.offers.map(offer => offer.dieType)).toEqual(['bonus', 'magnetic', 'jackpot']);
+    const bonus = session.game.shop?.offers.find(offer => offer.dieType === 'bonus');
     expect(bonus).toBeDefined();
+    session = act(session, { type: 'SET_SHOP_STAGE', stage: 'training' });
     session = act(session, { type: 'TRAIN_HAND', hand: 'fullHouse' });
     expect(session.game.handLevels.fullHouse).toBe(2);
     expect(session.game.gold).toBe(5);
-    session = act(session, { type: 'BUY', offerId: bonus!.id, dieId: 1 });
-    expect(activeFace(session.game.dice[1]).enhancements.bonus).toBe(1);
-    expect(session.game.gold).toBe(2);
+    expect(session.scenario.completedBeatIds).toContain('shop1-place-bonus');
+    expect(activeFace(session.game.dice[1]).enhancements.bonus).toBeUndefined();
 
     session = act(session, { type: 'NEXT_ROUND' });
     const round2Plan = session.scenario.round2Plan!;
-    expect(round2Plan.pairRanks).toContain(session.scenario.bonusBinding!.faceRank);
     expect(combinationsForHand(session.game.dice, 'twoPair')).not.toHaveLength(0);
     session = act(session, { type: 'PLAY', hand: round2Plan.upperHand, dieIds: [round2Plan.singletonDieId] });
     expect(combinationsForHand(session.game.dice, 'fullHouse')).not.toHaveLength(0);
     expect(session.game.manualRerollsRemaining).toBe(3);
     session = act(session, { type: 'PLAY', hand: 'fullHouse', dieIds: [0, 1, 2, 3, 4] });
     expect(session.game.phase).toBe('roundSummary');
-    expect(session.game.stats.triggers.bonus).toBe(1);
     expect(session.game.stats.handScores.at(-1)?.handLevel).toBe(2);
   });
 
@@ -212,7 +215,7 @@ describe('tutorial scenario', () => {
     let { session } = newTutorialSession();
     session.game.round = 6;
     session.game.phase = 'shop';
-    session.game.shop = { kind: 'post_boss', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    session.game.shop = { stage: 'fireKeeping', kind: 'post_boss', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     session.scenario.firstFlame = flame;
     session.scenario.firstFlameDieId = 4;
     session.game.dice[4].flame = { id: flame, investedGold: 1 };
@@ -265,18 +268,18 @@ describe('tutorial scenario', () => {
       { id: 3, enhancement: 'boomerang', purchased: false },
     ], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     curateTutorialOffers(session.game, session.scenario);
-    expect(session.game.shop.offers.some(offer => offer.enhancement === 'vintage')).toBe(true);
+    expect(session.game.shop.offers.some(offer => offer.dieType === 'vintage')).toBe(true);
     session.game.shop.offerRerolls = 1;
-    session.game.shop.offers[0].enhancement = 'bonus';
+    session.game.shop.offers[0].dieType = 'bonus';
     curateTutorialOffers(session.game, session.scenario);
-    expect(session.game.shop.offers.some(offer => offer.enhancement === 'vintage')).toBe(false);
+    expect(session.game.shop.offers.some(offer => offer.dieType === 'vintage')).toBe(false);
     session.game.shop.offerRerolls = 0;
     session.scenario.vintagePurchased = true;
     curateTutorialOffers(session.game, session.scenario);
-    expect(session.game.shop.offers.some(offer => offer.enhancement === 'vintage')).toBe(false);
+    expect(session.game.shop.offers.some(offer => offer.dieType === 'vintage')).toBe(false);
   });
 
-  it('places Workout on a real physical face and uses its increment in the C1 R4 route', () => {
+  it('curates a Workout collectible while bypassing the obsolete placement lesson', () => {
     let { session } = newTutorialSession();
     session.game.round = 3;
     session.game.phase = 'specialOffer';
@@ -287,22 +290,11 @@ describe('tutorial scenario', () => {
     session.game.dice[0].value = 5;
     session = act(session, { type: 'CONTINUE_SPECIAL_OFFER' });
 
-    const workoutBinding = session.scenario.workoutBinding!;
-    const workoutDieId = workoutBinding.dieId;
-    expect(workoutBinding.faceRank).toBe(5);
-    expect(activeFace(session.game.dice[workoutDieId]).rank).toBe(workoutBinding.faceRank);
-    const workout = session.game.shop?.offers.find(offer => offer.enhancement === 'workout');
+    const workout = session.game.shop?.offers.find(offer => offer.dieType === 'workout');
     expect(workout).toBeDefined();
-    session = act(session, { type: 'BUY', offerId: workout!.id, dieId: workoutDieId });
-    expect(activeFace(session.game.dice[workoutDieId]).enhancements.workout).toBe(1);
-    session = act(session, { type: 'NEXT_ROUND' });
-    const round4Plan = session.scenario.round4Plan!;
-    expect(round4Plan.singletonRank).toBe(workoutBinding.faceRank);
-    session = act(session, { type: 'PLAY', hand: round4Plan.upperHand, dieIds: [workoutDieId] });
-    expect(session.game.dice[workoutDieId].faces.find(face => face.rank === workoutBinding.faceRank)?.workoutPips).toBe(1);
-    expect(combinationsForHand(session.game.dice, 'fullHouse')).not.toHaveLength(0);
-    const fullHouseIds = session.game.dice.map(die => die.id);
-    session = act(session, { type: 'PLAY', hand: 'fullHouse', dieIds: fullHouseIds });
-    expect(session.game.stats.handScores.at(-1)?.handLevel).toBe(2);
+    session.game.gold = 100;
+    session = act(session, { type: 'BUY_DIE', offerId: workout!.id });
+    expect(Object.values(session.game.diceInventory.instances).some(die => die.type === 'workout')).toBe(true);
+    expect(session.scenario.completedBeatIds).toContain('shop-r4-place-workout');
   });
 });

@@ -6,7 +6,7 @@ import { handOptions, HANDS, HAND_IDS, ultimateHands } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { BigBossType, GameState } from '../src/game/types';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
-import { enterRun, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
+import { enterRun, goToShopStage, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 
 const seedFor = (boss: BigBossType) => {
   for (let index = 0; index < 100; index++) {
@@ -76,6 +76,9 @@ async function reachBossShop(page: Page, boss: BigBossType, seed = seedFor(boss)
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, game] as const);
   await page.reload();
   await ready(page);
+  await goToShopStage(page, 'fireKeeping');
+  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
+  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
   return game;
 }
 
@@ -539,6 +542,9 @@ test('Boss clear shows its Boss Reward summary and transitions directly to Flame
   for (let step = 0; step < 120 && game.phase !== 'roundSummary'; step++) {
     if (game.phase === 'round') game = await playOne(page, game);
     else if (game.phase === 'shop' && game.bust) {
+      await goToShopStage(page, 'fireKeeping');
+      game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
+      game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
       await page.getByRole('button', { name: `RETRY ROUND ${game.round}`, exact: true }).click();
       game = dispatch(game, { type: 'RETRY_ROUND' }).state;
       await ready(page);

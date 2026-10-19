@@ -32,7 +32,7 @@ function clockmakerEncounter(): GameState {
   state.phase = 'shop';
   state.round = 2;
   state.currentNodeId = 'shop:before-round:3';
-  state.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { stage: 'fireKeeping', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
   state.bossSchedule[3] = 'clockmaker';
   expose(state, [1, 2, 3, 4, 5]);
   return dispatch(state, { type: 'NEXT_ROUND' }, constant(.99)).state;
@@ -141,6 +141,7 @@ describe('Care Package resources and Time Travel boundaries', () => {
     state = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 1 }, constant()).state;
     expect(state.specialOfferEffects.carePackageRerolls).toBe(3);
     state = dispatch(state, { type: 'UNLOCK_SHOP_EXIT' }, constant()).state;
+    state.shop!.stage = 'fireKeeping';
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.2)).state;
     expect(state.specialOfferEffects.carePackageRerolls).toBe(3);
     state.manualRerollsRemaining = 0;
@@ -150,6 +151,7 @@ describe('Care Package resources and Time Travel boundaries', () => {
     new Resolver(state, constant(.2)).evaluate();
     expect(state.phase).toBe('shop');
     expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
+    state.shop!.stage = 'fireKeeping';
     state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.2)).state;
     expect(state.phase).toBe('round');
     expect(state.manualRerollsRemaining).toBe(3);

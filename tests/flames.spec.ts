@@ -8,7 +8,7 @@ import type { Action, GameState } from '../src/game/types';
 import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
 import { CONFIG } from '../src/game/config';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
-import { enterRun, installRunState, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
+import { enterRun, goToShopStage, installRunState, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 
 function bestHand(game: GameState, requiredDie?: number, requireHistory = false) {
   const dice = activeEncounterDice(game);
@@ -64,10 +64,12 @@ function flameRewardState(seed: string) {
     if (game.phase === 'round') {
       game = dispatch(game, automaticAction(game)).state;
     } else if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
-    else if (game.phase === 'shop') game = dispatch(game, game.shop?.exitUnlocked === false
-      ? { type: 'UNLOCK_SHOP_EXIT' }
-      : game.bust ? { type: 'RETRY_ROUND' }
-        : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
+    else if (game.phase === 'shop') game = dispatch(game, game.shop?.stage === 'dice'
+      ? { type: 'SET_SHOP_STAGE', stage: 'training' }
+      : game.shop?.stage === 'training' ? { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }
+        : game.shop?.exitUnlocked === false ? { type: 'UNLOCK_SHOP_EXIT' }
+          : game.bust ? { type: 'RETRY_ROUND' }
+            : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
     else if (game.phase === 'specialOffer') {
       const offer = game.specialOffer!.offers.find(item => item.type !== 'timeTravel') ?? game.specialOffer!.offers[0];
       game = dispatch(game, game.specialOffer!.acquired
@@ -89,7 +91,7 @@ async function reachReward(page: Page, seed: string) {
 test('Flame investment input supports typing and arrows, then normalizes to affordable capacity on mobile', async ({ page }) => {
   const state = newRun('flame-stepper-mobile').state;
   state.phase = 'shop';
-  state.shop = { visitId: 1, kind: 'between_rounds', exitUnlocked: true, offers: [], trainingOffers: [],
+  state.shop = { visitId: 1, kind: 'between_rounds', stage: 'fireKeeping', exitUnlocked: true, offers: [], trainingOffers: [],
     diceRerolls: 0, offerRerolls: 0, lifeRestores: 0, freeEnhancementOfferIds: [], freeTrainingOfferKeys: [] };
   state.gold = 2;
   state.dice[0].flame = { id: 'vineyard', investedGold: 97 };
@@ -193,6 +195,9 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   expect(game.phase).toBe('shop');
   await expect(page.getByTestId('active-flame-minigun')).toHaveAccessibleName('View Minigun Flame details, Ember at 0 of 100 Gold');
   await expect(page.getByRole('button', { name: /CONTINUE TO SHOP/i })).toHaveCount(0);
+  await goToShopStage(page, 'fireKeeping');
+  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
+  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
   await page.screenshot({ path: test.info().outputPath('flame-selection-claimed-shop-mobile.png'), fullPage: true });
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
   await expect(page.getByRole('button', { name: new RegExp(`^Die 1, face ${rewardFaces[0]},.*Ember ${FLAMES.minigun.name}`) })).toBeVisible();
@@ -211,6 +216,11 @@ test('Flame Selection has fixed offers, preserves faces, reveals XMult, and prev
   game = dispatch(game, { type: 'DISMISS_FLAME_TUTORIAL' }).state;
   await ready(page);
   await expect(page.locator('.driver-popover')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await goToShopStage(page, 'fireKeeping');
+  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
+  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
+  await flameBadge.click();
   const shopStoke = page.getByRole('dialog', { name: FLAMES.minigun.name });
   const amountControl = shopStoke.getByRole('spinbutton', { name: `Stoke amount for ${FLAMES.minigun.name}` });
   await expect(amountControl).toHaveAttribute('type', 'number');
@@ -274,6 +284,9 @@ test('Flame Selection only acquires while Shop Manage Die supports arbitrary Sto
   await expect(active).toHaveAccessibleName(`View ${FLAMES[offer.flame].name} Flame details, Ember at 0 of 100 Gold`);
   expect(game.phase).toBe('shop');
   expect(game.dice.map(die => die.value)).toEqual(rewardFaces);
+  await goToShopStage(page, 'fireKeeping');
+  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
+  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
   await expect(page.locator('.driver-popover')).toContainText('NEW EMBER');
   await page.locator('.driver-popover').getByRole('button', { name: 'GOT IT', exact: true }).click();
   game = dispatch(game, { type: 'DISMISS_FLAME_TUTORIAL' }).state;

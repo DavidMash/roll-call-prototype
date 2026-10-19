@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { stringifyExactJson } from './scoreMath';
 import { dispatch, newRun } from './engine';
 import { Resolver } from './effects';
-import { eligibleEnhancements, highestUnlockedEnhancementTier, maxEnhancementTypesPerFace } from './enhancements';
 import { loadPersistedRun, RUN_STORAGE_KEY, RUN_STORAGE_VERSION, savePersistedRun } from './persistence';
 import type { GameState, RandomSource } from './types';
 
@@ -70,11 +69,10 @@ describe('post-Boss Chapter boundary', () => {
     expect(opened.events.map(event => event.type)).toEqual(['MAP_TRANSITION', 'SHOP_OPENED']);
     expect(opened.events.filter(event => event.type === 'SHOP_OPENED')).toHaveLength(1);
     expect(opened.state.historyV2.filter(event => event.kind === 'chapter_started' && event.chapter === 2)).toHaveLength(0);
-    expect(maxEnhancementTypesPerFace(1)).toBe(1);
-    expect(highestUnlockedEnhancementTier(1)).toBe(0);
-    expect(opened.state.shop!.offers.every(offer => eligibleEnhancements(1).includes(offer.enhancement))).toBe(true);
+    expect(opened.state.shop!.offers.every(offer => !!offer.dieType)).toBe(true);
     expect(dispatch(opened.state, { type: 'NEXT_ROUND' }, constant()).error).toContain('one second');
     const unlocked = dispatch(opened.state, { type: 'UNLOCK_SHOP_EXIT' }, constant()).state;
+    unlocked.shop!.stage = 'fireKeeping';
     expect(dispatch(unlocked, { type: 'NEXT_ROUND' }, constant()).error).toContain('Next Chapter');
 
     const offers = structuredClone(opened.state.shop!.offers);
@@ -91,22 +89,19 @@ describe('post-Boss Chapter boundary', () => {
     expect(training).toHaveLength(3);
     expect(advanced.state.historyV2.filter(event => event.kind === 'shop_offers_presented')).toHaveLength(1);
     expect(advanced.state.historyV2.filter(event => event.kind === 'chapter_started' && event.chapter === 2)).toHaveLength(1);
-    expect(maxEnhancementTypesPerFace(2)).toBe(2);
-    expect(highestUnlockedEnhancementTier(2)).toBe(1);
-    expect(advanced.events[0]).toMatchObject({ enhancementCapacityBefore: 1, enhancementCapacityAfter: 2,
-      newlyUnlockedEnhancements: ['hitchhiker', 'weighted', 'bump', 'magnetic', 'jackpot'] });
+    expect(advanced.state.diceInventory.storage).toHaveLength(3);
+    expect(advanced.events[0].enhancementCapacityBefore).toBeUndefined();
     expect(advanced.state.historyV2.find(event => event.kind === 'chapter_started' && event.chapter === 2))
-      .toMatchObject({ enhancementProgression: { capacityBefore: 1, capacityAfter: 2,
-        newlyUnlocked: ['hitchhiker', 'weighted', 'bump', 'magnetic', 'jackpot'] } });
+      .not.toHaveProperty('enhancementProgression');
     expect(opened.state.shop!.offers).toEqual(offers);
 
     const chapterTwoShop = structuredClone(advanced.state);
     chapterTwoShop.phase = 'shop';
     chapterTwoShop.shop = { offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     new Resolver(chapterTwoShop, constant(.72)).freshOffers();
-    expect(chapterTwoShop.shop.offers.every(offer => eligibleEnhancements(2).includes(offer.enhancement))).toBe(true);
+    expect(chapterTwoShop.shop.offers.every(offer => !!offer.dieType)).toBe(true);
     expect([...chapterTwoShop.historyV2].reverse().find(event => event.kind === 'shop_offers_presented'))
-      .toMatchObject({ chapter: 2, maxEnhancementTypesPerFace: 2, highestUnlockedEnhancementTier: 1 });
+      .toMatchObject({ pool: 'dice' });
 
     const duplicate = dispatch(advanced.state, { type: 'NEXT_CHAPTER' }, constant());
     expect(duplicate.error).toContain('open shop');
@@ -116,7 +111,7 @@ describe('post-Boss Chapter boundary', () => {
   it('keeps ordinary Shops on NEXT_ROUND and rejects NEXT_CHAPTER there', () => {
     const state = newRun('ordinary-shop', constant()).state;
     state.phase = 'shop';
-    state.shop = { kind: 'between_rounds', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    state.shop = { stage: 'fireKeeping', kind: 'between_rounds', offers: [], trainingOffers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     const rejected = dispatch(state, { type: 'NEXT_CHAPTER' }, constant());
     expect(rejected.error).toContain('final post-Boss Shop');
     expect(rejected.state).toBe(state);
@@ -148,9 +143,10 @@ describe('post-Boss Chapter boundary', () => {
     expect(resumed.historyV2.filter(event => event.kind === 'shop_transaction'
       && event.transaction.type === 'enhancement_purchased')).toEqual(persistedPurchases);
     expect(resumed.shop?.offerRerolls).toBe(1);
-    expect(resumed.stats.enhancementShopRerolls).toBe(1);
+    expect(resumed.stats.diceOfferRerolls).toBe(1);
 
     const unlocked = dispatch(resumed, { type: 'UNLOCK_SHOP_EXIT' }, constant()).state;
+    unlocked.shop!.stage = 'fireKeeping';
     const advanced = dispatch(unlocked, { type: 'NEXT_CHAPTER' }, constant()).state;
     expect(savePersistedRun(storage, advanced)).toBe(true);
     const resumedChapter = loadPersistedRun(storage, advanced.seed)!;
@@ -181,6 +177,7 @@ describe('post-Boss Chapter boundary', () => {
     expect(migrated.historyV2.some(event => event.kind === 'chapter_started' && event.chapter === 2)).toBe(false);
 
     const unlocked = dispatch(migrated, { type: 'UNLOCK_SHOP_EXIT' }, constant()).state;
+    unlocked.shop!.stage = 'fireKeeping';
     const advanced = dispatch(unlocked, { type: 'NEXT_CHAPTER' }, constant());
     expect(advanced.state.chapterPlans[2]).toEqual(plan);
     expect(advanced.state.historyV2.filter(event => event.kind === 'chapter_started' && event.chapter === 2)).toHaveLength(1);
