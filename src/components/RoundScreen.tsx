@@ -17,7 +17,6 @@ import { formatPlayerNumber, formatScoreEquation, formatScoreProgress, playActio
 import { DecisionTimer } from '../game/decisionTimer';
 import { usableManualRerolls } from '../game/specialOffers';
 import { RunActionLayout, RunActionPortal } from './RunActionRow';
-import { SpecialDiceControls } from './SpecialDiceControls';
 import { SPECIAL_DICE } from '../game/specialDice';
 
 export function RoundScreen({ board, event, busy, inputBlocked, selection, setSelection, submit, skip }: {
@@ -149,7 +148,6 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
       {board.hotStreakGoal && <Text size="xs"><strong>🔥 HOT STREAK → {HANDS[board.hotStreakGoal].name}</strong></Text>}
       {board.targetPracticeHand && <Text size="xs"><strong>◎ TARGET: {HANDS[board.targetPracticeHand].name}</strong></Text>}
     </Group></Paper>}
-    <SpecialDiceControls board={board} busy={busy} submit={submit} />
     <Paper className={`scorecard-panel${scorecardRefreshing ? ' is-refreshing' : ''}`} p="xs">
       <HandScorecard board={board} selection={effectiveSelection} busy={busy || awaitingWardenChoice} canSubmit={valid && !busy && !awaitingWardenChoice}
         submitPreview={preview}

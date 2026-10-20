@@ -71,6 +71,7 @@ test('Weighted configuration is an owned-die Shop action and survives the detail
 });
 
 test('Magic and Furnace controls expose armed state, free disarm, Invocations, and Furnace power', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const state = newRun('stage4-command-controls', fixed).state;
   state.gold = 7;
   setType(state, 0, 'magic', 2);
@@ -80,33 +81,42 @@ test('Magic and Furnace controls expose armed state, free disarm, Invocations, a
   setType(state, 4, 'jumpingBean', 2);
   await installRunState(page, state);
   await enterRun(page);
-  await expect(page.getByTestId('special-dice-controls')).toContainText('2 / 2 Invocations');
+  await expect(page.getByTestId('special-dice-controls')).toHaveCount(0);
 
-  const magic = page.getByTestId('special-die-control-0');
-  await magic.getByRole('button', { name: 'Arm Magic die 0 for face 6' }).click();
-  await expect(magic).toContainText('ARMED: 6');
+  await page.getByTestId('flame-die-0').getByRole('button', { name: 'View details for Magic' }).click();
+  let details = page.getByRole('dialog', { name: 'MAGIC · LV2' });
+  await expect(details).toContainText(/Uses remaining\s*2 \/ 2/);
+  await details.getByRole('button', { name: 'Arm Magic die 0 for face 6' }).click();
+  await expect(details).toContainText(/Next Reroll\s*6/);
+  await page.screenshot({ path: test.info().outputPath('magic-armed-details-mobile.png'), fullPage: true });
   let saved = await persisted(page);
   expect(saved.dieRoundState[0].magicArmedFace).toBe(6);
   expect(saved.dieRoundState[0].invocationsRemaining).toBe(2);
-  await magic.getByRole('button', { name: 'DISARM' }).click();
-  await expect(magic).not.toContainText('ARMED: 6');
+  await details.getByRole('button', { name: 'DISARM MAGIC' }).click();
+  await expect(details).toContainText(/Next Reroll\s*Not armed/);
   saved = await persisted(page);
   expect(saved.dieRoundState[0].magicArmedFace).toBeNull();
   expect(saved.dieRoundState[0].invocationsRemaining).toBe(2);
+  await details.getByRole('button', { name: 'Close' }).click();
 
-  const furnace = page.getByTestId('special-die-control-1');
-  await expect(furnace).toContainText('0 / 5 units · +0 / +30 Pips · 7 Gold');
-  await furnace.getByRole('button', { name: 'FEED 1 GOLD' }).click();
-  await expect(furnace).toContainText('1 / 5 units · +6 / +30 Pips · 6 Gold');
+  await page.getByTestId('flame-die-1').getByRole('button', { name: 'View details for Furnace' }).click();
+  details = page.getByRole('dialog', { name: 'FURNACE · LV2' });
+  await expect(details).toContainText(/Fed Gold\s*0 \/ 5/);
+  await expect(details).toContainText(/Current bonus\s*\+0 Pips/);
+  await details.getByRole('button', { name: 'FEED 1 GOLD' }).click();
+  await expect(details).toContainText(/Fed Gold\s*1 \/ 5/);
+  await expect(details).toContainText(/Current bonus\s*\+6 Pips/);
   saved = await persisted(page);
   expect(saved.dieRoundState[1].furnaceUnits).toBe(1);
   expect(saved.gold).toBe(6);
+  await details.getByRole('button', { name: 'Close' }).click();
 
-  for (const id of [3, 2, 4]) {
-    const control = page.getByTestId(`special-die-control-${id}`);
-    await expect(control.getByRole('button', { name: 'ON COMMAND' })).toBeEnabled();
-    await control.getByRole('button', { name: 'ON COMMAND' }).click();
-    await expect(control).toContainText('1 / 2 Invocations');
+  for (const [id, name] of [[3, 'Chameleon'], [2, 'Flywheel'], [4, 'Jumping Bean']] as const) {
+    await page.getByTestId(`flame-die-${id}`).getByRole('button', { name: `View details for ${name}` }).click();
+    details = page.getByRole('dialog', { name: new RegExp(`${name.toUpperCase()} .* LV2`) });
+    await expect(details.getByRole('button', { name: 'USE ON COMMAND' })).toBeEnabled();
+    await details.getByRole('button', { name: 'USE ON COMMAND' }).click();
+    await expect(details).toHaveCount(0);
   }
   saved = await persisted(page);
   expect(saved.dieRoundState[2].invocationsRemaining).toBe(1);
@@ -129,14 +139,12 @@ test('ambiguous qualification previews spend nothing and let the player choose t
   let chooser = page.getByRole('dialog', { name: 'HOW SHOULD THIS HAND QUALIFY?' });
   await expect(chooser.getByRole('button', { name: /Mirror · Roster 1 · Lv1/ })).toBeVisible();
   await expect(chooser.getByRole('button', { name: /Mirror · Roster 2 · Lv1/ })).toBeVisible();
-  await expect(page.getByTestId('special-die-control-0')).toContainText('1 / 1 Invocations');
-  await expect(page.getByTestId('special-die-control-1')).toContainText('1 / 1 Invocations');
   await chooser.getByRole('button', { name: 'CANCEL' }).click();
-  await expect(page.getByTestId('special-die-control-0')).toContainText('1 / 1 Invocations');
-  await expect(page.getByTestId('special-die-control-1')).toContainText('1 / 1 Invocations');
 
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   chooser = page.getByRole('dialog', { name: 'HOW SHOULD THIS HAND QUALIFY?' });
+  await expect(chooser.getByRole('button', { name: /Mirror · Roster 1 · Lv1.*1 Invocation remaining/ })).toBeVisible();
+  await expect(chooser.getByRole('button', { name: /Mirror · Roster 2 · Lv1.*1 Invocation remaining/ })).toBeVisible();
   await chooser.getByRole('button', { name: /Mirror · Roster 2 · Lv1/ }).click();
   await expect(chooser).toHaveCount(0);
   const saved = await persisted(page);

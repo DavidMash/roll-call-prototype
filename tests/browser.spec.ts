@@ -671,13 +671,93 @@ test('Round Dice leave Normal dice unlabeled and identify special dice without D
 
   const normal = page.getByTestId('flame-die-0');
   const golden = page.getByTestId('flame-die-1');
-  await expect(normal.locator('.die-face-details')).not.toContainText('Normal');
-  await expect(normal.locator('.die-face-details')).not.toContainText('FACES');
+  await expect(normal.locator('.die-face-details')).toHaveCount(0);
+  await expect(normal.locator('.die-details-placeholder')).toHaveCount(1);
   await expect(golden.locator('.die-face-details')).toHaveText('Golden');
   await expect(page.getByRole('main')).not.toContainText('Golden D6');
+  await expect(page.getByTestId('special-dice-controls')).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('round-dice-labels-mobile.png'), fullPage: true });
-  await normal.locator('.die-face-details').click();
-  await expect(page.getByRole('dialog', { name: /D1 .* PHYSICAL FACES/ })).toBeVisible();
+  await golden.locator('.die-face-details').click();
+  const details = page.getByRole('dialog', { name: 'GOLDEN · LV1' });
+  await expect(details).toContainText('Earn 1 Gold when this die Scores');
+  await expect(details).toContainText(/Gold earned this Round\s*0 \/ 3/);
+  await expect(details).not.toContainText('D6');
+  await expect(details).not.toContainText('PHYSICAL FACES');
+  await expect(details.locator('.manage-face-tile')).toHaveCount(0);
+});
+
+test('five special dice do not add a persistent Round panel or change scorecard height', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const normal = newRun('round-five-normal-layout').state;
+  await installRunState(page, normal);
+  await enterRun(page);
+  const normalHeight = await page.locator('.scorecard-panel').evaluate(element => element.getBoundingClientRect().height);
+  await page.screenshot({ path: test.info().outputPath('round-zero-special-dice-mobile.png'), fullPage: true });
+
+  const mixed = newRun('round-three-special-layout').state;
+  const mixedTypes: DieType[] = ['doubleTime', 'workout', 'bonus'];
+  rosterDice(mixed).slice(0, 3).forEach((die, index) => { die.type = mixedTypes[index]; });
+  syncActiveDiceProjection(mixed);
+  mixed.dieRoundState = resetDieRoundState(rosterDice(mixed));
+  await installRunState(page, mixed);
+  await page.reload();
+  await enterRun(page);
+  const mixedHeight = await page.locator('.scorecard-panel').evaluate(element => element.getBoundingClientRect().height);
+  expect(Math.abs(mixedHeight - normalHeight)).toBeLessThanOrEqual(2);
+  await page.screenshot({ path: test.info().outputPath('round-three-special-dice-mobile.png'), fullPage: true });
+
+  const special = newRun('round-five-special-layout').state;
+  const types: DieType[] = ['doubleTime', 'workout', 'bonus', 'magnetic', 'magic'];
+  rosterDice(special).forEach((die, index) => { die.type = types[index]; });
+  syncActiveDiceProjection(special);
+  special.dieRoundState = resetDieRoundState(rosterDice(special));
+  await installRunState(page, special);
+  await page.reload();
+  await enterRun(page);
+
+  await expect(page.getByText('SPECIAL DICE', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.die-face-details.special')).toHaveText(['Double Time', 'Workout', 'Bonus', 'Magnetic', 'Magic']);
+  const specialHeight = await page.locator('.scorecard-panel').evaluate(element => element.getBoundingClientRect().height);
+  expect(Math.abs(specialHeight - normalHeight)).toBeLessThanOrEqual(2);
+  await page.screenshot({ path: test.info().outputPath('round-five-special-dice-mobile.png'), fullPage: true });
+});
+
+test('whole-die details show live status and only contextual boss face mutations', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const game = newRun('round-die-mutation-details').state;
+  const dice = rosterDice(game);
+  dice[0].type = 'workout';
+  dice[1].type = 'bonus';
+  activeFace(dice[0]).bossMutation = { kind: 'infected' };
+  const originalRank = 4 as const;
+  activeFace(dice[1]).bossMutation = { kind: 'snakeEyes', originalRank };
+  activeFace(dice[1]).rank = 1;
+  syncActiveDiceProjection(game);
+  game.dieRoundState = resetDieRoundState(rosterDice(game));
+  game.dieRoundState[dice[0].id].temporaryPips = 6;
+  await installRunState(page, game);
+  await enterRun(page);
+
+  const workout = page.getByTestId(`flame-die-${dice[0].id}`);
+  await expect(workout).toHaveClass(/effect-suppressed/);
+  await expect(workout.getByRole('button', { name: /View details for Workout/ })).toContainText('Workout');
+  await workout.getByRole('button', { name: /View details for Workout/ }).click();
+  let details = page.getByRole('dialog', { name: 'WORKOUT · LV1' });
+  await expect(details).toContainText(/Current bonus this Round\s*\+6 Pips/);
+  await expect(details).toContainText('INFECTED FACE');
+  await expect(details).toContainText("This die's special effect is suppressed");
+  await expect(details).not.toContainText('physical face');
+  await page.screenshot({ path: test.info().outputPath('workout-infected-details-mobile.png'), fullPage: true });
+  await details.getByRole('button', { name: 'Close' }).click();
+
+  await page.getByTestId(`flame-die-${dice[1].id}`).getByRole('button', { name: 'View details for Bonus' }).click();
+  details = page.getByRole('dialog', { name: 'BONUS · LV1' });
+  await expect(details).toContainText('SNAKE EYES');
+  await expect(details).toContainText(`changed from ${originalRank} to 1`);
+  await expect(details).not.toContainText('INFECTED FACE');
+  await details.getByRole('button', { name: 'Close' }).click();
+
+  await expect(page.getByTestId(`flame-die-${dice[2].id}`).locator('.die-face-details')).toHaveCount(0);
 });
 
 test('mobile staged Shop keeps each section, navigation, and the compact Roster usable', async ({ page }) => {
@@ -1146,15 +1226,18 @@ test('Jumping Bean runs its Free Play and explicit reroll only when invoked On C
   await installRunState(page, game);
   await matchBoard(page, game);
   const next = dispatch(game, { type: 'INVOKE_JUMPING_BEAN', dieId: 0 });
-  const bean = page.getByTestId('special-die-control-0');
-  await expect(bean).toContainText('1 / 1 Invocations');
-  await bean.getByRole('button', { name: 'ON COMMAND' }).click();
+  const bean = page.getByTestId('flame-die-0');
+  await bean.getByRole('button', { name: 'View details for Jumping Bean' }).click();
+  const details = page.getByRole('dialog', { name: 'JUMPING BEAN · LV1' });
+  await expect(details).toContainText(/On Command uses remaining\s*1 \/ 1/);
+  await details.getByRole('button', { name: 'USE ON COMMAND' }).click();
   await matchBoard(page, next.state);
   expect(next.state.stats.scoreBySource.jumpingBean).toBeGreaterThan(0);
   expect(next.state.effectScore).toBe(BigInt(0n));
   expect(next.events.some(event => event.type === 'JUMPING_BEAN_FREE_PLAY')).toBe(true);
   expect(next.events.some(event => event.type === 'DIE_ROLLED' && event.dieIds?.includes(0))).toBe(true);
-  await expect(bean).toContainText('0 / 1 Invocations');
+  await bean.getByRole('button', { name: 'View details for Jumping Bean' }).click();
+  await expect(page.getByRole('dialog', { name: 'JUMPING BEAN · LV1' })).toContainText(/On Command uses remaining\s*0 \/ 1/);
 });
 
 test('active mobile gameplay stays inside the viewport with a two-column scorecard', async ({ page }) => {

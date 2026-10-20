@@ -299,8 +299,6 @@ button { font: inherit; }
 .roster-collection-dock { position: sticky; bottom: 0; z-index: 4; padding: 5px; border: 1px solid color-mix(in srgb, var(--screen-primary) 34%, var(--mantine-color-dark-4)); border-radius: 8px; background: rgba(15,20,24,.985); box-shadow: 0 -8px 22px rgba(0,0,0,.28); }
 .collection-heading { min-height: 18px; }
 @keyframes collection-arrival { 0% { border-color: var(--mantine-color-yellow-3); box-shadow: 0 0 0 5px rgba(250,176,5,.3); transform: translateY(-3px); } }
-.special-dice-controls { border: 1px solid rgba(46,214,143,.22); background: rgba(15,75,56,.12); }
-.special-die-control { padding: 5px 7px; border-radius: 5px; background: rgba(255,255,255,.025); }
 .rarity-legendary { border-color: rgba(190,120,255,.72) !important; background: rgba(117,50,170,.16) !important; color: #d8b4fe !important; }
 .offer.rarity-uncommon, .flame-offer.rarity-uncommon, .special-offer-card.rarity-uncommon {
   border-color: rgba(34, 184, 207, .34);
@@ -1036,6 +1034,12 @@ body, #root { overflow: hidden; }
 .die-face-details.normal { color: var(--mantine-color-gray-6); border-color: transparent; background: transparent; }
 .normal-die-details-mark { font-size: .64rem; opacity: .72; }
 .die-face-details:disabled { cursor: default; }
+.die-details-placeholder { width: 100%; min-height: 24px; }
+.die-slot.effect-suppressed .die-face-details.special {
+  color: var(--mantine-color-red-2); border-color: rgba(248,113,113,.42); background: rgba(127,29,29,.2);
+  text-decoration: line-through; text-decoration-thickness: 1px;
+}
+.die-slot.effect-suppressed .die.special-die { filter: saturate(.45); }
 .die-lock-overlay {
   inset: -7px -4px auto auto; z-index: 5; width: auto; height: 18px; display: inline-flex; flex-direction: row;
   padding: 1px 4px; gap: 2px; border: 1px solid rgba(34,211,238,.55); border-radius: 6px;
@@ -1093,6 +1097,25 @@ body, #root { overflow: hidden; }
   .die-lock-overlay { top: -6px; right: -2px; height: 16px; padding-inline: 2px; font-size: .4rem; }
   .chapter-splash { min-height: 100%; }
 }
+.die-details-modal { max-height: min(92dvh, 700px); }
+.die-details-identity { padding: 2px 4px; }
+.die-details-identity .collectible-die-visual { flex: 0 0 74px; width: 74px; }
+.die-details-heading { min-width: 0; align-items: flex-start; }
+.die-details-effect { padding: 8px 10px; border-radius: 7px; background: rgba(255,255,255,.035); }
+.die-details-status-list { display: grid; gap: 3px; }
+.die-details-status-row {
+  min-width: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 4px 7px; border-bottom: 1px solid rgba(255,255,255,.06); font-size: .8rem;
+}
+.die-details-status-row span { color: var(--mantine-color-gray-5); }
+.die-details-status-row strong { text-align: right; }
+.free-play-status { margin-top: 7px; padding: 7px; border-radius: 7px; background: rgba(255,255,255,.03); }
+.free-play-status > div { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; margin-top: 4px; }
+.free-play-status span { padding: 3px 1px; border-radius: 4px; background: rgba(255,255,255,.045); font-size: .67rem; text-align: center; }
+.die-mutation-warning { border: 1px solid rgba(255,255,255,.12); }
+.die-mutation-warning.infected { border-color: rgba(248,113,113,.48); background: rgba(127,29,29,.2); }
+.die-mutation-warning.snake-eyes { border-color: rgba(251,146,60,.48); background: rgba(124,45,18,.2); }
+.die-details-actions { padding-top: 3px; }
 
 @media (max-width: 360px) {
   .run-action-row .reroll-action { width: 100%; }

@@ -48,6 +48,8 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
   const collectibleType = die.owner === 'player' ? die.type : null;
   const specialName = collectibleType && collectibleType !== 'normal' ? SPECIAL_DICE[collectibleType].name : null;
   const rarity = collectibleType ? SPECIAL_DICE[collectibleType].rarity : null;
+  const effectSuppressed = mutation?.kind === 'infected' && specialName !== null;
+  const hasDetails = die.owner === 'boss' || specialName !== null || mutation !== undefined || isFetchTarget;
   const dieDetails = `${dieLabel}, face ${formatPlayerNumber(face.rank)}, ${formatPlayerNumber(pips)} Pips`
     + `${temporaryState ? `, ${temporaryState}` : ''}${isFetchTarget ? ', Fetch target' : ''}`;
   const accessibilityLabel = wardenLocked
@@ -55,7 +57,7 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
     : `${dieDetails}${lockedReason ? `, required: ${lockedReason}` : ineligibleReason ? `, unavailable: ${ineligibleReason}` : ''}`;
   const triggered = ability || flameAbility;
 
-  return <div className={`die-wrap die-slot${detailsDisabled ? ' details-disabled' : ''}`} data-die-id={die.id}
+  return <div className={`die-wrap die-slot${detailsDisabled ? ' details-disabled' : ''}${effectSuppressed ? ' effect-suppressed' : ''}`} data-die-id={die.id}
     data-tutorial={die.owner === 'player' ? `die-${(rosterSlot ?? 0) + 1}` : undefined}
     data-testid={die.owner === 'player' ? `flame-die-${die.id}` : 'cursed-die-slot'}>
     <Paper component="button" type="button" withBorder
@@ -80,9 +82,10 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
         ? <PipFace value={face.rank} label={`${dieLabel} showing ${face.rank}`} />
         : <Text component="span" className="die-number" role="img" aria-label={`${dieLabel} showing ${face.rank}`}>{face.rank}</Text>}
     </Paper>
-    <button type="button" className={`die-face-details${specialName ? ' special' : ' normal'}`} disabled={detailsDisabled}
+    {hasDetails ? <button type="button" className={`die-face-details${specialName ? ' special' : ' normal'}`} disabled={detailsDisabled}
       aria-label={`View details for ${die.owner === 'boss' ? 'Cursed Die' : specialName ?? playerLabel}`} onClick={onDetails}>
-      {die.owner === 'boss' ? 'CURSED' : specialName ?? <span className="normal-die-details-mark" aria-hidden="true">ⓘ</span>}
-    </button>
+      {die.owner === 'boss' ? 'CURSED' : specialName ?? <span className="normal-die-details-mark" aria-hidden="true">!</span>}
+      {effectSuppressed && <span className="visually-hidden"> · special effect suppressed</span>}
+    </button> : <span className="die-details-placeholder" aria-hidden="true" />}
   </div>;
 }

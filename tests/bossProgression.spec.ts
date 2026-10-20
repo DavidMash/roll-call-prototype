@@ -527,7 +527,7 @@ test('Hexer face 7 renders seven pips with its dedicated Wild Bonus rule and rem
   await expect(button.locator('.pip-face')).toHaveAttribute('aria-label', 'Cursed Die showing 7');
   await expect(button.locator('.pip')).toHaveCount(7);
   await slot.getByRole('button', { name: 'View details for Cursed Die' }).click();
-  const faces = page.getByRole('dialog', { name: /CURSED DIE .* PHYSICAL FACES/ });
+  const faces = page.getByRole('dialog', { name: /CURSED DIE .* FACES/ });
   await expect(faces).toContainText('Wild for matching Qualification');
   await expect(faces).toContainText('+50 Pips when Scored');
   await faces.getByRole('button', { name: 'Close' }).click();
