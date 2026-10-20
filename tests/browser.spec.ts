@@ -57,7 +57,8 @@ function automaticAction(game: GameState): Action {
 function unlockShopExit(game: GameState): GameState {
   let next = game.shop?.exitUnlocked === false ? dispatch(game, { type: 'UNLOCK_SHOP_EXIT' }).state : game;
   if (next.shop?.stage === 'dice') next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
-  if (next.shop?.stage === 'training') next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
+  if (next.shop?.stage === 'training' && next.flameSlots.some(Boolean))
+    next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
   return next;
 }
 async function ready(page: Page) {
@@ -101,6 +102,14 @@ async function matchBoard(page: Page, game: GameState) {
     await expect(page.getByTestId('round-goal-progress')).toHaveAttribute('aria-valuetext',
       `${game.score.toLocaleString('en-US')} of ${game.target.toLocaleString('en-US')} points toward the Goal`,
     );
+  }
+  if (game.phase === 'shop' && game.shop?.stage === 'dice') {
+    for (const [index, dieId] of game.diceInventory.roster.entries()) {
+      const slot = page.getByTestId(`collection-slot-roster-${index}`);
+      if (dieId === null) await expect(slot.getByRole('button', { name: /empty/ })).toBeVisible();
+      else await expect(slot).toHaveAttribute('data-die-id', String(dieId));
+    }
+    return;
   }
   const visibleDice = game.bustPresentationDice ?? (game.phase === 'round' ? activeEncounterDice(game) : game.dice);
   for (const die of visibleDice) await expect(page.getByRole('button', { name: new RegExp(`^${dieUiLabel(visibleDice, die)}, face ${activeFace(die).rank},`) })).toBeVisible();
@@ -199,7 +208,7 @@ function highInterestState() {
         game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
       } else if (game.phase === 'shop') {
         game = dispatch(game, game.shop?.stage === 'dice' ? { type: 'SET_SHOP_STAGE', stage: 'training' }
-          : game.shop?.stage === 'training' ? { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }
+          : game.shop?.stage === 'training' && game.flameSlots.some(Boolean) ? { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }
             : game.shop?.exitUnlocked === false ? { type: 'UNLOCK_SHOP_EXIT' }
               : game.bust ? { type: 'RETRY_ROUND' }
                 : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
@@ -375,7 +384,7 @@ test('compact HUD, Run Info and Help keep secondary information off the gameplay
   await expect(help).not.toContainText('interpolation');
   await help.getByRole('tab', { name: 'Dice' }).click();
   await expect(help.getByTestId('help-die-jackpot')).toContainText('+3 Gold');
-  await expect(help.getByTestId('help-die-golden')).toContainText('3 Gold/Round');
+  await expect(help.getByTestId('help-die-golden')).toContainText('up to 3 Gold each Round');
   await expect(help.getByTestId('help-die-magic')).toContainText('Legendary');
   await expect(help.getByText('Boomerang', { exact: true })).toHaveCount(0);
   await expect(help.getByText('Personal Trainer', { exact: true })).toHaveCount(0);
@@ -441,10 +450,9 @@ test('physical dice default to numerals and persist the Pips preference across g
   await expect(page.locator('.die-number')).toHaveCount(0);
   await expect(page.locator('.pip-face')).toHaveCount(5);
   const shop = await reachShop(page, findShopSeed());
-  await expect(page.locator('.dice-dock .pip-face')).toHaveCount(5);
-  await page.getByRole('button', { name: 'View physical faces for D1' }).click();
-  const manager = page.getByRole('dialog', { name: /D1 .* PHYSICAL FACES/ });
-  for (let face = 1; face <= 6; face++) await expect(manager.getByTestId(`manage-face-${face}`).locator('.pip')).toHaveCount(face);
+  await expect(page.getByTestId('shop-roster-dock').locator('.pip-face')).toHaveCount(5);
+  await page.getByTestId('collection-slot-roster-0').getByRole('button', { name: 'INFO' }).click();
+  await expect(page.getByRole('dialog', { name: 'DIE DETAILS' })).toBeVisible();
   expect(shop.phase).toBe('shop');
 });
 
@@ -570,7 +578,8 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   expect(game.handLevels[hand]).toBe(2);
   await expect(page.getByTestId(`train-${hand}`)).toBeEnabled();
   await expect(page.getByTestId(`training-offer-${hand}`)).toContainText('TRAINED ×1');
-  await expect(page.getByTestId(`train-${hand}`)).toHaveText('TRAIN · 4 GOLD');
+  await expect(page.getByTestId(`train-${hand}`)).toHaveText('4G');
+  await expect(page.getByTestId(`train-${hand}`)).toHaveAccessibleName(`Train ${HANDS[hand].name} for 4 GOLD`);
   await expect(page.getByTestId(`training-stats-${hand}`)).toHaveText(`Lv. 2 · ${level2.basePips} × ${level2.baseMultiplier}`);
 
   await goToShopStage(page, 'fireKeeping');
@@ -634,11 +643,12 @@ test('Training uses a compact fourteen-hand scorecard on mobile', async ({ page 
   await expect(page.locator('[data-testid^="training-offer-"]')).toHaveCount(14);
   await expect(page.getByTestId('training-scorecard')).toBeVisible();
   await expect(page.getByTestId('training-offer-team')).toHaveCount(0);
-  await expect(page.getByText('Frozen baseline · Lv. 1')).toHaveCount(2);
+  await expect(page.getByText('Baseline · Lv. 1')).toHaveCount(2);
   await expect(page.locator('.dice-offer-grid .dice-offer')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(await page.locator('.training-scorecard .scorecard-grid')
-    .evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(1);
+    .evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(2);
+  expect(await page.getByTestId('training-scorecard').evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(460);
   await expect(page.locator('.roster-grid .collection-slot')).toHaveCount(0);
   await expect(page.locator('.storage-grid .collection-slot')).toHaveCount(0);
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -650,7 +660,27 @@ test('Training uses a compact fourteen-hand scorecard on mobile', async ({ page 
   await page.screenshot({ path: test.info().outputPath('shop-mobile.png'), fullPage: true });
 });
 
-test('mobile staged Shop keeps each section, navigation, and the active Dice Dock usable', async ({ page }) => {
+test('Round Dice leave Normal dice unlabeled and identify special dice without D6', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const game = newRun('round-die-labels').state;
+  game.diceInventory.instances[1].type = 'golden';
+  syncActiveDiceProjection(game);
+  game.dieRoundState = resetDieRoundState(rosterDice(game));
+  await installRunState(page, game);
+  await enterRun(page);
+
+  const normal = page.getByTestId('flame-die-0');
+  const golden = page.getByTestId('flame-die-1');
+  await expect(normal.locator('.die-face-details')).not.toContainText('Normal');
+  await expect(normal.locator('.die-face-details')).not.toContainText('FACES');
+  await expect(golden.locator('.die-face-details')).toHaveText('Golden');
+  await expect(page.getByRole('main')).not.toContainText('Golden D6');
+  await page.screenshot({ path: test.info().outputPath('round-dice-labels-mobile.png'), fullPage: true });
+  await normal.locator('.die-face-details').click();
+  await expect(page.getByRole('dialog', { name: /D1 .* PHYSICAL FACES/ })).toBeVisible();
+});
+
+test('mobile staged Shop keeps each section, navigation, and the compact Roster usable', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const game = await reachShop(page, findShopSeed());
   game.round = 2;
@@ -684,15 +714,26 @@ test('mobile staged Shop keeps each section, navigation, and the active Dice Doc
   await expect(page.getByTestId('shop-stage-continue')).toBeInViewport();
   await expect(page.getByTestId('shop-stage-continue')).toContainText('CONTINUE TO TRAINING');
   await expect(page.getByRole('button', { name: /^REROLL ALL DICE FOR \d+ GOLD$/ })).toBeVisible();
-  await expect(page.getByTestId('dice-dock')).toBeInViewport();
-  await expect(page.locator('.dice-row')).toHaveCount(1);
+  await expect(page.getByTestId('dice-dock')).toHaveCount(0);
+  await expect(page.getByTestId('shop-roster-dock')).toBeInViewport();
   await expect(page.getByTestId('shop-dice-controls')).toHaveCount(0);
-  await expect(page.getByTestId('dice-dock').locator('.die')).toHaveCount(5);
+  await expect(page.getByTestId('shop-roster-dock').locator('.collection-slot')).toHaveCount(5);
 
   await expect(page.getByTestId('dice-shop')).toBeVisible();
   await expect(page.locator('.dice-offer')).toHaveCount(3);
+  const offerTops = await page.locator('.dice-offer').evaluateAll(cards => cards.map(card => Math.round(card.getBoundingClientRect().top)));
+  expect(new Set(offerTops).size).toBe(1);
+  await expect(page.locator('.dice-offer .collectible-die-visual')).toHaveCount(3);
+  await expect(page.locator('.dice-offer').first()).not.toContainText('D6');
+  await page.locator('.dice-offer .dice-offer-info').first().click();
+  const offerDetails = page.getByRole('dialog', { name: 'DIE DETAILS' });
+  await expect(offerDetails).toBeVisible();
+  await offerDetails.getByRole('button', { name: 'CLOSE' }).click();
+  await expect(offerDetails).toBeHidden();
   await expect(page.locator('.roster-grid .collection-slot')).toHaveCount(5);
   await expect(page.locator('.storage-grid .collection-slot')).toHaveCount(3);
+  expect(await page.getByTestId('storage-strip').evaluate(element => getComputedStyle(element).overflowX)).toBe('auto');
+  await page.screenshot({ path: test.info().outputPath('dice-shop-mobile.png'), fullPage: true });
   const purchasedOffer = game.shop!.offers[0];
   await page.getByTestId(`dice-offer-${purchasedOffer.id}`).getByRole('button', { name: /BUY/ }).click();
   await expect(page.getByTestId(`dice-offer-${purchasedOffer.id}`)).toContainText('PURCHASED');
@@ -703,14 +744,15 @@ test('mobile staged Shop keeps each section, navigation, and the active Dice Doc
   await expect(page.getByTestId('shop-stage-gold')).toContainText(`${100 - purchasedOffer.price!} GOLD`);
   await goToShopStage(page, 'dice');
   await expect(page.getByTestId(`dice-offer-${purchasedOffer.id}`)).toContainText('PURCHASED');
-  await goToShopStage(page, 'fireKeeping');
-  await expect(page.getByTestId('fire-keeping-shop')).toBeVisible();
+  await expect(page.getByTestId('shop-stage-fire-keeping')).toHaveCount(0);
+  await goToShopStage(page, 'training');
   await expect(page.getByRole('button', { name: 'NEXT ROUND', exact: true })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('shop-shell-mobile.png'), fullPage: true });
 
   await goToShopStage(page, 'dice');
-  await page.getByTestId('collection-slot-roster-0').getByRole('button', { name: 'DETAILS' }).click();
-  await expect(page.getByRole('dialog', { name: 'DIE DETAILS' })).toContainText('Normal D6');
+  await page.getByTestId('collection-slot-roster-0').getByRole('button', { name: 'INFO' }).click();
+  await expect(page.getByRole('dialog', { name: 'DIE DETAILS' })).toContainText('Normal');
+  await expect(page.getByRole('dialog', { name: 'DIE DETAILS' })).not.toContainText('D6');
 });
 
 test('full seeded run: select/play, clear, buy a collectible die, reroll dice, next round, lose and export', async ({ page, context }) => {
@@ -845,7 +887,7 @@ test('native drag-and-drop moves collection dice and Dice-offer rerolls stay aut
   await page.mouse.up();
   game = dispatch(game, { type: 'MOVE_DIE', source: { area: 'roster', index: 0 }, destination: { area: 'storage', index: 0 },
     expectedSourceDieId: 0, expectedDestinationDieId: null }).state;
-  await expect(page.getByTestId('collection-slot-roster-0').getByText('EMPTY SLOT')).toBeVisible();
+  await expect(page.getByTestId('collection-slot-roster-0').getByRole('button', { name: /Roster 1, empty/ })).toBeVisible();
   await expect(page.getByTestId('collection-slot-storage-0')).toHaveAttribute('data-die-id', '0');
   const oldOfferIds = game.shop!.offers.map(offer => offer.id);
   await page.getByRole('button', { name: 'REROLL DICE OFFERS · 3 GOLD', exact: true }).click();
@@ -863,7 +905,7 @@ test('Vintage collectible details expose its authoritative appreciation and sell
   await matchBoard(page, game);
   const offer = game.shop!.offers.find(item => item.dieType === 'vintage')!;
   const card = page.getByTestId(`dice-offer-${offer.id}`);
-  await expect(card).toContainText('BUY · 10 GOLD');
+  await expect(card).toContainText('10 GOLD');
   await card.getByRole('button', { name: /BUY/ }).click();
   game = dispatch(game, { type: 'BUY_DIE', offerId: offer.id }).state;
   const vintageId = game.diceInventory.storage[0]!;
@@ -872,8 +914,8 @@ test('Vintage collectible details expose its authoritative appreciation and sell
   await matchBoard(page, game);
   const slot = page.getByTestId('collection-slot-storage-0');
   await expect(slot).toContainText('+7 appreciation');
-  await expect(slot).toContainText('Sell 12 Gold');
-  await slot.getByRole('button', { name: 'DETAILS' }).click();
+  await expect(slot).toContainText('Sell 12G');
+  await slot.getByRole('button', { name: 'INFO' }).click();
   const details = page.getByRole('dialog', { name: 'DIE DETAILS' });
   await expect(details).toContainText('Vintage appreciation: +7 Gold');
   await expect(details).toContainText('Current sell value: 12 Gold');
@@ -884,12 +926,12 @@ test('mobile Dice offers keep long names and Legendary rarity inside the card', 
   const game = await reachShop(page, findShopSeed('conjoined'));
   const offer = game.shop!.offers.find(item => item.dieType === 'conjoined')!;
   const card = page.getByTestId(`dice-offer-${offer.id}`);
-  await expect(card.getByText('Conjoined D6', { exact: true })).toBeVisible();
+  await expect(card.getByText('Conjoined', { exact: true })).toBeVisible();
   await expect(card).toContainText('Legendary');
   await expect(card).toContainText('40 GOLD');
   expect(await card.evaluate(element => {
     const cardRect = element.getBoundingClientRect();
-    const identity = element.querySelector('.mantine-Group-root')!.getBoundingClientRect();
+    const identity = element.querySelector('.dice-offer-name')!.getBoundingClientRect();
     return document.documentElement.scrollWidth <= innerWidth
       && identity.left >= cardRect.left - 1 && identity.right <= cardRect.right + 1;
   })).toBe(true);
@@ -908,7 +950,7 @@ test('same-type collection interaction requires explicit Fusion, Swap, or Cancel
   await first.locator('.collection-slot-main').click();
   await second.locator('.collection-slot-main').click();
   let modal = page.getByRole('dialog', { name: 'FUSE DICE?' });
-  await expect(modal).toContainText('Bonus D6 Lv1 + Bonus D6 Lv2');
+  await expect(modal).toContainText('Bonus Lv1 + Bonus Lv2');
   await expect(modal).toContainText('+10 Pips → +30 Pips');
   await modal.getByRole('button', { name: 'CANCEL' }).click();
   expect(game.diceInventory.roster.slice(0, 2)).toEqual([0, 1]);
@@ -929,7 +971,7 @@ test('same-type collection interaction requires explicit Fusion, Swap, or Cancel
   await modal.getByRole('button', { name: 'FUSE' }).click();
   game = dispatch(game, { type: 'FUSE_DICE', source: { area: 'roster', index: 0 }, destination: { area: 'roster', index: 1 },
     expectedSourceDieId: 1, expectedDestinationDieId: 0 }).state;
-  await expect(first.getByText('EMPTY SLOT')).toBeVisible();
+  await expect(first.getByRole('button', { name: /Roster 1, empty/ })).toBeVisible();
   await expect(second).toHaveAttribute('data-die-id', '0');
   await expect(second).toContainText('Lv3');
 });

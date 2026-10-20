@@ -16,7 +16,7 @@ import { formatPlayerNumber } from './copy';
 import { appendCriticalDiagnostic, appendDebugTrace, createDebugTrace, normalizeDebugTrace, type DebugTraceMode } from './debugTrace';
 import { isRollbackState } from './rollback';
 import { assertDiceInventory, collectibleDieById, ownedDice, rosterDice, rosterDieLabel, syncActiveDiceProjection } from './inventory';
-import { normalizeDieRoundRuntime, resetDieRoundState } from './specialDice';
+import { normalizeDieRoundRuntime, resetDieRoundState, SPECIAL_DICE } from './specialDice';
 import { dicePurchaseIsFree, initialSpecialOfferEffects, usableManualRerolls } from './specialOffers';
 import { createTrainingSession, quoteTraining } from './training';
 import { canFuse, dieSellBreakdown, firstPurchaseSlot, purchaseDie, setSlotValue, slotExists, slotValue } from './diceEconomy';
@@ -147,8 +147,9 @@ function normalizeHistoricalScores(state: GameState): void {
 
 const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`${seed}:round:${round}:attempt:${attempt}`);
 
-function normalizeShop(shop: Shop, state: Pick<Board, 'nextShopVisitId' | 'handLevels'>): void {
+function normalizeShop(shop: Shop, state: Pick<Board, 'nextShopVisitId' | 'handLevels' | 'flameSlots'>): void {
   if (!shop.stage || !['dice', 'training', 'fireKeeping'].includes(shop.stage)) shop.stage = 'dice';
+  if (shop.stage === 'fireKeeping' && !state.flameSlots.some(Boolean)) shop.stage = 'training';
   if (shop.trainingSession) {
     for (const hand of HAND_IDS) shop.trainingSession.purchasesByHand[hand] = Math.max(0,
       Math.floor(shop.trainingSession.purchasesByHand[hand] ?? 0));
@@ -493,6 +494,7 @@ export function validateAction(state: Board | GameState, action: Action): string
   if (state.phase !== 'shop' || !state.shop) return 'This action requires an open shop.';
   if (action.type === 'SET_SHOP_STAGE') {
     if (action.stage === state.shop.stage) return 'That Shop stage is already open.';
+    if (action.stage === 'fireKeeping' && !state.flameSlots.some(Boolean)) return 'Fire Keeping opens after you acquire a Flame.';
     const legal = (state.shop.stage === 'dice' && action.stage === 'training')
       || (state.shop.stage === 'training' && (action.stage === 'dice' || action.stage === 'fireKeeping'))
       || (state.shop.stage === 'fireKeeping' && action.stage === 'training');
@@ -506,7 +508,8 @@ export function validateAction(state: Board | GameState, action: Action): string
     && (action.type === 'NEXT_CHAPTER' || action.type === 'NEXT_ROUND' || action.type === 'RETRY_ROUND'))
     return 'Shop progression is available one second after entry.';
   if ((action.type === 'NEXT_CHAPTER' || action.type === 'NEXT_ROUND' || action.type === 'RETRY_ROUND')
-    && state.shop.stage !== 'fireKeeping') return 'Finish the Shop from Fire Keeping.';
+    && state.shop.stage !== (state.flameSlots.some(Boolean) ? 'fireKeeping' : 'training'))
+    return state.flameSlots.some(Boolean) ? 'Finish the Shop from Fire Keeping.' : 'Finish the Shop from Training.';
   if (action.type === 'RETRY_ROUND' && (!state.bust || state.lives <= 0))
     return 'A returned Bust Shop is required to retry the round.';
   if (action.type === 'NEXT_CHAPTER') {
@@ -705,7 +708,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       case 'BUY_DIE': {
         const offer = next.shop!.offers.find(item => item.id === action.offerId)!;
         const cost = dicePurchaseIsFree(next.shop!) ? 0 : offer.price!;
-        if (cost) resolver.spendGold(cost, `Bought ${offer.dieType!} D6: −${formatPlayerNumber(cost)} Gold`, 'dicePurchase');
+        if (cost) resolver.spendGold(cost, `Bought ${SPECIAL_DICE[offer.dieType!].name}: −${formatPlayerNumber(cost)} Gold`, 'dicePurchase');
         next.shop!.freeDicePurchaseAvailable = false;
         const { die, slot } = purchaseDie(next.diceInventory, offer.dieType!);
         offer.purchased = true;
@@ -750,7 +753,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         delete next.diceInventory.instances[die.id];
         delete next.dieRoundState[die.id];
         syncActiveDiceProjection(next);
-        resolver.addGold(sale.total, `Sold ${die.type} D6 Lv${die.level}: +${sale.total} Gold`, 'diceSale', die.id);
+        resolver.addGold(sale.total, `Sold ${SPECIAL_DICE[die.type].name} Lv${die.level}: +${sale.total} Gold`, 'diceSale', die.id);
         resolver.emitV2({ kind: 'shop_transaction', transaction: { type: 'dice_sold', dieId: die.id,
           dieType: die.type, level: die.level, source: action.slot, baseSellValue: sale.base,
           vintageAppreciation: sale.vintageAppreciation, proceeds: sale.total } });
@@ -896,14 +899,17 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         resolver.emit({ type: 'FLAME_TUTORIAL_COMPLETED', message: 'First-Flame shop tutorial completed' });
         break;
       case 'RETRY_ROUND':
-        resolver.emitV2({ kind: 'shop_visit_completed', shopVisitId: next.shop!.visitId!, stage: 'fireKeeping', progression: 'retry_round' });
+        resolver.emitV2({ kind: 'shop_visit_completed', shopVisitId: next.shop!.visitId!,
+          stage: next.shop!.stage as Exclude<NonNullable<Shop['stage']>, 'dice'>, progression: 'retry_round' });
         resolver.startRound(true); break;
       case 'NEXT_CHAPTER':
-        resolver.emitV2({ kind: 'shop_visit_completed', shopVisitId: next.shop!.visitId!, stage: 'fireKeeping', progression: 'next_chapter' });
+        resolver.emitV2({ kind: 'shop_visit_completed', shopVisitId: next.shop!.visitId!,
+          stage: next.shop!.stage as Exclude<NonNullable<Shop['stage']>, 'dice'>, progression: 'next_chapter' });
         if (next.flameTutorial.pendingFlameInstanceId !== null && !next.flameTutorial.completed) next.flameTutorial = { pendingFlameInstanceId: null, completed: true };
         next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
       case 'NEXT_ROUND':
-        resolver.emitV2({ kind: 'shop_visit_completed', shopVisitId: next.shop!.visitId!, stage: 'fireKeeping', progression: 'next_round' });
+        resolver.emitV2({ kind: 'shop_visit_completed', shopVisitId: next.shop!.visitId!,
+          stage: next.shop!.stage as Exclude<NonNullable<Shop['stage']>, 'dice'>, progression: 'next_round' });
         if (next.flameTutorial.pendingFlameInstanceId !== null && !next.flameTutorial.completed) next.flameTutorial = { pendingFlameInstanceId: null, completed: true };
         next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
     }

@@ -119,8 +119,8 @@ test('Shop reroll-all batches all five dice and preserves price escalation', asy
   await installRun(page, state, 'normal');
 
   await page.getByTestId('shop-dice-reroll').click();
-  await expect.poll(async () => page.locator('.die.rolling').count()).toBe(5);
-  await expect(page.locator('.die.rolling')).toHaveCount(0);
+  await expect.poll(async () => page.locator('.collectible-die-visual.rolling').count()).toBe(5);
+  await expect(page.locator('.collectible-die-visual.rolling')).toHaveCount(0);
   await expect(page.getByTestId('shop-dice-reroll')).toHaveAccessibleName('REROLL ALL DICE FOR 4 GOLD');
   await expect(page.getByTestId('stat-gold')).toContainText('98');
   await expect(page.getByTestId('shop-dice-controls')).toHaveCount(0);

@@ -1814,7 +1814,7 @@ export class Resolver {
     this.state.shop!.offers = createDiceOffers(this.rng, () => this.state.nextOfferId++);
     const offerSet = this.state.shop!.offers.map(offer => ({ name: SPECIAL_DICE[offer.dieType!].name, rarity: offer.rarity! }));
     this.log({ type: 'OFFERS_REFRESHED', offerSet,
-      message: `Dice offers: ${offerSet.map(item => `${item.name} D6 [${item.rarity}]`).join(', ')}` });
+      message: `Dice offers: ${offerSet.map(item => `${item.name} [${item.rarity}]`).join(', ')}` });
     this.emitV2({ kind: 'shop_offers_presented', pool: 'dice', reason, shopVisitId: this.state.shop!.visitId,
       offers: this.state.shop!.offers.map(offer => ({ id: offer.id, contentId: offer.dieType!,
         rarity: offer.rarity!, price: offer.price! })) });

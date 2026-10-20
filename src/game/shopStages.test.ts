@@ -15,10 +15,11 @@ function memoryStorage(): Pick<Storage, 'getItem' | 'setItem'> {
   return { getItem: key => values.get(key) ?? null, setItem: (key, value) => { values.set(key, value); } };
 }
 
-function openShop(seed = 'staged-shop'): GameState {
+function openShop(seed = 'staged-shop', withFlame = true): GameState {
   const state = newRun(seed, constant()).state;
   state.gold = 1_000;
   new Resolver(state, constant(.37)).openShop();
+  if (withFlame) placeFlameInstance(state, 'minigun', 0);
   state.shop!.exitUnlocked = true;
   return state;
 }
@@ -198,5 +199,18 @@ describe('persistent staged Shop', () => {
     expect(completed.state.phase).toBe('round');
     expect(completed.state.historyV2).toContainEqual(expect.objectContaining({ kind: 'shop_visit_completed',
       shopVisitId: visitId, stage: 'fireKeeping', progression: 'next_round' }));
+  });
+
+  it('omits Fire Keeping when no Flames are owned and completes from Training', () => {
+    let state = openShop('stage-no-flames', false);
+    expect(dispatch(state, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).error).toContain('after you acquire a Flame');
+    expect(dispatch(state, { type: 'NEXT_ROUND' }).error).toContain('Training');
+    state = go(state, 'training');
+    const visitId = state.shop!.visitId;
+    const completed = dispatch(state, { type: 'NEXT_ROUND' }, constant(.4));
+    expect(completed.error).toBeUndefined();
+    expect(completed.state.phase).toBe('round');
+    expect(completed.state.historyV2).toContainEqual(expect.objectContaining({ kind: 'shop_visit_completed',
+      shopVisitId: visitId, stage: 'training', progression: 'next_round' }));
   });
 });

@@ -45,7 +45,10 @@ export async function openMenuItem(page: Page, item: 'Run Info' | 'How to Play')
 }
 
 export async function goToShopStage(page: Page, stage: 'dice' | 'training' | 'fireKeeping') {
-  const active = async (testId: string) => (await page.getByTestId(testId).getAttribute('data-active')) === 'true';
+  const active = async (testId: string) => {
+    const target = page.getByTestId(testId);
+    return await target.count() > 0 && (await target.getAttribute('data-active')) === 'true';
+  };
   const waitForActive = (testId: string) => page.getByTestId(testId).waitFor({ state: 'visible' })
     .then(() => page.waitForFunction(id => document.querySelector(`[data-testid="${id}"]`)?.getAttribute('data-active') === 'true', testId));
   if (stage === 'dice') {
@@ -64,6 +67,8 @@ export async function goToShopStage(page: Page, stage: 'dice' | 'training' | 'fi
     await waitForActive('shop-stage-training');
   }
   if (stage === 'fireKeeping' && await active('shop-stage-training')) {
+    // Shops without Flames end at Training, so there is no Fire Keeping step to enter.
+    if (!await page.getByTestId('shop-stage-fire-keeping').count()) return;
     await page.getByTestId('shop-stage-continue').click();
     await waitForActive('shop-stage-fire-keeping');
   }

@@ -35,12 +35,11 @@ export function FlameSelectionScreen({ board, event, busy, selectedOffer, setSel
     {busy && <ScoreResolution event={event} busy={busy} onSkip={skip} />}
     <Paper p="xs" className="shop-section global-flame-slots" data-testid="global-flame-slots">
       <Text fw={700} size="sm" tt="uppercase" mb="xs">Your Flames · {board.flameSlots.filter(Boolean).length} / 5</Text>
-      <SimpleGrid cols={{ base: 2, sm: 5 }} spacing="xs">{board.flameSlots.map((flame, index) => <Card key={index} withBorder p="xs"
-        data-testid={`flame-slot-${index}`} className={flame ? `flame-slot ${flame.stage}` : 'flame-slot empty'}>
-        {flame ? <button type="button" className="flame-slot-detail" onClick={() => openFlameDetails({ flameInstanceId: flame.instanceId, kind: flame.stage })}
+      <SimpleGrid cols={{ base: 2, sm: 5 }} spacing="xs">{board.flameSlots.flatMap((flame, index) => flame ? [<Card key={flame.instanceId} withBorder p="xs"
+        data-testid={`flame-slot-${index}`} className={`flame-slot ${flame.stage}`}>
+        <button type="button" className="flame-slot-detail" onClick={() => openFlameDetails({ flameInstanceId: flame.instanceId, kind: flame.stage })}
           aria-label={`View ${FLAMES[flame.type].name} ${flame.stage} details`}><strong>{FLAMES[flame.type].name}</strong><span>{flame.stage.toUpperCase()}</span></button>
-          : <Text size="xs" c="dimmed" ta="center">EMPTY</Text>}
-      </Card>)}</SimpleGrid>
+      </Card>] : [])}</SimpleGrid>
     </Paper>
     <Paper p="xs" className="shop-section flame-offers-section" data-tutorial="flame-offers">
       <Group justify="space-between" className="section-heading"><Text fw={700} size="sm" tt="uppercase">Flame Offers</Text></Group>

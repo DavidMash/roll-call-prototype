@@ -215,7 +215,8 @@ button { font: inherit; }
 .shop-stage-shell { position: sticky; top: 38px; z-index: 13; border: 1px solid rgba(255,255,255,.07); background: rgba(15,20,24,.96); }
 .shop-stage-steps .mantine-Button-root[data-active="true"] { box-shadow: inset 0 -2px var(--screen-secondary); }
 .fire-keeping-section { border: 1px solid rgba(255,146,43,.18); background: linear-gradient(145deg, rgba(230,119,0,.07), var(--mantine-color-dark-7)); }
-.fire-keeping-card { background: var(--mantine-color-dark-8); border-color: rgba(255,146,43,.22); }
+.fire-keeping-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 7px; }
+.fire-keeping-card { min-width: 0; background: var(--mantine-color-dark-8); border-color: rgba(255,146,43,.22); }
 .fire-keeping-card.bonfire { border-color: rgba(250,82,82,.3); }
 .bust-shop-banner { background: rgba(250,82,82,.08); border: 1px solid rgba(250,82,82,.26); }
 .round-summary-screen { max-width: 620px; margin: clamp(12px, 5vh, 54px) auto 0; border: 1px solid color-mix(in srgb, var(--screen-primary) 44%, transparent); background: #151b20; box-shadow: 0 22px 60px rgba(0,0,0,.34); }
@@ -240,27 +241,64 @@ button { font: inherit; }
 .training-card, .offer { min-width: 0; display: flex; flex-direction: column; box-sizing: border-box; background: var(--mantine-color-dark-8); border: 1px solid rgba(255,255,255,.045); }
 .training-card { height: 112px; min-height: 112px; }
 .team-training-card { border-color: rgba(250, 176, 5, .52); background: linear-gradient(145deg, rgba(250,176,5,.16), rgba(134,80,0,.08)); box-shadow: inset 0 0 22px rgba(250,176,5,.06); }
-.training-scorecard { margin-top: 8px; }
+.training-scorecard { margin-top: 5px; }
+.training-scorecard .scorecard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
 .training-section-heading { min-height: 24px; padding-right: 8px; background: rgba(255,255,255,.025); }
 .training-section-heading .scorecard-section-title { background: transparent; }
-.training-scorecard-row { min-width: 0; min-height: 48px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 5px 7px 5px 9px; border-top: 1px solid rgba(255,255,255,.045); }
+.training-scorecard-row { min-width: 0; min-height: 43px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; padding: 4px 5px 4px 7px; border-top: 1px solid rgba(255,255,255,.045); }
 .training-hand-summary { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .training-hand-summary.strength-elevated { color: var(--mantine-color-blue-2); }
 .training-hand-summary.strength-strongest { color: var(--mantine-color-teal-2); }
 .training-hand-summary .scorecard-hand-name { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
 .training-hand-summary .hand-level { color: var(--mantine-color-gray-5); font-size: .68rem; font-variant-numeric: tabular-nums; }
-.training-scorecard-row .training-action { min-width: 128px; }
+.training-scorecard-row .training-action { min-width: 46px; padding-inline: 5px; font-size: .66rem; font-variant-numeric: tabular-nums; }
 .offer { height: 102px; min-height: 102px; }
 .offer[draggable="true"] { cursor: grab; user-select: none; }
 .offer.selected { border-color: var(--mantine-color-teal-5); background: rgba(18,184,134,.1); }
 .offer.purchased { opacity: .5; }
-.dice-offer { min-height: 118px; background: var(--mantine-color-dark-8); }
+.dice-offer-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.dice-offer {
+  position: relative; min-width: 0; min-height: 176px; display: flex; flex-direction: column; align-items: center;
+  gap: 4px; overflow: hidden; text-align: center; background: var(--mantine-color-dark-8);
+}
+.dice-offer-info { position: absolute; top: 3px; right: 3px; z-index: 2; }
+.dice-offer-name { width: 100%; min-height: 2.15em; display: grid; place-items: center; font-size: .78rem; line-height: 1.05; }
+.dice-offer-buy { margin-top: auto; padding-inline: 3px; font-size: .64rem; }
 .dice-offer.purchased { opacity: .5; }
-.collection-slot { min-height: 106px; padding: 0 !important; overflow: hidden; background: var(--mantine-color-dark-8); }
+.collectible-die-visual {
+  position: relative; width: 58px; aspect-ratio: 1; display: grid; place-items: center; flex: none;
+  border: 1px solid rgba(255,255,255,.18); border-radius: 9px; background: #161a1e;
+  box-shadow: inset 0 0 18px rgba(255,255,255,.025), 0 4px 12px rgba(0,0,0,.24);
+}
+.collectible-die-visual .pip-face { width: 62%; }
+.collectible-die-visual.special { box-shadow: inset 0 0 18px color-mix(in srgb, currentColor 12%, transparent), 0 4px 12px rgba(0,0,0,.24); }
+.collectible-die-visual.rarity-common { color: var(--mantine-color-gray-3); }
+.collectible-die-visual.rarity-uncommon { color: var(--mantine-color-cyan-3); border-color: rgba(34,184,207,.45); }
+.collectible-die-visual.rarity-rare { color: var(--mantine-color-violet-3); border-color: rgba(177,151,252,.58); }
+.collectible-die-visual.rarity-legendary { color: var(--mantine-color-grape-2); border-color: rgba(216,180,254,.72); }
+.collectible-die-visual.compact { width: 49px; border-radius: 8px; }
+.collectible-die-visual.rolling { animation: shake 170ms ease-in-out 2; }
+.app-container[data-playback-speed="fast"] .collectible-die-visual.rolling { animation-duration: 45ms; }
+.app-container[data-playback-speed="instant"] .collectible-die-visual.rolling { animation: none; }
+.collectible-die-slot-label { position: absolute; top: 3px; left: 4px; color: var(--mantine-color-gray-5); font-size: .48rem; font-weight: 850; }
+.collectible-die-mark { position: absolute; right: 4px; bottom: 2px; font-size: .46rem; }
+.collection-slot { min-height: 112px; padding: 0 !important; overflow: hidden; background: var(--mantine-color-dark-8); }
 .collection-slot.selected { border-color: var(--mantine-color-teal-5); box-shadow: 0 0 0 1px var(--mantine-color-teal-5); }
+.collection-slot.arriving { animation: collection-arrival 850ms ease-out; }
 .collection-slot.empty { border-style: dashed; opacity: .72; }
-.collection-slot-main { width: 100%; min-height: 69px; border: 0; background: transparent; color: inherit; padding: 7px; cursor: pointer; }
+.collection-slot-main { width: 100%; min-height: 83px; display: flex; flex-direction: column; align-items: center; gap: 2px; border: 0; background: transparent; color: inherit; padding: 5px 3px 2px; cursor: pointer; }
 .collection-slot-main:disabled { cursor: default; }
+.collection-die-name { width: 100%; overflow: hidden; font-size: .67rem; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
+.collection-die-meta { color: var(--mantine-color-gray-5); font-size: .54rem !important; line-height: 1; white-space: nowrap; }
+.collection-slot-actions { min-height: 23px; border-top: 1px solid rgba(255,255,255,.045); }
+.collection-slot-actions .mantine-Button-root { min-width: 0; padding-inline: 4px; font-size: .55rem; }
+.empty-collection-die { width: 49px; aspect-ratio: 1; display: grid; place-items: center; border: 1px dashed rgba(255,255,255,.18); border-radius: 8px; color: var(--mantine-color-gray-7); font-size: 1.25rem; }
+.storage-grid { display: flex; gap: 6px; padding: 1px 1px 5px; overflow-x: auto; scrollbar-width: thin; scroll-snap-type: x proximity; }
+.storage-grid .collection-slot { flex: 0 0 78px; min-height: 105px; scroll-snap-align: start; }
+.roster-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.roster-collection-dock { position: sticky; bottom: 0; z-index: 4; padding: 5px; border: 1px solid color-mix(in srgb, var(--screen-primary) 34%, var(--mantine-color-dark-4)); border-radius: 8px; background: rgba(15,20,24,.985); box-shadow: 0 -8px 22px rgba(0,0,0,.28); }
+.collection-heading { min-height: 18px; }
+@keyframes collection-arrival { 0% { border-color: var(--mantine-color-yellow-3); box-shadow: 0 0 0 5px rgba(250,176,5,.3); transform: translateY(-3px); } }
 .special-dice-controls { border: 1px solid rgba(46,214,143,.22); background: rgba(15,75,56,.12); }
 .special-die-control { padding: 5px 7px; border-radius: 5px; background: rgba(255,255,255,.025); }
 .rarity-legendary { border-color: rgba(190,120,255,.72) !important; background: rgba(117,50,170,.16) !important; color: #d8b4fe !important; }
@@ -705,8 +743,20 @@ button { font: inherit; }
 }
 
 @media (max-width: 430px) {
-  .training-scorecard .scorecard-grid { grid-template-columns: 1fr; }
-  .training-scorecard-row .training-action { min-width: 118px; font-size: .62rem; padding-inline: 5px; }
+  .dice-offer { min-height: 164px; padding: 6px !important; }
+  .dice-offer > .collectible-die-visual { width: 52px; }
+  .dice-offer-name { min-height: 2em; font-size: .7rem; }
+  .dice-offer .rarity-badge { padding-inline: 4px; font-size: .52rem; }
+  .roster-grid .collectible-die-visual { width: min(49px, 100%); }
+  .roster-grid .collection-slot { min-height: 103px; }
+  .roster-grid .collection-slot-main { min-height: 75px; padding-inline: 2px; }
+  .roster-grid .collection-slot-actions .mantine-Button-root { padding-inline: 2px; font-size: .48rem; }
+  .training-scorecard .scorecard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .training-section-heading { padding-inline: 4px; }
+  .training-section-heading .mantine-Text-root:last-child { font-size: .58rem; }
+  .training-scorecard-row .training-action { min-width: 40px; font-size: .6rem; padding-inline: 3px; }
+  .training-scorecard .hand-name-full { display: none; }
+  .training-scorecard .hand-name-compact { display: inline; }
   .active-gameplay .hand-name-full { display: none; }
   .active-gameplay .hand-name-compact { display: inline; }
   .active-gameplay .game-title { font-size: .82rem; letter-spacing: .08em; }
@@ -974,11 +1024,17 @@ body, #root { overflow: hidden; }
 .die-slot .die > .die-number { z-index: 1; font-size: clamp(1.7rem, 5vw, 2.55rem); }
 .die-slot .die > .pip-face { z-index: 1; width: min(66%, 58px); }
 .die-slot .die-id { z-index: 3; top: 4px; left: 5px; }
+.die-slot .die.special-die.rarity-uncommon { border-color: rgba(34,184,207,.58); box-shadow: inset 0 0 18px rgba(34,184,207,.09); }
+.die-slot .die.special-die.rarity-rare { border-color: rgba(177,151,252,.66); box-shadow: inset 0 0 18px rgba(132,94,247,.12); }
+.die-slot .die.special-die.rarity-legendary { border-color: rgba(216,180,254,.76); box-shadow: inset 0 0 20px rgba(190,120,255,.15); }
 .die-face-details {
   width: 100%; min-height: 24px; height: auto; min-width: 0; display: grid; align-content: center; justify-content: center;
   padding: 2px 3px; overflow: hidden; border: 1px solid rgba(255,255,255,.08); border-radius: 3px 3px 7px 7px;
   color: var(--mantine-color-gray-2); background: rgba(255,255,255,.025); cursor: pointer;
 }
+.die-face-details.special { color: var(--mantine-color-gray-1); font-size: clamp(.52rem, 1.8vw, .68rem); font-weight: 850; line-height: 1; text-transform: uppercase; }
+.die-face-details.normal { color: var(--mantine-color-gray-6); border-color: transparent; background: transparent; }
+.normal-die-details-mark { font-size: .64rem; opacity: .72; }
 .die-face-details:disabled { cursor: default; }
 .die-lock-overlay {
   inset: -7px -4px auto auto; z-index: 5; width: auto; height: 18px; display: inline-flex; flex-direction: row;

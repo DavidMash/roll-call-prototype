@@ -49,7 +49,8 @@ test('a full fire requires an explicit replacement confirmation and leaves a hol
   expect(saved.flameSlots.filter(Boolean)).toHaveLength(5);
 });
 
-test('Fire Keeping renders exactly five global slots and stokes an instance in place into Bonfire', async ({ page }) => {
+test('Fire Keeping renders only owned Flames and stokes an instance in place into Bonfire', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const state = newRun('global-fire-keeping').state;
   state.gold = 10;
   const flame = placeFlameInstance(state, 'doubleDown', 99, 3);
@@ -59,9 +60,12 @@ test('Fire Keeping renders exactly five global slots and stokes an instance in p
   await enterRun(page);
   await goToShopStage(page, 'fireKeeping');
 
-  await expect(page.locator('.fire-keeping-card')).toHaveCount(5);
+  await expect(page.locator('.fire-keeping-card')).toHaveCount(1);
+  await expect(page.getByTestId('fire-keeping-shop')).toContainText('1 / 5 FLAMES');
+  await expect(page.getByTestId('fire-keeping-shop')).not.toContainText('EMPTY');
   const card = page.getByTestId(`fire-keeping-flame-${flame.instanceId}`);
   await expect(card).toContainText('EMBER');
+  await page.screenshot({ path: test.info().outputPath('fire-keeping-one-flame-mobile.png'), fullPage: true });
   await card.getByRole('button', { name: 'MANAGE FLAME' }).click();
   const dialog = page.getByRole('dialog', { name: 'Double Down' });
   await dialog.getByRole('button', { name: 'Increase investment' }).click();

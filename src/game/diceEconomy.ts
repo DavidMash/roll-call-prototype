@@ -132,14 +132,31 @@ export function fusionEffectSummary(type: SpecialDieType, fromLevel: number, toL
 
 export function dieEffectDescription(type: DieType, level: number): string {
   if (type === 'normal') return 'No special effect.';
-  const summary = fusionEffectSummary(type, level, level);
-  const descriptions: Partial<Record<SpecialDieType, string>> = {
-    hitchhiker: 'Automatically Scores in another hand.', weighted: 'Forces Rolls to its configured face while Invocations remain.',
-    magnetic: 'Makes another rolling die match this die.', mirror: 'Wild for matching-hand Qualification.',
-    missingLink: 'Wild for Straight Qualification.', jumpingBean: 'On Command: Free Play its Upper hand, then Reroll.',
-    chameleon: 'On Command: change to the other dice’s majority face.', flywheel: 'On Command: Reroll for free.',
-    magic: 'On Command: choose this die’s next Reroll.', conjoined: 'Adds a matching presence for Qualification.',
-    sustainable: 'Preserves a hand that would become Used.',
+  const uses = (count: number): string => count === 1 ? 'Once per Round.' : `${count} times per Round.`;
+  const descriptions: Record<SpecialDieType, string> = {
+    bonus: `Scores +${10 * level} Pips.`,
+    workout: `After each Score, gains +${2 * level} Pips for the rest of the Round.`,
+    vintage: `Each Score adds ${level} Gold to its sell value, up to +${90 * level} Gold.`,
+    golden: `Earn 1 Gold when this die Scores, up to ${3 * level} Gold each Round.`,
+    weighted: `Rolls its chosen face while uses remain. ${uses(level)}`,
+    clockwork: `After its first Roll, its next ${3 * level} Rolls advance one face at a time.`,
+    teamPlayer: `Other dice score ×${level + 1} Pips when this die is played with them.`,
+    loneWolf: `When played alone, this die Scores ${level + 1} times.`,
+    hitchhiker: `Automatically Scores in another hand. ${uses(level)}`,
+    magnetic: `The next other die rolled matches this die. ${uses(level)}`,
+    jackpot: `Earn +${3 * level} Gold when this die Scores in the hand that reaches the target.`,
+    freePlay: `After a Roll, Free Play its Upper hand up to ${level} time${level === 1 ? '' : 's'} per face each Round.`,
+    chameleon: `On Command, match the other dice’s majority face. ${uses(level)}`,
+    flywheel: `On Command, Reroll this die for free. ${uses(level)}`,
+    tank: `After its first Roll, its face stays fixed and each Score or attempted Reroll adds +${10 * level} Pips.`,
+    mirror: `Use as a wild die for matching hands. ${uses(level)}`,
+    missingLink: `Use as a wild die for Straights. ${uses(level)}`,
+    doubleTime: `${fusionEffectSummary(type, level, level).before}.`,
+    jumpingBean: `On Command, Free Play its Upper hand, then Reroll. ${uses(level)}`,
+    furnace: `Feed Gold for +${3 * level} Pips each, up to +${15 * level} Pips.`,
+    sustainable: `Keep a hand available after this die Scores in it. ${uses(level)}`,
+    magic: `On Command, choose this die’s next Reroll. ${uses(level)}`,
+    conjoined: `Count as one extra matching die when qualifying a hand. ${uses(level)}`,
   };
-  return `${descriptions[type] ?? summary.label}: ${summary.before}.`;
+  return descriptions[type];
 }

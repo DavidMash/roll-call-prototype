@@ -199,7 +199,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
           const die = board.dice.find(item => item.id === claim.dieId);
           const rosterSlot = board.dice.filter(item => item.owner === 'player').findIndex(item => item.id === claim.dieId);
           const remaining = board.dieRoundState[claim.dieId]?.invocationsRemaining ?? 0;
-          return `${die?.owner === 'player' ? SPECIAL_DICE[die.type].name : claim.effect} D6${rosterSlot < 0 ? '' : ` · Roster ${rosterSlot + 1}`}${die?.owner === 'player' ? ` · Lv${die.level}` : ''} — ${remaining} Invocation${remaining === 1 ? '' : 's'} remaining · ${claim.effect === 'missingLink' ? 'Straight wildcard' : claim.effect === 'conjoined' ? 'matching presence' : 'matching wildcard'}`;
+          return `${die?.owner === 'player' ? SPECIAL_DICE[die.type].name : claim.effect}${rosterSlot < 0 ? '' : ` · Roster ${rosterSlot + 1}`}${die?.owner === 'player' ? ` · Lv${die.level}` : ''} — ${remaining} Invocation${remaining === 1 ? '' : 's'} remaining · ${claim.effect === 'missingLink' ? 'Straight wildcard' : claim.effect === 'conjoined' ? 'matching presence' : 'matching wildcard'}`;
         }).join(' + ')}
       </Button>)}<Button variant="subtle" color="gray" onClick={() => setQualificationChoiceOpen(false)}>CANCEL</Button></Stack>
     </Modal>

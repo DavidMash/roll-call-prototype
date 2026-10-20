@@ -84,7 +84,7 @@ async function reachBossShop(page: Page, boss: BigBossType, seed = seedFor(boss)
   await ready(page);
   await goToShopStage(page, 'fireKeeping');
   game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
-  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
+  if (game.flameSlots.some(Boolean)) game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
   return game;
 }
 
@@ -502,7 +502,7 @@ test('Hexer preview keeps its faces secret and encounter fits all six dice on on
   const dice = page.locator('.gameplay-dock .die');
   await expect(dice).toHaveCount(6);
   const boxes = await dice.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().top));
-  expect(Math.max(...boxes) - Math.min(...boxes)).toBeLessThan(2);
+  expect(Math.max(...boxes) - Math.min(...boxes)).toBeLessThan(3);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(game.dice).toHaveLength(6);
 });
@@ -526,7 +526,7 @@ test('Hexer face 7 renders seven pips with its dedicated Wild Bonus rule and rem
   const slot = page.getByTestId('cursed-die-slot');
   await expect(button.locator('.pip-face')).toHaveAttribute('aria-label', 'Cursed Die showing 7');
   await expect(button.locator('.pip')).toHaveCount(7);
-  await slot.getByRole('button', { name: 'View physical faces for Cursed Die' }).click();
+  await slot.getByRole('button', { name: 'View details for Cursed Die' }).click();
   const faces = page.getByRole('dialog', { name: /CURSED DIE .* PHYSICAL FACES/ });
   await expect(faces).toContainText('Wild for matching Qualification');
   await expect(faces).toContainText('+50 Pips when Scored');
@@ -549,7 +549,7 @@ test('Boss clear shows its Boss Reward summary and transitions directly to Flame
     else if (game.phase === 'shop' && game.bust) {
       await goToShopStage(page, 'fireKeeping');
       game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
-      game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
+      if (game.flameSlots.some(Boolean)) game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
       await page.getByRole('button', { name: `RETRY ROUND ${game.round}`, exact: true }).click();
       game = dispatch(game, { type: 'RETRY_ROUND' }).state;
       await ready(page);

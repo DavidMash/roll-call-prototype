@@ -239,7 +239,7 @@ export interface TeamTrainingAppliedEvent extends RunHistoryV2Envelope {
 export interface ShopVisitCompletedEvent extends RunHistoryV2Envelope {
   kind: 'shop_visit_completed';
   shopVisitId: number;
-  stage: 'fireKeeping';
+  stage: Exclude<ShopStage, 'dice'>;
   progression: 'next_round' | 'retry_round' | 'next_chapter';
 }
 

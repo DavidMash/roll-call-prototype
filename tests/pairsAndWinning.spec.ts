@@ -109,6 +109,10 @@ test('winning hand shows its final award, physical settle, and ROUND CLEARED in 
   await page.clock.resume();
   await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();
   await ready(page);
-  for (const physical of fixture.result.state.dice)
-    await expect(page.getByRole('button', { name: new RegExp(`^Die ${physical.id + 1}, face ${physical.value},`) })).toBeVisible();
+  for (const [slot, dieId] of fixture.result.state.diceInventory.roster.entries()) {
+    const die = dieId === null ? null : fixture.result.state.diceInventory.instances[dieId];
+    const card = page.getByTestId(`collection-slot-roster-${slot}`);
+    await expect(card).toHaveAttribute('data-die-id', String(dieId));
+    await expect(card.locator('.pip-face')).toHaveAttribute('aria-label', `Normal showing ${die!.value}`);
+  }
 });

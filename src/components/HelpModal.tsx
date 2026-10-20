@@ -51,11 +51,11 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
           <Text size="sm" fw={700}>{HANDS[hand].name}</Text><Text size="xs" c="dimmed">{LOWER_HAND_RULES[hand]}</Text>
         </div>)}</SimpleGrid></div>
       </Stack></Tabs.Panel>
-      <Tabs.Panel value="dice" pt="md"><Stack gap="sm"><Text size="sm">Own collectible D6s with stable identity. Equip up to five in Roster order; Storage dice stay out of the Round. Buy, sell, move, and fuse identical special dice in the Dice Shop.</Text><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{SPECIAL_DIE_TYPES.filter(id => id !== 'normal').map(id => <div key={id} className="help-item" data-testid={`help-die-${id}`}>
-        <Text size="sm" fw={700}>{SPECIAL_DICE[id].name} D6 <RarityBadge rarity={SPECIAL_DICE[id].rarity!} compact /></Text><Text size="xs" c="dimmed">{dieEffectDescription(id, 1)}</Text>
+      <Tabs.Panel value="dice" pt="md"><Stack gap="sm"><Text size="sm">Collect dice and equip up to five in your Roster. Storage dice stay out of the Round. Buy, sell, move, and fuse identical special dice in the Dice Shop.</Text><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{SPECIAL_DIE_TYPES.filter(id => id !== 'normal').map(id => <div key={id} className="help-item" data-testid={`help-die-${id}`}>
+        <Text size="sm" fw={700}>{SPECIAL_DICE[id].name} <RarityBadge rarity={SPECIAL_DICE[id].rarity!} compact /></Text><Text size="xs" c="dimmed">{dieEffectDescription(id, 1)}</Text>
       </div>)}</SimpleGrid></Stack></Tabs.Panel>
       <Tabs.Panel value="flames" pt="md"><Stack gap="sm">
-        <Text size="sm">You have five global Flame slots. Flames begin as Embers; Stoke one in Fire Keeping and it becomes a Bonfire at 100 Gold. A Flame's written condition is its complete activation condition.</Text>
+        <Text size="sm">You can keep up to five Flames. Feed Gold to an Ember in Fire Keeping to strengthen it; at 100 Gold, it becomes a Bonfire.</Text>
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{FLAME_IDS.map(id => <div key={id} className="help-item">
           <Text size="sm" fw={700}>🔥 {FLAMES[id].name} <RarityBadge rarity={FLAMES[id].rarity} compact /></Text><Text size="xs" c="dimmed">{FLAMES[id].description}</Text>
           {isChargeFlame(id) && <Text size="xs" c="orange">Bonfire: {FLAMES[id].bonfireDescription}</Text>}
@@ -70,7 +70,7 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
         </div>)}</SimpleGrid></div>
       </Stack></Tabs.Panel>
       <Tabs.Panel value="shop" pt="md"><Stack gap="xs"><Text size="sm" fw={700}>DICE → TRAINING → FIRE KEEPING</Text>
-        <Text size="sm">These are sections of one persistent Shop visit. Move backward freely without changing offers, purchases, Gold, or Training prices.</Text>
+        <Text size="sm">Move between Shop sections without losing offers, purchases, Gold, or Training prices. Fire Keeping appears after you acquire a Flame.</Text>
         <Text size="sm">Training lets you improve any hand. A hand becomes more expensive as it rises above the rest of its Upper or Lower section; catching up lower hands stays inexpensive.</Text>
       </Stack></Tabs.Panel>
     </Tabs>

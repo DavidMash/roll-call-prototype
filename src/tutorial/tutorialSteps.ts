@@ -101,8 +101,8 @@ const candidates: Candidate[] = [
     { highlightTargets: ['[data-tutorial="training-fullHouse"]'], interactiveTargets: ['[data-tutorial="training-fullHouse"] .training-action'] }),
   info('shop1-training-result', 'FULL HOUSE · LV. 2', ['Its Base Pips and Mult are both higher now.'], '[data-tutorial="training-fullHouse"]',
     s => s.game.phase === 'shop' && s.game.round === 1 && has(s, R.training)),
-  required('shop1-to-fire-keeping', 'FIRE KEEPING', ['Continue through Fire Keeping before starting the next Round.'], '[data-testid="shop-stage-continue"]',
-    'Continue to Fire Keeping.', s => s.game.phase === 'shop' && s.game.round === 1 && s.game.shop?.stage === 'training'
+  required('shop1-next-round', 'NEXT ROUND', ['You have no Flames to tend yet, so Training is the last stop in this Shop.'], '[data-testid="shop-progression-action"]',
+    'Start the next Round.', s => s.game.phase === 'shop' && s.game.round === 1 && s.game.shop?.stage === 'training'
       && has(s, 'shop1-training-result')),
   info('c1-mini-boss', 'MINI-BOSS', ['Round 3 has a Mini-Boss. Each one changes the rules for this Round.'], '[data-tutorial="boss"]',
     s => s.game.round === 3 && s.game.phase === 'round'),
@@ -126,12 +126,12 @@ const candidates: Candidate[] = [
     'Continue to Training.', s => s.game.round === 6 && s.game.phase === 'shop' && s.game.shop?.stage === 'dice' && !!s.scenario.firstFlame),
   required('flame-shop-to-fire-keeping', 'FIRE KEEPING', ['This is where you invest in the Flame you just earned.'], '[data-testid="shop-stage-continue"]',
     'Continue to Fire Keeping.', s => s.game.round === 6 && s.game.phase === 'shop' && s.game.shop?.stage === 'training' && !!s.scenario.firstFlame),
-  info('flame-basics', 'FLAMES', ['Flames are global build objects.', 'Their written condition is the complete rule for adding XMult.'], '[data-tutorial="flames"]',
+  info('flame-basics', 'FLAMES', ['Flames boost your score with XMult.', 'Each Flame tells you exactly when it helps.'], '[data-tutorial="flames"]',
     s => s.game.round === 6 && s.game.phase === 'shop' && s.game.shop?.stage === 'fireKeeping'
       && !!s.scenario.firstFlame && !s.game.flameTutorial.completed, { side: 'top' }),
   info('flame-xmult', 'XMULT', ['XMult multiplies your score after Pips and Mult.', 'Pips × Mult × XMult'], flameCard(),
     s => s.game.round === 6 && has(s, 'flame-basics'), { side: 'top' }),
-  info('flame-ember', undefined, ["A Flame's written condition is its complete activation rule."], flameCard(),
+  info('flame-ember', undefined, ['Meet the condition on a Flame to gain its XMult.'], flameCard(),
     s => s.game.round === 6 && has(s, 'flame-xmult'), { side: 'top' }),
   required('flame-details', undefined, ['Tap your Flame to see its details.'], flameCard(), 'Open the Flame details.',
     s => s.game.phase === 'shop' && s.game.shop?.stage === 'fireKeeping' && s.game.round === 6 && !!s.scenario.firstFlame && !s.game.flameTutorial.completed,
@@ -139,7 +139,7 @@ const candidates: Candidate[] = [
   required('flame-stoke', 'STOKE', ["Investing Gold makes a Flame's XMult effect stronger.", 'Stoke it once so you can see the effect grow.'], '[data-tutorial="stoke"]',
     'Stoke the Flame once.', (s, ui) => s.game.phase === 'shop' && s.game.round === 6 && has(s, 'flame-details') && ui.flameDetailsOpen && s.game.stats.flameStokes.length === 0,
     { side: 'right', highlightTargets: ['[data-tutorial="stoke"]'], interactiveTargets: ['[data-tutorial="stoke"] button'] }),
-  info('bonfire-explainer', 'BONFIRES', ['At 100 Gold, an Ember becomes a Bonfire.', 'It stays in the same Flame slot and reaches full strength.'], flameCard(),
+  info('bonfire-explainer', 'BONFIRES', ['At 100 Gold, an Ember becomes a Bonfire.', 'It remains yours and reaches full strength.'], flameCard(),
     s => s.game.phase === 'shop' && s.game.round === 6 && s.game.stats.flameStokes.length > 0, { side: 'top' }),
 
   info('chapter-2', 'CHAPTER 2', ["You've got the basics. I'll give you more room to make your own choices now."], undefined,
@@ -190,7 +190,7 @@ const candidates: Candidate[] = [
   info('context-persistent', 'SPECIAL EFFECT', ['Some Special Offers last across multiple Rounds.', 'You can check active effects here.'], '[data-tutorial="special-offer-status"]',
     s => !seen(s, 'persistent-effect') && activeSpecialOfferStatusItems(s.game.specialOfferEffects).length > 0
       && !(s.game.manualRerollsRemaining === 0 && s.game.specialOfferEffects.carePackageRerolls > 0), { contextual: true }),
-  info('context-bonfire', 'BONFIRE', ['Nice. That Flame is fully stoked now.', 'It remains in the same Flame slot and activates from the same written condition at full strength.'], '[data-tutorial="flames"]',
+  info('context-bonfire', 'BONFIRE', ['Nice. That Flame is fully stoked now.', 'It now grants its full effect whenever you meet its condition.'], '[data-tutorial="flames"]',
     s => !seen(s, 'bonfire') && s.game.flameSlots.some(flame => flame?.stage === 'bonfire'), { contextual: true }),
   info('context-later-boss', 'NEW BOSS', ['Check its rule here before you make your first move.'], '[data-tutorial="boss"]',
     s => !seen(s, 'later-boss') && s.game.round > 12 && s.game.phase === 'round' && !!s.game.boss
@@ -226,10 +226,10 @@ function contextualCopy(beat: TutorialBeat, session: TutorialSession): TutorialB
       : flame === 'straightShooter' ? (setup ? 'STRAIGHT SHOOTER' : "NOW IT'S READY") : 'MINIGUN';
     const body = flame === 'doubleDown' ? (setup
       ? [`Pair is marked because it sets up your Flame. ${selecting ? 'Select' : 'Play'} Pair first.`]
-      : ['Two Pair is the payoff. Its Flame applies globally when the condition is met.'])
+      : ['Two Pair is the payoff. The Flame activates when you meet its condition.'])
       : flame === 'straightShooter' ? (setup
         ? [`Small Straight is marked because it sets up your Flame. ${selecting ? 'Select' : 'Play'} it first.`]
-        : ['Large Straight is the payoff. Its Flame applies globally when the condition is met.'])
+        : ['Large Straight is the payoff. The Flame activates when you meet its condition.'])
         : ['Any Upper hand can trigger this Flame.', `${selecting ? 'Select' : 'Play'} an Upper hand and you'll get some extra XMult.`];
     return {
       ...beat,

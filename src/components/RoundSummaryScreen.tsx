@@ -13,8 +13,8 @@ export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy
     { label: 'Base Reward', amount: summary.sources.baseRewardGold },
     { label: 'Unused Rerolls', amount: summary.sources.unusedRerollGold },
     { label: 'Interest', amount: summary.sources.interestGold },
-    { label: 'Golden D6', amount: summary.sources.goldenGold },
-    { label: 'Jackpot D6', amount: summary.sources.jackpotGold },
+    { label: 'Golden', amount: summary.sources.goldenGold },
+    { label: 'Jackpot', amount: summary.sources.jackpotGold },
     { label: 'Other Gold', amount: summary.sources.otherGold },
     { label: miniBoss ? 'Mini-Boss Reward' : 'Boss Reward', amount: summary.sources.bossRewardGold },
   ];

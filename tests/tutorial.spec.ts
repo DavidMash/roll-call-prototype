@@ -281,8 +281,8 @@ test('Shop Training remains guided while obsolete Enhancement purchasing is bypa
 
   await expect(page.locator('.driver-popover-title')).toHaveText(/FULL HOUSE.*LV\. 2/);
   await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
-  await expect(page.locator('.driver-popover-title')).toHaveText('FIRE KEEPING');
-  await expect(page.locator('.driver-popover')).toContainText('Continue through Fire Keeping before starting the next Round.');
+  await expect(page.locator('.driver-popover-title')).toHaveText('NEXT ROUND');
+  await expect(page.locator('.driver-popover')).toContainText('Training is the last stop in this Shop.');
   await expect(page.locator('.dice-offer')).toHaveCount(0);
   await expect(page.getByTestId('training-shop')).toBeVisible();
   await expect(page.getByTestId('dice-shop')).toHaveCount(0);

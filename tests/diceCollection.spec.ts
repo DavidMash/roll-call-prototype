@@ -46,14 +46,14 @@ test('Shop click movement, roster sale warning, and pre-Round warning are explic
   await expect(sale).toContainText('EMPTY ROSTER SLOT');
   await expect(sale).toContainText('only 4 dice equipped');
   await sale.getByRole('button', { name: 'SELL ANYWAY' }).click();
-  await expect(first.getByText('EMPTY SLOT')).toBeVisible();
+  await expect(first.getByRole('button', { name: /Roster 1, empty/ })).toBeVisible();
 
   await goToShopStage(page, 'fireKeeping');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   const warning = page.getByRole('dialog', { name: 'ONLY 4 OF 5 DICE EQUIPPED' });
   await expect(warning).toContainText('Some hands may be impossible');
   await warning.getByRole('button', { name: 'GO BACK' }).click();
-  await expect(page.getByTestId('shop-stage-fire-keeping')).toHaveAttribute('data-active', 'true');
+  await expect(page.getByTestId('shop-stage-training')).toHaveAttribute('data-active', 'true');
 });
 
 test('Weighted configuration is an owned-die Shop action and survives the details modal', async ({ page }) => {
@@ -62,7 +62,7 @@ test('Weighted configuration is an owned-die Shop action and survives the detail
   await installRunState(page, state);
   await enterRun(page);
   const slot = page.getByTestId('collection-slot-roster-0');
-  await slot.getByRole('button', { name: 'DETAILS' }).click();
+  await slot.getByRole('button', { name: 'INFO' }).click();
   const details = page.getByRole('dialog', { name: 'DIE DETAILS' });
   await expect(details).toContainText('WEIGHTED FACE · 6');
   await details.getByRole('button', { name: '4', exact: true }).click();
@@ -127,8 +127,8 @@ test('ambiguous qualification previews spend nothing and let the player choose t
   await page.getByTestId('scorecard-row-pair').click();
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   let chooser = page.getByRole('dialog', { name: 'HOW SHOULD THIS HAND QUALIFY?' });
-  await expect(chooser.getByRole('button', { name: /Mirror D6 · Roster 1 · Lv1/ })).toBeVisible();
-  await expect(chooser.getByRole('button', { name: /Mirror D6 · Roster 2 · Lv1/ })).toBeVisible();
+  await expect(chooser.getByRole('button', { name: /Mirror · Roster 1 · Lv1/ })).toBeVisible();
+  await expect(chooser.getByRole('button', { name: /Mirror · Roster 2 · Lv1/ })).toBeVisible();
   await expect(page.getByTestId('special-die-control-0')).toContainText('1 / 1 Invocations');
   await expect(page.getByTestId('special-die-control-1')).toContainText('1 / 1 Invocations');
   await chooser.getByRole('button', { name: 'CANCEL' }).click();
@@ -137,7 +137,7 @@ test('ambiguous qualification previews spend nothing and let the player choose t
 
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   chooser = page.getByRole('dialog', { name: 'HOW SHOULD THIS HAND QUALIFY?' });
-  await chooser.getByRole('button', { name: /Mirror D6 · Roster 2 · Lv1/ }).click();
+  await chooser.getByRole('button', { name: /Mirror · Roster 2 · Lv1/ }).click();
   await expect(chooser).toHaveCount(0);
   const saved = await persisted(page);
   expect(saved.dieRoundState[0].invocationsRemaining).toBe(1);

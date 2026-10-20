@@ -21,7 +21,7 @@ export function SpecialDiceControls({ board, busy, submit }: { board: Board; bus
           : die.type === 'flywheel' ? { type: 'INVOKE_FLYWHEEL', dieId: die.id } as const : null;
       return <div className="special-die-control" key={die.id} data-testid={`special-die-control-${die.id}`}>
         <Group justify="space-between" align="center" gap="xs" wrap="wrap">
-          <div><Text size="sm" fw={800}>{definition.name} D6 · Lv{die.level}</Text>
+          <div><Text size="sm" fw={800}>{definition.name} · Lv{die.level}</Text>
             <Text size="xs" c="dimmed">{invocation ?? dieEffectDescription(die.type, die.level)}</Text></div>
           {action && <Button size="compact-xs" disabled={busy || validateAction(board, action) !== null} onClick={() => submit(action)}>ON COMMAND</Button>}
           {die.type === 'magic' && runtime && <Group gap={4}>

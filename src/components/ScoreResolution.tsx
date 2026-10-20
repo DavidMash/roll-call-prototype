@@ -38,7 +38,7 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText }: {
   const scoreDieType = event?.dieType ?? (event?.type === 'HITCHHIKER_ADDED_PIPS' ? 'hitchhiker' : null);
   let heading: ReactNode = idleText ?? '';
   if (event?.type === 'HAND_SCORE_FINALIZED' || event?.type === 'STANDALONE_SCORE_CALCULATED') heading = `+${typeof event.amount === 'bigint' ? formatExactScore(event.amount) : formatPlayerNumber(event.amount ?? 0)}`;
-  else if (event?.type === 'JUMPING_BEAN_FREE_PLAY' && event.hand) heading = <>JUMPING BEAN D6 · FREE {HANDS[event.hand].name.toUpperCase()}</>;
+  else if (event?.type === 'JUMPING_BEAN_FREE_PLAY' && event.hand) heading = <>JUMPING BEAN · FREE {HANDS[event.hand].name.toUpperCase()}</>;
   else if (event?.type === 'SCORE_ADDED') {
     const scoreAmount = typeof event.amount === 'bigint' ? event.amount : BigInt(event.amount ?? 0);
     heading = scoreAmount < 0n ? `−${formatExactScore(-scoreAmount)}` : `+${formatExactScore(scoreAmount)}`;
