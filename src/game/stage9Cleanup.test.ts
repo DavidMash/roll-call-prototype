@@ -26,7 +26,7 @@ describe('Stage 9 current schema and observability', () => {
   it('creates only current Shop, Training, Flame, and history state', () => {
     const state = newRun('stage9-schema', constant()).state;
     const payload = JSON.parse(JSON.stringify(state, (_key, value) => typeof value === 'bigint' ? value.toString() : value));
-    expect(RUN_STORAGE_VERSION).toBe(18);
+    expect(RUN_STORAGE_VERSION).toBe(19);
     expect(RUN_HISTORY_V2_SCHEMA_VERSION).toBe(16);
     expect(payload).not.toHaveProperty('suppressedPostBossRewardRounds');
     const serialized = JSON.stringify(payload);

@@ -7,7 +7,7 @@ import { postBossRewardForRound, routeThrough } from './progression';
 import { loadPersistedRun, savePersistedRun } from './persistence';
 import {
   activeSpecialOfferStatusItems, captureBustPersistentSpecialOfferState, initialSpecialOfferEffects,
-  restoreSpecialOfferEffectsAfterBust, SPECIAL_OFFER_COLOR, SPECIAL_OFFERS, specialOfferEligible,
+  fireKeeperInvestment, restoreSpecialOfferEffectsAfterBust, SPECIAL_OFFER_COLOR, SPECIAL_OFFERS, specialOfferEligible,
   usableManualRerolls,
 } from './specialOffers';
 import { SCREEN_THEMES } from './screenThemes';
@@ -121,13 +121,26 @@ describe('immediate and Shop Special Offers', () => {
     expect(state.actionJournal.at(-1)).toEqual({ type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 });
   });
 
-  it('Fire Keeper updates every applicable Flame deterministically', () => {
-    for (const [from, to] of [[20, 60], [60, 80], [90, 95]] as const) {
+  it('Fire Keeper moves a held Ember halfway from its current investment and rounds up', () => {
+    for (const [from, to] of [[0, 50], [25, 63], [50, 75], [63, 82], [82, 91], [99, 100]] as const) {
+      expect(fireKeeperInvestment(from)).toBe(to);
       const ember = offerState('fireKeeper');
       placeFlameInstance(ember, 'ultimate', from);
       const stoked = dispatch(ember, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }, constant(0)).state;
       expect(flameByType(stoked, 'ultimate')?.investedGold).toBe(to);
     }
+    expect(fireKeeperInvestment(100)).toBe(100);
+  });
+
+  it('Fire Keeper deterministically selects only held Embers and never a Bonfire', () => {
+    const state = offerState('fireKeeper');
+    placeFlameInstance(state, 'ultimate', 100, 0);
+    placeFlameInstance(state, 'momentum', 25, 1);
+    placeFlameInstance(state, 'lowball', 50, 2);
+    const stoked = dispatch(state, { type: 'CHOOSE_SPECIAL_OFFER', offerId: 100 }, constant(.99)).state;
+    expect(flameByType(stoked, 'ultimate')?.investedGold).toBe(100);
+    expect(flameByType(stoked, 'momentum')?.investedGold).toBe(25);
+    expect(flameByType(stoked, 'lowball')?.investedGold).toBe(75);
   });
 });
 
@@ -144,7 +157,7 @@ describe('temporary Special Offers', () => {
     });
     expect(activeSpecialOfferStatusItems(effects).map(status => [status.type, status.label])).toEqual([
       ['onTheHouse', 'On The House · Next Shop'],
-      ['carePackage', 'Care Package · 2 Rerolls Left'],
+      ['carePackage', 'Care Package · 2 Manual Rerolls Left'],
       ['silence', 'Silence · Next Boss'],
       ['taxEvasion', 'Tax Evasion · 1 Round'],
       ['bottledFairy', 'Bottled Fairy · 2 Rounds'],
@@ -162,10 +175,10 @@ describe('temporary Special Offers', () => {
     state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0, 1] }, constant(.4)).state;
     expect(state.manualRerollsRemaining).toBe(0);
     expect(state.specialOfferEffects.carePackageRerolls).toBe(2);
-    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Care Package · 2 Rerolls Left');
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Care Package · 2 Manual Rerolls Left');
     state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [2] }, constant(.4)).state;
     expect(state.specialOfferEffects.carePackageRerolls).toBe(1);
-    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Care Package · 1 Reroll Left');
+    expect(activeSpecialOfferStatusItems(state.specialOfferEffects)[0]?.label).toBe('Care Package · 1 Manual Reroll Left');
     state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [3] }, constant(.4)).state;
     expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
     expect(activeSpecialOfferStatusItems(state.specialOfferEffects)).toEqual([]);
@@ -235,7 +248,7 @@ describe('temporary Special Offers', () => {
     expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
     expect(state.roundCheckpoint?.board.specialOfferEffects.carePackageRerolls).toBe(0);
     expect(result.events.find(event => event.type === 'MANUAL_REROLL_STARTED')?.message)
-      .toBe('Care Package depleted · 0 Rerolls left');
+      .toBe('Care Package depleted · 0 normal Rerolls left');
     expect(result.events.find(event => event.type === 'SHOP_REOPENED_AFTER_BUST')?.message)
       .toContain('3 Rerolls left · Care Package 0');
 
@@ -576,8 +589,8 @@ describe('replay and checkpoint Special Offers', () => {
   });
 
   it('keeps the canonical player-facing descriptions exact', () => {
-    expect(SPECIAL_OFFERS.onTheHouse.description).toBe('Your first Dice purchase and first individual Training purchase in the next Shop are free.');
-    expect(SPECIAL_OFFERS.timeTravel.description).toBe('Replay this Chapter from Round 1 with your current build.');
-    expect(SPECIAL_OFFERS.badDream.description).toBe('If your run ends in the next 3 Rounds, return to the post-R3 Shop with your current build and 1 Life.');
+    expect(SPECIAL_OFFERS.onTheHouse.description).toBe('In the next Shop, the first die you purchase and the first individual Training you purchase will both be free.');
+    expect(SPECIAL_OFFERS.timeTravel.description).toBe('Return to Round 1 of the current Chapter while keeping your current Build.');
+    expect(SPECIAL_OFFERS.badDream.description).toBe('For the next 3 Rounds, if your run ends, you will return to the Shop after Round 3 with your current Build and 1 Life.');
   });
 });

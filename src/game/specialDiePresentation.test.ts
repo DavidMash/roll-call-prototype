@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { newRun } from './engine';
 import { rosterDice } from './inventory';
-import { specialDieDetails } from './specialDiePresentation';
-import { initialDieRoundRuntime } from './specialDice';
+import { SPECIAL_DIE_PRESENTATION, specialDieDetails } from './specialDiePresentation';
+import { initialDieRoundRuntime, SPECIAL_DIE_TYPES } from './specialDice';
 import type { CollectibleDie, DieType } from './types';
 
 function details(type: DieType, level = 1) {
@@ -39,8 +39,8 @@ describe('special die Round details', () => {
     magnetic.die.value = 4;
     magnetic.runtime.invocationsRemaining = 1;
     expect(specialDieDetails(magnetic.die, magnetic.runtime).status).toEqual([
-      { label: 'Target', value: '4' },
-      { label: 'Uses remaining', value: '1 / 2' },
+      { label: 'Matching Face', value: '4' },
+      { label: 'Uses Remaining', value: '1 / 2' },
     ]);
 
     const magic = details('magic', 1);
@@ -48,10 +48,9 @@ describe('special die Round details', () => {
     expect(specialDieDetails(magic.die, magic.runtime).status).toContainEqual({ label: 'Next Reroll', value: '5' });
 
     const doubleTime = details('doubleTime', 1);
-    expect(specialDieDetails(doubleTime.die, doubleTime.runtime)).toMatchObject({
-      description: '25% chance to Score twice.',
-      status: [{ label: 'Additional Score chance', value: '25% chance to Score twice' }],
-    });
+    expect(specialDieDetails(doubleTime.die, doubleTime.runtime).description).toContain('25% chance');
+    expect(specialDieDetails(doubleTime.die, doubleTime.runtime).status)
+      .toEqual([{ label: 'Additional Score chance', value: '25% chance to Score twice' }]);
   });
 
   it('reports compact Free Play uses for every face', () => {
@@ -60,5 +59,22 @@ describe('special die Round details', () => {
     expect(specialDieDetails(freePlay.die, freePlay.runtime).freePlayRemaining).toEqual({
       1: 2, 2: 1, 3: 0, 4: 2, 5: 1, 6: 0,
     });
+  });
+});
+
+describe('special die visual identity registry', () => {
+  it('gives every special type a unique icon and complete accent/tint metadata', () => {
+    const specialTypes = SPECIAL_DIE_TYPES.filter(type => type !== 'normal');
+    const icons = specialTypes.map(type => SPECIAL_DIE_PRESENTATION[type].icon);
+    expect(icons.every(Boolean)).toBe(true);
+    expect(new Set(icons).size).toBe(specialTypes.length);
+    for (const type of specialTypes) {
+      expect(SPECIAL_DIE_PRESENTATION[type].accent).toMatch(/^#/);
+      expect(SPECIAL_DIE_PRESENTATION[type].tint).toContain('rgba');
+    }
+  });
+
+  it('keeps Normal neutral and without a special icon', () => {
+    expect(SPECIAL_DIE_PRESENTATION.normal).toMatchObject({ icon: null, accent: '#adb5bd' });
   });
 });

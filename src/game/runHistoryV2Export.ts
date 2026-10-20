@@ -47,7 +47,7 @@ export function renderRunSummaryV2(state: GameState): string {
     .map(([hand, metric]) => `${HANDS[hand as keyof typeof HANDS].name}: ${metric.purchases} purchase${metric.purchases === 1 ? '' : 's'}, ${number(metric.goldSpent)} Gold, max tier ${metric.maximumRelativeTier}, max quote ${number(metric.maximumNormalPrice)}`).join(' · ') || 'None';
   const specialDice = Object.entries(experienced.specialDice)
     .filter(([type]) => type !== 'normal')
-    .map(([type, metric]) => `${SPECIAL_DICE[type as keyof typeof SPECIAL_DICE].name}: ${metric.activations} activations, ${metric.invocationsSpent} Invocations, ${metric.commandUses} commands, ${metric.scoreOccurrences} Scores (${metric.additionalScores} additional)`).join(' · ') || 'None';
+    .map(([type, metric]) => `${SPECIAL_DICE[type as keyof typeof SPECIAL_DICE].name}: ${metric.activations} activations, ${metric.invocationsSpent} Uses, ${metric.commandUses} commands, ${metric.scoreOccurrences} Scores (${metric.additionalScores} additional)`).join(' · ') || 'None';
   const shares = experienced.largestHandShare;
   return [
     'ROLL CALL · RUN HISTORY V2',

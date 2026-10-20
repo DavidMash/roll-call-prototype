@@ -40,6 +40,19 @@ describe('Flame formulas', () => {
 });
 
 describe('global activation', () => {
+  it('applies Lowball only when a scoring die shows 1, 2, or 3', () => {
+    for (const face of [1, 2, 3, 4, 5, 6] as const) {
+      const state = game([face, 2, 3, 4, 5]);
+      placeFlameInstance(state, 'lowball', 100);
+      const hand = (['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'] as const)[face - 1];
+      const preview = handXMultContributions(captureHandStart(state, hand, [0]), hand, 1, [0]);
+      expect(preview.some(factor => factor.source === 'lowball'), `face ${face}`).toBe(face <= 3);
+      new Resolver(state, constant()).play(hand, [0]);
+      expect(state.stats.handScores.at(-1)?.xMult, `face ${face}`)
+        .toBe(face <= 3 ? lowballMultiplier(100, face) : 1);
+    }
+  });
+
   it('uses the written condition independent of selected dice at Ember and Bonfire', () => {
     const ember = game(); ember.handLevels.threeKind = 3;
     const instance = placeFlameInstance(ember, 'ultimate', 50, 4);
@@ -113,7 +126,7 @@ describe('five-slot lifecycle', () => {
   });
   it('keeps Flame identity unchanged through die movement, sale, and Fusion', () => {
     let state = game(); state.phase = 'shop'; state.gold = 100;
-    state.shop = { stage: 'dice', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    state.shop = { stage: 'dice', offers: [], offerRerolls: 0, lifeRestores: 0 };
     const flame = placeFlameInstance(state, 'ultimate', 37, 3);
     const rosterId = state.diceInventory.roster[0]!;
     state = dispatch(state, { type: 'MOVE_DIE', source: { area: 'roster', index: 0 }, destination: { area: 'storage', index: 0 },

@@ -18,6 +18,7 @@ import { DecisionTimer } from '../game/decisionTimer';
 import { usableManualRerolls } from '../game/specialOffers';
 import { RunActionLayout, RunActionPortal } from './RunActionRow';
 import { SPECIAL_DICE } from '../game/specialDice';
+import { DieTypeLabel } from './DieTypeLabel';
 
 export function RoundScreen({ board, event, busy, inputBlocked, selection, setSelection, submit, skip }: {
   board: Board; event: GameEvent | null; busy: boolean; inputBlocked: boolean;
@@ -63,7 +64,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const validationError = effectiveSelection.hand
     ? validateAction(board, { type: 'PLAY', hand: effectiveSelection.hand, dieIds: effectiveSelection.dieIds }) : null;
   const valid = canPlay(encounterDice, unavailableHands, effectiveSelection, requiredDieIds)
-    && !!qualification?.legal && (validationError === null || validationError === 'Choose which qualification die should spend its Invocation.');
+    && !!qualification?.legal && (validationError === null || validationError === 'Choose which qualification die should spend its Use.');
   const preview = valid ? (() => {
     const hand = effectiveSelection.hand!;
     const base = handScore(encounterDice, hand, effectiveSelection.dieIds, board.handLevels[hand]);
@@ -193,12 +194,18 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
       title="HOW SHOULD THIS HAND QUALIFY?" centered>
       <Stack gap="xs">{qualification?.claimOptions.map((option, index) => <Button key={index} variant="default" fullWidth
         onClick={() => commitPlay(option.map(claim => ({ dieId: claim.dieId, effect: claim.effect })))}>
-        {option.map(claim => {
+        {option.map((claim, claimIndex) => {
           const die = board.dice.find(item => item.id === claim.dieId);
           const rosterSlot = board.dice.filter(item => item.owner === 'player').findIndex(item => item.id === claim.dieId);
           const remaining = board.dieRoundState[claim.dieId]?.invocationsRemaining ?? 0;
-          return `${die?.owner === 'player' ? SPECIAL_DICE[die.type].name : claim.effect}${rosterSlot < 0 ? '' : ` · Roster ${rosterSlot + 1}`}${die?.owner === 'player' ? ` · Lv${die.level}` : ''} — ${remaining} Invocation${remaining === 1 ? '' : 's'} remaining · ${claim.effect === 'missingLink' ? 'Straight wildcard' : claim.effect === 'conjoined' ? 'matching presence' : 'matching wildcard'}`;
-        }).join(' + ')}
+          return <span className="qualification-claim" key={`${claim.dieId}:${claim.effect}`}>
+            {claimIndex > 0 && <span> + </span>}
+            {die?.owner === 'player' && die.type !== 'normal'
+              ? <DieTypeLabel type={die.type} level={die.level} />
+              : <span>{die?.owner === 'player' ? SPECIAL_DICE[die.type].name : claim.effect}</span>}
+            <span>{`${rosterSlot < 0 ? '' : ` · Roster ${rosterSlot + 1}`} — ${remaining} Use${remaining === 1 ? '' : 's'} Remaining · ${claim.effect === 'missingLink' ? 'Straight Wild' : claim.effect === 'conjoined' ? 'Two-die presence' : 'Matching Wild'}`}</span>
+          </span>;
+        })}
       </Button>)}<Button variant="subtle" color="gray" onClick={() => setQualificationChoiceOpen(false)}>CANCEL</Button></Stack>
     </Modal>
   </Stack>;

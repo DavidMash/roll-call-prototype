@@ -1,7 +1,7 @@
-import { ActionIcon, Badge, Button, Card, Group, Modal, Paper, Progress, Stack, Text } from '@mantine/core';
+import { ActionIcon, Badge, Button, Card, Group, Modal, Paper, Progress, Stack, Tabs, Text } from '@mantine/core';
 import { useEffect, useRef, useState } from 'react';
-import { CONFIG, diceRerollCost, offerRerollCost } from '../game/config';
-import { dieEffectDescription, dieSellBreakdown, firstPurchaseSlot, fusionEffectSummary, slotValue } from '../game/diceEconomy';
+import { CONFIG, offerRerollCost } from '../game/config';
+import { dieSellBreakdown, firstPurchaseSlot, fusionEffectSummary, slotValue } from '../game/diceEconomy';
 import { SPECIAL_DICE } from '../game/specialDice';
 import type { Action, Board, CollectibleDie, DiceInventory, DiceSlotRef, GameEvent } from '../game/types';
 import { ScoreResolution } from './ScoreResolution';
@@ -16,29 +16,38 @@ import { RarityBadge } from './RarityBadge';
 import { flameEffectText, flameInstances, FLAMES } from '../game/flames';
 import type { FlameDetailsTarget } from './FlameDetailsModal';
 import { CollectibleDieVisual } from './CollectibleDieVisual';
+import { DieTypeLabel, diePresentationStyle } from './DieTypeLabel';
+import { RichDescription } from './RichDescription';
+import { chameleonTieDetail } from '../game/effectDescriptions';
 
 const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
 const slotKey = (slot: DiceSlotRef) => `${slot.area}:${slot.index}`;
 const slotName = (slot: DiceSlotRef) => `${slot.area === 'roster' ? 'Roster' : 'Storage'} ${slot.index + 1}`;
 
-function CollectionDieCard({ die, slot, selected, arriving, rolling, busy, onSelect, onDetails, onSell, onDragStart, onDrop }: {
-  die: CollectibleDie | null; slot: DiceSlotRef; selected: boolean; arriving: boolean; rolling: boolean; busy: boolean;
+function CollectionDieCard({ die, slot, selected, dragging, dropTarget, arriving, rolling, busy, onSelect, onDetails, onSell,
+  onDragStart, onDragEnd, onDragEnter, onDrop }: {
+  die: CollectibleDie | null; slot: DiceSlotRef; selected: boolean; dragging: boolean; dropTarget: boolean;
+  arriving: boolean; rolling: boolean; busy: boolean;
   onSelect: () => void; onDetails: () => void; onSell: () => void;
-  onDragStart: (event: React.DragEvent) => void; onDrop: (event: React.DragEvent) => void;
+  onDragStart: (event: React.DragEvent) => void; onDragEnd: () => void; onDragEnter: () => void;
+  onDrop: (event: React.DragEvent) => void;
 }) {
   const sale = die ? dieSellBreakdown(die) : null;
   const slotCode = `${slot.area === 'roster' ? 'D' : 'S'}${slot.index + 1}`;
-  return <Card withBorder p="xs" className={`collection-slot ${slot.area} ${selected ? 'selected' : ''} ${arriving ? 'arriving' : ''} ${die ? 'occupied' : 'empty'}`}
+  return <Card withBorder p="xs"
+    className={`collection-slot die-selection-target ${slot.area}${selected ? ' selected is-die-selected' : ''}${dragging ? ' is-die-dragging' : ''}${dropTarget ? ' valid-drop-target' : ''}${arriving ? ' arriving' : ''} ${die ? 'occupied' : 'empty'}`}
+    style={die ? diePresentationStyle(die.type) : undefined}
     data-testid={`collection-slot-${slot.area}-${slot.index}`} data-die-id={die?.id ?? undefined}
-    draggable={!!die && !busy} onDragStart={onDragStart}
+    data-selected={selected || undefined} data-dragging={dragging || undefined} data-drop-target={dropTarget || undefined}
+    draggable={!!die && !busy} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragEnter={onDragEnter}
     onDragOver={event => { if (!busy) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; } }} onDrop={onDrop}>
     <button type="button" className="collection-slot-main" disabled={busy} onClick={onSelect}
       aria-label={die ? `${slotName(slot)}, ${SPECIAL_DICE[die.type].name}, level ${die.level}` : `${slotName(slot)}, empty`}>
       {die ? <>
         <CollectibleDieVisual type={die.type} face={die.value as 1 | 2 | 3 | 4 | 5 | 6}
           slotLabel={slotCode} compact={slot.area === 'storage'} rolling={rolling} />
-        {die.type !== 'normal' && <Text className="collection-die-name" fw={850}>{SPECIAL_DICE[die.type].name}</Text>}
-        <Text size="xs" className="collection-die-meta">{die.type === 'normal' ? '' : `Lv${die.level} · `}Sell {sale!.total}G</Text>
+        {die.type !== 'normal' && <Text className="collection-die-name" fw={850}><DieTypeLabel type={die.type} level={die.level} /></Text>}
+        <Text size="xs" className="collection-die-meta">Sell {sale!.total}G</Text>
         {die.type === 'vintage' && <Text size="xs" c="teal">+{die.vintageAppreciation} appreciation</Text>}
       </> : <><span className="empty-collection-die" aria-hidden="true">+</span><Text size="xs" c="dimmed" fw={700}>{slotCode}</Text></>}
     </button>
@@ -60,9 +69,10 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
   const nextChapter = !returnedFromBust && shop.kind === 'post_boss';
   const upcomingBoss = board.bossSchedule[board.round + 1];
   const retryRound = chapterRoundForRound(board.round);
-  const rerollCost = diceRerollCost(shop.diceRerolls);
   const [showProgressNudge, setShowProgressNudge] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<DiceSlotRef | null>(null);
+  const [draggingSlot, setDraggingSlot] = useState<DiceSlotRef | null>(null);
+  const [dragTargetSlot, setDragTargetSlot] = useState<DiceSlotRef | null>(null);
   const [fusion, setFusion] = useState<{ source: DiceSlotRef; destination: DiceSlotRef } | null>(null);
   const [saleSlot, setSaleSlot] = useState<DiceSlotRef | null>(null);
   const [detailSlot, setDetailSlot] = useState<DiceSlotRef | null>(null);
@@ -131,7 +141,9 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
     event.dataTransfer.setData('application/x-roll-call-die-slot', JSON.stringify(slot));
     event.dataTransfer.effectAllowed = 'move';
     setSelectedSlot(slot);
+    setDraggingSlot(slot);
   }
+  function finishDrag() { setDraggingSlot(null); setDragTargetSlot(null); }
   function drop(event: React.DragEvent, destination: DiceSlotRef) {
     event.preventDefault();
     try {
@@ -140,6 +152,7 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
         setSelectedSlot(source); chooseDrop(source, destination);
       }
     } catch { /* Ignore foreign drag payloads. */ }
+    finishDrag();
   }
   function chooseDrop(source: DiceSlotRef, destination: DiceSlotRef) {
     if (slotKey(source) === slotKey(destination)) { setSelectedSlot(null); return; }
@@ -168,8 +181,12 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
       arriving={dieAt(slot)?.id === arrivalId}
       rolling={!!dieAt(slot) && event?.type === 'DICE_REROLL_STARTED' && !!event.dieIds?.includes(dieAt(slot)!.id)}
       selected={selectedSlot !== null && slotKey(selectedSlot) === slotKey(slot)} onSelect={() => chooseSlot(slot)}
+      dragging={draggingSlot !== null && slotKey(draggingSlot) === slotKey(slot)}
+      dropTarget={dragTargetSlot !== null && slotKey(dragTargetSlot) === slotKey(slot)}
       onDetails={() => setDetailSlot(slot)} onSell={() => setSaleSlot(slot)}
-      onDragStart={event => beginDrag(event, slot)} onDrop={event => drop(event, slot)} />;
+      onDragStart={event => beginDrag(event, slot)} onDragEnd={finishDrag}
+      onDragEnter={() => { if (draggingSlot && slotKey(draggingSlot) !== slotKey(slot)) setDragTargetSlot(slot); }}
+      onDrop={event => drop(event, slot)} />;
   });
 
   return <Stack gap="xs" className="shop-screen">
@@ -182,19 +199,16 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
     <BossPreview board={board} />
 
     <Paper p="xs" className="shop-stage-shell" data-testid="shop-stage-indicator">
-      <Group justify="space-between" gap="xs" wrap="wrap">
-        <Group gap={5} wrap="nowrap" className="shop-stage-steps">
-          <Button size="compact-xs" variant={stage === 'dice' ? 'filled' : 'subtle'}
-            disabled={busy || stage === 'dice' || stage === 'fireKeeping'} data-active={stage === 'dice' || undefined}
-            data-testid="shop-stage-dice" onClick={() => submit({ type: 'SET_SHOP_STAGE', stage: 'dice' })}>DICE</Button>
-          <Text size="xs" c="dimmed">→</Text>
-          <Button size="compact-xs" variant={stage === 'training' ? 'filled' : 'subtle'}
-            disabled={busy || stage === 'dice' || stage === 'training'} data-active={stage === 'training' || undefined}
-            data-testid="shop-stage-training" onClick={() => submit({ type: 'SET_SHOP_STAGE', stage: 'training' })}>TRAINING</Button>
-          {hasFlames && <><Text size="xs" c="dimmed">→</Text>
-            <Button size="compact-xs" variant={stage === 'fireKeeping' ? 'filled' : 'subtle'} disabled
-              data-active={stage === 'fireKeeping' || undefined} data-testid="shop-stage-fire-keeping">FIRE KEEPING</Button></>}
-        </Group>
+      <Group justify="space-between" gap="xs" wrap="nowrap">
+        <Tabs className="shop-stage-tabs" value={stage} onChange={value => {
+          if (value && value !== stage) submit({ type: 'SET_SHOP_STAGE', stage: value as typeof stage });
+        }}>
+          <Tabs.List>
+            <Tabs.Tab value="dice" disabled={busy} data-testid="shop-stage-dice">DICE</Tabs.Tab>
+            <Tabs.Tab value="training" disabled={busy} data-testid="shop-stage-training">TRAINING</Tabs.Tab>
+            {hasFlames && <Tabs.Tab value="fireKeeping" disabled={busy} data-testid="shop-stage-fire-keeping">FIRE KEEPING</Tabs.Tab>}
+          </Tabs.List>
+        </Tabs>
         <Badge color="yellow" variant="light" size="lg" data-testid="shop-stage-gold">{formatPlayerNumber(board.gold)} GOLD</Badge>
       </Group>
     </Paper>
@@ -202,18 +216,19 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
     {stage === 'dice' && <Paper p="xs" className="shop-section dice-shop-section" data-testid="dice-shop">
       <Group justify="space-between" className="section-heading"><Text fw={700} size="sm" tt="uppercase" lts=".08em">Dice</Text>
         <Button size="compact-xs" variant="default" disabled={busy || board.gold < offerRerollCost(shop.offerRerolls)}
-          aria-label={`REROLL DICE OFFERS · ${offerRerollCost(shop.offerRerolls)} GOLD`}
+          aria-label={`REROLL OFFERS · ${offerRerollCost(shop.offerRerolls)} GOLD`}
           onClick={() => submit({ type: 'REROLL_OFFERS' })}>REROLL OFFERS · {offerRerollCost(shop.offerRerolls)} GOLD</Button></Group>
       <div className="dice-offer-grid">{shop.offers.map(offer => {
         const available = !!offer.dieType && !!offer.rarity && offer.price !== undefined && !offer.purchased;
         const free = dicePurchaseIsFree(shop);
         const affordable = free || board.gold >= (offer.price ?? Infinity);
-        return <Card key={offer.id} withBorder p="xs" className={`dice-offer rarity-${offer.rarity ?? 'common'} ${offer.purchased ? 'purchased' : ''}`}
-          data-testid={`dice-offer-${offer.id}`}>
+        return <Card key={offer.id} withBorder p="xs" className={`dice-offer ${offer.purchased ? 'purchased' : ''}`}
+          style={offer.dieType ? diePresentationStyle(offer.dieType) : undefined}
+          data-die-type={offer.dieType} data-testid={`dice-offer-${offer.id}`}>
           {offer.dieType && offer.rarity ? <><ActionIcon className="dice-offer-info" variant="subtle" color="gray" size="sm"
               aria-label={`View ${SPECIAL_DICE[offer.dieType].name} details`} onClick={() => setDetailOfferType(offer.dieType)}>ⓘ</ActionIcon>
             <CollectibleDieVisual type={offer.dieType} face={((offer.id % 6) + 1) as 1 | 2 | 3 | 4 | 5 | 6} />
-            <Text className="dice-offer-name" fw={850}>{SPECIAL_DICE[offer.dieType].name}</Text>
+            <Text className="dice-offer-name" fw={850}><DieTypeLabel type={offer.dieType} /></Text>
             <RarityBadge rarity={offer.rarity} compact />
             <Text size="xs" fw={850} c="yellow" data-testid={`dice-offer-price-${offer.id}`}>{offer.price} GOLD</Text>
             <Button className="dice-offer-buy" size="compact-xs" fullWidth disabled={busy || !available || !affordable || collectionFull}
@@ -259,13 +274,6 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
     </Paper>}
 
     <RunActionPortal><RunActionLayout className="shop-action-dock"
-      left={stage === 'dice' ? <Button className="shop-dice-reroll" size="sm" variant="default" disabled={busy || board.gold < rerollCost}
-          aria-label={`REROLL ALL DICE FOR ${formatPlayerNumber(rerollCost)} GOLD`} data-testid="shop-dice-reroll"
-          onClick={() => submit({ type: 'REROLL_DICE' })}>REROLL ALL DICE FOR {formatPlayerNumber(rerollCost)} GOLD</Button>
-        : <Button size="sm" variant="default" disabled={busy} data-testid="shop-stage-back"
-          onClick={() => submit({ type: 'SET_SHOP_STAGE', stage: stage === 'training' ? 'dice' : 'training' })}>
-          {stage === 'training' ? 'BACK TO DICE' : 'BACK TO TRAINING'}
-        </Button>}
       right={stage === 'dice' ? <Button size="sm" disabled={busy} data-testid="shop-stage-continue"
           onClick={() => submit({ type: 'SET_SHOP_STAGE', stage: 'training' })}>CONTINUE TO TRAINING →</Button>
         : stage === 'training' && hasFlames ? <Button size="sm" disabled={busy} data-testid="shop-stage-continue"
@@ -279,8 +287,8 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
 
     <Modal opened={fusion !== null} onClose={() => { setFusion(null); setSelectedSlot(null); }} title="FUSE DICE?" centered>
       {fusion && sourceFusionDie && destinationFusionDie && fusionPreview && <Stack>
-        <Text fw={850}>{SPECIAL_DICE[sourceFusionDie.type].name} Lv{destinationFusionDie.level} + {SPECIAL_DICE[sourceFusionDie.type].name} Lv{sourceFusionDie.level}</Text>
-        <Text>→ {SPECIAL_DICE[sourceFusionDie.type].name} Lv{sourceFusionDie.level + destinationFusionDie.level}</Text>
+        <Text fw={850} className="fusion-die-line"><DieTypeLabel type={sourceFusionDie.type} level={destinationFusionDie.level} /> + <DieTypeLabel type={sourceFusionDie.type} level={sourceFusionDie.level} /></Text>
+        <Text className="fusion-die-line">→ <DieTypeLabel type={sourceFusionDie.type} level={sourceFusionDie.level + destinationFusionDie.level} /></Text>
         <Text size="sm" c="dimmed">{fusionPreview.label}<br /><strong>{fusionPreview.before} → {fusionPreview.after}</strong></Text>
         <Group justify="flex-end"><Button variant="default" onClick={() => { setFusion(null); setSelectedSlot(null); }}>CANCEL</Button>
           <Button variant="default" onClick={() => { submitMove(fusion.source, fusion.destination); setFusion(null); }}>SWAP</Button>
@@ -290,7 +298,7 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
     </Modal>
 
     <Modal opened={saleSlot !== null} onClose={() => setSaleSlot(null)} title="SELL DIE?" centered>
-      {saleSlot && saleDie && <Stack><Text fw={850}>{SPECIAL_DICE[saleDie.type].name} · Lv{saleDie.level}</Text>
+      {saleSlot && saleDie && <Stack>{saleDie.type === 'normal' ? <Text fw={850}>Normal</Text> : <Text fw={850}><DieTypeLabel type={saleDie.type} level={saleDie.level} /></Text>}
         {saleSlot.area === 'roster' && rosterCount < 6 && <Paper p="sm" withBorder><Text fw={800}>EMPTY ROSTER SLOT</Text>
           <Text size="sm">Selling this die will leave you with only {rosterCount - 1} dice equipped. Some hands may become impossible to Play.</Text></Paper>}
         <Text size="xl" fw={900}>+{dieSellBreakdown(saleDie).total} GOLD</Text>
@@ -301,9 +309,10 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
     </Modal>
 
     <Modal opened={detailType !== null} onClose={() => { setDetailSlot(null); setDetailOfferType(null); }} title="DIE DETAILS" centered>
-      {detailType && <Stack><Group justify="space-between"><Text fw={900} size="lg">{SPECIAL_DICE[detailType].name}{detailType === 'normal' ? '' : ` · Lv${detailLevel}`}</Text>
+      {detailType && <Stack><Group justify="space-between"><Text fw={900} size="lg">{detailType === 'normal' ? 'Normal' : <DieTypeLabel type={detailType} level={detailLevel} />}</Text>
         {SPECIAL_DICE[detailType].rarity && <RarityBadge rarity={SPECIAL_DICE[detailType].rarity!} />}</Group>
-        <Text>{dieEffectDescription(detailType, detailLevel)}</Text>
+        <RichDescription copy={SPECIAL_DICE[detailType].verboseDescription(detailLevel)} />
+        {detailType === 'chameleon' && <RichDescription copy={chameleonTieDetail} size="xs" />}
         {detailType !== 'normal' && <Text size="sm" c="dimmed">Level effect: {fusionEffectSummary(detailType, detailLevel, detailLevel).before}</Text>}
         {detailDie?.type === 'vintage' && <Text>Vintage appreciation: +{detailDie.vintageAppreciation} Gold</Text>}
         {detailDie?.type === 'weighted' && <div><Text size="sm" fw={800}>WEIGHTED FACE · {detailDie.weightedFace}</Text>

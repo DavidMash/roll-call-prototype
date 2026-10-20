@@ -1,6 +1,6 @@
 import { CONFIG } from './config';
 import type { CollectibleDie, DiceInventory, Die, DieType, Face, HexerFace, PhysicalFace, RandomSource, Rank } from './types';
-import { INITIAL_STORAGE_SLOT_COUNT, rosterTuple } from './inventory';
+import { rosterTuple, storageTuple, STORAGE_SLOT_COUNT } from './inventory';
 
 export const RANKS: Rank[] = [1, 2, 3, 4, 5, 6];
 export const HAND_RANKS: Rank[] = [1, 2, 3, 4, 5, 6, 7];
@@ -36,9 +36,8 @@ export function createDiceInventory(): DiceInventory {
   return {
     instances: Object.fromEntries(dice.map(die => [die.id, die])),
     roster: rosterTuple(dice.map(die => die.id)),
-    storage: Array.from({ length: INITIAL_STORAGE_SLOT_COUNT }, () => null),
+    storage: storageTuple(Array.from({ length: STORAGE_SLOT_COUNT }, () => null)),
     nextDieId: dice.length,
-    storageAwardedChapters: [],
   };
 }
 export const rollWeights = (die: Die, excludedFace?: Rank): number[] => (die.owner === 'boss'

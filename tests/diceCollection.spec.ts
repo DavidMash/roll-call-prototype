@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { newRun } from '../src/game/engine';
+import { createCollectibleDie } from '../src/game/dice';
 import { Resolver } from '../src/game/effects';
 import { RUN_STORAGE_KEY } from '../src/game/persistence';
+import { syncActiveDiceProjection } from '../src/game/inventory';
 import type { GameState, Rank } from '../src/game/types';
 import { enterRun, goToShopStage, installRunState } from './uiHelpers';
 
@@ -70,7 +72,63 @@ test('Weighted configuration is an owned-die Shop action and survives the detail
   expect((await persisted(page)).diceInventory.instances[0].weightedFace).toBe(4);
 });
 
-test('Magic and Furnace controls expose armed state, free disarm, Invocations, and Furnace power', async ({ page }) => {
+for (const viewport of [{ name: 'desktop', width: 1280, height: 900 }, { name: 'mobile', width: 390, height: 844 }]) {
+  test(`${viewport.name} selection visibly lifts Normal and special dice in Round and Shop`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    const round = newRun(`selection-lift-${viewport.name}`, fixed).state;
+    setType(round, 1, 'magnetic');
+    setType(round, 2, 'magic');
+    setType(round, 3, 'golden');
+    setType(round, 4, 'clockwork');
+    await installRunState(page, round);
+    await enterRun(page);
+    for (const id of [0, 1]) {
+      const die = page.getByTestId(`flame-die-${id}`).locator('.die');
+      await die.click();
+      await expect(die).toHaveClass(/is-die-selected/);
+      const selectedStyle = await die.evaluate(element => ({ transform: getComputedStyle(element).transform,
+        shadow: getComputedStyle(element).boxShadow }));
+      expect(selectedStyle.transform).not.toBe('none');
+      expect(selectedStyle.shadow).not.toBe('none');
+      await die.click();
+      await expect(die).not.toHaveClass(/is-die-selected/);
+    }
+    await page.getByTestId('flame-die-1').locator('.die').click();
+    await page.screenshot({ path: test.info().outputPath(`selected-round-${viewport.name}.png`), fullPage: true });
+
+    const shop = shopState(`shop-selection-lift-${viewport.name}`);
+    setType(shop, 0, 'magnetic');
+    for (const [index, type] of (['golden', 'magic', 'clockwork'] as const).entries()) {
+      const die = createCollectibleDie(shop.diceInventory.nextDieId++, type);
+      shop.diceInventory.instances[die.id] = die;
+      shop.diceInventory.storage[index] = die.id;
+    }
+    syncActiveDiceProjection(shop);
+    await installRunState(page, shop);
+    await enterRun(page);
+    const storageGeometry = await page.locator('.storage-grid .collection-slot').evaluateAll(elements => elements.map(element => {
+      const rect = element.getBoundingClientRect(); return { x: rect.x, width: rect.width };
+    }));
+    const rosterGeometry = await page.locator('.roster-grid .collection-slot').evaluateAll(elements => elements.map(element => {
+      const rect = element.getBoundingClientRect(); return { x: rect.x, width: rect.width };
+    }));
+    expect(storageGeometry).toHaveLength(5);
+    expect(rosterGeometry).toHaveLength(5);
+    storageGeometry.forEach((slotGeometry, index) => {
+      expect(slotGeometry.x).toBeCloseTo(rosterGeometry[index].x, 0);
+      expect(slotGeometry.width).toBeCloseTo(rosterGeometry[index].width, 0);
+    });
+    const slot = page.getByTestId('collection-slot-roster-0');
+    await slot.locator('.collection-slot-main').click();
+    await expect(slot).toHaveClass(/is-die-selected/);
+    expect(await slot.evaluate(element => getComputedStyle(element).transform)).not.toBe('none');
+    await page.screenshot({ path: test.info().outputPath(`selected-shop-${viewport.name}.png`), fullPage: true });
+    await slot.locator('.collection-slot-main').click();
+    await expect(slot).not.toHaveClass(/is-die-selected/);
+  });
+}
+
+test('Magic and Furnace controls expose armed state, free disarm, Uses, and Furnace power', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const state = newRun('stage4-command-controls', fixed).state;
   state.gold = 7;
@@ -85,7 +143,7 @@ test('Magic and Furnace controls expose armed state, free disarm, Invocations, a
 
   await page.getByTestId('flame-die-0').getByRole('button', { name: 'View details for Magic' }).click();
   let details = page.getByRole('dialog', { name: 'MAGIC · LV2' });
-  await expect(details).toContainText(/Uses remaining\s*2 \/ 2/);
+  await expect(details).toContainText(/Uses Remaining\s*2 \/ 2/);
   await details.getByRole('button', { name: 'Arm Magic die 0 for face 6' }).click();
   await expect(details).toContainText(/Next Reroll\s*6/);
   await page.screenshot({ path: test.info().outputPath('magic-armed-details-mobile.png'), fullPage: true });
@@ -137,15 +195,15 @@ test('ambiguous qualification previews spend nothing and let the player choose t
   await page.getByTestId('scorecard-row-pair').click();
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   let chooser = page.getByRole('dialog', { name: 'HOW SHOULD THIS HAND QUALIFY?' });
-  await expect(chooser.getByRole('button', { name: /Mirror · Roster 1 · Lv1/ })).toBeVisible();
-  await expect(chooser.getByRole('button', { name: /Mirror · Roster 2 · Lv1/ })).toBeVisible();
+  await expect(chooser.getByRole('button', { name: /Mirror · Lv1 · Roster 1/ })).toBeVisible();
+  await expect(chooser.getByRole('button', { name: /Mirror · Lv1 · Roster 2/ })).toBeVisible();
   await chooser.getByRole('button', { name: 'CANCEL' }).click();
 
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   chooser = page.getByRole('dialog', { name: 'HOW SHOULD THIS HAND QUALIFY?' });
-  await expect(chooser.getByRole('button', { name: /Mirror · Roster 1 · Lv1.*1 Invocation remaining/ })).toBeVisible();
-  await expect(chooser.getByRole('button', { name: /Mirror · Roster 2 · Lv1.*1 Invocation remaining/ })).toBeVisible();
-  await chooser.getByRole('button', { name: /Mirror · Roster 2 · Lv1/ }).click();
+  await expect(chooser.getByRole('button', { name: /Mirror · Lv1 · Roster 1.*1 Use Remaining/ })).toBeVisible();
+  await expect(chooser.getByRole('button', { name: /Mirror · Lv1 · Roster 2.*1 Use Remaining/ })).toBeVisible();
+  await chooser.getByRole('button', { name: /Mirror · Lv1 · Roster 2/ }).click();
   await expect(chooser).toHaveCount(0);
   const saved = await persisted(page);
   expect(saved.dieRoundState[0].invocationsRemaining).toBe(1);

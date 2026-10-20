@@ -3,7 +3,7 @@ import { createCollectibleDie } from './dice';
 import { DICE_PRICES, DICE_RARITY_WEIGHTS, canFuse, dieSellBreakdown, generateDiceOfferTypes } from './diceEconomy';
 import { dispatch, newRun } from './engine';
 import { Resolver } from './effects';
-import { rosterDice, syncActiveDiceProjection } from './inventory';
+import { ownedDice, rosterDice, syncActiveDiceProjection } from './inventory';
 import { loadPersistedRun, RUN_STORAGE_KEY, savePersistedRun } from './persistence';
 import type { GameState, RandomSource } from './types';
 
@@ -84,6 +84,7 @@ describe('Dice collection transactions', () => {
       state.diceInventory.instances[die.id] = die;
       state.diceInventory.storage[index] = die.id;
     }
+    expect(ownedDice(state)).toHaveLength(10);
     const gold = state.gold; const offer = structuredClone(state.shop!.offers[0]);
     const result = dispatch(state, { type: 'BUY_DIE', offerId: offer.id }, constant());
     expect(result.error).toMatch(/Collection full/);
@@ -126,7 +127,7 @@ describe('Dice collection transactions', () => {
     const state = shopGame();
     Object.assign(state.diceInventory.instances[0], { type: 'bonus', level: 1 });
     Object.assign(state.diceInventory.instances[1], { type: 'bonus', level: 1 });
-    state.diceInventory.storage = [1, 2, 3, 4];
+    state.diceInventory.storage = [1, 2, 3, 4, null];
     for (let index = 1; index < 5; index++) state.diceInventory.roster[index] = null;
     syncActiveDiceProjection(state);
     expect(dispatch(state, { type: 'FUSE_DICE', source: { area: 'roster', index: 0 }, destination: { area: 'storage', index: 0 },
@@ -139,7 +140,6 @@ describe('Dice collection transactions', () => {
     expect(dieSellBreakdown(normal).total).toBe(1);
     Object.assign(state.diceInventory.instances[1], { type: 'vintage', level: 3, vintageAppreciation: 80 });
     expect(dieSellBreakdown(state.diceInventory.instances[1])).toEqual({ base: 15, vintageAppreciation: 80, total: 95 });
-    state.diceInventory.storage.push(null);
     for (let index = 1; index < 5; index++) {
       state.diceInventory.storage[index - 1] ??= state.diceInventory.roster[index];
       state.diceInventory.roster[index] = null;

@@ -47,7 +47,7 @@ export interface QualificationPlan {
   ambiguousClaims: boolean;
 }
 
-export type ScoreOccurrenceCause = 'play_selection' | 'hitchhiker' | 'double_time' | 'lone_wolf';
+export type ScoreOccurrenceCause = 'play_selection' | 'hitchhiker' | 'double_time' | 'lone_wolf' | 'conjoined';
 export type ScoreEffectSuppression = 'wholeDieDoubleTime';
 
 /** One genuine scoring activation by one die within a Play. */

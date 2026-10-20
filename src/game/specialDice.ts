@@ -1,4 +1,6 @@
 import type { CollectibleDie, DiceRarity, DieRoundRuntime, DieRoundState, DieType, Rank } from './types';
+import type { RichText } from './richText';
+import { specialDieVerboseDescription } from './effectDescriptions';
 
 export interface SpecialDieDefinition {
   type: DieType;
@@ -6,12 +8,14 @@ export interface SpecialDieDefinition {
   rarity: DiceRarity | null;
   invocationScale: 'none' | 'level';
   activation: 'none' | 'automatic' | 'onCommand' | 'qualification';
+  verboseDescription: (level: number) => RichText;
+  shortDescription?: string;
 }
 
 const definition = (type: DieType, name: string, rarity: DiceRarity | null,
   invocationScale: SpecialDieDefinition['invocationScale'] = 'none',
   activation: SpecialDieDefinition['activation'] = 'automatic'): SpecialDieDefinition =>
-  ({ type, name, rarity, invocationScale, activation });
+  ({ type, name, rarity, invocationScale, activation, verboseDescription: level => specialDieVerboseDescription(type, level) });
 
 /** Typed V1 registry. It is metadata only; authoritative behavior lives at concrete resolution boundaries. */
 export const SPECIAL_DICE: Record<DieType, SpecialDieDefinition> = {

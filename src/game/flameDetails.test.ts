@@ -19,11 +19,11 @@ describe('shared Flame numeric details', () => {
   });
 
   it.each<[Flame, string]>([
-    ['momentum', '+0.125 Charge per hand'],
-    ['thirdRail', '+0.125 Charge per rolled 3'],
-    ['jumpStart', '+0.5 Charge per manual Reroll'],
-    ['powerSurge', '×3 current Charge on highest level hand'],
-    ['fluxCapacitor', '×1.25 Charge per Roll pulled by a Magnetic die'],
+    ['momentum', '+0.125 Charge per Play'],
+    ['thirdRail', '+0.125 Charge per Rolled 3'],
+    ['jumpStart', '+0.5 Charge per Manual Reroll'],
+    ['powerSurge', '×3 current Charge on highest-level Hand'],
+    ['fluxCapacitor', '×1.25 Charge when 1 other die is affected'],
   ])('%s keeps its own Current Effect wording', (flame, currentValue) => {
     expect(flameDetailsPresentation(flame, 25, board())).toMatchObject({ currentLabel: 'Current Effect', currentValue });
   });

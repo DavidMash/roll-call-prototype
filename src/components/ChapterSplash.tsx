@@ -35,10 +35,6 @@ export function ChapterSplash({ event, onComplete }: { event: GameEvent; onCompl
     <div className="chapter-splash-title">
       <Text className="chapter-splash-kicker">ROLL CALL</Text>
       <Title order={1}>CHAPTER {chapterNumber}</Title>
-      {chapterNumber >= 2 && <div className="chapter-storage-unlock" data-testid="chapter-storage-unlock">
-        <Text className="chapter-unlock-label">COLLECTION EXPANDED</Text>
-        <Text className="chapter-unlock-capacity">+1 STORAGE SLOT</Text>
-      </div>}
     </div>
   </Paper>;
 }

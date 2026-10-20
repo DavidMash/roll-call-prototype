@@ -169,7 +169,7 @@ button { font: inherit; }
 .mobile-score-total { display: none; }
 .dice-row { display: grid; grid-template-columns: repeat(var(--dice-columns, 5), minmax(74px, 104px)); justify-content: center; gap: 8px; min-width: 0; }
 .die-wrap { min-width: 0; }
-.die { width: 100%; aspect-ratio: 1; min-height: 88px; max-height: 104px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 5px 4px; color: var(--mantine-color-gray-1); background: var(--mantine-color-dark-8); cursor: pointer; border: 1px solid var(--mantine-color-dark-4); transition: border-color 100ms, background 100ms, transform 100ms; }
+.die { width: 100%; aspect-ratio: 1; min-height: 88px; max-height: 104px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 5px 4px; color: var(--mantine-color-gray-1); background: var(--mantine-color-dark-8); cursor: pointer; border: 1px solid var(--mantine-color-dark-4); transition: border-color 150ms, background 150ms, transform 150ms ease, box-shadow 150ms ease; }
 .die:disabled { cursor: default; }
 .die-id { position: absolute; top: 4px; left: 6px; font-size: .57rem; font-weight: 700; letter-spacing: .05em; }
 .pip-face { width: min(64%, 64px); aspect-ratio: 1; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); flex: none; }
@@ -185,7 +185,8 @@ button { font: inherit; }
 .pip-bottom-left { grid-column: 1; grid-row: 3; }
 .pip-bottom-right { grid-column: 3; grid-row: 3; }
 .warden-die-choice { display: inline-flex; align-items: center; gap: 5px; }
-.die.selected { background: rgba(18, 184, 134, .16); border-color: var(--mantine-color-teal-5); box-shadow: inset 0 0 0 1px var(--mantine-color-teal-7); }
+.die.special-die { color: color-mix(in srgb, var(--die-accent) 76%, white); border-color: color-mix(in srgb, var(--die-accent) 62%, var(--mantine-color-dark-4)); background: linear-gradient(145deg, var(--die-tint), var(--mantine-color-dark-8) 70%); box-shadow: inset 0 0 20px var(--die-tint); }
+.die-selection-target.is-die-selected { z-index: 5; transform: translateY(-4px) scale(1.025); border-color: color-mix(in srgb, var(--mantine-color-cyan-2) 80%, white); outline: 1px solid rgba(255,255,255,.36); outline-offset: 1px; box-shadow: 0 8px 18px rgba(0,0,0,.48), 0 0 0 3px rgba(34,211,238,.18), 0 0 18px rgba(34,211,238,.22), inset 0 0 14px rgba(255,255,255,.035); }
 .die.scoring { background: rgba(250, 176, 5, .12); border-color: var(--mantine-color-yellow-6); }
 .die.eligible { border-color: var(--mantine-color-teal-4); box-shadow: 0 0 0 1px var(--mantine-color-teal-6); }
 .die.ineligible { opacity: .42; filter: saturate(.55); cursor: not-allowed; }
@@ -195,7 +196,7 @@ button { font: inherit; }
 .die.warden-locked:not(:disabled) { cursor: pointer; }
 .die.warden-locked:disabled { opacity: 1; }
 .die.warden-locked > :not(.die-lock-overlay):not(.die-id) { opacity: .52; filter: saturate(.65); }
-.die.warden-locked.selected { border-color: var(--mantine-color-cyan-3); box-shadow: inset 0 0 0 2px var(--mantine-color-cyan-6); }
+.die.warden-locked.selected { border-color: var(--mantine-color-cyan-3); box-shadow: 0 8px 18px rgba(0,0,0,.48), 0 0 0 3px rgba(34,211,238,.18), 0 0 18px rgba(34,211,238,.22), inset 0 0 0 2px var(--mantine-color-cyan-6); }
 .die.warden-locked .die-id { z-index: 3; color: var(--mantine-color-gray-4); }
 .die-lock-overlay {
   position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -213,7 +214,10 @@ button { font: inherit; }
 
 .shop-summary { min-height: 27px; padding: 0 5px; }
 .shop-stage-shell { position: sticky; top: 38px; z-index: 13; border: 1px solid rgba(255,255,255,.07); background: rgba(15,20,24,.96); }
-.shop-stage-steps .mantine-Button-root[data-active="true"] { box-shadow: inset 0 -2px var(--screen-secondary); }
+.shop-stage-tabs { min-width: 0; flex: 1 1 auto; }
+.shop-stage-tabs .mantine-Tabs-list { flex-wrap: nowrap; }
+.shop-stage-tabs .mantine-Tabs-tab { min-width: 0; padding: 6px 10px; font-size: .68rem; font-weight: 850; letter-spacing: .04em; }
+.shop-stage-tabs .mantine-Tabs-tab[data-active] { color: var(--screen-secondary); }
 .fire-keeping-section { border: 1px solid rgba(255,146,43,.18); background: linear-gradient(145deg, rgba(230,119,0,.07), var(--mantine-color-dark-7)); }
 .fire-keeping-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 7px; }
 .fire-keeping-card { min-width: 0; background: var(--mantine-color-dark-8); border-color: rgba(255,146,43,.22); }
@@ -259,7 +263,8 @@ button { font: inherit; }
 .dice-offer-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .dice-offer {
   position: relative; min-width: 0; min-height: 176px; display: flex; flex-direction: column; align-items: center;
-  gap: 4px; overflow: hidden; text-align: center; background: var(--mantine-color-dark-8);
+  gap: 4px; overflow: hidden; text-align: center; border-color: color-mix(in srgb, var(--die-accent) 34%, var(--mantine-color-dark-4));
+  background: linear-gradient(155deg, var(--die-tint), var(--mantine-color-dark-8) 46%);
 }
 .dice-offer-info { position: absolute; top: 3px; right: 3px; z-index: 2; }
 .dice-offer-name { width: 100%; min-height: 2.15em; display: grid; place-items: center; font-size: .78rem; line-height: 1.05; }
@@ -267,37 +272,38 @@ button { font: inherit; }
 .dice-offer.purchased { opacity: .5; }
 .collectible-die-visual {
   position: relative; width: 58px; aspect-ratio: 1; display: grid; place-items: center; flex: none;
-  border: 1px solid rgba(255,255,255,.18); border-radius: 9px; background: #161a1e;
+  border: 1px solid rgba(255,255,255,.18); border-radius: 9px; color: var(--mantine-color-gray-2); background: #161a1e;
   box-shadow: inset 0 0 18px rgba(255,255,255,.025), 0 4px 12px rgba(0,0,0,.24);
 }
 .collectible-die-visual .pip-face { width: 62%; }
-.collectible-die-visual.special { box-shadow: inset 0 0 18px color-mix(in srgb, currentColor 12%, transparent), 0 4px 12px rgba(0,0,0,.24); }
-.collectible-die-visual.rarity-common { color: var(--mantine-color-gray-3); }
-.collectible-die-visual.rarity-uncommon { color: var(--mantine-color-cyan-3); border-color: rgba(34,184,207,.45); }
-.collectible-die-visual.rarity-rare { color: var(--mantine-color-violet-3); border-color: rgba(177,151,252,.58); }
-.collectible-die-visual.rarity-legendary { color: var(--mantine-color-grape-2); border-color: rgba(216,180,254,.72); }
+.collectible-die-visual.special { color: color-mix(in srgb, var(--die-accent) 78%, white); border-color: color-mix(in srgb, var(--die-accent) 66%, rgba(255,255,255,.16)); background: linear-gradient(145deg, var(--die-tint), #161a1e 72%); box-shadow: inset 0 0 18px var(--die-tint), 0 4px 12px rgba(0,0,0,.24), 0 0 10px color-mix(in srgb, var(--die-accent) 12%, transparent); }
 .collectible-die-visual.compact { width: 49px; border-radius: 8px; }
 .collectible-die-visual.rolling { animation: shake 170ms ease-in-out 2; }
 .app-container[data-playback-speed="fast"] .collectible-die-visual.rolling { animation-duration: 45ms; }
 .app-container[data-playback-speed="instant"] .collectible-die-visual.rolling { animation: none; }
 .collectible-die-slot-label { position: absolute; top: 3px; left: 4px; color: var(--mantine-color-gray-5); font-size: .48rem; font-weight: 850; }
-.collectible-die-mark { position: absolute; right: 4px; bottom: 2px; font-size: .46rem; }
-.collection-slot { min-height: 112px; padding: 0 !important; overflow: hidden; background: var(--mantine-color-dark-8); }
-.collection-slot.selected { border-color: var(--mantine-color-teal-5); box-shadow: 0 0 0 1px var(--mantine-color-teal-5); }
+.collection-slot { min-height: 112px; padding: 0 !important; overflow: hidden; background: linear-gradient(155deg, var(--die-tint, transparent), var(--mantine-color-dark-8) 48%); transition: border-color 150ms, transform 150ms ease, box-shadow 150ms ease; }
+.collection-slot.occupied { border-color: color-mix(in srgb, var(--die-accent, var(--mantine-color-dark-4)) 32%, var(--mantine-color-dark-4)); }
+.collection-slot.is-die-dragging { z-index: 7; opacity: .82; transform: translateY(-7px) scale(1.035); box-shadow: 0 12px 24px rgba(0,0,0,.56), 0 0 22px rgba(34,211,238,.28); }
+.collection-slot.valid-drop-target { border-color: var(--mantine-color-teal-3); outline: 1px dashed color-mix(in srgb, var(--mantine-color-teal-3) 78%, transparent); outline-offset: -4px; box-shadow: inset 0 0 18px rgba(18,184,134,.10); }
 .collection-slot.arriving { animation: collection-arrival 850ms ease-out; }
 .collection-slot.empty { border-style: dashed; opacity: .72; }
 .collection-slot-main { width: 100%; min-height: 83px; display: flex; flex-direction: column; align-items: center; gap: 2px; border: 0; background: transparent; color: inherit; padding: 5px 3px 2px; cursor: pointer; }
 .collection-slot-main:disabled { cursor: default; }
-.collection-die-name { width: 100%; overflow: hidden; font-size: .67rem; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
+.collection-die-name { width: 100%; overflow: hidden; font-size: .64rem; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
 .collection-die-meta { color: var(--mantine-color-gray-5); font-size: .54rem !important; line-height: 1; white-space: nowrap; }
+.die-type-label { min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 4px; color: var(--die-accent); line-height: 1.05; vertical-align: middle; }
+.die-type-label > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.die-type-icon { flex: none; }
+.fusion-die-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.qualification-claim { display: inline-flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 .collection-slot-actions { min-height: 23px; border-top: 1px solid rgba(255,255,255,.045); }
 .collection-slot-actions .mantine-Button-root { min-width: 0; padding-inline: 4px; font-size: .55rem; }
 .empty-collection-die { width: 49px; aspect-ratio: 1; display: grid; place-items: center; border: 1px dashed rgba(255,255,255,.18); border-radius: 8px; color: var(--mantine-color-gray-7); font-size: 1.25rem; }
-.storage-grid { display: flex; gap: 6px; padding: 1px 1px 5px; overflow-x: auto; scrollbar-width: thin; scroll-snap-type: x proximity; }
-.storage-grid .collection-slot { flex: 0 0 78px; min-height: 105px; scroll-snap-align: start; }
-.roster-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
-.roster-collection-dock { position: sticky; bottom: 0; z-index: 4; padding: 5px; border: 1px solid color-mix(in srgb, var(--screen-primary) 34%, var(--mantine-color-dark-4)); border-radius: 8px; background: rgba(15,20,24,.985); box-shadow: 0 -8px 22px rgba(0,0,0,.28); }
-.collection-heading { min-height: 18px; }
+.storage-grid, .roster-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.storage-grid { overflow: visible; }
+.roster-collection-dock { position: sticky; bottom: 0; z-index: 4; padding: 5px 0; border-block: 1px solid color-mix(in srgb, var(--screen-primary) 34%, var(--mantine-color-dark-4)); border-radius: 8px; background: rgba(15,20,24,.985); box-shadow: 0 -8px 22px rgba(0,0,0,.28); }
+.collection-heading { min-height: 18px; padding-inline: 5px; }
 @keyframes collection-arrival { 0% { border-color: var(--mantine-color-yellow-3); box-shadow: 0 0 0 5px rgba(250,176,5,.3); transform: translateY(-3px); } }
 .rarity-legendary { border-color: rgba(190,120,255,.72) !important; background: rgba(117,50,170,.16) !important; color: #d8b4fe !important; }
 .offer.rarity-uncommon, .flame-offer.rarity-uncommon, .special-offer-card.rarity-uncommon {
@@ -502,11 +508,6 @@ button { font: inherit; }
 .chapter-splash-title { text-align: center; text-shadow: 0 2px 18px rgba(0,0,0,.8), 0 0 38px rgba(255,255,255,.18); }
 .chapter-splash-title h1 { margin: 0; font-size: clamp(2.25rem, 8vw, 5.5rem); font-weight: 950; letter-spacing: .08em; }
 .chapter-splash-kicker { margin-bottom: 8px; color: rgba(255,255,255,.72); font-size: .68rem; font-weight: 900; letter-spacing: .32em; }
-.chapter-storage-unlock { width: min(88vw, 540px); margin: 20px auto 0; padding: 14px 18px; border: 1px solid rgba(255,255,255,.22);
-  border-radius: 12px; background: rgba(8,8,12,.48); box-shadow: 0 10px 34px rgba(0,0,0,.28); }
-.chapter-unlock-label { color: rgba(255,255,255,.72); font-size: .66rem; font-weight: 900; letter-spacing: .16em; }
-.chapter-unlock-capacity { margin: 1px 0 9px; font-size: clamp(1.25rem, 4vw, 1.75rem); font-weight: 950; }
-.chapter-unlock-names { margin-top: 3px; font-size: clamp(.78rem, 2.5vw, .98rem); font-weight: 750; line-height: 1.35; }
 @keyframes chapter-splash-fade { 0% { opacity: 0; } 15%, 78% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes chapter-start-light { 0%, 18% { opacity: 1; transform: translateX(-3%) scale(1); } 80%, 100% { opacity: .16; transform: translateX(7%) scale(1.08); } }
 @keyframes chapter-end-light { 0%, 20% { opacity: .08; transform: translateX(-6%) scale(.94); } 78%, 100% { opacity: 1; transform: translateX(3%) scale(1.08); } }
@@ -745,10 +746,12 @@ button { font: inherit; }
   .dice-offer > .collectible-die-visual { width: 52px; }
   .dice-offer-name { min-height: 2em; font-size: .7rem; }
   .dice-offer .rarity-badge { padding-inline: 4px; font-size: .52rem; }
-  .roster-grid .collectible-die-visual { width: min(49px, 100%); }
-  .roster-grid .collection-slot { min-height: 103px; }
-  .roster-grid .collection-slot-main { min-height: 75px; padding-inline: 2px; }
-  .roster-grid .collection-slot-actions .mantine-Button-root { padding-inline: 2px; font-size: .48rem; }
+  .storage-grid .collectible-die-visual, .roster-grid .collectible-die-visual { width: min(49px, 100%); }
+  .storage-grid .collection-slot, .roster-grid .collection-slot { min-height: 103px; }
+  .storage-grid .collection-slot-main, .roster-grid .collection-slot-main { min-height: 75px; padding-inline: 2px; }
+  .storage-grid .collection-slot-actions .mantine-Button-root, .roster-grid .collection-slot-actions .mantine-Button-root { padding-inline: 2px; font-size: .48rem; }
+  .shop-stage-tabs .mantine-Tabs-tab { padding-inline: 6px; font-size: .58rem; }
+  .shop-stage-shell .mantine-Badge-root { padding-inline: 6px; font-size: .55rem; }
   .training-scorecard .scorecard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .training-section-heading { padding-inline: 4px; }
   .training-section-heading .mantine-Text-root:last-child { font-size: .58rem; }
@@ -1022,15 +1025,14 @@ body, #root { overflow: hidden; }
 .die-slot .die > .die-number { z-index: 1; font-size: clamp(1.7rem, 5vw, 2.55rem); }
 .die-slot .die > .pip-face { z-index: 1; width: min(66%, 58px); }
 .die-slot .die-id { z-index: 3; top: 4px; left: 5px; }
-.die-slot .die.special-die.rarity-uncommon { border-color: rgba(34,184,207,.58); box-shadow: inset 0 0 18px rgba(34,184,207,.09); }
-.die-slot .die.special-die.rarity-rare { border-color: rgba(177,151,252,.66); box-shadow: inset 0 0 18px rgba(132,94,247,.12); }
-.die-slot .die.special-die.rarity-legendary { border-color: rgba(216,180,254,.76); box-shadow: inset 0 0 20px rgba(190,120,255,.15); }
 .die-face-details {
   width: 100%; min-height: 24px; height: auto; min-width: 0; display: grid; align-content: center; justify-content: center;
   padding: 2px 3px; overflow: hidden; border: 1px solid rgba(255,255,255,.08); border-radius: 3px 3px 7px 7px;
   color: var(--mantine-color-gray-2); background: rgba(255,255,255,.025); cursor: pointer;
 }
-.die-face-details.special { color: var(--mantine-color-gray-1); font-size: clamp(.52rem, 1.8vw, .68rem); font-weight: 850; line-height: 1; text-transform: uppercase; }
+.die-face-details.special { color: var(--die-accent); font-size: clamp(.52rem, 1.8vw, .68rem); font-weight: 850; line-height: 1; text-transform: uppercase; }
+.die-face-details.special .die-type-label { width: 100%; gap: 3px; }
+.die-face-details.special .die-type-icon { width: 12px; height: 12px; }
 .die-face-details.normal { color: var(--mantine-color-gray-6); border-color: transparent; background: transparent; }
 .normal-die-details-mark { font-size: .64rem; opacity: .72; }
 .die-face-details:disabled { cursor: default; }
@@ -1150,3 +1152,24 @@ body, #root { overflow: hidden; }
 @keyframes inferno-meter-move { from { height: var(--inferno-start); } to { height: var(--inferno-end); } }
 @keyframes engulfment-red-arrival { from { opacity: 0; transform: scale(.97); filter: brightness(2); } to { opacity: 1; transform: none; filter: none; } }
 @keyframes snuff-out { from { opacity: 1; filter: brightness(2); } to { opacity: .5; filter: grayscale(1); } }
+.rich-description { line-height: 1.55; }
+.glossary-term {
+  display: inline;
+  padding: 1px 5px;
+  margin: 0 1px;
+  border: 1px solid color-mix(in srgb, var(--mantine-color-cyan-5) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mantine-color-cyan-9) 28%, transparent);
+  color: var(--mantine-color-cyan-2);
+  font: inherit;
+  font-weight: 750;
+  line-height: 1.25;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+.glossary-term.effect-reference {
+  border-color: color-mix(in srgb, var(--mantine-color-violet-5) 48%, transparent);
+  background: color-mix(in srgb, var(--mantine-color-violet-9) 26%, transparent);
+  color: var(--mantine-color-violet-2);
+}
+.glossary-term:hover, .glossary-term:focus-visible { filter: brightness(1.2); outline: 1px solid currentColor; }

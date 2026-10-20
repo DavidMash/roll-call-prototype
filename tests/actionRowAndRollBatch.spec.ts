@@ -19,9 +19,11 @@ const die = (page: Page, id: number) => page.locator(`.die-slot[data-die-id="${i
 async function actionGeometry(page: Page) {
   return page.getByTestId('run-action-row').evaluate(element => {
     const row = element.getBoundingClientRect();
-    const left = element.querySelector<HTMLElement>('.run-action-left')!.getBoundingClientRect();
+    const leftElement = element.querySelector<HTMLElement>('.run-action-left');
+    const left = leftElement?.getBoundingClientRect() ?? null;
     const right = element.querySelector<HTMLElement>('.run-action-right')!.getBoundingClientRect();
-    return { rowLeft: row.left, rowRight: row.right, left: left.left, leftRight: left.right, right: right.left, rightRight: right.right };
+    return { rowLeft: row.left, rowRight: row.right, left: left?.left ?? null, leftRight: left?.right ?? null,
+      right: right.left, rightRight: right.right };
   });
 }
 
@@ -41,9 +43,9 @@ test('shared action row keeps manipulation left and progression right on narrow 
   await installRun(page, round);
 
   const roundLayout = await actionGeometry(page);
-  expect(roundLayout.left - roundLayout.rowLeft).toBeLessThan(12);
+  expect(roundLayout.left! - roundLayout.rowLeft).toBeLessThan(12);
   expect(roundLayout.rowRight - roundLayout.rightRight).toBeLessThan(12);
-  expect(roundLayout.leftRight).toBeLessThanOrEqual(roundLayout.right);
+  expect(roundLayout.leftRight!).toBeLessThanOrEqual(roundLayout.right);
   await expect(page.getByTestId('manual-reroll')).toBeDisabled();
   await expect(page.getByTestId('play-action')).toBeDisabled();
 
@@ -65,24 +67,23 @@ test('shared action row keeps manipulation left and progression right on narrow 
   const shop = structuredClone(round);
   shop.phase = 'shop';
   shop.gold = 100;
-  shop.shop = { kind: 'between_rounds', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  shop.shop = { kind: 'between_rounds', offers: [], offerRerolls: 0, lifeRestores: 0 };
   await installRun(page, shop);
 
   const row = page.getByTestId('run-action-row');
   await expect(page.getByTestId('shop-dice-controls')).toHaveCount(0);
-  await expect(row.getByRole('button', { name: 'REROLL ALL DICE FOR 2 GOLD', exact: true })).toHaveCount(1);
+  await expect(row.getByRole('button', { name: /REROLL ALL DICE/ })).toHaveCount(0);
   await expect(page.getByTestId('shop-stage-continue')).toContainText('CONTINUE TO TRAINING');
   const shopLayout = await actionGeometry(page);
-  expect(shopLayout.left - shopLayout.rowLeft).toBeLessThan(12);
+  expect(shopLayout.left).toBeNull();
   expect(shopLayout.rowRight - shopLayout.rightRight).toBeLessThan(12);
-  expect(shopLayout.leftRight).toBeLessThanOrEqual(shopLayout.right);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   await goToShopStage(page, 'fireKeeping');
   await expect(row.getByRole('button', { name: 'NEXT ROUND', exact: true })).toBeVisible();
 
-  shop.shop.kind = 'post_boss';
-  shop.shop.stage = 'fireKeeping';
+  shop.shop!.kind = 'post_boss';
+  shop.shop!.stage = 'fireKeeping';
   await installRun(page, shop);
   await expect(row.getByRole('button', { name: 'NEXT CHAPTER', exact: true })).toBeVisible();
   await expect(row.getByRole('button', { name: 'NEXT ROUND', exact: true })).toHaveCount(0);
@@ -111,17 +112,12 @@ for (const speed of ['normal', 'fast'] as const) {
   });
 }
 
-test('Shop reroll-all batches all five dice and preserves price escalation', async ({ page }) => {
-  const state = newRun('simultaneous-shop-reroll').state;
+test('Shop has no physical-dice reroll while offer rerolls remain available', async ({ page }) => {
+  const state = newRun('no-shop-physical-reroll').state;
   state.phase = 'shop';
   state.gold = 100;
-  state.shop = { kind: 'between_rounds', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { kind: 'between_rounds', offers: [], offerRerolls: 0, lifeRestores: 0 };
   await installRun(page, state, 'normal');
-
-  await page.getByTestId('shop-dice-reroll').click();
-  await expect.poll(async () => page.locator('.collectible-die-visual.rolling').count()).toBe(5);
-  await expect(page.locator('.collectible-die-visual.rolling')).toHaveCount(0);
-  await expect(page.getByTestId('shop-dice-reroll')).toHaveAccessibleName('REROLL ALL DICE FOR 4 GOLD');
-  await expect(page.getByTestId('stat-gold')).toContainText('98');
-  await expect(page.getByTestId('shop-dice-controls')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /REROLL ALL DICE/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /REROLL OFFERS/ })).toBeVisible();
 });

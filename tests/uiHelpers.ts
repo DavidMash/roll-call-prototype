@@ -45,31 +45,13 @@ export async function openMenuItem(page: Page, item: 'Run Info' | 'How to Play')
 }
 
 export async function goToShopStage(page: Page, stage: 'dice' | 'training' | 'fireKeeping') {
-  const active = async (testId: string) => {
-    const target = page.getByTestId(testId);
-    return await target.count() > 0 && (await target.getAttribute('data-active')) === 'true';
-  };
-  const waitForActive = (testId: string) => page.getByTestId(testId).waitFor({ state: 'visible' })
-    .then(() => page.waitForFunction(id => document.querySelector(`[data-testid="${id}"]`)?.getAttribute('data-active') === 'true', testId));
-  if (stage === 'dice') {
-    if (await active('shop-stage-fire-keeping')) {
-      await page.getByTestId('shop-stage-back').click();
-      await waitForActive('shop-stage-training');
-    }
-    if (await active('shop-stage-training')) {
-      await page.getByTestId('shop-stage-back').click();
-      await waitForActive('shop-stage-dice');
-    }
-    return;
+  let testId = stage === 'fireKeeping' ? 'shop-stage-fire-keeping' : `shop-stage-${stage}`;
+  let target = page.getByTestId(testId);
+  if (!await target.count() && stage === 'fireKeeping') {
+    testId = 'shop-stage-training';
+    target = page.getByTestId(testId);
   }
-  if (await active('shop-stage-dice')) {
-    await page.getByTestId('shop-stage-continue').click();
-    await waitForActive('shop-stage-training');
-  }
-  if (stage === 'fireKeeping' && await active('shop-stage-training')) {
-    // Shops without Flames end at Training, so there is no Fire Keeping step to enter.
-    if (!await page.getByTestId('shop-stage-fire-keeping').count()) return;
-    await page.getByTestId('shop-stage-continue').click();
-    await waitForActive('shop-stage-fire-keeping');
-  }
+  if (!await target.count()) return;
+  if (await target.getAttribute('data-active') !== 'true') await target.click();
+  await page.waitForFunction(id => document.querySelector(`[data-testid="${id}"]`)?.getAttribute('data-active') === 'true', testId);
 }

@@ -30,7 +30,7 @@ import {
 import { appendCriticalDiagnostic, appendDebugTrace } from './debugTrace';
 import { captureRollbackState, restoreRollbackState } from './rollback';
 import {
-  captureBustPersistentSpecialOfferState, eligibleSpecialOfferTypes, restoreSpecialOfferEffectsAfterBust,
+  captureBustPersistentSpecialOfferState, eligibleSpecialOfferTypes, fireKeeperInvestment, restoreSpecialOfferEffectsAfterBust,
   SPECIAL_OFFERS, specialOfferDescription, specialOfferName, usableManualRerolls,
 } from './specialOffers';
 import { createTrainingSession } from './training';
@@ -42,7 +42,7 @@ import type {
 } from './runHistoryV2';
 import { Decimal, roundPositiveScoreHalf, type ExactScore } from './scoreMath';
 import { createPlayIntent, createRollBatchIntent, createRollIntent } from './resolution';
-import { activeDieLabel, grantChapterStorageSlot, orderDieIdsByEncounter, rosterDice, rosterSlotOf, syncActiveDiceProjection } from './inventory';
+import { activeDieLabel, orderDieIdsByEncounter, rosterDice, rosterSlotOf, syncActiveDiceProjection } from './inventory';
 import type { PlayIntent, QualificationPlan, RollBatchIntent, RollContext, RollIntent, RollResolution, ScoreOccurrence } from './resolution';
 import { resetDieRoundState, SPECIAL_DICE } from './specialDice';
 
@@ -78,7 +78,7 @@ export interface ResolverOptions {
   disableHistoryV2?: boolean;
 }
 const NORMAL_SHOP_SPEND = new Set<GoldSpendSource>([
-  'dicePurchase', 'shopDiceReroll', 'diceOfferReroll', 'handTraining', 'lifeRestore',
+  'dicePurchase', 'diceOfferReroll', 'handTraining', 'lifeRestore',
 ]);
 const UPPER_HAND_BY_FACE: Partial<Record<import('./types').Rank, HandId>> = {
   1: 'ones', 2: 'twos', 3: 'threes', 4: 'fours', 5: 'fives', 6: 'sixes',
@@ -132,7 +132,7 @@ export class Resolver {
 
   private spendInvocation(die: CollectibleDie, detail: string, effectCause: string): void {
     const runtime = this.specialRuntime(die.id);
-    if (!runtime || runtime.invocationsRemaining <= 0) throw new Error(`${die.type} has no Invocation remaining.`);
+    if (!runtime || runtime.invocationsRemaining <= 0) throw new Error(`${die.type} has no Uses remaining.`);
     const before = runtime.invocationsRemaining;
     runtime.invocationsRemaining--;
     this.emitSpecial(die, detail, effectCause, before, runtime.invocationsRemaining);
@@ -629,6 +629,9 @@ export class Resolver {
         && intent.playerSelectedDieIds.length === 1 && intent.playerSelectedDieIds[0] === participant.id) {
         for (let index = 0; index < collectible.level; index++) pending.push({ ...root,
           id: `${rootId}:lone-wolf:${index + 1}`, cause: 'lone_wolf', additional: true });
+      }
+      if (resolution.qualification.effects.some(effect => effect.effect === 'conjoined' && effect.dieId === participant.id)) {
+        pending.push({ ...root, id: `${rootId}:conjoined`, cause: 'conjoined', additional: true });
       }
       while (pending.length) {
         const occurrence = pending.shift()!;
@@ -1336,7 +1339,7 @@ export class Resolver {
     for (const claim of resolution.qualification.resourceClaims) {
       const die = this.collectible(claim.dieId);
       if (!die) throw new Error('Qualification claim references a non-collectible die.');
-      this.spendInvocation(die, `${claim.effect} Qualification Invocation spent`, 'qualification');
+      this.spendInvocation(die, `${claim.effect} Qualification Use spent`, 'qualification');
     }
     for (const participation of resolution.qualification.effects) {
       if (participation.effect === 'conjoined') {
@@ -1478,11 +1481,13 @@ export class Resolver {
     for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
     const maximum = Math.max(...counts.values());
     const leaders = [...counts].filter(([, count]) => count === maximum).map(([rank]) => rank);
-    const target = leaders.length === 1 ? leaders[0] : values[randomIndex(this.rng, values.length)];
+    const target = leaders.length === 1 ? leaders[0] : leaders[randomIndex(this.rng, leaders.length)];
     const before = activeFace(die).rank;
     this.spendInvocation(die, `Chameleon changed ${before} → ${target}`, 'on_command');
-    const physicalFace = die.faces.findIndex(face => face.rank === target);
-    die.value = (physicalFace >= 0 ? physicalFace + 1 : target) as Rank;
+    const physicalFace = die.value;
+    const changedFace = die.faces[physicalFace - 1];
+    changedFace.rank = target;
+    if (changedFace.bossMutation?.kind === 'snakeEyes') changedFace.bossMutation.originalRank = target;
     this.emit({ type: 'DIE_FLIPPED', dieIds: [die.id], previousFace: before, resultFace: target, face: target,
       message: `${this.dieLabel(die.id)} Chameleon changed face: ${before} → ${target}` });
     this.evaluate();
@@ -1529,8 +1534,8 @@ export class Resolver {
     const carePackageRemaining = this.state.specialOfferEffects.carePackageRerolls;
     const message = carePackageSpent > 0
       ? carePackageRemaining > 0
-        ? `Care Package reroll${carePackageSpent === 1 ? '' : 's'} used · ${this.format(carePackageRemaining)} remaining · ${this.format(normalRemaining)} Rerolls left`
-        : `Care Package depleted · ${this.format(normalRemaining)} Rerolls left`
+        ? `Care Package Manual Reroll${carePackageSpent === 1 ? '' : 's'} used · ${this.format(carePackageRemaining)} remaining · ${this.format(normalRemaining)} normal Rerolls left`
+        : `Care Package depleted · ${this.format(normalRemaining)} normal Rerolls left`
       : `Manual reroll · ${this.format(normalRemaining)} Rerolls left · Care Package ${this.format(carePackageRemaining)}`;
     this.emit({ type: 'MANUAL_REROLL_STARTED', dieIds: ids, amount: ids.length, message });
     const jumpStart = this.chargeFlameSource('jumpStart');
@@ -1556,7 +1561,7 @@ export class Resolver {
     // generating offers, reroll allowances, exposed faces, or rewards.
     base.phase = 'shop';
     base.shop ??= { visitId: base.nextShopVisitId++, stage: 'dice',
-      offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
+      offers: [], offerRerolls: 0, lifeRestores: 0,
       freeDicePurchaseAvailable: false, trainingSession: createTrainingSession(base.handLevels) };
     // Once the next Chapter has started, a Bust restores this as that Round's
     // retry Shop even when its contents originated in the prior post-Boss Shop.
@@ -1641,7 +1646,7 @@ export class Resolver {
       this.state.roundCheckpoint.board.specialOfferEffects,
       persistentSpecialOfferState,
     );
-    this.state.shop ??= { stage: 'dice', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
+    this.state.shop ??= { stage: 'dice', offers: [], offerRerolls: 0, lifeRestores: 0,
       freeDicePurchaseAvailable: false, trainingSession: createTrainingSession(this.state.handLevels) };
     this.state.shop.lifeRestores ??= 0;
     this.nextTimeline('bust', this.state.round, failure.livesAfter > 0 ? failure.attempt + 1 : failure.attempt);
@@ -1922,7 +1927,7 @@ export class Resolver {
     const visitId = this.state.nextShopVisitId++;
     const onTheHouse = this.state.specialOfferEffects.onTheHouse;
     this.state.shop = { visitId, stage: 'dice', kind: postBoss ? 'post_boss' : 'between_rounds', exitUnlocked: false,
-      offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0,
+      offers: [], offerRerolls: 0, lifeRestores: 0,
       freeDicePurchaseAvailable: onTheHouse,
       trainingSession: createTrainingSession(this.state.handLevels, onTheHouse) };
     const upcomingRound = this.state.round + 1;
@@ -1999,7 +2004,7 @@ export class Resolver {
         const embers = flameInstances(this.state).filter(flame => flame.stage === 'ember');
         const flame = embers[randomIndex(this.rng, embers.length)];
         const from = flame.investedGold;
-        flame.investedGold = from + Math.ceil((100 - from) / 2);
+        flame.investedGold = fireKeeperInvestment(from);
         this.state.infernoProgress.recentAction = 'flame_invested';
         this.emit({ type: 'FLAME_INVESTED', flame: flame.type, amount: flame.investedGold - from,
           message: `Fire Keeper stoked ${FLAMES[flame.type].name}: ${this.format(from)} → ${this.format(flame.investedGold)} / 100` });
@@ -2091,8 +2096,6 @@ export class Resolver {
       }
       this.emit({ type: 'ROUND_CLEARED', message: `Round ${this.format(this.state.round)} cleared with ${this.format(this.state.score)} / ${this.format(this.state.target)}` });
       const bossType = this.state.boss?.type ?? null;
-      if (bossType && isBigBossRound(this.state.round))
-        grantChapterStorageSlot(this.state.diceInventory, chapterNumberForRound(this.state.round));
       const bossRewardLabel = bossType && isMiniBossType(bossType) ? 'Mini-Boss Reward' : 'Boss Reward';
       const heldGoldSnapshot = this.state.gold;
       const payout = { baseGold: roundReward(), unusedRerollGold: Math.max(0, this.state.manualRerollsRemaining - Math.max(0, this.options.nonPayingManualRerolls ?? 0)),
@@ -2136,7 +2139,7 @@ export class Resolver {
         this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound;
         this.state.specialOfferEffects.bottledFairyTriggeredThisRound = true;
         this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', amount: CONFIG.manualRerollsPerRound,
-          message: `Bottled Fairy refilled ${this.format(CONFIG.manualRerollsPerRound)} manual Rerolls` });
+          message: `Bottled Fairy refilled ${this.format(CONFIG.manualRerollsPerRound)} Manual Rerolls` });
         return;
       }
       this.resolveBust();

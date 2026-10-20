@@ -195,7 +195,7 @@ test('expanded current Round preserves a substantially large formatted target wi
   state.round = targetRound - 1;
   state.phase = 'shop';
   state.currentNodeId = `shop:before-round:${targetRound}`;
-  state.shop = { kind: 'between_rounds', stage: 'fireKeeping', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { kind: 'between_rounds', stage: 'fireKeeping', offers: [], offerRerolls: 0, lifeRestores: 0 };
   state.bust = null;
 
   await page.goto(`/?seed=${state.seed}&speed=normal`);
@@ -266,10 +266,8 @@ test('the post-Boss Shop stays in the completed Chapter until NEXT CHAPTER start
   const splash = page.getByTestId('chapter-splash');
   await expect(splash).toHaveAttribute('data-chapter', '2');
   await expect(splash).toHaveText(/CHAPTER 2/);
-  const unlock = splash.getByTestId('chapter-storage-unlock');
-  await expect(unlock).toContainText('COLLECTION EXPANDED');
-  await expect(unlock).toContainText('+1 STORAGE SLOT');
-  await expect(unlock).not.toContainText('ENHANCEMENT');
+  await expect(splash.getByText(/STORAGE SLOT/)).toHaveCount(0);
+  await expect(splash.getByText(/COLLECTION EXPANDED/)).toHaveCount(0);
   await expect(map).toBeVisible({ timeout: 4_000 });
   await expect(map.locator('.map-kicker')).toHaveText('CHAPTER 2');
   await expect(map.locator('.run-map-track')).toHaveAttribute('data-chapter', '2');

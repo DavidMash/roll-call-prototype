@@ -9,6 +9,7 @@ import { RunActionPortal } from './RunActionRow';
 import { rarityClassName, rarityLabel } from '../game/rarity';
 import { RarityBadge } from './RarityBadge';
 import { RewardSkipConfirmation } from './RewardSkipConfirmation';
+import { RichDescription } from './RichDescription';
 
 export function FlameSelectionScreen({ board, event, busy, selectedOffer, setSelectedOffer, submit, skip, openFlameDetails }: {
   board: Board; event: GameEvent | null; busy: boolean;
@@ -53,7 +54,7 @@ export function FlameSelectionScreen({ board, event, busy, selectedOffer, setSel
             aria-label={`About ${FLAMES[item.flame].name}, ${rarityLabel(FLAMES[item.flame].rarity)} Flame`}
             onClick={() => openFlameDetails({ flame: item.flame, kind: 'offer' })}>ⓘ</Button>
         </Group><Group gap={4} wrap="nowrap"><RarityBadge rarity={FLAMES[item.flame].rarity} compact /><Badge size="xs" color="teal">FREE</Badge></Group></Group>
-        <Text size="xs" c="dimmed" mt="xs">{FLAMES[item.flame].description}</Text>
+        <div className="flame-offer-description"><RichDescription copy={FLAMES[item.flame].verboseDescription} size="xs" /></div>
         <Button className="flame-offer-action" size="compact-xs" fullWidth mt="xs" color="orange" disabled={busy || reward.acquired}
           onClick={() => choose(item.id)}>{full ? 'SELECT TO REPLACE' : 'SELECT FLAME'}</Button>
       </Card>)}</div>

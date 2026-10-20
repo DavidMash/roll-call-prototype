@@ -76,21 +76,16 @@ describe('simultaneous roll batch presentation', () => {
       .toEqual(result.events[batch.settleIndex].board.dice.slice(0, 2).map(die => die.value));
   });
 
-  it('uses the shared batch presentation for initial, post-hand, winning-settle, and Shop rolls', () => {
+  it('uses the shared batch presentation for initial, post-hand, and winning-settle rolls', () => {
     const postHandState = newRun('simultaneous-post-hand').state;
     postHandState.target = 1_000_000n;
     postHandState.dice.forEach((die, index) => { die.value = index < 4 ? 1 : 2; });
     const winningState = structuredClone(postHandState);
     winningState.target = 1n;
-    const shopState = newRun('simultaneous-shop').state;
-    shopState.phase = 'shop';
-    shopState.gold = 100;
-    shopState.shop = { kind: 'between_rounds', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
     const cases = [
       { result: newRun('simultaneous-opening'), reason: 'Initial round roll', ids: [0, 1, 2, 3, 4] },
       { result: dispatch(postHandState, { type: 'PLAY', hand: 'fourKind', dieIds: [0, 1, 2, 3] }), reason: 'Post-hand reroll', ids: [0, 1, 2, 3] },
       { result: dispatch(winningState, { type: 'PLAY', hand: 'fourKind', dieIds: [0, 1, 2, 3] }), reason: 'Winning hand settle reroll', ids: [0, 1, 2, 3] },
-      { result: dispatch(shopState, { type: 'REROLL_DICE' }), reason: 'Shop dice reroll', ids: [0, 1, 2, 3, 4] },
     ];
 
     for (const { result, reason, ids } of cases) {

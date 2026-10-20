@@ -55,9 +55,24 @@ test('Fire Keeping renders only owned Flames and stokes an instance in place int
   state.gold = 10;
   const flame = placeFlameInstance(state, 'doubleDown', 99, 3);
   state.phase = 'shop';
-  state.shop = { stage: 'dice', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { visitId: 1, stage: 'dice', offers: [], offerRerolls: 0, lifeRestores: 0 };
+  state.nextShopVisitId = 2;
   await installRunState(page, state);
   await enterRun(page);
+  const beforeTabs = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state as GameState, RUN_STORAGE_KEY);
+  await expect(page.getByRole('tab')).toHaveCount(3);
+  await expect(page.getByTestId('shop-stage-back')).toHaveCount(0);
+  await page.getByTestId('shop-stage-fire-keeping').click();
+  await expect(page.getByTestId('shop-stage-fire-keeping')).toHaveAttribute('data-active', 'true');
+  const afterDirect = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state as GameState, RUN_STORAGE_KEY);
+  expect(afterDirect.shop!.stage).toBe('fireKeeping');
+  expect(afterDirect.shop!.visitId).toBe(beforeTabs.shop!.visitId);
+  expect(afterDirect.rngState).toBe(beforeTabs.rngState);
+  expect(afterDirect.shop!.offers).toEqual(beforeTabs.shop!.offers);
+  expect(afterDirect.shop!.trainingSession).toEqual(beforeTabs.shop!.trainingSession);
+  expect(afterDirect.flameSlots).toEqual(beforeTabs.flameSlots);
+  await page.getByTestId('shop-stage-dice').click();
+  await expect(page.getByTestId('shop-stage-dice')).toHaveAttribute('data-active', 'true');
   await goToShopStage(page, 'fireKeeping');
 
   await expect(page.locator('.fire-keeping-card')).toHaveCount(1);
@@ -87,7 +102,7 @@ test('global Flame details remain available during a Round without appearing on 
   await page.getByRole('button', { name: /View Momentum ember details/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Momentum' });
   await expect(dialog).toContainText('Investment: 25 / 100 Gold');
-  await expect(dialog).toContainText('Current Effect: +0.125 Charge per hand');
+  await expect(dialog).toContainText('Current Effect: +0.125 Charge per Play');
   await expect(dialog.getByLabel('Stoke amount for Momentum')).toHaveCount(0);
 });
 

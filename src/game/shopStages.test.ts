@@ -50,20 +50,17 @@ describe('persistent staged Shop', () => {
     );
   });
 
-  it('validates adjacent forward/back navigation and emits no redundant stage events', () => {
+  it('allows direct tab navigation and emits no redundant stage events', () => {
     let state = openShop('stage-adjacency');
-    expect(dispatch(state, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).error).toContain('one stage');
+    state = go(state, 'fireKeeping');
+    state = go(state, 'dice');
     state = go(state, 'training');
     expect(dispatch(state, { type: 'SET_SHOP_STAGE', stage: 'training' }).error).toContain('already');
-    state = go(state, 'fireKeeping');
-    state = go(state, 'training');
-    state = go(state, 'dice');
     expect(state.historyV2.filter(event => event.kind === 'shop_stage_changed').map(event =>
       event.kind === 'shop_stage_changed' ? [event.from, event.to, event.shopVisitId] : null)).toEqual([
+      ['dice', 'fireKeeping', state.shop!.visitId],
+      ['fireKeeping', 'dice', state.shop!.visitId],
       ['dice', 'training', state.shop!.visitId],
-      ['training', 'fireKeeping', state.shop!.visitId],
-      ['fireKeeping', 'training', state.shop!.visitId],
-      ['training', 'dice', state.shop!.visitId],
     ]);
   });
 

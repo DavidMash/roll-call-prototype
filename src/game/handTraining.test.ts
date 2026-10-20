@@ -21,7 +21,7 @@ function shopState(gold = 200, levels?: Partial<HandLevels>): GameState {
   const game = newRun('training-shop', constant()).state;
   game.phase = 'shop'; game.gold = gold;
   Object.assign(game.handLevels, levels);
-  game.shop = { visitId: 7, stage: 'training', offers: [], diceRerolls: 0,
+  game.shop = { visitId: 7, stage: 'training', offers: [],
     offerRerolls: 0, lifeRestores: 0, trainingSession: createTrainingSession(game.handLevels) };
   return game;
 }

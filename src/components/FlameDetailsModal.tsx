@@ -1,10 +1,12 @@
 import { Badge, Button, Group, Modal, Progress, Stack, Text } from '@mantine/core';
 import { useEffect, useState } from 'react';
-import { flameDetailsPresentation, flameEffectText, flameInstanceById, flameStokeLimits, FLAMES } from '../game/flames';
+import { flameDetailsPresentation, flameEffectText, flameInstanceById, flameStokeLimits, fluxCapacitorChargeMultiplier, FLAMES } from '../game/flames';
 import type { Action, Board, DiceInventory, Flame, FlameInstanceId, FlameStage } from '../game/types';
 import { formatPlayerNumber } from '../game/copy';
 import { RarityBadge } from './RarityBadge';
 import { activeDieLabel } from '../game/inventory';
+import { RichDescription } from './RichDescription';
+import { HANDS } from '../game/hands';
 
 export interface FlameDetailsTarget {
   flame?: Flame;
@@ -58,8 +60,10 @@ export function FlameDetailsModal({ board, inventory: _inventory, target, busy, 
         {details.maxChargeContribution !== null && <Text size="sm"><strong>Max Flame Contribution:</strong> +{formatPlayerNumber(details.maxChargeContribution)} Max Charge</Text>}
         <Text size="sm"><strong>{details.currentLabel}:</strong> {details.currentValue}</Text>
       </div>
-      <Text size="sm">{definition.description}</Text>
-      {flameId === 'fetch' && <Text size="sm" fw={700} c="orange">Target: {board.fetchTarget ? `${activeDieLabel(board, board.fetchTarget.dieId)} face ${board.fetchTarget.physicalFace}` : 'Not set'}</Text>}
+      <RichDescription copy={definition.verboseDescription} />
+      {flameId === 'fluxCapacitor' && <Text size="xs" c="dimmed">Example at current strength: if Magnetic affects 2 other dice, your Charge is multiplied by ×{formatPlayerNumber(fluxCapacitorChargeMultiplier(invested, 2))}.</Text>}
+      {flameId === 'fetch' && <Text size="sm" fw={700} c="orange">FETCH Face: {board.fetchTarget ? `${activeDieLabel(board, board.fetchTarget.dieId)} face ${board.fetchTarget.physicalFace}` : 'Not set'}</Text>}
+      {flameId === 'targetPractice' && <Text size="sm" fw={700} c="orange">Target Hand: {board.targetPracticeHand ? HANDS[board.targetPracticeHand].name : 'Not set'}</Text>}
       {stage === 'bonfire' && <Text size="xs" c="dimmed">{definition.bonfireDescription}</Text>}
       {canStoke && <Stack gap="sm" data-testid="stoke-flame-controls" data-tutorial="stoke">
         {amount > 0 && <div className="modal-stat stoke-preview"><Text size="xs" c="teal" tt="uppercase">AFTER STOKE · {formatPlayerNumber(afterInvestment)}/100</Text>

@@ -73,7 +73,7 @@ describe('Chapter encounter planning', () => {
     expect(resolver.events.filter(event => event.type === 'CHAPTER_STARTED')).toHaveLength(0);
 
     initial.state.phase = 'shop';
-    initial.state.shop = { stage: 'fireKeeping', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    initial.state.shop = { stage: 'fireKeeping', offers: [], offerRerolls: 0, lifeRestores: 0 };
     initial.state.bust = { round: 1, attempt: 1, score: 0n, target: 100n, shortfall: 100n, livesBefore: 3, livesAfter: 2 };
     initial.state.roundAttemptNumber = 2;
     const retry = dispatch(initial.state, { type: 'RETRY_ROUND' }, constant());

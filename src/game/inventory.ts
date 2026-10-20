@@ -1,8 +1,8 @@
-import type { CollectibleDie, DiceInventory, Die, DieId, EncounterDie, GameState, RosterSlots } from './types';
+import type { CollectibleDie, DiceInventory, Die, DieId, EncounterDie, GameState, RosterSlots, StorageSlots } from './types';
 import { assertCollectibleDie } from './specialDice';
 
 export const ROSTER_SLOT_COUNT = 5;
-export const INITIAL_STORAGE_SLOT_COUNT = 3;
+export const STORAGE_SLOT_COUNT = 5;
 
 type DiceCollectionState = Pick<GameState, 'diceInventory' | 'encounterDice' | 'dice'>;
 
@@ -78,7 +78,8 @@ export function orderDieIdsByEncounter<T extends DieId>(state: Pick<GameState, '
 export function assertDiceInventory(inventory: DiceInventory, encounter: readonly EncounterDie[] = []): void {
   if (!Array.isArray(inventory.roster) || inventory.roster.length !== ROSTER_SLOT_COUNT)
     throw new Error(`Dice inventory must have exactly ${ROSTER_SLOT_COUNT} Roster slots.`);
-  if (!Array.isArray(inventory.storage)) throw new Error('Dice inventory Storage must be an array.');
+  if (!Array.isArray(inventory.storage) || inventory.storage.length !== STORAGE_SLOT_COUNT)
+    throw new Error(`Dice inventory must have exactly ${STORAGE_SLOT_COUNT} Storage slots.`);
   const instanceIds = Object.keys(inventory.instances).map(Number);
   const locations = [...inventory.roster, ...inventory.storage].filter((id): id is number => id !== null);
   const equippedCount = inventory.roster.filter(id => id !== null).length;
@@ -100,9 +101,6 @@ export function assertDiceInventory(inventory: DiceInventory, encounter: readonl
   const maximumId = instanceIds.length ? Math.max(...instanceIds) : -1;
   if (!Number.isSafeInteger(inventory.nextDieId) || inventory.nextDieId <= maximumId)
     throw new Error('nextDieId must be greater than every owned collectible die ID.');
-  if (new Set(inventory.storageAwardedChapters).size !== inventory.storageAwardedChapters.length
-    || inventory.storageAwardedChapters.some(chapter => !Number.isSafeInteger(chapter) || chapter < 1))
-    throw new Error('Storage Chapter awards must contain unique positive Chapter numbers.');
   const encounterIds = new Set<number>();
   for (const die of encounter) {
     if (die.owner !== 'boss' || !die.encounterId) throw new Error('Encounter dice must have tagged boss identity.');
@@ -112,14 +110,12 @@ export function assertDiceInventory(inventory: DiceInventory, encounter: readonl
   }
 }
 
-export function grantChapterStorageSlot(inventory: DiceInventory, chapter: number): boolean {
-  if (inventory.storageAwardedChapters.includes(chapter)) return false;
-  inventory.storageAwardedChapters.push(chapter);
-  inventory.storage.push(null);
-  return true;
-}
-
 export function rosterTuple(ids: Array<DieId | null>): RosterSlots {
   if (ids.length !== ROSTER_SLOT_COUNT) throw new Error(`Expected ${ROSTER_SLOT_COUNT} Roster slots.`);
   return ids as RosterSlots;
+}
+
+export function storageTuple(ids: Array<DieId | null>): StorageSlots {
+  if (ids.length !== STORAGE_SLOT_COUNT) throw new Error(`Expected ${STORAGE_SLOT_COUNT} Storage slots.`);
+  return ids as StorageSlots;
 }

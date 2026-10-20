@@ -3,10 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { newRun } from '../game/engine';
 import { Resolver } from '../game/effects';
+import { rosterDice } from '../game/inventory';
 import { placeFlameInstance } from '../game/flames';
 import type { GameState } from '../game/types';
 import { Die } from './Die';
 import { ShopScreen } from './ShopScreen';
+import { CollectibleDieVisual } from './CollectibleDieVisual';
 
 const fixed = { next: () => .2 };
 const wrap = (node: React.ReactNode) => renderToStaticMarkup(<MantineProvider>{node}</MantineProvider>);
@@ -37,16 +39,34 @@ describe('collectible Dice presentation', () => {
 
     const golden = { ...normal, type: 'golden' as const };
     const specialHtml = wrap(<Die die={golden} {...props} />);
-    expect(specialHtml).toContain('>Golden<');
+    expect(specialHtml).toContain('Golden');
+    expect(specialHtml).toContain('die-type-icon');
     expect(specialHtml).not.toContain('Golden D6');
   });
 
-  it('renders three die-first offers plus horizontal Storage and one five-slot Roster', () => {
+  it('keeps special identity outside the pip field and uses the shared selected primitive', () => {
+    const specialVisual = wrap(<CollectibleDieVisual type="magnetic" face={5} />);
+    expect(specialVisual).toContain('data-die-type="magnetic"');
+    expect(specialVisual).not.toContain('collectible-die-mark');
+    expect(specialVisual.match(/class="pip pip-/g)).toHaveLength(5);
+
+    const state = newRun('selected-presentation', fixed).state;
+    const props = { rosterSlot: 0, display: 'pips' as const, highlighted: false, rolling: false,
+      disabled: false, onClick: () => {}, onDetails: () => {} };
+    expect(wrap(<Die die={state.dice[0]} {...props} selected />)).toContain('is-die-selected');
+    expect(wrap(<Die die={{ ...rosterDice(state)[0], type: 'magic' }} {...props} selected />)).toContain('is-die-selected');
+    expect(wrap(<Die die={state.dice[0]} {...props} selected={false} />)).not.toContain('is-die-selected');
+  });
+
+  it('renders three die-first offers plus aligned five-slot Storage and Roster rows', () => {
     const html = shopMarkup(openShop('compact-dice-shop'));
-    expect(html.match(/class="[^"]*dice-offer rarity-/g)).toHaveLength(3);
+    expect(html.match(/class="[^"]*dice-offer /g)).toHaveLength(3);
     expect(html.match(/class="[^"]*collectible-die-visual/g)).toHaveLength(8);
+    expect(html.match(/data-testid="collection-slot-storage-/g)).toHaveLength(5);
+    expect(html.match(/data-testid="collection-slot-roster-/g)).toHaveLength(5);
     expect(html).toContain('data-testid="storage-strip"');
     expect(html).toContain('data-testid="shop-roster-dock"');
+    expect(html).toContain('role="tablist"');
     expect(html).not.toMatch(/\bD6\b/);
   });
 });

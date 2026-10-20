@@ -35,7 +35,7 @@ function sideEffectLabel(effect: HandScoredEvent['sideEffects'][number]): string
     case 'flame_activation': return `${originLabel[effect.origin]} ${FLAMES[effect.flame].name}${effect.factor === undefined ? '' : ` ×${number(effect.factor)}`}`;
     case 'free_play': return `${die(effect.dieId)} Free Play event ${effect.rerollEventId}`;
     case 'sustainable': return `${die(effect.dieId)} Sustainable preserved ${HANDS[effect.hand].name} (${number(effect.chargesRemaining)} left)`;
-    case 'conjoined': return `${die(effect.dieId)} Conjoined qualified ${HANDS[effect.hand].name}`;
+    case 'conjoined': return `${die(effect.dieId)} Conjoined duplicated itself for ${HANDS[effect.hand].name} Qualification and Scoring`;
     case 'boss_state': return `${label(effect.boss)} ${label(effect.change)}`;
   }
 }

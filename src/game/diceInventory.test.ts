@@ -7,7 +7,7 @@ import { HAND_IDS, handOptions, hasPlayableHand } from './hands';
 import { legalHandCombinations } from './selection';
 import {
   activeDieLabel, assertDiceInventory, collectibleDieById, encounterDice, ownedDice, rosterDice, rosterDieLabel, rosterSlotOf,
-  grantChapterStorageSlot, rosterTuple, syncActiveDiceProjection,
+  rosterTuple, storageTuple, syncActiveDiceProjection,
 } from './inventory';
 import { loadPersistedRun, RUN_STORAGE_KEY, savePersistedRun } from './persistence';
 import { captureRollbackState, restoreRollbackState } from './rollback';
@@ -27,7 +27,7 @@ function equipCount(state: GameState, count: number): GameState {
   const ids = ownedDice(state).map(die => die.id);
   state.diceInventory.roster = rosterTuple(ids.map((id, index) => index < count ? id : null));
   const stored = ids.slice(count);
-  state.diceInventory.storage = [...stored, ...Array.from({ length: Math.max(0, 3 - stored.length) }, () => null)];
+  state.diceInventory.storage = storageTuple([...stored, ...Array.from({ length: Math.max(0, 5 - stored.length) }, () => null)]);
   syncActiveDiceProjection(state);
   assertDiceInventory(state.diceInventory, state.encounterDice);
   return state;
@@ -52,10 +52,10 @@ function startBoss(type: BossType, count: number): { state: GameState; resolver:
 }
 
 describe('collectible dice inventory', () => {
-  it('starts with five stable Normal D6s in fixed Roster slots and three empty Storage slots', () => {
+  it('starts with five stable Normal dice in fixed Roster slots and five empty Storage slots', () => {
     const state = newRun('inventory-start', constant()).state;
     expect(state.diceInventory.roster).toEqual([0, 1, 2, 3, 4]);
-    expect(state.diceInventory.storage).toEqual([null, null, null]);
+    expect(state.diceInventory.storage).toEqual([null, null, null, null, null]);
     expect(state.diceInventory.nextDieId).toBe(5);
     expect(ownedDice(state)).toHaveLength(5);
     expect(rosterDice(state)).toHaveLength(5);
@@ -77,6 +77,9 @@ describe('collectible dice inventory', () => {
     const malformed = structuredClone(state.diceInventory);
     malformed.roster.pop();
     expect(() => assertDiceInventory(malformed)).toThrow(/exactly 5/);
+    const malformedStorage = structuredClone(state.diceInventory);
+    malformedStorage.storage.pop();
+    expect(() => assertDiceInventory(malformedStorage)).toThrow(/exactly 5 Storage/);
     expect(() => assertDiceInventory(state.diceInventory, [{ ...createCursedDie(), id: 0,
       encounterId: 'test' }])).toThrow(/collides/);
   });
@@ -107,13 +110,13 @@ describe('collectible dice inventory', () => {
     const state = newRun('inventory-projection', constant()).state;
     remapIds(state, [105, 12, 999, 41, 240]);
     state.diceInventory.roster = rosterTuple([999, null, 105, 240, 12]);
-    state.diceInventory.storage = [41, null, null];
+    state.diceInventory.storage = [41, null, null, null, null];
     syncActiveDiceProjection(state);
     expect(state.dice.map(die => die.id)).toEqual([999, 105, 240, 12]);
     expect(state.dice[0]).toBe(state.diceInventory.instances[999]);
     expect(state.dice.map(die => activeDieLabel(state, die.id))).toEqual(['D1', 'D2', 'D3', 'D4']);
     state.diceInventory.roster = rosterTuple([12, 999, 105, 240, null]);
-    state.diceInventory.storage = [41, null, null];
+    state.diceInventory.storage = [41, null, null, null, null];
     syncActiveDiceProjection(state);
     expect(state.dice.map(die => die.id)).toEqual([12, 999, 105, 240]);
     expect(state.dice.map(die => activeDieLabel(state, die.id))).toEqual(['D1', 'D2', 'D3', 'D4']);
@@ -282,35 +285,32 @@ describe('reduced-Roster boss safety', () => {
   });
 });
 
-describe('Storage progression, persistence, and rollback', () => {
-  it('grants exactly one Storage slot immediately on Chapter clear and retains it through reward flow', () => {
+describe('fixed Storage, persistence, and rollback', () => {
+  it('keeps exactly five Storage slots through Chapter clear and reward flow', () => {
     const { state, resolver } = startBoss('caller', 5);
     expect(state.round).toBe(6);
     state.score = state.target;
     state.stats.rounds.at(-1)!.finalScore = state.score;
     resolver.evaluate();
     expect(state.phase).toBe('roundSummary');
-    expect(state.diceInventory.storage).toHaveLength(4);
-    expect(state.diceInventory.storageAwardedChapters).toEqual([1]);
-    expect(grantChapterStorageSlot(state.diceInventory, 1)).toBe(false);
+    expect(state.diceInventory.storage).toHaveLength(5);
     resolver.evaluate();
-    expect(state.diceInventory.storage).toHaveLength(4);
+    expect(state.diceInventory.storage).toHaveLength(5);
     resolver.continueRoundSummary();
     expect(state.phase).toBe('flameSelection');
-    expect(state.diceInventory.storage).toHaveLength(4);
+    expect(state.diceInventory.storage).toHaveLength(5);
   });
 
   it('round-trips exact slot layout, IDs, allocator state, and rollback state', () => {
     const state = newRun('inventory-persistence', constant()).state;
     remapIds(state, [12, 41, 105, 240, 999]);
     state.diceInventory.roster = rosterTuple([12, null, 105, 240, 999]);
-    state.diceInventory.storage = [null, 41, null, null];
+    state.diceInventory.storage = [null, 41, null, null, null];
     state.diceInventory.nextDieId = 1_500;
-    state.diceInventory.storageAwardedChapters = [1];
     syncActiveDiceProjection(state);
     const rollback = captureRollbackState(state);
     state.diceInventory.roster = rosterTuple([12, 41, 105, 240, 999]);
-    state.diceInventory.storage = [null, null, null, null];
+    state.diceInventory.storage = [null, null, null, null, null];
     syncActiveDiceProjection(state);
     restoreRollbackState(state, rollback);
     expect(state.diceInventory).toEqual(rollback.diceInventory);

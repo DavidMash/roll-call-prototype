@@ -378,14 +378,33 @@ test('compact HUD, Run Info and Help keep secondary information off the gameplay
   await openMenuItem(page, 'How to Play');
   const help = page.getByRole('dialog', { name: 'How to Play' });
   await expect(help).toBeVisible();
-  await expect(help).toContainText('Reach the Goal before you run out of playable hands and Rerolls.');
+  await expect(help).toContainText('Reach the Round Target before you run out of playable Hands and Manual Rerolls.');
   await expect(help).toContainText('Pips × Mult × XMult = Score');
   await expect(help).not.toContainText('pre-attempt');
   await expect(help).not.toContainText('interpolation');
   await help.getByRole('tab', { name: 'Dice' }).click();
-  await expect(help.getByTestId('help-die-jackpot')).toContainText('+3 Gold');
+  await expect(help.getByTestId('help-die-jackpot')).toContainText('you earn 3 Gold');
   await expect(help.getByTestId('help-die-golden')).toContainText('up to 3 Gold each Round');
   await expect(help.getByTestId('help-die-magic')).toContainText('Legendary');
+  await help.getByTestId('help-die-bonus').getByRole('button', { name: 'Explain Pips' }).click();
+  const pipsDefinition = page.getByRole('dialog', { name: 'Pips definition' });
+  await expect(pipsDefinition).toContainText('points added to a Hand');
+  await pipsDefinition.getByRole('button', { name: 'Explain Hand' }).click();
+  const handDefinition = page.getByRole('dialog', { name: 'Hand definition' });
+  await expect(handDefinition).toContainText('scoring pattern');
+  await handDefinition.getByRole('button', { name: 'Back to previous definition' }).click();
+  await expect(page.getByRole('dialog', { name: 'Pips definition' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close definition' }).click();
+  const scoreTerm = help.getByTestId('help-die-bonus').getByRole('button', { name: 'Explain Scores' });
+  await scoreTerm.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'Score definition' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close definition' }).click();
+  await help.getByRole('tab', { name: 'Flames' }).click();
+  await help.getByTestId('help-flame-fluxCapacitor').getByRole('button', { name: 'Explain Magnetic' }).click();
+  await expect(page.getByRole('dialog', { name: 'Magnetic definition' }))
+    .toContainText('next other die to be Rolled while this power is available');
+  await page.getByRole('button', { name: 'Close definition' }).click();
   await expect(help.getByText('Boomerang', { exact: true })).toHaveCount(0);
   await expect(help.getByText('Personal Trainer', { exact: true })).toHaveCount(0);
 });
@@ -399,7 +418,7 @@ test('header omits redundant phase labels and always reserves the menu on narrow
     structuredClone(base),
     Object.assign(structuredClone(base), {
       phase: 'shop' as const,
-      shop: { kind: 'between_rounds' as const, offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 },
+      shop: { kind: 'between_rounds' as const, offers: [], offerRerolls: 0, lifeRestores: 0 },
     }),
     Object.assign(structuredClone(base), {
       phase: 'flameSelection' as const,
@@ -660,6 +679,30 @@ test('Training uses a compact fourteen-hand scorecard on mobile', async ({ page 
   await page.screenshot({ path: test.info().outputPath('shop-mobile.png'), fullPage: true });
 });
 
+test('glossary drill-down stays tappable, dismissible, and inside a mobile viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/?seed=mobile-glossary&speed=instant');
+  await ready(page);
+  await openMenuItem(page, 'How to Play');
+  const help = page.getByRole('dialog', { name: 'How to Play' });
+  await help.getByRole('tab', { name: 'Dice' }).click();
+  const bonus = help.getByTestId('help-die-bonus');
+  await bonus.scrollIntoViewIfNeeded();
+  await bonus.getByRole('button', { name: 'Explain Pips' }).click();
+  let definition = page.getByRole('dialog', { name: 'Pips definition' });
+  const box = await definition.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+  await definition.getByRole('button', { name: 'Explain Hand' }).click();
+  definition = page.getByRole('dialog', { name: 'Hand definition' });
+  await expect(definition.getByRole('button', { name: 'Back to previous definition' })).toBeVisible();
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: test.info().outputPath('mobile-nested-glossary.png'), fullPage: true });
+  await definition.getByRole('button', { name: 'Close definition' }).click();
+  await expect(page.getByRole('dialog', { name: 'Hand definition' })).toHaveCount(0);
+});
+
 test('Round Dice leave Normal dice unlabeled and identify special dice without D6', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const game = newRun('round-die-labels').state;
@@ -679,7 +722,7 @@ test('Round Dice leave Normal dice unlabeled and identify special dice without D
   await page.screenshot({ path: test.info().outputPath('round-dice-labels-mobile.png'), fullPage: true });
   await golden.locator('.die-face-details').click();
   const details = page.getByRole('dialog', { name: 'GOLDEN · LV1' });
-  await expect(details).toContainText('Earn 1 Gold when this die Scores');
+  await expect(details).toContainText('Each time this die Scores, you earn 1 Gold');
   await expect(details).toContainText(/Gold earned this Round\s*0 \/ 3/);
   await expect(details).not.toContainText('D6');
   await expect(details).not.toContainText('PHYSICAL FACES');
@@ -793,7 +836,8 @@ test('mobile staged Shop keeps each section, navigation, and the compact Roster 
   await expect(page.getByTestId('fire-keeping-shop')).toHaveCount(0);
   await expect(page.getByTestId('shop-stage-continue')).toBeInViewport();
   await expect(page.getByTestId('shop-stage-continue')).toContainText('CONTINUE TO TRAINING');
-  await expect(page.getByRole('button', { name: /^REROLL ALL DICE FOR \d+ GOLD$/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /REROLL ALL DICE/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /REROLL OFFERS/ })).toBeVisible();
   await expect(page.getByTestId('dice-dock')).toHaveCount(0);
   await expect(page.getByTestId('shop-roster-dock')).toBeInViewport();
   await expect(page.getByTestId('shop-dice-controls')).toHaveCount(0);
@@ -811,8 +855,8 @@ test('mobile staged Shop keeps each section, navigation, and the compact Roster 
   await offerDetails.getByRole('button', { name: 'CLOSE' }).click();
   await expect(offerDetails).toBeHidden();
   await expect(page.locator('.roster-grid .collection-slot')).toHaveCount(5);
-  await expect(page.locator('.storage-grid .collection-slot')).toHaveCount(3);
-  expect(await page.getByTestId('storage-strip').evaluate(element => getComputedStyle(element).overflowX)).toBe('auto');
+  await expect(page.locator('.storage-grid .collection-slot')).toHaveCount(5);
+  expect(await page.getByTestId('storage-strip').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(5);
   await page.screenshot({ path: test.info().outputPath('dice-shop-mobile.png'), fullPage: true });
   const purchasedOffer = game.shop!.offers[0];
   await page.getByTestId(`dice-offer-${purchasedOffer.id}`).getByRole('button', { name: /BUY/ }).click();
@@ -835,7 +879,7 @@ test('mobile staged Shop keeps each section, navigation, and the compact Roster 
   await expect(page.getByRole('dialog', { name: 'DIE DETAILS' })).not.toContainText('D6');
 });
 
-test('full seeded run: select/play, clear, buy a collectible die, reroll dice, next round, lose and export', async ({ page, context }) => {
+test('full seeded run: select/play, clear, buy a collectible die, next round, lose and export', async ({ page, context }) => {
   // Bad Dream can intentionally replay the second half of a Chapter before this full-run fixture loses.
   test.setTimeout(240_000);
   const errors: string[] = [];
@@ -847,8 +891,8 @@ test('full seeded run: select/play, clear, buy a collectible die, reroll dice, n
   await page.screenshot({ path: test.info().outputPath('shop-desktop.png'), fullPage: true });
   await expect(page.locator('.dice-offer')).toHaveCount(3);
   const offer = game.shop!.offers.find(item => item.dieType === 'bonus')!;
-  if (game.gold < offer.price! + 2) {
-    game.gold = offer.price! + 2;
+  if (game.gold < offer.price!) {
+    game.gold = offer.price!;
     await installRunState(page, game);
     await enterRun(page);
   }
@@ -858,10 +902,7 @@ test('full seeded run: select/play, clear, buy a collectible die, reroll dice, n
   await expect(page.getByTestId(`dice-offer-${offer.id}`).getByRole('button', { name: 'PURCHASED' })).toBeDisabled();
   const purchasedId = game.diceInventory.storage.find(id => id !== null)!;
   expect(game.diceInventory.instances[purchasedId]).toMatchObject({ type: 'bonus', level: 1 });
-  await page.getByRole('button', { name: 'REROLL ALL DICE FOR 2 GOLD', exact: true }).click();
-  game = dispatch(game, { type: 'REROLL_DICE' }).state;
-  await matchBoard(page, game);
-  await expect(page.getByRole('button', { name: 'REROLL ALL DICE FOR 4 GOLD', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /REROLL ALL DICE/ })).toHaveCount(0);
   await goToShopStage(page, 'fireKeeping');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = unlockShopExit(game);
@@ -960,21 +1001,24 @@ test('native drag-and-drop moves collection dice and Dice-offer rerolls stay aut
   await page.mouse.down();
   // Start the real drag before scrolling the below-the-fold destination into view.
   await page.mouse.move(from.x + 30, from.y + 30, { steps: 5 });
+  await expect(source).toHaveAttribute('data-dragging', 'true');
   await target.scrollIntoViewIfNeeded();
   const to = (await target.boundingBox())!;
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 });
   await page.mouse.move(to.x + to.width / 2 + 1, to.y + to.height / 2 + 1);
+  await expect(target).toHaveAttribute('data-drop-target', 'true');
+  await page.screenshot({ path: test.info().outputPath('collection-drag-target.png'), fullPage: true });
   await page.mouse.up();
   game = dispatch(game, { type: 'MOVE_DIE', source: { area: 'roster', index: 0 }, destination: { area: 'storage', index: 0 },
     expectedSourceDieId: 0, expectedDestinationDieId: null }).state;
   await expect(page.getByTestId('collection-slot-roster-0').getByRole('button', { name: /Roster 1, empty/ })).toBeVisible();
   await expect(page.getByTestId('collection-slot-storage-0')).toHaveAttribute('data-die-id', '0');
   const oldOfferIds = game.shop!.offers.map(offer => offer.id);
-  await page.getByRole('button', { name: 'REROLL DICE OFFERS · 3 GOLD', exact: true }).click();
+  await page.getByRole('button', { name: 'REROLL OFFERS · 3 GOLD', exact: true }).click();
   game = dispatch(game, { type: 'REROLL_OFFERS' }).state;
   await expect(page.getByTestId('stat-gold').getByText(String(game.gold), { exact: true })).toBeVisible();
   await expect(page.locator('.dice-offer')).toHaveCount(3);
-  await expect(page.getByRole('button', { name: 'REROLL DICE OFFERS · 6 GOLD', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'REROLL OFFERS · 6 GOLD', exact: true })).toBeVisible();
   expect(game.shop!.offers.map(offer => offer.id)).not.toEqual(oldOfferIds);
 });
 
@@ -1030,8 +1074,10 @@ test('same-type collection interaction requires explicit Fusion, Swap, or Cancel
   await first.locator('.collection-slot-main').click();
   await second.locator('.collection-slot-main').click();
   let modal = page.getByRole('dialog', { name: 'FUSE DICE?' });
-  await expect(modal).toContainText('Bonus Lv1 + Bonus Lv2');
+  await expect(modal).toContainText('Bonus · Lv1 + Bonus · Lv2');
   await expect(modal).toContainText('+10 Pips → +30 Pips');
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: test.info().outputPath('fusion-modal.png'), fullPage: true });
   await modal.getByRole('button', { name: 'CANCEL' }).click();
   expect(game.diceInventory.roster.slice(0, 2)).toEqual([0, 1]);
 
@@ -1229,7 +1275,7 @@ test('Jumping Bean runs its Free Play and explicit reroll only when invoked On C
   const bean = page.getByTestId('flame-die-0');
   await bean.getByRole('button', { name: 'View details for Jumping Bean' }).click();
   const details = page.getByRole('dialog', { name: 'JUMPING BEAN · LV1' });
-  await expect(details).toContainText(/On Command uses remaining\s*1 \/ 1/);
+  await expect(details).toContainText(/Uses Remaining\s*1 \/ 1/);
   await details.getByRole('button', { name: 'USE ON COMMAND' }).click();
   await matchBoard(page, next.state);
   expect(next.state.stats.scoreBySource.jumpingBean).toBeGreaterThan(0);
@@ -1237,7 +1283,7 @@ test('Jumping Bean runs its Free Play and explicit reroll only when invoked On C
   expect(next.events.some(event => event.type === 'JUMPING_BEAN_FREE_PLAY')).toBe(true);
   expect(next.events.some(event => event.type === 'DIE_ROLLED' && event.dieIds?.includes(0))).toBe(true);
   await bean.getByRole('button', { name: 'View details for Jumping Bean' }).click();
-  await expect(page.getByRole('dialog', { name: 'JUMPING BEAN · LV1' })).toContainText(/On Command uses remaining\s*0 \/ 1/);
+  await expect(page.getByRole('dialog', { name: 'JUMPING BEAN · LV1' })).toContainText(/Uses Remaining\s*0 \/ 1/);
 });
 
 test('active mobile gameplay stays inside the viewport with a two-column scorecard', async ({ page }) => {

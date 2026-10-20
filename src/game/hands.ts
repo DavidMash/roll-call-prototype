@@ -218,7 +218,7 @@ export function planQualification(dice: Die[], hand: HandId, selected: readonly 
     if ((hand === 'smallStraight' || hand === 'largeStraight') && die.type === 'missingLink')
       return [{ dieId: die.id, effect: 'missingLink' as const }];
     if (rule.groups && die.type === 'mirror') return [{ dieId: die.id, effect: 'mirror' as const }];
-    if (rule.groups && die.type === 'conjoined') return [{ dieId: die.id, effect: 'conjoined' as const }];
+    if ((rule.groups || rule.rank) && die.type === 'conjoined') return [{ dieId: die.id, effect: 'conjoined' as const }];
     return [];
   });
   const validWith = (claims: QualificationClaim[]) => {
@@ -229,8 +229,14 @@ export function planQualification(dice: Die[], hand: HandId, selected: readonly 
   };
   const validSets = claimSets(candidates).filter(validWith);
   const minimumClaims = validSets.length ? Math.min(...validSets.map(set => set.length)) : Number.POSITIVE_INFINITY;
-  const claimOptions = validSets.filter(set => set.length === minimumClaims)
+  let claimOptions = validSets.filter(set => set.length === minimumClaims)
     .map(set => set.map(claim => ({ ...claim, resource: 'invocation' as const, amount: 1 })));
+  // An Upper Hand already qualifies from one matching die. Claim an available Conjoined power
+  // so the same committed resource also creates its second genuine Score occurrence.
+  if (rule.rank && validWith([])) {
+    const conjoined = candidates.filter(claim => claim.effect === 'conjoined');
+    if (conjoined.length) claimOptions = conjoined.map(claim => [{ ...claim, resource: 'invocation' as const, amount: 1 }]);
+  }
   const requestedClaims = options.claims?.map(claim => ({ ...claim, resource: 'invocation' as const, amount: 1 })) ?? [];
   const requestedKey = requestedClaims.map(claimKey).sort().join('|');
   const chosen = requestedClaims.length

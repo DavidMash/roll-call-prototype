@@ -14,7 +14,7 @@ const constant = (value = 0): RandomSource => ({ next: () => value });
 function miniBossRound(type: MiniBossType, prepare?: (state: GameState) => void, random: RandomSource = constant(.2)): GameState {
   const state = newRun(`mini-${type}`, constant(.2)).state;
   state.phase = 'shop';
-  state.shop = { stage: 'fireKeeping', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { stage: 'fireKeeping', offers: [], offerRerolls: 0, lifeRestores: 0 };
   state.round = 2;
   state.currentNodeId = 'shop:before-round:3';
   state.bossSchedule[3] = type;

@@ -5,40 +5,50 @@ import { finalizeScore, handScore, infernoMultiplier } from './scoring';
 import type { Board, Flame, FlameInstance, FlameInstanceId, FlameSlotIndex, FlameSlots, GameState, HandId, Rarity, XMultFactor } from './types';
 import { formatPlayerNumber } from './copy';
 import type { ExactScore } from './scoreMath';
+import type { RichText } from './richText';
+import { flameVerboseDescription, plainDescription } from './effectDescriptions';
 
 export interface FlameDefinition {
   name: string;
   shortName: string;
   description: string;
+  verboseDescription: RichText;
+  shortDescription?: string;
   bonfireDescription: string;
   affectsXMult: boolean;
   rarity: Rarity;
 }
 const GLOBAL_BONFIRE = 'At 100 Gold invested, this Flame reaches full strength.';
+const flameDefinition = (id: Flame, name: string, shortName: string, rarity: Rarity,
+  shortDescription?: string): FlameDefinition => {
+  const verboseDescription = flameVerboseDescription(id);
+  return { name, shortName, rarity, affectsXMult: true, description: plainDescription(verboseDescription),
+    verboseDescription, ...(shortDescription ? { shortDescription } : {}), bonfireDescription: GLOBAL_BONFIRE };
+};
 export const FLAMES: Record<Flame, FlameDefinition> = {
-  ultimate: { name: 'Ultimate', shortName: 'ULT', rarity: 'uncommon', affectsXMult: true, description: 'Your highest level hand gains up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  minigun: { name: 'Minigun', shortName: 'MINI', rarity: 'common', affectsXMult: true, description: 'Ones–Sixes gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  hailMary: { name: 'Hail Mary', shortName: 'HAIL', rarity: 'common', affectsXMult: true, description: 'Hands played with no Rerolls left gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  fullOfGrace: { name: 'Full of Grace', shortName: 'GRACE', rarity: 'common', affectsXMult: true, description: 'Last Play gains up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  momentum: { name: 'Momentum', shortName: 'MOM', rarity: 'common', affectsXMult: true, description: 'Playing a hand builds Charge.', bonfireDescription: GLOBAL_BONFIRE },
-  thirdRail: { name: 'Third Rail', shortName: 'RAIL', rarity: 'uncommon', affectsXMult: true, description: 'Rolling 3s builds Charge.', bonfireDescription: GLOBAL_BONFIRE },
-  jumpStart: { name: 'Jump Start', shortName: 'JUMP', rarity: 'uncommon', affectsXMult: true, description: 'Rerolls build Charge.', bonfireDescription: GLOBAL_BONFIRE },
-  powerSurge: { name: 'Power Surge', shortName: 'SURGE', rarity: 'rare', affectsXMult: true, description: 'Playing your highest level hand triples your current Charge.', bonfireDescription: GLOBAL_BONFIRE },
-  speedDemon: { name: 'Speed Demon', shortName: 'SPEED', rarity: 'rare', affectsXMult: true, description: 'Play quickly for up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  sixPack: { name: 'Six Pack', shortName: 'SIX', rarity: 'rare', affectsXMult: true, description: 'Starts at up to ×6 XMult. Reduces when an Upper hand is played.', bonfireDescription: GLOBAL_BONFIRE },
-  fluxCapacitor: { name: 'Flux Capacitor', shortName: 'FLUX', rarity: 'rare', affectsXMult: true, description: 'Magnetic dice pulling Rolls multiply your XMult Charge.', bonfireDescription: GLOBAL_BONFIRE },
-  fatCat: { name: 'Fat Cat', shortName: 'CAT', rarity: 'uncommon', affectsXMult: true, description: 'Hands with Golden or Jackpot gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  vineyard: { name: 'Vineyard', shortName: 'VINE', rarity: 'uncommon', affectsXMult: true, description: 'Hands with Vintage gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  fetch: { name: 'Fetch', shortName: 'FETCH', rarity: 'uncommon', affectsXMult: true, description: 'Score the marked FETCH face for up to ×5 XMult. Then FETCH moves.', bonfireDescription: GLOBAL_BONFIRE },
-  targetPractice: { name: 'Target Practice', shortName: 'TARGET', rarity: 'rare', affectsXMult: true, description: 'Hit your Target for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  hotStreak: { name: 'Hot Streak', shortName: 'STREAK', rarity: 'uncommon', affectsXMult: true, description: 'Chain Lower hands in order to build XMult, up to ×9.', bonfireDescription: GLOBAL_BONFIRE },
-  lowball: { name: 'Lowball', shortName: 'LOW', rarity: 'common', affectsXMult: true, description: 'Low face values earn up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  straightShooter: { name: 'Straight Shooter', shortName: 'STR8', rarity: 'uncommon', affectsXMult: true, description: 'Play Small Straight before Large Straight for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  doubleDown: { name: 'Double Down', shortName: 'DBL', rarity: 'uncommon', affectsXMult: true, description: 'Play Pair before Two Pair for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  threesCompany: { name: 'Three’s Company', shortName: 'THREE', rarity: 'uncommon', affectsXMult: true, description: 'Play Three of a Kind before Full House for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  boxSet: { name: 'Box Set', shortName: 'BOX', rarity: 'uncommon', affectsXMult: true, description: 'Play Four of a Kind before Five of a Kind for up to ×9 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  missingPair: { name: 'Missing Pair', shortName: 'MISS', rarity: 'common', affectsXMult: true, description: 'Pair and Three of a Kind gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
-  oneShort: { name: 'One Short', shortName: 'SHORT', rarity: 'common', affectsXMult: true, description: 'Small Straight and Four of a Kind gain up to ×5 XMult.', bonfireDescription: GLOBAL_BONFIRE },
+  ultimate: flameDefinition('ultimate', 'Ultimate', 'ULT', 'uncommon', 'Your highest level hand gains up to ×5 XMult.'),
+  minigun: flameDefinition('minigun', 'Minigun', 'MINI', 'common', 'Ones–Sixes gain up to ×5 XMult.'),
+  hailMary: flameDefinition('hailMary', 'Hail Mary', 'HAIL', 'common', 'Hands played with no Rerolls left gain up to ×5 XMult.'),
+  fullOfGrace: flameDefinition('fullOfGrace', 'Full of Grace', 'GRACE', 'common', 'Last Play gains up to ×5 XMult.'),
+  momentum: flameDefinition('momentum', 'Momentum', 'MOM', 'common', 'Playing a hand builds Charge.'),
+  thirdRail: flameDefinition('thirdRail', 'Third Rail', 'RAIL', 'uncommon', 'Rolling 3s builds Charge.'),
+  jumpStart: flameDefinition('jumpStart', 'Jump Start', 'JUMP', 'uncommon', 'Rerolls build Charge.'),
+  powerSurge: flameDefinition('powerSurge', 'Power Surge', 'SURGE', 'rare'),
+  speedDemon: flameDefinition('speedDemon', 'Speed Demon', 'SPEED', 'rare', 'Play quickly for up to ×5 XMult.'),
+  sixPack: flameDefinition('sixPack', 'Six Pack', 'SIX', 'rare'),
+  fluxCapacitor: flameDefinition('fluxCapacitor', 'Flux Capacitor', 'FLUX', 'rare'),
+  fatCat: flameDefinition('fatCat', 'Fat Cat', 'CAT', 'uncommon'),
+  vineyard: flameDefinition('vineyard', 'Vineyard', 'VINE', 'uncommon'),
+  fetch: flameDefinition('fetch', 'Fetch', 'FETCH', 'uncommon'),
+  targetPractice: flameDefinition('targetPractice', 'Target Practice', 'TARGET', 'rare'),
+  hotStreak: flameDefinition('hotStreak', 'Hot Streak', 'STREAK', 'uncommon'),
+  lowball: flameDefinition('lowball', 'Lowball', 'LOW', 'common'),
+  straightShooter: flameDefinition('straightShooter', 'Straight Shooter', 'STR8', 'uncommon'),
+  doubleDown: flameDefinition('doubleDown', 'Double Down', 'DBL', 'uncommon'),
+  threesCompany: flameDefinition('threesCompany', 'Three’s Company', 'THREE', 'uncommon'),
+  boxSet: flameDefinition('boxSet', 'Box Set', 'BOX', 'uncommon'),
+  missingPair: flameDefinition('missingPair', 'Missing Pair', 'MISS', 'common'),
+  oneShort: flameDefinition('oneShort', 'One Short', 'SHORT', 'common'),
 };
 export const FLAME_IDS = Object.keys(FLAMES) as Flame[];
 export const XMult_FLAME_IDS = FLAME_IDS.filter(flame => FLAMES[flame].affectsXMult);
@@ -71,11 +81,9 @@ export const sixPackMultiplierAfterUpperHands = (startingFactor: number, upperHa
   Number(Math.max(1, 1 + (Math.max(1, startingFactor) - 1) * (1 - Math.min(6, Math.max(0, upperHandsPlayed)) / 6)).toFixed(12));
 export const maxChargeContribution = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
 export const hotStreakMultiplier = (investedGold: number, charges: number) => 1 + Math.max(0, charges) * flameProgress(investedGold);
-export function lowballFullMultiplier(averageFace: number): number {
-  if (averageFace <= 2) return 3;
-  if (averageFace <= 3) return 2.5;
-  if (averageFace <= 4) return 2;
-  if (averageFace <= 5) return 1.5;
+export function lowballFullMultiplier(averageQualifyingFace: number): number {
+  if (averageQualifyingFace <= 2) return 3;
+  if (averageQualifyingFace <= 3) return 2.5;
   return 1;
 }
 export const lowballMultiplier = (investedGold: number, averageFace: number) =>
@@ -83,19 +91,19 @@ export const lowballMultiplier = (investedGold: number, averageFace: number) =>
 type FlameDisplayContext = Pick<Board, 'gold' | 'lifetimeNormalShopGoldSpent'>;
 export function flameEffectText(id: Flame, investedGold: number, _board: FlameDisplayContext): string {
   switch (id) {
-    case 'momentum': return `Hands build +${formatPlayerNumber(momentumChargeGain(investedGold))} Charge.`;
-    case 'thirdRail': return `Rolled 3s build +${formatPlayerNumber(thirdRailChargeGain(investedGold))} Charge.`;
-    case 'jumpStart': return `Each Reroll builds +${formatPlayerNumber(jumpStartChargeGain(investedGold))} Charge.`;
-    case 'powerSurge': return 'Your highest level hand triples current Charge.';
-    case 'fluxCapacitor': return `Each activation multiplies Charge by 1 + (${formatPlayerNumber(flameProgress(investedGold))} × pulled faces).`;
-    case 'speedDemon': return `A quick play reaches ×${formatPlayerNumber(speedDemonMultiplier(investedGold, 0))} XMult.`;
+    case 'momentum': return `Each Play adds +${formatPlayerNumber(momentumChargeGain(investedGold))} Charge.`;
+    case 'thirdRail': return `Each Rolled 3 adds +${formatPlayerNumber(thirdRailChargeGain(investedGold))} Charge.`;
+    case 'jumpStart': return `Each Manual Reroll adds +${formatPlayerNumber(jumpStartChargeGain(investedGold))} Charge.`;
+    case 'powerSurge': return 'Playing your highest-level Hand triples current Charge.';
+    case 'fluxCapacitor': return `A Magnetic activation multiplies Charge by 1 + (${formatPlayerNumber(flameProgress(investedGold))} × other dice affected).`;
+    case 'speedDemon': return `A sufficiently fast Play reaches ×${formatPlayerNumber(speedDemonMultiplier(investedGold, 0))} XMult.`;
     case 'sixPack': return `Each Round starts at ×${formatPlayerNumber(sixPackStartingMultiplier(investedGold))} XMult.`;
-    case 'targetPractice': return `Target gains ×${formatPlayerNumber(targetPracticeMultiplier(investedGold))} XMult.`;
+    case 'targetPractice': return `Target Hand gains ×${formatPlayerNumber(targetPracticeMultiplier(investedGold))} XMult.`;
     case 'fatCat': return `A scoring Golden or Jackpot face grants ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult.`;
     case 'vineyard': return `A scoring Vintage face grants ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult.`;
     case 'fetch': return `The marked FETCH face grants ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult, then moves.`;
-    case 'hotStreak': return `A full Lower-hand chain reaches ×${formatPlayerNumber(hotStreakMultiplier(investedGold, HOT_STREAK_SEQUENCE.length))} XMult.`;
-    case 'lowball': return `Low Faces gain up to ×${formatPlayerNumber(lowballMultiplier(investedGold, 2))} XMult.`;
+    case 'hotStreak': return `A full top-to-bottom Lower Section Hand sequence reaches ×${formatPlayerNumber(hotStreakMultiplier(investedGold, HOT_STREAK_SEQUENCE.length))} XMult.`;
+    case 'lowball': return `Scoring faces 1, 2, or 3 gain up to ×${formatPlayerNumber(lowballMultiplier(investedGold, 2))} XMult.`;
     case 'straightShooter':
     case 'doubleDown':
     case 'threesCompany':
@@ -114,11 +122,11 @@ export interface FlameDetailsPresentation {
 export function flameDetailsPresentation(id: Flame, investedGold: number, board: Board): FlameDetailsPresentation {
   const investment = Math.max(0, Math.min(100, investedGold));
   if (isChargeFlame(id)) {
-    const currentValue = id === 'momentum' ? `+${formatPlayerNumber(momentumChargeGain(investment))} Charge per hand`
-      : id === 'thirdRail' ? `+${formatPlayerNumber(thirdRailChargeGain(investment))} Charge per rolled 3`
-        : id === 'jumpStart' ? `+${formatPlayerNumber(jumpStartChargeGain(investment))} Charge per manual Reroll`
-          : id === 'powerSurge' ? '×3 current Charge on highest level hand'
-            : `×${formatPlayerNumber(fluxCapacitorChargeMultiplier(investment, 1))} Charge per Roll pulled by a Magnetic die`;
+    const currentValue = id === 'momentum' ? `+${formatPlayerNumber(momentumChargeGain(investment))} Charge per Play`
+      : id === 'thirdRail' ? `+${formatPlayerNumber(thirdRailChargeGain(investment))} Charge per Rolled 3`
+        : id === 'jumpStart' ? `+${formatPlayerNumber(jumpStartChargeGain(investment))} Charge per Manual Reroll`
+          : id === 'powerSurge' ? '×3 current Charge on highest-level Hand'
+            : `×${formatPlayerNumber(fluxCapacitorChargeMultiplier(investment, 1))} Charge when 1 other die is affected`;
     return { currentLabel: 'Current Effect', currentValue,
       maxChargeContribution: maxChargeContribution(investment) };
   }
@@ -310,6 +318,7 @@ const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId, scoring
     case 'minigun': return UPPER_HAND_IDS.includes(hand);
     case 'hailMary': return snapshot.manualRerollsRemaining === 0;
     case 'fullOfGrace': return snapshot.lastPlayDanger !== 'none';
+    case 'lowball': return snapshot.dice.some(die => scoringDieIds.includes(die.dieId) && die.faceValue >= 1 && die.faceValue <= 3);
     case 'targetPractice': return hand === snapshot.targetPracticeHand;
     case 'fatCat': return snapshot.dice.some(die => scoringDieIds.includes(die.dieId) && (die.golden || die.jackpot));
     case 'vineyard': return snapshot.dice.some(die => scoringDieIds.includes(die.dieId) && die.vintage);
@@ -330,7 +339,7 @@ function factorValue(id: Flame, investedGold: number, snapshot: HandStartSnapsho
   switch (id) {
     case 'targetPractice': return targetPracticeMultiplier(investedGold);
     case 'lowball': {
-      const scorers = snapshot.dice.filter(die => scoringDieIds.includes(die.dieId));
+      const scorers = snapshot.dice.filter(die => scoringDieIds.includes(die.dieId) && die.faceValue >= 1 && die.faceValue <= 3);
       const average = scorers.reduce((sum, die) => sum + die.faceValue, 0) / Math.max(1, scorers.length);
       return lowballMultiplier(investedGold, average);
     }
@@ -352,7 +361,7 @@ function factorInput(id: Flame, snapshot: HandStartSnapshot, scoringDieIds: numb
     return { detail: `FETCH target ${slot === null || slot === undefined ? `die #${snapshot.fetchTarget.dieId}` : `D${slot + 1}`} face ${snapshot.fetchTarget.physicalFace}` };
   }
   if (id === 'lowball') {
-    const scorers = snapshot.dice.filter(die => scoringDieIds.includes(die.dieId));
+    const scorers = snapshot.dice.filter(die => scoringDieIds.includes(die.dieId) && die.faceValue >= 1 && die.faceValue <= 3);
     const average = scorers.reduce((sum, die) => sum + die.faceValue, 0) / Math.max(1, scorers.length);
     return { input: average, detail: `${formatPlayerNumber(average)} average printed face` };
   }

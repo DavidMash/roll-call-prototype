@@ -8,6 +8,9 @@ import type { Action, Board, CollectibleDie, HexerFace, Rank } from '../game/typ
 import type { DiceDisplay } from '../uiSettings';
 import { CollectibleDieVisual } from './CollectibleDieVisual';
 import { PipFace } from './PipFace';
+import { DieTypeLabel } from './DieTypeLabel';
+import { RichDescription } from './RichDescription';
+import { chameleonTieDetail } from '../game/effectDescriptions';
 
 export interface FaceDetailsTarget { dieId: number; face: Rank }
 
@@ -70,7 +73,7 @@ function CollectibleDetails({ board, die, busy, actionsEnabled, onClose, submit 
   const details = specialDieDetails(die, board.dieRoundState[die.id]);
   const face = activeFace(die);
   const mutation = face.bossMutation;
-  const title = die.type === 'normal' ? 'DIE DETAILS' : `${definition.name.toUpperCase()} · LV${die.level}`;
+  const title = die.type === 'normal' ? 'DIE DETAILS' : <DieTypeLabel type={die.type} level={die.level} uppercase />;
 
   return <Modal opened onClose={onClose} title={title} size="sm" centered transitionProps={{ duration: 0 }}
     data-testid="die-details-modal" classNames={{ content: 'die-details-modal' }}>
@@ -78,7 +81,7 @@ function CollectibleDetails({ board, die, busy, actionsEnabled, onClose, submit 
       <Group align="center" wrap="nowrap" className="die-details-identity">
         <CollectibleDieVisual type={die.type} face={die.value as Exclude<Rank, 7>} />
         <Stack gap={4} className="die-details-heading">
-          <Text fw={900}>{definition.name}{die.type === 'normal' ? '' : ` · Lv${die.level}`}</Text>
+          <Text fw={900}>{die.type === 'normal' ? definition.name : <DieTypeLabel type={die.type} level={die.level} />}</Text>
           {definition.rarity && <Badge size="sm" variant="light" className={`rarity-badge rarity-${definition.rarity}`}>
             {definition.rarity}
           </Badge>}
@@ -87,7 +90,8 @@ function CollectibleDetails({ board, die, busy, actionsEnabled, onClose, submit 
 
       {die.type !== 'normal' && <section className="die-details-effect" aria-label="Effect">
         <Text size="xs" fw={850} tt="uppercase" c="dimmed">Effect</Text>
-        <Text size="sm">{details.description}</Text>
+        <RichDescription copy={definition.verboseDescription(die.level)} />
+        {die.type === 'chameleon' && <RichDescription copy={chameleonTieDetail} size="xs" className="die-effect-detail" />}
       </section>}
 
       {(details.status.length > 0 || details.freePlayRemaining) && <section aria-label="Current status">

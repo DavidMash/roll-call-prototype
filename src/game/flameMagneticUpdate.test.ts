@@ -118,7 +118,7 @@ describe('Six Pack', () => {
     expect(state.sixPackXMult).toBeCloseTo(3.083333333333);
 
     state.phase = 'shop';
-    state.shop = { offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    state.shop = { offers: [], offerRerolls: 0, lifeRestores: 0 };
     new Resolver(state, constant(.8)).startRound();
     expect(state.sixPackXMult).toBe(3.5);
     expect(state.sixPackUpperHandsPlayed).toBe(0);
@@ -164,7 +164,7 @@ describe('Magnetic source use and Flux Capacitor', () => {
     expect(state.dieRoundState[4].invocationsRemaining).toBe(0);
 
     state.phase = 'shop';
-    state.shop = { offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    state.shop = { offers: [], offerRerolls: 0, lifeRestores: 0 };
     new Resolver(state, constant(.8)).startRound();
     expect(state.dieRoundState[4].invocationsRemaining).toBe(2);
     expect(state.chargeXMult).toBe(1);

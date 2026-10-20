@@ -113,17 +113,14 @@ const HAND_FAMILY_PAYOFFS: Partial<Record<Flame, HandId>> = {
   straightShooter: 'largeStraight', doubleDown: 'twoPair', threesCompany: 'fullHouse', boxSet: 'fiveKind',
 };
 
-function minimumLegalAverageForLowball(hand: HandId): number {
+function minimumQualifyingAverageForLowball(hand: HandId): number {
   if (hand === 'ones' || hand === 'pair' || hand === 'threeKind' || hand === 'fourKind' || hand === 'fiveKind') return 1;
   if (hand === 'twos') return 2;
   if (hand === 'threes') return 3;
-  if (hand === 'fours') return 4;
-  if (hand === 'fives') return 5;
-  if (hand === 'sixes') return 6;
+  if (hand === 'fours' || hand === 'fives' || hand === 'sixes') return Number.POSITIVE_INFINITY;
   if (hand === 'twoPair') return 1.5;
   if (hand === 'fullHouse') return 1.4;
-  if (hand === 'smallStraight') return 2.5;
-  return 3; // Large Straight.
+  return 2; // Small and Large Straights can both contain qualifying 1, 2, and 3 faces.
 }
 
 /**
@@ -141,7 +138,7 @@ function maximumFlameFactorOnHand(flame: Flame, hand: HandId): number {
   if (flame === 'hotStreak') return hotStreakMultiplier(100, HOT_STREAK_SEQUENCE.length);
   if (flame === 'speedDemon') return speedDemonMultiplier(100, 0);
   if (flame === 'sixPack') return sixPackStartingMultiplier(100);
-  if (flame === 'lowball') return lowballMultiplier(100, minimumLegalAverageForLowball(hand));
+  if (flame === 'lowball') return lowballMultiplier(100, minimumQualifyingAverageForLowball(hand));
   if (HAND_FAMILY_PAYOFFS[flame]) return handFamilyFlameMultiplier(100);
   return standardFlameMultiplier(100);
 }

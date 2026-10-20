@@ -48,7 +48,7 @@ export type Phase = 'round' | 'roundSummary' | 'inferno' | 'bust' | 'flameSelect
 export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker' | 'boss';
 export type HandPlaySource = 'manual' | 'jumpingBean' | 'freePlay';
 export type GoldSource = 'golden' | 'jackpot' | 'diceSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward' | 'specialOffer';
-export type GoldSpendSource = 'dicePurchase' | 'shopDiceReroll' | 'diceOfferReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore' | 'furnace';
+export type GoldSpendSource = 'dicePurchase' | 'diceOfferReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore' | 'furnace';
 export type HandLevels = Record<HandId, number>;
 export type HandFamilyFlameStage = 'setup' | 'payoff' | 'spent';
 
@@ -209,13 +209,12 @@ export interface EncounterDie {
 }
 export type Die = CollectibleDie | EncounterDie;
 export type RosterSlots = [DieId | null, DieId | null, DieId | null, DieId | null, DieId | null];
+export type StorageSlots = [DieId | null, DieId | null, DieId | null, DieId | null, DieId | null];
 export interface DiceInventory {
   instances: Record<DieId, CollectibleDie>;
   roster: RosterSlots;
-  storage: Array<DieId | null>;
+  storage: StorageSlots;
   nextDieId: number;
-  /** Chapter numbers whose one-time completion slot has already been granted. */
-  storageAwardedChapters: number[];
 }
 /** Authoritative resources that exist only for one Round attempt. */
 export interface DieRoundRuntime {
@@ -261,7 +260,6 @@ export interface Shop {
   offers: DiceOffer[];
   /** Frozen when this semantic Shop visit is created and retained through navigation/Bust restoration. */
   trainingSession?: FrozenTrainingSession;
-  diceRerolls: number;
   offerRerolls: number;
   lifeRestores: number;
   /** On The House: the first collectible-die purchase in this visit costs no Gold. */
@@ -593,7 +591,6 @@ export interface RunStats {
   hotStreakSkippedHands: { round: number; hand: HandId }[];
   lifetimeNormalShopGoldSpent: number;
   diceOfferRerolls: number;
-  shopDiceRerolls: number;
   manualRerollActions: number;
   manualDiceRerolled: number;
   manualRerolls: ManualRerollStats[];
@@ -769,7 +766,6 @@ export type Action =
   | { type: 'RESTORE_LIFE' }
   | { type: 'DISMISS_FLAME_TUTORIAL' }
   | { type: 'RETRY_ROUND' }
-  | { type: 'REROLL_DICE' }
   | { type: 'REROLL_OFFERS' }
   | { type: 'SET_SHOP_STAGE'; stage: ShopStage }
   | { type: 'UNLOCK_SHOP_EXIT' }

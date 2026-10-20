@@ -119,7 +119,7 @@ describe('hand-family setup and payoff Flames', () => {
     attach(state, 'boxSet', 100);
     state.handFamilyFlameStages.boxSet = 'spent';
     state.phase = 'shop';
-    state.shop = { stage: 'fireKeeping', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    state.shop = { stage: 'fireKeeping', offers: [], offerRerolls: 0, lifeRestores: 0 };
     const next = dispatch(state, { type: 'NEXT_ROUND' }, constant()).state;
     expect(next.handFamilyFlameStages).toEqual({ boxSet: 'setup' });
     expect(handFamilyFlameTargets(next)).toContain('fourKind');
@@ -169,7 +169,7 @@ describe('Missing Pair and One Short', () => {
 
     state.phase = 'shop';
     state.flameSelection = null;
-    state.shop = { stage: 'fireKeeping', offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+    state.shop = { stage: 'fireKeeping', offers: [], offerRerolls: 0, lifeRestores: 0 };
     state.gold = 100;
     state = dispatch(state, { type: 'STOKE_FLAME', flameInstanceId: flameByType(state, id)!.instanceId, amount: 100 }, constant()).state;
     expect(flameByType(state, id)).toMatchObject({ type: id, investedGold: 100, stage: 'bonfire' });

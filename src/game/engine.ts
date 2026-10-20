@@ -1,4 +1,4 @@
-import { CONFIG, diceRerollCost, lifeRestoreCost, offerRerollCost } from './config';
+import { CONFIG, lifeRestoreCost, offerRerollCost } from './config';
 import { createDiceInventory, wholeDieEffectSuppressed } from './dice';
 import { Resolver } from './effects';
 import type { ResolverOptions } from './effects';
@@ -399,7 +399,7 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (!runtime) return 'That die has no active Round state.';
     if (action.type !== 'DISARM_MAGIC' && wholeDieEffectSuppressed(die))
       return "That die's special effect is suppressed while its infected face is exposed.";
-    if (action.type !== 'FEED_FURNACE' && action.type !== 'DISARM_MAGIC' && runtime.invocationsRemaining <= 0) return 'That die has no Invocations remaining.';
+    if (action.type !== 'FEED_FURNACE' && action.type !== 'DISARM_MAGIC' && runtime.invocationsRemaining <= 0) return 'That die has no Uses remaining.';
     if (action.type === 'INVOKE_CHAMELEON' && !state.dice.some(item => item.owner === 'player' && item.id !== die.id))
       return 'Chameleon requires another equipped die.';
     if (action.type === 'ARM_MAGIC') {
@@ -433,7 +433,7 @@ export function validateAction(state: Board | GameState, action: Action): string
     const qualification = planQualification(activeEncounterDice(state), action.hand, action.dieIds,
       { roundState: state.dieRoundState, claims: action.qualificationClaims });
     if (!qualification.legal) return 'Select a complete valid set of participating dice.';
-    if (qualification.ambiguousClaims) return 'Choose which qualification die should spend its Invocation.';
+    if (qualification.ambiguousClaims) return 'Choose which qualification die should spend its Use.';
     return null;
   }
   if (action.type === 'UNLOCK_WARDEN_DIE') {
@@ -495,10 +495,7 @@ export function validateAction(state: Board | GameState, action: Action): string
   if (action.type === 'SET_SHOP_STAGE') {
     if (action.stage === state.shop.stage) return 'That Shop stage is already open.';
     if (action.stage === 'fireKeeping' && !state.flameSlots.some(Boolean)) return 'Fire Keeping opens after you acquire a Flame.';
-    const legal = (state.shop.stage === 'dice' && action.stage === 'training')
-      || (state.shop.stage === 'training' && (action.stage === 'dice' || action.stage === 'fireKeeping'))
-      || (state.shop.stage === 'fireKeeping' && action.stage === 'training');
-    return legal ? null : 'Move through the Shop one stage at a time.';
+    return null;
   }
   if (action.type === 'UNLOCK_SHOP_EXIT') {
     if (state.shop.exitUnlocked !== false) return 'Shop progression is already available.';
@@ -579,10 +576,6 @@ export function validateAction(state: Board | GameState, action: Action): string
     const quote = quoteTraining(state.shop.trainingSession ?? createTrainingSession(state.handLevels), state.handLevels, action.hand);
     if (quote.actualPrice === null) return 'This hand is too specialized to train safely.';
     if (state.gold < quote.actualPrice) return 'Not enough Gold to train this hand.';
-  }
-  if (action.type === 'REROLL_DICE') {
-    if (state.shop.stage !== 'dice') return 'Shop dice can only be rerolled during the Dice stage.';
-    if (state.gold < diceRerollCost(state.shop.diceRerolls)) return 'Not enough Gold to reroll Shop dice.';
   }
   if (action.type === 'REROLL_OFFERS') {
     if (state.shop.stage !== 'dice') return 'Dice offers can only be rerolled during the Dice stage.';
@@ -834,12 +827,6 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         resolver.openShop();
         break;
       }
-      case 'REROLL_DICE':
-        resolver.spendGold(diceRerollCost(next.shop!.diceRerolls), 'Paid for shop dice reroll', 'shopDiceReroll');
-        next.shop!.diceRerolls++;
-        next.stats.shopDiceRerolls++;
-        resolver.rollBatch(next.dice.map(die => die.id), 'Shop dice reroll', 'shop', false, 'shop');
-        break;
       case 'REROLL_OFFERS': {
         const cost = offerRerollCost(next.shop!.offerRerolls);
         const oldOfferIds = next.shop!.offers.map(offer => offer.id);

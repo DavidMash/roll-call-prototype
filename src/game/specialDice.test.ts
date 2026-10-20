@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createCollectibleDie } from './dice';
+import { activeFace, createCollectibleDie } from './dice';
 import { dispatch, newRun } from './engine';
 import { Resolver } from './effects';
 import { combinationsForHand, planQualification } from './hands';
@@ -9,6 +9,7 @@ import { captureRollbackState, restoreRollbackState } from './rollback';
 import { resetDieRoundState, SPECIAL_DICE, SPECIAL_DIE_TYPES } from './specialDice';
 import type { DieType, GameState, RandomSource, Rank } from './types';
 import { placeFlameInstance } from './flames';
+import { cleanupTemporaryBossFaces } from './bosses';
 
 const constant = (value = 0): RandomSource => ({ next: () => value });
 function game(): GameState {
@@ -231,6 +232,41 @@ describe('whole-die Qualification effects', () => {
     expect(joinedPlan.resourceClaims[0]).toMatchObject({ dieId: 0, effect: 'conjoined' });
   });
 
+  it('lets Conjoined qualify Pair by itself and creates two genuine scoring occurrences', () => {
+    const state = game(); values(state, [4, 2, 3, 5, 6]); makeSpecial(state, 0, 'conjoined', 2);
+    const plan = planQualification(state.dice, 'pair', [0], { roundState: state.dieRoundState });
+    expect(plan).toMatchObject({ legal: true, resourceClaims: [{ dieId: 0, effect: 'conjoined', amount: 1 }] });
+    new Resolver(state, constant()).play('pair', [0], 'manual', null, plan.resourceClaims);
+    expect(state.stats.handScores.at(-1)?.pips).toBe(16);
+    expect(state.dieRoundState[0].invocationsRemaining).toBe(1);
+    const hand = [...state.historyV2].reverse().find(event => event.kind === 'hand_scored');
+    expect(hand?.kind === 'hand_scored' ? hand.scoreOccurrences.map(item => item.cause) : []).toEqual(['play_selection', 'conjoined']);
+  });
+
+  it('automatically spends one Conjoined Use for an Upper Hand and scores its face twice', () => {
+    const state = game(); values(state, [4, 2, 3, 5, 6]); makeSpecial(state, 0, 'conjoined');
+    const plan = planQualification(state.dice, 'fours', [0], { roundState: state.dieRoundState });
+    expect(plan.resourceClaims).toEqual([{ dieId: 0, effect: 'conjoined', resource: 'invocation', amount: 1 }]);
+    new Resolver(state, constant()).play('fours', [0], 'manual', null, plan.resourceClaims);
+    expect(state.stats.handScores.at(-1)?.pips).toBe(15);
+    expect(state.dieRoundState[0].invocationsRemaining).toBe(0);
+    const exhausted = planQualification(state.dice, 'fours', [0], { roundState: state.dieRoundState });
+    expect(exhausted.resourceClaims).toEqual([]);
+  });
+
+  it('applies per-Score pip synergies twice for Conjoined without duplicating the Play', () => {
+    const state = game(); values(state, [4, 4, 2, 3, 5]);
+    makeSpecial(state, 0, 'conjoined'); makeSpecial(state, 1, 'teamPlayer');
+    const plan = planQualification(state.dice, 'fours', [0, 1], { roundState: state.dieRoundState });
+    new Resolver(state, constant()).play('fours', [0, 1], 'manual', null, plan.resourceClaims);
+    // Base 7 + Conjoined (4 × Team Player's ×2) twice + Team Player's own 4.
+    expect(state.stats.handScores.at(-1)?.pips).toBe(27);
+    const hand = [...state.historyV2].reverse().find(event => event.kind === 'hand_scored');
+    expect(hand?.kind === 'hand_scored' ? hand.scoreOccurrences : []).toHaveLength(3);
+    expect(state.handPlayCounts.fours).toBe(1);
+    expect(state.consumed.filter(handId => handId === 'fours')).toHaveLength(1);
+  });
+
   it('requires an explicit claim when multiple wildcard Invocations can qualify', () => {
     const state = game(); values(state, [1, 2, 3, 4, 5]); makeSpecial(state, 0, 'mirror'); makeSpecial(state, 1, 'mirror');
     const preview = planQualification(state.dice, 'pair', [0, 1], { roundState: state.dieRoundState });
@@ -322,12 +358,75 @@ describe('whole-die Roll controllers, reactions, and commands', () => {
     expect(state.diceInventory.instances[0].value).not.toBe(1);
   });
 
-  it('uses seeded Chameleon ties without treating the change as a Roll', () => {
+  it('permanently rewrites Chameleon physical faces and chooses only among seeded top ties', () => {
     let state = game(); values(state, [6, 1, 2, 3, 4]); makeSpecial(state, 0, 'chameleon', 2);
     const result = dispatch(state, { type: 'INVOKE_CHAMELEON', dieId: 0 }, constant(.6)); state = result.state;
-    expect(state.diceInventory.instances[0].value).toBe(3);
+    const die = state.diceInventory.instances[0];
+    expect(die.value).toBe(6);
+    expect(die.faces[5].rank).toBe(3);
+    expect(activeFace(die).rank).toBe(3);
     expect(state.dieRoundState[0].invocationsRemaining).toBe(1);
     expect(result.events.at(-1)?.type).toBe('DIE_FLIPPED');
+
+    values(state, [2, 2, 2, 5, 5]);
+    state = dispatch(state, { type: 'INVOKE_CHAMELEON', dieId: 0 }, constant(.99)).state;
+    expect(state.diceInventory.instances[0].faces[1].rank).toBe(5);
+    expect(state.diceInventory.instances[0].faces[5].rank).toBe(3);
+    expect(state.dieRoundState[0].invocationsRemaining).toBe(0);
+  });
+
+  it('keeps Chameleon mutations through Rolls, later Rounds, Storage, and persistence', () => {
+    let state = game(); values(state, [1, 3, 3, 4, 5]); makeSpecial(state, 0, 'chameleon');
+    state = dispatch(state, { type: 'INVOKE_CHAMELEON', dieId: 0 }, constant()).state;
+    const die = state.diceInventory.instances[0];
+    expect(die.faces[0].rank).toBe(3);
+    new Resolver(state, constant(.3)).rollBatch([0], 'later Roll', 'gameplay', false, 'other');
+    new Resolver(state, constant(0)).rollBatch([0], 'return Roll', 'gameplay', false, 'other');
+    expect(activeFace(die).rank).toBe(3);
+    new Resolver(state, constant(0)).startRound();
+    expect(die.faces[0].rank).toBe(3);
+    state.diceInventory.roster[0] = null;
+    state.diceInventory.storage[0] = 0;
+    syncActiveDiceProjection(state);
+    expect(state.diceInventory.instances[0].faces[0].rank).toBe(3);
+    const savedValues = new Map<string, string>();
+    const storage = { getItem: (key: string) => savedValues.get(key) ?? null,
+      setItem: (key: string, value: string) => { savedValues.set(key, value); } };
+    expect(savePersistedRun(storage, state)).toBe(true);
+    expect(loadPersistedRun(storage, state.seed)?.diceInventory.instances[0].faces[0].rank).toBe(3);
+  });
+
+  it('can reshape every Chameleon physical face over multiple level-scaled Uses', () => {
+    let state = game(); makeSpecial(state, 0, 'chameleon', 6);
+    for (const physicalFace of [1, 2, 3, 4, 5, 6] as const) {
+      values(state, [physicalFace, 3, 3, 3, 4]);
+      state = dispatch(state, { type: 'INVOKE_CHAMELEON', dieId: 0 }, constant()).state;
+    }
+    expect(state.diceInventory.instances[0].faces.map(face => face.rank)).toEqual([3, 3, 3, 3, 3, 3]);
+    expect(state.dieRoundState[0].invocationsRemaining).toBe(0);
+  });
+
+  it('preserves a destination Chameleon mutation through Shop entry and Fusion', () => {
+    let state = game(); values(state, [1, 3, 3, 4, 5]); makeSpecial(state, 0, 'chameleon');
+    state = dispatch(state, { type: 'INVOKE_CHAMELEON', dieId: 0 }, constant()).state;
+    const source = createCollectibleDie(5, 'chameleon');
+    state.diceInventory.instances[source.id] = source;
+    state.diceInventory.storage[0] = source.id;
+    state.diceInventory.nextDieId = 6;
+    new Resolver(state, constant()).openShop();
+    state = dispatch(state, { type: 'FUSE_DICE', source: { area: 'storage', index: 0 },
+      destination: { area: 'roster', index: 0 }, expectedSourceDieId: 5, expectedDestinationDieId: 0 }, constant()).state;
+    expect(state.diceInventory.instances[0]).toMatchObject({ type: 'chameleon', level: 2 });
+    expect(state.diceInventory.instances[0].faces[0].rank).toBe(3);
+  });
+
+  it('keeps a Chameleon rewrite after temporary Snake Eyes cleanup', () => {
+    let state = game(); values(state, [1, 3, 3, 4, 5]); const die = makeSpecial(state, 0, 'chameleon');
+    die.faces[0] = { rank: 1, bossMutation: { kind: 'snakeEyes', originalRank: 1 } };
+    state = dispatch(state, { type: 'INVOKE_CHAMELEON', dieId: 0 }, constant()).state;
+    expect(state.diceInventory.instances[0].faces[0]).toMatchObject({ rank: 3, bossMutation: { originalRank: 3 } });
+    cleanupTemporaryBossFaces(state.dice);
+    expect(state.diceInventory.instances[0].faces[0]).toEqual({ rank: 3 });
   });
 
   it('routes Flywheel through the Roll pipeline without spending manual rerolls', () => {

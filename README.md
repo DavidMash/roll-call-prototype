@@ -4,11 +4,11 @@ Roll Call is a deterministic React/TypeScript/Vite dice roguelike. The domain en
 
 ## Current game model
 
-A run owns collectible D6s with stable IDs. `diceInventory.instances` is the die-object authority, while five fixed Roster slots and expandable Storage slots are the location authority. New runs start with five Normal D6s equipped and three empty Storage slots; completing a Chapter adds one Storage slot. A die ID is never a Roster position.
+A run owns collectible dice with stable IDs. `diceInventory.instances` is the die-object authority, while five fixed Roster slots and five fixed Storage slots are the location authority. New runs start with five Normal dice equipped and five empty Storage slots, for a maximum collection of ten dice. A die ID is never a Roster position.
 
 `Board.dice` is the active encounter reference projection. Its player entries alias the equipped inventory instances in Roster order, followed by any tagged temporary encounter dice. The array is rebuilt from inventory/encounter authority and must never be used to infer ownership or Storage membership. This compact projection is retained for resolution, playback, and Round UI.
 
-Collectible dice have one whole-die type and a level. Normal D6s remain level 1. Special dice can be bought, sold, moved between Roster and Storage, and fused with an identical type; the destination ID survives and levels add. The Shop uses rarity-first seeded offer generation. Storage dice do not Roll, Score, activate, or participate in encounter logic.
+Collectible dice have one whole-die type and a level. Normal dice remain level 1. Special dice can be bought, sold, moved between Roster and Storage, and fused with an identical type; the destination ID survives and levels add. The Shop uses rarity-first seeded offer generation. Storage dice do not Roll, Score, activate, or participate in encounter logic.
 
 ## Play, Score, and Roll
 
@@ -42,12 +42,12 @@ The browser stores one active current-schema run. Persistence is deliberately ve
 One authoritative Shop visit has one `visitId` and a persisted stage:
 
 ```text
-DICE → TRAINING → FIRE KEEPING
+DICE | TRAINING | FIRE KEEPING
 ```
 
 Navigation consumes no RNG and does not rebuild offers or session state. Bust restoration keeps the visit and returns its view to DICE.
 
-- DICE has three persistent seeded offers plus Roster/Storage movement, selling, fusion, details, and Weighted configuration.
+- DICE has three persistent seeded offers plus Roster/Storage movement, selling, fusion, details, and Weighted configuration. Offer rerolls remain available; owned dice are not physically rerolled in the Shop.
 - TRAINING displays the scorecard and allows every hand to be trained repeatedly.
 - FIRE KEEPING manages the five global Flame slots and is the only stage that exits to the next attempt.
 

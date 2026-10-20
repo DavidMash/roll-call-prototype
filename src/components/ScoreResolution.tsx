@@ -5,8 +5,8 @@ import type { GameEvent } from '../game/types';
 import { formatExactScore, formatPlayerNumber } from '../game/copy';
 import type { ExactScore } from '../game/scoreMath';
 import { scoreAnnouncement, scorePresentation, type ScoreMetric } from '../game/scorePresentation';
-import { SPECIAL_DICE } from '../game/specialDice';
 import type { ReactNode } from 'react';
+import { DieTypeIcon, DieTypeLabel } from './DieTypeLabel';
 
 function ScoreBox({ label, value, color, active, tutorial }: {
   label: 'INFERNO' | 'PIPS' | 'MULT' | 'XMULT';
@@ -38,13 +38,13 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText }: {
   const scoreDieType = event?.dieType ?? (event?.type === 'HITCHHIKER_ADDED_PIPS' ? 'hitchhiker' : null);
   let heading: ReactNode = idleText ?? '';
   if (event?.type === 'HAND_SCORE_FINALIZED' || event?.type === 'STANDALONE_SCORE_CALCULATED') heading = `+${typeof event.amount === 'bigint' ? formatExactScore(event.amount) : formatPlayerNumber(event.amount ?? 0)}`;
-  else if (event?.type === 'JUMPING_BEAN_FREE_PLAY' && event.hand) heading = <>JUMPING BEAN · FREE {HANDS[event.hand].name.toUpperCase()}</>;
+  else if (event?.type === 'JUMPING_BEAN_FREE_PLAY' && event.hand) heading = <><DieTypeIcon type="jumpingBean" /> JUMPING BEAN · FREE {HANDS[event.hand].name.toUpperCase()}</>;
   else if (event?.type === 'SCORE_ADDED') {
     const scoreAmount = typeof event.amount === 'bigint' ? event.amount : BigInt(event.amount ?? 0);
     heading = scoreAmount < 0n ? `−${formatExactScore(-scoreAmount)}` : `+${formatExactScore(scoreAmount)}`;
   }
   else if (event?.flame) heading = FLAMES[event.flame].name.toUpperCase();
-  else if (event?.dieType) heading = SPECIAL_DICE[event.dieType].name.toUpperCase();
+  else if (event?.dieType) heading = <DieTypeLabel type={event.dieType} />;
   else if (event?.type === 'TRAINING_PURCHASED' && event.hand) heading = `${HANDS[event.hand].name} · Lv. ${formatPlayerNumber(event.board.handLevels[event.hand])}`;
   else if (event?.type === 'GOLD_ADDED') heading = `+${formatPlayerNumber(typeof event.amount === 'number' ? event.amount : 0)} Gold`;
   else if (event?.type === 'MANUAL_REROLL_STARTED') heading = 'Reroll';
@@ -77,7 +77,7 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText }: {
         <span>×</span><small>BOSS MODIFIER</small><strong>{formatPlayerNumber(score.bossFactor)}</strong>
       </div>}
       {score.callout && <Text key={event?.id} className="score-effect-callout score-tick" fw={800}>
-        {scoreDieType && <span aria-hidden="true">◆</span>} {score.callout}
+        {scoreDieType && <DieTypeIcon type={scoreDieType} />} {score.callout}
       </Text>}
       {score.finalScore !== null && <div className={`score-final${score.activeMetric === 'final' ? ' is-awarded' : ''}`} data-testid="hand-final-score" aria-hidden="true">
         <span>FINAL SCORE</span><strong className={formatExactScore(score.finalScore).length > 16 ? 'is-very-long' : formatExactScore(score.finalScore).length > 10 ? 'is-long' : ''}>{formatExactScore(score.finalScore)}</strong>

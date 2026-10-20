@@ -184,7 +184,7 @@ test('Reroll control separates selected dice from Care Package resources respons
   const button = page.getByTestId('manual-reroll');
   await expect(button).toHaveAccessibleName('REROLL · 3 REROLLS LEFT, PLUS 3 CARE PACKAGE REROLLS');
   await expect(button).toHaveAttribute('data-normal-fill-percent', '100');
-  await expect(page.getByTestId('special-effect-carePackage')).toHaveText('Care Package · 3 Rerolls Left');
+  await expect(page.getByTestId('special-effect-carePackage')).toHaveText('Care Package · 3 Manual Rerolls Left');
 
   for (const id of [0, 1]) await page.getByRole('button', { name: new RegExp(`^Die ${id + 1},`) }).click();
   await expect(button).toHaveAccessibleName('REROLL 2 DICE · 3 REROLLS LEFT, PLUS 3 CARE PACKAGE REROLLS');
@@ -212,7 +212,7 @@ test('Reroll control separates selected dice from Care Package resources respons
   expect(game).toMatchObject({ manualRerollsRemaining: 0, specialOfferEffects: { carePackageRerolls: 2 } });
   await expect(button).toHaveAccessibleName('REROLL · 0 REROLLS LEFT, PLUS 2 CARE PACKAGE REROLLS');
   await expect(button).toHaveAttribute('data-normal-fill-percent', '0');
-  await expect(page.getByTestId('special-effect-carePackage')).toHaveText('Care Package · 2 Rerolls Left');
+  await expect(page.getByTestId('special-effect-carePackage')).toHaveText('Care Package · 2 Manual Rerolls Left');
   await expect(button.locator('.reroll-action-resource')).not.toContainText('CARE PACKAGE');
   expect(await button.locator('.reroll-action-resource').evaluate(element => ({
     singleLine: element.getBoundingClientRect().height < parseFloat(getComputedStyle(element).lineHeight) * 1.5,
@@ -248,7 +248,7 @@ test('dead-board UI and engine stay usable while only Care Package Rerolls remai
   expect(game.phase).toBe('round');
   expect(game.specialOfferEffects.carePackageRerolls).toBe(2);
   await expect(button).toHaveAccessibleName('REROLL · 0 REROLLS LEFT, PLUS 2 CARE PACKAGE REROLLS');
-  await expect(page.getByTestId('special-effect-carePackage')).toHaveText('Care Package · 2 Rerolls Left');
+  await expect(page.getByTestId('special-effect-carePackage')).toHaveText('Care Package · 2 Manual Rerolls Left');
   await expect(page.getByRole('heading', { name: 'Run Over' })).toHaveCount(0);
 });
 

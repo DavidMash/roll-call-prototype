@@ -75,7 +75,7 @@ async function reachBossShop(page: Page, boss: BigBossType, seed = seedFor(boss)
   game.phase = 'shop';
   game.round = 5;
   game.currentNodeId = 'shop:before-round:6';
-  game.shop = { offers: [], diceRerolls: 0, offerRerolls: 0, lifeRestores: 0 };
+  game.shop = { offers: [], offerRerolls: 0, lifeRestores: 0 };
   game.bossSchedule[6] = boss;
   await page.goto(`/?seed=${seed}&speed=instant`);
   await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
@@ -501,7 +501,7 @@ test('Hexer preview keeps its faces secret and encounter fits all six dice on on
   await expect(page.getByTestId('boss-status-hexer')).toHaveText('· Cursed Die required');
   const dice = page.locator('.gameplay-dock .die');
   await expect(dice).toHaveCount(6);
-  const boxes = await dice.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().top));
+  const boxes = await page.locator('.gameplay-dock .die-slot').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().top));
   expect(Math.max(...boxes) - Math.min(...boxes)).toBeLessThan(3);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(game.dice).toHaveLength(6);

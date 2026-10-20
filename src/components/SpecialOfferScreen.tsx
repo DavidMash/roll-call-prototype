@@ -1,11 +1,14 @@
 import { Badge, Button, Group, Paper, SimpleGrid, Stack, Text, Title } from '@mantine/core';
-import { SPECIAL_OFFERS, specialOfferDescription, specialOfferName } from '../game/specialOffers';
+import { SPECIAL_OFFERS, specialOfferName } from '../game/specialOffers';
 import { rarityClassName, rarityLabel } from '../game/rarity';
 import { RarityBadge } from './RarityBadge';
 import type { Action, Board } from '../game/types';
 import { RunActionPortal } from './RunActionRow';
 import { RewardSkipConfirmation } from './RewardSkipConfirmation';
 import { useEffect, useRef } from 'react';
+import { RichDescription } from './RichDescription';
+import { specialOfferCopy } from '../game/effectDescriptions';
+import { HANDS } from '../game/hands';
 
 export function SpecialOfferScreen({ board, busy, submit }: {
   board: Board;
@@ -37,7 +40,8 @@ export function SpecialOfferScreen({ board, busy, submit }: {
           <Stack gap="sm" h="100%">
             <Title order={3}>{specialOfferName(offer)}</Title>
             <RarityBadge rarity={rarity} compact />
-            <Text size="sm" c="dimmed" style={{ flex: 1 }}>{specialOfferDescription(offer)}</Text>
+            <div style={{ flex: 1 }}><RichDescription copy={specialOfferCopy(offer,
+              offer.type === 'focus' && offer.hand ? HANDS[offer.hand].name : undefined)} /></div>
             <Button color="teal" disabled={busy || selection.acquired} onClick={() => submit({ type: 'CHOOSE_SPECIAL_OFFER', offerId: offer.id })}>
               {chosen ? 'CHOSEN' : 'CHOOSE'}
             </Button>

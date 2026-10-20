@@ -17,12 +17,13 @@ function chapterEvent(chapter: number): GameEvent {
   return resolver.events.find(event => event.type === 'CHAPTER_STARTED')!;
 }
 
-describe('Chapter Storage unlock presentation', () => {
-  it.each([2, 3, 4, 5, 6, 7])('shows the Chapter %i Storage increase without legacy Enhancement progression', chapter => {
+describe('Chapter presentation', () => {
+  it.each([2, 3, 4, 5, 6, 7])('shows Chapter %i without obsolete collection-growth copy', chapter => {
     const event = chapterEvent(chapter);
     const html = renderToStaticMarkup(<MantineProvider><ChapterSplash event={event} onComplete={() => {}} /></MantineProvider>);
     expect(html).toContain(`CHAPTER ${chapter}`);
-    expect(html).toContain('+1 STORAGE SLOT');
+    expect(html).not.toContain('STORAGE SLOT');
+    expect(html).not.toContain('COLLECTION EXPANDED');
     expect(html).not.toContain('ENHANCEMENT CAPACITY');
     expect(html).not.toContain('NEW ENHANCEMENTS');
     expect(Object.keys(event)).not.toContain('enhancementCapacityBefore');

@@ -2,6 +2,7 @@ import { createCollectibleDie } from './dice';
 import { randomIndex } from './rng';
 import { SPECIAL_DICE, SPECIAL_DIE_TYPES } from './specialDice';
 import type { CollectibleDie, DiceInventory, DiceOffer, DiceRarity, DiceSlotRef, DieId, DieType, RandomSource } from './types';
+import { plainDescription, specialDieVerboseDescription } from './effectDescriptions';
 
 export const DICE_OFFER_COUNT = 3;
 export const DICE_RARITY_WEIGHTS: Readonly<Record<DiceRarity, number>> = {
@@ -119,7 +120,7 @@ export function fusionEffectSummary(type: SpecialDieType, fromLevel: number, toL
         return guaranteed && remainder ? `${base} + ${remainder * 25}% chance to Score ${guaranteed + 2} times` : base;
       }
       case 'furnace': return `+${3 * level} Pips/Gold, max +${15 * level}`;
-      default: return `${level} Invocation${level === 1 ? '' : 's'}`;
+      default: return `${level} Use${level === 1 ? '' : 's'} per Round`;
     }
   };
   const labels: Partial<Record<SpecialDieType, string>> = {
@@ -127,36 +128,9 @@ export function fusionEffectSummary(type: SpecialDieType, fromLevel: number, toL
     clockwork: 'Clockwork Rolls', jackpot: 'Winning payout', teamPlayer: 'Other-die multiplier', loneWolf: 'Solo Scores',
     tank: 'Tank bonus', freePlay: 'Free Plays', doubleTime: 'Additional Scores', furnace: 'Furnace power',
   };
-  return { label: labels[type] ?? 'Invocations', before: numeric(fromLevel), after: numeric(toLevel) };
+  return { label: labels[type] ?? 'Uses per Round', before: numeric(fromLevel), after: numeric(toLevel) };
 }
 
 export function dieEffectDescription(type: DieType, level: number): string {
-  if (type === 'normal') return 'No special effect.';
-  const uses = (count: number): string => count === 1 ? 'Once per Round.' : `${count} times per Round.`;
-  const descriptions: Record<SpecialDieType, string> = {
-    bonus: `Scores +${10 * level} Pips.`,
-    workout: `After each Score, gains +${2 * level} Pips for the rest of the Round.`,
-    vintage: `Each Score adds ${level} Gold to its sell value, up to +${90 * level} Gold.`,
-    golden: `Earn 1 Gold when this die Scores, up to ${3 * level} Gold each Round.`,
-    weighted: `Rolls its chosen face while uses remain. ${uses(level)}`,
-    clockwork: `After its first Roll, its next ${3 * level} Rolls advance one face at a time.`,
-    teamPlayer: `Other dice score ×${level + 1} Pips when this die is played with them.`,
-    loneWolf: `When played alone, this die Scores ${level + 1} times.`,
-    hitchhiker: `Automatically Scores in another hand. ${uses(level)}`,
-    magnetic: `The next other die rolled matches this die. ${uses(level)}`,
-    jackpot: `Earn +${3 * level} Gold when this die Scores in the hand that reaches the target.`,
-    freePlay: `After a Roll, Free Play its Upper hand up to ${level} time${level === 1 ? '' : 's'} per face each Round.`,
-    chameleon: `On Command, match the other dice’s majority face. ${uses(level)}`,
-    flywheel: `On Command, Reroll this die for free. ${uses(level)}`,
-    tank: `After its first Roll, its face stays fixed and each Score or attempted Reroll adds +${10 * level} Pips.`,
-    mirror: `Use as a wild die for matching hands. ${uses(level)}`,
-    missingLink: `Use as a wild die for Straights. ${uses(level)}`,
-    doubleTime: `${fusionEffectSummary(type, level, level).before}.`,
-    jumpingBean: `On Command, Free Play its Upper hand, then Reroll. ${uses(level)}`,
-    furnace: `Feed Gold for +${3 * level} Pips each, up to +${15 * level} Pips.`,
-    sustainable: `Keep a hand available after this die Scores in it. ${uses(level)}`,
-    magic: `On Command, choose this die’s next Reroll. ${uses(level)}`,
-    conjoined: `Count as one extra matching die when qualifying a hand. ${uses(level)}`,
-  };
-  return descriptions[type];
+  return plainDescription(specialDieVerboseDescription(type, level));
 }

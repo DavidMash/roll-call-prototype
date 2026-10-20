@@ -6,6 +6,7 @@ import { PipFace } from './PipFace';
 import { formatExactScore, formatPlayerNumber } from '../game/copy';
 import type { ExactScore } from '../game/scoreMath';
 import { SPECIAL_DICE } from '../game/specialDice';
+import { DieTypeLabel, diePresentationStyle } from './DieTypeLabel';
 
 interface Props {
   die: PhysicalDie;
@@ -47,7 +48,6 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
   const isFetchTarget = fetchTarget?.dieId === die.id && fetchTarget.physicalFace === die.value;
   const collectibleType = die.owner === 'player' ? die.type : null;
   const specialName = collectibleType && collectibleType !== 'normal' ? SPECIAL_DICE[collectibleType].name : null;
-  const rarity = collectibleType ? SPECIAL_DICE[collectibleType].rarity : null;
   const effectSuppressed = mutation?.kind === 'infected' && specialName !== null;
   const hasDetails = die.owner === 'boss' || specialName !== null || mutation !== undefined || isFetchTarget;
   const dieDetails = `${dieLabel}, face ${formatPlayerNumber(face.rank)}, ${formatPlayerNumber(pips)} Pips`
@@ -61,7 +61,8 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
     data-tutorial={die.owner === 'player' ? `die-${(rosterSlot ?? 0) + 1}` : undefined}
     data-testid={die.owner === 'player' ? `flame-die-${die.id}` : 'cursed-die-slot'}>
     <Paper component="button" type="button" withBorder
-      className={`die ${die.owner === 'boss' ? 'cursed-die' : ''}${specialName ? ' special-die' : ''}${rarity ? ` rarity-${rarity}` : ''} ${mutation?.kind === 'snakeEyes' ? 'snake-eyed-face' : ''} ${mutation?.kind === 'infected' ? 'infected-face' : ''} ${selected ? 'selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${resolving ? 'resolving' : ''} ${triggered ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''} ${wardenLocked ? 'warden-locked' : ''}`}
+      className={`die die-selection-target ${die.owner === 'boss' ? 'cursed-die' : ''}${specialName ? ' special-die' : ''} ${mutation?.kind === 'snakeEyes' ? 'snake-eyed-face' : ''} ${mutation?.kind === 'infected' ? 'infected-face' : ''}${selected ? ' selected is-die-selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${resolving ? 'resolving' : ''} ${triggered ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''} ${wardenLocked ? 'warden-locked' : ''}`}
+      style={collectibleType ? diePresentationStyle(collectibleType) : undefined} data-die-type={collectibleType ?? undefined}
       disabled={interactionDisabled} aria-disabled={interactionDisabled} aria-pressed={selected}
       title={wardenLocked ? `${dieLabel} locked${unlockAt === undefined ? '' : ` until ${formatExactScore(unlockAt)} points`}${wardenSelectable ? ' · choose to unlock' : ''}` : lockedReason ?? ineligibleReason}
       aria-label={accessibilityLabel} data-locked-until={unlockAt?.toString()} data-resolving={resolving || undefined}
@@ -84,7 +85,8 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
     </Paper>
     {hasDetails ? <button type="button" className={`die-face-details${specialName ? ' special' : ' normal'}`} disabled={detailsDisabled}
       aria-label={`View details for ${die.owner === 'boss' ? 'Cursed Die' : specialName ?? playerLabel}`} onClick={onDetails}>
-      {die.owner === 'boss' ? 'CURSED' : specialName ?? <span className="normal-die-details-mark" aria-hidden="true">!</span>}
+      {die.owner === 'boss' ? 'CURSED' : collectibleType && specialName
+        ? <DieTypeLabel type={collectibleType} /> : <span className="normal-die-details-mark" aria-hidden="true">!</span>}
       {effectSuppressed && <span className="visually-hidden"> · special effect suppressed</span>}
     </button> : <span className="die-details-placeholder" aria-hidden="true" />}
   </div>;

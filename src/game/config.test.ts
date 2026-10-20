@@ -15,7 +15,6 @@ describe('prototype balance configuration', () => {
       infectedFacePipPenalty: 3,
       interestInterval: 5,
       interestCap: 10,
-      diceRerollBase: 2,
       offerRerollBase: 3,
       rerollCostGrowth: 2,
       bonusPips: 10,
