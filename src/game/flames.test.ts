@@ -9,6 +9,7 @@ import {
 import type { GameState, RandomSource, Rank } from './types';
 import { purchaseDie } from './diceEconomy';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
+import { createDieEffect } from './specialDice';
 
 const constant = (value = .99): RandomSource => ({ next: () => value });
 function game(values: Rank[] = [4, 4, 4, 2, 6]): GameState {
@@ -76,7 +77,8 @@ describe('global activation', () => {
   });
   it('uses genuine scoring participants for Fat Cat and Vineyard, not ownership', () => {
     const state = game(); placeFlameInstance(state, 'fatCat', 100); placeFlameInstance(state, 'vineyard', 100);
-    rosterDice(state)[1].type = 'golden'; rosterDice(state)[2].type = 'vintage';
+    rosterDice(state)[1].effects = [createDieEffect(rosterDice(state)[1].id, 'golden')];
+    rosterDice(state)[2].effects = [createDieEffect(rosterDice(state)[2].id, 'vintage')];
     syncActiveDiceProjection(state);
     expect(handXMultContributions(captureHandStart(state, 'threeKind', [0, 1, 2]), 'threeKind', 1, [0, 1, 2])
       .map(factor => factor.source)).toEqual(['fatCat', 'vineyard']);
@@ -94,7 +96,7 @@ describe('five-slot lifecycle', () => {
     let state = dispatch(reward(), { type: 'CHOOSE_FLAME', offerId: 1 }).state;
     const acquired = state.flameSlots[0]!;
     expect(acquired).toMatchObject({ type: 'ultimate', investedGold: 0, stage: 'ember' });
-    state.shop!.stage = 'fireKeeping';
+    state.shop!.stage = 'flames';
     state = dispatch(state, { type: 'STOKE_FLAME', flameInstanceId: acquired.instanceId, amount: 100 }).state;
     expect(state.flameSlots[0]).toMatchObject({ instanceId: acquired.instanceId, type: 'ultimate', investedGold: 100, stage: 'bonfire' });
     expect(state.flameSlots).toHaveLength(5);
@@ -126,7 +128,7 @@ describe('five-slot lifecycle', () => {
   });
   it('keeps Flame identity unchanged through die movement, sale, and Fusion', () => {
     let state = game(); state.phase = 'shop'; state.gold = 100;
-    state.shop = { stage: 'dice', offers: [], offerRerolls: 0, lifeRestores: 0 };
+    state.shop = { stage: 'shop', offers: [], offerRerolls: 0, lifeRestores: 0 };
     const flame = placeFlameInstance(state, 'ultimate', 37, 3);
     const rosterId = state.diceInventory.roster[0]!;
     state = dispatch(state, { type: 'MOVE_DIE', source: { area: 'roster', index: 0 }, destination: { area: 'storage', index: 0 },
@@ -136,8 +138,10 @@ describe('five-slot lifecycle', () => {
     expect(state.flameSlots[3]).toEqual(flame);
     const first = purchaseDie(state.diceInventory, 'bonus');
     const second = purchaseDie(state.diceInventory, 'bonus');
-    state = dispatch(state, { type: 'FUSE_DICE', source: first.slot, destination: second.slot,
-      expectedSourceDieId: first.die.id, expectedDestinationDieId: second.die.id }).state;
+    state.temper = 10; state.forgeUnlocked = true; state.shop!.stage = 'forge';
+    state = dispatch(state, { type: 'SET_FORGE_INGREDIENT', socket: 'A', dieId: second.die.id }).state;
+    state = dispatch(state, { type: 'SET_FORGE_INGREDIENT', socket: 'B', dieId: first.die.id }).state;
+    state = dispatch(state, { type: 'CONFIRM_FORGE' }).state;
     expect(state.flameSlots[3]).toEqual(flame);
   });
 });

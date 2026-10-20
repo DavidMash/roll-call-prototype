@@ -64,6 +64,16 @@ describe('structured beginner-facing effect copy', () => {
     expect(plainDescription(specialDieVerboseDescription('conjoined', 1))).toContain('acts like two dice');
   });
 
+  it('keeps dynamic values and Round terminology tied to the canonical descriptions', () => {
+    expect(plainDescription(specialDieVerboseDescription('bonus', 3))).toContain('+30 Pips');
+    expect(plainDescription(specialDieVerboseDescription('clockwork', 2))).toContain('next 6 Rolls');
+    expect(plainDescription(specialDieVerboseDescription('teamPlayer', 2))).toContain('3 times as many Pips');
+    expect(plainDescription(specialDieVerboseDescription('doubleTime', 5))).toContain('1 additional time, with a 25% chance');
+    expect(plainDescription(specialDieVerboseDescription('jackpot', 2))).toContain('6 Gold');
+    expect(plainDescription(specialDieVerboseDescription('jackpot', 2))).toContain('Round Target');
+    expect(plainDescription(specialOfferVerboseDescription('focus'))).toContain('[HAND]');
+  });
+
   it('keeps deprecated Invocation wording out of all player descriptions', () => {
     expect(effectCopies().map(plainDescription).join('\n')).not.toMatch(/Invocation/i);
   });

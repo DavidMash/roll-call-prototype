@@ -15,6 +15,7 @@ import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
 import { flameByType, placeFlameInstance } from './flames';
 import type { GameState, HandId, RandomSource, RoundSummary, SpecialOfferType } from './types';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
+import { createDieEffect, effectOf } from './specialDice';
 
 const constant = (value = 0): RandomSource => ({ next: () => value });
 
@@ -33,8 +34,8 @@ const choose = (type: SpecialOfferType, hand?: HandId, random: RandomSource = co
 
 const unlockShop = (state: GameState, random: RandomSource = constant()) => {
   let next = state.shop?.exitUnlocked === false ? dispatch(state, { type: 'UNLOCK_SHOP_EXIT' }, random).state : state;
-  if (next.shop?.stage === 'dice') next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'training' }, random).state;
-  if (next.shop?.stage === 'training') next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }, random).state;
+  if (next.shop?.stage === 'shop') next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'train' }, random).state;
+  if (next.shop?.stage === 'train') next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'flames' }, random).state;
   return next;
 };
 
@@ -46,7 +47,8 @@ function carePackageRound(random: RandomSource = constant(.4)): GameState {
 function summary(round: number): RoundSummary {
   return { round, encounterType: 'boss', bossType: 'juggler', score: 1n, target: 1n, goldBefore: 0, goldAfter: 0,
     totalGoldEarned: 0, sources: { baseRewardGold: 0, unusedRerollGold: 0, interestGold: 0,
-      bossRewardGold: 0, goldenGold: 0, jackpotGold: 0, otherGold: 0 } };
+      bossRewardGold: 0, goldenGold: 0, jackpotGold: 0, otherGold: 0 },
+    temper: { overkill: 0, boardRefresh: 0, miniBoss: 0, boss: 0, total: 0 } };
 }
 
 describe('alternating Special Offer progression', () => {
@@ -93,13 +95,13 @@ describe('immediate and Shop Special Offers', () => {
     expect(state.shop?.freeDicePurchaseAvailable).toBe(false);
     expect([...state.historyV2].reverse().find(event => event.kind === 'shop_transaction'
       && event.transaction.type === 'dice_purchased')).toMatchObject({ transaction: { pricePaid: 0 } });
-    state = dispatch(state, { type: 'SET_SHOP_STAGE', stage: 'training' }, constant()).state;
+    state = dispatch(state, { type: 'SET_SHOP_STAGE', stage: 'train' }, constant()).state;
     state = dispatch(state, { type: 'TRAIN_HAND', hand: 'pair' }, constant()).state;
     expect(state.stats.trainingPurchases.at(-1)?.cost).toBe(0);
     state.gold = 100;
     state = dispatch(state, { type: 'TRAIN_HAND', hand: 'pair' }, constant()).state;
     expect(state.stats.trainingPurchases.at(-1)?.cost).toBe(4);
-    state = dispatch(state, { type: 'SET_SHOP_STAGE', stage: 'dice' }, constant()).state;
+    state = dispatch(state, { type: 'SET_SHOP_STAGE', stage: 'shop' }, constant()).state;
     state = dispatch(state, { type: 'REROLL_OFFERS' }, constant()).state;
     expect(state.shop!.freeDicePurchaseAvailable).toBe(false);
   });
@@ -542,8 +544,8 @@ describe('replay and checkpoint Special Offers', () => {
     state = dispatch(state, { type: 'NEXT_ROUND' }, constant(.4)).state;
     state.gold = 77;
     state.handLevels.ones = 9;
-    rosterDice(state)[0].type = 'vintage';
-    rosterDice(state)[0].vintageAppreciation = 18;
+    rosterDice(state)[0].effects = [createDieEffect(rosterDice(state)[0].id, 'vintage')];
+    effectOf(rosterDice(state)[0], 'vintage')!.persistent.vintageAppreciation = 18;
     syncActiveDiceProjection(state);
     placeFlameInstance(state, 'ultimate', 61);
     state.engulfmentLevel = 3;
@@ -560,7 +562,7 @@ describe('replay and checkpoint Special Offers', () => {
     expect(state.lives).toBe(1);
     expect(state.gold).toBe(77);
     expect(state.handLevels.ones).toBe(9);
-    expect(state.dice[0]).toMatchObject({ type: 'vintage', vintageAppreciation: 18 });
+    expect(state.dice[0]).toMatchObject({ effects: [expect.objectContaining({ type: 'vintage', persistent: expect.objectContaining({ vintageAppreciation: 18 }) })] });
     expect(flameByType(state, 'ultimate')).toMatchObject({ investedGold: 61 });
     expect(state.engulfmentLevel).toBe(3);
     expect(flameByType(state, 'lowball')).toMatchObject({ stage: 'bonfire' });

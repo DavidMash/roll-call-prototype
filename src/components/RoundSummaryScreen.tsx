@@ -18,6 +18,12 @@ export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy
     { label: 'Other Gold', amount: summary.sources.otherGold },
     { label: miniBoss ? 'Mini-Boss Reward' : 'Boss Reward', amount: summary.sources.bossRewardGold },
   ];
+  const temperRows = [
+    { label: 'Overkill', amount: summary.temper.overkill },
+    { label: 'Board Refresh', amount: summary.temper.boardRefresh },
+    { label: 'Mini-Boss', amount: summary.temper.miniBoss },
+    { label: 'Boss', amount: summary.temper.boss },
+  ];
   return <Paper className="round-summary-screen" p={{ base: 'md', sm: 'xl' }} data-testid="round-summary">
     <Stack gap="md">
       <div className="round-summary-heading">
@@ -41,6 +47,13 @@ export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy
         <Group justify="space-between" mt="md" className="summary-gold-before-after" data-testid="summary-gold-before-after">
           <Text c="dimmed">Gold</Text><Text fw={900}>{formatPlayerNumber(summary.goldBefore)} → {formatPlayerNumber(summary.goldAfter)}</Text>
         </Group>
+      </Paper>
+      <Paper className="summary-gold-card summary-temper-card" p="md" data-testid="summary-temper">
+        <Group justify="space-between" align="baseline"><Text fw={900}>TEMPER EARNED</Text>
+          <Text c="orange" fw={950} size="xl" data-testid="summary-temper-earned">+{formatPlayerNumber(summary.temper.total)}</Text></Group>
+        <div className="summary-gold-rows">{temperRows.filter(row => row.amount > 0).map(row => <div className="summary-gold-row" key={row.label}>
+          <Text size="sm">{row.label}</Text><Text size="sm" fw={850} c="orange">+{formatPlayerNumber(row.amount)}</Text></div>)}</div>
+        {summary.temper.total === 0 && <Text size="sm" c="dimmed" mt="xs">No Temper earned this Round.</Text>}
       </Paper>
       <RunActionPortal><div className="run-action-primary"><Button size="md" disabled={busy}
         onClick={() => submit({ type: 'CONTINUE_ROUND_SUMMARY' })}>CONTINUE →</Button></div></RunActionPortal>

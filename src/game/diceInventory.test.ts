@@ -13,6 +13,7 @@ import { loadPersistedRun, RUN_STORAGE_KEY, savePersistedRun } from './persisten
 import { captureRollbackState, restoreRollbackState } from './rollback';
 import { SeededRng } from './rng';
 import { flameByType } from './flames';
+import { createDieEffect } from './specialDice';
 import type { BossType, GameState, Rank } from './types';
 
 const constant = (value = .2) => ({ next: () => value });
@@ -59,7 +60,7 @@ describe('collectible dice inventory', () => {
     expect(state.diceInventory.nextDieId).toBe(5);
     expect(ownedDice(state)).toHaveLength(5);
     expect(rosterDice(state)).toHaveLength(5);
-    expect(ownedDice(state).every(die => die.type === 'normal' && die.level === 1 && die.faces.length === 6)).toBe(true);
+    expect(ownedDice(state).every(die => die.effects.length === 0 && die.faces.length === 6)).toBe(true);
     expect(state.dice).toEqual(rosterDice(state));
   });
 
@@ -101,7 +102,7 @@ describe('collectible dice inventory', () => {
     const acquired = dispatch(state, { type: 'CHOOSE_FLAME', offerId: 88 }, constant()).state;
     expect(flameByType(acquired, 'minigun')).toMatchObject({ type: 'minigun', investedGold: 0 });
     acquired.gold = 10;
-    acquired.shop!.stage = 'fireKeeping';
+    acquired.shop!.stage = 'flames';
     const stoked = dispatch(acquired, { type: 'STOKE_FLAME', flameInstanceId: flameByType(acquired, 'minigun')!.instanceId, amount: 3 }, constant()).state;
     expect(flameByType(stoked, 'minigun')).toMatchObject({ type: 'minigun', investedGold: 3 });
   });
@@ -133,7 +134,7 @@ describe('collectible dice inventory', () => {
     expect(rosterDice(played).map(die => die.id)).toEqual(ids);
     const scored = played.historyV2.find(event => event.kind === 'hand_scored');
     if (scored?.kind !== 'hand_scored') throw new Error('Expected hand history.');
-    expect(scored.scoringDice[0]).toMatchObject({ dieId: 41, rosterSlot: 3, collectibleType: 'normal', level: 1 });
+    expect(scored.scoringDice[0]).toMatchObject({ dieId: 41, rosterSlot: 3, effects: [] });
     const rerolled = dispatch(played, { type: 'MANUAL_REROLL', dieIds: [240, 105, 999] }, constant());
     expect(rosterDice(rerolled.state).map(die => die.id)).toEqual(ids);
     expect(rerolled.events.find(event => event.type === 'DICE_REROLL_STARTED')?.dieIds).toEqual([105, 999, 240]);
@@ -196,8 +197,7 @@ describe('Storage isolation and encounter-managed dice', () => {
     const storedId = state.diceInventory.storage.find((id): id is number => id !== null)!;
     const stored = collectibleDieById(state, storedId)!;
     stored.value = 6;
-    stored.type = 'golden';
-    stored.level = 3;
+    stored.effects = [createDieEffect(stored.id, 'golden', 3)];
     rosterDice(state).forEach(die => { die.value = 1; });
     state.target = 1_000_000n; state.stats.rounds.at(-1)!.target = state.target;
     const before = structuredClone(stored);

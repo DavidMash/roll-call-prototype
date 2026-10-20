@@ -258,7 +258,7 @@ test('Shop Training remains guided while obsolete Enhancement purchasing is bypa
   await page.setViewportSize({ width: 390, height: 844 });
   let session = shopOneSession();
   session.game.dice[1].value = 2;
-  session = act(session, { type: 'SET_SHOP_STAGE', stage: 'training' });
+  session = act(session, { type: 'SET_SHOP_STAGE', stage: 'train' });
   session.scenario.completedBeatIds.push('shop1-to-training', 'shop1-training');
   await resumeSession(page, session);
 
@@ -371,7 +371,7 @@ test('first Stoke highlights only the Flame badge and moves focus into modal con
   session.scenario.firstFlame = 'doubleDown';
   session.scenario.firstFlameInstanceId = flame.instanceId;
   session.game.flameTutorial = { pendingFlameInstanceId: flame.instanceId, completed: false };
-  session.game.shop!.stage = 'fireKeeping';
+  session.game.shop!.stage = 'flames';
   session.scenario.completedBeatIds.push('flame-shop-to-training', 'flame-shop-to-fire-keeping',
     'flame-basics', 'flame-xmult', 'flame-ember');
   await resumeSession(page, session);
@@ -404,7 +404,7 @@ test('Tutorial Shop progression nudge waits for five neutral seconds and stops a
     session.game.phase = 'shop';
     session.game.bust = null;
     session.game.shop!.kind = kind;
-    session.game.shop!.stage = 'fireKeeping';
+    session.game.shop!.stage = 'flames';
     session.scenario.completedBeatIds.push('chapter-2');
     if (round > 12) session.scenario.completedBeatIds.push('curriculum-complete');
     await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, session: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
@@ -443,7 +443,7 @@ test('Shop progression nudge is not used in a normal run', async ({ page }) => {
   await page.clock.install();
   const session = shopOneSession();
   session.game.round = 2;
-  session.game.shop!.stage = 'fireKeeping';
+  session.game.shop!.stage = 'flames';
   await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
     [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, session.game] as const);
   await page.reload();

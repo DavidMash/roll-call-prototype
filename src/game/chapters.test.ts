@@ -73,7 +73,7 @@ describe('Chapter encounter planning', () => {
     expect(resolver.events.filter(event => event.type === 'CHAPTER_STARTED')).toHaveLength(0);
 
     initial.state.phase = 'shop';
-    initial.state.shop = { stage: 'fireKeeping', offers: [], offerRerolls: 0, lifeRestores: 0 };
+    initial.state.shop = { stage: 'flames', offers: [], offerRerolls: 0, lifeRestores: 0 };
     initial.state.bust = { round: 1, attempt: 1, score: 0n, target: 100n, shortfall: 100n, livesBefore: 3, livesAfter: 2 };
     initial.state.roundAttemptNumber = 2;
     const retry = dispatch(initial.state, { type: 'RETRY_ROUND' }, constant());
@@ -95,7 +95,7 @@ describe('Chapter encounter planning', () => {
     expect(state.shop?.kind).toBe('post_boss');
 
     state.shop!.exitUnlocked = true;
-    state.shop!.stage = 'fireKeeping';
+    state.shop!.stage = 'flames';
     const next = dispatch(state, { type: 'NEXT_CHAPTER' }, constant());
     expect(next.state.round).toBe(7);
     expect(next.events.slice(0, 2).map(event => event.type)).toEqual(['CHAPTER_STARTED', 'MAP_TRANSITION']);

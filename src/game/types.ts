@@ -32,12 +32,14 @@ export interface FlameInstance {
 }
 export type FlameSlots = [FlameInstance | null, FlameInstance | null, FlameInstance | null, FlameInstance | null, FlameInstance | null];
 export type DieId = number;
-export type DieType =
-  | 'normal' | 'bonus' | 'workout' | 'vintage' | 'golden'
+export type SpecialDieType =
+  | 'bonus' | 'workout' | 'vintage' | 'golden'
   | 'hitchhiker' | 'weighted' | 'clockwork' | 'magnetic' | 'jackpot'
   | 'teamPlayer' | 'loneWolf' | 'tank' | 'freePlay'
   | 'mirror' | 'missingLink' | 'doubleTime' | 'jumpingBean'
   | 'chameleon' | 'flywheel' | 'magic' | 'conjoined' | 'furnace' | 'sustainable';
+export type DieType = 'normal' | SpecialDieType;
+export type DieEffectInstanceId = string;
 export type DiceRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
 export type HandId =
   | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes'
@@ -49,6 +51,9 @@ export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker' | 'boss';
 export type HandPlaySource = 'manual' | 'jumpingBean' | 'freePlay';
 export type GoldSource = 'golden' | 'jackpot' | 'diceSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward' | 'specialOffer';
 export type GoldSpendSource = 'dicePurchase' | 'diceOfferReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore' | 'furnace';
+export type TemperSource = 'overkill' | 'boardRefresh' | 'miniBoss' | 'boss' | 'bonfire' | 'engulfment';
+export type TemperSpendSource = 'fusion' | 'forge';
+export type RoundTemperState = { overkill: number; boardRefresh: number; miniBoss: number; boss: number };
 export type HandLevels = Record<HandId, number>;
 export type HandFamilyFlameStage = 'setup' | 'payoff' | 'spent';
 
@@ -193,12 +198,20 @@ export interface CollectibleDie {
   value: Rank;
   faces: PhysicalFace[];
   owner: 'player';
-  type: DieType;
-  level: number;
+  /** Ordered for stable presentation only. Gameplay resolves effects by explicit phases. */
+  effects: DieEffectInstance[];
+}
+export interface DieEffectPersistentState {
   /** Persistent value added to this die's future sale price by Vintage. */
   vintageAppreciation: number;
   /** Persistent player configuration copied into each Weighted Round runtime. */
   weightedFace: Exclude<Rank, 7>;
+}
+export interface DieEffectInstance {
+  id: DieEffectInstanceId;
+  type: SpecialDieType;
+  level: number;
+  persistent: DieEffectPersistentState;
 }
 export interface EncounterDie {
   id: DieId;
@@ -217,9 +230,9 @@ export interface DiceInventory {
   nextDieId: number;
 }
 /** Authoritative resources that exist only for one Round attempt. */
-export interface DieRoundRuntime {
-  dieId: DieId;
-  type: DieType;
+export interface DieEffectRoundRuntime {
+  effectId: DieEffectInstanceId;
+  type: SpecialDieType;
   invocationsRemaining: number;
   goldenGoldEarned: number;
   temporaryPips: number;
@@ -228,6 +241,10 @@ export interface DieRoundRuntime {
   furnaceUnits: number;
   magicArmedFace: Exclude<Rank, 7> | null;
   weightedFace: Exclude<Rank, 7>;
+}
+export interface DieRoundRuntime {
+  dieId: DieId;
+  effects: Record<DieEffectInstanceId, DieEffectRoundRuntime>;
 }
 export type DieRoundState = Record<DieId, DieRoundRuntime>;
 export interface DiceOffer {
@@ -238,7 +255,8 @@ export interface DiceOffer {
   purchased: boolean;
 }
 export type DiceSlotRef = { area: 'roster' | 'storage'; index: number };
-export type ShopStage = 'dice' | 'training' | 'fireKeeping';
+export type ShopStage = 'shop' | 'forge' | 'train' | 'flames';
+export interface ForgeSelection { dieAId: DieId | null; dieBId: DieId | null }
 export interface FrozenTrainingSession {
   upperLevelsAtEntry: Record<UpperHandId, number>;
   lowerLevelsAtEntry: Record<LowerHandId, number>;
@@ -264,6 +282,8 @@ export interface Shop {
   lifeRestores: number;
   /** On The House: the first collectible-die purchase in this visit costs no Gold. */
   freeDicePurchaseAvailable?: boolean;
+  /** Persisted within a semantic Shop visit so tab navigation/reload does not lose Forge work. */
+  forgeSelection?: ForgeSelection;
 }
 export interface FlameOffer { id: number; flame: Flame }
 export interface FlameSelection { offers: FlameOffer[]; acquired: boolean }
@@ -375,6 +395,13 @@ export interface RoundSummary {
   goldAfter: number;
   totalGoldEarned: number;
   sources: RoundSummaryGoldSources;
+  temper: {
+    overkill: number;
+    boardRefresh: number;
+    miniBoss: number;
+    boss: number;
+    total: number;
+  };
 }
 export interface Board {
   phase: Phase;
@@ -382,6 +409,11 @@ export interface Board {
   target: ExactScore;
   score: ExactScore;
   gold: number;
+  temper: number;
+  /** Permanently enabled after the first positive Temper award in this run. */
+  forgeUnlocked: boolean;
+  /** Attempt-local Temper; restored with the Round checkpoint and committed to telemetry only on clear. */
+  roundTemper: RoundTemperState;
   lives: number;
   /** Permanent in-run prestige level. Its multiplier is always derived as 25^level. */
   engulfmentLevel: number;
@@ -565,6 +597,14 @@ export interface JumpingBeanPlayRecord {
   roundCleared: boolean;
   jackpotPayout: number;
 }
+export interface TemperTransaction {
+  round: number;
+  shopVisitId: number | null;
+  kind: 'earned' | 'spent';
+  source: TemperSource | TemperSpendSource;
+  amount: number;
+  balance: number;
+}
 export interface RunStats {
   seed: string;
   roundReached: number;
@@ -599,6 +639,16 @@ export interface RunStats {
   goldBySource: Record<GoldSource, number>;
   goldSpent: number;
   goldSpentBySource: Record<GoldSpendSource, number>;
+  temperEarned: number;
+  temperSpent: number;
+  temperBySource: Record<TemperSource, number>;
+  temperSpentBySource: Record<TemperSpendSource, number>;
+  temperTransactions: TemperTransaction[];
+  fusions: number;
+  forges: number;
+  highestEffectCount: number;
+  highestForgeRating: string;
+  mostValuableDieSold: number;
   scoreBySource: Record<ScoreSource, ExactScore>;
   handScores: HandScoreRecord[];
   jumpingBeanFreePlays: JumpingBeanPlayRecord[];
@@ -629,7 +679,7 @@ export type EventType =
   | 'CALLER_CALLED' | 'CALLER_CHANGED' | 'WARDEN_UNLOCK_TARGET' | 'WARDEN_REINFORCEMENT' | 'CURSED_DIE_ROLLED'
   | 'BOSS_HAND_CHANGED' | 'BOSS_FACE_CHANGED'
   | 'RUN_LOST' | 'RESOLUTION_ERROR' | 'MANUAL_REROLL_STARTED' | 'DEAD_BOARD' | 'DEAD_BOARD_RESCUED'
-  | 'TUTORIAL_SAFEGUARD' | 'INFERNO_EVALUATED' | 'SPECIAL_DIE_EFFECT';
+  | 'TUTORIAL_SAFEGUARD' | 'INFERNO_EVALUATED' | 'SPECIAL_DIE_EFFECT' | 'TEMPER_CHANGED' | 'DICE_FORGED';
 export interface EventRecord {
   id: number;
   round: number;
@@ -662,6 +712,10 @@ export interface EventRecord {
   rarity?: DiceRarity;
   dieType?: DieType;
   dieLevel?: number;
+  effectInstanceId?: DieEffectInstanceId;
+  temperSource?: TemperSource;
+  temperSpendSource?: TemperSpendSource;
+  temperBalance?: number;
   invocationBefore?: number;
   invocationAfter?: number;
   effectCause?: string;
@@ -734,7 +788,7 @@ export interface EngulfmentAssetRef {
 }
 export type Action =
   | { type: 'PLAY'; hand: HandId; dieIds: number[]; decisionMs?: number;
-      qualificationClaims?: { dieId: DieId; effect: 'mirror' | 'missingLink' | 'conjoined' }[] }
+      qualificationClaims?: { dieId: DieId; effect: 'mirror' | 'missingLink' | 'conjoined'; effectInstanceId?: string }[] }
   | { type: 'MANUAL_REROLL'; dieIds: number[] }
   | { type: 'INVOKE_JUMPING_BEAN'; dieId: DieId }
   | { type: 'INVOKE_CHAMELEON'; dieId: DieId }
@@ -748,8 +802,9 @@ export type Action =
   | { type: 'BUY_DIE'; offerId: number }
   | { type: 'MOVE_DIE'; source: DiceSlotRef; destination: DiceSlotRef;
       expectedSourceDieId: DieId; expectedDestinationDieId: DieId | null }
-  | { type: 'FUSE_DICE'; source: DiceSlotRef; destination: DiceSlotRef;
-      expectedSourceDieId: DieId; expectedDestinationDieId: DieId }
+  | { type: 'SET_FORGE_INGREDIENT'; socket: 'A' | 'B'; dieId: DieId | null }
+  | { type: 'SWAP_FORGE_INGREDIENTS' }
+  | { type: 'CONFIRM_FORGE' }
   | { type: 'SELL_DIE'; slot: DiceSlotRef; expectedDieId: DieId }
   | { type: 'TRAIN_HAND'; hand: HandId }
   | { type: 'CHOOSE_FLAME'; offerId: number; replaceSlot?: FlameSlotIndex }

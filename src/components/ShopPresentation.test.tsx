@@ -9,6 +9,7 @@ import type { GameState } from '../game/types';
 import { Die } from './Die';
 import { ShopScreen } from './ShopScreen';
 import { CollectibleDieVisual } from './CollectibleDieVisual';
+import { createDieEffect } from '../game/specialDice';
 
 const fixed = { next: () => .2 };
 const wrap = (node: React.ReactNode) => renderToStaticMarkup(<MantineProvider>{node}</MantineProvider>);
@@ -37,7 +38,7 @@ describe('collectible Dice presentation', () => {
     expect(normalHtml).not.toContain('Normal D6');
     expect(normalHtml).not.toContain('>NORMAL<');
 
-    const golden = { ...normal, type: 'golden' as const };
+    const golden = { ...normal, effects: [createDieEffect(normal.id, 'golden')] };
     const specialHtml = wrap(<Die die={golden} {...props} />);
     expect(specialHtml).toContain('Golden');
     expect(specialHtml).toContain('die-type-icon');
@@ -45,8 +46,8 @@ describe('collectible Dice presentation', () => {
   });
 
   it('keeps special identity outside the pip field and uses the shared selected primitive', () => {
-    const specialVisual = wrap(<CollectibleDieVisual type="magnetic" face={5} />);
-    expect(specialVisual).toContain('data-die-type="magnetic"');
+    const specialVisual = wrap(<CollectibleDieVisual effects={[createDieEffect(5, 'magnetic')]} face={5} />);
+    expect(specialVisual).toContain('data-effect-count="1"');
     expect(specialVisual).not.toContain('collectible-die-mark');
     expect(specialVisual.match(/class="pip pip-/g)).toHaveLength(5);
 
@@ -54,7 +55,7 @@ describe('collectible Dice presentation', () => {
     const props = { rosterSlot: 0, display: 'pips' as const, highlighted: false, rolling: false,
       disabled: false, onClick: () => {}, onDetails: () => {} };
     expect(wrap(<Die die={state.dice[0]} {...props} selected />)).toContain('is-die-selected');
-    expect(wrap(<Die die={{ ...rosterDice(state)[0], type: 'magic' }} {...props} selected />)).toContain('is-die-selected');
+    expect(wrap(<Die die={{ ...rosterDice(state)[0], effects: [createDieEffect(0, 'magic')] }} {...props} selected />)).toContain('is-die-selected');
     expect(wrap(<Die die={state.dice[0]} {...props} selected={false} />)).not.toContain('is-die-selected');
   });
 
@@ -74,7 +75,7 @@ describe('collectible Dice presentation', () => {
 describe('responsive Shop-stage presentation', () => {
   it('uses a two-section scorecard for all fourteen Training hands', () => {
     const state = openShop('training-presentation');
-    state.shop!.stage = 'training';
+    state.shop!.stage = 'train';
     const html = shopMarkup(state);
     expect(html).toContain('class="scorecard-grid"');
     expect(html.match(/data-testid="training-offer-/g)).toHaveLength(14);
@@ -84,7 +85,7 @@ describe('responsive Shop-stage presentation', () => {
 
   it('omits Fire Keeping without Flames and renders only owned Flames when present', () => {
     const empty = openShop('empty-fire-keeping');
-    empty.shop!.stage = 'training';
+    empty.shop!.stage = 'train';
     const emptyHtml = shopMarkup(empty);
     expect(emptyHtml).not.toContain('shop-stage-fire-keeping');
     expect(emptyHtml).not.toContain('CONTINUE TO FIRE KEEPING');
@@ -92,7 +93,7 @@ describe('responsive Shop-stage presentation', () => {
 
     const owned = openShop('owned-fire-keeping');
     const flame = placeFlameInstance(owned, 'doubleDown', 25, 3);
-    owned.shop!.stage = 'fireKeeping';
+    owned.shop!.stage = 'flames';
     const ownedHtml = shopMarkup(owned);
     expect(ownedHtml).toContain(`fire-keeping-flame-${flame.instanceId}`);
     expect(ownedHtml.match(/class="[^"]*fire-keeping-card/g)).toHaveLength(1);

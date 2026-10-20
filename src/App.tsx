@@ -84,7 +84,7 @@ export default function App() {
   const tutorialProgressNudgeEligible = runMode === 'tutorial' && board.phase === 'shop' && !!board.shop && !board.bust
     && chapterNumberForRound(board.round) <= 2 && !tutorialPaused && currentTutorialBeat === null
     && selectedOffer === null && selectedFlameOffer === null;
-  const contextualFlameCue: TutorialBeat | null = runMode === 'normal' && board.phase === 'shop' && board.shop?.stage === 'fireKeeping'
+  const contextualFlameCue: TutorialBeat | null = runMode === 'normal' && board.phase === 'shop' && board.shop?.stage === 'flames'
     && board.flameTutorial.pendingFlameInstanceId !== null && !board.flameTutorial.completed ? {
       id: 'first-flame-ember', title: 'NEW EMBER',
       body: ['Stoke Flames in the Shop. At 100 Gold, they become Bonfires.'],
@@ -107,7 +107,7 @@ export default function App() {
   function submit(action: Action) {
     if (busy) return;
     if (!game.submit(action)) return;
-    if (!['BUY_DIE', 'MOVE_DIE', 'FUSE_DICE', 'SELL_DIE', 'STOKE_FLAME', 'RESTORE_LIFE', 'DISMISS_FLAME_TUTORIAL', 'UNLOCK_SHOP_EXIT'].includes(action.type)) setSelectedOffer(null);
+    if (!['BUY_DIE', 'MOVE_DIE', 'SELL_DIE', 'STOKE_FLAME', 'RESTORE_LIFE', 'DISMISS_FLAME_TUTORIAL', 'UNLOCK_SHOP_EXIT'].includes(action.type)) setSelectedOffer(null);
     setSelectedFlameOffer(null);
     if (action.type !== 'TOGGLE_CHARGE') setSelection(emptySelection());
   }
@@ -217,7 +217,7 @@ export default function App() {
         : <RoundScreen board={board} event={event} busy={busy} inputBlocked={busy || gameMenuOpen || runInfoOpen || helpOpen || restoreLivesOpen || faceDetails !== null || flameDetails !== null}
           selection={selection} setSelection={setSelection} submit={submit} skip={game.skip} />}
     </main>
-    {board.phase !== 'inferno' && !(board.phase === 'shop' && board.shop?.stage === 'dice') && <DiceDock board={diceBoard} event={event} busy={busy} actionsEnabled={dockActionsEnabled} cinematic={showingChapterSplash}
+    {board.phase !== 'inferno' && !(board.phase === 'shop' && board.shop?.stage === 'shop') && <DiceDock board={diceBoard} event={event} busy={busy} actionsEnabled={dockActionsEnabled} cinematic={showingChapterSplash}
       display={diceDisplay} selection={selection} setSelection={setSelection}
       selectedFlameOffer={selectedFlameOffer}
       submit={submit} openFaceDetails={setFaceDetails} openFlameDetails={openFlameDetails} />}

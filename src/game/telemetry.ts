@@ -15,6 +15,10 @@ export function createStats(seed: string): RunStats {
     goldBySource: { golden: 0, jackpot: 0, diceSale: 0, roundBase: 0, unusedRerolls: 0, interest: 0, bossReward: 0, specialOffer: 0 },
     goldSpent: 0,
     goldSpentBySource: { dicePurchase: 0, diceOfferReroll: 0, handTraining: 0, flameInvestment: 0, lifeRestore: 0, furnace: 0 },
+    temperEarned: 0, temperSpent: 0,
+    temperBySource: { overkill: 0, boardRefresh: 0, miniBoss: 0, boss: 0, bonfire: 0, engulfment: 0 },
+    temperSpentBySource: { fusion: 0, forge: 0 }, temperTransactions: [],
+    fusions: 0, forges: 0, highestEffectCount: 0, highestForgeRating: '0', mostValuableDieSold: 0,
     manualRerollActions: 0, manualDiceRerolled: 0, manualRerolls: [], deadBoardRescues: 0,
     scoreBySource: { hand: 0n, jumpingBean: 0n, hitchhiker: 0n, boss: 0n },
     handScores: [], jumpingBeanFreePlays: [], standaloneScores: [], handBonusPips: 0, hitchhikerPipsContributed: 0,
@@ -22,17 +26,17 @@ export function createStats(seed: string): RunStats {
   };
 }
 export function boardSnapshot(state: GameState): Board {
-  const { phase, round, target, score, gold, lives, engulfmentLevel, nextShopVisitId, nextFlameInstanceId, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, bustPresentationDice, flameTutorial,
+  const { phase, round, target, score, gold, temper, forgeUnlocked, roundTemper, lives, engulfmentLevel, nextShopVisitId, nextFlameInstanceId, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, bustPresentationDice, flameTutorial,
     manualRerollsRemaining, specialOfferEffects, bossSilenced, dice, dieRoundState, flameSlots, chargeAttribution, infernoProgress, infernoEvaluation, infernoEvaluationSuspendedUntilNewFlame, chargeXMult, maxCharge, decisionId, sixPackXMult, sixPackUpperHandsPlayed,
     chargeArmed, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, lifetimeNormalShopGoldSpent, consumed, scorecardCycleConsumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, fetchTarget, lastRoundPayout, roundSummary, shop, flameSelection, specialOffer } = state;
-  return structuredClone({ phase, round, target, score, gold, lives, engulfmentLevel, nextShopVisitId, nextFlameInstanceId, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, bustPresentationDice, flameTutorial,
+  return structuredClone({ phase, round, target, score, gold, temper, forgeUnlocked, roundTemper, lives, engulfmentLevel, nextShopVisitId, nextFlameInstanceId, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, bustPresentationDice, flameTutorial,
     manualRerollsRemaining, specialOfferEffects, bossSilenced, dice, dieRoundState, flameSlots, chargeAttribution, infernoProgress, infernoEvaluation, infernoEvaluationSuspendedUntilNewFlame,
     chargeXMult, maxCharge, chargeArmed, decisionId, sixPackXMult, sixPackUpperHandsPlayed, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, lifetimeNormalShopGoldSpent, consumed, scorecardCycleConsumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, fetchTarget, lastRoundPayout, roundSummary, shop, flameSelection, specialOffer });
 }
 export function exportRun(state: GameState) {
-  return toExactJsonValue({ schemaVersion: 26, scoringModel: 'whole-dice-only-v1', ...state.stats,
+  return toExactJsonValue({ schemaVersion: 27, scoringModel: 'composable-die-effects-v1', ...state.stats,
     actions: structuredClone(state.actionJournal),
     scoreByHand: structuredClone(state.scoreByHand),
     finalHandLevels: structuredClone(state.handLevels),

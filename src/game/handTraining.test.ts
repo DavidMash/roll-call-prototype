@@ -6,7 +6,7 @@ import {
 } from './hands';
 import { handScore } from './scoring';
 import { createTrainingSession, quoteTraining, roundedTrainingBaseline } from './training';
-import { resetDieRoundState } from './specialDice';
+import { createDieEffect, resetDieRoundState } from './specialDice';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
 import type { GameState, HandId, HandLevels, Rank } from './types';
 
@@ -21,7 +21,7 @@ function shopState(gold = 200, levels?: Partial<HandLevels>): GameState {
   const game = newRun('training-shop', constant()).state;
   game.phase = 'shop'; game.gold = gold;
   Object.assign(game.handLevels, levels);
-  game.shop = { visitId: 7, stage: 'training', offers: [],
+  game.shop = { visitId: 7, stage: 'train', offers: [],
     offerRerolls: 0, lifeRestores: 0, trainingSession: createTrainingSession(game.handLevels) };
   return game;
 }
@@ -72,8 +72,8 @@ describe('derived hand levels', () => {
     game.dice.forEach((die, index) => { die.value = values[index]; });
     game.handLevels.pair = 3;
     expect(handScore(game.dice, 'pair', [0, 1], 3)).toEqual({ pips: 22, multiplier: 3, rawScore: '66', score: 66n });
-    rosterDice(game)[0].type = 'bonus';
-    rosterDice(game)[4].type = 'hitchhiker';
+    rosterDice(game)[0].effects = [createDieEffect(rosterDice(game)[0].id, 'bonus')];
+    rosterDice(game)[4].effects = [createDieEffect(rosterDice(game)[4].id, 'hitchhiker')];
     syncActiveDiceProjection(game);
     game.dieRoundState = resetDieRoundState(rosterDice(game));
     const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0));

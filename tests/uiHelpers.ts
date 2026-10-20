@@ -44,11 +44,12 @@ export async function openMenuItem(page: Page, item: 'Run Info' | 'How to Play')
   await menu.getByRole('button', { name: item, exact: true }).click();
 }
 
-export async function goToShopStage(page: Page, stage: 'dice' | 'training' | 'fireKeeping') {
-  let testId = stage === 'fireKeeping' ? 'shop-stage-fire-keeping' : `shop-stage-${stage}`;
+export async function goToShopStage(page: Page, stage: 'shop' | 'forge' | 'train' | 'flames' | 'dice' | 'training') {
+  const normalized = stage === 'dice' ? 'shop' : stage === 'training' ? 'train' : stage;
+  let testId = `shop-stage-${normalized}`;
   let target = page.getByTestId(testId);
-  if (!await target.count() && stage === 'fireKeeping') {
-    testId = 'shop-stage-training';
+  if (!await target.count() && stage === 'flames') {
+    testId = 'shop-stage-train';
     target = page.getByTestId(testId);
   }
   if (!await target.count()) return;

@@ -135,7 +135,7 @@ test('Special Offers apply and advance atomically under repeated input', async (
     (element as HTMLButtonElement).click();
   });
   await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
-  await expect(page.getByTestId('shop-stage-dice')).toHaveAttribute('data-active', 'true');
+  await expect(page.getByTestId('shop-stage-shop')).toHaveAttribute('data-active', 'true');
   await expect(page.getByTestId('shop-stage-continue')).toContainText('CONTINUE TO TRAINING');
   const saved = await persistedState(page);
   expect(saved.specialOfferEffects.carePackageRerolls).toBe(3);
@@ -156,7 +156,7 @@ test('Shop exit stays disabled for one second and Shop interactions do not resta
   await page.getByTestId(`dice-offer-${offer.id}`).getByRole('button', { name: /BUY/ }).click();
   await expect(page.getByTestId(`dice-offer-${offer.id}`)).toContainText('PURCHASED');
 
-  await goToShopStage(page, 'fireKeeping');
+  await goToShopStage(page, 'flames');
   const next = page.getByTestId('shop-progression-action');
   await expect(next).toBeDisabled();
 
@@ -176,7 +176,7 @@ test('post-Boss Shop locks NEXT CHAPTER on entry', async ({ page }) => {
   await page.clock.pauseAt(clockStart);
   await installRunState(page, shopState('post_boss'));
   await enterRun(page);
-  await goToShopStage(page, 'fireKeeping');
+  await goToShopStage(page, 'flames');
   const next = page.getByRole('button', { name: 'NEXT CHAPTER', exact: true });
   await expect(next).toBeDisabled();
   await page.clock.fastForward(1000);

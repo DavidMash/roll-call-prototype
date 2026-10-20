@@ -5,13 +5,13 @@ import { activeFace } from '../src/game/dice';
 import { handOptions, handStats, HANDS, HAND_IDS, LOWER_HAND_IDS, relativeHandStrengthTiers, UPPER_HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import { CONFIG } from '../src/game/config';
-import type { Action, DieType, GameState } from '../src/game/types';
+import type { Action, GameState, SpecialDieType } from '../src/game/types';
 import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import { enterRun, goToShopStage, installRunState, openGameMenu, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 import { specialOfferName } from '../src/game/specialOffers';
 import { chapterLabel } from '../src/game/chapters';
-import { resetDieRoundState } from '../src/game/specialDice';
+import { createDieEffect, effectOf, resetDieRoundState, runtimeFor } from '../src/game/specialDice';
 import { rosterDice, syncActiveDiceProjection } from '../src/game/inventory';
 
 function dieUiLabel(dice: GameState['dice'], die: GameState['dice'][number]): string {
@@ -56,9 +56,9 @@ function automaticAction(game: GameState): Action {
 }
 function unlockShopExit(game: GameState): GameState {
   let next = game.shop?.exitUnlocked === false ? dispatch(game, { type: 'UNLOCK_SHOP_EXIT' }).state : game;
-  if (next.shop?.stage === 'dice') next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
-  if (next.shop?.stage === 'training' && next.flameSlots.some(Boolean))
-    next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
+  if (next.shop?.stage === 'shop') next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'train' }).state;
+  if (next.shop?.stage === 'train' && next.flameSlots.some(Boolean))
+    next = dispatch(next, { type: 'SET_SHOP_STAGE', stage: 'flames' }).state;
   return next;
 }
 async function ready(page: Page) {
@@ -92,7 +92,7 @@ async function matchBoard(page: Page, game: GameState) {
   }
   if (game.phase === 'shop' || game.phase === 'flameSelection') {
     if (game.phase === 'shop' && game.bust) await expect(page.getByTestId('bust-shop-banner')).toBeVisible();
-    else if (game.phase === 'shop') await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
+    else if (game.phase === 'shop') await expect(page.getByTestId('shop-stage-shop')).toBeVisible();
     else await expect(page.getByRole('main').getByText('FLAME SELECTION', { exact: true })).toBeVisible();
     await expect(page.getByTestId('manual-reroll')).toHaveCount(0);
   } else if (game.phase === 'round') {
@@ -103,7 +103,7 @@ async function matchBoard(page: Page, game: GameState) {
       `${game.score.toLocaleString('en-US')} of ${game.target.toLocaleString('en-US')} points toward the Goal`,
     );
   }
-  if (game.phase === 'shop' && game.shop?.stage === 'dice') {
+  if (game.phase === 'shop' && game.shop?.stage === 'shop') {
     for (const [index, dieId] of game.diceInventory.roster.entries()) {
       const slot = page.getByTestId(`collection-slot-roster-${index}`);
       if (dieId === null) await expect(slot.getByRole('button', { name: /empty/ })).toBeVisible();
@@ -166,7 +166,7 @@ async function playBest(page: Page, game: GameState): Promise<GameState> {
   await matchBoard(page, next);
   return next;
 }
-function findShopSeed(required?: DieType) {
+function findShopSeed(required?: SpecialDieType) {
   for (let i = 0; i < 1000; i++) {
     const seed = `browser-${i}`;
     let game = newRun(seed).state;
@@ -187,7 +187,7 @@ function findTrainingSeed() {
     }
     if (game.phase === 'roundSummary') game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
     if (game.phase !== 'shop' || game.bust) continue;
-    game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
+    game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'train' }).state;
     const next = dispatch(unlockShopExit(game), { type: 'NEXT_ROUND' }).state;
     for (const option of handOptions(next.dice, next.consumed).filter(item => !item.consumed)) {
       const scored = handScore(next.dice, option.id, option.combinations[0], 2);
@@ -207,8 +207,8 @@ function highInterestState() {
       } else if (game.phase === 'roundSummary') {
         game = dispatch(game, { type: 'CONTINUE_ROUND_SUMMARY' }).state;
       } else if (game.phase === 'shop') {
-        game = dispatch(game, game.shop?.stage === 'dice' ? { type: 'SET_SHOP_STAGE', stage: 'training' }
-          : game.shop?.stage === 'training' && game.flameSlots.some(Boolean) ? { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }
+        game = dispatch(game, game.shop?.stage === 'shop' ? { type: 'SET_SHOP_STAGE', stage: 'train' }
+          : game.shop?.stage === 'train' && game.flameSlots.some(Boolean) ? { type: 'SET_SHOP_STAGE', stage: 'flames' }
             : game.shop?.exitUnlocked === false ? { type: 'UNLOCK_SHOP_EXIT' }
               : game.bust ? { type: 'RETRY_ROUND' }
                 : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' }).state;
@@ -269,6 +269,7 @@ test('scorecard keeps all fourteen categories visible with simplified actionable
   await expect(page.getByTestId('round-score-progress')).toHaveText('0 / 100');
   await expect(page.getByTestId('round-score-progress')).toHaveClass(/round-score-readout/);
   await expect(page.getByTestId('round-goal-progress')).toHaveAttribute('aria-valuetext', '0 of 100 points toward the Goal');
+  await expect(page.getByLabel('Overkill: +1 Temper per 20% above target · max +5')).toBeVisible();
   await expect(page.locator('.hud-phase')).toHaveCount(0);
 
   const playable = page.locator('[data-state="playable"]').first();
@@ -503,7 +504,7 @@ test('successful normal encounter shows a reconciled Round Summary before the Sh
   await expect(shopMap.locator('[aria-current="step"]')).not.toContainText('Goal');
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await ready(page);
-  await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('shop-stage-shop')).toBeVisible();
 });
 
 test('live scoring panel updates inside the fixed mobile gameplay viewport', async ({ page }) => {
@@ -585,7 +586,7 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   const level1 = handStats(hand, 1);
   const level2 = handStats(hand, 2);
   await goToShopStage(page, 'training');
-  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
+  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'train' }).state;
   await expect(page.locator('[data-testid^="training-offer-"]')).toHaveCount(14);
   await expect(page.getByTestId(`training-stats-${hand}`)).toHaveText(`Lv. 1 · ${level1.basePips} × ${level1.baseMultiplier}`);
 
@@ -601,7 +602,7 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   await expect(page.getByTestId(`train-${hand}`)).toHaveAccessibleName(`Train ${HANDS[hand].name} for 4 GOLD`);
   await expect(page.getByTestId(`training-stats-${hand}`)).toHaveText(`Lv. 2 · ${level2.basePips} × ${level2.baseMultiplier}`);
 
-  await goToShopStage(page, 'fireKeeping');
+  await goToShopStage(page, 'flames');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = unlockShopExit(game);
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
@@ -706,7 +707,7 @@ test('glossary drill-down stays tappable, dismissible, and inside a mobile viewp
 test('Round Dice leave Normal dice unlabeled and identify special dice without D6', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const game = newRun('round-die-labels').state;
-  game.diceInventory.instances[1].type = 'golden';
+  game.diceInventory.instances[1].effects = [createDieEffect(1, 'golden')];
   syncActiveDiceProjection(game);
   game.dieRoundState = resetDieRoundState(rosterDice(game));
   await installRunState(page, game);
@@ -716,12 +717,12 @@ test('Round Dice leave Normal dice unlabeled and identify special dice without D
   const golden = page.getByTestId('flame-die-1');
   await expect(normal.locator('.die-face-details')).toHaveCount(0);
   await expect(normal.locator('.die-details-placeholder')).toHaveCount(1);
-  await expect(golden.locator('.die-face-details')).toHaveText('Golden');
+  await expect(golden.locator('.die-face-details')).toHaveText('Golden · I');
   await expect(page.getByRole('main')).not.toContainText('Golden D6');
   await expect(page.getByTestId('special-dice-controls')).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('round-dice-labels-mobile.png'), fullPage: true });
   await golden.locator('.die-face-details').click();
-  const details = page.getByRole('dialog', { name: 'GOLDEN · LV1' });
+  const details = page.getByRole('dialog', { name: 'GOLDEN · I' });
   await expect(details).toContainText('Each time this die Scores, you earn 1 Gold');
   await expect(details).toContainText(/Gold earned this Round\s*0 \/ 3/);
   await expect(details).not.toContainText('D6');
@@ -738,8 +739,8 @@ test('five special dice do not add a persistent Round panel or change scorecard 
   await page.screenshot({ path: test.info().outputPath('round-zero-special-dice-mobile.png'), fullPage: true });
 
   const mixed = newRun('round-three-special-layout').state;
-  const mixedTypes: DieType[] = ['doubleTime', 'workout', 'bonus'];
-  rosterDice(mixed).slice(0, 3).forEach((die, index) => { die.type = mixedTypes[index]; });
+  const mixedTypes: SpecialDieType[] = ['doubleTime', 'workout', 'bonus'];
+  rosterDice(mixed).slice(0, 3).forEach((die, index) => { die.effects = [createDieEffect(die.id, mixedTypes[index])]; });
   syncActiveDiceProjection(mixed);
   mixed.dieRoundState = resetDieRoundState(rosterDice(mixed));
   await installRunState(page, mixed);
@@ -750,8 +751,8 @@ test('five special dice do not add a persistent Round panel or change scorecard 
   await page.screenshot({ path: test.info().outputPath('round-three-special-dice-mobile.png'), fullPage: true });
 
   const special = newRun('round-five-special-layout').state;
-  const types: DieType[] = ['doubleTime', 'workout', 'bonus', 'magnetic', 'magic'];
-  rosterDice(special).forEach((die, index) => { die.type = types[index]; });
+  const types: SpecialDieType[] = ['doubleTime', 'workout', 'bonus', 'magnetic', 'magic'];
+  rosterDice(special).forEach((die, index) => { die.effects = [createDieEffect(die.id, types[index])]; });
   syncActiveDiceProjection(special);
   special.dieRoundState = resetDieRoundState(rosterDice(special));
   await installRunState(page, special);
@@ -759,7 +760,7 @@ test('five special dice do not add a persistent Round panel or change scorecard 
   await enterRun(page);
 
   await expect(page.getByText('SPECIAL DICE', { exact: true })).toHaveCount(0);
-  await expect(page.locator('.die-face-details.special')).toHaveText(['Double Time', 'Workout', 'Bonus', 'Magnetic', 'Magic']);
+  await expect(page.locator('.die-face-details.special')).toHaveText(['Double Time · I', 'Workout · I', 'Bonus · I', 'Magnetic · I', 'Magic · I']);
   const specialHeight = await page.locator('.scorecard-panel').evaluate(element => element.getBoundingClientRect().height);
   expect(Math.abs(specialHeight - normalHeight)).toBeLessThanOrEqual(2);
   await page.screenshot({ path: test.info().outputPath('round-five-special-dice-mobile.png'), fullPage: true });
@@ -769,15 +770,15 @@ test('whole-die details show live status and only contextual boss face mutations
   await page.setViewportSize({ width: 390, height: 844 });
   const game = newRun('round-die-mutation-details').state;
   const dice = rosterDice(game);
-  dice[0].type = 'workout';
-  dice[1].type = 'bonus';
+  dice[0].effects = [createDieEffect(dice[0].id, 'workout')];
+  dice[1].effects = [createDieEffect(dice[1].id, 'bonus')];
   activeFace(dice[0]).bossMutation = { kind: 'infected' };
   const originalRank = 4 as const;
   activeFace(dice[1]).bossMutation = { kind: 'snakeEyes', originalRank };
   activeFace(dice[1]).rank = 1;
   syncActiveDiceProjection(game);
   game.dieRoundState = resetDieRoundState(rosterDice(game));
-  game.dieRoundState[dice[0].id].temporaryPips = 6;
+  runtimeFor(dice[0], game.dieRoundState[dice[0].id], 'workout')!.temporaryPips = 6;
   await installRunState(page, game);
   await enterRun(page);
 
@@ -785,16 +786,16 @@ test('whole-die details show live status and only contextual boss face mutations
   await expect(workout).toHaveClass(/effect-suppressed/);
   await expect(workout.getByRole('button', { name: /View details for Workout/ })).toContainText('Workout');
   await workout.getByRole('button', { name: /View details for Workout/ }).click();
-  let details = page.getByRole('dialog', { name: 'WORKOUT · LV1' });
+  let details = page.getByRole('dialog', { name: 'WORKOUT · I' });
   await expect(details).toContainText(/Current bonus this Round\s*\+6 Pips/);
   await expect(details).toContainText('INFECTED FACE');
-  await expect(details).toContainText("This die's special effect is suppressed");
+  await expect(details).toContainText("This die's effects are suppressed");
   await expect(details).not.toContainText('physical face');
   await page.screenshot({ path: test.info().outputPath('workout-infected-details-mobile.png'), fullPage: true });
   await details.getByRole('button', { name: 'Close' }).click();
 
   await page.getByTestId(`flame-die-${dice[1].id}`).getByRole('button', { name: 'View details for Bonus' }).click();
-  details = page.getByRole('dialog', { name: 'BONUS · LV1' });
+  details = page.getByRole('dialog', { name: 'BONUS · I' });
   await expect(details).toContainText('SNAKE EYES');
   await expect(details).toContainText(`changed from ${originalRank} to 1`);
   await expect(details).not.toContainText('INFECTED FACE');
@@ -868,7 +869,7 @@ test('mobile staged Shop keeps each section, navigation, and the compact Roster 
   await expect(page.getByTestId('shop-stage-gold')).toContainText(`${100 - purchasedOffer.price!} GOLD`);
   await goToShopStage(page, 'dice');
   await expect(page.getByTestId(`dice-offer-${purchasedOffer.id}`)).toContainText('PURCHASED');
-  await expect(page.getByTestId('shop-stage-fire-keeping')).toHaveCount(0);
+  await expect(page.getByTestId('shop-stage-flames')).toHaveCount(0);
   await goToShopStage(page, 'training');
   await expect(page.getByRole('button', { name: 'NEXT ROUND', exact: true })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('shop-shell-mobile.png'), fullPage: true });
@@ -901,9 +902,9 @@ test('full seeded run: select/play, clear, buy a collectible die, next round, lo
   await expect(page.getByTestId('stat-gold').getByText(String(game.gold), { exact: true })).toBeVisible();
   await expect(page.getByTestId(`dice-offer-${offer.id}`).getByRole('button', { name: 'PURCHASED' })).toBeDisabled();
   const purchasedId = game.diceInventory.storage.find(id => id !== null)!;
-  expect(game.diceInventory.instances[purchasedId]).toMatchObject({ type: 'bonus', level: 1 });
+  expect(game.diceInventory.instances[purchasedId]).toMatchObject({ effects: [{ type: 'bonus', level: 1 }] });
   await expect(page.getByRole('button', { name: /REROLL ALL DICE/ })).toHaveCount(0);
-  await goToShopStage(page, 'fireKeeping');
+  await goToShopStage(page, 'flames');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = unlockShopExit(game);
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
@@ -916,7 +917,7 @@ test('full seeded run: select/play, clear, buy a collectible die, next round, lo
       await matchBoard(page, game);
     }
     else if (game.phase === 'shop') {
-      await goToShopStage(page, 'fireKeeping');
+      await goToShopStage(page, 'flames');
       game = unlockShopExit(game);
       const action = game.bust ? { type: 'RETRY_ROUND' as const }
         : game.shop?.kind === 'post_boss' ? { type: 'NEXT_CHAPTER' as const } : { type: 'NEXT_ROUND' as const };
@@ -1033,15 +1034,14 @@ test('Vintage collectible details expose its authoritative appreciation and sell
   await card.getByRole('button', { name: /BUY/ }).click();
   game = dispatch(game, { type: 'BUY_DIE', offerId: offer.id }).state;
   const vintageId = game.diceInventory.storage[0]!;
-  game.diceInventory.instances[vintageId].vintageAppreciation = 7;
+  effectOf(game.diceInventory.instances[vintageId], 'vintage')!.persistent.vintageAppreciation = 7;
   await installRunState(page, game);
   await matchBoard(page, game);
   const slot = page.getByTestId('collection-slot-storage-0');
-  await expect(slot).toContainText('+7 appreciation');
   await expect(slot).toContainText('Sell 12G');
   await slot.getByRole('button', { name: 'INFO' }).click();
   const details = page.getByRole('dialog', { name: 'DIE DETAILS' });
-  await expect(details).toContainText('Vintage appreciation: +7 Gold');
+  await expect(details).toContainText(/Appreciation:\s*\+7 Gold/);
   await expect(details).toContainText('Current sell value: 12 Gold');
 });
 
@@ -1061,10 +1061,10 @@ test('mobile Dice offers keep long names and Legendary rarity inside the card', 
   })).toBe(true);
 });
 
-test('same-type collection interaction requires explicit Fusion, Swap, or Cancel', async ({ page }) => {
-  let game = await reachShop(page, findShopSeed());
-  Object.assign(game.diceInventory.instances[0], { type: 'bonus', level: 2 });
-  Object.assign(game.diceInventory.instances[1], { type: 'bonus', level: 1 });
+test('same-type collection interaction always swaps without implicit Fusion', async ({ page }) => {
+  const game = await reachShop(page, findShopSeed());
+  game.diceInventory.instances[0].effects = [createDieEffect(0, 'bonus', 2)];
+  game.diceInventory.instances[1].effects = [createDieEffect(1, 'bonus', 1)];
   await installRunState(page, game);
   await enterRun(page);
   await expect(page.getByTestId('stat-gold').getByText(String(game.gold), { exact: true })).toBeVisible();
@@ -1073,33 +1073,9 @@ test('same-type collection interaction requires explicit Fusion, Swap, or Cancel
   const second = page.getByTestId('collection-slot-roster-1');
   await first.locator('.collection-slot-main').click();
   await second.locator('.collection-slot-main').click();
-  let modal = page.getByRole('dialog', { name: 'FUSE DICE?' });
-  await expect(modal).toContainText('Bonus · Lv1 + Bonus · Lv2');
-  await expect(modal).toContainText('+10 Pips → +30 Pips');
-  await page.waitForTimeout(250);
-  await page.screenshot({ path: test.info().outputPath('fusion-modal.png'), fullPage: true });
-  await modal.getByRole('button', { name: 'CANCEL' }).click();
-  expect(game.diceInventory.roster.slice(0, 2)).toEqual([0, 1]);
-
-  await first.locator('.collection-slot-main').click();
-  await second.locator('.collection-slot-main').click();
-  modal = page.getByRole('dialog', { name: 'FUSE DICE?' });
-  await modal.getByRole('button', { name: 'SWAP' }).click();
-  game = dispatch(game, { type: 'MOVE_DIE', source: { area: 'roster', index: 0 }, destination: { area: 'roster', index: 1 },
-    expectedSourceDieId: 0, expectedDestinationDieId: 1 }).state;
+  await expect(page.getByRole('dialog', { name: /FUSE/i })).toHaveCount(0);
   await expect(first).toHaveAttribute('data-die-id', '1');
   await expect(second).toHaveAttribute('data-die-id', '0');
-
-  await first.locator('.collection-slot-main').click();
-  await second.locator('.collection-slot-main').click();
-  modal = page.getByRole('dialog', { name: 'FUSE DICE?' });
-  await expect(modal).toContainText('+20 Pips → +30 Pips');
-  await modal.getByRole('button', { name: 'FUSE' }).click();
-  game = dispatch(game, { type: 'FUSE_DICE', source: { area: 'roster', index: 0 }, destination: { area: 'roster', index: 1 },
-    expectedSourceDieId: 1, expectedDestinationDieId: 0 }).state;
-  await expect(first.getByRole('button', { name: /Roster 1, empty/ })).toBeVisible();
-  await expect(second).toHaveAttribute('data-die-id', '0');
-  await expect(second).toContainText('Lv3');
 });
 
 test('ambiguous physical dice can be changed and filtering never ends the run', async ({ page }) => {
@@ -1266,7 +1242,7 @@ test('settled progress resumes across reloads and return visits with seed-aware 
 
 test('Jumping Bean runs its Free Play and explicit reroll only when invoked On Command', async ({ page }) => {
   const game = newRun('jumping-bean-command-browser').state;
-  rosterDice(game)[0].type = 'jumpingBean';
+  rosterDice(game)[0].effects = [createDieEffect(rosterDice(game)[0].id, 'jumpingBean')];
   syncActiveDiceProjection(game);
   game.dieRoundState = resetDieRoundState(rosterDice(game));
   await installRunState(page, game);
@@ -1274,16 +1250,16 @@ test('Jumping Bean runs its Free Play and explicit reroll only when invoked On C
   const next = dispatch(game, { type: 'INVOKE_JUMPING_BEAN', dieId: 0 });
   const bean = page.getByTestId('flame-die-0');
   await bean.getByRole('button', { name: 'View details for Jumping Bean' }).click();
-  const details = page.getByRole('dialog', { name: 'JUMPING BEAN · LV1' });
+  const details = page.getByRole('dialog', { name: 'JUMPING BEAN · I' });
   await expect(details).toContainText(/Uses Remaining\s*1 \/ 1/);
-  await details.getByRole('button', { name: 'USE ON COMMAND' }).click();
+  await details.getByRole('button', { name: 'USE JUMPING BEAN' }).click();
   await matchBoard(page, next.state);
   expect(next.state.stats.scoreBySource.jumpingBean).toBeGreaterThan(0);
   expect(next.state.effectScore).toBe(BigInt(0n));
   expect(next.events.some(event => event.type === 'JUMPING_BEAN_FREE_PLAY')).toBe(true);
   expect(next.events.some(event => event.type === 'DIE_ROLLED' && event.dieIds?.includes(0))).toBe(true);
   await bean.getByRole('button', { name: 'View details for Jumping Bean' }).click();
-  await expect(page.getByRole('dialog', { name: 'JUMPING BEAN · LV1' })).toContainText(/Uses Remaining\s*0 \/ 1/);
+  await expect(page.getByRole('dialog', { name: 'JUMPING BEAN · I' })).toContainText(/Uses Remaining\s*0 \/ 1/);
 });
 
 test('active mobile gameplay stays inside the viewport with a two-column scorecard', async ({ page }) => {

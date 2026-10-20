@@ -1,7 +1,7 @@
 import { formatExactScore, formatPlayerNumber } from './copy';
 import { FLAMES } from './flames';
 import { HANDS } from './hands';
-import { SPECIAL_DICE } from './specialDice';
+import { isSpecialDieType, SPECIAL_DICE } from './specialDice';
 import { activeDieLabel } from './inventory';
 import type { GameEvent } from './types';
 import type { ExactScore } from './scoreMath';
@@ -32,19 +32,19 @@ export function scorePresentation(event: GameEvent | null): ScorePresentation | 
     if (event.type === 'HAND_STARTED') callout = `${HANDS[accumulator.hand].name.toUpperCase()} · LV. ${formatPlayerNumber(accumulator.handLevel)} · BASE`;
     else if (event.type === 'HAND_PIPS_CHANGED') {
       activeMetric = 'pips';
-      callout = event.dieType
+      callout = isSpecialDieType(event.dieType)
         ? `${SPECIAL_DICE[event.dieType].name.toUpperCase()} +${amount(event.amount)}`
         : `${event.dieIds?.[0] === undefined ? 'DIE' : activeDieLabel(event.board, event.dieIds[0])} +${amount(event.amount)} PIPS`;
     } else if (event.type === 'HITCHHIKER_ADDED_PIPS') {
       activeMetric = 'pips';
-      callout = event.dieType
+      callout = isSpecialDieType(event.dieType)
         ? `${SPECIAL_DICE[event.dieType].name.toUpperCase()} +${amount(event.amount)}`
         : `HITCHHIKER +${amount(event.amount)}`;
     } else if (event.type === 'HAND_MULTIPLIER_CHANGED') {
       activeMetric = 'mult';
-      callout = event.dieType ? SPECIAL_DICE[event.dieType].name.toUpperCase() : 'MULT UPDATED';
+      callout = isSpecialDieType(event.dieType) ? SPECIAL_DICE[event.dieType].name.toUpperCase() : 'MULT UPDATED';
     } else if (event.type === 'SPECIAL_DIE_EFFECT') {
-      callout = event.dieType ? SPECIAL_DICE[event.dieType].name.toUpperCase() : 'DIE EFFECT';
+      callout = isSpecialDieType(event.dieType) ? SPECIAL_DICE[event.dieType].name.toUpperCase() : 'DIE EFFECT';
     } else if (event.type === 'HAND_XMULT_CHANGED') {
       activeMetric = 'xmult';
       const source = event.xMultFactor?.source;

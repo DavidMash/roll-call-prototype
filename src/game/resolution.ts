@@ -25,12 +25,16 @@ export interface QualificationEffectParticipation {
   dieId: number;
   face: Rank;
   effect: QualificationEffect;
+  effectInstanceId?: string;
+  virtualValue?: Rank;
+  virtualDuplicateCount?: number;
 }
 
 /** Reserved for future Invocation-backed wildcards. Legacy qualification effects make no claims. */
 export interface QualificationResourceClaim {
   dieId: number;
   effect: Exclude<QualificationEffect, 'hexerWild'>;
+  effectInstanceId: string;
   resource: 'invocation';
   amount: number;
 }

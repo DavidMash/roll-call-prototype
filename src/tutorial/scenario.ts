@@ -164,8 +164,8 @@ export function tutorialActionError(session: TutorialSession, action: Action): s
     if (!requires(REQUIRED_BEATS.reroll) && requires(REQUIRED_BEATS.threeKind) && (action.type !== 'PLAY' || action.hand !== 'threeKind' || action.dieIds.some(id => ![0, 1, 2].includes(id)))) return 'Play Three of a Kind with the three 1s.';
   }
   if (state.phase === 'shop' && state.round === 1) {
-    if (requires(REQUIRED_BEATS.training) && state.shop?.stage === 'dice') {
-      if (action.type !== 'SET_SHOP_STAGE' || action.stage !== 'training') return 'Continue to Training first.';
+    if (requires(REQUIRED_BEATS.training) && state.shop?.stage === 'shop') {
+      if (action.type !== 'SET_SHOP_STAGE' || action.stage !== 'train') return 'Continue to Train first.';
     } else if (requires(REQUIRED_BEATS.training) && (action.type !== 'TRAIN_HAND' || action.hand !== 'fullHouse')) return 'Train Full House once.';
   }
   if (state.round === 7 && state.phase === 'round') {

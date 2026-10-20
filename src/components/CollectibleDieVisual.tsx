@@ -1,19 +1,19 @@
-import { SPECIAL_DICE } from '../game/specialDice';
-import type { DieType, Rank } from '../game/types';
+import type { CollectibleDie, DieEffectInstance, Rank } from '../game/types';
 import { PipFace } from './PipFace';
 import { diePresentationStyle } from './DieTypeLabel';
 
-export function CollectibleDieVisual({ type, face, slotLabel, compact = false, rolling = false }: {
-  type: DieType;
+export function CollectibleDieVisual({ effects, face, slotLabel, compact = false, rolling = false }: {
+  effects: readonly DieEffectInstance[];
   face: Exclude<Rank, 7>;
   slotLabel?: string;
   compact?: boolean;
   rolling?: boolean;
 }) {
-  const definition = SPECIAL_DICE[type];
-  return <div className={`collectible-die-visual${compact ? ' compact' : ''}${type === 'normal' ? ' normal' : ' special'}${rolling ? ' rolling' : ''}`}
-    style={diePresentationStyle(type)} data-die-type={type} aria-hidden="true">
+  const die = { effects } as Pick<CollectibleDie, 'effects'>;
+  const names = effects.map(effect => effect.type).join(' + ') || 'Normal';
+  return <div className={`collectible-die-visual${compact ? ' compact' : ''}${effects.length ? ' special' : ' normal'}${rolling ? ' rolling' : ''}`}
+    style={diePresentationStyle(die)} data-effect-count={effects.length} aria-hidden="true">
     {slotLabel && <span className="collectible-die-slot-label">{slotLabel}</span>}
-    <PipFace value={face} label={`${definition.name} showing ${face}`} />
+    <PipFace value={face} label={`${names} die showing ${face}`} />
   </div>;
 }

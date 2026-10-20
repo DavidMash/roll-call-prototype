@@ -1,5 +1,6 @@
 import { activeFace, HAND_RANKS, isHexerFace, wholeDieEffectSuppressed } from './dice';
 import type { QualificationEffect, QualificationPlan } from './resolution';
+import { effectOf, effectRuntime } from './specialDice';
 import type { Die, DieRoundState, HandId, HandLevels, HandOption, Rank } from './types';
 
 export interface HandDefinition {
@@ -119,7 +120,7 @@ function subsets<T>(items: T[], size: number): T[][] {
   return [...subsets(tail, size - 1).map(rest => [head, ...rest]), ...subsets(tail, size)];
 }
 
-type QualificationClaim = { dieId: number; effect: Exclude<QualificationEffect, 'hexerWild'> };
+type QualificationClaim = { dieId: number; effect: Exclude<QualificationEffect, 'hexerWild'>; effectInstanceId: string };
 const claimed = (claims: readonly QualificationClaim[], dieId: number, effect: QualificationEffect) =>
   claims.some(claim => claim.dieId === dieId && claim.effect === effect);
 
@@ -139,26 +140,36 @@ function straightValid(dice: Die[], size: number, claims: readonly Qualification
   return dice.length === size && HAND_RANKS.slice(0, HAND_RANKS.length - size + 1)
     .some(start => natural.every(rank => rank >= start && rank < start + size));
 }
-function matchingGroupsValid(dice: Die[], groups: readonly number[], claims: readonly QualificationClaim[] = []): boolean {
-  const qualificationFaces = dice.flatMap(die => {
-    const face = activeFace(die);
-    return Array.from({ length: claimed(claims, die.id, 'conjoined') ? 2 : 1 }, () => ({ die, face }));
-  });
-  const natural = qualificationFaces.filter(({ die }) => !hexerMatchingWild(die) && !claimed(claims, die.id, 'mirror'))
-    .map(({ face }) => face.rank);
-  const mirrorCount = qualificationFaces.length - natural.length;
-  // Distinct ranks own disjoint slots. Mirror qualification copies fill remaining slots.
-  function assign(group: number, ranks: Rank[]): boolean {
-    if (group === groups.length) {
-      const naturalSlots = ranks.reduce((total, rank, index) => total + Math.min(groups[index], natural.filter(value => value === rank).length), 0);
-      return natural.every(rank => ranks.includes(rank)) && naturalSlots + mirrorCount === groups.reduce((sum, size) => sum + size, 0);
+function matchingVirtualValues(dice: Die[], groups: readonly number[], claims: readonly QualificationClaim[] = []): Map<number, Rank> | null {
+  const total = dice.reduce((sum, die) => sum + (claimed(claims, die.id, 'conjoined') ? 2 : 1), 0);
+  if (total !== groups.reduce((sum, size) => sum + size, 0)) return null;
+  const fixed = dice.filter(die => !hexerMatchingWild(die) && !claimed(claims, die.id, 'mirror'));
+  const variables = dice.filter(die => hexerMatchingWild(die) || claimed(claims, die.id, 'mirror'));
+  const assignments = new Map<number, Rank>();
+  function assignVariables(index: number, ranks: Rank[], counts: number[]): boolean {
+    if (index === variables.length) return counts.every((count, i) => count === groups[i]);
+    const die = variables[index];
+    const copies = claimed(claims, die.id, 'conjoined') ? 2 : 1;
+    for (let group = 0; group < ranks.length; group++) if (counts[group] + copies <= groups[group]) {
+      counts[group] += copies; assignments.set(die.id, ranks[group]);
+      if (assignVariables(index + 1, ranks, counts)) return true;
+      counts[group] -= copies; assignments.delete(die.id);
     }
-    return HAND_RANKS.some(rank => !ranks.includes(rank)
-      && natural.filter(value => value === rank).length <= groups[group]
-      && assign(group + 1, [...ranks, rank]));
+    return false;
   }
-  return qualificationFaces.length === groups.reduce((sum, size) => sum + size, 0) && assign(0, []);
+  function assignGroups(group: number, ranks: Rank[]): boolean {
+    if (group === groups.length) {
+      const counts = ranks.map(rank => fixed.reduce((sum, die) => sum
+        + (activeFace(die).rank === rank ? (claimed(claims, die.id, 'conjoined') ? 2 : 1) : 0), 0));
+      if (fixed.some(die => !ranks.includes(activeFace(die).rank)) || counts.some((count, i) => count > groups[i])) return false;
+      return assignVariables(0, ranks, counts);
+    }
+    return HAND_RANKS.some(rank => !ranks.includes(rank) && assignGroups(group + 1, [...ranks, rank]));
+  }
+  return assignGroups(0, []) ? assignments : null;
 }
+const matchingGroupsValid = (dice: Die[], groups: readonly number[], claims: readonly QualificationClaim[] = []) =>
+  matchingVirtualValues(dice, groups, claims) !== null;
 
 export function combinationsForHand(dice: Die[], hand: HandId, roundState?: DieRoundState): number[][] {
   const rule = HANDS[hand];
@@ -198,10 +209,10 @@ export function isValidSelection(dice: Die[], hand: HandId, selected: number[], 
  */
 export interface QualificationPlanningOptions {
   roundState?: DieRoundState;
-  claims?: readonly QualificationClaim[];
+  claims?: readonly (Omit<QualificationClaim, 'effectInstanceId'> & { effectInstanceId?: string })[];
 }
 
-function claimKey(claim: QualificationClaim): string { return `${claim.dieId}:${claim.effect}`; }
+function claimKey(claim: QualificationClaim): string { return `${claim.dieId}:${claim.effect}:${claim.effectInstanceId}`; }
 function claimSets(claims: QualificationClaim[]): QualificationClaim[][] {
   return claims.reduce<QualificationClaim[][]>((sets, claim) => [...sets, ...sets.map(set => [...set, claim])], [[]]);
 }
@@ -213,13 +224,19 @@ export function planQualification(dice: Die[], hand: HandId, selected: readonly 
   const validShape = new Set(requestedDieIds).size === requestedDieIds.length && selectedDice.length === requestedDieIds.length;
   const rule = HANDS[hand];
   const candidates: QualificationClaim[] = selectedDice.flatMap<QualificationClaim>(die => {
-    if (die.owner !== 'player' || wholeDieEffectSuppressed(die)
-      || (options.roundState && (options.roundState[die.id]?.invocationsRemaining ?? 0) <= 0)) return [];
-    if ((hand === 'smallStraight' || hand === 'largeStraight') && die.type === 'missingLink')
-      return [{ dieId: die.id, effect: 'missingLink' as const }];
-    if (rule.groups && die.type === 'mirror') return [{ dieId: die.id, effect: 'mirror' as const }];
-    if ((rule.groups || rule.rank) && die.type === 'conjoined') return [{ dieId: die.id, effect: 'conjoined' as const }];
-    return [];
+    if (die.owner !== 'player' || wholeDieEffectSuppressed(die)) return [];
+    const available = (effect: ReturnType<typeof effectOf>) => !!effect
+      && (!options.roundState || (effectRuntime(options.roundState[die.id], effect)?.invocationsRemaining ?? 0) > 0);
+    const claims: QualificationClaim[] = [];
+    const missing = effectOf(die, 'missingLink');
+    const mirror = effectOf(die, 'mirror');
+    const conjoined = effectOf(die, 'conjoined');
+    if ((hand === 'smallStraight' || hand === 'largeStraight') && available(missing))
+      claims.push({ dieId: die.id, effect: 'missingLink', effectInstanceId: missing!.id });
+    if (rule.groups && available(mirror)) claims.push({ dieId: die.id, effect: 'mirror', effectInstanceId: mirror!.id });
+    if ((rule.groups || rule.rank) && available(conjoined))
+      claims.push({ dieId: die.id, effect: 'conjoined', effectInstanceId: conjoined!.id });
+    return claims;
   });
   const validWith = (claims: QualificationClaim[]) => {
     if (!validShape) return false;
@@ -231,18 +248,22 @@ export function planQualification(dice: Die[], hand: HandId, selected: readonly 
   const minimumClaims = validSets.length ? Math.min(...validSets.map(set => set.length)) : Number.POSITIVE_INFINITY;
   let claimOptions = validSets.filter(set => set.length === minimumClaims)
     .map(set => set.map(claim => ({ ...claim, resource: 'invocation' as const, amount: 1 })));
-  // An Upper Hand already qualifies from one matching die. Claim an available Conjoined power
-  // so the same committed resource also creates its second genuine Score occurrence.
+  // Upper Hands already qualify naturally. Claim one available Conjoined effect anyway so
+  // the same committed resource can create its second genuine Score occurrence. Multiple
+  // eligible Conjoined dice remain an explicit player choice rather than spending all Uses.
   if (rule.rank && validWith([])) {
     const conjoined = candidates.filter(claim => claim.effect === 'conjoined');
     if (conjoined.length) claimOptions = conjoined.map(claim => [{ ...claim, resource: 'invocation' as const, amount: 1 }]);
   }
-  const requestedClaims = options.claims?.map(claim => ({ ...claim, resource: 'invocation' as const, amount: 1 })) ?? [];
+  const requestedClaims = options.claims?.map(claim => ({ ...claim,
+    effectInstanceId: claim.effectInstanceId ?? candidates.find(candidate => candidate.dieId === claim.dieId && candidate.effect === claim.effect)?.effectInstanceId ?? '',
+    resource: 'invocation' as const, amount: 1 })) ?? [];
   const requestedKey = requestedClaims.map(claimKey).sort().join('|');
   const chosen = requestedClaims.length
     ? claimOptions.find(option => option.map(claimKey).sort().join('|') === requestedKey)
     : claimOptions.length === 1 ? claimOptions[0] : undefined;
   const legal = claimOptions.length > 0 && (!requestedClaims.length || !!chosen);
+  const virtualValues = legal && rule.groups ? matchingVirtualValues(selectedDice, rule.groups, chosen ?? []) : null;
   const effects = legal ? selectedDice.flatMap(die => {
     const face = activeFace(die);
     const participating: QualificationEffect[] = [];
@@ -250,7 +271,12 @@ export function planQualification(dice: Die[], hand: HandId, selected: readonly 
     if (HANDS[hand].groups && hexerMatchingWild(die)) participating.push('hexerWild');
     return participating.map(effect => ({ dieId: die.id, face: face.rank, effect }));
   }).concat((chosen ?? []).map(claim => ({ dieId: claim.dieId,
-    face: activeFace(selectedDice.find(die => die.id === claim.dieId)!).rank, effect: claim.effect }))) : [];
+    face: activeFace(selectedDice.find(die => die.id === claim.dieId)!).rank, effect: claim.effect,
+    effectInstanceId: claim.effectInstanceId,
+    ...(claim.effect === 'mirror' && virtualValues?.has(claim.dieId) ? { virtualValue: virtualValues.get(claim.dieId) } : {}),
+    ...(claim.effect === 'conjoined' ? { virtualDuplicateCount: 1,
+      ...(virtualValues?.has(claim.dieId) ? { virtualValue: virtualValues.get(claim.dieId) } : {}) } : {}),
+  }))) : [];
   return {
     hand,
     requestedDieIds,

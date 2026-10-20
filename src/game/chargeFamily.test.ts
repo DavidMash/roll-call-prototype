@@ -6,7 +6,7 @@ import {
   flameByType, placeFlameInstance, recalculateMaxCharge, removeFlameInstance, thirdRailChargeGain,
 } from './flames';
 import { ultimateHands } from './hands';
-import { resetDieRoundState } from './specialDice';
+import { createDieEffect, resetDieRoundState } from './specialDice';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
 import type { Flame, GameState, RandomSource, Rank } from './types';
 
@@ -43,7 +43,7 @@ describe('Charge-family generation', () => {
   it('counts a Jumping Bean free play for Momentum', () => {
     const state = game([6, 2, 4, 5, 6]);
     flame(state, 1, 'momentum', 100);
-    rosterDice(state)[0].type = 'jumpingBean';
+    rosterDice(state)[0].effects = [createDieEffect(rosterDice(state)[0].id, 'jumpingBean')];
     syncActiveDiceProjection(state);
     state.dieRoundState = resetDieRoundState(rosterDice(state));
     const result = dispatch(state, { type: 'INVOKE_JUMPING_BEAN', dieId: 0 }, sequence(.4, .99));
@@ -61,7 +61,7 @@ describe('Charge-family generation', () => {
     expect(state.chargeXMult).toBe(2);
 
     state.phase = 'shop';
-    state.shop = { stage: 'fireKeeping', offers: [], offerRerolls: 0, lifeRestores: 0 };
+    state.shop = { stage: 'flames', offers: [], offerRerolls: 0, lifeRestores: 0 };
     const nextRound = dispatch(state, { type: 'NEXT_ROUND' }, constant(.4)).state;
     expect(nextRound.dice.every(die => die.value === 3)).toBe(true);
     expect(nextRound.chargeXMult).toBe(3.5);
@@ -123,7 +123,7 @@ describe('Power Surge', () => {
     flame(state, 1, 'powerSurge', 100);
     state.handLevels.threes = 2;
     state.chargeXMult = 2;
-    rosterDice(state)[0].type = 'jumpingBean';
+    rosterDice(state)[0].effects = [createDieEffect(rosterDice(state)[0].id, 'jumpingBean')];
     syncActiveDiceProjection(state);
     state.dieRoundState = resetDieRoundState(rosterDice(state));
     const result = dispatch(state, { type: 'INVOKE_JUMPING_BEAN', dieId: 0 }, sequence(.4, .99));

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dispatch, newRun } from './engine';
 import { finalizeScore, handScore } from './scoring';
-import { resetDieRoundState } from './specialDice';
+import { createDieEffect, resetDieRoundState } from './specialDice';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
 import type { RandomSource, Rank } from './types';
 
@@ -19,8 +19,7 @@ describe('whole-die scoring', () => {
   it('uses printed pips, hand stats, and a whole Bonus die exactly once', () => {
     const state = newRun('whole-score', constant()).state;
     ([4, 4, 4, 2, 6] as Rank[]).forEach((rank, index) => { state.dice[index].value = rank; });
-    rosterDice(state)[0].type = 'bonus';
-    rosterDice(state)[0].level = 2;
+    rosterDice(state)[0].effects = [createDieEffect(rosterDice(state)[0].id, 'bonus', 2)];
     syncActiveDiceProjection(state);
     state.dieRoundState = resetDieRoundState(rosterDice(state));
     const preview = handScore(state.dice, 'threeKind', [0, 1, 2]);

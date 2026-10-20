@@ -6,7 +6,7 @@ import {
 } from './selection';
 import type { Selection } from './selection';
 import type { GameState, Rank } from './types';
-import { resetDieRoundState } from './specialDice';
+import { createDieEffect, resetDieRoundState } from './specialDice';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
 
 function game(values: Rank[]): GameState {
@@ -30,7 +30,7 @@ describe('board-based hand availability and scorecard cycling', () => {
 
   it('prefers highest projected score, then cycles every Pair combination and deselects', () => {
     const state = game([4, 4, 4, 2, 6]);
-    rosterDice(state)[1].type = 'bonus';
+    rosterDice(state)[1].effects = [createDieEffect(rosterDice(state)[1].id, 'bonus')];
     syncActiveDiceProjection(state);
     expect(legalHandCombinations(state, 'pair')).toEqual([[0, 1], [1, 2], [0, 2]]);
     let selection = selectBoardHand(state, emptySelection(), 'pair');
@@ -44,7 +44,7 @@ describe('board-based hand availability and scorecard cycling', () => {
 
   it('prioritizes compatible manual dice before projected score', () => {
     const state = game([4, 4, 4, 2, 6]);
-    rosterDice(state)[1].type = 'bonus';
+    rosterDice(state)[1].effects = [createDieEffect(rosterDice(state)[1].id, 'bonus')];
     syncActiveDiceProjection(state);
     const manual = { hand: null, dieIds: [2], intent: 'manual' as const };
     expect(selectBoardHand(state, manual, 'pair').dieIds).toEqual([1, 2]);
@@ -61,8 +61,8 @@ describe('board-based hand availability and scorecard cycling', () => {
 
   it('cycles evaluator-qualified Missing Link organizations', () => {
     const state = game([1, 2, 3, 6, 6]);
-    rosterDice(state)[3].type = 'missingLink';
-    rosterDice(state)[4].type = 'missingLink';
+    rosterDice(state)[3].effects = [createDieEffect(rosterDice(state)[3].id, 'missingLink')];
+    rosterDice(state)[4].effects = [createDieEffect(rosterDice(state)[4].id, 'missingLink')];
     syncActiveDiceProjection(state);
     state.dieRoundState = resetDieRoundState(rosterDice(state));
     const combinations = legalHandCombinations(state, 'smallStraight');

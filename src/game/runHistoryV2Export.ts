@@ -33,8 +33,8 @@ export function renderRunSummaryV2(state: GameState): string {
   const largest = experienced.largestHand
     ? `${HANDS[experienced.largestHand.hand].name} ${number(experienced.largestHand.score)} · R${number(experienced.largestHand.round)} A${number(experienced.largestHand.attempt)}${experienced.largestHand.abandoned ? ' · rolled back' : ''}`
     : 'None';
-  const dieBuildLabel = (item: typeof canonical.ownedDice[number]) => `${SPECIAL_DICE[item.dieType].name} Lv${item.level}`
-    + (item.vintageAppreciation > 0 ? ` (+${number(item.vintageAppreciation)} Vintage)` : '')
+  const dieBuildLabel = (item: typeof canonical.ownedDice[number]) => (item.effects.length
+    ? item.effects.map(effect => `${SPECIAL_DICE[effect.type].name} Lv${effect.level}`).join(' + ') : 'Normal')
     + ` [ID #${item.dieId}]`;
   const roster = canonical.ownedDice.filter(item => item.rosterSlot !== null)
     .sort((a, b) => a.rosterSlot! - b.rosterSlot!).map(item => `R${item.rosterSlot! + 1} ${dieBuildLabel(item)}`).join(' · ') || 'None';
@@ -72,6 +72,7 @@ export function renderRunSummaryV2(state: GameState): string {
     '',
     'ECONOMY · CANONICAL',
     `Final Gold: ${number(canonical.finalGold)}`,
+    `Final Temper: ${number(canonical.finalTemper)} · earned ${number(experienced.temperEarned)} (${entries(experienced.temperBySource)}) · spent ${number(experienced.temperSpent)} (${entries(experienced.temperSpentBySource)})`,
     `Earned: ${entries(canonical.goldEarnedBySource)}`,
     `Spent: ${entries(canonical.goldSpentByCategory)}`,
     `Training spend: ${number(canonical.trainingGoldSpent)} Gold`,

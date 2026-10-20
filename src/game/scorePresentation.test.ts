@@ -3,6 +3,7 @@ import { newRun, dispatch } from './engine';
 import { scoreAnnouncement, scorePresentation } from './scorePresentation';
 import type { GameEvent } from './types';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
+import { createDieEffect } from './specialDice';
 
 describe('score resolution presentation', () => {
   it('begins at authoritative Base Pips and Mult without an empty XMult stage', () => {
@@ -26,7 +27,7 @@ describe('score resolution presentation', () => {
     state.target = 1_000_000n;
     const die = rosterDice(state)[0];
     die.value = 1;
-    die.type = 'bonus';
+    die.effects = [createDieEffect(die.id, 'bonus')];
     syncActiveDiceProjection(state);
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] });
     const bonus = result.events.find(event => event.type === 'HAND_PIPS_CHANGED' && event.dieType === 'bonus')!;

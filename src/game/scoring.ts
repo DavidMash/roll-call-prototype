@@ -2,7 +2,7 @@ import { CONFIG } from './config';
 import { activeFace, scoringPips } from './dice';
 import { handStats } from './hands';
 import { exactInferno, exactWeightedFactorAverage, finalizeExactScore, type ExactScore } from './scoreMath';
-import type { Die, Face, HandId, HandScoreAccumulator } from './types';
+import type { Die, Face, HandId, HandScoreAccumulator, SpecialDieType } from './types';
 
 export const INFERNO_BASE = 25;
 export const infernoMultiplier = (level: number): ExactScore => exactInferno(Math.max(0, Math.floor(level)));
@@ -13,6 +13,7 @@ export interface HandScoreContribution {
   dieId: number;
   face: Face;
   amount: number;
+  effectType?: SpecialDieType;
   /** Effect owners when another die's Score receives this contribution. */
   sourceDieIds?: number[];
 }

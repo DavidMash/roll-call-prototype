@@ -1,12 +1,13 @@
 import type {
   BossFaceMutation, BossType, ChallengeId, DiceRarity, DiceSlotRef, DieType, EngulfmentAssetRef, Flame, FlameInstanceId, GoldSource, GoldSpendSource, HandId, HandPlaySource,
   FlameSlotIndex, FlameStage, HexerFaceEffect, InfernoEvaluationState, Rarity, Rank, RunNodeType, ShopStage, SpecialOfferType,
+  SpecialDieType, TemperSource, TemperSpendSource,
 } from './types';
 import type { RoundGoalBreakdown } from './goals';
 import type { ExactDecimal, ExactScore } from './scoreMath';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 16 as const;
-export const RUN_HISTORY_V2_RULESET = 'whole-dice-only-v1' as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 17 as const;
+export const RUN_HISTORY_V2_RULESET = 'composable-effects-temper-forge-v1' as const;
 
 export interface RunHistoryV2Coverage {
   complete: boolean;
@@ -33,24 +34,14 @@ export interface HistoryDieState {
   dieId: number;
   owner: 'player' | 'boss';
   rosterSlot: number | null;
-  collectibleType?: import('./types').DieType;
-  level?: number;
+  effects?: import('./types').DieEffectInstance[];
   encounterId?: string;
   physicalFace: Rank;
   face: Rank;
   pips: number;
   bossMutation: BossFaceMutation | null;
   encounterFaceEffect?: HexerFaceEffect;
-  specialRuntime?: {
-    invocationsRemaining: number;
-    temporaryPips: number;
-    goldenGoldEarned: number;
-    clockworkRolls: number;
-    furnaceUnits: number;
-    magicArmedFace: Exclude<Rank, 7> | null;
-    weightedFace: Exclude<Rank, 7>;
-    freePlayUsesByFace: Record<Exclude<Rank, 7>, number>;
-  };
+  specialRuntime?: import('./types').DieRoundRuntime;
 }
 
 export interface PipsContribution {
@@ -60,6 +51,7 @@ export interface PipsContribution {
   face?: Rank;
   role?: 'selected' | 'hitchhiker';
   sourceDieIds?: number[];
+  effectType?: SpecialDieType;
 }
 
 export interface MultContribution {
@@ -85,7 +77,7 @@ export interface XMultContribution {
 export type HandSideEffect =
   | { type: 'gold'; source: GoldSource; amount: number; dieId?: number }
   | { type: 'double_time'; dieId: number; succeeded: boolean }
-  | { type: 'special_die'; dieId: number; dieType: import('./types').DieType; detail: string;
+  | { type: 'special_die'; dieId: number; dieType: import('./types').SpecialDieType; effectInstanceId: string; detail: string;
       invocationBefore?: number; invocationAfter?: number }
   | { type: 'charge'; operation: 'gain' | 'consume_reset' | 'arm' | 'disarm'; before: number; after: number; source?: Flame }
   | { type: 'flame_activation'; flame: Flame; origin: FlameOrigin; dieId?: number; factor?: number }
@@ -142,7 +134,7 @@ export type RollEffect =
   | { type: 'charge'; source: Flame; before: number; after: number }
   | { type: 'flame_activation'; flame: Flame; origin: FlameOrigin; dieIds: number[] }
   | { type: 'boss'; boss: BossType; change: string; dieIds: number[] }
-  | { type: 'special_die'; dieId: number; dieType: import('./types').DieType; detail: string;
+  | { type: 'special_die'; dieId: number; dieType: import('./types').SpecialDieType; effectInstanceId: string; detail: string;
       invocationBefore?: number; invocationAfter?: number };
 
 export interface RollBatchEvent extends RunHistoryV2Envelope {
@@ -204,7 +196,8 @@ export interface ShopVisitStartedEvent extends RunHistoryV2Envelope {
 export interface SpecialDieActivatedEvent extends RunHistoryV2Envelope {
   kind: 'special_die_activated';
   dieId: number;
-  dieType: DieType;
+  dieType: SpecialDieType;
+  effectInstanceId: string;
   level: number;
   context: 'hand' | 'roll' | 'command' | 'other';
   effectCause: string;
@@ -239,7 +232,7 @@ export interface TeamTrainingAppliedEvent extends RunHistoryV2Envelope {
 export interface ShopVisitCompletedEvent extends RunHistoryV2Envelope {
   kind: 'shop_visit_completed';
   shopVisitId: number;
-  stage: Exclude<ShopStage, 'dice'>;
+  stage: Exclude<ShopStage, 'shop'>;
   progression: 'next_round' | 'retry_round' | 'next_chapter';
 }
 
@@ -290,14 +283,13 @@ export type ShopTransaction =
   | { type: 'gold_earned'; source: GoldSource; amount: number }
   | { type: 'round_payout'; sources: Partial<Record<GoldSource, number>>; total: number }
   | { type: 'gold_spent'; source: GoldSpendSource; amount: number }
-  | { type: 'dice_purchased'; shopVisitId: number; offerId: number; dieId: number; dieType: DieType; level: number;
+  | { type: 'dice_purchased'; shopVisitId: number; offerId: number; dieId: number; dieType: SpecialDieType; level: number;
       rarity: DiceRarity; listedPrice: number; pricePaid: number; destination: DiceSlotRef }
-  | { type: 'dice_sold'; dieId: number; dieType: DieType; level: number; source: DiceSlotRef;
-      baseSellValue: number; vintageAppreciation: number; proceeds: number }
+  | { type: 'dice_sold'; dieId: number; effects: import('./types').DieEffectInstance[]; source: DiceSlotRef;
+      componentSalvage: number; complexityPremium: number; vintageAppreciation: number; proceeds: number }
   | { type: 'dice_moved'; source: DiceSlotRef; destination: DiceSlotRef; sourceDieId: number; destinationDieId: number | null }
-  | { type: 'dice_fused'; sourceId: number; sourceType: DieType; sourceLevel: number; destinationId: number;
-      destinationType: DieType; destinationLevel: number; resultingLevel: number; destination: DiceSlotRef;
-      vintageAppreciation: number }
+  | { type: 'dice_fused'; sourceId: number; destinationId: number; destination: DiceSlotRef;
+      effects: import('./types').DieEffectInstance[]; temperCost: string; forgeRating: string; operation: 'fusion' | 'forge' }
   | { type: 'dice_offers_rerolled'; cost: number; oldOfferIds: number[]; newOfferIds: number[]; rerollCount: number }
   | { type: 'training'; shopVisitId: number; hand: HandId; family: 'upper' | 'lower'; fromLevel: number; toLevel: number;
       frozenBaseline: number; relativeTier: number; normalPrice: number | null; cost: number;
@@ -342,6 +334,15 @@ export interface BossStateChangedEvent extends RunHistoryV2Envelope {
   dieIds: number[];
   amount?: number | ExactScore;
   state?: string;
+}
+
+export interface TemperChangedEvent extends RunHistoryV2Envelope {
+  kind: 'temper_changed';
+  operation: 'earned' | 'spent';
+  source: TemperSource | TemperSpendSource;
+  amount: number;
+  balance: number;
+  shopVisitId: number | null;
 }
 
 export interface InfernoEvaluatedEvent extends RunHistoryV2Envelope {
@@ -419,7 +420,7 @@ export interface MapTransitionV2Event extends RunHistoryV2Envelope {
 
 export type RunHistoryV2Event = RunStartedEvent | ChapterStartedEvent | RoundAttemptStartedEvent | RollBatchEvent
   | HandScoredEvent | SpecialDieActivatedEvent | ShopVisitStartedEvent | ShopStageChangedEvent | TrainingSessionStartedEvent | TeamTrainingAppliedEvent | ShopVisitCompletedEvent
-  | ShopOffersPresentedEvent | ShopTransactionEvent | FlameChangedEvent | ChargeChangedEvent
+  | ShopOffersPresentedEvent | ShopTransactionEvent | TemperChangedEvent | FlameChangedEvent | ChargeChangedEvent
   | EngulfmentAttemptedEvent | InfernoEvaluatedEvent | InfernoSuspensionChangedEvent
   | BossStateChangedEvent | ScorecardRefreshedEvent | RoundAttemptFinishedEvent
   | CheckpointRestoredEvent | RunFinishedEvent | ErrorEvent | MapTransitionV2Event;

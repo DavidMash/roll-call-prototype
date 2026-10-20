@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDice } from './dice';
 import { combinationsForHand, defaultCombination, HAND_IDS, isValidSelection, planQualification } from './hands';
-import { resetDieRoundState } from './specialDice';
+import { createDieEffect, resetDieRoundState } from './specialDice';
 import type { CollectibleDie, HandId, Rank } from './types';
 
 function board(values: Rank[]): CollectibleDie[] {
@@ -28,7 +28,7 @@ describe('hand detection', () => {
 
   it('qualifies only through whole-die effects and never mutates a preview', () => {
     const dice = board([2, 3, 4, 5, 6]);
-    dice[0].type = 'mirror';
+    dice[0].effects = [createDieEffect(dice[0].id, 'mirror')];
     const runtime = resetDieRoundState(dice);
     const before = structuredClone({ dice, runtime });
     const plan = planQualification(dice, 'pair', [0, 1], { roundState: runtime });

@@ -7,6 +7,7 @@ import type { ExactScore } from '../game/scoreMath';
 import { scoreAnnouncement, scorePresentation, type ScoreMetric } from '../game/scorePresentation';
 import type { ReactNode } from 'react';
 import { DieTypeIcon, DieTypeLabel } from './DieTypeLabel';
+import { isSpecialDieType } from '../game/specialDice';
 
 function ScoreBox({ label, value, color, active, tutorial }: {
   label: 'INFERNO' | 'PIPS' | 'MULT' | 'XMULT';
@@ -35,7 +36,8 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText }: {
   scoreText?: string;
 }) {
   const score = scorePresentation(event);
-  const scoreDieType = event?.dieType ?? (event?.type === 'HITCHHIKER_ADDED_PIPS' ? 'hitchhiker' : null);
+  const scoreDieType = isSpecialDieType(event?.dieType) ? event.dieType
+    : event?.type === 'HITCHHIKER_ADDED_PIPS' ? 'hitchhiker' : null;
   let heading: ReactNode = idleText ?? '';
   if (event?.type === 'HAND_SCORE_FINALIZED' || event?.type === 'STANDALONE_SCORE_CALCULATED') heading = `+${typeof event.amount === 'bigint' ? formatExactScore(event.amount) : formatPlayerNumber(event.amount ?? 0)}`;
   else if (event?.type === 'JUMPING_BEAN_FREE_PLAY' && event.hand) heading = <><DieTypeIcon type="jumpingBean" /> JUMPING BEAN · FREE {HANDS[event.hand].name.toUpperCase()}</>;
@@ -44,9 +46,11 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText }: {
     heading = scoreAmount < 0n ? `−${formatExactScore(-scoreAmount)}` : `+${formatExactScore(scoreAmount)}`;
   }
   else if (event?.flame) heading = FLAMES[event.flame].name.toUpperCase();
-  else if (event?.dieType) heading = <DieTypeLabel type={event.dieType} />;
+  else if (isSpecialDieType(event?.dieType)) heading = <DieTypeLabel type={event.dieType} />;
   else if (event?.type === 'TRAINING_PURCHASED' && event.hand) heading = `${HANDS[event.hand].name} · Lv. ${formatPlayerNumber(event.board.handLevels[event.hand])}`;
   else if (event?.type === 'GOLD_ADDED') heading = `+${formatPlayerNumber(typeof event.amount === 'number' ? event.amount : 0)} Gold`;
+  else if (event?.type === 'TEMPER_CHANGED') heading = `${typeof event.amount === 'number' && event.amount > 0 ? '+' : ''}${formatPlayerNumber(typeof event.amount === 'number' ? event.amount : 0)} Temper`;
+  else if (event?.type === 'SCORECARD_REFRESHED') heading = 'BOARD REFRESH · +2 TEMPER';
   else if (event?.type === 'MANUAL_REROLL_STARTED') heading = 'Reroll';
   else if (event?.type === 'DEAD_BOARD') heading = 'Use a Reroll';
   else if (event?.type === 'DEAD_BOARD_RESCUED') heading = 'Dead board rescued';
@@ -57,6 +61,9 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText }: {
   return <Paper className={`resolution ${busy ? 'active' : ''}${score ? ' is-score-resolution' : ''}`} p="xs">
     <Group justify={scoreText ? 'space-between' : 'flex-end'} className="resolution-meta is-round-score">
       {scoreText && <Text className="round-score-readout" data-testid="round-score-progress" data-tutorial="goal">{scoreText}</Text>}
+      {scoreText && <Text component="span" className="overkill-temper-help" role="img"
+        aria-label="Overkill: +1 Temper per 20% above target · max +5"
+        title="Overkill: +1 Temper per 20% above target · max +5">ⓘ</Text>}
       {busy && <Button size="compact-xs" variant="subtle" color="gray" onClick={onSkip}>Skip playback</Button>}
     </Group>
     {score ? <div className="score-resolution-stage" data-testid="hand-accumulator">

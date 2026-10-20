@@ -4,7 +4,8 @@ import { infernoMultiplier } from './scoring';
 import { ownedDice } from './inventory';
 import { HAND_IDS } from './hands';
 import type {
-  DiceRarity, DieType, Flame, FlameInstance, GoldSource, GoldSpendSource, HandId, SpecialOfferType, GameState,
+  DiceRarity, DieEffectInstance, Flame, FlameInstance, GoldSource, GoldSpendSource, HandId, SpecialDieType, SpecialOfferType,
+  TemperSource, TemperSpendSource, GameState,
 } from './types';
 import type { RunHistoryV2Coverage, RunHistoryV2Event } from './runHistoryV2';
 import { exactRatioNumber, scoreMax, type ExactScore } from './scoreMath';
@@ -52,11 +53,15 @@ export interface ExperiencedRunMetrics {
     catchUpPurchases: number; relativeTierTotal: number; maximumRelativeTier: number; maximumNormalPrice: number }>>;
   diceEconomy: {
     purchases: number; sales: number; moves: number; fusions: number; purchaseGold: number; saleGold: number;
-    byType: Partial<Record<DieType, { purchased: number; sold: number; fused: number }>>;
+    byType: Partial<Record<SpecialDieType, { purchased: number; sold: number; fused: number }>>;
   };
-  specialDice: Partial<Record<DieType, { activations: number; invocationsSpent: number;
+  specialDice: Partial<Record<SpecialDieType, { activations: number; invocationsSpent: number;
     commandUses: number; scoreOccurrences: number; additionalScores: number }>>;
   shopRerollSpend: number;
+  temperEarned: number;
+  temperSpent: number;
+  temperBySource: Counts<TemperSource>;
+  temperSpentBySource: Counts<TemperSpendSource>;
   flameTimeline: { round: number; attempt: number; type: string; flame?: Flame; abandoned: boolean }[];
   flameActivations: Counts<Flame>;
   flameLifecycle: { acquired: number; replaced: number; stokedGold: number; bonfires: number; engulfed: number };
@@ -74,6 +79,7 @@ export interface CanonicalRunMetrics {
   finalBoss: string | null;
   roundsCleared: number;
   finalGold: number;
+  finalTemper: number;
   finalLives: number;
   infernoLevel: number;
   infernoMultiplier: ExactScore;
@@ -82,13 +88,13 @@ export interface CanonicalRunMetrics {
   highestClearedRoundScore: ExactScore;
   goldEarnedBySource: Record<GoldSource, number>;
   goldSpentByCategory: Record<GoldSpendSource, number>;
-  ownedDice: { dieId: number; dieType: DieType; level: number; vintageAppreciation: number;
+  ownedDice: { dieId: number; effects: DieEffectInstance[];
     rosterSlot: number | null; storageSlot: number | null }[];
   flameSlots: Array<{ slot: number; flame: FlameInstance }>;
   retainedPurchases: number;
   retainedTrainingPurchases: number;
   trainingGoldSpent: number;
-  retainedOffers: { dice: { dieType: DieType; rarity: DiceRarity; price: number }[]; trainableHands: number };
+  retainedOffers: { dice: { dieType: SpecialDieType; rarity: DiceRarity; price: number }[]; trainableHands: number };
 }
 
 export interface RunHistoryV2Summary {
@@ -123,7 +129,8 @@ function initialExperienced(): ExperiencedRunMetrics {
     trainingByHand: {},
     diceEconomy: { purchases: 0, sales: 0, moves: 0, fusions: 0, purchaseGold: 0, saleGold: 0, byType: {} },
     specialDice: {},
-    shopRerollSpend: 0, flameTimeline: [], flameActivations: {},
+    shopRerollSpend: 0, temperEarned: 0, temperSpent: 0, temperBySource: {}, temperSpentBySource: {},
+    flameTimeline: [], flameActivations: {},
     flameLifecycle: { acquired: 0, replaced: 0, stokedGold: 0, bonfires: 0, engulfed: 0 },
     charge: { gains: 0, arms: 0, consumes: 0, resets: 0 }, specialOffers: {},
     bossOutcomes: {},
@@ -165,15 +172,14 @@ function canonicalFromState(state: GameState | undefined, events: readonly RunHi
     finalChapter: chapterNumberForRound(finalRound), finalRound, finalLocalRound: chapterRoundForRound(finalRound),
     finalBoss: state?.boss?.type ?? (finished?.kind === 'run_finished' ? finished.finalBoss : null),
     roundsCleared: cleared.length,
-    finalGold: state?.gold ?? 0, finalLives: state?.lives ?? 0,
+    finalGold: state?.gold ?? 0, finalTemper: state?.temper ?? 0, finalLives: state?.lives ?? 0,
     infernoLevel: state?.engulfmentLevel ?? 0, infernoMultiplier: infernoMultiplier(state?.engulfmentLevel ?? 0),
     finalHandLevels: structuredClone(state?.handLevels ?? (finished?.kind === 'run_finished' ? finished.finalHandLevels : {})) as Record<HandId, number>,
     scoreByHand,
     highestClearedRoundScore: cleared.reduce((highest, round) => round.score > highest ? round.score : highest, 0n),
     goldEarnedBySource: earned,
     goldSpentByCategory: spent,
-    ownedDice: state ? ownedDice(state).map(die => ({ dieId: die.id, dieType: die.type, level: die.level,
-      vintageAppreciation: die.vintageAppreciation,
+    ownedDice: state ? ownedDice(state).map(die => ({ dieId: die.id, effects: structuredClone(die.effects),
       rosterSlot: state.diceInventory.roster.indexOf(die.id) >= 0 ? state.diceInventory.roster.indexOf(die.id) : null,
       storageSlot: state.diceInventory.storage.indexOf(die.id) >= 0 ? state.diceInventory.storage.indexOf(die.id) : null })) : [],
     flameSlots: state ? state.flameSlots.flatMap((flame, slot) => flame ? [{ slot, flame: structuredClone(flame) }] : []) : [],
@@ -216,12 +222,13 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
           }
         }
         for (const occurrence of event.scoreOccurrences) {
-          const dieType = event.scoringDice.find(die => die.dieId === occurrence.dieId)?.collectibleType;
-          if (!dieType) continue;
-          const metric = experienced.specialDice[dieType] ??= {
-            activations: 0, invocationsSpent: 0, commandUses: 0, scoreOccurrences: 0, additionalScores: 0 };
-          metric.scoreOccurrences++;
-          if (occurrence.additional) metric.additionalScores++;
+          const effects = event.scoringDice.find(die => die.dieId === occurrence.dieId)?.effects ?? [];
+          for (const effect of effects) {
+            const metric = experienced.specialDice[effect.type] ??= {
+              activations: 0, invocationsSpent: 0, commandUses: 0, scoreOccurrences: 0, additionalScores: 0 };
+            metric.scoreOccurrences++;
+            if (occurrence.additional) metric.additionalScores++;
+          }
         }
         break;
       }
@@ -286,13 +293,17 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
           type.purchased++;
         } else if (transaction.type === 'dice_sold') {
           experienced.diceEconomy.sales++; experienced.diceEconomy.saleGold += transaction.proceeds;
-          const type = experienced.diceEconomy.byType[transaction.dieType] ??= { purchased: 0, sold: 0, fused: 0 };
-          type.sold++;
+          for (const effect of transaction.effects) {
+            const type = experienced.diceEconomy.byType[effect.type] ??= { purchased: 0, sold: 0, fused: 0 };
+            type.sold++;
+          }
         } else if (transaction.type === 'dice_moved') experienced.diceEconomy.moves++;
         else if (transaction.type === 'dice_fused') {
           experienced.diceEconomy.fusions++;
-          const type = experienced.diceEconomy.byType[transaction.destinationType] ??= { purchased: 0, sold: 0, fused: 0 };
-          type.fused++;
+          for (const effect of transaction.effects) {
+            const type = experienced.diceEconomy.byType[effect.type] ??= { purchased: 0, sold: 0, fused: 0 };
+            type.fused++;
+          }
         }
         if (transaction.type === 'life_restored') experienced.livesRestored += transaction.livesAfter - transaction.livesBefore;
         if (transaction.type === 'special_offer_selected') add(experienced.specialOffers, transaction.offer, 1);
@@ -309,6 +320,15 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
         else if (change.type === 'bonfire_created') experienced.flameLifecycle.bonfires++;
         break;
       }
+      case 'temper_changed':
+        if (event.operation === 'earned') {
+          experienced.temperEarned += event.amount;
+          add(experienced.temperBySource, event.source as TemperSource, event.amount);
+        } else {
+          experienced.temperSpent += event.amount;
+          add(experienced.temperSpentBySource, event.source as TemperSpendSource, event.amount);
+        }
+        break;
       case 'engulfment_attempted': experienced.flameLifecycle.engulfed += event.flamesSnuffed.length; break;
       case 'charge_changed':
         if (event.operation === 'gain') experienced.charge.gains += Math.max(0, event.after - event.before);

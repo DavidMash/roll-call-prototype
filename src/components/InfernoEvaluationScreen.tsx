@@ -68,6 +68,7 @@ export function InfernoEvaluationScreen({ board, submit }: {
       <Stack gap={3} mt="md">
         <Text fw={800}>Upper hand levels unify → Lv.{formatPlayerNumber(evaluation.upper.unifiedLevel)}</Text>
         <Text fw={800}>Lower hand levels unify → Lv.{formatPlayerNumber(evaluation.lower.unifiedLevel)}</Text>
+        <Text size="sm" c="orange" fw={900} mt={5}>Successful Engulfment: +25 Temper</Text>
         <Text size="xs" c="red.3" fw={800} mt={5}>Engulfment cannot be undone.</Text>
       </Stack>
     </Paper>
@@ -88,6 +89,7 @@ export function InfernoEvaluationScreen({ board, submit }: {
     </Badge>)}</div>
     <Text>Upper hands unified → Lv.{formatPlayerNumber(evaluation.upper.unifiedLevel)}</Text>
     <Text>Lower hands unified → Lv.{formatPlayerNumber(evaluation.lower.unifiedLevel)}</Text>
+    <Text c="orange" fw={900}>+25 TEMPER</Text>
     {evaluation.consumedFinalFlame && <Text c="orange">The Inferno craves more Flames.</Text>}
     <Button color="red" variant="white" onClick={() => submit({ type: 'CONTINUE_INFERNO_EVALUATION' })}>CONTINUE</Button>
   </Stack>;

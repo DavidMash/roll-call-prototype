@@ -14,7 +14,7 @@ const constant = (value = 0): RandomSource => ({ next: () => value });
 function miniBossRound(type: MiniBossType, prepare?: (state: GameState) => void, random: RandomSource = constant(.2)): GameState {
   const state = newRun(`mini-${type}`, constant(.2)).state;
   state.phase = 'shop';
-  state.shop = { stage: 'fireKeeping', offers: [], offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { stage: 'flames', offers: [], offerRerolls: 0, lifeRestores: 0 };
   state.round = 2;
   state.currentNodeId = 'shop:before-round:3';
   state.bossSchedule[3] = type;
@@ -232,7 +232,7 @@ describe('Mini-Boss mechanics', () => {
     loaded.manualRerollsRemaining = 0;
     new Resolver(loaded, constant(.2)).evaluate();
     expect(loaded.phase).toBe('shop');
-    loaded.shop!.stage = 'fireKeeping';
+    loaded.shop!.stage = 'flames';
     const retry = dispatch(loaded, { type: 'RETRY_ROUND' }, constant(.2)).state;
     expect(retry.boss).toMatchObject({ type: 'neglected', handsPlayed: 0, restored: false });
     if (retry.boss?.type === 'neglected')
@@ -307,7 +307,7 @@ describe('Mini-Boss mechanics', () => {
     expect(state.phase).toBe('shop');
     expect(state.boss).toBeNull();
     expect(flameByType(state, 'momentum')).toMatchObject({ investedGold: 50 });
-    state.shop!.stage = 'fireKeeping';
+    state.shop!.stage = 'flames';
     state = dispatch(state, { type: 'RETRY_ROUND' }, constant(.2)).state;
     expect(state.boss).toMatchObject({ type: 'magician', missingDieId: preview.missingDieId, returned: false });
     expect(flameByType(state, 'momentum')).toMatchObject({ investedGold: 50 });

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { dispatch, newRun } from './engine';
 import { HAND_IDS } from './hands';
 import { playbackBoard, rollBatchPresentation, SCORECARD_REFRESH_HOLD_MS, scoreSummaryJump } from './playback';
-import { resetDieRoundState } from './specialDice';
+import { createDieEffect, resetDieRoundState } from './specialDice';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
 
 describe('score summary playback checkpoint', () => {
@@ -60,7 +60,7 @@ describe('simultaneous roll batch presentation', () => {
 
   it('keeps non-dice state on a whole-die controller frame while projecting settled faces', () => {
     const state = newRun('simultaneous-clockwork-roll').state;
-    rosterDice(state)[0].type = 'clockwork';
+    rosterDice(state)[0].effects = [createDieEffect(rosterDice(state)[0].id, 'clockwork')];
     syncActiveDiceProjection(state);
     state.dieRoundState = resetDieRoundState(rosterDice(state));
     state.dice[0].value = 1;

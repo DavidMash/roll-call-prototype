@@ -30,7 +30,7 @@ export function FlameDetailsModal({ board, inventory: _inventory, target, busy, 
     return Number.isFinite(parsed) ? Math.max(0, Math.min(Math.floor(parsed), maxStoke)) : maxStoke;
   }
   const amount = normalizedAmount(stokeDraft);
-  const canStoke = isEmber && board.phase === 'shop' && board.shop?.stage === 'fireKeeping' && actionsEnabled;
+  const canStoke = isEmber && board.phase === 'shop' && board.shop?.stage === 'flames' && actionsEnabled;
   useEffect(() => { setStokeDraft('0'); }, [target?.flameInstanceId, target?.flame, target?.kind]);
   if (!flameId) return null;
   const definition = FLAMES[flameId];
@@ -56,6 +56,7 @@ export function FlameDetailsModal({ board, inventory: _inventory, target, busy, 
       <div className="flame-detail-progress"><Group justify="space-between"><Text size="sm" fw={800}>Investment: {formatPlayerNumber(invested)} / 100 Gold</Text>
         <Text size="xs" c="dimmed">{stage === 'bonfire' ? 'FULL STRENGTH' : 'BONFIRE AT 100'}</Text></Group>
         <Progress value={invested} color="orange" size="lg" mt={5} aria-label={`${definition.name} investment`} /></div>
+      {isEmber && <Text size="sm" fw={850} c="orange">Complete this Bonfire: +10 Temper</Text>}
       <div className="modal-stat flame-current-effect" data-testid="flame-current-effect">
         {details.maxChargeContribution !== null && <Text size="sm"><strong>Max Flame Contribution:</strong> +{formatPlayerNumber(details.maxChargeContribution)} Max Charge</Text>}
         <Text size="sm"><strong>{details.currentLabel}:</strong> {details.currentValue}</Text>

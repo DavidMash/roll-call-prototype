@@ -3,7 +3,7 @@ import { dispatch, newRun } from './engine';
 import { handStats, HAND_IDS, LOWER_HAND_IDS, relativeHandStrengthTiers, startingBasePips, UPPER_HAND_IDS } from './hands';
 import { handScore } from './scoring';
 import type { GameState, HandId, Rank } from './types';
-import { resetDieRoundState } from './specialDice';
+import { createDieEffect, resetDieRoundState } from './specialDice';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
 
 const constant = (value = 0.99) => ({ next: () => value });
@@ -89,7 +89,7 @@ describe('authoritative current-round scorecard totals', () => {
     game = dispatch(game, { type: 'PLAY', hand: 'smallStraight', dieIds: [0, 1, 2, 3] }, constant()).state;
     expect(game.scoreByHand).toEqual({ pair: 24n, smallStraight: 50n });
     game.phase = 'shop';
-    game.shop = { stage: 'fireKeeping', offers: [], offerRerolls: 0, lifeRestores: 0 };
+    game.shop = { stage: 'flames', offers: [], offerRerolls: 0, lifeRestores: 0 };
     const next = dispatch(game, { type: 'NEXT_ROUND' }, constant()).state;
     expect(next.scoreByHand).toEqual({});
     expect(next.effectScore).toBe(BigInt(0n));
@@ -97,7 +97,7 @@ describe('authoritative current-round scorecard totals', () => {
 
   it('attributes Jumping Bean free-play score to its Upper category, not Effect Score', () => {
     const game = board([1, 2, 3, 4, 5]);
-    rosterDice(game)[0].type = 'jumpingBean';
+    rosterDice(game)[0].effects = [createDieEffect(rosterDice(game)[0].id, 'jumpingBean')];
     syncActiveDiceProjection(game);
     game.dieRoundState = resetDieRoundState(rosterDice(game));
     game.dice[0].value = 6;

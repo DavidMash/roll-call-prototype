@@ -35,7 +35,7 @@ import {
 } from './specialOffers';
 import { createTrainingSession } from './training';
 import type { ChargeFlame, HandStartSnapshot } from './flames';
-import type { CollectibleDie, EventRecord, Face, Flame, FlameInstanceId, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, Rank, RunNode, ScoreSource, SpecialOffer } from './types';
+import type { CollectibleDie, DieEffectInstance, EventRecord, Face, Flame, FlameInstanceId, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, Rank, RunNode, ScoreSource, SpecialDieType, SpecialOffer, TemperSource, TemperSpendSource } from './types';
 import type {
   FlameOrigin, HandSideEffect, HistoryDieState, MultContribution, PipsContribution,
   RollEffect, RollReason, RunHistoryV2Event, RunHistoryV2EventInput, XMultContribution,
@@ -44,7 +44,7 @@ import { Decimal, roundPositiveScoreHalf, type ExactScore } from './scoreMath';
 import { createPlayIntent, createRollBatchIntent, createRollIntent } from './resolution';
 import { activeDieLabel, orderDieIdsByEncounter, rosterDice, rosterSlotOf, syncActiveDiceProjection } from './inventory';
 import type { PlayIntent, QualificationPlan, RollBatchIntent, RollContext, RollIntent, RollResolution, ScoreOccurrence } from './resolution';
-import { resetDieRoundState, SPECIAL_DICE } from './specialDice';
+import { effectOf, effectRuntime, hasEffect, requireEffect, resetDieRoundState, runtimeFor, SPECIAL_DICE } from './specialDice';
 
 type RollTrigger = { dieId: number; face: Face; kind: 'specialFreePlay'; rerollEventId: string };
 type V2HandDraft = {
@@ -112,42 +112,42 @@ export class Resolver {
 
   private dieLabel(dieId: number): string { return activeDieLabel(this.state, dieId); }
 
-  private specialRuntime(dieId: number) {
-    return this.state.dieRoundState[dieId];
+  private specialRuntime(die: CollectibleDie, type: SpecialDieType) {
+    return runtimeFor(die, this.state.dieRoundState[die.id], type);
   }
 
-  private emitSpecial(die: CollectibleDie, detail: string, effectCause: string,
+  private emitSpecial(die: CollectibleDie, effect: DieEffectInstance, detail: string, effectCause: string,
     invocationBefore?: number, invocationAfter?: number, extra: Partial<EventRecord> = {}): void {
-    this.v2Hand?.sideEffects.push({ type: 'special_die', dieId: die.id, dieType: die.type, detail,
+    this.v2Hand?.sideEffects.push({ type: 'special_die', dieId: die.id, dieType: effect.type, effectInstanceId: effect.id, detail,
       ...(invocationBefore === undefined ? {} : { invocationBefore }),
       ...(invocationAfter === undefined ? {} : { invocationAfter }) });
-    this.emitV2({ kind: 'special_die_activated', dieId: die.id, dieType: die.type, level: die.level,
+    this.emitV2({ kind: 'special_die_activated', dieId: die.id, dieType: effect.type, effectInstanceId: effect.id, level: effect.level,
       context: this.v2Hand ? 'hand' : this.v2Roll ? 'roll' : effectCause === 'on_command' ? 'command' : 'other',
       effectCause, detail,
       ...(invocationBefore === undefined ? {} : { invocationBefore }),
       ...(invocationAfter === undefined ? {} : { invocationAfter }) });
-    this.emit({ type: 'SPECIAL_DIE_EFFECT', dieIds: [die.id], dieType: die.type, dieLevel: die.level,
+    this.emit({ type: 'SPECIAL_DIE_EFFECT', dieIds: [die.id], dieType: effect.type, effectInstanceId: effect.id, dieLevel: effect.level,
       effectCause, invocationBefore, invocationAfter, message: `${this.dieLabel(die.id)} ${detail}`, ...extra });
   }
 
-  private spendInvocation(die: CollectibleDie, detail: string, effectCause: string): void {
-    const runtime = this.specialRuntime(die.id);
-    if (!runtime || runtime.invocationsRemaining <= 0) throw new Error(`${die.type} has no Uses remaining.`);
+  private spendInvocation(die: CollectibleDie, effect: DieEffectInstance, detail: string, effectCause: string): void {
+    const runtime = effectRuntime(this.state.dieRoundState[die.id], effect);
+    if (!runtime || runtime.invocationsRemaining <= 0) throw new Error(`${effect.type} has no Uses remaining.`);
     const before = runtime.invocationsRemaining;
     runtime.invocationsRemaining--;
-    this.emitSpecial(die, detail, effectCause, before, runtime.invocationsRemaining);
+    this.emitSpecial(die, effect, detail, effectCause, before, runtime.invocationsRemaining);
   }
 
   private historyDie(dieId: number, faceSnapshot?: Face): HistoryDieState {
     const die = this.state.dice.find(item => item.id === dieId)!;
     const face = faceSnapshot ?? activeFace(die);
     return { dieId, owner: die.owner, rosterSlot: die.owner === 'player' ? rosterSlotOf(this.state, dieId) : null,
-      ...(die.owner === 'player' ? { collectibleType: die.type, level: die.level } : { encounterId: die.encounterId }),
+      ...(die.owner === 'player' ? { effects: structuredClone(die.effects) } : { encounterId: die.encounterId }),
       physicalFace: die.value, face: face.rank, pips: scoringPips(face),
       bossMutation: face.bossMutation ? structuredClone(face.bossMutation) : null,
       ...(isHexerFace(face) ? { encounterFaceEffect: structuredClone(face.hexerEffect) } : {}),
-      ...(die.owner === 'player' && die.type !== 'normal' && this.specialRuntime(die.id)
-        ? { specialRuntime: structuredClone(this.specialRuntime(die.id)) } : {}) };
+      ...(die.owner === 'player' && die.effects.length && this.state.dieRoundState[die.id]
+        ? { specialRuntime: structuredClone(this.state.dieRoundState[die.id]) } : {}) };
   }
 
   emitV2(input: RunHistoryV2EventInput): RunHistoryV2Event {
@@ -251,7 +251,8 @@ export class Resolver {
       else if ((record.type === 'BOSS_FACE_CHANGED' || record.type === 'CURSED_DIE_ROLLED') && record.boss)
         this.v2Roll.effects.push({ type: 'boss', boss: record.boss, change: record.type, dieIds: record.dieIds ?? [] });
       else if (record.type === 'SPECIAL_DIE_EFFECT' && record.dieType && record.dieIds?.[0] !== undefined)
-        this.v2Roll.effects.push({ type: 'special_die', dieId: record.dieIds[0], dieType: record.dieType,
+        this.v2Roll.effects.push({ type: 'special_die', dieId: record.dieIds[0], dieType: record.dieType as SpecialDieType,
+          effectInstanceId: record.effectInstanceId ?? `${record.dieIds[0]}:${record.dieType}`,
           detail: record.message, invocationBefore: record.invocationBefore, invocationAfter: record.invocationAfter });
       return true;
     }
@@ -444,6 +445,50 @@ export class Resolver {
     }
     this.emit({ type: 'GOLD_SPENT', amount, message, goldSpendSource });
   }
+  addTemper(amount: number, source: TemperSource, message: string): void {
+    if (!Number.isSafeInteger(amount) || amount <= 0) return;
+    this.state.temper += amount;
+    this.state.forgeUnlocked = true;
+    if (this.state.phase === 'round' && (source === 'overkill' || source === 'boardRefresh' || source === 'miniBoss' || source === 'boss')) {
+      this.state.roundTemper[source] += amount;
+      this.emitV2({ kind: 'temper_changed', operation: 'earned', source, amount, balance: this.state.temper,
+        shopVisitId: this.state.shop?.visitId ?? null });
+      this.emit({ type: 'TEMPER_CHANGED', amount, temperSource: source, temperBalance: this.state.temper,
+        message: `${message} · +${amount} Temper` });
+      return;
+    }
+    this.state.stats.temperEarned += amount;
+    this.state.stats.temperBySource[source] += amount;
+    this.state.stats.temperTransactions.push({ round: this.state.round, shopVisitId: this.state.shop?.visitId ?? null,
+      kind: 'earned', source, amount, balance: this.state.temper });
+    this.emitV2({ kind: 'temper_changed', operation: 'earned', source, amount, balance: this.state.temper,
+      shopVisitId: this.state.shop?.visitId ?? null });
+    this.emit({ type: 'TEMPER_CHANGED', amount, temperSource: source, temperBalance: this.state.temper,
+      message: `${message} · +${amount} Temper` });
+  }
+  private commitRoundTemper(): void {
+    for (const source of ['overkill', 'boardRefresh', 'miniBoss', 'boss'] as const) {
+      const amount = this.state.roundTemper[source];
+      if (!amount) continue;
+      this.state.stats.temperEarned += amount;
+      this.state.stats.temperBySource[source] += amount;
+      this.state.stats.temperTransactions.push({ round: this.state.round, shopVisitId: null,
+        kind: 'earned', source, amount, balance: this.state.temper });
+    }
+  }
+  spendTemper(amount: number, source: TemperSpendSource): void {
+    if (this.state.phase !== 'shop' || !Number.isSafeInteger(amount) || amount <= 0 || amount > this.state.temper)
+      throw new Error('Invalid Temper spend.');
+    this.state.temper -= amount;
+    this.state.stats.temperSpent += amount;
+    this.state.stats.temperSpentBySource[source] += amount;
+    this.state.stats.temperTransactions.push({ round: this.state.round, shopVisitId: this.state.shop?.visitId ?? null,
+      kind: 'spent', source, amount, balance: this.state.temper });
+    this.emitV2({ kind: 'temper_changed', operation: 'spent', source, amount, balance: this.state.temper,
+      shopVisitId: this.state.shop?.visitId ?? null });
+    this.emit({ type: 'TEMPER_CHANGED', amount, temperSpendSource: source, temperBalance: this.state.temper,
+      message: `${source === 'fusion' ? 'Fusion' : 'Forge'} spent ${amount} Temper` });
+  }
   private spendRoundGold(amount: number, message: string, goldSpendSource: 'furnace'): void {
     if (this.state.phase !== 'round') throw new Error('This Gold may only be spent during an active Round.');
     this.state.gold -= amount;
@@ -506,14 +551,15 @@ export class Resolver {
     const contributingDie = kind === 'special' ? this.collectible(dieId) : null;
     void scoringDice;
     applyHandContribution(this.handAccumulator!, contribution);
-    if (kind === 'special' && contributingDie?.type === 'bonus') this.handAccumulator!.bonusPips += amount;
+    if (kind === 'special' && contribution.effectType === 'bonus') this.handAccumulator!.bonusPips += amount;
     this.v2Hand?.pipsContributions.push({
       source: kind === 'base' ? 'die_base' : kind === 'special' ? 'special_die' : 'team_player',
-      amount, dieId, face: face.rank, role, ...(sourceDieIds?.length ? { sourceDieIds: [...sourceDieIds] } : {}),
+      amount, dieId, face: face.rank, role, ...(contribution.effectType ? { effectType: contribution.effectType } : {}),
+      ...(sourceDieIds?.length ? { sourceDieIds: [...sourceDieIds] } : {}),
     });
     this.emit({ type: role === 'hitchhiker' ? 'HITCHHIKER_ADDED_PIPS' : 'HAND_PIPS_CHANGED',
       hand, dieIds: [dieId], face: face.rank, amount,
-      dieType: contributingDie?.type,
+      dieType: contribution.effectType ?? contributingDie?.effects[0]?.type,
       source: playSource === 'jumpingBean' ? 'jumpingBean' : 'hand', playSource,
       pips: this.handAccumulator!.currentPips, multiplier: this.handAccumulator!.currentMultiplier,
       message: `${this.dieLabel(dieId)}${role === 'hitchhiker' ? ' Hitchhiker' : ''} added ${this.format(amount)} Pips` });
@@ -523,19 +569,26 @@ export class Resolver {
     intent?: PlayIntent): HandScoreContribution[] {
     const contributions = ordinaryFaceContributions(participant, scoringDice);
     const die = this.collectible(participant.id);
-    const runtime = die ? this.specialRuntime(die.id) : undefined;
-    if (die && runtime && !wholeDieEffectSuppressed(die)) {
-      const specialPips = (die.type === 'bonus' ? 10 * die.level : 0)
-        + (die.type === 'furnace' ? runtime.furnaceUnits * 3 * die.level : 0)
-        + runtime.temporaryPips;
-      if (specialPips) contributions.push({ kind: 'special', role: participant.role,
-        dieId: participant.id, face: participant.face, amount: specialPips });
+    if (die && !wholeDieEffectSuppressed(die)) {
+      const bonus = effectOf(die, 'bonus');
+      const furnace = effectOf(die, 'furnace');
+      const workoutRuntime = this.specialRuntime(die, 'workout');
+      const tankRuntime = this.specialRuntime(die, 'tank');
+      const furnaceRuntime = this.specialRuntime(die, 'furnace');
+      const specialParts: [SpecialDieType, number][] = [
+        ['bonus', bonus ? 10 * bonus.level : 0],
+        ['furnace', furnace ? (furnaceRuntime?.furnaceUnits ?? 0) * 3 * furnace.level : 0],
+        ['workout', workoutRuntime?.temporaryPips ?? 0],
+        ['tank', tankRuntime?.temporaryPips ?? 0],
+      ];
+      for (const [effectType, amount] of specialParts) if (amount) contributions.push({ kind: 'special', role: participant.role,
+        dieId: participant.id, face: participant.face, amount, effectType });
     }
     if (intent?.source === 'manual' && intent.playerSelectedDieIds.includes(participant.id)) {
       const teamPlayers = intent.playerSelectedDieIds.filter(id => id !== participant.id)
-        .map(id => this.collectible(id)).filter((item): item is CollectibleDie => item?.type === 'teamPlayer' && !wholeDieEffectSuppressed(item));
+        .map(id => this.collectible(id)).filter((item): item is CollectibleDie => !!item && hasEffect(item, 'teamPlayer') && !wholeDieEffectSuppressed(item));
       const teamFactor = teamPlayers
-        .reduce((factor, teamPlayer) => factor * (teamPlayer.level + 1), 1);
+        .reduce((factor, teamPlayer) => factor * (requireEffect(teamPlayer, 'teamPlayer').level + 1), 1);
       if (teamFactor > 1) {
         const subtotal = contributions.reduce((sum, contribution) => sum + contribution.amount, 0);
         contributions.push({ kind: 'teamPlayer', role: participant.role, dieId: participant.id,
@@ -553,54 +606,44 @@ export class Resolver {
     void participants;
     this.whenScored(participant.id, participant.face, hand, playSource, participant.role);
     const collectible = this.collectible(participant.id);
-    const runtime = collectible ? this.specialRuntime(collectible.id) : undefined;
-    if (collectible && runtime && !wholeDieEffectSuppressed(collectible)) {
-      if (collectible.type === 'golden' && runtime.goldenGoldEarned < collectible.level * 3) {
-        runtime.goldenGoldEarned++;
+    if (collectible && !wholeDieEffectSuppressed(collectible)) {
+      const golden = effectOf(collectible, 'golden');
+      const goldenRuntime = this.specialRuntime(collectible, 'golden');
+      if (golden && goldenRuntime && goldenRuntime.goldenGoldEarned < golden.level * 3) {
+        goldenRuntime.goldenGoldEarned++;
         this.addGold(1, `${this.dieLabel(collectible.id)} Golden: +1 Gold`, 'golden', collectible.id);
-        this.emitSpecial(collectible, `Golden earned 1 Gold (${runtime.goldenGoldEarned}/${collectible.level * 3})`, 'score');
+        this.emitSpecial(collectible, golden, `Golden earned 1 Gold (${goldenRuntime.goldenGoldEarned}/${golden.level * 3})`, 'score');
       }
-      if (collectible.type === 'workout') {
-        const growth = 2 * collectible.level;
-        const before = runtime.temporaryPips;
-        runtime.temporaryPips += growth;
-        this.emitSpecial(collectible, `Workout future Pips ${before} → ${runtime.temporaryPips}`, 'score');
+      const workout = effectOf(collectible, 'workout');
+      const workoutRuntime = this.specialRuntime(collectible, 'workout');
+      if (workout && workoutRuntime) {
+        const growth = 2 * workout.level;
+        const before = workoutRuntime.temporaryPips;
+        workoutRuntime.temporaryPips += growth;
+        this.emitSpecial(collectible, workout, `Workout future Pips ${before} → ${workoutRuntime.temporaryPips}`, 'score');
       }
-      if (collectible.type === 'vintage') {
-        const before = collectible.vintageAppreciation;
-        collectible.vintageAppreciation = Math.min(90 * collectible.level, before + collectible.level);
-        this.emitSpecial(collectible, `Vintage appreciation ${before} → ${collectible.vintageAppreciation}`, 'score');
+      const vintage = effectOf(collectible, 'vintage');
+      if (vintage) {
+        const before = vintage.persistent.vintageAppreciation;
+        vintage.persistent.vintageAppreciation = Math.min(90 * vintage.level, before + vintage.level);
+        this.emitSpecial(collectible, vintage, `Vintage appreciation ${before} → ${vintage.persistent.vintageAppreciation}`, 'score');
       }
-      if (collectible.type === 'tank') {
-        const before = runtime.temporaryPips;
-        runtime.temporaryPips += 10 * collectible.level;
-        this.emitSpecial(collectible, `Tank future Pips ${before} → ${runtime.temporaryPips}`, 'score');
+      const tank = effectOf(collectible, 'tank');
+      const tankRuntime = this.specialRuntime(collectible, 'tank');
+      if (tank && tankRuntime) {
+        const before = tankRuntime.temporaryPips;
+        tankRuntime.temporaryPips += 10 * tank.level;
+        this.emitSpecial(collectible, tank, `Tank future Pips ${before} → ${tankRuntime.temporaryPips}`, 'score');
       }
-      if (collectible.type === 'furnace' && runtime.furnaceUnits > 0) {
-        const before = runtime.furnaceUnits;
-        runtime.furnaceUnits--;
-        this.emitSpecial(collectible, `Furnace units ${before} → ${runtime.furnaceUnits}`, 'score');
+      const furnace = effectOf(collectible, 'furnace');
+      const furnaceRuntime = this.specialRuntime(collectible, 'furnace');
+      if (furnace && furnaceRuntime && furnaceRuntime.furnaceUnits > 0) {
+        const before = furnaceRuntime.furnaceUnits;
+        furnaceRuntime.furnaceUnits--;
+        this.emitSpecial(collectible, furnace, `Furnace units ${before} → ${furnaceRuntime.furnaceUnits}`, 'score');
       }
     }
-    const additionalOccurrences: ScoreOccurrence[] = [];
-    if (collectible?.type === 'doubleTime' && !wholeDieEffectSuppressed(collectible)
-      && !occurrence.suppressedEffects.includes('wholeDieDoubleTime')) {
-      const guaranteed = Math.floor(collectible.level / 4);
-      const remainder = collectible.level % 4;
-      const randomExtra = remainder > 0 && probabilityCheck(this.rng, remainder * .25) ? 1 : 0;
-      const extras = guaranteed + randomExtra;
-      this.emitSpecial(collectible, `Double Time created ${extras} additional Score${extras === 1 ? '' : 's'}`,
-        'score', undefined, undefined, { amount: extras });
-      for (let index = 0; index < extras; index++) additionalOccurrences.push({
-        ...occurrence,
-        id: `${occurrence.rootId}:whole-double-time:${index + 1}`,
-        rootId: occurrence.rootId,
-        cause: 'double_time',
-        additional: true,
-        suppressedEffects: [...occurrence.suppressedEffects, 'wholeDieDoubleTime'],
-      });
-    }
-    return { additionalOccurrences };
+    return { additionalOccurrences: [] };
   }
 
   private resolveScoreOccurrences(resolution: HandResolution): ScoringParticipant[] {
@@ -623,30 +666,33 @@ export class Resolver {
         additional: false,
         suppressedEffects: [],
       };
-      const pending: ScoreOccurrence[] = [root];
+      let branches: ScoreOccurrence[] = [root];
       const collectible = this.collectible(participant.id);
-      if (collectible?.type === 'loneWolf' && !wholeDieEffectSuppressed(collectible) && intent.source === 'manual'
-        && intent.playerSelectedDieIds.length === 1 && intent.playerSelectedDieIds[0] === participant.id) {
-        for (let index = 0; index < collectible.level; index++) pending.push({ ...root,
-          id: `${rootId}:lone-wolf:${index + 1}`, cause: 'lone_wolf', additional: true });
-      }
       if (resolution.qualification.effects.some(effect => effect.effect === 'conjoined' && effect.dieId === participant.id)) {
-        pending.push({ ...root, id: `${rootId}:conjoined`, cause: 'conjoined', additional: true });
+        branches.push({ ...root, id: `${rootId}:conjoined`, cause: 'conjoined', additional: true });
       }
-      while (pending.length) {
-        const occurrence = pending.shift()!;
+      const doubleTime = collectible && !wholeDieEffectSuppressed(collectible) ? effectOf(collectible, 'doubleTime') : undefined;
+      if (doubleTime) branches = branches.flatMap((branch, branchIndex) => {
+        const guaranteed = Math.floor(doubleTime.level / 4);
+        const remainder = doubleTime.level % 4;
+        const extras = guaranteed + (remainder > 0 && probabilityCheck(this.rng, remainder * .25) ? 1 : 0);
+        this.emitSpecial(collectible!, doubleTime, `Double Time created ${extras} additional Score${extras === 1 ? '' : 's'}`,
+          'score', undefined, undefined, { amount: extras });
+        return [branch, ...Array.from({ length: extras }, (_, index) => ({ ...branch,
+          id: `${rootId}:double-time:${branchIndex + 1}:${index + 1}`, cause: 'double_time' as const,
+          additional: true, suppressedEffects: [...branch.suppressedEffects, 'wholeDieDoubleTime' as const] }))];
+      });
+      const loneWolf = collectible && !wholeDieEffectSuppressed(collectible) ? effectOf(collectible, 'loneWolf') : undefined;
+      if (loneWolf && intent.source === 'manual' && intent.playerSelectedDieIds.length === 1
+        && intent.playerSelectedDieIds[0] === participant.id) branches = branches.flatMap((branch, branchIndex) =>
+          [branch, ...Array.from({ length: loneWolf.level }, (_, index) => ({ ...branch,
+            id: `${rootId}:lone-wolf:${branchIndex + 1}:${index + 1}`, cause: 'lone_wolf' as const, additional: true }))]);
+      for (const occurrence of branches) {
         resolution.scoreOccurrences.push(occurrence);
-        if (occurrence.additional) {
-          const scoreParticipant: ScoringParticipant = {
-            id: occurrence.dieId,
-            face: occurrence.face,
-            role: occurrence.role,
-          };
-          for (const contribution of this.scoringContributions(scoreParticipant, scoringDice, intent))
-            this.applyScoringContribution(contribution, intent.hand, intent.source, scoringDice);
-        }
-        const result = this.resolveScoreOccurrence(occurrence, scoringParticipants);
-        pending.push(...result.additionalOccurrences);
+        const scoreParticipant: ScoringParticipant = { id: occurrence.dieId, face: occurrence.face, role: occurrence.role };
+        for (const contribution of this.scoringContributions(scoreParticipant, scoringDice, intent))
+          this.applyScoringContribution(contribution, intent.hand, intent.source, scoringDice);
+        this.resolveScoreOccurrence(occurrence, scoringParticipants);
       }
     }
     return [];
@@ -657,7 +703,8 @@ export class Resolver {
     let total = 0;
     for (const die of this.state.dice) {
       if (die.owner !== 'player') continue;
-      const specialPayout = die.type === 'jackpot' && !wholeDieEffectSuppressed(die) ? 3 * die.level : 0;
+      const jackpot = effectOf(die, 'jackpot');
+      const specialPayout = jackpot && !wholeDieEffectSuppressed(die) ? 3 * jackpot.level : 0;
       if (!specialPayout) continue;
       if (!scoring.has(die.id)) {
         this.log({ type: 'ABILITY_EVALUATED', dieType: 'jackpot', dieIds: [die.id], face: activeFace(die).rank,
@@ -665,7 +712,7 @@ export class Resolver {
         continue;
       }
       this.addGold(specialPayout, `${this.dieLabel(die.id)} Jackpot: +${this.format(specialPayout)} Gold`, 'jackpot', die.id);
-      this.emitSpecial(die, `Jackpot paid ${specialPayout} Gold`, 'winning_play');
+      this.emitSpecial(die, jackpot!, `Jackpot paid ${specialPayout} Gold`, 'winning_play');
       total += specialPayout;
     }
     if (total) this.log({ type: 'ABILITY_EVALUATED', dieType: 'jackpot', message: `Total Jackpot payout: +${this.format(total)} Gold` });
@@ -737,7 +784,6 @@ export class Resolver {
     const before = activeFace(die).rank;
     const origin = structuredClone(activeFace(die));
     const collectible = die.owner === 'player' ? die : null;
-    const runtime = collectible ? this.specialRuntime(die.id) : undefined;
     const specialAllowed = intent.context === 'gameplay' || intent.context === 'settle' || intent.context === 'wardenSetup';
     const ownEffectActive = !!collectible && !wholeDieEffectSuppressed(collectible);
     const forced = (controller: RollResolution['controller'], target: Rank, controllerDieId: number,
@@ -745,34 +791,54 @@ export class Resolver {
       const physicalFace = (die.faces.findIndex(face => face.rank === target) + 1 || target) as Rank;
       return { intent, dieId: die.id, before, beforePhysical, physicalFace, value: target,
         weighted: false, attracted: false, controller, controllerDieId, locked, origin,
-        specialDieType: collectible?.type };
+        specialDieType: collectible?.effects[0]?.type };
     };
-    if (specialAllowed && ownEffectActive && collectible.type === 'tank' && runtime && intent.reroll) {
-      const beforePips = runtime.temporaryPips;
-      runtime.temporaryPips += 10 * collectible.level;
-      this.emitSpecial(collectible, `Tank intercepted Reroll; future Pips ${beforePips} → ${runtime.temporaryPips}`,
-        'reroll_intercept');
-      return { ...forced('tank', before, die.id), physicalFace: beforePhysical, intercepted: true };
-    }
-    if (specialAllowed && ownEffectActive && collectible.type === 'weighted' && runtime && runtime.invocationsRemaining > 0) {
-      const target = runtime.weightedFace;
-      this.spendInvocation(collectible, `Weighted forced Roll to ${target}`, 'roll_controller');
-      return forced('weightedDie', target, die.id);
-    }
-    if (specialAllowed && ownEffectActive && collectible.type === 'magic' && runtime && intent.reroll && runtime.magicArmedFace !== null
-      && runtime.invocationsRemaining > 0) {
-      const target = runtime.magicArmedFace;
-      runtime.magicArmedFace = null;
-      this.spendInvocation(collectible, `Magic forced Reroll to ${target}`, 'roll_controller');
+    // Locked canonical controller phase: Magic → Magnetic → Weighted → Clockwork → Tank → Boss → Random.
+    const magic = collectible && ownEffectActive ? effectOf(collectible, 'magic') : undefined;
+    const magicRuntime = collectible ? this.specialRuntime(collectible, 'magic') : undefined;
+    if (specialAllowed && collectible && magic && magicRuntime && intent.reroll && magicRuntime.magicArmedFace !== null
+      && magicRuntime.invocationsRemaining > 0) {
+      const target = magicRuntime.magicArmedFace;
+      magicRuntime.magicArmedFace = null;
+      this.spendInvocation(collectible, magic, `Magic forced Reroll to ${target}`, 'roll_controller');
       return forced('magicDie', target, die.id);
     }
-    if (specialAllowed && ownEffectActive && collectible.type === 'clockwork' && runtime && intent.reroll
-      && runtime.clockworkRolls < 3 * collectible.level) {
-      runtime.clockworkRolls++;
+    if (specialAllowed) {
+      const magnetic = activeEncounterDice(this.state).find((candidate): candidate is CollectibleDie => candidate.owner === 'player'
+        && hasEffect(candidate, 'magnetic') && !rolling.has(candidate.id) && !wholeDieEffectSuppressed(candidate)
+        && (this.specialRuntime(candidate, 'magnetic')?.invocationsRemaining ?? 0) > 0);
+      if (magnetic) {
+        const magneticEffect = requireEffect(magnetic, 'magnetic');
+        const target = activeFace(magnetic).rank;
+        this.spendInvocation(magnetic, magneticEffect, `Magnetic forced ${this.dieLabel(die.id)} to ${target}`, 'external_roll_controller');
+        return { ...forced('magneticDie', target, magnetic.id, false), attracted: true, specialDieType: magneticEffect.type };
+      }
+    }
+    const weighted = collectible && ownEffectActive ? effectOf(collectible, 'weighted') : undefined;
+    const weightedRuntime = collectible ? this.specialRuntime(collectible, 'weighted') : undefined;
+    if (specialAllowed && collectible && weighted && weightedRuntime && weightedRuntime.invocationsRemaining > 0) {
+      const target = weightedRuntime.weightedFace;
+      this.spendInvocation(collectible, weighted, `Weighted forced Roll to ${target}`, 'roll_controller');
+      return forced('weightedDie', target, die.id);
+    }
+    const clockwork = collectible && ownEffectActive ? effectOf(collectible, 'clockwork') : undefined;
+    const clockworkRuntime = collectible ? this.specialRuntime(collectible, 'clockwork') : undefined;
+    if (specialAllowed && collectible && clockwork && clockworkRuntime && intent.reroll
+      && clockworkRuntime.clockworkRolls < 3 * clockwork.level) {
+      clockworkRuntime.clockworkRolls++;
       const target = (before === 6 ? 1 : before + 1) as Rank;
-      this.emitSpecial(collectible, `Clockwork advanced ${before} → ${target} (${runtime.clockworkRolls}/${3 * collectible.level})`,
+      this.emitSpecial(collectible, clockwork, `Clockwork advanced ${before} → ${target} (${clockworkRuntime.clockworkRolls}/${3 * clockwork.level})`,
         'roll_controller');
       return forced('clockworkDie', target, die.id);
+    }
+    const tank = collectible && ownEffectActive ? effectOf(collectible, 'tank') : undefined;
+    const tankRuntime = collectible ? this.specialRuntime(collectible, 'tank') : undefined;
+    if (specialAllowed && collectible && tank && tankRuntime && intent.reroll) {
+      const beforePips = tankRuntime.temporaryPips;
+      tankRuntime.temporaryPips += 10 * tank.level;
+      this.emitSpecial(collectible, tank, `Tank intercepted Reroll; future Pips ${beforePips} → ${tankRuntime.temporaryPips}`,
+        'reroll_intercept');
+      return { ...forced('tank', before, die.id), physicalFace: beforePhysical, intercepted: true };
     }
     if (specialAllowed && isCursedDie(die) && isHexerFace(origin)
       && origin.hexerEffect.kind === 'workoutClockwork' && intent.reroll) {
@@ -780,16 +846,6 @@ export class Resolver {
       return { intent, dieId: die.id, before, beforePhysical, physicalFace,
         value: die.faces[physicalFace - 1].rank, weighted: false, attracted: false,
         controller: 'hexerClockwork', controllerDieId: die.id, locked: true, origin };
-    }
-    if (specialAllowed) {
-      const magnetic = activeEncounterDice(this.state).find((candidate): candidate is CollectibleDie => candidate.owner === 'player'
-        && candidate.type === 'magnetic' && !rolling.has(candidate.id) && !wholeDieEffectSuppressed(candidate)
-        && (this.specialRuntime(candidate.id)?.invocationsRemaining ?? 0) > 0);
-      if (magnetic) {
-        const target = activeFace(magnetic).rank;
-        this.spendInvocation(magnetic, `Magnetic forced ${this.dieLabel(die.id)} to ${target}`, 'external_roll_controller');
-        return { ...forced('magneticDie', target, magnetic.id, false), attracted: true, specialDieType: magnetic.type };
-      }
     }
     const previousFaceExcluded = intent.excludeStartingFace;
     const randomResult = rollPhysicalDie(die, this.rng, previousFaceExcluded ? beforePhysical : undefined);
@@ -823,12 +879,12 @@ export class Resolver {
         this.emit({ type: 'CURSED_DIE_ROLLED', boss: 'hexer', dieIds: [die.id], face: face.rank,
           message: `Cursed Die rolled ${face.rank}` });
       }
-      if (batch.context === 'gameplay' && die.owner === 'player' && die.type === 'freePlay'
-        && !wholeDieEffectSuppressed(die)) {
-        const runtime = this.specialRuntime(die.id);
-        if (face.rank !== 7 && runtime && runtime.freePlayUsesByFace[face.rank] < die.level) {
+      const freePlay = die.owner === 'player' ? effectOf(die, 'freePlay') : undefined;
+      if (batch.context === 'gameplay' && die.owner === 'player' && freePlay && !wholeDieEffectSuppressed(die)) {
+        const runtime = this.specialRuntime(die, 'freePlay');
+        if (face.rank !== 7 && runtime && runtime.freePlayUsesByFace[face.rank] < freePlay.level) {
           runtime.freePlayUsesByFace[face.rank]++;
-          this.emitSpecial(die, `Free Play face ${face.rank} (${runtime.freePlayUsesByFace[face.rank]}/${die.level})`,
+          this.emitSpecial(die, freePlay, `Free Play face ${face.rank} (${runtime.freePlayUsesByFace[face.rank]}/${freePlay.level})`,
             'post_roll');
           triggers.push({ dieId: die.id, face, kind: 'specialFreePlay', rerollEventId: batch.id });
         }
@@ -1002,7 +1058,8 @@ export class Resolver {
       ? this.state.boss.neglectedHands : [];
     this.state.consumed = [...encounterLocks];
     this.state.scorecardCycleConsumed = [];
-    this.emit({ type: 'SCORECARD_REFRESHED', message: 'Scorecard filled \u00b7 all hands refreshed' });
+    this.addTemper(2, 'boardRefresh', 'BOARD REFRESH');
+    this.emit({ type: 'SCORECARD_REFRESHED', amount: 2, message: 'BOARD REFRESH \u00b7 +2 TEMPER \u00b7 all Hands refreshed' });
     return true;
   }
 
@@ -1294,13 +1351,14 @@ export class Resolver {
     for (const die of freePlay ? [] : activeEncounterDice(this.state)) {
       if (ids.includes(die.id)) continue;
       const face = structuredClone(activeFace(die));
-      if (die.owner === 'player' && die.type === 'hitchhiker' && !wholeDieEffectSuppressed(die)) {
-        const runtime = this.specialRuntime(die.id);
+      const hitchhiker = die.owner === 'player' ? effectOf(die, 'hitchhiker') : undefined;
+      if (die.owner === 'player' && hitchhiker && !wholeDieEffectSuppressed(die)) {
+        const runtime = this.specialRuntime(die, 'hitchhiker');
         if (runtime?.invocationsRemaining) {
           const before = runtime.invocationsRemaining;
           runtime.invocationsRemaining--;
           hitchhikers.push({ id: die.id, face, role: 'hitchhiker' });
-          this.emitSpecial(die, `Hitchhiker joined ${HANDS[hand].name}`, 'play', before, runtime.invocationsRemaining);
+          this.emitSpecial(die, hitchhiker, `Hitchhiker joined ${HANDS[hand].name}`, 'play', before, runtime.invocationsRemaining);
           continue;
         }
       }
@@ -1319,16 +1377,17 @@ export class Resolver {
     };
     const sustainableParticipant = resolution.wouldConsumeHand ? scoringParticipants.find(participant => {
       const die = this.collectible(participant.id);
-      return die?.type === 'sustainable' && !wholeDieEffectSuppressed(die)
-        && (this.specialRuntime(die.id)?.invocationsRemaining ?? 0) > 0;
+      return !!die && hasEffect(die, 'sustainable') && !wholeDieEffectSuppressed(die)
+        && (this.specialRuntime(die, 'sustainable')?.invocationsRemaining ?? 0) > 0;
     }) : undefined;
     if (sustainableParticipant) {
       const die = this.collectible(sustainableParticipant.id)!;
-      const runtime = this.specialRuntime(die.id)!;
+      const sustainable = requireEffect(die, 'sustainable');
+      const runtime = this.specialRuntime(die, 'sustainable')!;
       const before = runtime.invocationsRemaining;
       runtime.invocationsRemaining--;
       const remaining = runtime.invocationsRemaining;
-      this.emitSpecial(die, `${HANDS[hand].name} preserved`, 'hand_consumption', before, remaining);
+      this.emitSpecial(die, sustainable, `${HANDS[hand].name} preserved`, 'hand_consumption', before, remaining);
       resolution.consumesHand = false;
       this.v2Hand.consumed = false;
       this.v2Hand.sideEffects.push({ type: 'sustainable', dieId: sustainableParticipant.id, hand,
@@ -1339,7 +1398,8 @@ export class Resolver {
     for (const claim of resolution.qualification.resourceClaims) {
       const die = this.collectible(claim.dieId);
       if (!die) throw new Error('Qualification claim references a non-collectible die.');
-      this.spendInvocation(die, `${claim.effect} Qualification Use spent`, 'qualification');
+      const effect = requireEffect(die, claim.effect);
+      this.spendInvocation(die, effect, `${claim.effect} Qualification Use spent`, 'qualification');
     }
     for (const participation of resolution.qualification.effects) {
       if (participation.effect === 'conjoined') {
@@ -1349,10 +1409,6 @@ export class Resolver {
           face: participation.face, message: 'Cursed Die supplied wild Qualification; printed Pips still scored' });
       }
     }
-    const originalContributions = scoringParticipants.flatMap(participant =>
-      this.scoringContributions(participant, scoringParticipants.length, intent));
-    for (const kind of ['base', 'special', 'teamPlayer'] as const) for (const contribution of originalContributions)
-      if (contribution.kind === kind) this.applyScoringContribution(contribution, hand, playSource, scoringParticipants.length);
     this.resolveScoreOccurrences(resolution);
     const { pips, multiplier, xMult, rawScore, score, bossFactor } =
       this.resolveHandScore(resolution, handStart, handLevel, chargeAttributionAtHandStart);
@@ -1447,12 +1503,13 @@ export class Resolver {
 
   invokeJumpingBean(dieId: number): void {
     const die = this.collectible(dieId);
-    if (!die || die.type !== 'jumpingBean') throw new Error('Jumping Bean command requires its equipped die.');
+    if (!die || !hasEffect(die, 'jumpingBean')) throw new Error('Jumping Bean command requires its equipped die.');
+    const effect = requireEffect(die, 'jumpingBean');
     if (wholeDieEffectSuppressed(die)) throw new Error('Jumping Bean is suppressed while its infected face is exposed.');
     const face = activeFace(die);
     const hand = UPPER_HAND_BY_FACE[face.rank];
     if (!hand) throw new Error('Jumping Bean requires an ordinary exposed face.');
-    this.spendInvocation(die, `Jumping Bean Free Played ${HANDS[hand].name}`, 'on_command');
+    this.spendInvocation(die, effect, `Jumping Bean Free Played ${HANDS[hand].name}`, 'on_command');
     const outcome = this.play(hand, [die.id], 'jumpingBean');
     if (outcome.winning) { this.evaluate(); return; }
     this.rollBatch([die.id], 'Jumping Bean reroll', 'gameplay', false, 'jumping_bean_followup');
@@ -1462,9 +1519,10 @@ export class Resolver {
 
   invokeFlywheel(dieId: number): void {
     const die = this.collectible(dieId);
-    if (!die || die.type !== 'flywheel') throw new Error('Flywheel command requires its equipped die.');
+    if (!die || !hasEffect(die, 'flywheel')) throw new Error('Flywheel command requires its equipped die.');
+    const effect = requireEffect(die, 'flywheel');
     if (wholeDieEffectSuppressed(die)) throw new Error('Flywheel is suppressed while its infected face is exposed.');
-    this.spendInvocation(die, 'Flywheel free Reroll', 'on_command');
+    this.spendInvocation(die, effect, 'Flywheel free Reroll', 'on_command');
     this.rollBatch([die.id], 'Flywheel free reroll', 'gameplay', false, 'other');
     this.drain();
     this.evaluate();
@@ -1472,7 +1530,8 @@ export class Resolver {
 
   invokeChameleon(dieId: number): void {
     const die = this.collectible(dieId);
-    if (!die || die.type !== 'chameleon') throw new Error('Chameleon command requires its equipped die.');
+    if (!die || !hasEffect(die, 'chameleon')) throw new Error('Chameleon command requires its equipped die.');
+    const effect = requireEffect(die, 'chameleon');
     if (wholeDieEffectSuppressed(die)) throw new Error('Chameleon is suppressed while its infected face is exposed.');
     const others = rosterDice(this.state).filter(item => item.id !== die.id);
     if (!others.length) throw new Error('Chameleon requires another equipped die.');
@@ -1483,7 +1542,7 @@ export class Resolver {
     const leaders = [...counts].filter(([, count]) => count === maximum).map(([rank]) => rank);
     const target = leaders.length === 1 ? leaders[0] : leaders[randomIndex(this.rng, leaders.length)];
     const before = activeFace(die).rank;
-    this.spendInvocation(die, `Chameleon changed ${before} → ${target}`, 'on_command');
+    this.spendInvocation(die, effect, `Chameleon changed ${before} → ${target}`, 'on_command');
     const physicalFace = die.value;
     const changedFace = die.faces[physicalFace - 1];
     changedFace.rank = target;
@@ -1495,23 +1554,25 @@ export class Resolver {
 
   armMagic(dieId: number, face: Exclude<Rank, 7>): void {
     const die = this.collectible(dieId);
-    if (!die || die.type !== 'magic') throw new Error('Magic command requires its equipped die.');
+    if (!die || !hasEffect(die, 'magic')) throw new Error('Magic command requires its equipped die.');
+    const effect = requireEffect(die, 'magic');
     if (wholeDieEffectSuppressed(die)) throw new Error('Magic is suppressed while its infected face is exposed.');
-    const runtime = this.specialRuntime(die.id)!;
+    const runtime = this.specialRuntime(die, 'magic')!;
     runtime.magicArmedFace = face;
-    this.emitSpecial(die, `Magic armed face ${face} for the next Reroll`, 'on_command',
+    this.emitSpecial(die, effect, `Magic armed face ${face} for the next Reroll`, 'on_command',
       runtime.invocationsRemaining, runtime.invocationsRemaining, { face });
   }
 
   feedFurnace(dieId: number, amount: number): void {
     const die = this.collectible(dieId);
-    if (!die || die.type !== 'furnace') throw new Error('Furnace command requires its equipped die.');
+    if (!die || !hasEffect(die, 'furnace')) throw new Error('Furnace command requires its equipped die.');
+    const effect = requireEffect(die, 'furnace');
     if (wholeDieEffectSuppressed(die)) throw new Error('Furnace is suppressed while its infected face is exposed.');
-    const runtime = this.specialRuntime(die.id)!;
+    const runtime = this.specialRuntime(die, 'furnace')!;
     this.spendRoundGold(amount, `Fed ${this.dieLabel(die.id)} Furnace: -${amount} Gold`, 'furnace');
     const before = runtime.furnaceUnits;
     runtime.furnaceUnits += amount;
-    this.emitSpecial(die, `Furnace units ${before} → ${runtime.furnaceUnits}`, 'on_command',
+    this.emitSpecial(die, effect, `Furnace units ${before} → ${runtime.furnaceUnits}`, 'on_command',
       undefined, undefined, { amount });
   }
 
@@ -1560,7 +1621,7 @@ export class Resolver {
     // session that launched it. Bust restoration reopens this Shop without
     // generating offers, reroll allowances, exposed faces, or rewards.
     base.phase = 'shop';
-    base.shop ??= { visitId: base.nextShopVisitId++, stage: 'dice',
+    base.shop ??= { visitId: base.nextShopVisitId++, stage: 'shop',
       offers: [], offerRerolls: 0, lifeRestores: 0,
       freeDicePurchaseAvailable: false, trainingSession: createTrainingSession(base.handLevels) };
     // Once the next Chapter has started, a Bust restores this as that Round's
@@ -1646,7 +1707,7 @@ export class Resolver {
       this.state.roundCheckpoint.board.specialOfferEffects,
       persistentSpecialOfferState,
     );
-    this.state.shop ??= { stage: 'dice', offers: [], offerRerolls: 0, lifeRestores: 0,
+    this.state.shop ??= { stage: 'shop', offers: [], offerRerolls: 0, lifeRestores: 0,
       freeDicePurchaseAvailable: false, trainingSession: createTrainingSession(this.state.handLevels) };
     this.state.shop.lifeRestores ??= 0;
     this.nextTimeline('bust', this.state.round, failure.livesAfter > 0 ? failure.attempt + 1 : failure.attempt);
@@ -1664,12 +1725,12 @@ export class Resolver {
     if (failure.livesAfter > 0) {
       this.state.bustPresentationDice = null;
       this.state.phase = 'shop';
-      const priorStage = this.state.shop!.stage ?? 'dice';
-      this.state.shop!.stage = 'dice';
+      const priorStage = this.state.shop!.stage ?? 'shop';
+      this.state.shop!.stage = 'shop';
       this.state.currentNodeId = failedNodeId;
       this.mapTransition(shopNodeBefore(failure.round), 'backward');
-      if (priorStage !== 'dice') this.emitV2({ kind: 'shop_stage_changed', shopVisitId: this.state.shop!.visitId!,
-        from: priorStage, to: 'dice' });
+      if (priorStage !== 'shop') this.emitV2({ kind: 'shop_stage_changed', shopVisitId: this.state.shop!.visitId!,
+        from: priorStage, to: 'shop' });
       this.emit({ type: 'SHOP_REOPENED_AFTER_BUST',
         message: `Round ${this.format(failure.round)} attempt ${this.format(failure.attempt)} checkpoint restored · ${this.format(this.state.manualRerollsRemaining)} Rerolls left · Care Package ${this.format(this.state.specialOfferEffects.carePackageRerolls)} · returned to the same Shop · prepare for attempt ${this.format(failure.attempt + 1)}` });
     } else {
@@ -1716,6 +1777,7 @@ export class Resolver {
     const chargeWasArmed = this.state.chargeArmed;
     if (this.state.chargeXMult !== 1 || this.state.chargeArmed) this.state.stats.chargeResets++;
     this.state.phase = 'round'; this.state.score = 0n; this.state.scoreByHand = {}; this.state.effectScore = 0n;
+    this.state.roundTemper = { overkill: 0, boardRefresh: 0, miniBoss: 0, boss: 0 };
     if (!retry) this.state.specialOfferEffects.bottledFairyTriggeredThisRound = false;
     this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound;
     this.state.consumed = []; this.state.scorecardCycleConsumed = []; this.state.targetPracticeHand = null; this.state.lastRoundPayout = null; this.state.roundSummary = null;
@@ -1902,6 +1964,7 @@ export class Resolver {
       .filter(([flame]) => ownedFlameIds(this.state).has(flame as Flame)));
     recalculateMaxCharge(this.state);
     evaluation.engulfed = true;
+    this.addTemper(25, 'engulfment', 'Successful Engulfment');
     this.state.infernoProgress.previousReadiness = 0;
     this.emit({ type: 'INFERNO_EVALUATED',
       message: `Engulfment accepted: Inferno ${this.format(evaluation.infernoMultiplierBefore)} to ${this.format(evaluation.infernoMultiplierAfter)}; ${this.format(evaluation.flamesSnuffed.length)} Flame${evaluation.flamesSnuffed.length === 1 ? '' : 's'} snuffed` });
@@ -1926,16 +1989,17 @@ export class Resolver {
     const postBoss = isBigBossRound(this.state.round);
     const visitId = this.state.nextShopVisitId++;
     const onTheHouse = this.state.specialOfferEffects.onTheHouse;
-    this.state.shop = { visitId, stage: 'dice', kind: postBoss ? 'post_boss' : 'between_rounds', exitUnlocked: false,
+    this.state.shop = { visitId, stage: 'shop', kind: postBoss ? 'post_boss' : 'between_rounds', exitUnlocked: false,
       offers: [], offerRerolls: 0, lifeRestores: 0,
       freeDicePurchaseAvailable: onTheHouse,
-      trainingSession: createTrainingSession(this.state.handLevels, onTheHouse) };
+      trainingSession: createTrainingSession(this.state.handLevels, onTheHouse),
+      forgeSelection: { dieAId: null, dieBId: null } };
     const upcomingRound = this.state.round + 1;
     const upcomingBoss = this.state.bossSchedule[upcomingRound];
     if (upcomingBoss) this.state.bossSchedule[upcomingRound] = upcomingBoss;
     this.mapTransition(postBoss ? postBossShopNodeAfter(this.state.round) : shopNodeBefore(upcomingRound), direction);
     this.emitV2({ kind: 'shop_visit_started', shopVisitId: visitId,
-      reason: direction === 'backward' ? 'bad_dream' : 'normal', initialStage: 'dice' });
+      reason: direction === 'backward' ? 'bad_dream' : 'normal', initialStage: 'shop' });
     const trainingSession = this.state.shop.trainingSession!;
     this.emitV2({ kind: 'training_session_started', shopVisitId: visitId,
       upperLevelsAtEntry: structuredClone(trainingSession.upperLevelsAtEntry),
@@ -2011,6 +2075,7 @@ export class Resolver {
         if (flame.investedGold === 100) {
           flame.stage = 'bonfire';
           this.state.infernoProgress.recentAction = 'bonfire_created';
+          this.addTemper(10, 'bonfire', 'BONFIRE CREATED');
           this.emit({ type: 'BONFIRE_CREATED', flame: flame.type, message: `${FLAMES[flame.type].name} became a Bonfire` });
         }
         recalculateMaxCharge(this.state);
@@ -2108,10 +2173,18 @@ export class Resolver {
       if (payout.unusedRerollGold) this.addGold(payout.unusedRerollGold, `Unused rerolls: +${this.format(payout.unusedRerollGold)} gold`, 'unusedRerolls');
       if (payout.interestGold) this.addGold(payout.interestGold, `Interest on ${this.format(heldGoldSnapshot)} held Gold: +${this.format(payout.interestGold)}`, 'interest');
       if (payout.bossRewardGold) this.addGold(payout.bossRewardGold, `${bossRewardLabel}: +${this.format(payout.bossRewardGold)} gold`, 'bossReward');
+      const overkill = this.state.target > 0n
+        ? Number(((this.state.score - this.state.target) * 5n) / this.state.target) : 0;
+      this.addTemper(Math.max(0, Math.min(5, overkill)), 'overkill', 'Overkill');
+      if (bossType) this.addTemper(isMiniBossType(bossType) ? 2 : 3,
+        isMiniBossType(bossType) ? 'miniBoss' : 'boss', isMiniBossType(bossType) ? 'Mini-Boss defeated' : 'Boss defeated');
+      this.commitRoundTemper();
       const goldenGold = this.state.stats.goldBySource.golden - current.goldBySourceBefore.golden;
       const jackpotGold = this.state.stats.goldBySource.jackpot - current.goldBySourceBefore.jackpot;
       const knownGold = payout.baseGold + payout.unusedRerollGold + payout.interestGold + payout.bossRewardGold + goldenGold + jackpotGold;
-      const totalGoldEarned = this.state.gold - current.goldBefore;
+      const totalGoldEarned = Object.entries(this.state.stats.goldBySource)
+        .reduce((total, [source, amount]) => total + amount - (current.goldBySourceBefore[source as GoldSource] ?? 0), 0);
+      const temperTotal = Object.values(this.state.roundTemper).reduce((sum, amount) => sum + amount, 0);
       const summary = this.state.roundSummary = {
         round: this.state.round, encounterType: bossType ? 'boss' : 'normal', bossType,
         score: this.state.score, target: this.state.target, goldBefore: current.goldBefore, goldAfter: this.state.gold,
@@ -2119,6 +2192,7 @@ export class Resolver {
           baseRewardGold: payout.baseGold, unusedRerollGold: payout.unusedRerollGold, interestGold: payout.interestGold,
           bossRewardGold: payout.bossRewardGold, goldenGold, jackpotGold, otherGold: totalGoldEarned - knownGold,
         },
+        temper: { ...this.state.roundTemper, total: temperTotal },
       };
       if (Object.values(summary.sources).reduce((sum, amount) => sum + amount, 0) !== totalGoldEarned)
         throw new Error('Round Summary Gold sources do not reconcile.');

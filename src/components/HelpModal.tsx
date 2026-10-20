@@ -52,7 +52,7 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
           <Text size="sm" fw={700}>{HANDS[hand].name}</Text><Text size="xs" c="dimmed">{LOWER_HAND_RULES[hand]}</Text>
         </div>)}</SimpleGrid></div>
       </Stack></Tabs.Panel>
-      <Tabs.Panel value="dice" pt="md"><Stack gap="sm"><Text size="sm">Your collection holds up to ten dice: five in your Roster and five in Storage. Storage dice stay out of the Round. Each special die has a unique effect and a consistent color and icon identity.</Text><Text size="sm">Buy, sell, move, and fuse identical special dice in the Dice Shop.</Text><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{SPECIAL_DIE_TYPES.filter(id => id !== 'normal').map(id => <div key={id} className="help-item" data-testid={`help-die-${id}`}>
+      <Tabs.Panel value="dice" pt="md"><Stack gap="sm"><Text size="sm">Your collection holds up to ten dice: five in your Roster and five in Storage. Storage dice stay out of the Round. Each special effect has a unique rule plus a consistent color and icon identity.</Text><Text size="sm">Once you earn Temper, the Forge lets one special die absorb another. Matching effect sets fuse their levels; other combinations create a die with every effect.</Text><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{SPECIAL_DIE_TYPES.map(id => <div key={id} className="help-item" data-testid={`help-die-${id}`}>
         <Text size="sm" fw={700}><DieTypeLabel type={id} /> <RarityBadge rarity={SPECIAL_DICE[id].rarity!} compact /></Text><RichDescription copy={SPECIAL_DICE[id].verboseDescription(1)} size="xs" />
       </div>)}</SimpleGrid></Stack></Tabs.Panel>
       <Tabs.Panel value="flames" pt="md"><Stack gap="sm">

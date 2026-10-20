@@ -1,171 +1,111 @@
-import {
-  IconBarbell, IconCirclesRelation, IconClockBolt, IconClockCog, IconClover, IconCoin, IconCopy,
-  IconFlame, IconHourglassHigh, IconJumpRope, IconLink, IconMagnet, IconPalette, IconPlayerPlay,
-  IconPlus, IconRecycle, IconRefresh, IconRoute, IconScale, IconShield, IconUser, IconUsersGroup, IconWand,
-  type Icon,
-} from '@tabler/icons-react';
 import { activeFace } from './dice';
-import { dieEffectDescription, dieSellBreakdown, fusionEffectSummary } from './diceEconomy';
-import { invocationCapacity } from './specialDice';
-import type { CollectibleDie, DieRoundRuntime, DieType, Rank } from './types';
+import { dieEffectDescription, fusionEffectSummary } from './diceEconomy';
+import { dieSellBreakdown } from './forge';
+import { SPECIAL_DICE, effectRuntime, invocationCapacity } from './specialDice';
+import type { CollectibleDie, DieEffectInstance, DieEffectRoundRuntime, DieRoundRuntime, Rank, SpecialDieType } from './types';
 
-export interface SpecialDiePresentation {
-  icon: Icon | null;
+export const saturationFactor = (level: number): number => Math.min(1, .8 + .03 * (Math.max(1, level) - 1));
+
+function adjustedColor(hex: string, level: number): string {
+  const raw = hex.replace('#', '');
+  const r = parseInt(raw.slice(0, 2), 16) / 255;
+  const g = parseInt(raw.slice(2, 4), 16) / 255;
+  const b = parseInt(raw.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0;
+  const l = (max + min) / 2;
+  const delta = max - min;
+  let s = delta === 0 ? 0 : delta / (1 - Math.abs(2 * l - 1));
+  if (delta) {
+    if (max === r) h = 60 * (((g - b) / delta) % 6);
+    else if (max === g) h = 60 * ((b - r) / delta + 2);
+    else h = 60 * ((r - g) / delta + 4);
+  }
+  if (h < 0) h += 360;
+  s *= saturationFactor(level);
+  return `hsl(${h.toFixed(1)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%)`;
+}
+
+export const effectColor = (effect: DieEffectInstance): string => adjustedColor(SPECIAL_DICE[effect.type].color, effect.level);
+
+export interface DieVisualPresentation {
   accent: string;
   tint: string;
+  background: string;
 }
 
-const identity = (icon: Icon | null, accent: string, tint: string): SpecialDiePresentation => ({ icon, accent, tint });
-
-/** One visual identity registry shared by Shop, collection, Round, details, and Fusion UI. */
-export const SPECIAL_DIE_PRESENTATION: Record<DieType, SpecialDiePresentation> = {
-  normal: identity(null, '#adb5bd', 'rgba(173, 181, 189, .035)'),
-  bonus: identity(IconPlus, '#ffd43b', 'rgba(255, 212, 59, .10)'),
-  workout: identity(IconBarbell, '#ff922b', 'rgba(255, 146, 43, .10)'),
-  vintage: identity(IconHourglassHigh, '#d6a756', 'rgba(214, 167, 86, .10)'),
-  golden: identity(IconCoin, '#fcc419', 'rgba(252, 196, 25, .11)'),
-  weighted: identity(IconScale, '#74c0fc', 'rgba(116, 192, 252, .10)'),
-  clockwork: identity(IconClockCog, '#a5d8ff', 'rgba(165, 216, 255, .10)'),
-  teamPlayer: identity(IconUsersGroup, '#63e6be', 'rgba(99, 230, 190, .10)'),
-  loneWolf: identity(IconUser, '#ffa8a8', 'rgba(255, 168, 168, .10)'),
-  hitchhiker: identity(IconRoute, '#94d82d', 'rgba(148, 216, 45, .10)'),
-  magnetic: identity(IconMagnet, '#22b8cf', 'rgba(34, 184, 207, .10)'),
-  jackpot: identity(IconClover, '#69db7c', 'rgba(105, 219, 124, .10)'),
-  freePlay: identity(IconPlayerPlay, '#38d9a9', 'rgba(56, 217, 169, .10)'),
-  chameleon: identity(IconPalette, '#e599f7', 'rgba(229, 153, 247, .10)'),
-  flywheel: identity(IconRefresh, '#4dabf7', 'rgba(77, 171, 247, .10)'),
-  tank: identity(IconShield, '#ff8787', 'rgba(255, 135, 135, .10)'),
-  mirror: identity(IconCopy, '#b197fc', 'rgba(177, 151, 252, .10)'),
-  missingLink: identity(IconLink, '#9775fa', 'rgba(151, 117, 250, .10)'),
-  doubleTime: identity(IconClockBolt, '#91a7ff', 'rgba(145, 167, 255, .10)'),
-  jumpingBean: identity(IconJumpRope, '#ff6b6b', 'rgba(255, 107, 107, .10)'),
-  furnace: identity(IconFlame, '#ff6b35', 'rgba(255, 107, 53, .11)'),
-  sustainable: identity(IconRecycle, '#20c997', 'rgba(32, 201, 151, .10)'),
-  magic: identity(IconWand, '#da77f2', 'rgba(218, 119, 242, .11)'),
-  conjoined: identity(IconCirclesRelation, '#f783ac', 'rgba(247, 131, 172, .10)'),
-};
-
-export interface DieStatusRow {
-  label: string;
-  value: string;
+export function dieVisualPresentation(die: Pick<CollectibleDie, 'effects'>): DieVisualPresentation {
+  if (!die.effects.length) return { accent: '#adb5bd', tint: 'rgba(173, 181, 189, .035)', background: 'rgba(173, 181, 189, .035)' };
+  const colors = die.effects.map(effectColor);
+  const stops = colors.map((color, index) =>
+    `color-mix(in srgb, ${color} 24%, #17191f) ${Math.round(index * 100 / (colors.length - 1))}%`);
+  return {
+    accent: colors[0],
+    tint: `color-mix(in srgb, ${colors[0]} 12%, transparent)`,
+    background: colors.length === 1
+      ? `linear-gradient(145deg, color-mix(in srgb, ${colors[0]} 15%, #17191f), #17191f 72%)`
+      : `linear-gradient(135deg, ${stops.join(', ')})`,
+  };
 }
 
-export interface SpecialDieDetails {
+export interface DieStatusRow { label: string; value: string }
+export interface EffectDetails {
   description: string;
   status: DieStatusRow[];
   freePlayRemaining: Record<Exclude<Rank, 7>, number> | null;
 }
 
-const usesRemaining = (die: CollectibleDie, runtime: DieRoundRuntime | undefined): string =>
-  `${runtime?.invocationsRemaining ?? invocationCapacity(die)} / ${invocationCapacity(die)}`;
+const usesRemaining = (effect: DieEffectInstance, runtime: DieEffectRoundRuntime | undefined): string =>
+  `${runtime?.invocationsRemaining ?? invocationCapacity(effect)} / ${invocationCapacity(effect)}`;
 
-/** Player-facing Round details derived from the same die/runtime values used by resolution. */
-export function specialDieDetails(die: CollectibleDie, runtime: DieRoundRuntime | undefined): SpecialDieDetails {
-  const level = die.level;
+export function effectDetails(die: CollectibleDie, effect: DieEffectInstance,
+  dieRuntime: DieRoundRuntime | undefined): EffectDetails {
+  const level = effect.level;
+  const runtime = effectRuntime(dieRuntime, effect);
   const status: DieStatusRow[] = [];
-  let freePlayRemaining: SpecialDieDetails['freePlayRemaining'] = null;
-
-  switch (die.type) {
-    case 'normal': break;
-    case 'bonus':
-      status.push({ label: 'Current bonus', value: `+${10 * level} Pips` });
-      break;
-    case 'workout':
-      status.push(
-        { label: 'Current bonus this Round', value: `+${runtime?.temporaryPips ?? 0} Pips` },
-        { label: 'Gains per Score', value: `+${2 * level} Pips` },
-      );
-      break;
+  let freePlayRemaining: EffectDetails['freePlayRemaining'] = null;
+  switch (effect.type) {
+    case 'bonus': status.push({ label: 'Current bonus', value: `+${10 * level} Pips` }); break;
+    case 'workout': status.push({ label: 'Current bonus this Round', value: `+${runtime?.temporaryPips ?? 0} Pips` },
+      { label: 'Gains per Score', value: `+${2 * level} Pips` }); break;
     case 'vintage': {
       const sale = dieSellBreakdown(die);
-      status.push(
-        { label: 'Current sell value', value: `${sale.total} Gold` },
-        { label: 'Appreciation', value: `+${sale.vintageAppreciation} Gold` },
-      );
-      break;
+      status.push({ label: 'Current sell value', value: `${sale.total} Gold` },
+        { label: 'Appreciation', value: `+${effect.persistent.vintageAppreciation} Gold` }); break;
     }
-    case 'golden':
-      status.push({ label: 'Gold earned this Round', value: `${runtime?.goldenGoldEarned ?? 0} / ${3 * level}` });
-      break;
-    case 'hitchhiker':
-      status.push({ label: 'Uses Remaining', value: usesRemaining(die, runtime) });
-      break;
-    case 'weighted':
-      status.push(
-        { label: 'Weighted face', value: String(runtime?.weightedFace ?? die.weightedFace) },
-        { label: 'Uses Remaining', value: usesRemaining(die, runtime) },
-      );
-      break;
+    case 'golden': status.push({ label: 'Gold earned this Round', value: `${runtime?.goldenGoldEarned ?? 0} / ${3 * level}` }); break;
+    case 'hitchhiker': case 'mirror': case 'missingLink': case 'jumpingBean': case 'chameleon':
+    case 'flywheel': case 'conjoined': case 'sustainable':
+      status.push({ label: 'Uses Remaining', value: usesRemaining(effect, runtime) }); break;
+    case 'weighted': status.push({ label: 'Weighted face', value: String(runtime?.weightedFace ?? effect.persistent.weightedFace) },
+      { label: 'Uses Remaining', value: usesRemaining(effect, runtime) }); break;
     case 'clockwork': {
-      const capacity = 3 * level;
-      const used = runtime?.clockworkRolls ?? 0;
+      const capacity = 3 * level, used = runtime?.clockworkRolls ?? 0;
       status.push({ label: 'Controlled Rolls remaining', value: `${Math.max(0, capacity - used)} / ${capacity}` });
       if (used < capacity) status.push({ label: 'Next face', value: String(activeFace(die).rank % 6 + 1) });
       break;
     }
-    case 'magnetic':
-      status.push(
-        { label: 'Matching Face', value: String(activeFace(die).rank) },
-        { label: 'Uses Remaining', value: usesRemaining(die, runtime) },
-      );
-      break;
-    case 'jackpot':
-      status.push({ label: 'Winning-hand reward', value: `+${3 * level} Gold` });
-      break;
-    case 'teamPlayer':
-      status.push({ label: 'Other played dice', value: `×${level + 1} Pips` });
-      break;
-    case 'loneWolf':
-      status.push({ label: 'Scores when played alone', value: `×${level + 1}` });
-      break;
-    case 'tank':
-      status.push(
-        { label: 'Bonus this Round', value: `+${runtime?.temporaryPips ?? 0} Pips` },
-        { label: 'Face locked', value: String(activeFace(die).rank) },
-      );
-      break;
+    case 'magnetic': status.push({ label: 'Matching Face', value: String(activeFace(die).rank) },
+      { label: 'Uses Remaining', value: usesRemaining(effect, runtime) }); break;
+    case 'jackpot': status.push({ label: 'Winning-hand reward', value: `+${3 * level} Gold` }); break;
+    case 'teamPlayer': status.push({ label: 'Other played dice', value: `×${level + 1} Pips` }); break;
+    case 'loneWolf': status.push({ label: 'Scores when played alone', value: `×${level + 1}` }); break;
+    case 'tank': status.push({ label: 'Bonus this Round', value: `+${runtime?.temporaryPips ?? 0} Pips` },
+      { label: 'Face locked', value: String(activeFace(die).rank) }); break;
     case 'freePlay':
-      freePlayRemaining = Object.fromEntries(([1, 2, 3, 4, 5, 6] as const)
-        .map(face => [face, Math.max(0, level - (runtime?.freePlayUsesByFace[face] ?? 0))])) as Record<Exclude<Rank, 7>, number>;
+      freePlayRemaining = Object.fromEntries(([1, 2, 3, 4, 5, 6] as const).map(face =>
+        [face, Math.max(0, level - (runtime?.freePlayUsesByFace[face] ?? 0))])) as Record<Exclude<Rank, 7>, number>;
       break;
-    case 'mirror':
-      status.push({ label: 'Uses Remaining', value: usesRemaining(die, runtime) });
-      break;
-    case 'missingLink':
-      status.push({ label: 'Uses Remaining', value: usesRemaining(die, runtime) });
-      break;
-    case 'doubleTime':
-      status.push({ label: 'Additional Score chance', value: fusionEffectSummary('doubleTime', level, level).before });
-      break;
-    case 'jumpingBean':
-    case 'chameleon':
-      status.push({ label: 'Uses Remaining', value: usesRemaining(die, runtime) });
-      break;
-    case 'flywheel':
-      status.push({ label: 'Uses Remaining', value: usesRemaining(die, runtime) });
-      break;
-    case 'magic':
-      status.push(
-        { label: 'Uses Remaining', value: usesRemaining(die, runtime) },
-        { label: 'Next Reroll', value: runtime?.magicArmedFace === null || runtime?.magicArmedFace === undefined
-          ? 'Not armed' : String(runtime.magicArmedFace) },
-      );
-      break;
-    case 'conjoined':
-      status.push({ label: 'Uses Remaining', value: usesRemaining(die, runtime) });
-      break;
+    case 'doubleTime': status.push({ label: 'Additional Score chance', value: fusionEffectSummary('doubleTime', level, level).before }); break;
+    case 'magic': status.push({ label: 'Uses Remaining', value: usesRemaining(effect, runtime) },
+      { label: 'Next Reroll', value: runtime?.magicArmedFace == null ? 'Not armed' : String(runtime.magicArmedFace) }); break;
     case 'furnace': {
       const units = runtime?.furnaceUnits ?? 0;
-      status.push(
-        { label: 'Fed Gold', value: `${units} / 5` },
-        { label: 'Current bonus', value: `+${units * 3 * level} Pips` },
-      );
+      status.push({ label: 'Fed Gold', value: `${units} / 5` }, { label: 'Current bonus', value: `+${units * 3 * level} Pips` });
       break;
     }
-    case 'sustainable':
-      status.push({ label: 'Uses Remaining', value: usesRemaining(die, runtime) });
-      break;
   }
-
-  return { description: dieEffectDescription(die.type, level), status, freePlayRemaining };
+  return { description: dieEffectDescription(effect.type, level), status, freePlayRemaining };
 }
+
+export const effectDefinition = (type: SpecialDieType) => SPECIAL_DICE[type];

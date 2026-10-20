@@ -14,7 +14,7 @@ function shopBeforeMini(type: MiniBossType): GameState {
   state.phase = 'shop';
   state.round = 2;
   state.currentNodeId = 'shop:before-round:3';
-  state.shop = { stage: 'fireKeeping', offers: [], offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { stage: 'flames', offers: [], offerRerolls: 0, lifeRestores: 0 };
   state.bossSchedule[3] = type;
   return state;
 }
@@ -38,6 +38,7 @@ test('Mini-Boss map, preview, encounter label, and Neglected badges reuse the bo
 
   await expect(page.getByTestId('boss-preview')).toContainText('MINI-BOSS');
   await expect(page.getByTestId('boss-preview')).toContainText('THE NEGLECTED');
+  await expect(page.getByTestId('boss-preview')).toContainText('Defeat: +2 Temper');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   const map = page.getByTestId('run-map-transition');
   await expect(map).toHaveAttribute('data-destination', 'boss:3');

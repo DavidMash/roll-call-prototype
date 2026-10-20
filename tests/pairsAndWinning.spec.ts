@@ -113,6 +113,6 @@ test('winning hand shows its final award, physical settle, and ROUND CLEARED in 
     const die = dieId === null ? null : fixture.result.state.diceInventory.instances[dieId];
     const card = page.getByTestId(`collection-slot-roster-${slot}`);
     await expect(card).toHaveAttribute('data-die-id', String(dieId));
-    await expect(card.locator('.pip-face')).toHaveAttribute('aria-label', `Normal showing ${die!.value}`);
+    await expect(card.locator('.pip-face')).toHaveAttribute('aria-label', `Normal die showing ${die!.value}`);
   }
 });

@@ -8,7 +8,7 @@ A run owns collectible dice with stable IDs. `diceInventory.instances` is the di
 
 `Board.dice` is the active encounter reference projection. Its player entries alias the equipped inventory instances in Roster order, followed by any tagged temporary encounter dice. The array is rebuilt from inventory/encounter authority and must never be used to infer ownership or Storage membership. This compact projection is retained for resolution, playback, and Round UI.
 
-Collectible dice have one whole-die type and a level. Normal dice remain level 1. Special dice can be bought, sold, moved between Roster and Storage, and fused with an identical type; the destination ID survives and levels add. The Shop uses rarity-first seeded offer generation. Storage dice do not Roll, Score, activate, or participate in encounter logic.
+Each collectible die owns an independent list of effect instances. Normal dice have no effects; a Shop die begins with one. Fusion adds levels when one input's effect set contains the other, while a true Forge combines different effect sets. Die A keeps its stable identity and Die B is consumed. The Shop uses rarity-first seeded offer generation. Storage dice do not Roll, Score, activate, or participate in encounter logic.
 
 ## Play, Score, and Roll
 
@@ -27,11 +27,11 @@ Scoring is authoritative domain arithmetic:
 round(Inferno × Pips × Mult × XMult × Boss factor)
 ```
 
-Hand Base Pips and Base Mult come from the trained hand level. Whole-die effects contribute through the typed Score, Qualification, Roll-controller, and post-Roll boundaries.
+Hand Base Pips and Base Mult come from the trained hand level. Composable effects contribute through typed Score, Qualification, Roll-controller, and post-Roll boundaries. Roll controllers use a fixed priority and only the winning controller spends a use.
 
 ## Rounds, Busts, and persistence
 
-Each attempt starts with three manual reroll charges. A manual Reroll excludes the die's current ordinary face from the seeded distribution. Automatic and controller-driven Rolls follow their explicit rules.
+Each attempt starts with three manual reroll charges. A manual Reroll excludes the die's current ordinary face from the seeded distribution. Automatic and controller-driven Rolls follow their explicit rules. Temper is earned from encounter and Flame milestones and persists as the Forge currency.
 
 When the score is below the target and no legal hand or reroll remains, the attempt Busts. The Round checkpoint restores the committed build and Shop visit, subtracts a life, and increments the attempt number. Players return to the same semantic Shop before retrying. Attempt-local score, consumed hands, exposed faces, Invocations, temporary die growth, Charge, and other Round state roll back; committed collection, Training, and Fire Keeping transactions remain.
 
@@ -42,14 +42,15 @@ The browser stores one active current-schema run. Persistence is deliberately ve
 One authoritative Shop visit has one `visitId` and a persisted stage:
 
 ```text
-DICE | TRAINING | FIRE KEEPING
+SHOP | FORGE | TRAIN | FLAMES
 ```
 
-Navigation consumes no RNG and does not rebuild offers or session state. Bust restoration keeps the visit and returns its view to DICE.
+Navigation consumes no RNG and does not rebuild offers or session state. FORGE appears permanently after the run first earns Temper; FLAMES appears only while the player owns a Flame. Bust restoration keeps the visit and returns its view to SHOP.
 
-- DICE has three persistent seeded offers plus Roster/Storage movement, selling, fusion, details, and Weighted configuration. Offer rerolls remain available; owned dice are not physically rerolled in the Shop.
-- TRAINING displays the scorecard and allows every hand to be trained repeatedly.
-- FIRE KEEPING manages the five global Flame slots and is the only stage that exits to the next attempt.
+- SHOP has three persistent seeded offers plus Roster/Storage movement, selling, details, and Weighted configuration. Offer rerolls remain available; owned dice are not physically rerolled in the Shop.
+- FORGE combines two special dice through Fusion or true Forge, charging the previewed Temper cost.
+- TRAIN displays the scorecard and allows every hand to be trained repeatedly.
+- FLAMES manages the five global Flame slots. The bottom CTA advances through available sections and exits from the final one.
 
 Special Offers and Flame Selection are post-Boss rewards outside the normal staged Shop.
 
@@ -86,7 +87,7 @@ Temporary boss dice occupy a separate identity namespace, are never owned, and n
 
 ## History and debugging
 
-Run History V2 is the balance-analysis authority. It records semantic Shop visits, offer impressions, Dice transactions, Roster-at-Round-start snapshots, Score occurrences, special-die activations and Invocation changes, Roll controllers, Training sessions/purchases, global Flame lifecycle, Charge attribution, Engulfment, Boss state, exact scores, economy, and rollback timelines.
+Run History V2 is the balance-analysis authority. It records semantic Shop visits, offer impressions, Dice and Forge transactions, Temper changes, Roster-at-Round-start effect snapshots, Score occurrences, effect activations and Invocation changes, Roll controllers, Training sessions/purchases, global Flame lifecycle, Charge attribution, Engulfment, Boss state, exact scores, economy, and rollback timelines.
 
 The text export begins with Result, Final Build, Economy, and Balance summaries, followed by the chronological canonical/experienced history. Stable IDs remain visible in deep history where lifecycle joins matter; player-facing Round labels use Roster positions.
 

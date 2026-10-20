@@ -1,4 +1,4 @@
-import type { DieType, Flame, SpecialOffer, SpecialOfferType } from './types';
+import type { Flame, SpecialDieType, SpecialOffer, SpecialOfferType } from './types';
 import type { RichText } from './richText';
 import { effect, richTextToPlain, term, text } from './richText';
 import { GLOSSARY } from './glossary';
@@ -6,7 +6,7 @@ import { GLOSSARY } from './glossary';
 const uses = (count: number): RichText => [text(`This power can be used ${count} ${count === 1 ? 'time' : 'times'} per Round.`)];
 const sentenceWithUses = (sentence: RichText, count: number): RichText => [...sentence, text(' '), ...uses(count)];
 
-export function specialDieVerboseDescription(type: DieType, level: number): RichText {
+export function specialDieVerboseDescription(type: SpecialDieType, level: number): RichText {
   const count = Math.max(1, Math.floor(level));
   const guaranteedAdditionalScores = Math.floor(count / 4);
   const additionalScoreChance = (count % 4) * 25;
@@ -15,8 +15,7 @@ export function specialDieVerboseDescription(type: DieType, level: number): Rich
     : [text('Each time this die '), term('score', 'Scores'),
       text(`, it will Score ${guaranteedAdditionalScores} additional ${guaranteedAdditionalScores === 1 ? 'time' : 'times'}`),
       ...(additionalScoreChance ? [text(`, with a ${additionalScoreChance}% chance to Score one more time`)] : []), text('.')];
-  const descriptions: Record<DieType, RichText> = {
-    normal: [text('This die has no special effect.')],
+  const descriptions: Record<SpecialDieType, RichText> = {
     bonus: [text('Whenever this die '), term('score', 'Scores'), text(`, it adds +${10 * count} `), term('pips'), text(' to the '), term('hand'), text('.')],
     workout: [text('Each time this die '), term('score', 'Scores'), text(`, it gains +${2 * count} `), term('pips'), text(' for the rest of the current '), term('round'), text('.')],
     vintage: [text('Each time this die '), term('score', 'Scores'), text(`, its `), term('sellValue'), text(` increases by ${count} Gold. Its Sell Value can increase by up to ${90 * count} Gold this way.`)],
@@ -36,7 +35,9 @@ export function specialDieVerboseDescription(type: DieType, level: number): Rich
     missingLink: sentenceWithUses([text('During '), term('handQualification'), text(' for a Straight, this die can act as any face value you need. Its actual '), term('exposedFace'), text(' does not change.')], count),
     doubleTime: doubleTimeCopy,
     jumpingBean: sentenceWithUses([term('onCommand'), text(', '), term('freePlay'), text(' the '), term('upperHand'), text(' that matches this die\'s '), term('exposedFace'), text('. After that Play, this die is '), term('roll', 'Rolled'), text(' again.')], count),
-    furnace: [text(`You can spend Gold to permanently increase this die's `), term('pips'), text(`. Each Gold spent adds +${3 * count} Pips, up to a maximum bonus of +${15 * count} Pips.`)],
+    furnace: [text('During a Round, you can feed this effect up to 5 Gold units. Each remaining unit adds '),
+      text(`+${3 * count} `), term('pips'), text(' whenever this die '), term('score', 'Scores'),
+      text('. One unit is consumed per Score, and all remaining units reset at the end of the Round.')],
     sustainable: sentenceWithUses([text('If this die '), term('score', 'Scores'), text(' in a '), term('hand'), text(', that Hand remains available and can be '), term('play', 'Played'), text(' again later in the '), term('round'), text('.')], count),
     magic: sentenceWithUses([term('onCommand'), text(', choose which '), term('exposedFace'), text(' this die will show the next time it is Rerolled.')], count),
     conjoined: sentenceWithUses([text('This die acts like two dice showing the same face. For example, this die can be '), term('play', 'Played'), text(' by itself as a Pair, or '), term('score'), text(' in an '), term('upperHand'), text(' as if two dice were Played.')], count),

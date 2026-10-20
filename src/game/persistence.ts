@@ -6,7 +6,7 @@ import { stringifyExactJson } from './scoreMath';
 import type { BadDreamCheckpoint, GameState } from './types';
 
 export const RUN_STORAGE_KEY = 'roll-call:active-run';
-export const RUN_STORAGE_VERSION = 19;
+export const RUN_STORAGE_VERSION = 20;
 
 type RunStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
@@ -70,7 +70,7 @@ export function compactGameStateForPersistence(state: GameState): GameState {
   compact.stats.handScores = empty.handScores;
   compact.stats.jumpingBeanFreePlays = empty.jumpingBeanFreePlays;
   compact.stats.loss = null;
-  return compact;
+  return normalizeGameState(compact);
 }
 
 export function browserRunStorage(): RunStorage | null {

@@ -107,7 +107,7 @@ describe('Run History V2 Pass 3 ownership', () => {
       state = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, { next: () => 0 }).state;
       checkpointSizes.push(Buffer.byteLength(stringifyExactJson(state.roundCheckpoint)));
       if (attempt === 0) {
-        state.shop!.stage = 'fireKeeping';
+        state.shop!.stage = 'flames';
         state = dispatch(state, { type: 'RETRY_ROUND' }, { next: () => 0 }).state;
       }
     }

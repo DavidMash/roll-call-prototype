@@ -79,11 +79,11 @@ test('shared action row keeps manipulation left and progression right on narrow 
   expect(shopLayout.rowRight - shopLayout.rightRight).toBeLessThan(12);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
-  await goToShopStage(page, 'fireKeeping');
+  await goToShopStage(page, 'flames');
   await expect(row.getByRole('button', { name: 'NEXT ROUND', exact: true })).toBeVisible();
 
   shop.shop!.kind = 'post_boss';
-  shop.shop!.stage = 'fireKeeping';
+  shop.shop!.stage = 'flames';
   await installRun(page, shop);
   await expect(row.getByRole('button', { name: 'NEXT CHAPTER', exact: true })).toBeVisible();
   await expect(row.getByRole('button', { name: 'NEXT ROUND', exact: true })).toHaveCount(0);

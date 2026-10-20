@@ -17,7 +17,7 @@ import { formatPlayerNumber, formatScoreEquation, formatScoreProgress, playActio
 import { DecisionTimer } from '../game/decisionTimer';
 import { usableManualRerolls } from '../game/specialOffers';
 import { RunActionLayout, RunActionPortal } from './RunActionRow';
-import { SPECIAL_DICE } from '../game/specialDice';
+import { effectRuntime } from '../game/specialDice';
 import { DieTypeLabel } from './DieTypeLabel';
 
 export function RoundScreen({ board, event, busy, inputBlocked, selection, setSelection, submit, skip }: {
@@ -138,9 +138,9 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     </div>
     <BossPanel board={board} />
     {scorecardRefreshing && <div className="scorecard-refresh-celebration" data-testid="scorecard-refresh-celebration"
-      role="status" aria-live="polite" aria-atomic="true" aria-label="Scorecard filled. All hands refreshed.">
-      <span aria-hidden="true">SCORECARD FILLED</span>
-      <strong aria-hidden="true">ALL HANDS REFRESHED</strong>
+      role="status" aria-live="polite" aria-atomic="true" aria-label="Board refresh. Plus 2 Temper. All hands refreshed.">
+      <span aria-hidden="true">BOARD REFRESH</span>
+      <strong aria-hidden="true">+2 TEMPER · ALL HANDS REFRESHED</strong>
     </div>}
     {!busy && !awaitingWardenChoice && deadBoard && manualRerolls > 0 && <Alert className="round-status" color="orange" py={5} title="NO PLAYABLE HANDS" role="status">
       Use a Reroll.
@@ -193,16 +193,15 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     <Modal opened={qualificationChoiceOpen} onClose={() => setQualificationChoiceOpen(false)}
       title="HOW SHOULD THIS HAND QUALIFY?" centered>
       <Stack gap="xs">{qualification?.claimOptions.map((option, index) => <Button key={index} variant="default" fullWidth
-        onClick={() => commitPlay(option.map(claim => ({ dieId: claim.dieId, effect: claim.effect })))}>
+        onClick={() => commitPlay(option.map(claim => ({ dieId: claim.dieId, effect: claim.effect, effectInstanceId: claim.effectInstanceId })))}>
         {option.map((claim, claimIndex) => {
           const die = board.dice.find(item => item.id === claim.dieId);
           const rosterSlot = board.dice.filter(item => item.owner === 'player').findIndex(item => item.id === claim.dieId);
-          const remaining = board.dieRoundState[claim.dieId]?.invocationsRemaining ?? 0;
+          const effect = die?.owner === 'player' ? die.effects.find(item => item.id === claim.effectInstanceId) : undefined;
+          const remaining = effectRuntime(board.dieRoundState[claim.dieId], effect)?.invocationsRemaining ?? 0;
           return <span className="qualification-claim" key={`${claim.dieId}:${claim.effect}`}>
             {claimIndex > 0 && <span> + </span>}
-            {die?.owner === 'player' && die.type !== 'normal'
-              ? <DieTypeLabel type={die.type} level={die.level} />
-              : <span>{die?.owner === 'player' ? SPECIAL_DICE[die.type].name : claim.effect}</span>}
+            {effect ? <DieTypeLabel type={effect.type} level={effect.level} /> : <span>{claim.effect}</span>}
             <span>{`${rosterSlot < 0 ? '' : ` · Roster ${rosterSlot + 1}`} — ${remaining} Use${remaining === 1 ? '' : 's'} Remaining · ${claim.effect === 'missingLink' ? 'Straight Wild' : claim.effect === 'conjoined' ? 'Two-die presence' : 'Matching Wild'}`}</span>
           </span>;
         })}

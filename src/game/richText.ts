@@ -1,4 +1,4 @@
-import type { DieType, Flame, SpecialOfferType } from './types';
+import type { Flame, SpecialDieType, SpecialOfferType } from './types';
 
 export type GlossaryTermId =
   | 'roll' | 'manualReroll' | 'exposedFace' | 'play' | 'hand' | 'handQualification'
@@ -8,7 +8,7 @@ export type GlossaryTermId =
   | 'build' | 'targetHand' | 'weightedFace' | 'sellValue' | 'bossEffect';
 
 export type EffectReference =
-  | { kind: 'die'; id: DieType }
+  | { kind: 'die'; id: SpecialDieType }
   | { kind: 'flame'; id: Flame }
   | { kind: 'offer'; id: SpecialOfferType };
 

@@ -13,6 +13,7 @@ export function BossPanel({ board }: { board: Board }) {
   if (!boss) return null;
   const definition = BOSSES[boss.type];
   const tier = isMiniBossType(boss.type) ? 'MINI-BOSS' : 'BOSS';
+  const temperReward = isMiniBossType(boss.type) ? 2 : 3;
   const compactStatus = (() => {
     if (board.bossSilenced) return 'SILENCED';
     switch (boss.type) {
@@ -67,6 +68,7 @@ export function BossPanel({ board }: { board: Board }) {
         <Text>{definition.shortRule}</Text>
         <Paper p="sm" className="boss-info-current"><Text size="xs" fw={900} tt="uppercase" c="dimmed">Current state</Text>
           <Text size="sm" mt={3}>{modalState}</Text></Paper>
+        <Text size="sm" fw={850} c="orange">Defeat: +{temperReward} Temper</Text>
         {boss.type === 'magician' && !boss.returned && <Group gap={4} data-testid="magician-calls">
           {boss.calledHands.map(hand => <Badge key={hand} size="xs" variant="light"
             color={boss.completedHands.includes(hand) ? 'teal' : 'grape'}>{boss.completedHands.includes(hand) ? '✓ ' : ''}{HANDS[hand].name}</Badge>)}
@@ -81,9 +83,11 @@ export function BossPreview({ board }: { board: Board }) {
   const bossType = board.bossSchedule[nextRound];
   if (!bossType) return null;
   const boss = BOSSES[bossType];
+  const temperReward = isMiniBossType(bossType) ? 2 : 3;
   return <Paper p="sm" className={`boss-preview boss-${bossType}`} data-testid="boss-preview">
     <Group justify="space-between"><div><Text size="xs" fw={900} tt="uppercase" lts=".14em">Incoming · {chapterLabel(nextRound)}</Text>
       <Text fw={950}>{boss.name}</Text></div><Badge variant="light">{isMiniBossType(bossType) ? 'MINI-BOSS' : 'BOSS'}</Badge></Group>
     <Text size="sm" mt={5}>{boss.shortRule}</Text>
+    <Text size="xs" fw={850} c="orange" mt={4}>Defeat: +{temperReward} Temper</Text>
   </Paper>;
 }

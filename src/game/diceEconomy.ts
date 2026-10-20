@@ -1,8 +1,10 @@
 import { createCollectibleDie } from './dice';
 import { randomIndex } from './rng';
 import { SPECIAL_DICE, SPECIAL_DIE_TYPES } from './specialDice';
-import type { CollectibleDie, DiceInventory, DiceOffer, DiceRarity, DiceSlotRef, DieId, DieType, RandomSource } from './types';
+import type { CollectibleDie, DiceInventory, DiceOffer, DiceRarity, DiceSlotRef, DieId, RandomSource, SpecialDieType } from './types';
+export type { SpecialDieType } from './types';
 import { plainDescription, specialDieVerboseDescription } from './effectDescriptions';
+export { dieSellBreakdown } from './forge';
 
 export const DICE_OFFER_COUNT = 3;
 export const DICE_RARITY_WEIGHTS: Readonly<Record<DiceRarity, number>> = {
@@ -18,16 +20,12 @@ export const DICE_PRICES: Readonly<Record<DiceRarity, number>> = {
   legendary: 40,
 };
 export const DICE_RARITY_ORDER: readonly DiceRarity[] = ['common', 'uncommon', 'rare', 'legendary'];
-export type SpecialDieType = Exclude<DieType, 'normal'>;
-
 export function specialDieRarity(type: SpecialDieType): DiceRarity {
-  const rarity = SPECIAL_DICE[type].rarity;
-  if (!rarity) throw new Error('Normal dice do not have a Shop rarity.');
-  return rarity;
+  return SPECIAL_DICE[type].rarity;
 }
 
 export function diePurchasePrice(type: SpecialDieType): number {
-  return DICE_PRICES[specialDieRarity(type)];
+  return SPECIAL_DICE[type].purchasePrice;
 }
 
 function chooseRarity(rng: RandomSource): DiceRarity {
@@ -45,7 +43,7 @@ function chooseRarity(rng: RandomSource): DiceRarity {
 /** Rarity-first, with replacement. Duplicate die types are deliberately possible. */
 export function generateDiceOfferTypes(rng: RandomSource, count = DICE_OFFER_COUNT): SpecialDieType[] {
   const pools = Object.fromEntries(DICE_RARITY_ORDER.map(rarity => [rarity,
-    SPECIAL_DIE_TYPES.filter((type): type is SpecialDieType => type !== 'normal' && SPECIAL_DICE[type].rarity === rarity)])) as Record<DiceRarity, SpecialDieType[]>;
+    SPECIAL_DIE_TYPES.filter(type => SPECIAL_DICE[type].rarity === rarity)])) as Record<DiceRarity, SpecialDieType[]>;
   return Array.from({ length: count }, () => {
     const rarity = chooseRarity(rng);
     return pools[rarity][randomIndex(rng, pools[rarity].length)];
@@ -56,13 +54,6 @@ export function createDiceOffers(rng: RandomSource, allocateId: () => number): D
   return generateDiceOfferTypes(rng).map(dieType => ({
     id: allocateId(), dieType, rarity: specialDieRarity(dieType), price: diePurchasePrice(dieType), purchased: false,
   }));
-}
-
-export function dieSellBreakdown(die: CollectibleDie): { base: number; vintageAppreciation: number; total: number } {
-  if (die.type === 'normal') return { base: 1, vintageAppreciation: 0, total: 1 };
-  const base = Math.floor(diePurchasePrice(die.type) * die.level * .5);
-  const vintageAppreciation = die.type === 'vintage' ? die.vintageAppreciation : 0;
-  return { base, vintageAppreciation, total: base + vintageAppreciation };
 }
 
 export function slotValue(inventory: DiceInventory, slot: DiceSlotRef): DieId | null | undefined {
@@ -96,10 +87,6 @@ export function purchaseDie(inventory: DiceInventory, type: SpecialDieType): { d
   return { die, slot };
 }
 
-export function canFuse(source: CollectibleDie, destination: CollectibleDie): boolean {
-  return source.id !== destination.id && source.type !== 'normal' && source.type === destination.type;
-}
-
 export function fusionEffectSummary(type: SpecialDieType, fromLevel: number, toLevel: number): { label: string; before: string; after: string } {
   const numeric = (level: number): string => {
     switch (type) {
@@ -131,6 +118,6 @@ export function fusionEffectSummary(type: SpecialDieType, fromLevel: number, toL
   return { label: labels[type] ?? 'Uses per Round', before: numeric(fromLevel), after: numeric(toLevel) };
 }
 
-export function dieEffectDescription(type: DieType, level: number): string {
+export function dieEffectDescription(type: SpecialDieType, level: number): string {
   return plainDescription(specialDieVerboseDescription(type, level));
 }

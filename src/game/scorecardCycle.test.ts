@@ -35,7 +35,8 @@ describe('authoritative scorecard cycles', () => {
     const result = playFinalHand(state);
     const refresh = result.events.find(event => event.type === 'SCORECARD_REFRESHED');
 
-    expect(refresh?.message).toBe('Scorecard filled · all hands refreshed');
+    expect(refresh?.message).toBe('BOARD REFRESH · +2 TEMPER · all Hands refreshed');
+    expect(result.state.temper).toBe(state.temper + 2);
     expect(result.state.phase).toBe('round');
     expect(result.state.round).toBe(state.round);
     expect(result.state.score).toBe(BigInt(81n));

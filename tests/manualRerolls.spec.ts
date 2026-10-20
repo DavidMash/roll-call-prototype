@@ -104,11 +104,11 @@ function deadBoardRun(rescue: boolean) {
         game = dispatch(game, action).state;
       }
       if (game.phase === 'shop') {
-        game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
-        prefix.push({ type: 'SET_SHOP_STAGE', stage: 'training' });
+        game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'train' }).state;
+        prefix.push({ type: 'SET_SHOP_STAGE', stage: 'train' });
         if (game.flameSlots.some(Boolean)) {
-          game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
-          prefix.push({ type: 'SET_SHOP_STAGE', stage: 'fireKeeping' });
+          game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'flames' }).state;
+          prefix.push({ type: 'SET_SHOP_STAGE', stage: 'flames' });
         }
         const action: Action = game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' };
         prefix.push(action);
@@ -268,9 +268,9 @@ test('Bust UI and retry keep a depleted Care Package reserve depleted', async ({
   await expect(page.getByTestId('bust-shop-banner')).toBeVisible();
   await expect(page.getByTestId('special-effect-carePackage')).toHaveCount(0);
 
-  await goToShopStage(page, 'fireKeeping');
-  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
-  if (game.flameSlots.some(Boolean)) game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
+  await goToShopStage(page, 'flames');
+  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'train' }).state;
+  if (game.flameSlots.some(Boolean)) game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'flames' }).state;
   await page.getByRole('button', { name: `RETRY ROUND ${game.round}`, exact: true }).click();
   game = dispatch(game, { type: 'RETRY_ROUND' }).state;
   await matchRound(page, game);
@@ -311,7 +311,7 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   const failedRound = game.round;
   const expectedShop = structuredClone(game.roundCheckpoint?.board.shop);
   expect(expectedShop).toBeTruthy();
-  expectedShop!.stage = 'dice';
+  expectedShop!.stage = 'shop';
   const bustResult = dispatch(game, { type: 'MANUAL_REROLL', dieIds: [0] });
   const bustEventIndex = bustResult.events.findIndex(event => event.type === 'ROUND_BUST');
   const terminalDice = bustResult.events[bustEventIndex].board.bustPresentationDice!;
@@ -350,9 +350,9 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   await page.getByTestId('stat-lives').click();
   await expect(page.getByRole('dialog', { name: 'RESTORE LIVES' })).toBeVisible();
   await page.keyboard.press('Escape');
-  await goToShopStage(page, 'fireKeeping');
-  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'training' }).state;
-  if (game.flameSlots.some(Boolean)) game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'fireKeeping' }).state;
+  await goToShopStage(page, 'flames');
+  game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'train' }).state;
+  if (game.flameSlots.some(Boolean)) game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'flames' }).state;
   await page.getByRole('button', { name: `RETRY ROUND ${failedRound}`, exact: true }).click();
   game = dispatch(game, { type: 'RETRY_ROUND' }).state;
   await matchRound(page, game);

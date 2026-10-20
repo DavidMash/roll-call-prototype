@@ -1,6 +1,7 @@
 import { CONFIG } from './config';
 import type { CollectibleDie, DiceInventory, Die, DieType, Face, HexerFace, PhysicalFace, RandomSource, Rank } from './types';
 import { rosterTuple, storageTuple, STORAGE_SLOT_COUNT } from './inventory';
+import { createDieEffect } from './specialDice';
 
 export const RANKS: Rank[] = [1, 2, 3, 4, 5, 6];
 export const HAND_RANKS: Rank[] = [1, 2, 3, 4, 5, 6, 7];
@@ -22,8 +23,7 @@ export function createCollectibleDie(id: number, type: DieType = 'normal', level
   if (!Number.isSafeInteger(level) || level < 1 || (type === 'normal' && level !== 1))
     throw new Error('Collectible die level must be a positive integer; Normal dice remain level 1.');
   return {
-    id, value: 1, owner: 'player', type, level,
-    vintageAppreciation: 0, weightedFace: 6,
+    id, value: 1, owner: 'player', effects: type === 'normal' ? [] : [createDieEffect(id, type, level)],
     faces: RANKS.map(rank => ({ rank } satisfies PhysicalFace)),
   };
 }

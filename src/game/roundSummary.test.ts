@@ -4,7 +4,7 @@ import { Resolver } from './effects';
 import { HAND_IDS } from './hands';
 import type { GameState, RandomSource } from './types';
 import { isChapterMapTransition, isPlaybackBarrier } from './playback';
-import { resetDieRoundState } from './specialDice';
+import { createDieEffect, resetDieRoundState } from './specialDice';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
 
 const constant = (value = .99): RandomSource => ({ next: () => value });
@@ -23,8 +23,8 @@ function clearState(gold: number): GameState {
 describe('authoritative Round Summary', () => {
   it('reconciles scoring Gold and standard payout for a normal encounter', () => {
     const state = clearState(4);
-    rosterDice(state)[0].type = 'golden';
-    rosterDice(state)[1].type = 'jackpot';
+    rosterDice(state)[0].effects = [createDieEffect(rosterDice(state)[0].id, 'golden')];
+    rosterDice(state)[1].effects = [createDieEffect(rosterDice(state)[1].id, 'jackpot')];
     syncActiveDiceProjection(state);
     state.dieRoundState = resetDieRoundState(rosterDice(state));
     const result = dispatch(state, { type: 'PLAY', hand: 'sixes', dieIds: [0, 1] }, constant());

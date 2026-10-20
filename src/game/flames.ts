@@ -7,6 +7,7 @@ import { formatPlayerNumber } from './copy';
 import type { ExactScore } from './scoreMath';
 import type { RichText } from './richText';
 import { flameVerboseDescription, plainDescription } from './effectDescriptions';
+import { hasEffect } from './specialDice';
 
 export interface FlameDefinition {
   name: string;
@@ -306,9 +307,9 @@ export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'en
     dice: state.dice.map(die => ({ dieId: die.id,
       rosterSlot: die.owner === 'player' ? state.dice.filter(item => item.owner === 'player').findIndex(item => item.id === die.id) : null,
       faceValue: activeFace(die).rank, physicalFace: die.value,
-      golden: die.owner === 'player' && die.type === 'golden' && !wholeDieEffectSuppressed(die),
-      jackpot: die.owner === 'player' && die.type === 'jackpot' && !wholeDieEffectSuppressed(die),
-      vintage: die.owner === 'player' && die.type === 'vintage' && !wholeDieEffectSuppressed(die) })),
+      golden: die.owner === 'player' && hasEffect(die, 'golden') && !wholeDieEffectSuppressed(die),
+      jackpot: die.owner === 'player' && hasEffect(die, 'jackpot') && !wholeDieEffectSuppressed(die),
+      vintage: die.owner === 'player' && hasEffect(die, 'vintage') && !wholeDieEffectSuppressed(die) })),
   };
 }
 
@@ -400,7 +401,7 @@ export const composeXMult = (factors: readonly (number | XMultFactor)[]) =>
     .reduce((product, value) => product * value, 1).toFixed(12));
 export const ownedFlameIds = (state: Pick<Board, 'flameSlots'>) => new Set<Flame>(flameInstances(state).map(flame => flame.type));
 const hasBuildDie = (state: Pick<GameState, 'dice'>, types: readonly import('./types').DieType[]) =>
-  state.dice.some(die => die.owner === 'player' && types.includes(die.type));
+  state.dice.some(die => die.owner === 'player' && die.effects.some(effect => types.includes(effect.type)));
 
 /** Build prerequisites required by actual Flame activation paths. Self-enabling Flames remain unrestricted. */
 export function flameEligible(state: Pick<GameState, 'dice' | 'flameSlots'>, id: Flame): boolean {

@@ -7,7 +7,7 @@ import {
   placeFlameInstance, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, speedDemonMultiplier,
 } from './flames';
 import type { Flame, GameState, RandomSource, Rank } from './types';
-import { resetDieRoundState } from './specialDice';
+import { createDieEffect, resetDieRoundState, runtimeFor } from './specialDice';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
 
 const constant = (value = .99): RandomSource => ({ next: () => value });
@@ -30,8 +30,7 @@ function flame(state: GameState, dieId: number, id: Flame, investedGold: number)
 }
 
 function magnetic(state: GameState, dieId: number, level = 1): void {
-  rosterDice(state)[dieId].type = 'magnetic';
-  rosterDice(state)[dieId].level = level;
+  rosterDice(state)[dieId].effects = [createDieEffect(rosterDice(state)[dieId].id, 'magnetic', level)];
   syncActiveDiceProjection(state);
   state.dieRoundState = resetDieRoundState(rosterDice(state));
 }
@@ -132,7 +131,7 @@ describe('Magnetic source use and Flux Capacitor', () => {
     const resolver = new Resolver(state, constant(0));
     resolver.rollBatch([0, 1], 'two pulls', 'gameplay');
     expect(state.dice.slice(0, 2).map(die => die.value)).toEqual([6, 6]);
-    expect(state.dieRoundState[4].invocationsRemaining).toBe(0);
+    expect(runtimeFor(rosterDice(state)[4], state.dieRoundState[4], 'magnetic')?.invocationsRemaining).toBe(0);
   });
 
   it('counts all pulled Magnetic faces once per activation for investment-scaled Flux', () => {
@@ -161,12 +160,12 @@ describe('Magnetic source use and Flux Capacitor', () => {
     resolver.rollBatch([0, 1], 'clamped pull', 'gameplay');
     expect(state.chargeXMult).toBe(5);
     expect(state.stats.flameTriggers.fluxCapacitor).toBe(1);
-    expect(state.dieRoundState[4].invocationsRemaining).toBe(0);
+    expect(runtimeFor(rosterDice(state)[4], state.dieRoundState[4], 'magnetic')?.invocationsRemaining).toBe(0);
 
     state.phase = 'shop';
     state.shop = { offers: [], offerRerolls: 0, lifeRestores: 0 };
     new Resolver(state, constant(.8)).startRound();
-    expect(state.dieRoundState[4].invocationsRemaining).toBe(2);
+    expect(runtimeFor(rosterDice(state)[4], state.dieRoundState[4], 'magnetic')?.invocationsRemaining).toBe(2);
     expect(state.chargeXMult).toBe(1);
   });
 });

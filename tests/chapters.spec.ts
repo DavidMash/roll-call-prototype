@@ -195,7 +195,7 @@ test('expanded current Round preserves a substantially large formatted target wi
   state.round = targetRound - 1;
   state.phase = 'shop';
   state.currentNodeId = `shop:before-round:${targetRound}`;
-  state.shop = { kind: 'between_rounds', stage: 'fireKeeping', offers: [], offerRerolls: 0, lifeRestores: 0 };
+  state.shop = { kind: 'between_rounds', stage: 'flames', offers: [], offerRerolls: 0, lifeRestores: 0 };
   state.bust = null;
 
   await page.goto(`/?seed=${state.seed}&speed=normal`);
@@ -256,7 +256,7 @@ test('the post-Boss Shop stays in the completed Chapter until NEXT CHAPTER start
   await expect(map).toHaveCount(0);
   await expect(page.locator('.shop-summary').getByText('SHOP', { exact: true })).toBeVisible();
   await expect(page.getByTestId('stat-round')).toContainText('C1 R6');
-  await goToShopStage(page, 'fireKeeping');
+  await goToShopStage(page, 'flames');
   await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
   await expect(page.getByRole('button', { name: 'NEXT CHAPTER', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'NEXT ROUND', exact: true })).toHaveCount(0);

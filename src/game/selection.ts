@@ -5,6 +5,7 @@ import { handOptions, HAND_IDS, isValidSelection, sameDice } from './hands';
 import { finalizeScore, handScore } from './scoring';
 import type { Board, CollectibleDie, Die, HandId } from './types';
 import { scoreCompare, type ExactScore } from './scoreMath';
+import { effectOf, effectRuntime } from './specialDice';
 
 export interface Selection { dieIds: number[]; hand: HandId | null; intent?: 'hand' | 'manual' }
 export const emptySelection = (): Selection => ({ dieIds: [], hand: null });
@@ -34,11 +35,14 @@ function projectedCombinationScore(board: Board, hand: HandId, dieIds: number[],
   const deterministicWholeDiePips = selected.reduce((total, die) => {
     if (wholeDieEffectSuppressed(die)) return total;
     const runtime = board.dieRoundState[die.id];
-    const special = (die.type === 'bonus' ? 10 * die.level : 0)
-      + (die.type === 'furnace' ? (runtime?.furnaceUnits ?? 0) * 3 * die.level : 0)
-      + (runtime?.temporaryPips ?? 0);
-    const teamFactor = selected.filter(other => other.id !== die.id && other.type === 'teamPlayer'
-      && !wholeDieEffectSuppressed(other)).reduce((factor, teamPlayer) => factor * (teamPlayer.level + 1), 1);
+    const bonus = effectOf(die, 'bonus');
+    const furnace = effectOf(die, 'furnace');
+    const special = (bonus ? 10 * bonus.level : 0)
+      + (furnace ? (effectRuntime(runtime, furnace)?.furnaceUnits ?? 0) * 3 * furnace.level : 0)
+      + (effectRuntime(runtime, effectOf(die, 'workout'))?.temporaryPips ?? 0)
+      + (effectRuntime(runtime, effectOf(die, 'tank'))?.temporaryPips ?? 0);
+    const teamFactor = selected.filter(other => other.id !== die.id && !!effectOf(other, 'teamPlayer')
+      && !wholeDieEffectSuppressed(other)).reduce((factor, teamPlayer) => factor * (effectOf(teamPlayer, 'teamPlayer')!.level + 1), 1);
     return total + special + (scoringPips(activeFace(die)) + special) * (teamFactor - 1);
   }, 0);
   const snapshot = captureHandStart(board, hand, dieIds, decisionMs);

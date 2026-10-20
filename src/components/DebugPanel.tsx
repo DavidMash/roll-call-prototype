@@ -10,7 +10,7 @@ import { renderRunHistoryV2Event } from '../game/runHistoryV2Renderer';
 import { classifyRunHistoryV2Timelines } from '../game/runHistoryV2Timeline';
 import { activeSpecialOfferStatuses } from '../game/specialOffers';
 import type { GameState } from '../game/types';
-import { DieTypeLabel } from './DieTypeLabel';
+import { DieEffectsLabel } from './DieTypeLabel';
 
 function OverviewStat({ label, value }: { label: string; value: string | number }) {
   return <div className="modal-stat"><Text size="xs" c="dimmed" tt="uppercase">{label}</Text>
@@ -78,7 +78,7 @@ export function RunInfoModal({ state, busy, opened, onClose, seedInput, setSeedI
               const exposed = die.value === index + 1;
               return <Table.Tr key={`${die.id}:${index + 1}`} className={exposed ? 'exposed-face-row' : undefined}>
                 <Table.Td>#{die.id} · {die.owner === 'player'
-                  ? die.type === 'normal' ? `D${state.dice.filter(item => item.owner === 'player').findIndex(item => item.id === die.id) + 1}` : <DieTypeLabel type={die.type} level={die.level} />
+                  ? die.effects.length ? <DieEffectsLabel effects={die.effects} /> : `D${state.dice.filter(item => item.owner === 'player').findIndex(item => item.id === die.id) + 1}`
                   : 'Cursed Die'}</Table.Td><Table.Td>side {index + 1} → {face.rank}{exposed ? ' · exposed' : ''}</Table.Td><Table.Td>{formatPlayerNumber(scoringPips(face))}</Table.Td>
                 <Table.Td>{face.bossMutation?.kind ?? ('hexerEffect' in face ? face.hexerEffect.kind : '—')}</Table.Td>
               </Table.Tr>;
