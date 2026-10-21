@@ -4,6 +4,7 @@ import { formatExactScore, formatPlayerNumber } from './copy';
 import type { FlameOrigin, HandScoredEvent, RunHistoryV2Coverage, RunHistoryV2Event, XMultContribution } from './runHistoryV2';
 import { chapterNumberForRound, chapterRoundForRound } from './chapters';
 import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
+import { SPECIAL_DICE } from './specialDice';
 
 const number = (value: number | bigint) => typeof value === 'bigint' ? formatExactScore(value) : formatPlayerNumber(value);
 // A collectible ID is stable identity, not a Roster position.
@@ -13,6 +14,7 @@ const scoredDie = (item: HandScoredEvent['scoringDice'][number]) => item.face ==
   : `${die(item.dieId)} face ${number(item.face)} · ${number(item.pips)} Pips`;
 const label = (value: string) => value.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
   .replace(/\b\w/g, character => character.toUpperCase());
+const specialDieLabel = (type: keyof typeof SPECIAL_DICE) => SPECIAL_DICE[type].name;
 
 const originLabel: Record<FlameOrigin, string> = {
   ember: 'Ember', bonfire: 'Bonfire', charge: 'Charge', boss: 'Boss',
@@ -33,10 +35,12 @@ function sideEffectLabel(effect: HandScoredEvent['sideEffects'][number]): string
   switch (effect.type) {
     case 'gold': return `${effect.dieId === undefined ? '' : `${die(effect.dieId)} `}${label(effect.source)} +${number(effect.amount)} Gold`;
     case 'double_time': return `${die(effect.dieId)} Double Time ${effect.succeeded ? 'succeeded' : 'failed'}`;
-    case 'special_die': return `${die(effect.dieId)} ${label(effect.dieType)} ${effect.detail}`;
+    case 'special_die': return `${die(effect.dieId)} ${specialDieLabel(effect.dieType)} ${effect.detail}`;
     case 'charge': return `Charge ${label(effect.operation)} ×${number(effect.before)}→×${number(effect.after)}`;
     case 'flame_activation': return `${originLabel[effect.origin]} ${FLAMES[effect.flame].name}${effect.factor === undefined ? '' : ` ×${number(effect.factor)}`}`;
-    case 'free_play': return `${die(effect.dieId)} Free Play event ${effect.rerollEventId}`;
+    case 'free_play': return effect.pipsMultiplier === undefined
+      ? `${die(effect.dieId)} Free Play event ${effect.rerollEventId}`
+      : `${die(effect.dieId)} Curtain Call Free Play before Manual Reroll · ×${number(effect.pipsMultiplier)} die Pips`;
     case 'sustainable': return `${die(effect.dieId)} Sustainable preserved ${HANDS[effect.hand].name} (${number(effect.chargesRemaining)} left)`;
     case 'conjoined': return `${die(effect.dieId)} Conjoined duplicated itself for ${HANDS[effect.hand].name} Qualification and Scoring`;
     case 'boss_state': return `${label(effect.boss)} ${label(effect.change)}`;
@@ -79,7 +83,7 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
       return `ROUND ${number(event.round)} · Attempt ${number(event.attempt)} · Goal ${number(target.finalGoal ?? target.final ?? 0)}${event.boss ? ` · ${event.boss}` : ''}`;
     }
     case 'hand_scored': return renderHandScoredV2(event);
-    case 'special_die_activated': return `SPECIAL DIE · ${label(event.dieType)} Lv${number(event.level)} · ${die(event.dieId)} · ${event.detail}`;
+    case 'special_die_activated': return `SPECIAL DIE · ${specialDieLabel(event.dieType)} Lv${number(event.level)} · ${die(event.dieId)} · ${event.detail}`;
     case 'roll_batch': return `ROLL · ${event.reason} · ${event.results.map(result => `${die(result.dieId)} ${number(result.beforeFace)}→${number(result.afterFace)}`).join(' · ')}`;
     case 'shop_visit_started': return `SHOP VISIT ${number(event.shopVisitId)} · ${event.reason} · ${label(event.initialStage)}`;
     case 'shop_stage_changed': return `SHOP ${number(event.shopVisitId)} · ${label(event.from)} → ${label(event.to)}`;
@@ -92,10 +96,10 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     case 'shop_transaction': {
       const transaction = event.transaction;
       switch (transaction.type) {
-        case 'dice_purchased': return `DICE PURCHASE · offer ${number(transaction.offerId)} · Die #${number(transaction.dieId)} ${label(transaction.dieType)} Lv${number(transaction.level)} · ${number(transaction.pricePaid)} Gold · ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)}`;
-        case 'dice_sold': return `DICE SALE · Die #${number(transaction.dieId)} ${transaction.effects.map(effect => `${label(effect.type)} Lv${number(effect.level)}`).join(' + ') || 'Normal'} · ${number(transaction.proceeds)} Gold (${number(transaction.componentSalvage)} components + ${number(transaction.complexityPremium)} complexity + ${number(transaction.vintageAppreciation)} Vintage) · ${label(transaction.source.area)} ${number(transaction.source.index + 1)}`;
+        case 'dice_purchased': return `DICE PURCHASE · offer ${number(transaction.offerId)} · Die #${number(transaction.dieId)} ${specialDieLabel(transaction.dieType)} Lv${number(transaction.level)} · ${number(transaction.pricePaid)} Gold · ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)}`;
+        case 'dice_sold': return `DICE SALE · Die #${number(transaction.dieId)} ${transaction.effects.map(effect => `${specialDieLabel(effect.type)} Lv${number(effect.level)}`).join(' + ') || 'Normal'} · ${number(transaction.proceeds)} Gold (${number(transaction.componentSalvage)} components + ${number(transaction.complexityPremium)} complexity + ${number(transaction.vintageAppreciation)} Vintage) · ${label(transaction.source.area)} ${number(transaction.source.index + 1)}`;
         case 'dice_moved': return `DICE MOVE · ${label(transaction.source.area)} ${number(transaction.source.index + 1)} → ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)} · source #${number(transaction.sourceDieId)}${transaction.destinationDieId === null ? '' : ` · destination #${number(transaction.destinationDieId)}`}`;
-        case 'dice_fused': return `DICE ${transaction.operation.toUpperCase()} · ingredients #${number(transaction.ingredientIds[0])} + #${number(transaction.ingredientIds[1])} → result #${number(transaction.resultId)} · ${transaction.effects.map(effect => `${label(effect.type)} Lv${number(effect.level)}`).join(' + ')} · ${transaction.temperCost} Temper · rating ${transaction.forgeRating} · ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)}`;
+        case 'dice_fused': return `DICE ${transaction.operation.toUpperCase()} · ingredients #${number(transaction.ingredientIds[0])} + #${number(transaction.ingredientIds[1])} → result #${number(transaction.resultId)} · ${transaction.effects.map(effect => `${specialDieLabel(effect.type)} Lv${number(effect.level)}`).join(' + ')} · ${transaction.temperCost} Temper · rating ${transaction.forgeRating} · ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)}`;
         case 'dice_offers_rerolled': return `DICE OFFERS REROLLED · ${number(transaction.cost)} Gold · ${transaction.oldOfferIds.join(',')} → ${transaction.newOfferIds.join(',')} · reroll ${number(transaction.rerollCount)}`;
         default: return `SHOP · ${transaction.type} · ${'amount' in transaction ? number(transaction.amount) : ''}`.trim();
       }

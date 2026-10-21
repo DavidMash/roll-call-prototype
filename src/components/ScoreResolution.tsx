@@ -7,7 +7,7 @@ import type { ExactScore } from '../game/scoreMath';
 import { scoreAnnouncement, scorePresentation, type ScoreMetric } from '../game/scorePresentation';
 import type { ReactNode } from 'react';
 import { DieTypeIcon, DieTypeLabel } from './DieTypeLabel';
-import { isSpecialDieType } from '../game/specialDice';
+import { isSpecialDieType, SPECIAL_DICE } from '../game/specialDice';
 
 function ScoreBox({ label, value, color, active, tutorial }: {
   label: 'INFERNO' | 'PIPS' | 'MULT' | 'XMULT';
@@ -40,7 +40,10 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText }: {
     : event?.type === 'HITCHHIKER_ADDED_PIPS' ? 'hitchhiker' : null;
   let heading: ReactNode = idleText ?? '';
   if (event?.type === 'HAND_SCORE_FINALIZED' || event?.type === 'STANDALONE_SCORE_CALCULATED') heading = `+${typeof event.amount === 'bigint' ? formatExactScore(event.amount) : formatPlayerNumber(event.amount ?? 0)}`;
-  else if (event?.type === 'JUMPING_BEAN_FREE_PLAY' && event.hand) heading = <><DieTypeIcon type="jumpingBean" /> JUMPING BEAN · FREE {HANDS[event.hand].name.toUpperCase()}</>;
+  else if (event?.type === 'JUMPING_BEAN_FREE_PLAY' && event.hand) {
+    const freePlayDie = event.dieType === 'freePlay' ? 'freePlay' : 'jumpingBean';
+    heading = <><DieTypeIcon type={freePlayDie} /> {SPECIAL_DICE[freePlayDie].name.toUpperCase()} · FREE {HANDS[event.hand].name.toUpperCase()}</>;
+  }
   else if (event?.type === 'SCORE_ADDED') {
     const scoreAmount = typeof event.amount === 'bigint' ? event.amount : BigInt(event.amount ?? 0);
     heading = scoreAmount < 0n ? `−${formatExactScore(-scoreAmount)}` : `+${formatExactScore(scoreAmount)}`;

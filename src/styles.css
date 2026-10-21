@@ -1125,9 +1125,6 @@ body, #root { overflow: hidden; }
 }
 .die-details-status-row span { color: var(--mantine-color-gray-5); }
 .die-details-status-row strong { text-align: right; }
-.free-play-status { margin-top: 7px; padding: 7px; border-radius: 7px; background: rgba(255,255,255,.03); }
-.free-play-status > div { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; margin-top: 4px; }
-.free-play-status span { padding: 3px 1px; border-radius: 4px; background: rgba(255,255,255,.045); font-size: .67rem; text-align: center; }
 .die-mutation-warning { border: 1px solid rgba(255,255,255,.12); }
 .die-mutation-warning.infected { border-color: rgba(248,113,113,.48); background: rgba(127,29,29,.2); }
 .die-mutation-warning.snake-eyes { border-color: rgba(251,146,60,.48); background: rgba(124,45,18,.2); }

@@ -4,10 +4,14 @@ import { dispatch, newRun } from './engine';
 import { Resolver } from './effects';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
 import { effectDetails } from './specialDiePresentation';
-import { createDieEffect, effectOf, effectRuntime, resetDieRoundState } from './specialDice';
+import { createDieEffect, effectOf, effectRuntime, initialEffectRoundRuntime, resetDieRoundState } from './specialDice';
 import type { GameState, RandomSource } from './types';
 
 const constant = (value = 0): RandomSource => ({ next: () => value });
+const sequence = (...values: number[]): RandomSource => {
+  let index = 0;
+  return { next: () => values[Math.min(index++, values.length - 1)] };
+};
 function stateWithEffects(effects: Array<['weighted' | 'jumpingBean' | 'magic' | 'chameleon' | 'clockwork', number]>): GameState {
   const state = newRun('configurable-effects', constant(.9)).state;
   state.target = 1_000_000n;
@@ -70,6 +74,14 @@ describe('Weighted physical-face probability', () => {
 });
 
 describe('automatic Jumping Bean', () => {
+  it.each([[1, 3], [2, 6], [3, 9]] as const)('starts and resets Lv%s with %s Uses per Round', (level, uses) => {
+    const effect = createDieEffect(0, 'jumpingBean', level);
+    const runtime = initialEffectRoundRuntime(effect);
+    expect(runtime.invocationsRemaining).toBe(uses);
+    runtime.invocationsRemaining = 0;
+    expect(initialEffectRoundRuntime(effect).invocationsRemaining).toBe(uses);
+  });
+
   it('defaults to 1 and changes independently from Weighted and Magic', () => {
     let state = stateWithEffects([['weighted', 1], ['jumpingBean', 2], ['magic', 1]]);
     const die = state.diceInventory.instances[0];
@@ -90,10 +102,25 @@ describe('automatic Jumping Bean', () => {
       const resolver = new Resolver(state, constant(0));
       resolver.rollBatch([0], 'Jumping Bean canonical Roll', 'gameplay', false, reason);
       resolver.drain();
-      expect(state.stats.jumpingBeanFreePlays).toHaveLength(1);
+      expect(state.stats.jumpingBeanFreePlays).toHaveLength(3);
       expect(effectRuntime(state.dieRoundState[0], effectOf(state.diceInventory.instances[0], 'jumpingBean'))!.invocationsRemaining).toBe(0);
-      expect(state.historyV2.filter(event => event.kind === 'roll_batch')).toHaveLength(before + 2);
+      expect(state.historyV2.filter(event => event.kind === 'roll_batch')).toHaveLength(before + 4);
     });
+
+  it('consumes exactly one of six Lv2 Uses for one activation and reports the remaining count', () => {
+    const state = stateWithEffects([['jumpingBean', 2]]);
+    const die = state.diceInventory.instances[0];
+    die.value = 6;
+    const resolver = new Resolver(state, sequence(0, .6));
+    resolver.rollBatch([0], 'Single Jumping Bean activation', 'gameplay', false, 'other');
+    resolver.drain();
+    const effect = effectOf(die, 'jumpingBean')!;
+    expect(state.stats.jumpingBeanFreePlays).toHaveLength(1);
+    expect(effectRuntime(state.dieRoundState[0], effect)?.invocationsRemaining).toBe(5);
+    expect(effectDetails(die, effect, state.dieRoundState[0]).status).toContainEqual({ label: 'Uses Remaining', value: '5' });
+    const activation = state.historyV2.find(event => event.kind === 'special_die_activated' && event.dieType === 'jumpingBean');
+    expect(activation).toMatchObject({ kind: 'special_die_activated', invocationBefore: 6, invocationAfter: 5 });
+  });
 
   it('does not trigger on Chameleon mutation, then triggers when a later Roll lands on that physical face', () => {
     let state = stateWithEffects([['jumpingBean', 1], ['chameleon', 1]]);
@@ -104,15 +131,15 @@ describe('automatic Jumping Bean', () => {
     syncActiveDiceProjection(state);
     state = dispatch(state, { type: 'INVOKE_CHAMELEON', dieId: 0 }, constant()).state;
     const bean = effectOf(state.diceInventory.instances[0], 'jumpingBean')!;
-    expect(effectRuntime(state.dieRoundState[0], bean)!.invocationsRemaining).toBe(1);
+    expect(effectRuntime(state.dieRoundState[0], bean)!.invocationsRemaining).toBe(3);
     const resolver = new Resolver(state, constant(.99));
     resolver.rollBatch([0], 'Roll mutated face', 'gameplay');
     resolver.drain();
-    expect(state.stats.jumpingBeanFreePlays).toHaveLength(1);
+    expect(state.stats.jumpingBeanFreePlays).toHaveLength(3);
   });
 
   it('chains by numeric final result while Uses remain and stops without recursion', () => {
-    const state = stateWithEffects([['jumpingBean', 3]]);
+    const state = stateWithEffects([['jumpingBean', 1]]);
     const die = state.diceInventory.instances[0];
     die.faces.forEach(face => { face.rank = 1; });
     const before = state.historyV2.filter(event => event.kind === 'roll_batch').length;

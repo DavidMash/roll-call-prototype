@@ -40,4 +40,18 @@ describe('special-die presentation', () => {
     expect(effectDetails(die, die.effects[0], runtime).status).toContainEqual({ label: 'Next Reroll', value: '5' });
     expect(effectDetails(die, die.effects[1], runtime).status).toContainEqual({ label: 'Current bonus', value: '+36 Pips' });
   });
+
+  it('reports Curtain Call scaling without old per-face counters and Jumping Bean uses at three per level', () => {
+    const die = createCollectibleDie(9, 'freePlay', 3);
+    die.effects.push(createDieEffect(9, 'jumpingBean', 2));
+    const runtime = initialDieRoundRuntime(die);
+    expect(effectDetails(die, die.effects[0], runtime)).toEqual({
+      description: expect.stringContaining('Curtain Call level'),
+      status: [{ label: 'Manual Reroll Free Play', value: '×3 die Pips' }],
+    });
+    expect(effectDetails(die, die.effects[1], runtime).status).toEqual([
+      { label: 'Jumping Bean Number', value: '1' },
+      { label: 'Uses Remaining', value: '6' },
+    ]);
+  });
 });

@@ -47,7 +47,7 @@ export type HandId =
 export type UpperHandId = 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes';
 export type LowerHandId = Exclude<HandId, UpperHandId>;
 export type Phase = 'round' | 'roundSummary' | 'inferno' | 'bust' | 'flameSelection' | 'specialOffer' | 'shop' | 'lost' | 'error';
-export type ScoreSource = 'hand' | 'jumpingBean' | 'hitchhiker' | 'boss';
+export type ScoreSource = 'hand' | 'curtainCall' | 'jumpingBean' | 'hitchhiker' | 'boss';
 export type HandPlaySource = 'manual' | 'jumpingBean' | 'freePlay';
 export type GoldSource = 'golden' | 'jackpot' | 'diceSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward' | 'specialOffer';
 export type GoldSpendSource = 'dicePurchase' | 'diceOfferReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore' | 'furnace';
@@ -239,7 +239,6 @@ export interface DieEffectRoundRuntime {
   goldenGoldEarned: number;
   temporaryPips: number;
   clockworkRolls: number;
-  freePlayUsesByFace: Record<Exclude<Rank, 7>, number>;
   furnaceUnits: number;
   magicArmedFace: Exclude<Rank, 7> | null;
   weightedFace: Exclude<Rank, 7>;

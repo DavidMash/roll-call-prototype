@@ -6,7 +6,7 @@ import {
 } from '@tabler/icons-react';
 import type {
   CollectibleDie, DiceRarity, DieEffectInstance, DieEffectInstanceId, DieEffectRoundRuntime,
-  DieRoundRuntime, DieRoundState, Rank, SpecialDieType,
+  DieRoundRuntime, DieRoundState, SpecialDieType,
 } from './types';
 import type { RichText } from './richText';
 import { specialDieVerboseDescription } from './effectDescriptions';
@@ -56,7 +56,8 @@ export const SPECIAL_DICE: Record<SpecialDieType, SpecialDieDefinition> = {
   flywheel: definition('flywheel', 'Flywheel', 'uncommon', IconRefresh, '#4dabf7', 'level', 'onCommand'),
   teamPlayer: definition('teamPlayer', 'Team Player', 'rare', IconUsersGroup, '#63e6be'),
   loneWolf: definition('loneWolf', 'Lone Wolf', 'rare', IconUser, '#ffa8a8'),
-  freePlay: definition('freePlay', 'Free Play', 'rare', IconPlayerPlay, '#38d9a9'),
+  // Keep the stable `freePlay` key so existing dice and saves become Curtain Call without migration.
+  freePlay: definition('freePlay', 'Curtain Call', 'rare', IconPlayerPlay, '#38d9a9'),
   tank: definition('tank', 'Tank', 'rare', IconShield, '#ff8787'),
   mirror: definition('mirror', 'Mirror', 'rare', IconCopy, '#b197fc', 'level', 'qualification'),
   missingLink: definition('missingLink', 'Missing Link', 'rare', IconLink, '#9775fa', 'level', 'qualification'),
@@ -88,16 +89,14 @@ export function requireEffect(die: CollectibleDie, type: SpecialDieType): DieEff
   return effect;
 }
 
-const faceUses = (): Record<Exclude<Rank, 7>, number> => ({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 });
 export function initialEffectRoundRuntime(effect: DieEffectInstance): DieEffectRoundRuntime {
   return {
     effectId: effect.id,
     type: effect.type,
-    invocationsRemaining: SPECIAL_DICE[effect.type].invocationScale === 'level' ? effect.level : 0,
+    invocationsRemaining: invocationCapacity(effect),
     goldenGoldEarned: 0,
     temporaryPips: 0,
     clockworkRolls: 0,
-    freePlayUsesByFace: faceUses(),
     furnaceUnits: 0,
     magicArmedFace: null,
     weightedFace: effect.persistent.weightedFace,
@@ -118,6 +117,7 @@ export function runtimeFor(die: CollectibleDie, runtime: DieRoundRuntime | undef
   return effectRuntime(runtime, effectOf(die, type));
 }
 export function invocationCapacity(effect: DieEffectInstance): number {
+  if (effect.type === 'jumpingBean') return effect.level * 3;
   return SPECIAL_DICE[effect.type].invocationScale === 'level' ? effect.level : 0;
 }
 
@@ -159,9 +159,8 @@ export function normalizeDieRoundRuntime(die: CollectibleDie, runtime: DieRoundR
       ? target.weightedFace : effect.persistent.weightedFace;
     target.jumpingBeanNumber = [1, 2, 3, 4, 5, 6].includes(target.jumpingBeanNumber as number)
       ? target.jumpingBeanNumber : effect.persistent.jumpingBeanNumber;
-    target.freePlayUsesByFace = { ...faceUses(), ...(target.freePlayUsesByFace ?? {}) };
-    for (const rank of [1, 2, 3, 4, 5, 6] as const)
-      target.freePlayUsesByFace[rank] = Math.max(0, Math.floor(target.freePlayUsesByFace[rank] ?? 0));
+    // Old saves may contain Curtain Call's obsolete per-face Free Play counters.
+    delete (target as unknown as Record<string, unknown>).freePlayUsesByFace;
     normalized.effects[effect.id] = target;
   }
   return normalized;

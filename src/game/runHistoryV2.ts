@@ -81,7 +81,7 @@ export type HandSideEffect =
       invocationBefore?: number; invocationAfter?: number }
   | { type: 'charge'; operation: 'gain' | 'consume_reset' | 'arm' | 'disarm'; before: number; after: number; source?: Flame }
   | { type: 'flame_activation'; flame: Flame; origin: FlameOrigin; dieId?: number; factor?: number }
-  | { type: 'free_play'; dieId: number; rerollEventId: string }
+  | { type: 'free_play'; dieId: number; rerollEventId: string; pipsMultiplier?: number }
   | { type: 'sustainable'; dieId: number; hand: HandId; chargesRemaining: number }
   | { type: 'conjoined'; dieId: number; hand: HandId }
   | { type: 'boss_state'; boss: BossType; change: string; amount?: number | ExactScore;

@@ -20,7 +20,7 @@ export function createStats(seed: string): RunStats {
     temperSpentBySource: { fusion: 0, forge: 0 }, temperTransactions: [],
     fusions: 0, forges: 0, highestEffectCount: 0, highestForgeRating: '0', mostValuableDieSold: 0,
     manualRerollActions: 0, manualDiceRerolled: 0, manualRerolls: [], deadBoardRescues: 0,
-    scoreBySource: { hand: 0n, jumpingBean: 0n, hitchhiker: 0n, boss: 0n },
+    scoreBySource: { hand: 0n, curtainCall: 0n, jumpingBean: 0n, hitchhiker: 0n, boss: 0n },
     handScores: [], jumpingBeanFreePlays: [], standaloneScores: [], handBonusPips: 0, hitchhikerPipsContributed: 0,
     loss: null, resolutionError: null,
   };

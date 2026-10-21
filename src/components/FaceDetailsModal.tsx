@@ -73,12 +73,10 @@ function EffectPanel({ board, die, effect, busy, actionsEnabled, submit, onClose
       <Badge size="sm" variant="light" className={`rarity-badge rarity-${definition.rarity}`}>{definition.rarity}</Badge></Group>
     <RichDescription copy={definition.verboseDescription(effect.level)} />
     {effect.type === 'chameleon' && <RichDescription copy={chameleonTieDetail} size="xs" className="die-effect-detail" />}
-    {(details.status.length > 0 || details.freePlayRemaining) && <section aria-label={`${definition.name} current status`}>
+    {details.status.length > 0 && <section aria-label={`${definition.name} current status`}>
       <Text size="xs" fw={850} tt="uppercase" c="dimmed" mt="xs" mb={4}>Current status</Text>
       <div className="die-details-status-list">{details.status.map(item => <div className="die-details-status-row" key={item.label}>
         <span>{item.label}</span><strong>{item.value}</strong></div>)}</div>
-      {details.freePlayRemaining && <div className="free-play-status" data-testid="free-play-status"><Text size="xs">Free Plays remaining by face</Text>
-        <div>{([1, 2, 3, 4, 5, 6] as const).map(rank => <span key={rank}><b>{rank}:</b> {details.freePlayRemaining![rank]}</span>)}</div></div>}
     </section>}
     <EffectCommands board={board} die={die} effect={effect} busy={busy} actionsEnabled={actionsEnabled} submit={submit} closeAfter={onClose} />
   </Paper>;

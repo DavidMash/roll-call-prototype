@@ -66,7 +66,8 @@ function normalizeBoardScores(board: Board): void {
 function normalizeHistoricalScores(state: GameState): void {
   state.historyV2 ??= [];
   state.stats.rounds ??= [];
-  state.stats.scoreBySource ??= { hand: 0n, jumpingBean: 0n, hitchhiker: 0n, boss: 0n };
+  state.stats.scoreBySource ??= { hand: 0n, curtainCall: 0n, jumpingBean: 0n, hitchhiker: 0n, boss: 0n };
+  state.stats.scoreBySource.curtainCall ??= 0n;
   state.stats.handScores ??= [];
   state.stats.standaloneScores ??= [];
   state.stats.jumpingBeanFreePlays ??= [];

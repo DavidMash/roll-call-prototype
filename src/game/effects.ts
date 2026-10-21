@@ -47,8 +47,8 @@ import { activeDieLabel, orderDieIdsByEncounter, rosterDice, rosterSlotOf, syncA
 import type { PlayIntent, QualificationPlan, RollBatchIntent, RollContext, RollIntent, RollResolution, ScoreOccurrence } from './resolution';
 import { effectOf, effectRuntime, hasEffect, requireEffect, resetDieRoundState, runtimeFor, SPECIAL_DICE } from './specialDice';
 
-type RollTrigger = { dieId: number; face: Face; kind: 'specialFreePlay'; rerollEventId: string }
-  | { dieId: number; face: Face; kind: 'jumpingBean'; rerollEventId: string; selectedNumber: Exclude<Rank, 7> };
+type RollTrigger = { dieId: number; face: Face; kind: 'jumpingBean'; rerollEventId: string; selectedNumber: Exclude<Rank, 7> };
+type CurtainCallContext = { dieId: number; multiplier: number; manualRerollEventId: string };
 type V2HandDraft = {
   parentSeq?: number;
   hand: HandId;
@@ -98,7 +98,7 @@ export class Resolver {
   private v2ParentSeq: number | undefined;
   private lastV2RollSeq: number | undefined;
   private v2LastCharge: number;
-  private pendingFreePlayEventId: string | null = null;
+  private curtainCallContext: CurtainCallContext | null = null;
   constructor(readonly state: GameState, readonly rng: RandomSource, readonly options: ResolverOptions = {}) {
     state.historyV2 ??= [];
     state.historyV2TimelineId = Math.max(0, Math.floor(state.historyV2TimelineId ?? 0));
@@ -562,7 +562,7 @@ export class Resolver {
     this.emit({ type: role === 'hitchhiker' ? 'HITCHHIKER_ADDED_PIPS' : 'HAND_PIPS_CHANGED',
       hand, dieIds: [dieId], face: face.rank, amount,
       dieType: contribution.effectType ?? contributingDie?.effects[0]?.type,
-      source: playSource === 'jumpingBean' ? 'jumpingBean' : 'hand', playSource,
+      source: playSource === 'jumpingBean' ? 'jumpingBean' : playSource === 'freePlay' ? 'curtainCall' : 'hand', playSource,
       pips: this.handAccumulator!.currentPips, multiplier: this.handAccumulator!.currentMultiplier,
       message: `${this.dieLabel(dieId)}${role === 'hitchhiker' ? ' Hitchhiker' : ''} added ${this.format(amount)} Pips` });
   }
@@ -585,6 +585,13 @@ export class Resolver {
       ];
       for (const [effectType, amount] of specialParts) if (amount) contributions.push({ kind: 'special', role: participant.role,
         dieId: participant.id, face: participant.face, amount, effectType });
+    }
+    const curtainCall = intent?.source === 'freePlay' && this.curtainCallContext?.dieId === participant.id
+      ? this.curtainCallContext : null;
+    if (curtainCall && curtainCall.multiplier > 1) {
+      const diePips = contributions.reduce((sum, contribution) => sum + contribution.amount, 0);
+      contributions.push({ kind: 'special', role: participant.role, dieId: participant.id, face: participant.face,
+        amount: diePips * (curtainCall.multiplier - 1), effectType: 'freePlay' });
     }
     if (intent?.source === 'manual' && intent.playerSelectedDieIds.includes(participant.id)) {
       const teamPlayers = intent.playerSelectedDieIds.filter(id => id !== participant.id)
@@ -881,16 +888,6 @@ export class Resolver {
         this.emit({ type: 'CURSED_DIE_ROLLED', boss: 'hexer', dieIds: [die.id], face: face.rank,
           message: `Cursed Die rolled ${face.rank}` });
       }
-      const freePlay = die.owner === 'player' ? effectOf(die, 'freePlay') : undefined;
-      if (batch.context === 'gameplay' && die.owner === 'player' && freePlay && !wholeDieEffectSuppressed(die)) {
-        const runtime = this.specialRuntime(die, 'freePlay');
-        if (face.rank !== 7 && runtime && runtime.freePlayUsesByFace[face.rank] < freePlay.level) {
-          runtime.freePlayUsesByFace[face.rank]++;
-          this.emitSpecial(die, freePlay, `Free Play face ${face.rank} (${runtime.freePlayUsesByFace[face.rank]}/${freePlay.level})`,
-            'post_roll');
-          triggers.push({ dieId: die.id, face, kind: 'specialFreePlay', rerollEventId: batch.id });
-        }
-      }
       const jumpingBean = die.owner === 'player' ? effectOf(die, 'jumpingBean') : undefined;
       const jumpingBeanRoll = batch.context === 'gameplay' || batch.context === 'wardenSetup' || batch.context === 'settle';
       if (jumpingBeanRoll && die.owner === 'player' && jumpingBean && !wholeDieEffectSuppressed(die)
@@ -917,14 +914,15 @@ export class Resolver {
     reasonId: RollReason = 'other'): void {
     const ids = orderDieIdsByEncounter(this.state, [...new Set(dieIds)]);
     if (!ids.length) return;
+    const batchId = `${this.state.historyV2TimelineId}:${this.state.round}:${this.state.actionJournal.length}:${this.state.historyV2.length}`;
+    const batch = createRollBatchIntent(batchId, ids, reason, context, reasonId);
+    if (batch.manual) this.resolveCurtainCallsBeforeManualReroll(batch);
     const parentSeq = this.v2ParentSeq;
     this.v2ParentSeq = undefined;
     this.v2Roll = { effects: [] };
     this.emit({ type: 'DICE_REROLL_STARTED', dieIds: ids, rollReason: reasonId,
       message: `${reason}: ${ids.map(id => this.dieLabel(id)).join(', ')}` });
     const rolling = new Set(ids);
-    const batchId = `${this.state.historyV2TimelineId}:${this.state.round}:${this.state.actionJournal.length}:${this.state.historyV2.length}`;
-    const batch = createRollBatchIntent(batchId, ids, reason, context, reasonId);
     const results = ids.map(dieId => this.resolveRoll(createRollIntent(batch, dieId), rolling));
     for (const result of results) if (!result.intercepted)
       this.state.dice.find(item => item.id === result.dieId)!.value = result.physicalFace;
@@ -967,18 +965,7 @@ export class Resolver {
     let cursor = 0;
     while (cursor < this.queue.length) {
       const item = this.queue[cursor++];
-      if (item.kind === 'specialFreePlay') {
-        const hand = UPPER_HAND_BY_FACE[item.face.rank];
-        if (!hand) continue;
-        this.v2ParentSeq = this.lastV2RollSeq;
-        this.pendingFreePlayEventId = item.rerollEventId ?? 'unknown';
-        const outcome = this.play(hand, [item.dieId], 'freePlay');
-        this.pendingFreePlayEventId = null;
-        this.emit({ type: 'JUMPING_BEAN_FREE_PLAY', dieType: 'freePlay', hand, dieIds: [item.dieId],
-          playSource: 'freePlay', handConsumed: false,
-          message: `Free Play ${item.rerollEventId}: reroll returned to the same physical face; ${HANDS[hand].name} scored without consumption` });
-        if (outcome.winning) { this.queue = []; return; }
-      } else if (item.kind === 'jumpingBean') {
+      if (item.kind === 'jumpingBean') {
         const hand = UPPER_HAND_BY_FACE[item.selectedNumber];
         if (!hand) continue;
         this.v2ParentSeq = this.lastV2RollSeq;
@@ -990,6 +977,28 @@ export class Resolver {
       }
     }
     this.queue = [];
+  }
+
+  private resolveCurtainCallsBeforeManualReroll(batch: RollBatchIntent): void {
+    for (const dieId of batch.dieIds) {
+      const die = this.collectible(dieId);
+      const curtainCall = die ? effectOf(die, 'freePlay') : undefined;
+      if (!die || !curtainCall || wholeDieEffectSuppressed(die)) continue;
+      const face = structuredClone(activeFace(die));
+      const hand = UPPER_HAND_BY_FACE[face.rank];
+      if (!hand) continue;
+      const detail = `Curtain Call before Manual Reroll · Free Played ${HANDS[hand].name} · ×${curtainCall.level} die Pips`;
+      this.emitSpecial(die, curtainCall, detail, 'manual_reroll', undefined, undefined, { face: face.rank });
+      this.curtainCallContext = { dieId, multiplier: curtainCall.level, manualRerollEventId: batch.id };
+      try {
+        this.play(hand, [dieId], 'freePlay');
+      } finally {
+        this.curtainCallContext = null;
+      }
+      this.emit({ type: 'JUMPING_BEAN_FREE_PLAY', dieType: 'freePlay', hand, dieIds: [dieId], face: face.rank,
+        playSource: 'freePlay', handConsumed: false,
+        message: `Curtain Call Free Played ${HANDS[hand].name} at ×${curtainCall.level} die Pips before Manual Reroll` });
+    }
   }
 
   private advanceHotStreak(hand: HandId, _scoringIds: number[]): void {
@@ -1371,7 +1380,8 @@ export class Resolver {
       multContributions: [{ source: 'hand_base', factor: createHandAccumulator(hand, ids, handLevel).baseMultiplier,
         before: 0, after: createHandAccumulator(hand, ids, handLevel).baseMultiplier }],
       xMultContributions: [], sideEffects: playSource === 'freePlay'
-        ? [{ type: 'free_play', dieId: ids[0], rerollEventId: this.pendingFreePlayEventId ?? 'unknown' }] : [],
+        ? [{ type: 'free_play', dieId: ids[0], rerollEventId: this.curtainCallContext?.manualRerollEventId ?? 'unknown',
+          pipsMultiplier: this.curtainCallContext?.multiplier }] : [],
     };
     this.v2ParentSeq = undefined;
     if (freeBean) this.emit({ type: 'JUMPING_BEAN_FREE_PLAY', dieType: 'jumpingBean', hand, dieIds: ids,
@@ -1453,7 +1463,8 @@ export class Resolver {
       playSource, consumedHand: resolution.consumesHand });
     this.state.stats.handBonusPips += this.handAccumulator.bonusPips;
     this.state.stats.hitchhikerPipsContributed += this.handAccumulator.hitchhikerPips;
-    const scoreSource = freePlay ? 'jumpingBean' as const : 'hand' as const;
+    const scoreSource = playSource === 'jumpingBean' ? 'jumpingBean' as const
+      : playSource === 'freePlay' ? 'curtainCall' as const : 'hand' as const;
     this.log({ type: 'SCORE_ROUNDING_AUDIT', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score, source: scoreSource, playSource,
       message: `Final: ${this.format(pips)} × ${this.format(multiplier)} × ${this.format(xMult)}${bossFactor !== 1 ? ` × boss ${this.format(bossFactor)}` : ''} = ${this.format(rawScore)}; rounded ${this.format(score)}` });
     this.emit({ type: 'HAND_SCORE_FINALIZED', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score,

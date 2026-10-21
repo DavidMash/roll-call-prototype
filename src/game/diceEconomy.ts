@@ -99,7 +99,8 @@ export function fusionEffectSummary(type: SpecialDieType, fromLevel: number, toL
       case 'teamPlayer': return `×${level + 1}`;
       case 'loneWolf': return `${level + 1} Scores`;
       case 'tank': return `+${10 * level} Pips`;
-      case 'freePlay': return `${level} use${level === 1 ? '' : 's'} per face`;
+      case 'freePlay': return `×${level} die Pips`;
+      case 'jumpingBean': return `${level * 3} Uses per Round`;
       case 'doubleTime': {
         const guaranteed = Math.floor(level / 4);
         const remainder = level % 4;
@@ -113,7 +114,7 @@ export function fusionEffectSummary(type: SpecialDieType, fromLevel: number, toL
   const labels: Partial<Record<SpecialDieType, string>> = {
     bonus: 'Scoring bonus', workout: 'Workout growth', vintage: 'Appreciation', golden: 'Gold cap per Round',
     clockwork: 'Clockwork Rolls', jackpot: 'Winning payout', teamPlayer: 'Other-die multiplier', loneWolf: 'Solo Scores',
-    tank: 'Tank bonus', freePlay: 'Free Plays', doubleTime: 'Additional Scores', furnace: 'Furnace power',
+    tank: 'Tank bonus', freePlay: 'Curtain Call multiplier', doubleTime: 'Additional Scores', furnace: 'Furnace power',
   };
   return { label: labels[type] ?? 'Uses per Round', before: numeric(fromLevel), after: numeric(toLevel) };
 }

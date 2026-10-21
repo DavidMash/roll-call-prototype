@@ -50,6 +50,7 @@ describe('composable special-die registry', () => {
     expect(new Set(SPECIAL_DIE_TYPES.map(type => SPECIAL_DICE[type].color))).toHaveLength(23);
     expect(SPECIAL_DICE.bonus.color).toBe('#12b886');
     expect(SPECIAL_DICE.bonus.color).not.toBe(SPECIAL_DICE.golden.color);
+    expect(SPECIAL_DICE.freePlay.name).toBe('Curtain Call');
   });
 
   it('represents Normal as zero effects and a special die as an effect instance', () => {

@@ -2,7 +2,7 @@ import { activeFace, weightedNumberProbability } from './dice';
 import { dieEffectDescription, fusionEffectSummary } from './diceEconomy';
 import { dieSellBreakdown } from './forge';
 import { SPECIAL_DICE, effectRuntime, invocationCapacity } from './specialDice';
-import type { CollectibleDie, DieEffectInstance, DieEffectRoundRuntime, DieRoundRuntime, Rank, SpecialDieType } from './types';
+import type { CollectibleDie, DieEffectInstance, DieEffectRoundRuntime, DieRoundRuntime, SpecialDieType } from './types';
 
 export const saturationFactor = (level: number): number => Math.min(1, .8 + .03 * (Math.max(1, level) - 1));
 
@@ -52,7 +52,6 @@ export interface DieStatusRow { label: string; value: string }
 export interface EffectDetails {
   description: string;
   status: DieStatusRow[];
-  freePlayRemaining: Record<Exclude<Rank, 7>, number> | null;
 }
 
 const usesRemaining = (effect: DieEffectInstance, runtime: DieEffectRoundRuntime | undefined): string =>
@@ -63,7 +62,6 @@ export function effectDetails(die: CollectibleDie, effect: DieEffectInstance,
   const level = effect.level;
   const runtime = effectRuntime(dieRuntime, effect);
   const status: DieStatusRow[] = [];
-  let freePlayRemaining: EffectDetails['freePlayRemaining'] = null;
   switch (effect.type) {
     case 'bonus': status.push({ label: 'Current bonus', value: `+${10 * level} Pips` }); break;
     case 'workout': status.push({ label: 'Current bonus this Round', value: `+${runtime?.temporaryPips ?? 0} Pips` },
@@ -98,10 +96,7 @@ export function effectDetails(die: CollectibleDie, effect: DieEffectInstance,
     case 'loneWolf': status.push({ label: 'Scores when played alone', value: `×${level + 1}` }); break;
     case 'tank': status.push({ label: 'Bonus this Round', value: `+${runtime?.temporaryPips ?? 0} Pips` },
       { label: 'Face locked', value: String(activeFace(die).rank) }); break;
-    case 'freePlay':
-      freePlayRemaining = Object.fromEntries(([1, 2, 3, 4, 5, 6] as const).map(face =>
-        [face, Math.max(0, level - (runtime?.freePlayUsesByFace[face] ?? 0))])) as Record<Exclude<Rank, 7>, number>;
-      break;
+    case 'freePlay': status.push({ label: 'Manual Reroll Free Play', value: `×${level} die Pips` }); break;
     case 'doubleTime': status.push({ label: 'Additional Score chance', value: fusionEffectSummary('doubleTime', level, level).before }); break;
     case 'magic': status.push({ label: 'Uses Remaining', value: usesRemaining(effect, runtime) },
       { label: 'Next Reroll', value: runtime?.magicArmedFace == null ? 'Not armed' : String(runtime.magicArmedFace) }); break;
@@ -111,7 +106,7 @@ export function effectDetails(die: CollectibleDie, effect: DieEffectInstance,
       break;
     }
   }
-  return { description: dieEffectDescription(effect.type, level), status, freePlayRemaining };
+  return { description: dieEffectDescription(effect.type, level), status };
 }
 
 export const effectDefinition = (type: SpecialDieType) => SPECIAL_DICE[type];
