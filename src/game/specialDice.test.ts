@@ -48,6 +48,8 @@ describe('composable special-die registry', () => {
     }
     expect(new Set(SPECIAL_DIE_TYPES.map(type => SPECIAL_DICE[type].icon))).toHaveLength(23);
     expect(new Set(SPECIAL_DIE_TYPES.map(type => SPECIAL_DICE[type].color))).toHaveLength(23);
+    expect(SPECIAL_DICE.bonus.color).toBe('#12b886');
+    expect(SPECIAL_DICE.bonus.color).not.toBe(SPECIAL_DICE.golden.color);
   });
 
   it('represents Normal as zero effects and a special die as an effect instance', () => {
@@ -75,7 +77,7 @@ describe('composable special-die registry', () => {
     const first = initialDieRoundRuntime(die);
     effectRuntime(first, effectOf(die, 'weighted'))!.invocationsRemaining = 0;
     const next = initialDieRoundRuntime(die);
-    expect(effectRuntime(next, effectOf(die, 'weighted'))).toMatchObject({ weightedFace: 4, invocationsRemaining: 2 });
+    expect(effectRuntime(next, effectOf(die, 'weighted'))).toMatchObject({ weightedFace: 4, invocationsRemaining: 0 });
     expect(effectOf(die, 'weighted')!.persistent.weightedFace).toBe(4);
   });
 });
@@ -91,7 +93,7 @@ describe('composable roll controllers', () => {
     new Resolver(state, constant(.2)).manualReroll([die.id]);
     expect(activeFace(die).rank).toBe(4);
     expect(magic.invocationsRemaining).toBe(0);
-    expect(weighted.invocationsRemaining).toBe(1);
+    expect(weighted.invocationsRemaining).toBe(0);
   });
 
   it('lets an external Magnetic controller shadow Weighted without spending Weighted', () => {
@@ -104,17 +106,17 @@ describe('composable roll controllers', () => {
     new Resolver(state, constant(.2)).manualReroll([target.id]);
     expect(activeFace(target).rank).toBe(5);
     expect(effectRuntime(state.dieRoundState[anchor.id], effectOf(anchor, 'magnetic'))?.invocationsRemaining).toBe(0);
-    expect(effectRuntime(state.dieRoundState[target.id], effectOf(target, 'weighted'))?.invocationsRemaining).toBe(1);
+    expect(effectRuntime(state.dieRoundState[target.id], effectOf(target, 'weighted'))?.invocationsRemaining).toBe(0);
   });
 
-  it('uses Weighted before Clockwork and does not advance the shadowed controller', () => {
+  it('preserves Clockwork precedence because Weighted only affects genuinely randomized Rolls', () => {
     const state = game();
     const die = setEffects(state, 0, [['weighted', 1], ['clockwork', 2]]);
     effectOf(die, 'weighted')!.persistent.weightedFace = 6;
     state.dieRoundState = resetDieRoundState(rosterDice(state));
     new Resolver(state, constant(.2)).manualReroll([die.id]);
-    expect(activeFace(die).rank).toBe(6);
-    expect(effectRuntime(state.dieRoundState[die.id], effectOf(die, 'clockwork'))?.clockworkRolls).toBe(0);
+    expect(activeFace(die).rank).toBe(2);
+    expect(effectRuntime(state.dieRoundState[die.id], effectOf(die, 'clockwork'))?.clockworkRolls).toBe(1);
   });
 });
 
@@ -201,8 +203,9 @@ describe('persistent Chameleon faces', () => {
     state = dispatch(state, { type: 'SET_FORGE_INGREDIENT', socket: 'A', dieId: 0 }).state;
     state = dispatch(state, { type: 'SET_FORGE_INGREDIENT', socket: 'B', dieId: 5 }).state;
     state = dispatch(state, { type: 'CONFIRM_FORGE' }).state;
-    expect(effectOf(state.diceInventory.instances[0], 'chameleon')?.level).toBe(2);
-    expect(state.diceInventory.instances[0].faces[0].rank).toBe(3);
+    const result = state.diceInventory.instances[6];
+    expect(effectOf(result, 'chameleon')?.level).toBe(2);
+    expect(result.faces[0].rank).toBe(3);
   });
 
   it('survives cleanup of a temporary Snake Eyes mutation', () => {

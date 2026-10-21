@@ -8,6 +8,9 @@ import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
 const number = (value: number | bigint) => typeof value === 'bigint' ? formatExactScore(value) : formatPlayerNumber(value);
 // A collectible ID is stable identity, not a Roster position.
 const die = (id: number) => `Die #${id}`;
+const scoredDie = (item: HandScoredEvent['scoringDice'][number]) => item.face === item.pips
+  ? `${die(item.dieId)}=${number(item.pips)}`
+  : `${die(item.dieId)} face ${number(item.face)} · ${number(item.pips)} Pips`;
 const label = (value: string) => value.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
   .replace(/\b\w/g, character => character.toUpperCase());
 
@@ -46,9 +49,10 @@ export function renderHandScoredV2(event: HandScoredEvent): string {
   const meaningfulPips = event.pipsContributions.some(item => item.source !== 'hand_base' && item.source !== 'die_base');
   const meaningfulMult = event.multContributions.some(item => item.source !== 'hand_base');
   const expanded = meaningfulPips || meaningfulMult || event.xMultContributions.length > 0 || event.sideEffects.length > 0;
-  if (!expanded) return `${title} · ${(event.score.infernoMultiplier ?? 1) > 1 ? `Inferno ×${number(event.score.infernoMultiplier ?? 1)} · ` : ''}${number(event.score.finalPips)} Pips × ${number(event.score.finalMult)} Mult × ${number(event.score.finalXMult * event.score.bossFactor)} XMult = ${number(event.score.awarded)}`;
+  const unusualDice = event.scoringDice.filter(item => item.face !== item.pips).map(scoredDie);
+  if (!expanded) return `${title} · ${(event.score.infernoMultiplier ?? 1) > 1 ? `Inferno ×${number(event.score.infernoMultiplier ?? 1)} · ` : ''}${number(event.score.finalPips)} Pips × ${number(event.score.finalMult)} Mult × ${number(event.score.finalXMult * event.score.bossFactor)} XMult = ${number(event.score.awarded)}${unusualDice.length ? ` · Dice: ${unusualDice.join(', ')}` : ''}`;
 
-  const dice = event.scoringDice.map(item => `${die(item.dieId)}=${number(item.pips)}`).join(', ');
+  const dice = event.scoringDice.map(scoredDie).join(', ');
   const pipsEffects = event.pipsContributions.filter(item => item.source !== 'hand_base' && item.source !== 'die_base')
     .map(item => `${item.dieId === undefined ? '' : `${die(item.dieId)} `}${label(item.source)} +${number(item.amount)}`);
   const multEffects = event.multContributions.filter(item => item.source !== 'hand_base')
@@ -91,7 +95,7 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
         case 'dice_purchased': return `DICE PURCHASE · offer ${number(transaction.offerId)} · Die #${number(transaction.dieId)} ${label(transaction.dieType)} Lv${number(transaction.level)} · ${number(transaction.pricePaid)} Gold · ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)}`;
         case 'dice_sold': return `DICE SALE · Die #${number(transaction.dieId)} ${transaction.effects.map(effect => `${label(effect.type)} Lv${number(effect.level)}`).join(' + ') || 'Normal'} · ${number(transaction.proceeds)} Gold (${number(transaction.componentSalvage)} components + ${number(transaction.complexityPremium)} complexity + ${number(transaction.vintageAppreciation)} Vintage) · ${label(transaction.source.area)} ${number(transaction.source.index + 1)}`;
         case 'dice_moved': return `DICE MOVE · ${label(transaction.source.area)} ${number(transaction.source.index + 1)} → ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)} · source #${number(transaction.sourceDieId)}${transaction.destinationDieId === null ? '' : ` · destination #${number(transaction.destinationDieId)}`}`;
-        case 'dice_fused': return `DICE ${transaction.operation.toUpperCase()} · source #${number(transaction.sourceId)} → destination #${number(transaction.destinationId)} · ${transaction.effects.map(effect => `${label(effect.type)} Lv${number(effect.level)}`).join(' + ')} · ${transaction.temperCost} Temper · rating ${transaction.forgeRating} · ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)}`;
+        case 'dice_fused': return `DICE ${transaction.operation.toUpperCase()} · ingredients #${number(transaction.ingredientIds[0])} + #${number(transaction.ingredientIds[1])} → result #${number(transaction.resultId)} · ${transaction.effects.map(effect => `${label(effect.type)} Lv${number(effect.level)}`).join(' + ')} · ${transaction.temperCost} Temper · rating ${transaction.forgeRating} · ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)}`;
         case 'dice_offers_rerolled': return `DICE OFFERS REROLLED · ${number(transaction.cost)} Gold · ${transaction.oldOfferIds.join(',')} → ${transaction.newOfferIds.join(',')} · reroll ${number(transaction.rerollCount)}`;
         default: return `SHOP · ${transaction.type} · ${'amount' in transaction ? number(transaction.amount) : ''}`.trim();
       }

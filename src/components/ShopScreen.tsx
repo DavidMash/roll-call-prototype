@@ -26,23 +26,24 @@ const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, in
 const slotKey = (slot: DiceSlotRef) => `${slot.area}:${slot.index}`;
 const slotName = (slot: DiceSlotRef) => `${slot.area === 'roster' ? 'Roster' : 'Storage'} ${slot.index + 1}`;
 
-function CollectionDieCard({ die, slot, selected, dragging, dropTarget, arriving, rolling, busy, onSelect, onDetails, onSell,
+function CollectionDieCard({ die, slot, selected, dragging, dropTarget, staged, arriving, rolling, busy, allowSell, onSelect, onDetails, onSell,
   onDragStart, onDragEnd, onDragEnter, onDrop }: {
   die: CollectibleDie | null; slot: DiceSlotRef; selected: boolean; dragging: boolean; dropTarget: boolean;
-  arriving: boolean; rolling: boolean; busy: boolean; onSelect: () => void; onDetails: () => void; onSell: () => void;
+  staged: boolean; arriving: boolean; rolling: boolean; busy: boolean; allowSell: boolean;
+  onSelect: () => void; onDetails: () => void; onSell: () => void;
   onDragStart: (event: React.DragEvent) => void; onDragEnd: () => void; onDragEnter: () => void; onDrop: (event: React.DragEvent) => void;
 }) {
   const sale = die ? dieSellBreakdown(die) : null;
   const slotCode = `${slot.area === 'roster' ? 'D' : 'S'}${slot.index + 1}`;
   const identity = die?.effects.map(effect => `${SPECIAL_DICE[effect.type].name} ${effect.level}`).join(', ') || 'Normal';
   return <Card withBorder p="xs"
-    className={`collection-slot die-selection-target ${slot.area}${selected ? ' selected is-die-selected' : ''}${dragging ? ' is-die-dragging' : ''}${dropTarget ? ' valid-drop-target' : ''}${arriving ? ' arriving' : ''} ${die ? 'occupied' : 'empty'}`}
+    className={`collection-slot die-selection-target ${slot.area}${selected ? ' selected is-die-selected' : ''}${dragging ? ' is-die-dragging' : ''}${dropTarget ? ' valid-drop-target' : ''}${staged ? ' forge-staged' : ''}${arriving ? ' arriving' : ''} ${die ? 'occupied' : 'empty'}`}
     style={die ? diePresentationStyle(die) : undefined} data-testid={`collection-slot-${slot.area}-${slot.index}`}
     data-die-id={die?.id ?? undefined} data-effect-count={die?.effects.length ?? undefined}
     data-selected={selected || undefined} data-dragging={dragging || undefined} data-drop-target={dropTarget || undefined}
-    draggable={!!die && !busy} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragEnter={onDragEnter}
+    draggable={!!die && !busy && !staged} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragEnter={onDragEnter}
     onDragOver={event => { if (!busy) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; } }} onDrop={onDrop}>
-    <button type="button" className="collection-slot-main" disabled={busy} onClick={onSelect}
+    <button type="button" className="collection-slot-main" disabled={busy || staged} onClick={onSelect}
       aria-label={die ? `${slotName(slot)}, ${identity}` : `${slotName(slot)}, empty`}>
       {die ? <><CollectibleDieVisual effects={die.effects} face={die.value as 1 | 2 | 3 | 4 | 5 | 6}
         slotLabel={slotCode} compact={slot.area === 'storage'} rolling={rolling} />
@@ -50,8 +51,9 @@ function CollectionDieCard({ die, slot, selected, dragging, dropTarget, arriving
         <Text size="xs" className="collection-die-meta">Sell {sale!.total}G</Text></>
         : <><span className="empty-collection-die" aria-hidden="true">+</span><Text size="xs" c="dimmed" fw={700}>{slotCode}</Text></>}
     </button>
+    {staged && <Text className="forge-staged-label" size="xs" fw={900}>STAGED</Text>}
     {die && <Group gap={2} justify="center" className="collection-slot-actions"><Button size="compact-xs" variant="subtle" onClick={onDetails} disabled={busy}>INFO</Button>
-      <Button size="compact-xs" variant="subtle" color="yellow" onClick={onSell} disabled={busy}>SELL</Button></Group>}
+      {allowSell && <Button size="compact-xs" variant="subtle" color="yellow" onClick={onSell} disabled={busy}>SELL</Button>}</Group>}
   </Card>;
 }
 
@@ -62,7 +64,8 @@ function EffectDetails({ effects }: { effects: CollectibleDie['effects'] }) {
     <RichDescription copy={SPECIAL_DICE[effect.type].verboseDescription(effect.level)} />
     {effect.type === 'chameleon' && <RichDescription copy={chameleonTieDetail} size="xs" />}
     {effect.type === 'vintage' && <Text size="xs">Appreciation: +{effect.persistent.vintageAppreciation} Gold</Text>}
-    {effect.type === 'weighted' && <Text size="xs">Weighted face: {effect.persistent.weightedFace}</Text>}
+    {effect.type === 'weighted' && <Text size="xs">Weighted Number: {effect.persistent.weightedFace}</Text>}
+    {effect.type === 'jumpingBean' && <Text size="xs">Jumping Bean Number: {effect.persistent.jumpingBeanNumber}</Text>}
   </Paper>)}</Stack>;
 }
 
@@ -82,7 +85,6 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
   const [dragTargetSlot, setDragTargetSlot] = useState<DiceSlotRef | null>(null);
   const [saleSlot, setSaleSlot] = useState<DiceSlotRef | null>(null);
   const [detailDie, setDetailDie] = useState<CollectibleDie | null>(null);
-  const [confirmForge, setConfirmForge] = useState(false);
   const [arrivalId, setArrivalId] = useState<number | null>(null);
   const [startWarning, setStartWarning] = useState(false);
   const exitLockStartedAt = useRef(Date.now());
@@ -116,10 +118,6 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
   }, [inventory.instances]);
 
   const dieAt = (slot: DiceSlotRef) => { const id = slotValue(inventory, slot); return id == null ? null : inventory.instances[id] ?? null; };
-  const slotForDie = (id: number): DiceSlotRef | null => {
-    const roster = inventory.roster.indexOf(id); if (roster >= 0) return { area: 'roster', index: roster };
-    const storage = inventory.storage.indexOf(id); return storage >= 0 ? { area: 'storage', index: storage } : null;
-  };
   function submitMove(source: DiceSlotRef, destination: DiceSlotRef) {
     const sourceId = slotValue(inventory, source); const destinationId = slotValue(inventory, destination) ?? null;
     if (sourceId == null) return;
@@ -146,10 +144,13 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
   const progressionAction: Action = returnedFromBust ? { type: 'RETRY_ROUND' } : nextChapter ? { type: 'NEXT_CHAPTER' } : { type: 'NEXT_ROUND' };
   function requestProgression() { if (rosterCount < 5) setStartWarning(true); else submit(progressionAction); }
   const saleDie = saleSlot ? dieAt(saleSlot) : null;
+  const stagedIds = new Set([shop.forgeSelection?.dieAId, shop.forgeSelection?.dieBId].filter((id): id is number => id !== null && id !== undefined));
   const slots = (area: 'roster' | 'storage', values: Array<number | null>) => values.map((_id, index) => {
     const slot = { area, index } satisfies DiceSlotRef;
-    return <CollectionDieCard key={slotKey(slot)} die={dieAt(slot)} slot={slot} busy={busy} arriving={dieAt(slot)?.id === arrivalId}
+    const die = dieAt(slot);
+    return <CollectionDieCard key={slotKey(slot)} die={die} slot={slot} busy={busy} arriving={die?.id === arrivalId}
       rolling={!!dieAt(slot) && event?.type === 'DICE_REROLL_STARTED' && !!event.dieIds?.includes(dieAt(slot)!.id)}
+      staged={die ? stagedIds.has(die.id) : false} allowSell={stage === 'shop'}
       selected={selectedSlot !== null && slotKey(selectedSlot) === slotKey(slot)} onSelect={() => chooseSlot(slot)}
       dragging={draggingSlot !== null && slotKey(draggingSlot) === slotKey(slot)} dropTarget={dragTargetSlot !== null && slotKey(dragTargetSlot) === slotKey(slot)}
       onDetails={() => setDetailDie(dieAt(slot))} onSell={() => setSaleSlot(slot)} onDragStart={event => beginDrag(event, slot)} onDragEnd={finishDrag}
@@ -159,7 +160,25 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
   const dieA = selection.dieAId == null ? null : inventory.instances[selection.dieAId] ?? null;
   const dieB = selection.dieBId == null ? null : inventory.instances[selection.dieBId] ?? null;
   const forgePreview = dieA && dieB ? previewForge(dieA, dieB) : null;
-  const forgeEligible = Object.values(inventory.instances).filter(die => die.effects.length);
+  function stageSelected(socket: 'A' | 'B') {
+    if (!selectedSlot) return;
+    const die = dieAt(selectedSlot);
+    if (!die?.effects.length) return;
+    submit({ type: 'SET_FORGE_INGREDIENT', socket, dieId: die.id });
+    setSelectedSlot(null);
+  }
+  function dropOnForge(event: React.DragEvent, socket: 'A' | 'B') {
+    event.preventDefault();
+    try {
+      const source = JSON.parse(event.dataTransfer.getData('application/x-roll-call-die-slot')) as DiceSlotRef;
+      const die = dieAt(source);
+      if (die?.effects.length) {
+        submit({ type: 'SET_FORGE_INGREDIENT', socket, dieId: die.id });
+        setSelectedSlot(null);
+      }
+    } catch { /* Ignore foreign drag payloads. */ }
+    finishDrag();
+  }
 
   const forwardStage = stage === 'shop' ? (stages.includes('forge') ? 'forge' : 'train') : stage === 'forge' ? 'train'
     : stage === 'train' && stages.includes('flames') ? 'flames' : null;
@@ -204,24 +223,31 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
     </Paper>}
 
     {stage === 'forge' && <Paper p="sm" className="shop-section forge-shop-section" data-testid="forge-shop">
-      <Group justify="space-between" className="section-heading"><div><Text fw={800}>FORGE</Text><Text size="xs" c="dimmed">Die A survives. Die B is consumed. Matching effect sets fuse; other combinations forge.</Text></div>
-        <Badge color="orange" variant="light">{formatPlayerNumber(board.temper)} TEMPER</Badge></Group>
-      <div className="forge-sockets"><Card withBorder p="sm" className="forge-socket" data-testid="forge-socket-a"><Text size="xs" fw={900}>DIE A · SURVIVES</Text>
+      <Group justify="space-between" className="section-heading"><div><Text fw={800}>FORGE</Text><Text size="xs" c="dimmed">Choose 2 dice to Forge</Text></div></Group>
+      <div className="forge-sockets"><Card role="button" tabIndex={0} withBorder p="sm" className="forge-socket" data-testid="forge-socket-a"
+        onClick={() => stageSelected('A')} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') stageSelected('A'); }}
+        onDragOver={event => event.preventDefault()} onDrop={event => dropOnForge(event, 'A')}><Text size="xs" fw={900}>INGREDIENT 1</Text>
         {dieA ? <><CollectibleDieVisual effects={dieA.effects} face={dieA.value as 1|2|3|4|5|6} /><DieEffectsLabel effects={dieA.effects} />
-          <Button size="compact-xs" variant="subtle" onClick={() => submit({ type: 'SET_FORGE_INGREDIENT', socket: 'A', dieId: null })}>CLEAR</Button></> : <Text c="dimmed">Choose a special die below.</Text>}</Card>
-        <Button variant="default" onClick={() => submit({ type: 'SWAP_FORGE_INGREDIENTS' })} disabled={busy || !dieA || !dieB}>SWAP A / B</Button>
-        <Card withBorder p="sm" className="forge-socket" data-testid="forge-socket-b"><Text size="xs" fw={900}>DIE B · CONSUMED</Text>
+          <Button size="compact-xs" variant="subtle" onClick={event => { event.stopPropagation(); submit({ type: 'SET_FORGE_INGREDIENT', socket: 'A', dieId: null }); }}>REMOVE</Button></>
+          : <Text c="dimmed">Select or drag a special die here.</Text>}</Card>
+        <Text fw={900} aria-hidden="true">+</Text>
+        <Card role="button" tabIndex={0} withBorder p="sm" className="forge-socket" data-testid="forge-socket-b"
+          onClick={() => stageSelected('B')} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') stageSelected('B'); }}
+          onDragOver={event => event.preventDefault()} onDrop={event => dropOnForge(event, 'B')}><Text size="xs" fw={900}>INGREDIENT 2</Text>
         {dieB ? <><CollectibleDieVisual effects={dieB.effects} face={dieB.value as 1|2|3|4|5|6} /><DieEffectsLabel effects={dieB.effects} />
-          <Button size="compact-xs" variant="subtle" onClick={() => submit({ type: 'SET_FORGE_INGREDIENT', socket: 'B', dieId: null })}>CLEAR</Button></> : <Text c="dimmed">Choose a different special die below.</Text>}</Card></div>
-      <div className="forge-die-picker">{forgeEligible.map(die => { const slot = slotForDie(die.id); const active = die.id === dieA?.id || die.id === dieB?.id;
-        return <Button key={die.id} variant={active ? 'light' : 'default'} className="forge-die-option" disabled={busy}
-          onClick={() => submit({ type: 'SET_FORGE_INGREDIENT', socket: !dieA || dieB ? 'A' : 'B', dieId: die.id })}>
-          {slot ? `${slot.area === 'roster' ? 'D' : 'S'}${slot.index + 1} · ` : ''}<DieEffectsLabel effects={die.effects} /></Button>; })}</div>
+          <Button size="compact-xs" variant="subtle" onClick={event => { event.stopPropagation(); submit({ type: 'SET_FORGE_INGREDIENT', socket: 'B', dieId: null }); }}>REMOVE</Button></>
+          : <Text c="dimmed">Select or drag a special die here.</Text>}</Card></div>
       {forgePreview && <Paper withBorder p="sm" className="forge-preview" data-testid="forge-preview"><Group justify="space-between"><Text fw={900}>{forgePreview.kind === 'fusion' ? 'FUSION' : 'TRUE FORGE'}</Text>
         <Text fw={900} c="orange">{formatForgeValue(forgePreview.cost)} TEMPER</Text></Group>
-        <Text size="sm">Result: <DieEffectsLabel effects={forgePreview.effects} /></Text><Text size="xs" c="dimmed">Forge Rating {formatForgeValue(forgePreview.rating)} · Sell {forgePreview.sellValue} Gold</Text>
-        <Button mt="sm" fullWidth color="orange" disabled={busy || forgePreview.cost > BigInt(board.temper)} onClick={() => setConfirmForge(true)}>
-          {forgePreview.cost > BigInt(board.temper) ? 'NOT ENOUGH TEMPER' : `CONFIRM ${forgePreview.kind.toUpperCase()}`}</Button></Paper>}
+        <Text size="sm"><DieEffectsLabel effects={dieA!.effects} /> + <DieEffectsLabel effects={dieB!.effects} /> → <DieEffectsLabel effects={forgePreview.effects} /></Text>
+        <Text size="xs" c="dimmed">Forge Rating {formatForgeValue(forgePreview.rating)} · Sell {forgePreview.sellValue} Gold</Text>
+        <Button mt="sm" fullWidth color="orange" disabled={busy || forgePreview.cost > BigInt(board.temper)} onClick={() => submit({ type: 'CONFIRM_FORGE' })}>
+          {forgePreview.cost > BigInt(board.temper) ? `NEED ${formatForgeValue(forgePreview.cost - BigInt(board.temper))} TEMPER`
+            : `FORGE · ${formatForgeValue(forgePreview.cost)} TEMPER`}</Button></Paper>}
+      <Stack gap={5} mt="xs" className="dice-collection forge-collection"><Group justify="space-between"><Text size="xs" fw={850} tt="uppercase">Storage</Text><Text size="xs" c="dimmed">Select a die, then choose an ingredient slot.</Text></Group>
+        <div className="collection-grid storage-grid" data-testid="forge-storage-grid">{slots('storage', inventory.storage)}</div>
+        <div className="roster-collection-dock" data-testid="forge-roster-grid"><Group justify="space-between" className="collection-heading"><Text size="xs" fw={850} tt="uppercase">Roster</Text><Text size="xs" c="dimmed">Staged source slots are reserved.</Text></Group>
+          <div className="collection-grid roster-grid">{slots('roster', inventory.roster)}</div></div></Stack>
     </Paper>}
 
     {stage === 'train' && <Paper p="xs" className="shop-section training-shop-section" data-testid="training-shop" data-tutorial="hand-training">
@@ -239,7 +265,10 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
           onClick={() => openFlameDetails({ flameInstanceId: flame.instanceId, kind: flame.stage })}>{flame.stage === 'bonfire' ? 'VIEW BONFIRE' : 'MANAGE FLAME'}</Button></Card>)}</div>
     </Paper>}
 
-    <RunActionPortal><RunActionLayout className="shop-action-dock" right={forwardStage && forwardLabel
+    <RunActionPortal><RunActionLayout className="shop-action-dock"
+      left={stage !== 'shop' ? <Button size="sm" variant="default" disabled={busy} data-testid="shop-back"
+        onClick={() => submit({ type: 'SET_SHOP_STAGE', stage: 'shop' })}>← BACK TO DICE</Button> : undefined}
+      right={forwardStage && forwardLabel
       ? <Button size="sm" disabled={busy} data-testid="shop-stage-continue" onClick={() => submit({ type: 'SET_SHOP_STAGE', stage: forwardStage })}>{forwardLabel}</Button>
       : <Button size="sm" disabled={busy || shop.exitUnlocked === false || rosterCount === 0}
         aria-label={returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : nextChapter ? 'NEXT CHAPTER' : 'NEXT ROUND'}
@@ -247,11 +276,6 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
         data-tutorial-nudge={showProgressNudge ? 'true' : undefined} data-testid="shop-progression-action"
         color={returnedFromBust ? 'red' : undefined} onClick={requestProgression}>
         {returnedFromBust ? `RETRY ROUND ${formatPlayerNumber(retryRound)}` : nextChapter ? 'NEXT CHAPTER' : 'NEXT ROUND'} →</Button>} /></RunActionPortal>
-
-    <Modal opened={confirmForge} onClose={() => setConfirmForge(false)} title="CONFIRM FORGE?" centered>{dieA && dieB && forgePreview && <Stack>
-      <Text><DieEffectsLabel effects={dieA.effects} /> + <DieEffectsLabel effects={dieB.effects} /></Text><Text>→ <DieEffectsLabel effects={forgePreview.effects} /></Text>
-      <Text fw={900} c="orange">{formatForgeValue(forgePreview.cost)} TEMPER</Text><Text size="sm" c="dimmed">Die A remains in its slot. Die B is permanently consumed.</Text>
-      <Group justify="flex-end"><Button variant="default" onClick={() => setConfirmForge(false)}>CANCEL</Button><Button color="orange" onClick={() => { submit({ type: 'CONFIRM_FORGE' }); setConfirmForge(false); }}>CONFIRM</Button></Group></Stack>}</Modal>
 
     <Modal opened={saleSlot !== null} onClose={() => setSaleSlot(null)} title="SELL DIE?" centered>{saleSlot && saleDie && <Stack>
       <Text fw={850}>{saleDie.effects.length ? <DieEffectsLabel effects={saleDie.effects} /> : 'Normal'}</Text>{(() => { const sale = dieSellBreakdown(saleDie); return <Paper withBorder p="sm">

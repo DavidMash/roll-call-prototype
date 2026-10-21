@@ -46,8 +46,9 @@ describe('Charge-family generation', () => {
     rosterDice(state)[0].effects = [createDieEffect(rosterDice(state)[0].id, 'jumpingBean')];
     syncActiveDiceProjection(state);
     state.dieRoundState = resetDieRoundState(rosterDice(state));
-    const result = dispatch(state, { type: 'INVOKE_JUMPING_BEAN', dieId: 0 }, sequence(.4, .99));
-    Object.assign(state, result.state);
+    const resolver = new Resolver(state, sequence(0, .99));
+    resolver.rollBatch([0], 'Jumping Bean trigger test', 'gameplay');
+    resolver.drain();
     expect(state.stats.jumpingBeanFreePlays).toHaveLength(1);
     expect(state.chargeXMult).toBe(1.5);
   });
@@ -126,8 +127,11 @@ describe('Power Surge', () => {
     rosterDice(state)[0].effects = [createDieEffect(rosterDice(state)[0].id, 'jumpingBean')];
     syncActiveDiceProjection(state);
     state.dieRoundState = resetDieRoundState(rosterDice(state));
-    const result = dispatch(state, { type: 'INVOKE_JUMPING_BEAN', dieId: 0 }, sequence(.4, .99));
-    Object.assign(state, result.state);
+    const effect = rosterDice(state)[0].effects[0];
+    effect.persistent.jumpingBeanNumber = 3;
+    const resolver = new Resolver(state, sequence(.34, .99));
+    resolver.rollBatch([0], 'Jumping Bean trigger test', 'gameplay');
+    resolver.drain();
     expect(ultimateHands(state.handLevels)).toEqual(['threes']);
     expect(state.chargeXMult).toBe(5);
     expect(state.stats.flameTriggers.powerSurge).toBe(1);

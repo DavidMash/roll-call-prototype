@@ -43,11 +43,11 @@ const definition = (type: SpecialDieType, name: string, rarity: DiceRarity, icon
 
 /** Authoritative metadata for all collectible special effects. */
 export const SPECIAL_DICE: Record<SpecialDieType, SpecialDieDefinition> = {
-  bonus: definition('bonus', 'Bonus', 'common', IconPlus, '#ffd43b'),
+  bonus: definition('bonus', 'Bonus', 'common', IconPlus, '#12b886'),
   workout: definition('workout', 'Workout', 'common', IconBarbell, '#ff922b'),
   vintage: definition('vintage', 'Vintage', 'common', IconHourglassHigh, '#d6a756'),
   golden: definition('golden', 'Golden', 'common', IconCoin, '#fcc419'),
-  weighted: definition('weighted', 'Weighted', 'common', IconScale, '#74c0fc', 'level'),
+  weighted: definition('weighted', 'Weighted', 'common', IconScale, '#74c0fc'),
   clockwork: definition('clockwork', 'Clockwork', 'common', IconClockCog, '#a5d8ff'),
   hitchhiker: definition('hitchhiker', 'Hitchhiker', 'uncommon', IconRoute, '#94d82d', 'level'),
   magnetic: definition('magnetic', 'Magnetic', 'uncommon', IconMagnet, '#22b8cf', 'level'),
@@ -60,7 +60,7 @@ export const SPECIAL_DICE: Record<SpecialDieType, SpecialDieDefinition> = {
   tank: definition('tank', 'Tank', 'rare', IconShield, '#ff8787'),
   mirror: definition('mirror', 'Mirror', 'rare', IconCopy, '#b197fc', 'level', 'qualification'),
   missingLink: definition('missingLink', 'Missing Link', 'rare', IconLink, '#9775fa', 'level', 'qualification'),
-  jumpingBean: definition('jumpingBean', 'Jumping Bean', 'rare', IconJumpRope, '#ff6b6b', 'level', 'onCommand'),
+  jumpingBean: definition('jumpingBean', 'Jumping Bean', 'rare', IconJumpRope, '#ff6b6b', 'level'),
   furnace: definition('furnace', 'Furnace', 'rare', IconFlame, '#ff6b35', 'none', 'onCommand'),
   sustainable: definition('sustainable', 'Sustainable', 'rare', IconRecycle, '#20c997', 'level'),
   doubleTime: definition('doubleTime', 'Double Time', 'legendary', IconClockBolt, '#91a7ff'),
@@ -76,7 +76,8 @@ export const isDieType = (value: unknown): value is SpecialDieType | 'normal' =>
 export const effectInstanceId = (dieId: number, type: SpecialDieType): DieEffectInstanceId => `${dieId}:${type}`;
 export function createDieEffect(dieId: number, type: SpecialDieType, level = 1): DieEffectInstance {
   if (!Number.isSafeInteger(level) || level < 1) throw new Error('Effect level must be a positive integer.');
-  return { id: effectInstanceId(dieId, type), type, level, persistent: { vintageAppreciation: 0, weightedFace: 6 } };
+  return { id: effectInstanceId(dieId, type), type, level,
+    persistent: { vintageAppreciation: 0, weightedFace: 6, jumpingBeanNumber: 1 } };
 }
 export const effectOf = (die: CollectibleDie, type: SpecialDieType): DieEffectInstance | undefined =>
   die.effects.find(effect => effect.type === type);
@@ -100,6 +101,7 @@ export function initialEffectRoundRuntime(effect: DieEffectInstance): DieEffectR
     furnaceUnits: 0,
     magicArmedFace: null,
     weightedFace: effect.persistent.weightedFace,
+    jumpingBeanNumber: effect.persistent.jumpingBeanNumber,
   };
 }
 export function initialDieRoundRuntime(die: CollectibleDie): DieRoundRuntime {
@@ -134,7 +136,9 @@ export function assertCollectibleDie(die: CollectibleDie): void {
     if (effect.type !== 'vintage' && effect.persistent.vintageAppreciation !== 0)
       throw new Error(`Non-Vintage effect ${effect.id} cannot hold Vintage appreciation.`);
     if (![1, 2, 3, 4, 5, 6].includes(effect.persistent.weightedFace))
-      throw new Error(`Effect ${effect.id} has invalid Weighted face.`);
+      throw new Error(`Effect ${effect.id} has invalid Weighted Number.`);
+    if (![1, 2, 3, 4, 5, 6].includes(effect.persistent.jumpingBeanNumber))
+      throw new Error(`Effect ${effect.id} has invalid Jumping Bean number.`);
   }
 }
 
@@ -153,6 +157,8 @@ export function normalizeDieRoundRuntime(die: CollectibleDie, runtime: DieRoundR
     target.magicArmedFace = [1, 2, 3, 4, 5, 6].includes(target.magicArmedFace as number) ? target.magicArmedFace : null;
     target.weightedFace = [1, 2, 3, 4, 5, 6].includes(target.weightedFace as number)
       ? target.weightedFace : effect.persistent.weightedFace;
+    target.jumpingBeanNumber = [1, 2, 3, 4, 5, 6].includes(target.jumpingBeanNumber as number)
+      ? target.jumpingBeanNumber : effect.persistent.jumpingBeanNumber;
     target.freePlayUsesByFace = { ...faceUses(), ...(target.freePlayUsesByFace ?? {}) };
     for (const rank of [1, 2, 3, 4, 5, 6] as const)
       target.freePlayUsesByFace[rank] = Math.max(0, Math.floor(target.freePlayUsesByFace[rank] ?? 0));

@@ -44,7 +44,8 @@ describe('persistent Shop tabs', () => {
     state = go(state, 'forge');
     state = go(state, 'train');
     expect({ rng: state.rngState, offers: state.shop!.offers, training: state.shop!.trainingSession,
-      selection: state.shop!.forgeSelection, visit: state.shop!.visitId }).toEqual(snapshot);
+      selection: state.shop!.forgeSelection, visit: state.shop!.visitId }).toEqual({ ...snapshot,
+        selection: { dieAId: null, dieBId: null } });
     expect(state.historyV2.filter(event => event.kind === 'shop_stage_changed')).toHaveLength(4);
   });
 

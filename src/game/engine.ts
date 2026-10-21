@@ -16,11 +16,11 @@ import { formatPlayerNumber } from './copy';
 import { appendCriticalDiagnostic, appendDebugTrace, createDebugTrace, normalizeDebugTrace, type DebugTraceMode } from './debugTrace';
 import { isRollbackState } from './rollback';
 import { assertDiceInventory, collectibleDieById, ownedDice, rosterDice, rosterDieLabel, syncActiveDiceProjection } from './inventory';
-import { effectOf, effectRuntime, hasEffect, normalizeDieRoundRuntime, requireEffect, resetDieRoundState, SPECIAL_DICE } from './specialDice';
+import { effectInstanceId, effectOf, effectRuntime, hasEffect, normalizeDieRoundRuntime, requireEffect, resetDieRoundState, SPECIAL_DICE } from './specialDice';
 import { dicePurchaseIsFree, initialSpecialOfferEffects, usableManualRerolls } from './specialOffers';
 import { createTrainingSession, quoteTraining } from './training';
 import { firstPurchaseSlot, purchaseDie, setSlotValue, slotExists, slotValue } from './diceEconomy';
-import { dieForgeRating, dieSellBreakdown, formatForgeValue, mergedEffects, previewForge } from './forge';
+import { dieForgeRating, dieSellBreakdown, forgeRevealEligible, formatForgeValue, mergedEffects, previewForge } from './forge';
 import { formatEffectLevel } from './effectLevel';
 import { Decimal, exactInferno, scoreFromUnknown, type ExactScore } from './scoreMath';
 import { getEncounterGoalBreakdown, targetForRound } from './goals';
@@ -224,10 +224,18 @@ function normalizeSilencedBossGoal(state: GameState): void {
 export function normalizeGameState(state: GameState): GameState {
   const next = structuredClone(state);
   next.temper = Math.max(0, Math.floor(next.temper ?? 0));
-  next.forgeUnlocked = next.forgeUnlocked === true || next.temper > 0;
   next.roundTemper ??= { overkill: 0, boardRefresh: 0, miniBoss: 0, boss: 0 };
   if (!next.diceInventory || !Array.isArray(next.encounterDice))
     throw new Error('Saved run does not match the current collectible-dice schema.');
+  next.forgeUnlocked = next.forgeUnlocked === true || forgeRevealEligible(next.diceInventory, next.temper);
+  for (const die of Object.values(next.diceInventory.instances)) for (const effect of die.effects) {
+    effect.persistent ??= { vintageAppreciation: 0, weightedFace: 6, jumpingBeanNumber: 1 };
+    effect.persistent.vintageAppreciation ??= 0;
+    effect.persistent.weightedFace = [1, 2, 3, 4, 5, 6].includes(effect.persistent.weightedFace as number)
+      ? effect.persistent.weightedFace : 6;
+    effect.persistent.jumpingBeanNumber = [1, 2, 3, 4, 5, 6].includes(effect.persistent.jumpingBeanNumber as number)
+      ? effect.persistent.jumpingBeanNumber : 1;
+  }
   assertDiceInventory(next.diceInventory, next.encounterDice);
   syncActiveDiceProjection(next);
   next.dieRoundState ??= {};
@@ -403,14 +411,13 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (paidDice > usableManualRerolls(state)) return 'Not enough manual rerolls for these dice.';
     return null;
   }
-  if (action.type === 'INVOKE_JUMPING_BEAN' || action.type === 'INVOKE_CHAMELEON'
-    || action.type === 'INVOKE_FLYWHEEL' || action.type === 'ARM_MAGIC' || action.type === 'DISARM_MAGIC' || action.type === 'FEED_FURNACE') {
+  if (action.type === 'INVOKE_CHAMELEON' || action.type === 'INVOKE_FLYWHEEL'
+    || action.type === 'ARM_MAGIC' || action.type === 'DISARM_MAGIC' || action.type === 'FEED_FURNACE') {
     if (state.phase !== 'round') return 'Special die commands can only be used during an active Round.';
     const die = 'diceInventory' in state ? collectibleDieById(state, action.dieId)
       : state.dice.find(item => item.id === action.dieId && item.owner === 'player');
     if (!die || die.owner !== 'player') return 'Choose an equipped collectible die.';
-    const expected = action.type === 'INVOKE_JUMPING_BEAN' ? 'jumpingBean'
-      : action.type === 'INVOKE_CHAMELEON' ? 'chameleon'
+    const expected = action.type === 'INVOKE_CHAMELEON' ? 'chameleon'
         : action.type === 'INVOKE_FLYWHEEL' ? 'flywheel'
           : action.type === 'ARM_MAGIC' || action.type === 'DISARM_MAGIC' ? 'magic' : 'furnace';
     const effect = effectOf(die, expected);
@@ -434,13 +441,14 @@ export function validateAction(state: Board | GameState, action: Action): string
     }
     return null;
   }
-  if (action.type === 'SET_WEIGHTED_FACE') {
-    if (state.phase !== 'shop') return 'Choose the Weighted face before the next Round.';
-    if (!state.shop || state.shop.stage !== 'shop') return 'Configure Weighted dice from the Shop stage.';
+  if (action.type === 'SET_DIE_EFFECT_NUMBER') {
+    if (state.phase !== 'round') return 'Choose effect numbers during an active Round.';
     const die = 'diceInventory' in state ? collectibleDieById(state, action.dieId)
       : state.dice.find(item => item.id === action.dieId && item.owner === 'player');
-    if (!die || die.owner !== 'player' || !hasEffect(die, 'weighted')) return 'Choose an owned Weighted die.';
-    if (![1, 2, 3, 4, 5, 6].includes(action.face)) return 'Choose a valid Weighted face.';
+    const effectType = action.effect;
+    const number = action.number;
+    if (!die || die.owner !== 'player' || !hasEffect(die, effectType)) return `Choose an equipped ${SPECIAL_DICE[effectType].name} die.`;
+    if (![1, 2, 3, 4, 5, 6].includes(number)) return 'Choose a number from 1 through 6.';
     return null;
   }
   if (action.type === 'PLAY') {
@@ -550,12 +558,15 @@ export function validateAction(state: Board | GameState, action: Action): string
     return null;
   }
   if (action.type === 'MOVE_DIE') {
-    if (state.shop.stage !== 'shop') return 'The collection can only be reorganized during Shop.';
+    if (state.shop.stage !== 'shop' && state.shop.stage !== 'forge') return 'The collection can only be reorganized during Dice or Forge.';
     if (!('diceInventory' in state)) return 'The authoritative Dice inventory is required.';
     if (!slotExists(state.diceInventory, action.source) || !slotExists(state.diceInventory, action.destination))
       return 'Choose valid collection slots.';
     const sourceId = slotValue(state.diceInventory, action.source);
     const destinationId = slotValue(state.diceInventory, action.destination);
+    const staged = state.shop.forgeSelection;
+    if (state.shop.stage === 'forge' && staged && [staged.dieAId, staged.dieBId].some(id => id !== null
+      && (id === sourceId || id === destinationId))) return 'Remove a staged Forge ingredient before moving that reserved slot.';
     if (sourceId !== action.expectedSourceDieId || destinationId !== action.expectedDestinationDieId)
       return 'The collection changed before that action could be completed.';
     if (sourceId === null || sourceId === undefined) return 'Choose a die to move.';
@@ -567,7 +578,7 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (!rosterAfter.some(id => id !== null)) return 'At least one die must remain equipped.';
     return null;
   }
-  if (action.type === 'SET_FORGE_INGREDIENT' || action.type === 'SWAP_FORGE_INGREDIENTS' || action.type === 'CONFIRM_FORGE') {
+  if (action.type === 'SET_FORGE_INGREDIENT' || action.type === 'CONFIRM_FORGE') {
     if (state.shop.stage !== 'forge' || !state.forgeUnlocked) return 'Forge actions require the Forge section.';
     if (!('diceInventory' in state)) return 'The authoritative Dice inventory is required.';
     const selection = state.shop.forgeSelection ?? { dieAId: null, dieBId: null };
@@ -579,15 +590,13 @@ export function validateAction(state: Board | GameState, action: Action): string
       if (other === action.dieId) return 'Choose two different physical dice.';
       return null;
     }
-    if (selection.dieAId === null || selection.dieBId === null) return 'Choose Die A and Die B.';
+    if (selection.dieAId === null || selection.dieBId === null) return 'Choose two Forge ingredient dice.';
     const dieA = collectibleDieById(state, selection.dieAId);
     const dieB = collectibleDieById(state, selection.dieBId);
     if (!dieA || !dieB || !dieA.effects.length || !dieB.effects.length || dieA.id === dieB.id) return 'Choose two eligible special dice.';
     if (action.type === 'CONFIRM_FORGE') {
       const preview = previewForge(dieA, dieB);
       if (preview.cost > BigInt(state.temper)) return `Not enough Temper; ${formatForgeValue(preview.cost)} required.`;
-      const rosterAfter = state.diceInventory.roster.filter(id => id !== dieB.id);
-      if (!rosterAfter.length) return 'At least one die must remain equipped.';
     }
     return null;
   }
@@ -718,7 +727,6 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
             resource: 'invocation' as const, amount: 1 };
         }) ?? []); break;
       case 'MANUAL_REROLL': resolver.manualReroll(action.dieIds); break;
-      case 'INVOKE_JUMPING_BEAN': resolver.invokeJumpingBean(action.dieId); break;
       case 'INVOKE_CHAMELEON': resolver.invokeChameleon(action.dieId); break;
       case 'INVOKE_FLYWHEEL': resolver.invokeFlywheel(action.dieId); break;
       case 'ARM_MAGIC': resolver.armMagic(action.dieId, action.face); break;
@@ -728,12 +736,19 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         break;
       }
       case 'FEED_FURNACE': resolver.feedFurnace(action.dieId, action.amount); break;
-      case 'SET_WEIGHTED_FACE': {
+      case 'SET_DIE_EFFECT_NUMBER': {
         const die = collectibleDieById(next, action.dieId)!;
-        const effect = requireEffect(die, 'weighted');
-        effect.persistent.weightedFace = action.face;
-        resolver.emit({ type: 'SPECIAL_DIE_EFFECT', dieIds: [die.id], dieType: effect.type, effectInstanceId: effect.id, dieLevel: effect.level,
-          face: action.face, effectCause: 'configuration', message: `${rosterDieLabel(next, die.id)} Weighted target set to ${action.face}` });
+        const effect = requireEffect(die, action.effect);
+        if (action.effect === 'weighted') effect.persistent.weightedFace = action.number;
+        else effect.persistent.jumpingBeanNumber = action.number;
+        const runtime = effectRuntime(next.dieRoundState[action.dieId], effect);
+        if (runtime) {
+          if (action.effect === 'weighted') runtime.weightedFace = action.number;
+          else runtime.jumpingBeanNumber = action.number;
+        }
+        resolver.emit({ type: 'SPECIAL_DIE_EFFECT', dieIds: [die.id], dieType: effect.type,
+          effectInstanceId: effect.id, dieLevel: effect.level, face: action.number, effectCause: 'configuration',
+          message: `${rosterDieLabel(next, die.id)} ${SPECIAL_DICE[action.effect].name} Number set to ${action.number}` });
         break;
       }
       case 'UNLOCK_WARDEN_DIE': resolver.unlockWardenDie(action.dieId); break;
@@ -749,6 +764,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         if (cost) resolver.spendGold(cost, `Bought ${SPECIAL_DICE[offer.dieType!].name}: −${formatPlayerNumber(cost)} Gold`, 'dicePurchase');
         next.shop!.freeDicePurchaseAvailable = false;
         const { die, slot } = purchaseDie(next.diceInventory, offer.dieType!);
+        next.forgeUnlocked ||= forgeRevealEligible(next.diceInventory, next.temper);
         offer.purchased = true;
         syncActiveDiceProjection(next);
         resolver.emitV2({ kind: 'shop_transaction', transaction: { type: 'dice_purchased',
@@ -771,41 +787,42 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         if (action.socket === 'A') next.shop!.forgeSelection.dieAId = action.dieId;
         else next.shop!.forgeSelection.dieBId = action.dieId;
         break;
-      case 'SWAP_FORGE_INGREDIENTS': {
-        next.shop!.forgeSelection ??= { dieAId: null, dieBId: null };
-        const a = next.shop!.forgeSelection.dieAId;
-        next.shop!.forgeSelection.dieAId = next.shop!.forgeSelection.dieBId;
-        next.shop!.forgeSelection.dieBId = a;
-        break;
-      }
       case 'CONFIRM_FORGE': {
         const selection = next.shop!.forgeSelection!;
-        const destination = collectibleDieById(next, selection.dieAId!)!;
-        const source = collectibleDieById(next, selection.dieBId!)!;
-        const preview = previewForge(destination, source);
+        const ingredientA = collectibleDieById(next, selection.dieAId!)!;
+        const ingredientB = collectibleDieById(next, selection.dieBId!)!;
+        const ingredients = [ingredientA, ingredientB].sort((a, b) => a.id - b.id) as [typeof ingredientA, typeof ingredientB];
+        const preview = previewForge(ingredientA, ingredientB);
         const cost = Number(preview.cost);
         resolver.spendTemper(cost, preview.kind);
-        destination.effects = mergedEffects(destination, source);
-        const rosterIndex = next.diceInventory.roster.indexOf(source.id);
-        const storageIndex = next.diceInventory.storage.indexOf(source.id);
-        const sourceSlot = rosterIndex >= 0 ? { area: 'roster' as const, index: rosterIndex }
-          : { area: 'storage' as const, index: storageIndex };
-        const destinationRosterIndex = next.diceInventory.roster.indexOf(destination.id);
-        const destinationSlot = destinationRosterIndex >= 0 ? { area: 'roster' as const, index: destinationRosterIndex }
-          : { area: 'storage' as const, index: next.diceInventory.storage.indexOf(destination.id) };
-        delete next.diceInventory.instances[source.id];
-        delete next.dieRoundState[source.id];
-        setSlotValue(next.diceInventory, sourceSlot, null);
+        const resultId = next.diceInventory.nextDieId++;
+        const result = structuredClone(ingredients[0]);
+        result.id = resultId;
+        result.effects = mergedEffects(ingredientA, ingredientB).map(effect => ({ ...effect,
+          id: effectInstanceId(resultId, effect.type) }));
+        for (const ingredient of ingredients) {
+          const rosterIndex = next.diceInventory.roster.indexOf(ingredient.id);
+          const slot = rosterIndex >= 0 ? { area: 'roster' as const, index: rosterIndex }
+            : { area: 'storage' as const, index: next.diceInventory.storage.indexOf(ingredient.id) };
+          setSlotValue(next.diceInventory, slot, null);
+          delete next.diceInventory.instances[ingredient.id];
+          delete next.dieRoundState[ingredient.id];
+        }
+        const destinationSlot = firstPurchaseSlot(next.diceInventory);
+        if (!destinationSlot) throw new Error('Forge result has no collection destination.');
+        next.diceInventory.instances[result.id] = result;
+        setSlotValue(next.diceInventory, destinationSlot, result.id);
         next.stats[preview.kind === 'fusion' ? 'fusions' : 'forges']++;
-        next.stats.highestEffectCount = Math.max(next.stats.highestEffectCount, destination.effects.length);
-        const rating = dieForgeRating(destination);
+        next.stats.highestEffectCount = Math.max(next.stats.highestEffectCount, result.effects.length);
+        const rating = dieForgeRating(result);
         if (rating > BigInt(next.stats.highestForgeRating)) next.stats.highestForgeRating = rating.toString();
         selection.dieAId = null; selection.dieBId = null;
         syncActiveDiceProjection(next);
-        resolver.emit({ type: 'DICE_FORGED', dieIds: [destination.id, source.id], amount: cost,
+        resolver.emit({ type: 'DICE_FORGED', dieIds: [ingredientA.id, ingredientB.id, result.id], amount: cost,
           message: `${preview.kind === 'fusion' ? 'Fusion' : 'Forge'} completed for ${formatForgeValue(preview.cost)} Temper` });
-        resolver.emitV2({ kind: 'shop_transaction', transaction: { type: 'dice_fused', sourceId: source.id,
-          destinationId: destination.id, destination: destinationSlot, effects: structuredClone(destination.effects),
+        resolver.emitV2({ kind: 'shop_transaction', transaction: { type: 'dice_fused',
+          ingredientIds: [ingredients[0].id, ingredients[1].id], resultId: result.id,
+          destination: destinationSlot, effects: structuredClone(result.effects),
           temperCost: preview.cost.toString(), forgeRating: rating.toString(), operation: preview.kind } });
         break;
       }
@@ -915,6 +932,8 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       }
       case 'SET_SHOP_STAGE': {
         const from = next.shop!.stage ?? 'shop';
+        if (from === 'forge' && action.stage !== 'forge')
+          next.shop!.forgeSelection = { dieAId: null, dieBId: null };
         next.shop!.stage = action.stage;
         resolver.emitV2({ kind: 'shop_stage_changed', shopVisitId: next.shop!.visitId!, from, to: action.stage });
         break;

@@ -5,6 +5,7 @@ import { handScore } from './scoring';
 import type { GameState, HandId, Rank } from './types';
 import { createDieEffect, resetDieRoundState } from './specialDice';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
+import { Resolver } from './effects';
 
 const constant = (value = 0.99) => ({ next: () => value });
 function sequence(...values: number[]) {
@@ -100,12 +101,14 @@ describe('authoritative current-round scorecard totals', () => {
     rosterDice(game)[0].effects = [createDieEffect(rosterDice(game)[0].id, 'jumpingBean')];
     syncActiveDiceProjection(game);
     game.dieRoundState = resetDieRoundState(rosterDice(game));
-    game.dice[0].value = 6;
-    const result = dispatch(game, { type: 'INVOKE_JUMPING_BEAN', dieId: 0 }, sequence(0.99, 0));
-    expect(result.state.scoreByHand).toEqual({ sixes: 13n });
-    expect(result.state.effectScore).toBe(BigInt(0n));
-    expect(result.state.score).toBe(BigInt(13n));
-    expect(handTotal(result.state) + result.state.effectScore).toBe(BigInt(result.state.score));
-    expect(result.state.stats.rounds[0].effectScore).toBe(BigInt(0n));
+    rosterDice(game)[0].effects[0].persistent.jumpingBeanNumber = 6;
+    const resolver = new Resolver(game, sequence(0.99, 0));
+    resolver.rollBatch([0], 'Jumping Bean trigger test', 'gameplay');
+    resolver.drain();
+    expect(game.scoreByHand).toEqual({ sixes: 13n });
+    expect(game.effectScore).toBe(BigInt(0n));
+    expect(game.score).toBe(BigInt(13n));
+    expect(handTotal(game) + game.effectScore).toBe(BigInt(game.score));
+    expect(game.stats.rounds[0].effectScore).toBe(BigInt(0n));
   });
 });

@@ -73,7 +73,7 @@ export interface ScoreOccurrence {
 }
 
 export type RollContext = 'gameplay' | 'settle' | 'wardenSetup' | 'shop' | 'flameSelection';
-export type RollController = 'tank' | 'weightedDie' | 'clockworkDie' | 'magicDie' | 'magneticDie'
+export type RollController = 'tank' | 'clockworkDie' | 'magicDie' | 'magneticDie'
   | 'hexerWeighted' | 'hexerClockwork' | 'rng';
 
 export interface RollBatchIntent {
@@ -119,6 +119,7 @@ export interface RollResolution {
   locked?: boolean;
   intercepted?: boolean;
   specialDieType?: DieType;
+  weightedBias?: { selectedNumber: Exclude<Rank, 7>; matchingPhysicalFaces: number; selectedFaceWeight: number };
   previousFaceExcluded?: boolean;
 }
 

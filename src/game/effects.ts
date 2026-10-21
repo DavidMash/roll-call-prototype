@@ -1,5 +1,5 @@
 import { bossRewardForEncounter, CONFIG, interestForGold, roundReward } from './config';
-import { activeFace, isHexerFace, rollPhysicalDie, scoringPips, weightedSourceFace, wholeDieEffectSuppressed } from './dice';
+import { activeFace, isHexerFace, rollPhysicalDie, scoringPips, weightedSelectedFaceWeight, weightedSourceFace, wholeDieEffectSuppressed } from './dice';
 import {
   captureHandStart, currentFlameInstanceId, eligibleFlameIds, flameByType, flameInstances, flameSlotOf, FLAMES, handXMultContributions,
   fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, HOT_STREAK_SEQUENCE,
@@ -34,6 +34,7 @@ import {
   SPECIAL_OFFERS, specialOfferDescription, specialOfferName, usableManualRerolls,
 } from './specialOffers';
 import { createTrainingSession } from './training';
+import { forgeRevealEligible } from './forge';
 import type { ChargeFlame, HandStartSnapshot } from './flames';
 import type { CollectibleDie, DieEffectInstance, EventRecord, Face, Flame, FlameInstanceId, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, Rank, RunNode, ScoreSource, SpecialDieType, SpecialOffer, TemperSource, TemperSpendSource } from './types';
 import type {
@@ -46,7 +47,8 @@ import { activeDieLabel, orderDieIdsByEncounter, rosterDice, rosterSlotOf, syncA
 import type { PlayIntent, QualificationPlan, RollBatchIntent, RollContext, RollIntent, RollResolution, ScoreOccurrence } from './resolution';
 import { effectOf, effectRuntime, hasEffect, requireEffect, resetDieRoundState, runtimeFor, SPECIAL_DICE } from './specialDice';
 
-type RollTrigger = { dieId: number; face: Face; kind: 'specialFreePlay'; rerollEventId: string };
+type RollTrigger = { dieId: number; face: Face; kind: 'specialFreePlay'; rerollEventId: string }
+  | { dieId: number; face: Face; kind: 'jumpingBean'; rerollEventId: string; selectedNumber: Exclude<Rank, 7> };
 type V2HandDraft = {
   parentSeq?: number;
   hand: HandId;
@@ -448,7 +450,7 @@ export class Resolver {
   addTemper(amount: number, source: TemperSource, message: string): void {
     if (!Number.isSafeInteger(amount) || amount <= 0) return;
     this.state.temper += amount;
-    this.state.forgeUnlocked = true;
+    this.state.forgeUnlocked ||= forgeRevealEligible(this.state.diceInventory, this.state.temper);
     if (this.state.phase === 'round' && (source === 'overkill' || source === 'boardRefresh' || source === 'miniBoss' || source === 'boss')) {
       this.state.roundTemper[source] += amount;
       this.emitV2({ kind: 'temper_changed', operation: 'earned', source, amount, balance: this.state.temper,
@@ -793,7 +795,8 @@ export class Resolver {
         weighted: false, attracted: false, controller, controllerDieId, locked, origin,
         specialDieType: collectible?.effects[0]?.type };
     };
-    // Locked canonical controller phase: Magic → Magnetic → Weighted → Clockwork → Tank → Boss → Random.
+    // Locked controller phase: Magic → Magnetic → Clockwork → Tank → Boss → Random.
+    // Weighted is applied only inside the final randomized physical-face selection.
     const magic = collectible && ownEffectActive ? effectOf(collectible, 'magic') : undefined;
     const magicRuntime = collectible ? this.specialRuntime(collectible, 'magic') : undefined;
     if (specialAllowed && collectible && magic && magicRuntime && intent.reroll && magicRuntime.magicArmedFace !== null
@@ -813,13 +816,6 @@ export class Resolver {
         this.spendInvocation(magnetic, magneticEffect, `Magnetic forced ${this.dieLabel(die.id)} to ${target}`, 'external_roll_controller');
         return { ...forced('magneticDie', target, magnetic.id, false), attracted: true, specialDieType: magneticEffect.type };
       }
-    }
-    const weighted = collectible && ownEffectActive ? effectOf(collectible, 'weighted') : undefined;
-    const weightedRuntime = collectible ? this.specialRuntime(collectible, 'weighted') : undefined;
-    if (specialAllowed && collectible && weighted && weightedRuntime && weightedRuntime.invocationsRemaining > 0) {
-      const target = weightedRuntime.weightedFace;
-      this.spendInvocation(collectible, weighted, `Weighted forced Roll to ${target}`, 'roll_controller');
-      return forced('weightedDie', target, die.id);
     }
     const clockwork = collectible && ownEffectActive ? effectOf(collectible, 'clockwork') : undefined;
     const clockworkRuntime = collectible ? this.specialRuntime(collectible, 'clockwork') : undefined;
@@ -848,7 +844,11 @@ export class Resolver {
         controller: 'hexerClockwork', controllerDieId: die.id, locked: true, origin };
     }
     const previousFaceExcluded = intent.excludeStartingFace;
-    const randomResult = rollPhysicalDie(die, this.rng, previousFaceExcluded ? beforePhysical : undefined);
+    const weighted = specialAllowed && collectible && ownEffectActive ? effectOf(collectible, 'weighted') : undefined;
+    const weightedConfig = weighted ? { selectedNumber: weighted.persistent.weightedFace, level: weighted.level } : undefined;
+    const randomResult = rollPhysicalDie(die, this.rng, previousFaceExcluded ? beforePhysical : undefined, weightedConfig);
+    const matchingPhysicalFaces = weightedConfig
+      ? die.faces.filter(face => face.rank === weightedConfig.selectedNumber).length : 0;
     return {
       intent, dieId: die.id, before, beforePhysical,
       ...randomResult,
@@ -856,6 +856,8 @@ export class Resolver {
       controller: isCursedDie(die) && randomResult.weighted ? 'hexerWeighted' : 'rng',
       controllerDieId: isCursedDie(die) && randomResult.weighted ? die.id : undefined,
       origin, previousFaceExcluded,
+      ...(weightedConfig ? { weightedBias: { selectedNumber: weightedConfig.selectedNumber, matchingPhysicalFaces,
+        selectedFaceWeight: weightedSelectedFaceWeight(weightedConfig.level) } } : {}),
     };
   }
 
@@ -889,11 +891,26 @@ export class Resolver {
           triggers.push({ dieId: die.id, face, kind: 'specialFreePlay', rerollEventId: batch.id });
         }
       }
+      const jumpingBean = die.owner === 'player' ? effectOf(die, 'jumpingBean') : undefined;
+      const jumpingBeanRoll = batch.context === 'gameplay' || batch.context === 'wardenSetup' || batch.context === 'settle';
+      if (jumpingBeanRoll && die.owner === 'player' && jumpingBean && !wholeDieEffectSuppressed(die)
+        && face.rank !== 7 && face.rank === jumpingBean.persistent.jumpingBeanNumber) {
+        const runtime = this.specialRuntime(die, 'jumpingBean');
+        if (runtime && runtime.invocationsRemaining > 0) {
+          const beforeUses = runtime.invocationsRemaining;
+          runtime.invocationsRemaining--;
+          this.emitSpecial(die, jumpingBean,
+            `Jumping Bean rolled selected number ${face.rank}; use ${beforeUses} to ${runtime.invocationsRemaining}`,
+            'post_roll', beforeUses, runtime.invocationsRemaining, { face: face.rank });
+          triggers.push({ dieId: die.id, face, kind: 'jumpingBean', rerollEventId: batch.id,
+            selectedNumber: jumpingBean.persistent.jumpingBeanNumber });
+        }
+      }
     }
     const attracted = results.filter(result => result.attracted);
     if (attracted.length && batch.context === 'gameplay')
       this.applyFluxCapacitor(attracted.length, attracted.map(result => result.dieId));
-    if (batch.context === 'gameplay') this.queue.push(...triggers);
+    if (batch.context === 'gameplay' || batch.context === 'wardenSetup' || batch.context === 'settle') this.queue.push(...triggers);
   }
 
   rollBatch(dieIds: number[], reason: string, context: RollContext, _excludeStartingFace = false,
@@ -925,8 +942,14 @@ export class Resolver {
         return { dieId: result.dieId, beforePhysicalFace: result.beforePhysical, afterPhysicalFace: result.physicalFace,
           beforeFace: result.before, afterFace: activeFace(die).rank,
           previousFaceExcluded: batch.manual,
-          weighted: result.weighted && weightedSource ? { sourceFace: weightedSource.rank, stacks: weightedStacks,
-            destinationWeight: 1 + weightedStacks } : null,
+          weighted: result.weightedBias ? { sourceFace: result.weightedBias.selectedNumber,
+            stacks: result.weightedBias.matchingPhysicalFaces,
+            destinationWeight: die.faces[result.physicalFace - 1].rank === result.weightedBias.selectedNumber
+              ? result.weightedBias.selectedFaceWeight : 1,
+            selectedNumber: result.weightedBias.selectedNumber,
+            matchingPhysicalFaces: result.weightedBias.matchingPhysicalFaces }
+            : result.weighted && weightedSource ? { sourceFace: weightedSource.rank, stacks: weightedStacks,
+              destinationWeight: 1 + weightedStacks } : null,
           magneticAnchorIds: result.attracted
             ? result.controllerDieId !== undefined ? [result.controllerDieId] : []
             : [], controller: result.controller,
@@ -955,6 +978,15 @@ export class Resolver {
           playSource: 'freePlay', handConsumed: false,
           message: `Free Play ${item.rerollEventId}: reroll returned to the same physical face; ${HANDS[hand].name} scored without consumption` });
         if (outcome.winning) { this.queue = []; return; }
+      } else if (item.kind === 'jumpingBean') {
+        const hand = UPPER_HAND_BY_FACE[item.selectedNumber];
+        if (!hand) continue;
+        this.v2ParentSeq = this.lastV2RollSeq;
+        this.play(hand, [item.dieId], 'jumpingBean');
+        this.emit({ type: 'JUMPING_BEAN_FREE_PLAY', dieType: 'jumpingBean', hand, dieIds: [item.dieId],
+          playSource: 'jumpingBean', handConsumed: false,
+          message: `Jumping Bean ${item.selectedNumber}: Free Played ${HANDS[hand].name}; automatic follow-up Roll` });
+        this.rollBatch([item.dieId], 'Jumping Bean automatic follow-up Roll', 'gameplay', false, 'jumping_bean_followup');
       }
     }
     this.queue = [];
@@ -1233,6 +1265,7 @@ export class Resolver {
         const settleRerolls = jugglerRerolls ?? [...this.postHandRerolls(resolution.selectedParticipants)];
         this.rollBatch(settleRerolls, jugglerRerolls ? 'The Juggler reroll' : 'Winning hand settle reroll',
           'settle', false, jugglerRerolls ? 'juggler' : 'winning_settle');
+        this.drain();
         this.evaluate();
       }
       return { winning, beanRecordIndex };
@@ -1499,22 +1532,6 @@ export class Resolver {
     this.v2ParentSeq = handEvent.seq;
     this.advanceNeglected();
     return this.resolvePostPlayRerolls(resolution, winning, beanRecordIndex);
-  }
-
-  invokeJumpingBean(dieId: number): void {
-    const die = this.collectible(dieId);
-    if (!die || !hasEffect(die, 'jumpingBean')) throw new Error('Jumping Bean command requires its equipped die.');
-    const effect = requireEffect(die, 'jumpingBean');
-    if (wholeDieEffectSuppressed(die)) throw new Error('Jumping Bean is suppressed while its infected face is exposed.');
-    const face = activeFace(die);
-    const hand = UPPER_HAND_BY_FACE[face.rank];
-    if (!hand) throw new Error('Jumping Bean requires an ordinary exposed face.');
-    this.spendInvocation(die, effect, `Jumping Bean Free Played ${HANDS[hand].name}`, 'on_command');
-    const outcome = this.play(hand, [die.id], 'jumpingBean');
-    if (outcome.winning) { this.evaluate(); return; }
-    this.rollBatch([die.id], 'Jumping Bean reroll', 'gameplay', false, 'jumping_bean_followup');
-    this.drain();
-    this.evaluate();
   }
 
   invokeFlywheel(dieId: number): void {

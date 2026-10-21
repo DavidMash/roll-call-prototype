@@ -1,4 +1,4 @@
-import { activeFace } from './dice';
+import { activeFace, weightedNumberProbability } from './dice';
 import { dieEffectDescription, fusionEffectSummary } from './diceEconomy';
 import { dieSellBreakdown } from './forge';
 import { SPECIAL_DICE, effectRuntime, invocationCapacity } from './specialDice';
@@ -74,11 +74,17 @@ export function effectDetails(die: CollectibleDie, effect: DieEffectInstance,
         { label: 'Appreciation', value: `+${effect.persistent.vintageAppreciation} Gold` }); break;
     }
     case 'golden': status.push({ label: 'Gold earned this Round', value: `${runtime?.goldenGoldEarned ?? 0} / ${3 * level}` }); break;
-    case 'hitchhiker': case 'mirror': case 'missingLink': case 'jumpingBean': case 'chameleon':
+    case 'hitchhiker': case 'mirror': case 'missingLink': case 'chameleon':
     case 'flywheel': case 'conjoined': case 'sustainable':
       status.push({ label: 'Uses Remaining', value: usesRemaining(effect, runtime) }); break;
-    case 'weighted': status.push({ label: 'Weighted face', value: String(runtime?.weightedFace ?? effect.persistent.weightedFace) },
-      { label: 'Uses Remaining', value: usesRemaining(effect, runtime) }); break;
+    case 'weighted': {
+      const number = effect.persistent.weightedFace;
+      status.push({ label: 'Weighted Number', value: String(number) },
+        { label: `Chance to Roll ${number}`, value: `${(weightedNumberProbability(die, number, level) * 100).toFixed(1)}%` });
+      break;
+    }
+    case 'jumpingBean': status.push({ label: 'Jumping Bean Number', value: String(effect.persistent.jumpingBeanNumber) },
+      { label: 'Uses Remaining', value: String(runtime?.invocationsRemaining ?? invocationCapacity(effect)) }); break;
     case 'clockwork': {
       const capacity = 3 * level, used = runtime?.clockworkRolls ?? 0;
       status.push({ label: 'Controlled Rolls remaining', value: `${Math.max(0, capacity - used)} / ${capacity}` });

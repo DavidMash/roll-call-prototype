@@ -6,8 +6,8 @@ import type {
 import type { RoundGoalBreakdown } from './goals';
 import type { ExactDecimal, ExactScore } from './scoreMath';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 17 as const;
-export const RUN_HISTORY_V2_RULESET = 'composable-effects-temper-forge-v1' as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 18 as const;
+export const RUN_HISTORY_V2_RULESET = 'configurable-roll-effects-forge-v2' as const;
 
 export interface RunHistoryV2Coverage {
   complete: boolean;
@@ -122,7 +122,8 @@ export interface RollResult {
   beforeFace: Rank;
   afterFace: Rank;
   previousFaceExcluded: boolean;
-  weighted: null | { sourceFace: Rank; stacks: number; destinationWeight: number };
+  weighted: null | { sourceFace: Rank; stacks: number; destinationWeight: number;
+    selectedNumber?: Exclude<Rank, 7>; matchingPhysicalFaces?: number };
   magneticAnchorIds: number[];
   controller: import('./resolution').RollController;
   controllerDieId?: number;
@@ -288,7 +289,7 @@ export type ShopTransaction =
   | { type: 'dice_sold'; dieId: number; effects: import('./types').DieEffectInstance[]; source: DiceSlotRef;
       componentSalvage: number; complexityPremium: number; vintageAppreciation: number; proceeds: number }
   | { type: 'dice_moved'; source: DiceSlotRef; destination: DiceSlotRef; sourceDieId: number; destinationDieId: number | null }
-  | { type: 'dice_fused'; sourceId: number; destinationId: number; destination: DiceSlotRef;
+  | { type: 'dice_fused'; ingredientIds: [number, number]; resultId: number; destination: DiceSlotRef;
       effects: import('./types').DieEffectInstance[]; temperCost: string; forgeRating: string; operation: 'fusion' | 'forge' }
   | { type: 'dice_offers_rerolled'; cost: number; oldOfferIds: number[]; newOfferIds: number[]; rerollCount: number }
   | { type: 'training'; shopVisitId: number; hand: HandId; family: 'upper' | 'lower'; fromLevel: number; toLevel: number;

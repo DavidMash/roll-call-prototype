@@ -9,6 +9,7 @@ import { SPECIAL_DICE, runtimeFor } from '../game/specialDice';
 import type { Action, Board, CollectibleDie, DieEffectInstance, HexerFace, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
 import { CollectibleDieVisual } from './CollectibleDieVisual';
+import { DieNumberSelector } from './DieNumberSelector';
 import { DieEffectsLabel, DieTypeLabel } from './DieTypeLabel';
 import { PipFace } from './PipFace';
 import { RichDescription } from './RichDescription';
@@ -32,30 +33,32 @@ function EffectCommands({ board, die, effect, busy, actionsEnabled, submit, clos
 }) {
   if (board.phase !== 'round') return null;
   const runtime = runtimeFor(die, board.dieRoundState[die.id], effect.type);
-  const invoke: Action | null = effect.type === 'jumpingBean' ? { type: 'INVOKE_JUMPING_BEAN', dieId: die.id }
-    : effect.type === 'chameleon' ? { type: 'INVOKE_CHAMELEON', dieId: die.id }
+  const invoke: Action | null = effect.type === 'chameleon' ? { type: 'INVOKE_CHAMELEON', dieId: die.id }
       : effect.type === 'flywheel' ? { type: 'INVOKE_FLYWHEEL', dieId: die.id } : null;
   return <Stack gap={6} className="die-details-actions" data-testid={`die-details-actions-${effect.id}`}>
     {invoke && <Button size="sm" disabled={busy || !actionsEnabled || validateAction(board, invoke) !== null}
       onClick={() => { submit(invoke); closeAfter(); }}>USE {SPECIAL_DICE[effect.type].name.toUpperCase()}</Button>}
     {effect.type === 'magic' && runtime && <>
-      <Text size="xs" fw={800}>CHOOSE THE NEXT REROLL</Text>
-      <Group gap={4} grow>{([1, 2, 3, 4, 5, 6] as const).map(face => {
-        const action: Action = { type: 'ARM_MAGIC', dieId: die.id, face };
-        return <Button key={face} size="compact-sm" variant={runtime.magicArmedFace === face ? 'filled' : 'default'}
-          disabled={busy || !actionsEnabled || validateAction(board, action) !== null}
-          aria-label={`Arm Magic effect on die ${die.id} for face ${face}`} onClick={() => submit(action)}>{face}</Button>;
-      })}</Group>
+      <DieNumberSelector label="Magic · choose the next Reroll" value={runtime.magicArmedFace}
+        disabled={busy || !actionsEnabled}
+        optionDisabled={face => validateAction(board, { type: 'ARM_MAGIC', dieId: die.id, face }) !== null}
+        onChange={face => submit({ type: 'ARM_MAGIC', dieId: die.id, face })}
+        testId={`number-selector-${effect.id}`} />
       {runtime.magicArmedFace !== null && <Button size="compact-sm" variant="default" disabled={busy || !actionsEnabled}
         onClick={() => submit({ type: 'DISARM_MAGIC', dieId: die.id })}>DISARM MAGIC</Button>}
     </>}
     {effect.type === 'furnace' && runtime && <Button size="sm" color="yellow"
       disabled={busy || !actionsEnabled || validateAction(board, { type: 'FEED_FURNACE', dieId: die.id, amount: 1 }) !== null}
       onClick={() => submit({ type: 'FEED_FURNACE', dieId: die.id, amount: 1 })}>FEED 1 GOLD</Button>}
-    {effect.type === 'weighted' && <div><Text size="xs" fw={800}>WEIGHTED FACE · {effect.persistent.weightedFace}</Text>
-      <Group gap={4} mt={4}>{([1, 2, 3, 4, 5, 6] as const).map(face => <Button key={face} size="compact-xs"
-        variant={effect.persistent.weightedFace === face ? 'filled' : 'default'} disabled={busy || !actionsEnabled}
-        onClick={() => submit({ type: 'SET_WEIGHTED_FACE', dieId: die.id, face })}>{face}</Button>)}</Group></div>}
+    {(effect.type === 'weighted' || effect.type === 'jumpingBean') && <DieNumberSelector
+      label={`${SPECIAL_DICE[effect.type].name} · choose a number`}
+      value={effect.type === 'weighted' ? effect.persistent.weightedFace : effect.persistent.jumpingBeanNumber}
+      disabled={busy || !actionsEnabled}
+      optionDisabled={number => validateAction(board,
+        { type: 'SET_DIE_EFFECT_NUMBER', dieId: die.id, effect: effect.type as 'weighted' | 'jumpingBean', number }) !== null}
+      onChange={number => submit({ type: 'SET_DIE_EFFECT_NUMBER', dieId: die.id,
+        effect: effect.type as 'weighted' | 'jumpingBean', number })}
+      testId={`number-selector-${effect.id}`} />}
   </Stack>;
 }
 

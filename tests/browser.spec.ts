@@ -1240,26 +1240,31 @@ test('settled progress resumes across reloads and return visits with seed-aware 
   await matchBoard(page, generated);
 });
 
-test('Jumping Bean runs its Free Play and explicit reroll only when invoked On Command', async ({ page }) => {
-  const game = newRun('jumping-bean-command-browser').state;
-  rosterDice(game)[0].effects = [createDieEffect(rosterDice(game)[0].id, 'jumpingBean')];
+test('configurable effects share independent compact number selectors', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const game = newRun('shared-number-selector-browser').state;
+  rosterDice(game)[0].effects = [
+    createDieEffect(rosterDice(game)[0].id, 'weighted'),
+    createDieEffect(rosterDice(game)[0].id, 'jumpingBean'),
+    createDieEffect(rosterDice(game)[0].id, 'magic'),
+  ];
   syncActiveDiceProjection(game);
   game.dieRoundState = resetDieRoundState(rosterDice(game));
   await installRunState(page, game);
   await matchBoard(page, game);
-  const next = dispatch(game, { type: 'INVOKE_JUMPING_BEAN', dieId: 0 });
   const bean = page.getByTestId('flame-die-0');
-  await bean.getByRole('button', { name: 'View details for Jumping Bean' }).click();
-  const details = page.getByRole('dialog', { name: 'JUMPING BEAN · I' });
-  await expect(details).toContainText(/Uses Remaining\s*1 \/ 1/);
-  await details.getByRole('button', { name: 'USE JUMPING BEAN' }).click();
-  await matchBoard(page, next.state);
-  expect(next.state.stats.scoreBySource.jumpingBean).toBeGreaterThan(0);
-  expect(next.state.effectScore).toBe(BigInt(0n));
-  expect(next.events.some(event => event.type === 'JUMPING_BEAN_FREE_PLAY')).toBe(true);
-  expect(next.events.some(event => event.type === 'DIE_ROLLED' && event.dieIds?.includes(0))).toBe(true);
-  await bean.getByRole('button', { name: 'View details for Jumping Bean' }).click();
-  await expect(page.getByRole('dialog', { name: 'JUMPING BEAN · I' })).toContainText(/Uses Remaining\s*0 \/ 1/);
+  await bean.getByRole('button', { name: /View details for Weighted.*Jumping Bean.*Magic/ }).click();
+  const details = page.getByTestId('die-details-modal');
+  await expect(details.locator('.die-number-selector')).toHaveCount(3);
+  await expect(details.getByRole('button', { name: 'USE JUMPING BEAN' })).toHaveCount(0);
+  await details.getByRole('button', { name: 'Weighted · choose a number: 4' }).click();
+  await details.getByRole('button', { name: 'Jumping Bean · choose a number: 3' }).click();
+  await details.getByRole('button', { name: 'Magic · choose the next Reroll: 5' }).click();
+  await expect(details.getByRole('button', { name: 'Weighted · choose a number: 4' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(details.getByRole('button', { name: 'Jumping Bean · choose a number: 3' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(details.getByRole('button', { name: 'Magic · choose the next Reroll: 5' })).toHaveAttribute('aria-pressed', 'true');
+  expect(await details.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await page.screenshot({ path: test.info().outputPath('shared-number-selectors-mobile.png'), fullPage: true });
 });
 
 test('active mobile gameplay stays inside the viewport with a two-column scorecard', async ({ page }) => {

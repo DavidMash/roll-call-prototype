@@ -1,4 +1,4 @@
-import type { CollectibleDie, DieEffectInstance, SpecialDieType } from './types';
+import type { CollectibleDie, DiceInventory, DieEffectInstance, SpecialDieType } from './types';
 import { SPECIAL_DICE, effectOf } from './specialDice';
 
 export type ForgeOperationKind = 'fusion' | 'forge';
@@ -9,6 +9,9 @@ export interface ForgePreview {
   cost: bigint;
   sellValue: number;
 }
+
+export const forgeRevealEligible = (inventory: DiceInventory, temper: number): boolean => temper > 0
+  && Object.values(inventory.instances).filter(die => die.effects.length > 0).length >= 2;
 
 export function effectForgeWeight(effect: DieEffectInstance): bigint {
   return BigInt(SPECIAL_DICE[effect.type].forgeBaseWeight + effect.level - 1);
@@ -31,8 +34,9 @@ export function classifyForge(a: CollectibleDie, b: CollectibleDie): ForgeOperat
   return contained(a.effects, b.effects) || contained(b.effects, a.effects) ? 'fusion' : 'forge';
 }
 
-/** Destination order and matching instance identity survive; source-only effects append in source order. */
-export function mergedEffects(destination: CollectibleDie, source: CollectibleDie): DieEffectInstance[] {
+/** Ingredient order is player-facing irrelevant; the lower stable die ID supplies deterministic presentation/configuration. */
+export function mergedEffects(a: CollectibleDie, b: CollectibleDie): DieEffectInstance[] {
+  const [destination, source] = a.id <= b.id ? [a, b] : [b, a];
   const result = destination.effects.map(effect => structuredClone(effect));
   for (const incoming of source.effects) {
     const existing = result.find(effect => effect.type === incoming.type);
@@ -45,7 +49,7 @@ export function mergedEffects(destination: CollectibleDie, source: CollectibleDi
       existing.persistent.vintageAppreciation = Math.min(90 * existing.level,
         existing.persistent.vintageAppreciation + incoming.persistent.vintageAppreciation);
     }
-    // Destination Weighted configuration deliberately wins for matching effects.
+    // The lower stable die ID supplies any matching effect configuration.
   }
   return result;
 }
@@ -90,11 +94,11 @@ export function dieSellBreakdown(die: CollectibleDie): {
   };
 }
 
-export function previewForge(destination: CollectibleDie, source: CollectibleDie): ForgePreview {
-  const effects = mergedEffects(destination, source);
-  const kind = classifyForge(destination, source);
-  const cost = kind === 'fusion' ? fusionCost(effects) : trueForgeCost(destination, source);
-  const result = { ...structuredClone(destination), effects };
+export function previewForge(a: CollectibleDie, b: CollectibleDie): ForgePreview {
+  const effects = mergedEffects(a, b);
+  const kind = classifyForge(a, b);
+  const cost = kind === 'fusion' ? fusionCost(effects) : trueForgeCost(a, b);
+  const result = { ...structuredClone(a.id <= b.id ? a : b), effects };
   return { kind, effects, rating: dieForgeRatingFromEffects(effects), cost, sellValue: dieSellBreakdown(result).total };
 }
 

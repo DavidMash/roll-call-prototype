@@ -204,8 +204,10 @@ export interface CollectibleDie {
 export interface DieEffectPersistentState {
   /** Persistent value added to this die's future sale price by Vintage. */
   vintageAppreciation: number;
-  /** Persistent player configuration copied into each Weighted Round runtime. */
+  /** Persistent player configuration for Weighted's selected number. */
   weightedFace: Exclude<Rank, 7>;
+  /** Persistent player configuration for Jumping Bean's selected number. */
+  jumpingBeanNumber: Exclude<Rank, 7>;
 }
 export interface DieEffectInstance {
   id: DieEffectInstanceId;
@@ -241,6 +243,7 @@ export interface DieEffectRoundRuntime {
   furnaceUnits: number;
   magicArmedFace: Exclude<Rank, 7> | null;
   weightedFace: Exclude<Rank, 7>;
+  jumpingBeanNumber: Exclude<Rank, 7>;
 }
 export interface DieRoundRuntime {
   dieId: DieId;
@@ -790,20 +793,18 @@ export type Action =
   | { type: 'PLAY'; hand: HandId; dieIds: number[]; decisionMs?: number;
       qualificationClaims?: { dieId: DieId; effect: 'mirror' | 'missingLink' | 'conjoined'; effectInstanceId?: string }[] }
   | { type: 'MANUAL_REROLL'; dieIds: number[] }
-  | { type: 'INVOKE_JUMPING_BEAN'; dieId: DieId }
   | { type: 'INVOKE_CHAMELEON'; dieId: DieId }
   | { type: 'INVOKE_FLYWHEEL'; dieId: DieId }
   | { type: 'ARM_MAGIC'; dieId: DieId; face: Exclude<Rank, 7> }
   | { type: 'DISARM_MAGIC'; dieId: DieId }
   | { type: 'FEED_FURNACE'; dieId: DieId; amount: number }
-  | { type: 'SET_WEIGHTED_FACE'; dieId: DieId; face: Exclude<Rank, 7> }
+  | { type: 'SET_DIE_EFFECT_NUMBER'; dieId: DieId; effect: 'weighted' | 'jumpingBean'; number: Exclude<Rank, 7> }
   | { type: 'UNLOCK_WARDEN_DIE'; dieId: number }
   | { type: 'TOGGLE_CHARGE'; hand?: HandId | null; dieIds?: number[] }
   | { type: 'BUY_DIE'; offerId: number }
   | { type: 'MOVE_DIE'; source: DiceSlotRef; destination: DiceSlotRef;
       expectedSourceDieId: DieId; expectedDestinationDieId: DieId | null }
   | { type: 'SET_FORGE_INGREDIENT'; socket: 'A' | 'B'; dieId: DieId | null }
-  | { type: 'SWAP_FORGE_INGREDIENTS' }
   | { type: 'CONFIRM_FORGE' }
   | { type: 'SELL_DIE'; slot: DiceSlotRef; expectedDieId: DieId }
   | { type: 'TRAIN_HAND'; hand: HandId }

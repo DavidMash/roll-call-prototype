@@ -44,7 +44,7 @@ export const GLOSSARY: Record<GlossaryTermId, GlossaryDefinition> = {
   build: { label: 'Build', definition: [text('Your Build is the collection of dice, Flames, Hand levels, and other upgrades you currently have in the run.')] },
   targetHand: { label: 'Target Hand', definition: [text('Your Target Hand is the specific '), term('hand'),
     text(' currently selected by Target Practice. Playing that Hand activates Target Practice\'s bonus.')] },
-  weightedFace: { label: 'Weighted Face', definition: [text('The Weighted Face is the face a Weighted die is guaranteed to show when its Weighted power activates.')] },
+  weightedFace: { label: 'Weighted Number', definition: [text('The number a Weighted die currently makes more likely during a randomized Roll.')] },
   sellValue: { label: 'Sell Value', definition: [text('Sell Value is the amount of Gold you receive when you sell a die in the Shop.')] },
   bossEffect: { label: 'Boss Effect', definition: [text('A Boss Effect is the special rule imposed by a Boss encounter.')] },
 };

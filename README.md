@@ -8,7 +8,7 @@ A run owns collectible dice with stable IDs. `diceInventory.instances` is the di
 
 `Board.dice` is the active encounter reference projection. Its player entries alias the equipped inventory instances in Roster order, followed by any tagged temporary encounter dice. The array is rebuilt from inventory/encounter authority and must never be used to infer ownership or Storage membership. This compact projection is retained for resolution, playback, and Round UI.
 
-Each collectible die owns an independent list of effect instances. Normal dice have no effects; a Shop die begins with one. Fusion adds levels when one input's effect set contains the other, while a true Forge combines different effect sets. Die A keeps its stable identity and Die B is consumed. The Shop uses rarity-first seeded offer generation. Storage dice do not Roll, Score, activate, or participate in encounter logic.
+Each collectible die owns an independent list of effect instances. Normal dice have no effects; a Shop die begins with one. Fusion adds levels when one ingredient's effect set contains the other, while a true Forge combines different effect sets. Forge ingredients are unordered and produce a new result die. The Shop uses rarity-first seeded offer generation. Storage dice do not Roll, Score, activate, or participate in encounter logic.
 
 ## Play, Score, and Roll
 

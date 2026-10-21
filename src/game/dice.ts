@@ -40,16 +40,29 @@ export function createDiceInventory(): DiceInventory {
     nextDieId: dice.length,
   };
 }
-export const rollWeights = (die: Die, excludedFace?: Rank): number[] => (die.owner === 'boss'
+export interface PlayerWeightedRollConfig { selectedNumber: Exclude<Rank, 7>; level: number }
+
+/** Weight assigned to every physical face currently showing Weighted's selected number. */
+export const weightedSelectedFaceWeight = (level: number): number => 1 + (4 * Math.max(1, level) / (Math.max(1, level) + 2));
+
+export const rollWeights = (die: Die, excludedFace?: Rank, weighted?: PlayerWeightedRollConfig): number[] => (die.owner === 'boss'
   ? die.faces.map(destination => 1 + die.faces.reduce((weight, source) =>
     weight + (source.hexerEffect.kind === 'goldenWeighted' && source.hexerEffect.target === destination.rank ? 1 : 0), 0))
-  : RANKS.map(() => 1))
+  : die.faces.map(face => weighted && face.rank === weighted.selectedNumber ? weightedSelectedFaceWeight(weighted.level) : 1))
   .map((weight, index) => index + 1 === excludedFace ? 0 : weight);
+export function weightedNumberProbability(die: CollectibleDie, selectedNumber: Exclude<Rank, 7>, level: number,
+  excludedFace?: Rank): number {
+  const weights = rollWeights(die, excludedFace, { selectedNumber, level });
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  if (!total) return 0;
+  return weights.reduce((sum, weight, index) => sum + (die.faces[index].rank === selectedNumber ? weight : 0), 0) / total;
+}
 export const weightedSourceFace = (die: Die, destination: Rank): Face | undefined => die.owner === 'boss'
   ? die.faces.find(face => face.hexerEffect.kind === 'goldenWeighted' && face.hexerEffect.target === destination)
   : undefined;
-export function rollPhysicalDie(die: Die, rng: RandomSource, excludedFace?: Rank): { physicalFace: Rank; value: Rank; weighted: boolean } {
-  const weights = rollWeights(die, excludedFace);
+export function rollPhysicalDie(die: Die, rng: RandomSource, excludedFace?: Rank,
+  playerWeighted?: PlayerWeightedRollConfig): { physicalFace: Rank; value: Rank; weighted: boolean } {
+  const weights = rollWeights(die, excludedFace, playerWeighted);
   const totalWeight = weights.reduce((a, b) => a + b, 0);
   if (totalWeight <= 0) throw new Error('A die roll must have at least one eligible face.');
   const random = rng.next();
