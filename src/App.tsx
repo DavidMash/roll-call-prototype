@@ -217,7 +217,7 @@ export default function App() {
         : <RoundScreen board={board} event={event} busy={busy} inputBlocked={busy || gameMenuOpen || runInfoOpen || helpOpen || restoreLivesOpen || faceDetails !== null || flameDetails !== null}
           selection={selection} setSelection={setSelection} submit={submit} skip={game.skip} />}
     </main>
-    {board.phase !== 'inferno' && !(board.phase === 'shop' && board.shop?.stage === 'shop') && <DiceDock board={diceBoard} event={event} busy={busy} actionsEnabled={dockActionsEnabled} cinematic={showingChapterSplash}
+    {board.phase === 'round' && <DiceDock board={diceBoard} event={event} busy={busy} actionsEnabled={dockActionsEnabled} cinematic={showingChapterSplash}
       display={diceDisplay} selection={selection} setSelection={setSelection}
       selectedFlameOffer={selectedFlameOffer}
       submit={submit} openFaceDetails={setFaceDetails} openFlameDetails={openFlameDetails} />}

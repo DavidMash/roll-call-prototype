@@ -7,7 +7,7 @@ import { rosterDice, syncActiveDiceProjection } from './inventory';
 import { loadPersistedRun, savePersistedRun } from './persistence';
 import {
   createDieEffect, effectOf, effectRuntime, initialDieRoundRuntime, resetDieRoundState,
-  SPECIAL_DICE, SPECIAL_DIE_TYPES,
+  SHOP_SPECIAL_DIE_TYPES, SPECIAL_DICE, SPECIAL_DIE_TYPES,
 } from './specialDice';
 import type { GameState, RandomSource, Rank, SpecialDieType } from './types';
 import { cleanupTemporaryBossFaces } from './bosses';
@@ -33,21 +33,25 @@ function values(state: GameState, ranks: Rank[]) {
 }
 
 describe('composable special-die registry', () => {
-  it('registers the complete 23-effect catalog with authoritative presentation and economy metadata', () => {
-    expect(SPECIAL_DIE_TYPES).toHaveLength(23);
-    expect(new Set(SPECIAL_DIE_TYPES)).toHaveLength(23);
+  it('registers the complete 24-component catalog with authoritative presentation and economy metadata', () => {
+    expect(SPECIAL_DIE_TYPES).toHaveLength(24);
+    expect(new Set(SPECIAL_DIE_TYPES)).toHaveLength(24);
     for (const type of SPECIAL_DIE_TYPES) {
       const definition = SPECIAL_DICE[type];
       expect(definition.type).toBe(type);
       expect(definition.name).toBeTruthy();
       expect(definition.icon).toBeTypeOf('object');
       expect(definition.color).toMatch(/^#[0-9a-f]{6}$/i);
-      expect(definition.purchasePrice).toBe({ common: 10, uncommon: 20, rare: 30, legendary: 40 }[definition.rarity]);
-      expect(definition.forgeBaseWeight).toBe({ common: 2, uncommon: 3, rare: 5, legendary: 8 }[definition.rarity]);
+      if (type !== 'basic') {
+        expect(definition.purchasePrice).toBe({ common: 10, uncommon: 20, rare: 30, legendary: 40 }[definition.rarity]);
+        expect(definition.forgeBaseWeight).toBe({ common: 2, uncommon: 3, rare: 5, legendary: 8 }[definition.rarity]);
+      }
       expect(definition.verboseDescription(1).length).toBeGreaterThan(0);
     }
-    expect(new Set(SPECIAL_DIE_TYPES.map(type => SPECIAL_DICE[type].icon))).toHaveLength(23);
-    expect(new Set(SPECIAL_DIE_TYPES.map(type => SPECIAL_DICE[type].color))).toHaveLength(23);
+    expect(new Set(SPECIAL_DIE_TYPES.map(type => SPECIAL_DICE[type].icon))).toHaveLength(24);
+    expect(new Set(SPECIAL_DIE_TYPES.map(type => SPECIAL_DICE[type].color))).toHaveLength(24);
+    expect(SHOP_SPECIAL_DIE_TYPES).not.toContain('basic');
+    expect(SPECIAL_DICE.basic).toMatchObject({ componentSalvage: 1, forgeBaseWeight: 1 });
     expect(SPECIAL_DICE.bonus.color).toBe('#12b886');
     expect(SPECIAL_DICE.bonus.color).not.toBe(SPECIAL_DICE.golden.color);
     expect(SPECIAL_DICE.freePlay.name).toBe('Curtain Call');

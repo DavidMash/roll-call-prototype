@@ -317,9 +317,7 @@ for (const playbackSpeed of ['normal', 'instant'] as const) test(`dead board Bus
   const terminalDice = bustResult.events[bustEventIndex].board.bustPresentationDice!;
   expect(terminalDice).not.toBeNull();
   expect(bustResult.events.slice(bustEventIndex + 1).some(event => event.type === 'DICE_REROLL_STARTED')).toBe(false);
-  for (const die of terminalDice.filter(item => item.owner === 'player')) {
-    await expect(page.getByRole('button', { name: new RegExp(`^Die ${die.id + 1}, face ${die.value},`) })).toBeVisible();
-  }
+  await expect(page.getByTestId('dice-dock')).toHaveCount(0);
   game = bustResult.state;
   await bustContinue.click();
   const fallbackMap = page.getByTestId('run-map-transition');

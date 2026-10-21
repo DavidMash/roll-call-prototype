@@ -27,9 +27,10 @@ const slotKey = (slot: DiceSlotRef) => `${slot.area}:${slot.index}`;
 const slotName = (slot: DiceSlotRef) => `${slot.area === 'roster' ? 'Roster' : 'Storage'} ${slot.index + 1}`;
 
 function CollectionDieCard({ die, slot, selected, dragging, dropTarget, staged, arriving, rolling, busy, allowSell, onSelect, onDetails, onSell,
-  onDragStart, onDragEnd, onDragEnter, onDrop }: {
+  placementActive, onDragStart, onDragEnd, onDragEnter, onDrop }: {
   die: CollectibleDie | null; slot: DiceSlotRef; selected: boolean; dragging: boolean; dropTarget: boolean;
   staged: boolean; arriving: boolean; rolling: boolean; busy: boolean; allowSell: boolean;
+  placementActive: boolean;
   onSelect: () => void; onDetails: () => void; onSell: () => void;
   onDragStart: (event: React.DragEvent) => void; onDragEnd: () => void; onDragEnter: () => void; onDrop: (event: React.DragEvent) => void;
 }) {
@@ -43,11 +44,11 @@ function CollectionDieCard({ die, slot, selected, dragging, dropTarget, staged, 
     data-selected={selected || undefined} data-dragging={dragging || undefined} data-drop-target={dropTarget || undefined}
     draggable={!!die && !busy && !staged} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragEnter={onDragEnter}
     onDragOver={event => { if (!busy) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; } }} onDrop={onDrop}>
-    <button type="button" className="collection-slot-main" disabled={busy || staged} onClick={onSelect}
+    <button type="button" className="collection-slot-main" disabled={busy || (staged && !placementActive)} onClick={onSelect}
       aria-label={die ? `${slotName(slot)}, ${identity}` : `${slotName(slot)}, empty`}>
       {die ? <><CollectibleDieVisual effects={die.effects} face={die.value as 1 | 2 | 3 | 4 | 5 | 6}
         slotLabel={slotCode} compact={slot.area === 'storage'} rolling={rolling} />
-        {!!die.effects.length && <Text className="collection-die-name" fw={850}><DieEffectsLabel effects={die.effects} /></Text>}
+        {!!die.effects.length && <Text className="collection-die-name" fw={850}><DieEffectsLabel effects={die.effects} compact /></Text>}
         <Text size="xs" className="collection-die-meta">Sell {sale!.total}G</Text></>
         : <><span className="empty-collection-die" aria-hidden="true">+</span><Text size="xs" c="dimmed" fw={700}>{slotCode}</Text></>}
     </button>
@@ -87,6 +88,8 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
   const [detailDie, setDetailDie] = useState<CollectibleDie | null>(null);
   const [arrivalId, setArrivalId] = useState<number | null>(null);
   const [startWarning, setStartWarning] = useState(false);
+  const [resultPlacementArmed, setResultPlacementArmed] = useState(false);
+  const [draggingResult, setDraggingResult] = useState(false);
   const exitLockStartedAt = useRef(Date.now());
   const knownDieIds = useRef(new Set(Object.keys(inventory.instances).map(Number)));
   const rosterCount = inventory.roster.filter(id => id !== null).length;
@@ -106,7 +109,10 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
     const timer = window.setTimeout(() => setShowProgressNudge(true), 5000);
     return () => window.clearTimeout(timer);
   }, [tutorialProgressNudgeEligible]);
-  useEffect(() => { if (stage !== 'shop') { setSelectedSlot(null); setSaleSlot(null); setDetailDie(null); } }, [stage]);
+  useEffect(() => {
+    if (stage !== 'shop') { setSelectedSlot(null); setSaleSlot(null); setDetailDie(null); }
+    if (stage !== 'forge') { setResultPlacementArmed(false); setDraggingResult(false); }
+  }, [stage]);
   useEffect(() => {
     const current = new Set(Object.keys(inventory.instances).map(Number));
     const added = [...current].find(id => !knownDieIds.current.has(id)) ?? null;
@@ -125,6 +131,14 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
   }
   function chooseSlot(destination: DiceSlotRef) {
     if (busy) return;
+    if (stage === 'forge' && resultPlacementArmed) {
+      if (forgeDestinationValid(destination)) {
+        submit({ type: 'CONFIRM_FORGE', destination });
+        setResultPlacementArmed(false);
+        setDragTargetSlot(null);
+      }
+      return;
+    }
     if (!selectedSlot) { if (dieAt(destination)) setSelectedSlot(destination); return; }
     if (slotKey(selectedSlot) === slotKey(destination)) { setSelectedSlot(null); return; }
     submitMove(selectedSlot, destination);
@@ -136,6 +150,10 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
   function finishDrag() { setDraggingSlot(null); setDragTargetSlot(null); }
   function drop(event: React.DragEvent, destination: DiceSlotRef) {
     event.preventDefault();
+    if (event.dataTransfer.getData('application/x-roll-call-forge-result') === 'preview') {
+      if (forgeDestinationValid(destination)) submit({ type: 'CONFIRM_FORGE', destination });
+      setResultPlacementArmed(false); setDraggingResult(false); finishDrag(); return;
+    }
     try { const source = JSON.parse(event.dataTransfer.getData('application/x-roll-call-die-slot')) as DiceSlotRef;
       if ((source.area === 'roster' || source.area === 'storage') && Number.isInteger(source.index)) submitMove(source, destination);
     } catch { /* Ignore foreign drag payloads. */ }
@@ -150,20 +168,33 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
     const die = dieAt(slot);
     return <CollectionDieCard key={slotKey(slot)} die={die} slot={slot} busy={busy} arriving={die?.id === arrivalId}
       rolling={!!dieAt(slot) && event?.type === 'DICE_REROLL_STARTED' && !!event.dieIds?.includes(dieAt(slot)!.id)}
-      staged={die ? stagedIds.has(die.id) : false} allowSell={stage === 'shop'}
+      staged={die ? stagedIds.has(die.id) : false} allowSell={stage === 'shop'} placementActive={resultPlacementArmed}
       selected={selectedSlot !== null && slotKey(selectedSlot) === slotKey(slot)} onSelect={() => chooseSlot(slot)}
-      dragging={draggingSlot !== null && slotKey(draggingSlot) === slotKey(slot)} dropTarget={dragTargetSlot !== null && slotKey(dragTargetSlot) === slotKey(slot)}
+      dragging={draggingSlot !== null && slotKey(draggingSlot) === slotKey(slot)}
+      dropTarget={(resultPlacementArmed && forgeDestinationValid(slot)) || (dragTargetSlot !== null && slotKey(dragTargetSlot) === slotKey(slot))}
       onDetails={() => setDetailDie(dieAt(slot))} onSell={() => setSaleSlot(slot)} onDragStart={event => beginDrag(event, slot)} onDragEnd={finishDrag}
-      onDragEnter={() => { if (draggingSlot && slotKey(draggingSlot) !== slotKey(slot)) setDragTargetSlot(slot); }} onDrop={event => drop(event, slot)} />;
+      onDragEnter={() => {
+        if (draggingResult && forgeDestinationValid(slot)) setDragTargetSlot(slot);
+        else if (draggingSlot && slotKey(draggingSlot) !== slotKey(slot)) setDragTargetSlot(slot);
+      }} onDrop={event => drop(event, slot)} />;
   });
   const selection = shop.forgeSelection ?? { dieAId: null, dieBId: null };
   const dieA = selection.dieAId == null ? null : inventory.instances[selection.dieAId] ?? null;
   const dieB = selection.dieBId == null ? null : inventory.instances[selection.dieBId] ?? null;
   const forgePreview = dieA && dieB ? previewForge(dieA, dieB) : null;
+  const forgeAffordable = !!forgePreview && forgePreview.cost <= BigInt(board.temper);
+  const forgeBase = dieA && dieB ? (dieA.id <= dieB.id ? dieA : dieB) : null;
+  const forgeResult: CollectibleDie | null = forgePreview && forgeBase ? { ...forgeBase, effects: forgePreview.effects } : null;
+  function forgeDestinationValid(slot: DiceSlotRef): boolean {
+    if (!forgePreview || !forgeAffordable || busy) return false;
+    const occupant = slotValue(inventory, slot);
+    return occupant === null || occupant === dieA?.id || occupant === dieB?.id;
+  }
+  useEffect(() => { setResultPlacementArmed(false); }, [selection.dieAId, selection.dieBId]);
   function stageSelected(socket: 'A' | 'B') {
     if (!selectedSlot) return;
     const die = dieAt(selectedSlot);
-    if (!die?.effects.length) return;
+    if (!die) return;
     submit({ type: 'SET_FORGE_INGREDIENT', socket, dieId: die.id });
     setSelectedSlot(null);
   }
@@ -172,7 +203,7 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
     try {
       const source = JSON.parse(event.dataTransfer.getData('application/x-roll-call-die-slot')) as DiceSlotRef;
       const die = dieAt(source);
-      if (die?.effects.length) {
+      if (die) {
         submit({ type: 'SET_FORGE_INGREDIENT', socket, dieId: die.id });
         setSelectedSlot(null);
       }
@@ -195,8 +226,7 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
     <Paper p="xs" className="shop-stage-shell" data-testid="shop-stage-indicator"><Group justify="space-between" gap="xs" wrap="nowrap">
       <Tabs className="shop-stage-tabs" value={stage} onChange={value => { if (value && value !== stage) submit({ type: 'SET_SHOP_STAGE', stage: value as typeof stage }); }}>
         <Tabs.List>{stages.map(value => <Tabs.Tab key={value} value={value} disabled={busy} data-testid={`shop-stage-${value}`}>{value.toUpperCase()}</Tabs.Tab>)}</Tabs.List>
-      </Tabs><Group gap={5} wrap="nowrap"><Badge color="orange" variant="light" size="lg" data-testid="shop-stage-temper">{formatPlayerNumber(board.temper)} TEMPER</Badge>
-        <Badge color="yellow" variant="light" size="lg" data-testid="shop-stage-gold">{formatPlayerNumber(board.gold)} GOLD</Badge></Group>
+      </Tabs>
     </Group></Paper>
 
     {stage === 'shop' && <Paper p="xs" className="shop-section dice-shop-section" data-testid="dice-shop">
@@ -223,27 +253,39 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
     </Paper>}
 
     {stage === 'forge' && <Paper p="sm" className="shop-section forge-shop-section" data-testid="forge-shop">
-      <Group justify="space-between" className="section-heading"><div><Text fw={800}>FORGE</Text><Text size="xs" c="dimmed">Choose 2 dice to Forge</Text></div></Group>
-      <div className="forge-sockets"><Card role="button" tabIndex={0} withBorder p="sm" className="forge-socket" data-testid="forge-socket-a"
+      <Group justify="space-between" className="section-heading"><div><Text fw={800}>FORGE</Text><Text size="xs" c="dimmed">Choose two dice to combine</Text></div></Group>
+      <div className="forge-workspace" data-testid="forge-workspace"><div className="forge-equation"><Card role="button" tabIndex={0} withBorder p="xs" className="forge-socket" data-testid="forge-socket-a"
         onClick={() => stageSelected('A')} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') stageSelected('A'); }}
-        onDragOver={event => event.preventDefault()} onDrop={event => dropOnForge(event, 'A')}><Text size="xs" fw={900}>INGREDIENT 1</Text>
-        {dieA ? <><CollectibleDieVisual effects={dieA.effects} face={dieA.value as 1|2|3|4|5|6} /><DieEffectsLabel effects={dieA.effects} />
+        onDragOver={event => event.preventDefault()} onDrop={event => dropOnForge(event, 'A')}>
+        {dieA ? <><CollectibleDieVisual effects={dieA.effects} face={dieA.value as 1|2|3|4|5|6} />
+          <Text size="xs" fw={850}>{dieA.effects.length ? <DieEffectsLabel effects={dieA.effects} compact /> : 'Normal'}</Text>
           <Button size="compact-xs" variant="subtle" onClick={event => { event.stopPropagation(); submit({ type: 'SET_FORGE_INGREDIENT', socket: 'A', dieId: null }); }}>REMOVE</Button></>
-          : <Text c="dimmed">Select or drag a special die here.</Text>}</Card>
+          : <Text size="xs" c="dimmed">Select or drag a die here</Text>}</Card>
         <Text fw={900} aria-hidden="true">+</Text>
-        <Card role="button" tabIndex={0} withBorder p="sm" className="forge-socket" data-testid="forge-socket-b"
+        <Card role="button" tabIndex={0} withBorder p="xs" className="forge-socket" data-testid="forge-socket-b"
           onClick={() => stageSelected('B')} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') stageSelected('B'); }}
-          onDragOver={event => event.preventDefault()} onDrop={event => dropOnForge(event, 'B')}><Text size="xs" fw={900}>INGREDIENT 2</Text>
-        {dieB ? <><CollectibleDieVisual effects={dieB.effects} face={dieB.value as 1|2|3|4|5|6} /><DieEffectsLabel effects={dieB.effects} />
+          onDragOver={event => event.preventDefault()} onDrop={event => dropOnForge(event, 'B')}>
+        {dieB ? <><CollectibleDieVisual effects={dieB.effects} face={dieB.value as 1|2|3|4|5|6} />
+          <Text size="xs" fw={850}>{dieB.effects.length ? <DieEffectsLabel effects={dieB.effects} compact /> : 'Normal'}</Text>
           <Button size="compact-xs" variant="subtle" onClick={event => { event.stopPropagation(); submit({ type: 'SET_FORGE_INGREDIENT', socket: 'B', dieId: null }); }}>REMOVE</Button></>
-          : <Text c="dimmed">Select or drag a special die here.</Text>}</Card></div>
-      {forgePreview && <Paper withBorder p="sm" className="forge-preview" data-testid="forge-preview"><Group justify="space-between"><Text fw={900}>{forgePreview.kind === 'fusion' ? 'FUSION' : 'TRUE FORGE'}</Text>
-        <Text fw={900} c="orange">{formatForgeValue(forgePreview.cost)} TEMPER</Text></Group>
-        <Text size="sm"><DieEffectsLabel effects={dieA!.effects} /> + <DieEffectsLabel effects={dieB!.effects} /> → <DieEffectsLabel effects={forgePreview.effects} /></Text>
-        <Text size="xs" c="dimmed">Forge Rating {formatForgeValue(forgePreview.rating)} · Sell {forgePreview.sellValue} Gold</Text>
-        <Button mt="sm" fullWidth color="orange" disabled={busy || forgePreview.cost > BigInt(board.temper)} onClick={() => submit({ type: 'CONFIRM_FORGE' })}>
+          : <Text size="xs" c="dimmed">Select or drag a die here</Text>}</Card>
+        <Text fw={900} aria-hidden="true">→</Text>
+        {forgeResult ? <Card component="button" type="button" withBorder p="xs"
+          className={`forge-result die-selection-target${resultPlacementArmed ? ' selected is-die-selected' : ''}`}
+          style={diePresentationStyle(forgeResult)} data-testid="forge-result-preview" draggable={forgeAffordable && !busy}
+          aria-pressed={resultPlacementArmed} aria-label="Select forged result for placement"
+          onClick={() => { if (forgeAffordable && !busy) setResultPlacementArmed(value => !value); }}
+          onDragStart={event => { event.dataTransfer.setData('application/x-roll-call-forge-result', 'preview'); event.dataTransfer.effectAllowed = 'move'; setDraggingResult(true); }}
+          onDragEnd={() => { setDraggingResult(false); finishDrag(); }}>
+          <CollectibleDieVisual effects={forgeResult.effects} face={forgeResult.value as 1|2|3|4|5|6} />
+          <Text size="xs" fw={850}><DieEffectsLabel effects={forgeResult.effects} compact /></Text>
+          <Text size="xs" c="dimmed">Rating {formatForgeValue(forgePreview!.rating)} · Sell {forgePreview!.sellValue}G</Text>
+        </Card> : <Card withBorder p="xs" className="forge-result empty" data-testid="forge-result-placeholder"><Text size="xs" c="dimmed">Result</Text></Card>}</div>
+      {forgePreview && <div className="forge-commit" data-testid="forge-preview">
+        {resultPlacementArmed && <Text size="xs" c="teal">Choose an empty or ingredient slot for the result.</Text>}
+        <Button fullWidth color="orange" disabled={busy || !forgeAffordable} onClick={() => { setResultPlacementArmed(false); submit({ type: 'CONFIRM_FORGE' }); }}>
           {forgePreview.cost > BigInt(board.temper) ? `NEED ${formatForgeValue(forgePreview.cost - BigInt(board.temper))} TEMPER`
-            : `FORGE · ${formatForgeValue(forgePreview.cost)} TEMPER`}</Button></Paper>}
+            : `FORGE · ${formatForgeValue(forgePreview.cost)} TEMPER`}</Button></div>}</div>
       <Stack gap={5} mt="xs" className="dice-collection forge-collection"><Group justify="space-between"><Text size="xs" fw={850} tt="uppercase">Storage</Text><Text size="xs" c="dimmed">Select a die, then choose an ingredient slot.</Text></Group>
         <div className="collection-grid storage-grid" data-testid="forge-storage-grid">{slots('storage', inventory.storage)}</div>
         <div className="roster-collection-dock" data-testid="forge-roster-grid"><Group justify="space-between" className="collection-heading"><Text size="xs" fw={850} tt="uppercase">Roster</Text><Text size="xs" c="dimmed">Staged source slots are reserved.</Text></Group>
@@ -267,7 +309,7 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
 
     <RunActionPortal><RunActionLayout className="shop-action-dock"
       left={stage !== 'shop' ? <Button size="sm" variant="default" disabled={busy} data-testid="shop-back"
-        onClick={() => submit({ type: 'SET_SHOP_STAGE', stage: 'shop' })}>← BACK TO DICE</Button> : undefined}
+        onClick={() => submit({ type: 'SET_SHOP_STAGE', stage: 'shop' })}>← BACK TO SHOP</Button> : undefined}
       right={forwardStage && forwardLabel
       ? <Button size="sm" disabled={busy} data-testid="shop-stage-continue" onClick={() => submit({ type: 'SET_SHOP_STAGE', stage: forwardStage })}>{forwardLabel}</Button>
       : <Button size="sm" disabled={busy || shop.exitUnlocked === false || rosterCount === 0}

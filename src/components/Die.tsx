@@ -86,7 +86,7 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
     {hasDetails ? <button type="button" className={`die-face-details${specialName ? ' special' : ' normal'}`} disabled={detailsDisabled}
       aria-label={`View details for ${die.owner === 'boss' ? 'Cursed Die' : specialName ?? playerLabel}`} onClick={onDetails}>
       {die.owner === 'boss' ? 'CURSED' : collectible && collectible.effects.length
-        ? <DieEffectsLabel effects={collectible.effects} /> : <span className="normal-die-details-mark" aria-hidden="true">!</span>}
+        ? <DieEffectsLabel effects={collectible.effects} compact /> : <span className="normal-die-details-mark" aria-hidden="true">!</span>}
       {effectSuppressed && <span className="visually-hidden"> · special effect suppressed</span>}
     </button> : <span className="die-details-placeholder" aria-hidden="true" />}
   </div>;

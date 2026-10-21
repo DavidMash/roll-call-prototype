@@ -1,6 +1,6 @@
 import { createCollectibleDie } from './dice';
 import { randomIndex } from './rng';
-import { SPECIAL_DICE, SPECIAL_DIE_TYPES } from './specialDice';
+import { SHOP_SPECIAL_DIE_TYPES, SPECIAL_DICE } from './specialDice';
 import type { CollectibleDie, DiceInventory, DiceOffer, DiceRarity, DiceSlotRef, DieId, RandomSource, SpecialDieType } from './types';
 export type { SpecialDieType } from './types';
 import { plainDescription, specialDieVerboseDescription } from './effectDescriptions';
@@ -43,7 +43,7 @@ function chooseRarity(rng: RandomSource): DiceRarity {
 /** Rarity-first, with replacement. Duplicate die types are deliberately possible. */
 export function generateDiceOfferTypes(rng: RandomSource, count = DICE_OFFER_COUNT): SpecialDieType[] {
   const pools = Object.fromEntries(DICE_RARITY_ORDER.map(rarity => [rarity,
-    SPECIAL_DIE_TYPES.filter(type => SPECIAL_DICE[type].rarity === rarity)])) as Record<DiceRarity, SpecialDieType[]>;
+    SHOP_SPECIAL_DIE_TYPES.filter(type => SPECIAL_DICE[type].rarity === rarity)])) as Record<DiceRarity, SpecialDieType[]>;
   return Array.from({ length: count }, () => {
     const rarity = chooseRarity(rng);
     return pools[rarity][randomIndex(rng, pools[rarity].length)];
@@ -90,6 +90,7 @@ export function purchaseDie(inventory: DiceInventory, type: SpecialDieType): { d
 export function fusionEffectSummary(type: SpecialDieType, fromLevel: number, toLevel: number): { label: string; before: string; after: string } {
   const numeric = (level: number): string => {
     switch (type) {
+      case 'basic': return `×${level} raw face Pips`;
       case 'bonus': return `+${10 * level} Pips`;
       case 'workout': return `+${2 * level} Pips per Score`;
       case 'vintage': return `+${level} Gold per Score, max +${90 * level}`;

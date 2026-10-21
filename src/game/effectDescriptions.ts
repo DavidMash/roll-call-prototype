@@ -16,6 +16,7 @@ export function specialDieVerboseDescription(type: SpecialDieType, level: number
       text(`, it will Score ${guaranteedAdditionalScores} additional ${guaranteedAdditionalScores === 1 ? 'time' : 'times'}`),
       ...(additionalScoreChance ? [text(`, with a ${additionalScoreChance}% chance to Score one more time`)] : []), text('.')];
   const descriptions: Record<SpecialDieType, RichText> = {
+    basic: [text(`This die's raw `), term('exposedFace'), text(` Pips are multiplied by ${count}. Other Pips bonuses are added afterward.`)],
     bonus: [text('Whenever this die '), term('score', 'Scores'), text(`, it adds +${10 * count} `), term('pips'), text(' to the '), term('hand'), text('.')],
     workout: [text('Each time this die '), term('score', 'Scores'), text(`, it gains +${2 * count} `), term('pips'), text(' for the rest of the current '), term('round'), text('.')],
     vintage: [text('Each time this die '), term('score', 'Scores'), text(`, its `), term('sellValue'), text(` increases by ${count} Gold. Its Sell Value can increase by up to ${90 * count} Gold this way.`)],

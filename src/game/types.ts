@@ -33,7 +33,7 @@ export interface FlameInstance {
 export type FlameSlots = [FlameInstance | null, FlameInstance | null, FlameInstance | null, FlameInstance | null, FlameInstance | null];
 export type DieId = number;
 export type SpecialDieType =
-  | 'bonus' | 'workout' | 'vintage' | 'golden'
+  | 'basic' | 'bonus' | 'workout' | 'vintage' | 'golden'
   | 'hitchhiker' | 'weighted' | 'clockwork' | 'magnetic' | 'jackpot'
   | 'teamPlayer' | 'loneWolf' | 'tank' | 'freePlay'
   | 'mirror' | 'missingLink' | 'doubleTime' | 'jumpingBean'
@@ -804,7 +804,7 @@ export type Action =
   | { type: 'MOVE_DIE'; source: DiceSlotRef; destination: DiceSlotRef;
       expectedSourceDieId: DieId; expectedDestinationDieId: DieId | null }
   | { type: 'SET_FORGE_INGREDIENT'; socket: 'A' | 'B'; dieId: DieId | null }
-  | { type: 'CONFIRM_FORGE' }
+  | { type: 'CONFIRM_FORGE'; destination?: DiceSlotRef }
   | { type: 'SELL_DIE'; slot: DiceSlotRef; expectedDieId: DieId }
   | { type: 'TRAIN_HAND'; hand: HandId }
   | { type: 'CHOOSE_FLAME'; offerId: number; replaceSlot?: FlameSlotIndex }

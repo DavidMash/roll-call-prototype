@@ -103,6 +103,7 @@ async function matchBoard(page: Page, game: GameState) {
       `${game.score.toLocaleString('en-US')} of ${game.target.toLocaleString('en-US')} points toward the Goal`,
     );
   }
+  if (game.phase !== 'round') await expect(page.getByTestId('dice-dock')).toHaveCount(0);
   if (game.phase === 'shop' && game.shop?.stage === 'shop') {
     for (const [index, dieId] of game.diceInventory.roster.entries()) {
       const slot = page.getByTestId(`collection-slot-roster-${index}`);
@@ -111,7 +112,8 @@ async function matchBoard(page: Page, game: GameState) {
     }
     return;
   }
-  const visibleDice = game.bustPresentationDice ?? (game.phase === 'round' ? activeEncounterDice(game) : game.dice);
+  if (game.phase !== 'round') return;
+  const visibleDice = activeEncounterDice(game);
   for (const die of visibleDice) await expect(page.getByRole('button', { name: new RegExp(`^${dieUiLabel(visibleDice, die)}, face ${activeFace(die).rank},`) })).toBeVisible();
 }
 async function progressSpecialOffer(page: Page, game: GameState): Promise<GameState> {
@@ -717,12 +719,12 @@ test('Round Dice leave Normal dice unlabeled and identify special dice without D
   const golden = page.getByTestId('flame-die-1');
   await expect(normal.locator('.die-face-details')).toHaveCount(0);
   await expect(normal.locator('.die-details-placeholder')).toHaveCount(1);
-  await expect(golden.locator('.die-face-details')).toHaveText('Golden · I');
+  await expect(golden.locator('.die-face-details')).toHaveText('Golden');
   await expect(page.getByRole('main')).not.toContainText('Golden D6');
   await expect(page.getByTestId('special-dice-controls')).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('round-dice-labels-mobile.png'), fullPage: true });
   await golden.locator('.die-face-details').click();
-  const details = page.getByRole('dialog', { name: 'GOLDEN · I' });
+  const details = page.getByRole('dialog', { name: 'GOLDEN' });
   await expect(details).toContainText('Each time this die Scores, you earn 1 Gold');
   await expect(details).toContainText(/Gold earned this Round\s*0 \/ 3/);
   await expect(details).not.toContainText('D6');
@@ -760,7 +762,7 @@ test('five special dice do not add a persistent Round panel or change scorecard 
   await enterRun(page);
 
   await expect(page.getByText('SPECIAL DICE', { exact: true })).toHaveCount(0);
-  await expect(page.locator('.die-face-details.special')).toHaveText(['Double Time · I', 'Workout · I', 'Bonus · I', 'Magnetic · I', 'Magic · I']);
+  await expect(page.locator('.die-face-details.special')).toHaveText(['Double Time', 'Workout', 'Bonus', 'Magnetic', 'Magic']);
   const specialHeight = await page.locator('.scorecard-panel').evaluate(element => element.getBoundingClientRect().height);
   expect(Math.abs(specialHeight - normalHeight)).toBeLessThanOrEqual(2);
   await page.screenshot({ path: test.info().outputPath('round-five-special-dice-mobile.png'), fullPage: true });
@@ -786,7 +788,7 @@ test('whole-die details show live status and only contextual boss face mutations
   await expect(workout).toHaveClass(/effect-suppressed/);
   await expect(workout.getByRole('button', { name: /View details for Workout/ })).toContainText('Workout');
   await workout.getByRole('button', { name: /View details for Workout/ }).click();
-  let details = page.getByRole('dialog', { name: 'WORKOUT · I' });
+  let details = page.getByRole('dialog', { name: 'WORKOUT' });
   await expect(details).toContainText(/Current bonus this Round\s*\+6 Pips/);
   await expect(details).toContainText('INFECTED FACE');
   await expect(details).toContainText("This die's effects are suppressed");
@@ -795,7 +797,7 @@ test('whole-die details show live status and only contextual boss face mutations
   await details.getByRole('button', { name: 'Close' }).click();
 
   await page.getByTestId(`flame-die-${dice[1].id}`).getByRole('button', { name: 'View details for Bonus' }).click();
-  details = page.getByRole('dialog', { name: 'BONUS · I' });
+  details = page.getByRole('dialog', { name: 'BONUS' });
   await expect(details).toContainText('SNAKE EYES');
   await expect(details).toContainText(`changed from ${originalRank} to 1`);
   await expect(details).not.toContainText('INFECTED FACE');
@@ -862,11 +864,11 @@ test('mobile staged Shop keeps each section, navigation, and the compact Roster 
   const purchasedOffer = game.shop!.offers[0];
   await page.getByTestId(`dice-offer-${purchasedOffer.id}`).getByRole('button', { name: /BUY/ }).click();
   await expect(page.getByTestId(`dice-offer-${purchasedOffer.id}`)).toContainText('PURCHASED');
-  await expect(page.getByTestId('shop-stage-gold')).toContainText(`${100 - purchasedOffer.price!} GOLD`);
+  await expect(page.getByTestId('stat-gold')).toContainText(String(100 - purchasedOffer.price!));
   await goToShopStage(page, 'training');
   await expect(page.getByTestId('training-shop')).toBeInViewport();
   await expect(page.getByTestId('dice-shop')).toHaveCount(0);
-  await expect(page.getByTestId('shop-stage-gold')).toContainText(`${100 - purchasedOffer.price!} GOLD`);
+  await expect(page.getByTestId('stat-gold')).toContainText(String(100 - purchasedOffer.price!));
   await goToShopStage(page, 'dice');
   await expect(page.getByTestId(`dice-offer-${purchasedOffer.id}`)).toContainText('PURCHASED');
   await expect(page.getByTestId('shop-stage-flames')).toHaveCount(0);

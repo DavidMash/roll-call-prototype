@@ -84,6 +84,29 @@ describe('Curtain Call Manual Reroll trigger', () => {
 });
 
 describe('Curtain Call Pips multiplier', () => {
+  it('applies Basic only to raw face Pips, leaves Basic I unchanged, and creates one Score occurrence', () => {
+    const basicI = stateWithEffects([['basic', 1]], 5);
+    new Resolver(basicI, constant(0)).play('fives', [0]);
+    const basicIHand = basicI.historyV2.find(event => event.kind === 'hand_scored');
+    expect(basicIHand?.kind === 'hand_scored' ? basicIHand.score.finalPips : null).toBe(12);
+
+    const combined = stateWithEffects([['basic', 2], ['bonus', 2]], 5);
+    new Resolver(combined, constant(0)).play('fives', [0]);
+    const combinedHand = combined.historyV2.find(event => event.kind === 'hand_scored');
+    // Hand base 7 + (raw face 5 × Basic II) + Bonus II 20.
+    expect(combinedHand?.kind === 'hand_scored' ? combinedHand.score.finalPips : null).toBe(37);
+    expect(combinedHand?.kind === 'hand_scored' ? combinedHand.scoreOccurrences : []).toHaveLength(1);
+  });
+
+  it('applies Basic before additive Pips and Curtain Call multiplies the full die contribution afterward', () => {
+    const state = stateWithEffects([['basic', 2], ['bonus', 2], ['freePlay', 3]], 5);
+    new Resolver(state, constant(0)).manualReroll([0]);
+    const hand = curtainHands(state)[0];
+    // Hand base 7 + ((raw face 5 × Basic II) + Bonus II 20) × Curtain Call III.
+    expect(hand?.kind === 'hand_scored' ? hand.score.finalPips : null).toBe(97);
+    expect(hand?.kind === 'hand_scored' ? hand.scoreOccurrences : []).toHaveLength(1);
+  });
+
   it.each([1, 2, 3, 7])('scales full die Pips linearly at Lv%s without multiplying Hand base Pips', level => {
     const state = stateWithEffects([['freePlay', level]], 5);
     new Resolver(state, constant(0)).manualReroll([0]);

@@ -489,7 +489,7 @@ export class Resolver {
     this.emitV2({ kind: 'temper_changed', operation: 'spent', source, amount, balance: this.state.temper,
       shopVisitId: this.state.shop?.visitId ?? null });
     this.emit({ type: 'TEMPER_CHANGED', amount, temperSpendSource: source, temperBalance: this.state.temper,
-      message: `${source === 'fusion' ? 'Fusion' : 'Forge'} spent ${amount} Temper` });
+      message: `Forge spent ${amount} Temper` });
   }
   private spendRoundGold(amount: number, message: string, goldSpendSource: 'furnace'): void {
     if (this.state.phase !== 'round') throw new Error('This Gold may only be spent during an active Round.');
@@ -572,12 +572,14 @@ export class Resolver {
     const contributions = ordinaryFaceContributions(participant, scoringDice);
     const die = this.collectible(participant.id);
     if (die && !wholeDieEffectSuppressed(die)) {
+      const basic = effectOf(die, 'basic');
       const bonus = effectOf(die, 'bonus');
       const furnace = effectOf(die, 'furnace');
       const workoutRuntime = this.specialRuntime(die, 'workout');
       const tankRuntime = this.specialRuntime(die, 'tank');
       const furnaceRuntime = this.specialRuntime(die, 'furnace');
       const specialParts: [SpecialDieType, number][] = [
+        ['basic', basic ? participant.face.rank * (basic.level - 1) : 0],
         ['bonus', bonus ? 10 * bonus.level : 0],
         ['furnace', furnace ? (furnaceRuntime?.furnaceUnits ?? 0) * 3 * furnace.level : 0],
         ['workout', workoutRuntime?.temporaryPips ?? 0],

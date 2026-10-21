@@ -10,6 +10,7 @@ import { Die } from './Die';
 import { ShopScreen } from './ShopScreen';
 import { CollectibleDieVisual } from './CollectibleDieVisual';
 import { createDieEffect } from '../game/specialDice';
+import { DieEffectsLabel, DieTypeLabel } from './DieTypeLabel';
 
 const fixed = { next: () => .2 };
 const wrap = (node: React.ReactNode) => renderToStaticMarkup(<MantineProvider>{node}</MantineProvider>);
@@ -28,6 +29,17 @@ function shopMarkup(state: GameState): string {
 }
 
 describe('collectible Dice presentation', () => {
+  it('omits level I, removes the separator at II+, and compacts multi-effect labels to icons', () => {
+    expect(wrap(<DieTypeLabel type="weighted" level={1} />)).toContain('>Weighted<');
+    expect(wrap(<DieTypeLabel type="weighted" level={1} />)).not.toContain('·');
+    expect(wrap(<DieTypeLabel type="weighted" level={2} />)).toContain('Weighted II');
+    const compact = wrap(<DieEffectsLabel compact effects={[createDieEffect(1, 'weighted'), createDieEffect(1, 'bonus', 2)]} />);
+    expect(compact).toContain('die-effects-label compact');
+    expect(compact).toContain('compact-effect-level');
+    expect(compact).toContain('aria-label="Weighted + Bonus II"');
+    expect(compact).not.toContain('>Weighted<');
+  });
+
   it('leaves Normal dice unlabeled while naming special dice without a side-count suffix', () => {
     const state = newRun('die-presentation', fixed).state;
     const normal = state.dice[0];
@@ -73,6 +85,24 @@ describe('collectible Dice presentation', () => {
 });
 
 describe('responsive Shop-stage presentation', () => {
+  it('uses the compact unordered Forge equation and consistent Back-to-Shop copy', () => {
+    const state = openShop('forge-presentation');
+    state.temper = 10; state.forgeUnlocked = true; state.shop!.stage = 'forge';
+    state.diceInventory.instances[0].effects = [createDieEffect(0, 'bonus')];
+    state.shop!.forgeSelection = { dieAId: 0, dieBId: 1 };
+    const html = shopMarkup(state);
+    expect(html).toContain('Choose two dice to combine');
+    expect(html).not.toContain('INGREDIENT 1');
+    expect(html).not.toContain('INGREDIENT 2');
+    expect(html).not.toContain('TRUE FORGE');
+    expect(html).not.toContain('FUSION');
+    expect(html).toContain('data-testid="forge-result-preview"');
+    expect(html).toContain('FORGE ·');
+    expect(html).toContain('BACK TO SHOP');
+    expect(html).not.toContain('shop-stage-gold');
+    expect(html).not.toContain('shop-stage-temper');
+  });
+
   it('uses a two-section scorecard for all fourteen Training hands', () => {
     const state = openShop('training-presentation');
     state.shop!.stage = 'train';

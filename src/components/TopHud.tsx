@@ -60,6 +60,7 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
           </strong>
         </div>
         <HudStat testId="stat-gold" icon="●" label="Gold" value={board.gold} />
+        <HudStat testId="stat-temper" icon="◆" label="Temper" value={board.temper} />
         {board.phase === 'shop'
           ? <Tooltip label="Restore lost lives" withArrow><UnstyledButton className="hud-lives interactive" data-testid="stat-lives"
             data-tutorial="lives"

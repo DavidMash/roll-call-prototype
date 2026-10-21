@@ -22,15 +22,24 @@ export function DieTypeLabel({ type, level, className = '', uppercase = false }:
     style={{ '--die-accent': effectColor(effect) } as CSSProperties}>
     <DieTypeIcon type={type} />
     <span>{uppercase ? SPECIAL_DICE[type].name.toUpperCase() : SPECIAL_DICE[type].name}
-      {level === undefined ? '' : ` · ${formatEffectLevel(level)}`}</span>
+      {level === undefined || level === 1 ? '' : ` ${formatEffectLevel(level)}`}</span>
   </span>;
 }
 
-export function DieEffectsLabel({ effects, className = '', uppercase = false }: {
-  effects: readonly DieEffectInstance[]; className?: string; uppercase?: boolean;
+export function DieEffectsLabel({ effects, className = '', uppercase = false, compact = false }: {
+  effects: readonly DieEffectInstance[]; className?: string; uppercase?: boolean; compact?: boolean;
 }) {
   if (!effects.length) return null;
-  return <span className={`die-effects-label${className ? ` ${className}` : ''}`}>
+  const accessible = effects.map(effect => `${SPECIAL_DICE[effect.type].name}${effect.level > 1 ? ` ${formatEffectLevel(effect.level)}` : ''}`).join(' + ');
+  if (compact && effects.length > 1) return <span className={`die-effects-label compact${className ? ` ${className}` : ''}`}
+    aria-label={accessible} title={accessible}>
+    {effects.map(effect => <span key={effect.id} className="compact-die-effect"
+      style={{ '--die-accent': effectColor(effect) } as CSSProperties}>
+      <DieTypeIcon type={effect.type} size={16} />
+      {effect.level > 1 && <span className="compact-effect-level">{formatEffectLevel(effect.level)}</span>}
+    </span>)}
+  </span>;
+  return <span className={`die-effects-label${className ? ` ${className}` : ''}`} aria-label={accessible}>
     {effects.map((effect, index) => <span key={effect.id} className="die-effect-label-part">
       {index > 0 && <span className="die-effect-separator" aria-hidden="true"> + </span>}
       <DieTypeLabel type={effect.type} level={effect.level} uppercase={uppercase} />

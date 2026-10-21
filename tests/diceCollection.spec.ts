@@ -51,6 +51,7 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 900 }, { name: '
     round.diceInventory.instances[1].effects.push(createDieEffect(1, 'golden'));
     syncActiveDiceProjection(round); round.dieRoundState = resetDieRoundState(rosterDice(round));
     await installRunState(page, round); await enterRun(page);
+    await expect(page.getByTestId('dice-dock')).toBeVisible();
     for (const id of [0, 1]) {
       const die = page.getByTestId(`flame-die-${id}`).locator('.die');
       await die.click(); await expect(die).toHaveClass(/is-die-selected/);
@@ -63,7 +64,7 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 900 }, { name: '
   });
 }
 
-test('Shop uses clickable Mantine tabs, keeps Gold/Temper visible, and has no physical-dice reroll', async ({ page }) => {
+test('Shop uses clickable Mantine tabs, global Gold/Temper, Back-to-Shop copy, and no duplicate dice tray', async ({ page }) => {
   const state = shopState('shop-tabs-ui');
   state.temper = 12; state.forgeUnlocked = true;
   placeFlameInstance(state, 'ultimate', 0);
@@ -72,17 +73,24 @@ test('Shop uses clickable Mantine tabs, keeps Gold/Temper visible, and has no ph
   await expect(page.getByTestId('shop-stage-shop')).toHaveAttribute('data-active', 'true');
   await expect(page.getByText(/REROLL ALL DICE/i)).toHaveCount(0);
   await expect(page.getByRole('button', { name: /REROLL OFFERS/i })).toBeVisible();
-  await expect(page.getByTestId('shop-stage-gold')).toBeVisible();
-  await expect(page.getByTestId('shop-stage-temper')).toContainText('12 TEMPER');
+  await expect(page.getByTestId('stat-gold')).toBeVisible();
+  await expect(page.getByTestId('stat-temper')).toContainText('12');
+  await expect(page.getByTestId('shop-stage-gold')).toHaveCount(0);
+  await expect(page.getByTestId('shop-stage-temper')).toHaveCount(0);
+  await expect(page.getByTestId('dice-dock')).toHaveCount(0);
   await goToShopStage(page, 'forge'); await expect(page.getByTestId('forge-shop')).toBeVisible();
+  await expect(page.getByTestId('shop-back')).toContainText('BACK TO SHOP');
+  await expect(page.getByTestId('dice-dock')).toHaveCount(0);
   await page.getByTestId('shop-back').click(); await expect(page.getByTestId('dice-shop')).toBeVisible();
-  await goToShopStage(page, 'train'); await expect(page.getByTestId('shop-back')).toBeVisible();
+  await goToShopStage(page, 'train'); await expect(page.getByTestId('shop-back')).toContainText('BACK TO SHOP');
+  await expect(page.getByTestId('dice-dock')).toHaveCount(0);
   await page.getByTestId('shop-back').click(); await expect(page.getByTestId('dice-shop')).toBeVisible();
-  await goToShopStage(page, 'flames'); await expect(page.getByTestId('shop-back')).toBeVisible();
+  await goToShopStage(page, 'flames'); await expect(page.getByTestId('shop-back')).toContainText('BACK TO SHOP');
+  await expect(page.getByTestId('dice-dock')).toHaveCount(0);
   await page.getByTestId('shop-back').click(); await expect(page.getByTestId('dice-shop')).toBeVisible();
 });
 
-test('Forge reuses inventory staging, treats ingredients as unordered, and places the result Roster-first', async ({ page }) => {
+test('Forge uses the compact equation and click-placement without committing invalid destinations', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const state = shopState('forge-ui');
   setEffect(state, 0, 'bonus', 2); setEffect(state, 1, 'bonus', 1);
@@ -93,16 +101,42 @@ test('Forge reuses inventory staging, treats ingredients as unordered, and place
   await page.getByTestId('collection-slot-roster-1').locator('.collection-slot-main').click();
   await page.getByTestId('forge-socket-b').click();
   await expect(page.locator('.forge-staged')).toHaveCount(2);
-  await expect(page.getByTestId('forge-preview')).toContainText('FUSION');
+  await expect(page.getByTestId('forge-shop')).toContainText('Choose two dice to combine');
+  await expect(page.getByTestId('forge-shop')).not.toContainText('INGREDIENT 1');
+  await expect(page.getByTestId('forge-shop')).not.toContainText('TRUE FORGE');
+  await expect(page.getByTestId('forge-result-preview')).toBeVisible();
   await expect(page.getByTestId('forge-preview')).toContainText('3 TEMPER');
-  await page.getByTestId('forge-preview').getByRole('button', { name: 'FORGE · 3 TEMPER' }).click();
+  await page.screenshot({ path: test.info().outputPath('forge-preview-mobile.png'), fullPage: true });
+  await page.getByTestId('forge-result-preview').click();
+  await page.getByTestId('collection-slot-roster-2').locator('.collection-slot-main').click();
+  await expect(page.locator('.forge-staged')).toHaveCount(2);
+  await expect(page.getByTestId('stat-temper')).toContainText('20');
+  await page.getByTestId('collection-slot-storage-0').locator('.collection-slot-main').click();
   await expect(page.getByTestId('forge-shop')).toBeVisible();
-  await expect(page.getByTestId('shop-stage-temper')).toContainText('17 TEMPER');
+  await expect(page.getByTestId('stat-temper')).toContainText('17');
   await expect(page.locator('.forge-staged')).toHaveCount(0);
-  await expect(page.getByTestId('collection-slot-roster-0')).toContainText('Bonus · III');
+  await expect(page.getByTestId('collection-slot-storage-0')).toContainText('Bonus III');
   await expect(page.getByTestId('shop-back')).toBeVisible();
   expect(await page.getByTestId('forge-shop').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   await page.screenshot({ path: test.info().outputPath('forge-mobile.png'), fullPage: true });
+});
+
+test('Normal dice forge into Basic II through direct result dragging', async ({ page }) => {
+  const state = shopState('basic-drag-forge');
+  state.temper = 10; state.forgeUnlocked = true;
+  await installRunState(page, state); await enterRun(page); await goToShopStage(page, 'forge');
+  await page.getByTestId('collection-slot-roster-0').locator('.collection-slot-main').click();
+  await page.getByTestId('forge-socket-a').click();
+  await page.getByTestId('collection-slot-roster-1').locator('.collection-slot-main').click();
+  await page.getByTestId('forge-socket-b').click();
+  await expect(page.getByTestId('forge-result-preview')).toContainText('Basic II');
+  await page.getByTestId('forge-result-preview').dragTo(page.getByTestId('collection-slot-roster-2'));
+  await expect(page.locator('.forge-staged')).toHaveCount(2);
+  await expect(page.getByTestId('stat-temper')).toContainText('10');
+  await page.getByTestId('forge-result-preview').dragTo(page.getByTestId('collection-slot-roster-0'));
+  await expect(page.locator('.forge-staged')).toHaveCount(0);
+  await expect(page.getByTestId('collection-slot-roster-0')).toContainText('Basic II');
+  await expect(page.getByTestId('stat-temper')).toContainText('8');
 });
 
 test('special icons are labels outside the pip field and multi-effect gradients remain readable', async ({ page }) => {

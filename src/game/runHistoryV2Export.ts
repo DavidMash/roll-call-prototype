@@ -13,6 +13,13 @@ import { toExactJsonValue } from './scoreMath';
 const number = (value: number | bigint) => typeof value === 'bigint' ? formatExactScore(value) : formatPlayerNumber(value);
 const entries = (record: Record<string, number | bigint> | Partial<Record<string, number | bigint>>) => Object.entries(record)
   .filter(([, value]) => value !== 0 && value !== 0n).map(([key, value]) => `${key} ${number(value ?? 0)}`).join(' · ') || 'None';
+const forgeSpendEntries = (record: Partial<Record<string, number | bigint>>) => {
+  const combined: Partial<Record<string, number | bigint>> = {
+    ...record, forge: Number(record.forge ?? 0) + Number(record.fusion ?? 0),
+  };
+  delete combined.fusion;
+  return entries(combined);
+};
 const percent = (value: number) => `${number(value * 100)}%`;
 
 function offerLine(label: string, offers: OfferImpressions): string {
@@ -42,7 +49,7 @@ export function renderRunSummaryV2(state: GameState): string {
     .sort((a, b) => a.storageSlot! - b.storageSlot!).map(item => `S${item.storageSlot! + 1} ${dieBuildLabel(item)}`).join(' · ') || 'Empty';
   const flames = canonical.flameSlots.map(item => `Slot ${item.slot + 1} ${FLAMES[item.flame.type].name} ${item.flame.stage} ${number(item.flame.investedGold)}/100`).join(' · ') || 'None';
   const diceEconomy = Object.entries(experienced.diceEconomy.byType)
-    .map(([type, metric]) => `${SPECIAL_DICE[type as keyof typeof SPECIAL_DICE].name}: bought ${metric.purchased}, sold ${metric.sold}, fused ${metric.fused}`).join(' · ') || 'None';
+    .map(([type, metric]) => `${SPECIAL_DICE[type as keyof typeof SPECIAL_DICE].name}: bought ${metric.purchased}, sold ${metric.sold}, forged ${metric.fused}`).join(' · ') || 'None';
   const training = Object.entries(experienced.trainingByHand)
     .map(([hand, metric]) => `${HANDS[hand as keyof typeof HANDS].name}: ${metric.purchases} purchase${metric.purchases === 1 ? '' : 's'}, ${number(metric.goldSpent)} Gold, max tier ${metric.maximumRelativeTier}, max quote ${number(metric.maximumNormalPrice)}`).join(' · ') || 'None';
   const specialDice = Object.entries(experienced.specialDice)
@@ -72,7 +79,7 @@ export function renderRunSummaryV2(state: GameState): string {
     '',
     'ECONOMY · CANONICAL',
     `Final Gold: ${number(canonical.finalGold)}`,
-    `Final Temper: ${number(canonical.finalTemper)} · earned ${number(experienced.temperEarned)} (${entries(experienced.temperBySource)}) · spent ${number(experienced.temperSpent)} (${entries(experienced.temperSpentBySource)})`,
+    `Final Temper: ${number(canonical.finalTemper)} · earned ${number(experienced.temperEarned)} (${entries(experienced.temperBySource)}) · spent ${number(experienced.temperSpent)} (${forgeSpendEntries(experienced.temperSpentBySource)})`,
     `Earned: ${entries(canonical.goldEarnedBySource)}`,
     `Spent: ${entries(canonical.goldSpentByCategory)}`,
     `Training spend: ${number(canonical.trainingGoldSpent)} Gold`,

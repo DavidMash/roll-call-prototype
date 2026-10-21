@@ -63,6 +63,7 @@ export function effectDetails(die: CollectibleDie, effect: DieEffectInstance,
   const runtime = effectRuntime(dieRuntime, effect);
   const status: DieStatusRow[] = [];
   switch (effect.type) {
+    case 'basic': status.push({ label: 'Raw face Pips', value: `×${level}` }); break;
     case 'bonus': status.push({ label: 'Current bonus', value: `+${10 * level} Pips` }); break;
     case 'workout': status.push({ label: 'Current bonus this Round', value: `+${runtime?.temporaryPips ?? 0} Pips` },
       { label: 'Gains per Score', value: `+${2 * level} Pips` }); break;

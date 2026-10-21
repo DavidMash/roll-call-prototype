@@ -1,5 +1,5 @@
 import type { CollectibleDie, DiceInventory, DieEffectInstance, SpecialDieType } from './types';
-import { SPECIAL_DICE, effectOf } from './specialDice';
+import { SPECIAL_DICE, createDieEffect, effectOf } from './specialDice';
 
 export type ForgeOperationKind = 'fusion' | 'forge';
 export interface ForgePreview {
@@ -25,20 +25,27 @@ export function dieForgeRating(die: CollectibleDie): bigint {
   return dieForgeRatingFromEffects(die.effects);
 }
 
+/** An untouched Normal die contributes one explicit Basic level only once it is forged. */
+function forgeEffects(die: CollectibleDie): DieEffectInstance[] {
+  if (die.effects.length) return die.effects;
+  return [createDieEffect(die.id, 'basic')];
+}
+
 const contained = (left: readonly DieEffectInstance[], right: readonly DieEffectInstance[]): boolean => {
   const rightTypes = new Set(right.map(effect => effect.type));
   return left.every(effect => rightTypes.has(effect.type));
 };
 
 export function classifyForge(a: CollectibleDie, b: CollectibleDie): ForgeOperationKind {
-  return contained(a.effects, b.effects) || contained(b.effects, a.effects) ? 'fusion' : 'forge';
+  const aEffects = forgeEffects(a), bEffects = forgeEffects(b);
+  return contained(aEffects, bEffects) || contained(bEffects, aEffects) ? 'fusion' : 'forge';
 }
 
 /** Ingredient order is player-facing irrelevant; the lower stable die ID supplies deterministic presentation/configuration. */
 export function mergedEffects(a: CollectibleDie, b: CollectibleDie): DieEffectInstance[] {
   const [destination, source] = a.id <= b.id ? [a, b] : [b, a];
-  const result = destination.effects.map(effect => structuredClone(effect));
-  for (const incoming of source.effects) {
+  const result = forgeEffects(destination).map(effect => structuredClone(effect));
+  for (const incoming of forgeEffects(source)) {
     const existing = result.find(effect => effect.type === incoming.type);
     if (!existing) {
       result.push(structuredClone(incoming));
@@ -81,7 +88,7 @@ export function dieSellBreakdown(die: CollectibleDie): {
 } {
   if (!die.effects.length) return { componentSalvage: 1, complexityPremium: 0, vintageAppreciation: 0, total: 1 };
   const component = die.effects.reduce((sum, effect) =>
-    sum + BigInt((SPECIAL_DICE[effect.type].purchasePrice / 2) * effect.level), 0n);
+    sum + BigInt(SPECIAL_DICE[effect.type].componentSalvage * effect.level), 0n);
   // floor(4 * sqrt(rating)) is exactly floor(sqrt(16 * rating)); computing it
   // this way avoids losing the fractional portion before multiplication.
   const premium = die.effects.length < 2 ? 0n : integerSqrt(16n * dieForgeRating(die));

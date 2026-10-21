@@ -5,8 +5,9 @@ import { placeFlameInstance } from './flames';
 import { syncActiveDiceProjection } from './inventory';
 import { createDieEffect } from './specialDice';
 import type { GameState, RandomSource } from './types';
-import { previewForge } from './forge';
+import { dieSellBreakdown, previewForge } from './forge';
 import { createCollectibleDie } from './dice';
+import { renderRunHistoryV2Event } from './runHistoryV2Renderer';
 
 const constant = (value = .2): RandomSource => ({ next: () => value });
 function shop(state: GameState) {
@@ -37,6 +38,8 @@ describe('Temper economy', () => {
     base.diceInventory.instances[1].effects = [createDieEffect(1, 'golden')];
     expect(normalizeGameState(base).forgeUnlocked).toBe(false);
     base.temper = 1;
+    expect(base.diceInventory.instances[2].effects).toEqual([]);
+    expect(normalizeGameState(newRun('normal-only-reveal', constant()).state).forgeUnlocked).toBe(false);
     const revealed = normalizeGameState(base);
     expect(revealed.forgeUnlocked).toBe(true);
     revealed.temper = 0;
@@ -134,9 +137,10 @@ describe('authoritative Forge actions', () => {
     expect(state.diceInventory.storage[0]).toBeNull();
   });
 
-  it('rejects Normal ingredients and an unaffordable Forge without mutation', () => {
+  it('accepts Normal ingredients but rejects an unaffordable Forge without mutation', () => {
     let state = forgeState();
-    expect(dispatch(state, { type: 'SET_FORGE_INGREDIENT', socket: 'A', dieId: 2 }).error).toMatch(/Normal dice/i);
+    const stagedNormal = dispatch(state, { type: 'SET_FORGE_INGREDIENT', socket: 'A', dieId: 2 });
+    expect(stagedNormal.error).toBeUndefined();
     state.diceInventory.instances[1].effects = [createDieEffect(1, 'magic', 10)];
     state = dispatch(state, { type: 'SET_FORGE_INGREDIENT', socket: 'A', dieId: 0 }).state;
     state = dispatch(state, { type: 'SET_FORGE_INGREDIENT', socket: 'B', dieId: 1 }).state;
@@ -145,5 +149,54 @@ describe('authoritative Forge actions', () => {
     const result = dispatch(state, { type: 'CONFIRM_FORGE' });
     expect(result.error).toMatch(/Not enough Temper/i);
     expect(result.state.diceInventory).toEqual(before);
+  });
+
+  it('turns Normal ingredients into Basic and preserves special effects through later combinations', () => {
+    const normalA = createCollectibleDie(10);
+    const normalB = createCollectibleDie(11);
+    expect(previewForge(normalA, normalB).effects.map(effect => [effect.type, effect.level]))
+      .toEqual([['basic', 2]]);
+    const basicII = { ...normalA, effects: [createDieEffect(10, 'basic', 2)] };
+    expect(previewForge(basicII, normalB).effects.map(effect => [effect.type, effect.level]))
+      .toEqual([['basic', 3]]);
+    const bonus = createCollectibleDie(12, 'bonus');
+    expect(previewForge(normalA, bonus).effects.map(effect => [effect.type, effect.level]))
+      .toEqual([['basic', 1], ['bonus', 1]]);
+    expect(previewForge(basicII, bonus).effects.map(effect => [effect.type, effect.level]))
+      .toEqual([['basic', 2], ['bonus', 1]]);
+  });
+
+  it('commits a Normal + Normal result to an explicit valid destination and leaves invalid placement untouched', () => {
+    let state = newRun('basic-placement', constant()).state;
+    shop(state); state.temper = 10; state.forgeUnlocked = true; state.shop!.stage = 'forge';
+    state = dispatch(state, { type: 'SET_FORGE_INGREDIENT', socket: 'A', dieId: 0 }).state;
+    state = dispatch(state, { type: 'SET_FORGE_INGREDIENT', socket: 'B', dieId: 1 }).state;
+    const before = structuredClone(state.diceInventory);
+    const invalid = dispatch(state, { type: 'CONFIRM_FORGE', destination: { area: 'roster', index: 2 } });
+    expect(invalid.error).toMatch(/empty or ingredient slot/i);
+    expect(invalid.state.diceInventory).toEqual(before);
+    expect(invalid.state.temper).toBe(10);
+
+    const committed = dispatch(state, { type: 'CONFIRM_FORGE', destination: { area: 'storage', index: 0 } });
+    expect(committed.error).toBeUndefined();
+    expect(committed.state.diceInventory.storage[0]).toBe(5);
+    expect(committed.state.diceInventory.instances[5].effects.map(effect => [effect.type, effect.level]))
+      .toEqual([['basic', 2]]);
+    expect(committed.state.temper).toBe(8);
+    const history = committed.state.historyV2.find(event => event.kind === 'shop_transaction'
+      && event.transaction.type === 'dice_fused');
+    expect(history && renderRunHistoryV2Event(history)).toContain('DICE FORGE');
+    expect(history && renderRunHistoryV2Event(history)).toContain('Basic II');
+    expect(history && renderRunHistoryV2Event(history)).not.toContain('FUSION');
+    const spend = committed.state.historyV2.find(event => event.kind === 'temper_changed' && event.operation === 'spent');
+    expect(spend && renderRunHistoryV2Event(spend)).toContain('Forge');
+    expect(spend && renderRunHistoryV2Event(spend)).not.toContain('Fusion');
+  });
+
+  it('gives Basic one Gold of component salvage per level with deterministic rating value', () => {
+    const basicII = createCollectibleDie(20, 'basic', 2);
+    expect(dieSellBreakdown(basicII)).toEqual({ componentSalvage: 2, complexityPremium: 0, vintageAppreciation: 0, total: 2 });
+    const combined = { ...basicII, effects: [...basicII.effects, createDieEffect(20, 'bonus')] };
+    expect(dieSellBreakdown(combined)).toEqual({ componentSalvage: 7, complexityPremium: 8, vintageAppreciation: 0, total: 15 });
   });
 });

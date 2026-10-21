@@ -35,6 +35,7 @@ button { font: inherit; }
 .hud-stat { display: flex; align-items: baseline; gap: 5px; padding: 2px 7px; border-radius: 6px; font-size: .82rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .hud-stat-icon { color: var(--mantine-color-teal-4); font-size: .8rem; }
 [data-testid="stat-gold"] .hud-stat-icon { color: var(--mantine-color-yellow-5); }
+[data-testid="stat-temper"] .hud-stat-icon { color: var(--mantine-color-orange-4); }
 .hud-stat-label { color: var(--mantine-color-dimmed); font-size: .65rem; text-transform: uppercase; letter-spacing: .04em; }
 .hud-stage-value { display: inline-flex; gap: 6px; }
 .hud-stage-segment { display: inline-flex; gap: 1px; }
@@ -296,6 +297,9 @@ button { font: inherit; }
 .die-type-label > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .die-type-icon { flex: none; }
 .die-effects-label { min-width: 0; display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 2px; }
+.die-effects-label.compact { gap: 5px; flex-wrap: wrap; }
+.compact-die-effect { display: inline-flex; align-items: center; gap: 1px; color: var(--die-accent); line-height: 1; }
+.compact-effect-level { font-size: .68em; font-weight: 900; }
 .die-effect-label-part { min-width: 0; display: inline-flex; align-items: center; }
 .die-effect-separator { color: var(--mantine-color-gray-6); padding-inline: 2px; }
 .fusion-die-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -306,15 +310,19 @@ button { font: inherit; }
 .storage-grid, .roster-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
 .storage-grid { overflow: visible; }
 .forge-shop-section { border-color: rgba(255,146,43,.24); background: linear-gradient(145deg, rgba(230,119,0,.055), var(--mantine-color-dark-7)); }
-.forge-sockets { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 8px; margin-block: 10px; }
-.forge-socket { min-width: 0; min-height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; text-align: center; background: rgba(10,14,17,.55); }
+.forge-workspace { margin-block: 7px; padding: 7px; border: 1px solid rgba(255,146,43,.22); border-radius: var(--mantine-radius-default); background: rgba(10,14,17,.38); }
+.forge-equation { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 6px; }
+.forge-socket, .forge-result { min-width: 0; min-height: 126px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; text-align: center; background: rgba(10,14,17,.55); color: inherit; }
 .forge-socket[role="button"] { cursor: pointer; }
+.forge-result { width: 100%; cursor: pointer; border-color: color-mix(in srgb, var(--die-accent, var(--mantine-color-dark-4)) 40%, var(--mantine-color-dark-4)); }
+.forge-result.empty { border-style: dashed; opacity: .66; }
+.forge-result .collectible-die-visual, .forge-socket .collectible-die-visual { width: min(62px, 88%); }
+.forge-commit { display: grid; gap: 4px; margin-top: 7px; }
 .collection-slot.forge-staged { opacity: .58; outline: 1px dashed var(--mantine-color-orange-5); }
 .forge-staged-label { color: var(--mantine-color-orange-3); letter-spacing: .08em; }
 .forge-die-picker { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 5px; }
 .forge-die-option { min-width: 0; height: auto; min-height: 38px; padding-block: 5px; }
 .forge-die-option .mantine-Button-label { min-width: 0; white-space: normal; }
-.forge-preview { margin-top: 10px; border-color: rgba(255,146,43,.3); background: rgba(230,119,0,.06); }
 .forge-effect-summary { background: rgba(255,255,255,.025); }
 .roster-collection-dock { position: sticky; bottom: 0; z-index: 4; padding: 5px 0; border-block: 1px solid color-mix(in srgb, var(--screen-primary) 34%, var(--mantine-color-dark-4)); border-radius: 8px; background: rgba(15,20,24,.985); box-shadow: 0 -8px 22px rgba(0,0,0,.28); }
 .collection-heading { min-height: 18px; padding-inline: 5px; }
@@ -756,8 +764,9 @@ button { font: inherit; }
 }
 
 @media (max-width: 430px) {
-  .forge-sockets { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 4px; }
-  .forge-socket { min-height: 132px; }
+  .forge-equation { gap: 3px; }
+  .forge-socket, .forge-result { min-height: 112px; padding-inline: 3px !important; }
+  .forge-result .collectible-die-visual, .forge-socket .collectible-die-visual { width: min(52px, 92%); }
   .dice-offer { min-height: 164px; padding: 6px !important; }
   .dice-offer > .collectible-die-visual { width: 52px; }
   .dice-offer-name { min-height: 2em; font-size: .7rem; }

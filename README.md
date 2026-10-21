@@ -8,7 +8,7 @@ A run owns collectible dice with stable IDs. `diceInventory.instances` is the di
 
 `Board.dice` is the active encounter reference projection. Its player entries alias the equipped inventory instances in Roster order, followed by any tagged temporary encounter dice. The array is rebuilt from inventory/encounter authority and must never be used to infer ownership or Storage membership. This compact projection is retained for resolution, playback, and Round UI.
 
-Each collectible die owns an independent list of effect instances. Normal dice have no effects; a Shop die begins with one. Fusion adds levels when one ingredient's effect set contains the other, while a true Forge combines different effect sets. Forge ingredients are unordered and produce a new result die. The Shop uses rarity-first seeded offer generation. Storage dice do not Roll, Score, activate, or participate in encounter logic.
+Each collectible die owns an independent list of effect instances. Normal dice have no effects; a Shop die begins with one. Forging adds levels to shared effects and combines different effect sets. Normal ingredients contribute Basic, which multiplies raw face Pips. Forge ingredients are unordered and produce a new result die. The Shop uses rarity-first seeded offer generation. Storage dice do not Roll, Score, activate, or participate in encounter logic.
 
 ## Play, Score, and Roll
 
@@ -48,7 +48,7 @@ SHOP | FORGE | TRAIN | FLAMES
 Navigation consumes no RNG and does not rebuild offers or session state. FORGE appears permanently after the run first earns Temper; FLAMES appears only while the player owns a Flame. Bust restoration keeps the visit and returns its view to SHOP.
 
 - SHOP has three persistent seeded offers plus Roster/Storage movement, selling, details, and Weighted configuration. Offer rerolls remain available; owned dice are not physically rerolled in the Shop.
-- FORGE combines two special dice through Fusion or true Forge, charging the previewed Temper cost.
+- FORGE combines two dice after it has been revealed, charging the previewed Temper cost.
 - TRAIN displays the scorecard and allows every hand to be trained repeatedly.
 - FLAMES manages the five global Flame slots. The bottom CTA advances through available sections and exits from the final one.
 

@@ -586,7 +586,7 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (action.type === 'SET_FORGE_INGREDIENT') {
       if (action.dieId === null) return null;
       const die = collectibleDieById(state, action.dieId);
-      if (!die || !die.effects.length) return 'Normal dice cannot be Forged.';
+      if (!die) return 'Choose an owned die.';
       const other = action.socket === 'A' ? selection.dieBId : selection.dieAId;
       if (other === action.dieId) return 'Choose two different physical dice.';
       return null;
@@ -594,10 +594,16 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (selection.dieAId === null || selection.dieBId === null) return 'Choose two Forge ingredient dice.';
     const dieA = collectibleDieById(state, selection.dieAId);
     const dieB = collectibleDieById(state, selection.dieBId);
-    if (!dieA || !dieB || !dieA.effects.length || !dieB.effects.length || dieA.id === dieB.id) return 'Choose two eligible special dice.';
+    if (!dieA || !dieB || dieA.id === dieB.id) return 'Choose two eligible dice.';
     if (action.type === 'CONFIRM_FORGE') {
       const preview = previewForge(dieA, dieB);
       if (preview.cost > BigInt(state.temper)) return `Not enough Temper; ${formatForgeValue(preview.cost)} required.`;
+      if (action.destination) {
+        if (!slotExists(state.diceInventory, action.destination)) return 'Choose a valid Forge destination.';
+        const occupant = slotValue(state.diceInventory, action.destination);
+        if (occupant !== null && occupant !== dieA.id && occupant !== dieB.id)
+          return 'Place the Forge result in an empty or ingredient slot.';
+      }
     }
     return null;
   }
@@ -809,7 +815,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
           delete next.diceInventory.instances[ingredient.id];
           delete next.dieRoundState[ingredient.id];
         }
-        const destinationSlot = firstPurchaseSlot(next.diceInventory);
+        const destinationSlot = action.destination ?? firstPurchaseSlot(next.diceInventory);
         if (!destinationSlot) throw new Error('Forge result has no collection destination.');
         next.diceInventory.instances[result.id] = result;
         setSlotValue(next.diceInventory, destinationSlot, result.id);
@@ -820,7 +826,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         selection.dieAId = null; selection.dieBId = null;
         syncActiveDiceProjection(next);
         resolver.emit({ type: 'DICE_FORGED', dieIds: [ingredientA.id, ingredientB.id, result.id], amount: cost,
-          message: `${preview.kind === 'fusion' ? 'Fusion' : 'Forge'} completed for ${formatForgeValue(preview.cost)} Temper` });
+          message: `Forge completed for ${formatForgeValue(preview.cost)} Temper` });
         resolver.emitV2({ kind: 'shop_transaction', transaction: { type: 'dice_fused',
           ingredientIds: [ingredients[0].id, ingredients[1].id], resultId: result.id,
           destination: destinationSlot, effects: structuredClone(result.effects),
@@ -834,7 +840,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         delete next.diceInventory.instances[die.id];
         delete next.dieRoundState[die.id];
         syncActiveDiceProjection(next);
-        const label = die.effects.length ? die.effects.map(effect => `${SPECIAL_DICE[effect.type].name} ${formatEffectLevel(effect.level)}`).join(' + ') : 'Normal';
+        const label = die.effects.length ? die.effects.map(effect => `${SPECIAL_DICE[effect.type].name}${effect.level > 1 ? ` ${formatEffectLevel(effect.level)}` : ''}`).join(' + ') : 'Normal';
         resolver.addGold(sale.total, `Sold ${label}: +${sale.total} Gold`, 'diceSale', die.id);
         next.stats.mostValuableDieSold = Math.max(next.stats.mostValuableDieSold, sale.total);
         resolver.emitV2({ kind: 'shop_transaction', transaction: { type: 'dice_sold', dieId: die.id,

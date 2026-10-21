@@ -1,6 +1,6 @@
 import {
   IconBarbell, IconCirclesRelation, IconClockBolt, IconClockCog, IconClover, IconCoin, IconCopy,
-  IconFlame, IconHourglassHigh, IconJumpRope, IconLink, IconMagnet, IconPalette, IconPlayerPlay,
+  IconFlame, IconHexagon, IconHourglassHigh, IconJumpRope, IconLink, IconMagnet, IconPalette, IconPlayerPlay,
   IconPlus, IconRecycle, IconRefresh, IconRoute, IconScale, IconShield, IconUser, IconUsersGroup, IconWand,
   type Icon,
 } from '@tabler/icons-react';
@@ -16,6 +16,7 @@ export interface SpecialDieDefinition {
   name: string;
   rarity: DiceRarity;
   purchasePrice: number;
+  componentSalvage: number;
   forgeBaseWeight: number;
   invocationScale: 'none' | 'level';
   activation: 'automatic' | 'onCommand' | 'qualification';
@@ -37,12 +38,15 @@ const definition = (type: SpecialDieType, name: string, rarity: DiceRarity, icon
   activation: SpecialDieDefinition['activation'] = 'automatic'): SpecialDieDefinition => ({
     type, name, rarity, icon, color, invocationScale, activation,
     purchasePrice: RARITY_ECONOMY[rarity].price,
+    componentSalvage: RARITY_ECONOMY[rarity].price / 2,
     forgeBaseWeight: RARITY_ECONOMY[rarity].weight,
     verboseDescription: level => specialDieVerboseDescription(type, level),
   });
 
 /** Authoritative metadata for all collectible special effects. */
 export const SPECIAL_DICE: Record<SpecialDieType, SpecialDieDefinition> = {
+  basic: { ...definition('basic', 'Basic', 'common', IconHexagon, '#adb5bd'),
+    purchasePrice: 2, componentSalvage: 1, forgeBaseWeight: 1 },
   bonus: definition('bonus', 'Bonus', 'common', IconPlus, '#12b886'),
   workout: definition('workout', 'Workout', 'common', IconBarbell, '#ff922b'),
   vintage: definition('vintage', 'Vintage', 'common', IconHourglassHigh, '#d6a756'),
@@ -70,6 +74,8 @@ export const SPECIAL_DICE: Record<SpecialDieType, SpecialDieDefinition> = {
 };
 
 export const SPECIAL_DIE_TYPES = Object.keys(SPECIAL_DICE) as SpecialDieType[];
+/** Forge-only components are registered for rendering and persistence but never generated as Shop offers. */
+export const SHOP_SPECIAL_DIE_TYPES = SPECIAL_DIE_TYPES.filter(type => type !== 'basic');
 export const isSpecialDieType = (value: unknown): value is SpecialDieType =>
   typeof value === 'string' && Object.hasOwn(SPECIAL_DICE, value);
 export const isDieType = (value: unknown): value is SpecialDieType | 'normal' => value === 'normal' || isSpecialDieType(value);
