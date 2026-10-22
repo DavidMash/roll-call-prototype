@@ -22,11 +22,11 @@ const done = (scenario: TutorialScenarioState, id: string) => scenario.completed
 
 function withBossPlan(state: GameState): void {
   state.bossSchedule[3] = 'capitalReturn';
-  state.bossSchedule[6] = 'quickdraw';
-  state.bossSchedule[9] = 'juggler';
+  state.bossSchedule[6] = 'magician';
+  state.bossSchedule[9] = 'quickdraw';
   state.bossSchedule[12] = 'warden';
-  state.chapterPlans[1] = { chapterNumber: 1, miniBoss: 'capitalReturn', boss: 'quickdraw' };
-  state.chapterPlans[2] = { chapterNumber: 2, miniBoss: 'juggler', boss: 'warden' };
+  state.chapterPlans[1] = { chapterNumber: 1, miniBoss: 'capitalReturn', boss: 'magician' };
+  state.chapterPlans[2] = { chapterNumber: 2, miniBoss: 'quickdraw', boss: 'warden' };
 }
 
 function patchFinalEvent(resolution: Resolution): void {
@@ -142,13 +142,13 @@ export function newTutorialSession(): { session: TutorialSession; resolution: Re
   const resolution = newRun(TUTORIAL_SEED, source);
   withBossPlan(resolution.state);
   for (const event of resolution.events) {
-    if (event.type === 'CHAPTER_STARTED') { event.chapterMiniBoss = 'capitalReturn'; event.chapterBoss = 'quickdraw'; }
+    if (event.type === 'CHAPTER_STARTED') { event.chapterMiniBoss = 'capitalReturn'; event.chapterBoss = 'magician'; }
     event.board.bossSchedule[3] = 'capitalReturn';
-    event.board.bossSchedule[6] = 'quickdraw';
-    event.board.bossSchedule[9] = 'juggler';
+    event.board.bossSchedule[6] = 'magician';
+    event.board.bossSchedule[9] = 'quickdraw';
     event.board.bossSchedule[12] = 'warden';
-    event.board.chapterPlans[1] = { chapterNumber: 1, miniBoss: 'capitalReturn', boss: 'quickdraw' };
-    event.board.chapterPlans[2] = { chapterNumber: 2, miniBoss: 'juggler', boss: 'warden' };
+    event.board.chapterPlans[1] = { chapterNumber: 1, miniBoss: 'capitalReturn', boss: 'magician' };
+    event.board.chapterPlans[2] = { chapterNumber: 2, miniBoss: 'quickdraw', boss: 'warden' };
   }
   const scenario = initialTutorialScenario();
   curateTutorialOffers(resolution.state, scenario);

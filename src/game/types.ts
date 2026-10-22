@@ -4,10 +4,12 @@ import type { ExactDecimal, ExactScore } from './scoreMath';
 
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export type Rarity = 'common' | 'uncommon' | 'rare';
-export type BigBossType = 'caller' | 'warden' | 'hexer' | 'marathon' | 'quickdraw' | 'fly' | 'snakeEyes' | 'infected';
-export type MiniBossType = 'juggler' | 'capitalReturn' | 'neglected'
-  | 'tightrope' | 'crawler' | 'magician' | 'mugger';
-export type BossType = BigBossType | MiniBossType;
+export type BigBossType = 'magician' | 'juggler' | 'caller' | 'warden' | 'hexer' | 'marathon' | 'fly' | 'snakeEyes' | 'infected';
+export type MiniBossType = 'capitalReturn' | 'neglected'
+  | 'tightrope' | 'crawler' | 'quickdraw' | 'pendulum';
+/** Retained only so old history/save payloads can still be inspected. New runs never schedule Mugger. */
+export type LegacyBossType = 'mugger';
+export type BossType = BigBossType | MiniBossType | LegacyBossType;
 export interface ChapterPlan {
   chapterNumber: number;
   miniBoss: MiniBossType;
@@ -42,9 +44,9 @@ export type DieType = 'normal' | SpecialDieType;
 export type DieEffectInstanceId = string;
 export type DiceRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
 export type HandId =
-  | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes'
+  | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes' | 'sevens'
   | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
-export type UpperHandId = 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes';
+export type UpperHandId = 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes' | 'sevens';
 export type LowerHandId = Exclude<HandId, UpperHandId>;
 export type Phase = 'round' | 'roundSummary' | 'inferno' | 'bust' | 'flameSelection' | 'specialOffer' | 'shop' | 'lost' | 'error';
 export type ScoreSource = 'hand' | 'curtainCall' | 'jumpingBean' | 'hitchhiker' | 'boss';
@@ -88,7 +90,8 @@ export interface WardenBossState {
 export interface HexerBossState { type: 'hexer'; cursedDieId: number }
 export interface MarathonBossState { type: 'marathon'; cooldowns: Partial<Record<HandId, number>> }
 export interface QuickdrawBossState { type: 'quickdraw'; lowerShotUsed: boolean; playedLowerHand: HandId | null }
-export interface FlyBossState { type: 'fly'; flyHand: HandId | null; caught: boolean; moves: number }
+export interface PendulumBossState { type: 'pendulum'; requestedSection: 'upper' | 'lower'; switches: number }
+export interface FlyBossState { type: 'fly'; flyHand: HandId | null; caught: boolean; moves: number; mercyActive?: boolean }
 export interface SnakeEyesBossState { type: 'snakeEyes'; mutatedFaces: { dieId: number; physicalFace: Rank }[] }
 export interface InfectedBossState { type: 'infected'; infectedFaces: { dieId: number; physicalFace: Rank }[] }
 export interface JugglerBossState { type: 'juggler' }
@@ -112,7 +115,7 @@ export interface MuggerBossState { type: 'mugger'; hiddenHand: HandId; revealedH
 export type BossRuntimeState = CallerBossState | WardenBossState | HexerBossState | MarathonBossState
   | QuickdrawBossState | FlyBossState | SnakeEyesBossState | InfectedBossState
   | JugglerBossState | CapitalReturnBossState | NeglectedBossState
-  | TightropeBossState | CrawlerBossState | MagicianBossState | MuggerBossState;
+  | TightropeBossState | CrawlerBossState | MagicianBossState | MuggerBossState | PendulumBossState;
 
 export interface XMultFactor {
   source: Flame | 'charge';
@@ -218,7 +221,7 @@ export interface DieEffectInstance {
 export interface EncounterDie {
   id: DieId;
   value: Rank;
-  faces: HexerFace[];
+  faces: PhysicalFace[];
   owner: 'boss';
   encounterId: string;
 }
@@ -821,6 +824,7 @@ export type Action =
   | { type: 'RESTORE_LIFE' }
   | { type: 'DISMISS_FLAME_TUTORIAL' }
   | { type: 'RETRY_ROUND' }
+  | { type: 'RETREAT' }
   | { type: 'REROLL_OFFERS' }
   | { type: 'SET_SHOP_STAGE'; stage: ShopStage }
   | { type: 'UNLOCK_SHOP_EXIT' }

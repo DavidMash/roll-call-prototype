@@ -57,11 +57,11 @@ describe('authoritative scorecard cycles', () => {
     expect(result.events.some(event => event.type === 'ROUND_CLEARED')).toBe(false);
   });
 
-  it('does not label the final hand in a completable cycle as a last play', () => {
+  it('labels the only currently playable manual hand as a last play', () => {
     const state = finalHandState();
     state.manualRerollsRemaining = 0;
     state.specialOfferEffects.carePackageRerolls = 0;
-    expect(lastPlayDanger(state, 'ones')).toBe('none');
+    expect(lastPlayDanger(state, 'ones')).toBe('definite');
   });
 
   it('does not refresh when the final hand clears the Round', () => {
@@ -125,7 +125,7 @@ describe('authoritative scorecard cycles', () => {
     expect(refreshed.state.boss).toEqual(notRefreshed.state.boss);
   });
 
-  it('does not let Neglected restrictions complete a partial scorecard', () => {
+  it('lets Neglected restrictions stand aside for a scorecard refresh', () => {
     const state = finalHandState();
     state.boss = { type: 'neglected', neglectedHands: ['ones', 'twos'], handsPlayed: 0, restored: false };
     state.dice[0].value = 3;
@@ -133,9 +133,9 @@ describe('authoritative scorecard cycles', () => {
     state.scorecardCycleConsumed = HAND_IDS.filter(hand => !(['ones', 'twos', 'threes'] as HandId[]).includes(hand));
     const result = dispatch(state, { type: 'PLAY', hand: 'threes', dieIds: [0] }, constant());
 
-    expect(result.events.some(event => event.type === 'SCORECARD_REFRESHED')).toBe(false);
-    expect(result.state.scorecardCycleConsumed).toHaveLength(HAND_IDS.length - 2);
-    expect(new Set(result.state.consumed)).toEqual(new Set(HAND_IDS));
+    expect(result.events.some(event => event.type === 'SCORECARD_REFRESHED')).toBe(true);
+    expect(result.state.scorecardCycleConsumed).toEqual([]);
+    expect(new Set(result.state.consumed)).toEqual(new Set(['ones', 'twos']));
     expect(result.state.boss).toEqual({ ...state.boss, handsPlayed: 1 });
   });
 
@@ -149,7 +149,7 @@ describe('authoritative scorecard cycles', () => {
     expect(result.events.some(event => event.type === 'SCORECARD_REFRESHED')).toBe(false);
     expect(result.state.consumed).toEqual([]);
     expect(result.state.scorecardCycleConsumed).toEqual(HAND_IDS);
-    expect(result.state.boss).toEqual({ type: 'marathon', cooldowns: { twos: 2, ones: 7 } });
+    expect(result.state.boss).toEqual({ type: 'marathon', cooldowns: { twos: 2, ones: 6 } });
   });
 
   it('migrates the current ordinary Used state into persisted cycle state', () => {

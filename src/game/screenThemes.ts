@@ -40,6 +40,7 @@ export const SCREEN_THEMES: Record<ScreenThemeId, ScreenTheme> = {
   hexer: theme('hexer', 'THE HEXER', '⦿', '#84CC16', '#D9F99D'),
   marathon: theme('marathon', 'THE MARATHON', '↻', '#F97316', '#FDBA74'),
   quickdraw: theme('quickdraw', 'QUICKDRAW', '✦', '#EAB308', '#FDE047'),
+  pendulum: theme('pendulum', 'THE PENDULUM', '↔', '#38BDF8', '#F0ABFC'),
   fly: theme('fly', 'THE FLY', '●', '#92400E', '#D97706'),
   snakeEyes: theme('snakeEyes', 'SNAKE EYES', '⚁', '#16A34A', '#4ADE80'),
   infected: theme('infected', 'THE INFECTED', '✣', '#DC2626', '#FB7185'),

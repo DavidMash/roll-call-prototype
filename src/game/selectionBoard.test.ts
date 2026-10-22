@@ -121,7 +121,7 @@ describe('encounter-aware combinations', () => {
 
     const quickdraw = game([4, 4, 1, 2, 3]);
     quickdraw.boss = { type: 'quickdraw', lowerShotUsed: true, playedLowerHand: 'pair' };
-    expect(boardHandAvailable(quickdraw, 'pair')).toBe(false);
+    expect(boardHandAvailable(quickdraw, 'pair')).toBe(true);
     expect(boardHandAvailable(quickdraw, 'fours')).toBe(true);
   });
 });

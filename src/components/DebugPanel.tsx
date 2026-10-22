@@ -80,7 +80,7 @@ export function RunInfoModal({ state, busy, opened, onClose, seedInput, setSeedI
                 <Table.Td>#{die.id} · {die.owner === 'player'
                   ? die.effects.length ? <DieEffectsLabel effects={die.effects} /> : `D${state.dice.filter(item => item.owner === 'player').findIndex(item => item.id === die.id) + 1}`
                   : 'Cursed Die'}</Table.Td><Table.Td>side {index + 1} → {face.rank}{exposed ? ' · exposed' : ''}</Table.Td><Table.Td>{formatPlayerNumber(scoringPips(face))}</Table.Td>
-                <Table.Td>{face.bossMutation?.kind ?? ('hexerEffect' in face ? face.hexerEffect.kind : '—')}</Table.Td>
+                <Table.Td>{face.bossMutation?.kind ?? (die.owner === 'boss' ? 'cursed' : '—')}</Table.Td>
               </Table.Tr>;
             }))}</Table.Tbody>
           </Table></Table.ScrollContainer>

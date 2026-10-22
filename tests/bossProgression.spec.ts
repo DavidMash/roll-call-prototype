@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { activeEncounterDice, BOSSES, bossTypeForRound, createBossRuntime, createCursedDie, unavailableEncounterHands } from '../src/game/bosses';
+import { activeEncounterDice, BOSSES, createBossRuntime, createCursedDie, unavailableEncounterHands } from '../src/game/bosses';
 import { dispatch, newRun } from '../src/game/engine';
 import { handOptions, HANDS, HAND_IDS, ultimateHands } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
@@ -14,13 +14,6 @@ function dieUiLabel(game: GameState, die: GameState['dice'][number]): string {
   return `Die ${game.dice.filter(item => item.owner === 'player').findIndex(item => item.id === die.id) + 1}`;
 }
 
-const seedFor = (boss: BigBossType) => {
-  for (let index = 0; index < 100; index++) {
-    const seed = `boss-browser-${index}`;
-    if (bossTypeForRound(seed, 6) === boss) return seed;
-  }
-  throw new Error(`No seed found for ${boss}`);
-};
 async function ready(page: Page) {
   await page.locator('main').waitFor();
   await enterRun(page);
@@ -70,7 +63,7 @@ async function playOne(page: Page, game: GameState) {
   await ready(page);
   return next;
 }
-async function reachBossShop(page: Page, boss: BigBossType, seed = seedFor(boss)) {
+async function reachBossShop(page: Page, boss: BigBossType, seed = `boss-browser-${boss}`) {
   let game = newRun(seed).state;
   game.phase = 'shop';
   game.round = 5;
@@ -178,11 +171,11 @@ test('Caller preview hides the call, then encounter reveals it and its counter',
 });
 
 for (const testCase of [
-  { type: 'marathon', name: 'THE MARATHON', preview: 'Extra large Goal. Played hands return after 7 other hands are played.', hud: 'Hands return after 7 plays' },
-  { type: 'quickdraw', name: 'QUICKDRAW', preview: 'Reduced Goal, but you can only play a single Lower hand.', hud: '1 Lower shot available' },
+  { type: 'marathon', name: 'THE MARATHON', preview: 'Extra large Goal. Played hands return after 6 other hands are played.', hud: 'Hands return after 6 plays' },
+  { type: 'magician', name: 'THE MAGICIAN', preview: 'One die disappears until you play 3 called Upper hands.', hud: 'calls completed' },
   { type: 'fly', name: 'THE FLY', preview: 'Your played hands are weakened until you catch The Fly on the marked Lower hand.', hud: 'Catch:' },
   { type: 'snakeEyes', name: 'SNAKE EYES', preview: 'Scored faces turn into 1s.', hud: 'Scored faces become 1s' },
-  { type: 'infected', name: 'THE INFECTED', preview: "Infected faces lose 3 Pips and suppress the die's special effect. Played faces become infected.", hud: 'infected face' },
+  { type: 'infected', name: 'THE INFECTED', preview: "Infected faces suppress the die's special effects. Played faces become infected.", hud: 'infected face' },
 ] as const) {
   test(`${testCase.name} preview, HUD, and theme use the boss architecture`, async ({ page }) => {
     let game = await reachBossShop(page, testCase.type);
@@ -204,8 +197,8 @@ test('every boss uses a readable compact mobile status without displacing core g
     ['warden', '2 of 5 dice unlocked'],
     ['caller', '3 plays left'],
     ['fly', 'Catch:'],
-    ['marathon', 'Hands return after 7 plays'],
-    ['quickdraw', 'Lower shot spent'],
+    ['marathon', 'Hands return after 6 plays'],
+    ['quickdraw', 'Later Lower Plays ×0.25'],
     ['hexer', 'Cursed Die required'],
     ['snakeEyes', 'Scored faces become 1s'],
     ['infected', '2 infected faces'],
@@ -234,7 +227,8 @@ test('every boss uses a readable compact mobile status without displacing core g
       const rows = [...document.querySelectorAll<HTMLElement>('[data-testid^="scorecard-row-"]')];
       const dock = document.querySelector<HTMLElement>('.gameplay-dock')!.getBoundingClientRect();
       return root.scrollWidth <= innerWidth && root.scrollHeight <= innerHeight
-        && rows.length === 14 && rows.every(row => row.getBoundingClientRect().bottom <= innerHeight)
+        && rows.length === (document.querySelector('[data-screen-theme="hexer"]') ? 15 : 14)
+        && rows.every(row => row.getBoundingClientRect().bottom <= innerHeight)
         && dock.bottom <= innerHeight;
     });
     expect(fits).toBe(true);
@@ -507,7 +501,7 @@ test('Hexer preview keeps its faces secret and encounter fits all six dice on on
   expect(game.dice).toHaveLength(6);
 });
 
-test('Hexer face 7 renders seven pips with its dedicated Wild Bonus rule and remains freely selectable', async ({ page }) => {
+test('Hexer face 7 renders seven ordinary pips with no legacy face power and remains freely selectable', async ({ page }) => {
   let game = await reachBossShop(page, 'hexer');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
@@ -528,8 +522,10 @@ test('Hexer face 7 renders seven pips with its dedicated Wild Bonus rule and rem
   await expect(button.locator('.pip')).toHaveCount(7);
   await slot.getByRole('button', { name: 'View details for Cursed Die' }).click();
   const faces = page.getByRole('dialog', { name: /CURSED DIE .* FACES/ });
-  await expect(faces).toContainText('Wild for matching Qualification');
-  await expect(faces).toContainText('+50 Pips when Scored');
+  await expect(faces).toContainText('Face 7 · 7 Pips');
+  await expect(faces).toContainText('Cursed Die');
+  await expect(faces).not.toContainText('Wild');
+  await expect(faces).not.toContainText('+50');
   await faces.getByRole('button', { name: 'Close' }).click();
   await expect(button).toHaveAttribute('aria-pressed', 'false');
   await expect(button).toHaveAttribute('aria-disabled', 'false');
@@ -547,9 +543,12 @@ test('Boss clear shows its Boss Reward summary and transitions directly to Flame
   for (let step = 0; step < 120 && game.phase !== 'roundSummary'; step++) {
     if (game.phase === 'round') game = await playOne(page, game);
     else if (game.phase === 'shop' && game.bust) {
-      await goToShopStage(page, 'flames');
+      await page.getByRole('button', { name: /CONTINUE TO TRAINING/ }).click();
       game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'train' }).state;
-      if (game.flameSlots.some(Boolean)) game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'flames' }).state;
+      if (game.flameSlots.some(Boolean)) {
+        await page.getByRole('button', { name: /CONTINUE TO FIRE KEEPING/ }).click();
+        game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'flames' }).state;
+      }
       await page.getByRole('button', { name: `RETRY ROUND ${game.round}`, exact: true }).click();
       game = dispatch(game, { type: 'RETRY_ROUND' }).state;
       await ready(page);

@@ -340,7 +340,7 @@ test('Play action distinguishes possible, definite, and guaranteed final chances
   }
 
   await load(HAND_IDS.filter(hand => hand !== selected.id && hand !== unplayable), 0n);
-  await expect(page.getByRole('button', { name: 'LAST PLAY?', exact: true })).toContainText('• LAST PLAY?');
+  await expect(page.getByRole('button', { name: 'LAST PLAY.', exact: true })).toBeVisible();
 
   const finalConsumed = HAND_IDS.filter(hand => hand !== selected.id);
   await load(finalConsumed, 0n);

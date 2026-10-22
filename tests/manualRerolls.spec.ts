@@ -229,6 +229,7 @@ test('Reroll control separates selected dice from Care Package resources respons
 });
 
 test('dead-board UI and engine stay usable while only Care Package Rerolls remain', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
   let game = newRun('care-package-dead-board-ui').state;
   game.target = 999n;
   game.consumed = [...HAND_IDS];
@@ -239,6 +240,7 @@ test('dead-board UI and engine stay usable while only Care Package Rerolls remai
 
   const button = page.getByTestId('manual-reroll');
   await expect(page.getByRole('status', { name: 'NO PLAYABLE HANDS' })).toContainText('Use a Reroll.');
+  await expect(page.getByTestId('retreat-action')).toBeVisible();
   await expect(button).toHaveAccessibleName('REROLL · 0 REROLLS LEFT, PLUS 3 CARE PACKAGE REROLLS');
   await page.getByRole('button', { name: /^Die 1,/ }).click();
   await expect(button).toBeEnabled();
@@ -365,5 +367,5 @@ test('a manual reroll rescues a dead board and restores legal hand controls', as
   await expect(page.getByText('Use a Reroll.', { exact: true })).toHaveCount(0);
   const option = handOptions(result.state.dice, result.state.consumed).find(hand => !hand.consumed)!;
   await page.getByRole('button', { name: new RegExp(`^${HANDS[option.id].name} `) }).click();
-  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^(PLAY|LAST PLAY[?.])$/ })).toBeEnabled();
 });

@@ -3,6 +3,7 @@ import { FLAMES } from './flames';
 import { HANDS } from './hands';
 import { isSpecialDieType, SPECIAL_DICE } from './specialDice';
 import { activeDieLabel } from './inventory';
+import { BOSSES } from './bosses';
 import type { GameEvent } from './types';
 import type { ExactScore } from './scoreMath';
 
@@ -14,6 +15,7 @@ export interface ScorePresentation {
   mult: number;
   xMult: number;
   bossFactor: number;
+  bossLabel: string;
   finalScore: ExactScore | null;
   showXMult: boolean;
   activeMetric: ScoreMetric;
@@ -59,6 +61,7 @@ export function scorePresentation(event: GameEvent | null): ScorePresentation | 
       mult: accumulator.currentMultiplier,
       xMult: accumulator.currentXMult,
       bossFactor: accumulator.bossFactor,
+      bossLabel: event.board.boss ? BOSSES[event.board.boss.type].name.replace(/^THE /, '') : 'BOSS MODIFIER',
       finalScore: accumulator.finalScore,
       showXMult: Math.abs(accumulator.currentXMult - 1) > 1e-9,
       activeMetric,
@@ -73,6 +76,7 @@ export function scorePresentation(event: GameEvent | null): ScorePresentation | 
     mult: event.multiplier ?? 0,
     xMult,
     bossFactor: 1,
+    bossLabel: 'BOSS MODIFIER',
     finalScore: typeof event.amount === 'bigint' ? event.amount : event.amount === undefined ? null : BigInt(event.amount),
     showXMult: Math.abs(xMult - 1) > 1e-9,
     activeMetric: 'final',

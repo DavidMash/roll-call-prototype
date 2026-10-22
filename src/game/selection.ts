@@ -1,7 +1,7 @@
 import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands } from './bosses';
 import { activeFace, scoringPips, wholeDieEffectSuppressed } from './dice';
 import { captureHandStart, composeXMult, handXMultContributions } from './flames';
-import { handOptions, HAND_IDS, isValidSelection, sameDice } from './hands';
+import { encounterHandIds, handIsStructurallyImpossible, handOptions, isValidSelection, sameDice } from './hands';
 import { finalizeScore, handScore } from './scoring';
 import type { Board, CollectibleDie, Die, HandId } from './types';
 import { scoreCompare, type ExactScore } from './scoreMath';
@@ -65,7 +65,8 @@ export function legalHandCombinations(
   const required = requiredSelectionDieIds(board);
   const preferred = new Set(preferredManualDieIds);
   const dice = activeEncounterDice(board);
-  const combinations = handOptions(dice, [], required, board.dieRoundState)
+  if (!encounterHandIds(board).includes(hand) || handIsStructurallyImpossible(hand, dice.length)) return [];
+  const combinations = handOptions(dice, [], required, board.dieRoundState, encounterHandIds(board))
     .find(option => option.id === hand)?.combinations.map(ids => orderedIds(dice, ids)) ?? [];
   return combinations.sort((a, b) => {
     const aPreferred = preferred.size > 0 && [...preferred].every(id => a.includes(id));
@@ -112,7 +113,7 @@ export function toggleBoardDie(board: Board, selection: Selection, id: number): 
     .some(combination => sameDice(combination, dieIds))) {
     return { dieIds, hand: selection.hand, intent: 'manual' };
   }
-  const completed = HAND_IDS.filter(hand => legalHandCombinations(board, hand)
+  const completed = encounterHandIds(board).filter(hand => legalHandCombinations(board, hand)
     .some(combination => sameDice(combination, dieIds)));
   return { dieIds, hand: completed.length === 1 ? completed[0] : null, intent: 'manual' };
 }

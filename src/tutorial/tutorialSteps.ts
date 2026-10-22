@@ -115,7 +115,7 @@ const candidates: Candidate[] = [
 
   info('c1-boss-intro', 'BOSS', ['Round 6 ends the Chapter with a Boss. Bosses can change the rules in bigger ways.'], '[data-tutorial="boss"]',
     s => s.game.round === 6 && s.game.phase === 'round'),
-  info('c1-quickdraw', 'QUICKDRAW', ['The Goal is lower, but you only get one Lower hand this Round. Choose it carefully.'], '[data-tutorial="boss"]',
+  info('c1-quickdraw', 'THE MAGICIAN', ['One die has disappeared. Complete the three called Upper hands to bring it back.'], '[data-tutorial="boss"]',
     s => s.game.round === 6 && s.game.phase === 'round' && has(s, 'c1-boss-intro')),
   info('flame-selection-1', 'FLAME SELECTION', ['After beating a Boss, you get to choose a Flame.', 'Read the descriptions and pick the one you like best.'], '[data-tutorial="flame-offers"]',
     s => s.game.round === 6 && s.game.phase === 'flameSelection' && !s.game.flameSelection?.acquired),
@@ -159,7 +159,7 @@ const candidates: Candidate[] = [
     (s, ui) => s.game.round === 7 && s.game.phase === 'round' && has(s, 'chapter-2')
       && (s.scenario.firstFlame === 'minigun' || has(s, R.flameDemoSetup)) && !has(s, R.flameDemoPayoff) && flameSelectionReady(s, ui, true),
     { interactiveTargets: [PLAY] }),
-  info('c2-juggler', 'THE JUGGLER', ['After every hand, one extra die rerolls.', 'Watch how it changes the board.'], '[data-tutorial="boss"]',
+  info('c2-juggler', 'QUICKDRAW', ['Your first Lower hand scores normally. Later Lower hands score at ×0.25.'], '[data-tutorial="boss"]',
     s => s.game.round === 9 && s.game.phase === 'round'),
   info('c2-special-offer', 'LOOK AT YOUR BUILD', ['These rewards can strengthen things you already own.', 'Read all three and pick what fits your build.'], '[data-tutorial="special-offers"]',
     s => s.game.round === 9 && s.game.phase === 'specialOffer' && !s.game.specialOffer?.acquired),
@@ -194,7 +194,7 @@ const candidates: Candidate[] = [
     s => !seen(s, 'bonfire') && s.game.flameSlots.some(flame => flame?.stage === 'bonfire'), { contextual: true }),
   info('context-later-boss', 'NEW BOSS', ['Check its rule here before you make your first move.'], '[data-tutorial="boss"]',
     s => !seen(s, 'later-boss') && s.game.round > 12 && s.game.phase === 'round' && !!s.game.boss
-      && !['capitalReturn', 'quickdraw', 'juggler', 'warden'].includes(s.game.boss.type), { contextual: true }),
+      && !['capitalReturn', 'magician', 'quickdraw', 'warden'].includes(s.game.boss.type), { contextual: true }),
   info('context-safeguard', 'KEEP GOING', ['Your final Life is safe during the guided Chapters.', 'Used hands are refreshed, you have 3 Rerolls, and this encounter rule is disabled.'], '[data-tutorial="reroll-button"]',
     s => !seen(s, 'safeguard') && s.scenario.safeguardActivations > 0, { contextual: true, side: 'top' }),
   info('tutorial-run-over', 'RUN OVER', ['Every run gives you different options and challenges you in different ways.', 'I hope you enjoy playing Roll Call!'], undefined,
@@ -268,5 +268,5 @@ export function tutorialActionHint(session: TutorialSession): string | null {
   return beat?.requiredAction ?? null;
 }
 
-export const taughtBosses = new Set(['capitalReturn', 'quickdraw', 'juggler', 'warden']);
+export const taughtBosses = new Set(['capitalReturn', 'magician', 'quickdraw', 'warden']);
 export const tutorialHandName = (hand: keyof typeof HANDS) => HANDS[hand].name;

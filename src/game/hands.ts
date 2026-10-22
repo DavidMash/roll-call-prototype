@@ -1,4 +1,4 @@
-import { activeFace, HAND_RANKS, isHexerFace, wholeDieEffectSuppressed } from './dice';
+import { activeFace, HAND_RANKS, wholeDieEffectSuppressed } from './dice';
 import type { QualificationEffect, QualificationPlan } from './resolution';
 import { effectOf, effectRuntime } from './specialDice';
 import type { Die, DieRoundState, HandId, HandLevels, HandOption, Rank } from './types';
@@ -19,6 +19,7 @@ export const HANDS: Record<HandId, HandDefinition> = {
   fours: { name: 'Fours', rank: 4, baseMultiplier: 1 },
   fives: { name: 'Fives', rank: 5, baseMultiplier: 1 },
   sixes: { name: 'Sixes', rank: 6, baseMultiplier: 1 },
+  sevens: { name: 'Sevens', rank: 7, baseMultiplier: 1 },
   pair: { name: 'Pair', size: 2, groups: [2], baseMultiplier: 1.5 },
   twoPair: { name: 'Two Pair', size: 4, groups: [2, 2], baseMultiplier: 2 },
   threeKind: { name: 'Three of a Kind', size: 3, groups: [3], baseMultiplier: 2.5 },
@@ -28,8 +29,10 @@ export const HANDS: Record<HandId, HandDefinition> = {
   largeStraight: { name: 'Large Straight', size: 5, baseMultiplier: 4 },
   fiveKind: { name: 'Five of a Kind', size: 5, groups: [5], baseMultiplier: 5 },
 };
-export const HAND_IDS = Object.keys(HANDS) as HandId[];
+/** Normal scorecard hands. Sevens is encounter-scoped and never leaks into Shops or other Rounds. */
+export const HAND_IDS = (Object.keys(HANDS) as HandId[]).filter(id => id !== 'sevens');
 export const UPPER_HAND_IDS = HAND_IDS.filter(id => HANDS[id].rank) as HandId[];
+export const HEXER_HAND_IDS: HandId[] = [...HAND_IDS.slice(0, UPPER_HAND_IDS.length), 'sevens', ...HAND_IDS.slice(UPPER_HAND_IDS.length)];
 export const LOWER_HAND_IDS = HAND_IDS.filter(id => !HANDS[id].rank) as HandId[];
 export const ULTIMATE_HAND_COUNT = 1;
 
@@ -109,9 +112,20 @@ export function rankedHands(handLevels: HandLevels): HandId[] {
 export const ultimateHands = (handLevels: HandLevels): HandId[] =>
   rankedHands(handLevels).slice(0, ULTIMATE_HAND_COUNT);
 export const initialHandLevels = (): Record<HandId, number> =>
-  Object.fromEntries(HAND_IDS.map(hand => [hand, 1])) as Record<HandId, number>;
+  Object.fromEntries([...HAND_IDS, 'sevens'].map(hand => [hand, 1])) as Record<HandId, number>;
 export const initialHandPlayCounts = (): Record<HandId, number> =>
-  Object.fromEntries(HAND_IDS.map(hand => [hand, 0])) as Record<HandId, number>;
+  Object.fromEntries([...HAND_IDS, 'sevens'].map(hand => [hand, 0])) as Record<HandId, number>;
+
+export const upperBaselineLevel = (levels: HandLevels): number =>
+  Math.max(1, Math.round(UPPER_HAND_IDS.reduce((sum, hand) => sum + levels[hand], 0) / UPPER_HAND_IDS.length));
+
+export const encounterHandIds = (state: { boss?: { type: string } | null; bossSilenced?: boolean }): HandId[] =>
+  !state.bossSilenced && state.boss?.type === 'hexer' ? HEXER_HAND_IDS : HAND_IDS;
+
+export const handIsStructurallyImpossible = (hand: HandId, activeDieCount: number): boolean => {
+  const rule = HANDS[hand];
+  return activeDieCount < (rule.rank !== undefined ? 1 : rule.size ?? 1);
+};
 
 function subsets<T>(items: T[], size: number): T[][] {
   if (size === 0) return [[]];
@@ -124,17 +138,8 @@ type QualificationClaim = { dieId: number; effect: Exclude<QualificationEffect, 
 const claimed = (claims: readonly QualificationClaim[], dieId: number, effect: QualificationEffect) =>
   claims.some(claim => claim.dieId === dieId && claim.effect === effect);
 
-const hexerStraightWild = (die: Die) => {
-  const face = activeFace(die);
-  return isHexerFace(face) && face.hexerEffect.kind === 'wild';
-};
-const hexerMatchingWild = (die: Die) => {
-  const face = activeFace(die);
-  return isHexerFace(face) && ['wild', 'wildWorkout', 'wildBonus'].includes(face.hexerEffect.kind);
-};
-
 function straightValid(dice: Die[], size: number, claims: readonly QualificationClaim[] = []): boolean {
-  const natural = dice.filter(die => !hexerStraightWild(die) && !claimed(claims, die.id, 'missingLink'))
+  const natural = dice.filter(die => !claimed(claims, die.id, 'missingLink'))
     .map(die => activeFace(die).rank);
   if (new Set(natural).size !== natural.length) return false;
   return dice.length === size && HAND_RANKS.slice(0, HAND_RANKS.length - size + 1)
@@ -143,8 +148,8 @@ function straightValid(dice: Die[], size: number, claims: readonly Qualification
 function matchingVirtualValues(dice: Die[], groups: readonly number[], claims: readonly QualificationClaim[] = []): Map<number, Rank> | null {
   const total = dice.reduce((sum, die) => sum + (claimed(claims, die.id, 'conjoined') ? 2 : 1), 0);
   if (total !== groups.reduce((sum, size) => sum + size, 0)) return null;
-  const fixed = dice.filter(die => !hexerMatchingWild(die) && !claimed(claims, die.id, 'mirror'));
-  const variables = dice.filter(die => hexerMatchingWild(die) || claimed(claims, die.id, 'mirror'));
+  const fixed = dice.filter(die => !claimed(claims, die.id, 'mirror'));
+  const variables = dice.filter(die => claimed(claims, die.id, 'mirror'));
   const assignments = new Map<number, Rank>();
   function assignVariables(index: number, ranks: Rank[], counts: number[]): boolean {
     if (index === variables.length) return counts.every((count, i) => count === groups[i]);
@@ -186,8 +191,9 @@ export function combinationsForHand(dice: Die[], hand: HandId, roundState?: DieR
 }
 
 export const sameDice = (a: number[], b: number[]) => a.length === b.length && a.every(id => b.includes(id));
-export function handOptions(dice: Die[], consumed: HandId[], selected: number[] = [], roundState?: DieRoundState): HandOption[] {
-  return HAND_IDS.map(id => ({ id, consumed: consumed.includes(id),
+export function handOptions(dice: Die[], consumed: HandId[], selected: number[] = [], roundState?: DieRoundState,
+  handIds: readonly HandId[] = HAND_IDS): HandOption[] {
+  return handIds.map(id => ({ id, consumed: consumed.includes(id),
     combinations: combinationsForHand(dice, id, roundState).filter(set => selected.every(die => set.includes(die))),
   })).filter(option => option.combinations.length > 0);
 }
@@ -267,8 +273,6 @@ export function planQualification(dice: Die[], hand: HandId, selected: readonly 
   const effects = legal ? selectedDice.flatMap(die => {
     const face = activeFace(die);
     const participating: QualificationEffect[] = [];
-    if ((hand === 'smallStraight' || hand === 'largeStraight') && hexerStraightWild(die)) participating.push('hexerWild');
-    if (HANDS[hand].groups && hexerMatchingWild(die)) participating.push('hexerWild');
     return participating.map(effect => ({ dieId: die.id, face: face.rank, effect }));
   }).concat((chosen ?? []).map(claim => ({ dieId: claim.dieId,
     face: activeFace(selectedDice.find(die => die.id === claim.dieId)!).rank, effect: claim.effect,

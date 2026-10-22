@@ -6,7 +6,7 @@ import { validateAction } from '../game/engine';
 import { dieSellBreakdown } from '../game/forge';
 import { effectDetails } from '../game/specialDiePresentation';
 import { SPECIAL_DICE, runtimeFor } from '../game/specialDice';
-import type { Action, Board, CollectibleDie, DieEffectInstance, HexerFace, Rank } from '../game/types';
+import type { Action, Board, CollectibleDie, DieEffectInstance, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
 import { CollectibleDieVisual } from './CollectibleDieVisual';
 import { DieNumberSelector } from './DieNumberSelector';
@@ -15,17 +15,6 @@ import { PipFace } from './PipFace';
 import { RichDescription } from './RichDescription';
 
 export interface FaceDetailsTarget { dieId: number; face: Rank }
-
-const hexerEffectLabel = (face: HexerFace): string => {
-  const effect = face.hexerEffect;
-  switch (effect.kind) {
-    case 'goldenWeighted': return `Earn 1 Gold when Scored · weighted toward ${effect.target}`;
-    case 'wild': return 'Wild for matching and straight Qualification';
-    case 'wildWorkout': return `Wild for matching Qualification · gains +${effect.growthPips} Pips when Scored`;
-    case 'workoutClockwork': return `Gains +${effect.growthPips} Pips when Scored · advances predictably when Rerolled`;
-    case 'wildBonus': return `Wild for matching Qualification · +${effect.bonusPips} Pips when Scored`;
-  }
-};
 
 function EffectCommands({ board, die, effect, busy, actionsEnabled, submit, closeAfter }: {
   board: Board; die: CollectibleDie; effect: DieEffectInstance; busy: boolean; actionsEnabled: boolean;
@@ -116,7 +105,7 @@ function CursedDieDetails({ board, dieId, initialFace, diceDisplay, onClose }: {
   useEffect(() => setFocusedFace(initialFace), [dieId, initialFace]);
   if (!die) return null;
   const face = die.faces[focusedFace - 1];
-  if (!face || !('hexerEffect' in face)) return null;
+  if (!face) return null;
   return <Modal opened onClose={onClose} title="CURSED DIE · FACES" size="lg" centered transitionProps={{ duration: 0 }} data-testid="cursed-die-details-modal">
     <Stack gap="sm"><SimpleGrid cols={{ base: 3, sm: 7 }} spacing="xs" className="manage-face-grid" aria-label="Cursed Die faces">
       {die.faces.map((candidate, index) => { const physicalFace = index + 1 as Rank; return <Paper component="button" type="button" key={physicalFace} withBorder p="xs"
@@ -125,7 +114,7 @@ function CursedDieDetails({ board, dieId, initialFace, diceDisplay, onClose }: {
         {diceDisplay === 'pips' ? <PipFace value={candidate.rank} compact label={`Cursed Die face ${physicalFace}`} />
           : <span className="manage-face-number" aria-label={`Cursed Die face ${physicalFace}`}>{candidate.rank}</span>}
         <strong>FACE {physicalFace}</strong>{die.value === physicalFace && <span className="manage-face-exposed">EXPOSED</span>}</Paper>; })}
-    </SimpleGrid><Text fw={850}>Face {focusedFace} · {scoringPips(face)} Pips</Text><Text c="violet">{hexerEffectLabel(face)}</Text>
+    </SimpleGrid><Text fw={850}>Face {focusedFace} · {scoringPips(face)} Pips</Text><Text c="dimmed">Cursed Die</Text>
     <Button variant="default" onClick={onClose}>Close</Button></Stack>
   </Modal>;
 }

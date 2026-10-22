@@ -1,6 +1,6 @@
 import { activeFace, wholeDieEffectSuppressed } from './dice';
 import { lastPlayDanger } from './bosses';
-import { LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from './hands';
+import { HANDS, LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from './hands';
 import { finalizeScore, handScore, infernoMultiplier } from './scoring';
 import type { Board, Flame, FlameInstance, FlameInstanceId, FlameSlotIndex, FlameSlots, GameState, HandId, Rarity, XMultFactor } from './types';
 import { formatPlayerNumber } from './copy';
@@ -277,7 +277,7 @@ export interface HandStartSnapshot {
     golden: boolean; jackpot: boolean; vintage: boolean }[];
 }
 
-export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'engulfmentLevel' | 'gold' | 'manualRerollsRemaining' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackUpperHandsPlayed' | 'flameSlots' | 'dice' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null): HandStartSnapshot {
+export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'engulfmentLevel' | 'gold' | 'manualRerollsRemaining' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackUpperHandsPlayed' | 'flameSlots' | 'dice' | 'dieRoundState' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null): HandStartSnapshot {
   const selectedScore = handScore(state.dice, hand, selectedDieIds, state.handLevels[hand]);
   return {
     score: state.score,
@@ -300,7 +300,11 @@ export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'en
     selectedBasePips: selectedScore.pips,
     selectedBaseMultiplier: selectedScore.multiplier,
     selectedDieIds: [...selectedDieIds],
-    bossFactor: !state.bossSilenced && state.boss?.type === 'fly' && !state.boss.caught && hand !== state.boss.flyHand ? .5 : 1,
+    bossFactor: state.bossSilenced ? 1
+      : state.boss?.type === 'fly' && !state.boss.caught && hand !== state.boss.flyHand ? .5
+        : state.boss?.type === 'quickdraw' && !HANDS[hand].rank && state.boss.lowerShotUsed ? .25
+          : state.boss?.type === 'pendulum'
+            && (HANDS[hand].rank ? 'upper' : 'lower') !== state.boss.requestedSection ? .5 : 1,
     lifetimeNormalShopGoldSpent: state.lifetimeNormalShopGoldSpent,
     fetchTarget: state.fetchTarget ? { ...state.fetchTarget } : null,
     flames: structuredClone(flameInstances(state)),

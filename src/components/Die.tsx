@@ -44,7 +44,7 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
   const playerLabel = `D${(rosterSlot ?? 0) + 1}`;
   const dieLabel = die.owner === 'boss' ? 'Cursed Die' : `Die ${(rosterSlot ?? 0) + 1}`;
   const temporaryState = mutation?.kind === 'snakeEyes' ? 'Snake-Eyed temporary face'
-    : mutation?.kind === 'infected' ? 'infected face; 3 fewer Pips; die effect suppressed' : '';
+    : mutation?.kind === 'infected' ? 'infected face; die effects suppressed' : '';
   const isFetchTarget = fetchTarget?.dieId === die.id && fetchTarget.physicalFace === die.value;
   const collectible = die.owner === 'player' ? die : null;
   const specialName = collectible?.effects.map(effect => SPECIAL_DICE[effect.type].name).join(' + ') || null;

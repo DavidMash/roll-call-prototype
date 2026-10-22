@@ -10,7 +10,7 @@ import {
 import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, planQualification } from './hands';
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
-import { activeEncounterDice, bossSchedule, isBigBossRound, unavailableEncounterHands } from './bosses';
+import { activeEncounterDice, bossSchedule, currentlyPlayableManualHands, isBigBossRound, unavailableEncounterHands } from './bosses';
 import { chapterNumberForRound, ensureChapterPlan } from './chapters';
 import { formatPlayerNumber } from './copy';
 import { appendCriticalDiagnostic, appendDebugTrace, createDebugTrace, normalizeDebugTrace, type DebugTraceMode } from './debugTrace';
@@ -393,6 +393,12 @@ export function availableShopStages(state: Pick<Board, 'forgeUnlocked' | 'flameS
 }
 
 export function validateAction(state: Board | GameState, action: Action): string | null {
+  if (action.type === 'RETREAT') {
+    if (state.phase !== 'round') return 'Retreat is only available during a gameplay Round.';
+    if (currentlyPlayableManualHands(state).length > 0) return 'Retreat is only available when no manual Hand can be played.';
+    if (state.lives <= 1) return 'Retreating would end the run.';
+    return null;
+  }
   if (action.type === 'CONTINUE_ROUND_SUMMARY') return state.phase === 'roundSummary' && !!state.roundSummary
     ? null : 'A completed encounter summary is required.';
   if (action.type === 'CONTINUE_INFERNO_EVALUATION') return state.phase === 'inferno' && !!state.infernoEvaluation
@@ -457,7 +463,7 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0) return 'Unlock a Warden die before committing another hand.';
     if (action.decisionMs !== undefined && (!Number.isFinite(action.decisionMs) || action.decisionMs < 0)) return 'Decision time must be a nonnegative number.';
     if (unavailableEncounterHands(state).includes(action.hand)) return state.boss?.type === 'marathon'
-      ? 'That hand is still cooling down.' : state.boss?.type === 'quickdraw' ? 'Quickdraw has no Lower shot remaining.' : 'That hand has already been consumed.';
+      ? 'That hand is still cooling down.' : 'That hand has already been consumed or is unavailable.';
     if (!state.bossSilenced && state.boss?.type === 'hexer' && !action.dieIds.includes(state.boss.cursedDieId)) return 'The Cursed Die must participate in every hand.';
     const qualification = planQualification(activeEncounterDice(state), action.hand, action.dieIds,
       { roundState: state.dieRoundState, claims: action.qualificationClaims });
@@ -734,6 +740,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
             resource: 'invocation' as const, amount: 1 };
         }) ?? []); break;
       case 'MANUAL_REROLL': resolver.manualReroll(action.dieIds); break;
+      case 'RETREAT': resolver.retreat(); break;
       case 'INVOKE_CHAMELEON': resolver.invokeChameleon(action.dieId); break;
       case 'INVOKE_FLYWHEEL': resolver.invokeFlywheel(action.dieId); break;
       case 'ARM_MAGIC': resolver.armMagic(action.dieId, action.face); break;

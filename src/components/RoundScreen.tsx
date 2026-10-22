@@ -3,14 +3,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { validateAction } from '../game/engine';
 import { captureHandStart, composeXMult, handXMultContributions,
   hasOwnedFlame, isGuaranteedWinningPlay, speedDemonMultiplier } from '../game/flames';
-import { hasPlayableHand, HANDS, planQualification } from '../game/hands';
+import { HANDS, planQualification } from '../game/hands';
 import { finalizeScore, handScore } from '../game/scoring';
 import { canPlay, normalizeBoardSelection, selectBoardHand } from '../game/selection';
 import type { Selection } from '../game/selection';
 import type { Action, Board, GameEvent } from '../game/types';
 import { HandScorecard } from './HandList';
 import { ScoreResolution } from './ScoreResolution';
-import { activeEncounterDice, lastPlayDanger, requiredEncounterDieIds, unavailableEncounterHands } from '../game/bosses';
+import { activeEncounterDice, currentlyPlayableManualHands, lastPlayDanger, requiredEncounterDieIds, unavailableEncounterHands } from '../game/bosses';
 import { BossPanel } from './BossPanel';
 import { CONFIG } from '../game/config';
 import { formatPlayerNumber, formatScoreEquation, formatScoreProgress, playActionLabel } from '../game/copy';
@@ -88,7 +88,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     ? `, PLUS ${carePackageRerolls} CARE PACKAGE REROLL${carePackageRerolls === 1 ? '' : 'S'}` : ''}`;
   const rerollVisualResourceText = `${board.manualRerollsRemaining} LEFT${carePackageRerolls ? ` + ${carePackageRerolls}` : ''}`;
   const normalRerollFill = Math.max(0, Math.min(1, board.manualRerollsRemaining / CONFIG.manualRerollsPerRound));
-  const deadBoard = !hasPlayableHand(encounterDice, unavailableHands, requiredDieIds, board.dieRoundState);
+  const deadBoard = currentlyPlayableManualHands(board).length === 0;
   const speedStrength = (speedDemonMultiplier(100, decisionMs) - 1) / 4;
   const speedReveal = event?.type === 'SPEED_DEMON_REVEALED' ? event : null;
   const scorecardRefreshing = event?.type === 'SCORECARD_REFRESHED';
@@ -142,8 +142,15 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
       <span aria-hidden="true">BOARD REFRESH</span>
       <strong aria-hidden="true">+2 TEMPER · ALL HANDS REFRESHED</strong>
     </div>}
-    {!busy && !awaitingWardenChoice && deadBoard && manualRerolls > 0 && <Alert className="round-status" color="orange" py={5} title="NO PLAYABLE HANDS" role="status">
-      Use a Reroll.
+    {!busy && !awaitingWardenChoice && deadBoard && <Alert className="round-status retreat-status" color="orange" py={5}
+      title="NO PLAYABLE HANDS" role="status" data-testid="retreat-panel">
+      <Group justify="space-between" align="center" gap="xs">
+        <Text size="sm">{board.lives > 1 ? 'Lose 1 Life and return to the previous Shop.'
+          : 'Retreating costs 1 Life. You only have 1 Life remaining.'}</Text>
+        <Button size="compact-sm" color="orange" disabled={board.lives <= 1}
+          onClick={() => submit({ type: 'RETREAT' })} data-testid="retreat-action">RETREAT</Button>
+      </Group>
+      {manualRerolls > 0 && <Text size="xs" c="dimmed" mt={3}>Use a Reroll.</Text>}
     </Alert>}
     {(board.hotStreakGoal || board.targetPracticeHand) && <Paper p="xs" className="flame-goals"><Group gap="lg">
       {board.hotStreakGoal && <Text size="xs"><strong>🔥 HOT STREAK → {HANDS[board.hotStreakGoal].name}</strong></Text>}

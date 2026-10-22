@@ -18,24 +18,23 @@ function hexerState(): GameState {
 }
 
 describe('Hexer Cursed Die face/scoring coherence', () => {
-  it('keeps face 7 distinct from its intentional 57-Pip scoring value', () => {
+  it('scores the plain seventh face as 7 Pips through the temporary Sevens hand', () => {
     const state = hexerState();
     const cursed = state.encounterDice[0];
     cursed.value = 7;
-    state.diceInventory.instances[0].value = 1;
-    state.diceInventory.instances[1].value = 1;
-    const selected = [cursed.id, 0, 1];
+    const selected = [cursed.id];
 
     expect(activeFace(cursed).rank).toBe(7);
-    expect(scoringPips(activeFace(cursed))).toBe(57);
-    expect(planQualification(state.dice, 'threeKind', selected, { roundState: state.dieRoundState }).legal).toBe(true);
+    expect(scoringPips(activeFace(cursed))).toBe(7);
+    expect(planQualification(state.dice, 'sevens', selected, { roundState: state.dieRoundState }).legal).toBe(true);
+    expect(cursed.faces.every(face => !('hexerEffect' in face))).toBe(true);
 
-    const result = dispatch(state, { type: 'PLAY', hand: 'threeKind', dieIds: selected }, constant(.7));
+    const result = dispatch(state, { type: 'PLAY', hand: 'sevens', dieIds: selected }, constant(.7));
     expect(result.error).toBeUndefined();
     const scored = [...result.state.historyV2].reverse().find(event => event.kind === 'hand_scored');
     if (!scored || scored.kind !== 'hand_scored') throw new Error('Expected Hexer hand history.');
-    expect(scored.scoringDice.find(die => die.dieId === -1)).toMatchObject({ face: 7, pips: 57 });
-    expect(renderHandScoredV2(scored)).toContain('Die #-1 face 7 · 57 Pips');
+    expect(scored.scoringDice.find(die => die.dieId === -1)).toMatchObject({ face: 7, pips: 7 });
+    expect(renderHandScoredV2(scored)).toContain('Sevens');
     expect(renderHandScoredV2(scored)).not.toContain('Die #-1=57');
 
     const nextCursed = result.state.encounterDice[0];

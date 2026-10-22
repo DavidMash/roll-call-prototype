@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { wardenUnlockCost, wardenUnlockCosts, wardenUnlockTarget } from './bosses';
+import { wardenUnlockCosts, wardenUnlockTarget } from './bosses';
 import { dispatch, newRun, normalizeGameState } from './engine';
 import { initialHandLevels } from './hands';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION, loadPersistedRun, savePersistedRun } from './persistence';
@@ -77,9 +77,9 @@ describe('exact score state, Warden, and attribution', () => {
   it('keeps Warden target addition and nearest-five behavior exact at huge scores', () => {
     const levels = initialHandLevels();
     const current = HUGE_GOAL + 3n;
-    const cost = wardenUnlockCost(levels, [], 1);
+    const cost = wardenUnlockCosts(levels, [], 10n ** 40n)[0];
     expect(wardenUnlockTarget(current, levels, [], 1)).toBe(roundScoreToStep(current + cost, 5n));
-    expect(wardenUnlockCosts(levels, [], 10n ** 40n)).toEqual([15n, 30n, 105n, 255n]);
+    expect(wardenUnlockCosts(levels, [], 10n ** 40n)).toEqual([10n, 25n, 85n, 205n]);
   });
 
   it('round-trips exact rollback state without number coercion', () => {

@@ -3,13 +3,13 @@ import type { Page } from '@playwright/test';
 import { dispatch, newRun } from '../src/game/engine';
 import { HAND_IDS } from '../src/game/hands';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
-import type { GameState, MiniBossType, RandomSource } from '../src/game/types';
+import type { BossType, GameState, RandomSource } from '../src/game/types';
 import { enterRun } from './uiHelpers';
 import { placeFlameInstance } from '../src/game/flames';
 
 const constant = (value = .2): RandomSource => ({ next: () => value });
 
-function shopBeforeMini(type: MiniBossType): GameState {
+function shopBeforeMini(type: BossType): GameState {
   const state = newRun(`browser-mini-${type}`, constant()).state;
   state.phase = 'shop';
   state.round = 2;

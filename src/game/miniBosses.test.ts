@@ -7,11 +7,11 @@ import { isChapterMapTransition, isPlaybackBarrier } from './playback';
 import { loadPersistedRun, savePersistedRun } from './persistence';
 import { postBossRewardForRound, routeThrough } from './progression';
 import { flameByType, placeFlameInstance } from './flames';
-import type { GameState, HandId, MiniBossType, RandomSource, Rank } from './types';
+import type { BossType, GameState, HandId, RandomSource, Rank } from './types';
 
 const constant = (value = 0): RandomSource => ({ next: () => value });
 
-function miniBossRound(type: MiniBossType, prepare?: (state: GameState) => void, random: RandomSource = constant(.2)): GameState {
+function miniBossRound(type: BossType, prepare?: (state: GameState) => void, random: RandomSource = constant(.2)): GameState {
   const state = newRun(`mini-${type}`, constant(.2)).state;
   state.phase = 'shop';
   state.shop = { stage: 'flames', offers: [], offerRerolls: 0, lifeRestores: 0 };
@@ -83,7 +83,7 @@ describe('six-Round encounter cadence', () => {
 });
 
 describe('Mini-Boss mechanics', () => {
-  it('The Juggler rerolls every physical player die after Upper hands, after scoring, without spending a Reroll', () => {
+  it('The Juggler adds one eligible die after Upper hands, after scoring, without spending a Reroll', () => {
     let state = miniBossRound('juggler');
     state.target = 1_000_000n;
     expose(state, [1, 2, 3, 4, 5]);
@@ -95,7 +95,7 @@ describe('Mini-Boss mechanics', () => {
     const scoreIndex = result.events.findIndex(event => event.type === 'HAND_SCORE_FINALIZED');
     const jugglerRoll = result.events.find(event => event.type === 'DICE_REROLL_STARTED' && event.rollReason === 'juggler');
     expect(triggerIndex).toBeGreaterThan(scoreIndex);
-    expect(jugglerRoll?.dieIds).toEqual([0, 1, 2, 3, 4]);
+    expect(jugglerRoll?.dieIds).toEqual([0, 2]);
     expect(result.state.manualRerollsRemaining).toBe(rerollsBefore);
     expect(result.state.stats.handScores).toHaveLength(scoresBefore + 1);
     expect(result.state.dice.map(die => die.faces)).toEqual(facesBefore);
@@ -104,20 +104,20 @@ describe('Mini-Boss mechanics', () => {
       .find(event => event.kind === 'boss_state_changed' && event.boss === 'juggler');
     const rollEvent = [...result.state.historyV2].reverse()
       .find(event => event.kind === 'roll_batch' && event.reason === 'juggler');
-    expect(bossEvent).toMatchObject({ hand: 'ones', dieIds: [0, 1, 2, 3, 4], state: 'triggered' });
-    expect(rollEvent).toMatchObject({ dieIds: [0, 1, 2, 3, 4], spend: null, parentSeq: scored?.seq });
+    expect(bossEvent).toMatchObject({ hand: 'ones', dieIds: [2], state: 'triggered' });
+    expect(rollEvent).toMatchObject({ dieIds: [0, 2], spend: null, parentSeq: scored?.seq });
 
     state = miniBossRound('juggler');
     state.target = 1_000_000n;
     state.dice[0].value = 6;
     result = dispatch(state, { type: 'PLAY', hand: 'sixes', dieIds: [0] }, constant(.4));
-    expect(result.events.find(event => event.rollReason === 'juggler')?.dieIds).toEqual([0, 1, 2, 3, 4]);
+    expect(result.events.find(event => event.rollReason === 'juggler')?.dieIds).toEqual([0, 2]);
 
     state = miniBossRound('juggler');
     state.target = 1n;
     state.dice[0].value = 1;
     result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.4));
-    expect(result.events.find(event => event.rollReason === 'juggler')?.dieIds).toEqual([0, 1, 2, 3, 4]);
+    expect(result.events.find(event => event.rollReason === 'juggler')?.dieIds).toEqual([0, 2]);
     expect([...result.state.historyV2].reverse().find(event => event.kind === 'roll_batch' && event.reason === 'juggler'))
       .toMatchObject({ context: 'settle' });
   });
@@ -211,12 +211,12 @@ describe('Mini-Boss mechanics', () => {
     expect(state.consumed).toContain('ones');
   });
 
-  it('The Neglected counts genuine extra plays, resets on a fresh attempt, and persists mid-attempt progress', () => {
+  it('The Neglected blocks unavailable Free Plays and persists mid-attempt progress', () => {
     let state = miniBossRound('neglected');
     state.target = 1_000_000n;
     state.dice[0].value = 2;
     new Resolver(state, constant(.2)).play('twos', [0], 'jumpingBean');
-    expect(state.boss).toMatchObject({ type: 'neglected', handsPlayed: 1, restored: false });
+    expect(state.boss).toMatchObject({ type: 'neglected', handsPlayed: 0, restored: false });
 
     let serialized = '';
     const storage = { getItem: () => serialized || null, setItem: (_key: string, value: string) => { serialized = value; } };
@@ -335,13 +335,12 @@ describe('Mini-Boss mechanics', () => {
 
   it('keeps all canonical Mini-Boss rules centralized', () => {
     expect(Object.fromEntries(MINI_BOSS_TYPES.map(type => [type, BOSSES[type].shortRule]))).toEqual({
-      juggler: 'All dice reroll when an Upper hand is played.',
       capitalReturn: 'Lose 1 Gold whenever you play a Lower hand.',
       neglected: 'Two of your least played hands are unavailable until 6 hands have been played.',
       tightrope: 'Start with 0 Rerolls. Goal is halved.',
       crawler: 'After every hand, only one scoring die rerolls.',
-      magician: 'One die disappears until you play 3 called Upper hands.',
-      mugger: 'One hidden Lower hand will steal 5 Gold if played.',
+      quickdraw: 'The first Lower hand scores normally. Later Lower hands score ×0.25.',
+      pendulum: 'Alternate between the requested Upper and Lower sections. A wrong-section Play scores ×0.5.',
     });
   });
 });

@@ -203,7 +203,7 @@ describe('Storage isolation and encounter-managed dice', () => {
     const before = structuredClone(stored);
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [rosterDice(state)[0].id] }, constant());
     const juggler = result.events.find(event => event.type === 'DICE_REROLL_STARTED' && event.message.includes('Juggler'));
-    expect(juggler?.dieIds).toEqual(rosterDice(result.state).map(die => die.id));
+    expect(juggler?.dieIds).toHaveLength(2);
     expect(juggler?.dieIds).not.toContain(storedId);
     expect(collectibleDieById(result.state, storedId)).toEqual(before);
     expect(result.state.gold).toBe(state.gold);

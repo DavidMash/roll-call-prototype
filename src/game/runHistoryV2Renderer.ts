@@ -27,7 +27,7 @@ function xMultLabel(contribution: XMultContribution): string {
     ? ` [${contribution.chargeSources.map(source => `${FLAMES[source.flame].name}${source.instanceId === undefined ? '' : ` #${number(source.instanceId)}`} ×${number(source.factor)}`).join(', ')}]` : ''}`;
   const source = contribution.sourceId in FLAMES
     ? FLAMES[contribution.sourceId as keyof typeof FLAMES].name
-    : String(contribution.sourceId);
+    : label(String(contribution.sourceId));
   const location = originLabel[contribution.origin];
   return `${location} ${source} ×${number(contribution.factor)}`;
 }

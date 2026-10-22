@@ -21,12 +21,13 @@ export function BossPanel({ board }: { board: Board }) {
       case 'warden': return boss.pendingReinforcements > 0 ? 'Choose a die to unlock'
         : `${formatPlayerNumber(boss.activeDieIds.length)} of 5 dice unlocked`;
       case 'hexer': return 'Cursed Die required';
-      case 'marathon': return 'Hands return after 7 plays';
-      case 'quickdraw': return boss.lowerShotUsed ? 'Lower shot spent' : '1 Lower shot available';
+      case 'marathon': return 'Hands return after 6 plays';
+      case 'quickdraw': return boss.lowerShotUsed ? 'Later Lower Plays ×0.25' : 'First Lower Play scores normally';
+      case 'pendulum': return `${boss.requestedSection.toUpperCase()} requested`;
       case 'fly': return boss.caught ? 'Caught' : `Catch: ${boss.flyHand ? HANDS[boss.flyHand].name : 'Lower hand'}`;
       case 'snakeEyes': return 'Scored faces become 1s';
       case 'infected': return `${formatPlayerNumber(boss.infectedFaces.length)} infected face${boss.infectedFaces.length === 1 ? '' : 's'}`;
-      case 'juggler': return 'Upper hand rerolls all dice';
+      case 'juggler': return 'Upper Play Rolls 1 extra die';
       case 'capitalReturn': return 'Lower hands cost 1 Gold';
       case 'neglected': return boss.restored ? 'Neglected hands restored'
         : `${formatPlayerNumber(boss.handsPlayed)} of 6 hands played`;
@@ -47,7 +48,8 @@ export function BossPanel({ board }: { board: Board }) {
         ? `Restored: ${boss.neglectedHands.map(hand => HANDS[hand].name).join(' and ')}.`
         : `Unavailable: ${boss.neglectedHands.map(hand => HANDS[hand].name).join(' and ')}. ${formatPlayerNumber(boss.handsPlayed)} of 6 hands played.`;
       case 'marathon': return `${Object.keys(boss.cooldowns).length} hand${Object.keys(boss.cooldowns).length === 1 ? '' : 's'} currently cooling down.`;
-      case 'quickdraw': return boss.lowerShotUsed ? `Lower shot used${boss.playedLowerHand ? ` on ${HANDS[boss.playedLowerHand].name}` : ''}.` : 'Your one Lower-hand shot is still available.';
+      case 'quickdraw': return boss.lowerShotUsed ? 'Every later Lower Play scores at ×0.25.' : 'Your first Lower Play scores normally.';
+      case 'pendulum': return `${boss.requestedSection.toUpperCase()} requested. Correct section scores fully and switches; wrong section scores ×0.5.`;
       default: return compactStatus;
     }
   })();

@@ -7,7 +7,6 @@ export const CONFIG = {
   maxLives: 3,
   manualRerollsPerRound: 3,
   roundRewardBase: 5,
-  infectedFacePipPenalty: 3,
   interestInterval: 5,
   interestCap: 10,
   offerRerollBase: 3,

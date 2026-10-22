@@ -68,6 +68,8 @@ button { font: inherit; }
 .scorecard-header { min-height: 25px; padding: 0 4px 5px; }
 .scorecard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: start; }
 .scorecard-section { min-width: 0; overflow: hidden; border-radius: 6px; background: var(--mantine-color-dark-8); }
+.scorecard-section.pendulum-requested { box-shadow: inset 0 0 0 1px rgba(56,189,248,.72), 0 0 12px rgba(56,189,248,.16); background: color-mix(in srgb, #38bdf8 7%, var(--mantine-color-dark-8)); transition: box-shadow 150ms ease, background 150ms ease; }
+.scorecard-section.pendulum-requested .scorecard-section-title { color: #7dd3fc; }
 .scorecard-section-title { height: 22px; display: flex; align-items: center; padding: 0 9px; color: var(--mantine-color-gray-5); background: rgba(255,255,255,.025); letter-spacing: .1em; }
 .scorecard-rows { display: grid; }
 .scorecard-row-shell { min-width: 0; position: relative; }
@@ -94,6 +96,7 @@ button { font: inherit; }
 .ultimate-badge, .magician-call-badge { height: 14px; padding-inline: 4px; font-size: .46rem; letter-spacing: .025em; }
 .well-trained-preview { color: var(--mantine-color-violet-3); font-size: .52rem; font-weight: 750; white-space: nowrap; }
 .scorecard-row.unavailable:disabled { opacity: .35; }
+.scorecard-row.impossible:disabled { opacity: .42; filter: saturate(.35); }
 .scorecard-row.consumed:disabled { opacity: .56; background: rgba(255,255,255,.018); }
 .scorecard-row.unavailable .scorecard-name-line, .scorecard-row.consumed .scorecard-name-line { color: var(--mantine-color-gray-4); }
 .scorecard-row.consumed .scorecard-row-result { color: var(--mantine-color-gray-4); }
@@ -695,6 +698,15 @@ button { font: inherit; }
   .active-gameplay .boss-info-button { width: 25px; min-width: 25px; height: 25px; }
   .active-gameplay .round-status { min-height: 18px; max-height: 24px; overflow: hidden; }
   .active-gameplay .round-status.mantine-Alert-root { padding: 2px 6px; }
+  .active-gameplay .round-status.retreat-status {
+    min-height: 48px;
+    max-height: 56px;
+    overflow: visible;
+  }
+  .active-gameplay .retreat-status .mantine-Alert-label,
+  .active-gameplay .retreat-status .mantine-Alert-message,
+  .active-gameplay .retreat-status .mantine-Text-root { font-size: .64rem; line-height: 1.1; }
+  .active-gameplay .retreat-status .mantine-Button-root { min-height: 25px; height: 25px; }
   .active-gameplay .flame-goals { padding: 3px 5px !important; overflow: hidden; }
   .active-gameplay .flame-goals .mantine-Group-root { min-width: 0; flex-wrap: nowrap; gap: 8px !important; }
   .active-gameplay .flame-goals .mantine-Text-root { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -84,7 +84,7 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText }: {
         </>}
       </div>
       {score.bossFactor !== 1 && <div className="score-boss-stage" data-testid="hand-boss-factor">
-        <span>×</span><small>BOSS MODIFIER</small><strong>{formatPlayerNumber(score.bossFactor)}</strong>
+        <span>×</span><small>{score.bossLabel}</small><strong>{formatPlayerNumber(score.bossFactor)}</strong>
       </div>}
       {score.callout && <Text key={event?.id} className="score-effect-callout score-tick" fw={800}>
         {scoreDieType && <DieTypeIcon type={scoreDieType} />} {score.callout}

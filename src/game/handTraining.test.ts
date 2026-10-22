@@ -13,6 +13,7 @@ import type { GameState, HandId, HandLevels, Rank } from './types';
 const constant = (value = 0.99) => ({ next: () => value });
 const expectedLevelOne: Record<HandId, [number, number]> = {
   ones: [7, 1], twos: [7, 1], threes: [7, 1], fours: [7, 1], fives: [7, 1], sixes: [7, 1],
+  sevens: [7, 1],
   pair: [8, 1.5], twoPair: [9, 2], threeKind: [10, 2.5], smallStraight: [10, 2.5],
   fullHouse: [12, 3.5], fourKind: [13, 4], largeStraight: [13, 4], fiveKind: [15, 5],
 };
