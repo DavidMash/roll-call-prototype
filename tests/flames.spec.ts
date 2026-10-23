@@ -15,13 +15,33 @@ function reward(flame: Flame = 'ultimate'): GameState {
 }
 
 test('Flame reward fills the first empty global slot without asking for a carrier die', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
   const state = reward();
+  state.flameSelection!.offers = [
+    { id: 51, flame: 'ultimate' }, { id: 52, flame: 'thirdRail' }, { id: 53, flame: 'speedDemon' },
+  ];
   placeFlameInstance(state, 'minigun', 20, 0);
   placeFlameInstance(state, 'hailMary', 100, 2);
   await installRunState(page, state);
   await enterRun(page);
 
-  await expect(page.getByTestId('global-flame-slots')).toContainText('2 / 5');
+  await expect(page.getByTestId('flames-strip')).toContainText('FLAMES · 2/5');
+  await expect(page.getByTestId('flames-strip').locator('[data-testid^="active-flame-"]')).toHaveCount(2);
+  await expect(page.getByText(/YOUR FLAMES/i)).toHaveCount(0);
+  await expect(page.getByTestId('global-flame-slots')).toHaveCount(0);
+  await expect(page.getByTestId('dice-dock')).toHaveAttribute('data-phase', 'flameSelection');
+  await expect(page.getByRole('button', { name: 'SKIP REWARD' })).toBeVisible();
+  const cards = page.locator('.flame-offer');
+  await expect(cards).toHaveCount(3);
+  const boxes = await cards.evaluateAll(elements => elements.map(element => {
+    const box = element.getBoundingClientRect();
+    return { top: box.top, width: box.width, left: box.left, right: box.right };
+  }));
+  expect(boxes[1].top).toBeGreaterThan(boxes[0].top);
+  expect(boxes[2].top).toBeGreaterThan(boxes[1].top);
+  expect(boxes.every(box => box.width > 260 && box.left >= 0 && box.right <= 320)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: test.info().outputPath('flame-selection-320.png'), fullPage: true });
   await page.getByTestId('flame-offer-ultimate').getByRole('button', { name: 'SELECT FLAME' }).click();
   await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
 
@@ -80,13 +100,13 @@ test('Fire Keeping renders only owned Flames and stokes an instance in place int
   await expect(page.getByTestId('fire-keeping-shop')).not.toContainText('EMPTY');
   const card = page.getByTestId(`fire-keeping-flame-${flame.instanceId}`);
   await expect(card).toContainText('EMBER');
-  await expect(card).toContainText('Complete this Bonfire: +10 Temper');
+  await expect(card).toContainText('Complete this Bonfire: T+10');
   await page.screenshot({ path: test.info().outputPath('fire-keeping-one-flame-mobile.png'), fullPage: true });
   await card.getByRole('button', { name: 'MANAGE FLAME' }).click();
   const dialog = page.getByRole('dialog', { name: 'Double Down' });
-  await expect(dialog).toContainText('Complete this Bonfire: +10 Temper');
+  await expect(dialog).toContainText('Complete this Bonfire: T+10');
   await dialog.getByRole('button', { name: 'Increase investment' }).click();
-  await dialog.getByRole('button', { name: 'STOKE 1 GOLD' }).click();
+  await dialog.getByRole('button', { name: 'STOKE 1 Gold' }).click();
   await expect(card).toContainText('BONFIRE');
 
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state as GameState, RUN_STORAGE_KEY);
@@ -103,7 +123,8 @@ test('global Flame details remain available during a Round without appearing on 
   await expect(page.locator('.die-flame-cap')).toHaveCount(0);
   await page.getByRole('button', { name: /View Momentum ember details/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Momentum' });
-  await expect(dialog).toContainText('Investment: 25 / 100 Gold');
+  await expect(dialog).toContainText('Investment: G25 / G100');
+  await expect(dialog.getByLabel('25 Gold')).toBeVisible();
   await expect(dialog).toContainText('Current Effect: +0.125 Charge per Play');
   await expect(dialog.getByLabel('Stoke amount for Momentum')).toHaveCount(0);
 });
@@ -119,7 +140,7 @@ test('global Flame state survives a responsive reload with exact instance identi
   await enterRun(page);
 
   await page.getByRole('button', { name: /View Fetch ember details/ }).click();
-  await expect(page.getByRole('dialog', { name: 'Fetch' })).toContainText('Investment: 44 / 100 Gold');
+  await expect(page.getByRole('dialog', { name: 'Fetch' })).toContainText('Investment: G44 / G100');
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state as GameState, RUN_STORAGE_KEY);
   expect(flameByType(saved, 'fetch')).toMatchObject({ instanceId: flame.instanceId });
   expect(saved.fetchTarget).toEqual(state.fetchTarget);

@@ -2,7 +2,7 @@ import { ActionIcon, Badge, Box, Button, Divider, Drawer, Group, Progress, Segme
 import { useState } from 'react';
 import { CONFIG } from '../game/config';
 import type { Board } from '../game/types';
-import { FLAMES } from '../game/flames';
+import { flameInstances, FLAMES, FLAME_SLOT_COUNT } from '../game/flames';
 import type { PlaybackSpeed } from '../useGame';
 import type { DiceDisplay } from '../uiSettings';
 import { formatExactScore, formatPlayerNumber } from '../game/copy';
@@ -11,13 +11,13 @@ import { chapterPosition } from '../game/chapters';
 import type { FlameDetailsTarget } from './FlameDetailsModal';
 import { infernoMultiplier, infernoRoman } from '../game/engulfment';
 import { exactRatioNumber } from '../game/scoreMath';
+import { CurrencyAmount, type Currency } from './CurrencyAmount';
 
-function HudStat({ testId, icon, label, value }: { testId: string; icon: string; label: string; value: number }) {
+function HudStat({ testId, currency, label, value }: { testId: string; currency: Currency; label: string; value: number }) {
   const formatted = formatPlayerNumber(value);
   return <div className="hud-stat" data-testid={testId} aria-label={`${label} ${formatted}`}>
-    <span aria-hidden="true" className="hud-stat-icon">{icon}</span>
     <span className="hud-stat-label">{label}</span>
-    <strong>{formatted}</strong>
+    <strong><CurrencyAmount currency={currency} value={value} accessible={false} /></strong>
   </div>;
 }
 
@@ -59,8 +59,8 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
             <span className="hud-stage-segment"><span className="hud-stage-letter">R</span>{formatPlayerNumber(chapter.chapterRound)}</span>
           </strong>
         </div>
-        <HudStat testId="stat-gold" icon="●" label="Gold" value={board.gold} />
-        <HudStat testId="stat-temper" icon="◆" label="Temper" value={board.temper} />
+        <HudStat testId="stat-gold" currency="gold" label="Gold" value={board.gold} />
+        <HudStat testId="stat-temper" currency="temper" label="Temper" value={board.temper} />
         {board.phase === 'shop'
           ? <Tooltip label="Restore lost lives" withArrow><UnstyledButton className="hud-lives interactive" data-testid="stat-lives"
             data-tutorial="lives"
@@ -74,8 +74,9 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
     {board.phase === 'round' && <Progress data-testid="round-goal-progress"
       value={board.target > 0n ? Math.min(100, exactRatioNumber(board.score, board.target) * 100) : 0} size={4} radius={0}
       aria-label="Round Goal progress" aria-valuetext={`${formatExactScore(board.score)} of ${formatExactScore(board.target)} points toward the Goal`} />}
-    {board.flameSlots.some(Boolean) && <Group gap={4} px="xs" py={3} className="bonfire-strip" data-tutorial="flames" aria-label="Active Flames">
-      <Text size="xs" fw={700} c="orange">FLAMES</Text>{board.flameSlots.flatMap(flame => flame ? [<Badge component="button" type="button" key={flame.instanceId}
+    {(board.flameSlots.some(Boolean) || board.phase === 'flameSelection') && <Group gap={4} px="xs" py={3} className="bonfire-strip" data-tutorial="flames"
+      data-testid="flames-strip" aria-label={`${flameInstances(board).length} of ${FLAME_SLOT_COUNT} Flames owned`}>
+      <Text size="xs" fw={700} c="orange">FLAMES · {flameInstances(board).length}/{FLAME_SLOT_COUNT}</Text>{board.flameSlots.flatMap(flame => flame ? [<Badge component="button" type="button" key={flame.instanceId}
         data-testid={`active-flame-${flame.instanceId}`} size="xs" color={flame.stage === 'bonfire' ? 'red' : 'orange'} variant="light" className="flame-detail-trigger" aria-label={`View ${FLAMES[flame.type].name} ${flame.stage} details`}
         onClick={() => openFlameDetails({ flameInstanceId: flame.instanceId, kind: flame.stage })}>🔥 {FLAMES[flame.type].shortName}</Badge>] : [])}
     </Group>}

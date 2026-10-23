@@ -329,7 +329,9 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
           add(experienced.temperSpentBySource, event.source as TemperSpendSource, event.amount);
         }
         break;
-      case 'engulfment_attempted': experienced.flameLifecycle.engulfed += event.flamesSnuffed.length; break;
+      case 'engulfment_attempted':
+        if (event.success && !abandoned) experienced.flameLifecycle.engulfed++;
+        break;
       case 'charge_changed':
         if (event.operation === 'gain') experienced.charge.gains += Math.max(0, event.after - event.before);
         else if (event.operation === 'arm') experienced.charge.arms++;

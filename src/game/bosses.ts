@@ -44,7 +44,7 @@ export const BOSSES: Record<BossType, BossDefinition> = {
   },
   magician: {
     name: 'THE MAGICIAN',
-    shortRule: 'One die disappears until you play 3 called Upper hands.',
+    shortRule: 'One die disappears until you play 3 called Upper hands, but you have twice as many Manual Rerolls.',
     primary: '#7C3AED',
     secondary: '#C4B5FD',
   },
@@ -86,7 +86,7 @@ export const BOSSES: Record<BossType, BossDefinition> = {
   },
   fly: {
     name: 'THE FLY',
-    shortRule: 'Your played hands are weakened until you catch The Fly on the marked Lower hand.',
+    shortRule: 'Your played hands are weakened until you catch The Fly on the marked Lower hand, but you have twice as many Manual Rerolls.',
     primary: '#92400E',
     secondary: '#D97706',
   },

@@ -7,6 +7,7 @@ import {
   selectInfernoFeedback,
 } from './engulfment';
 import { placeFlameInstance } from './flames';
+import { summarizeRunHistoryV2 } from './runHistoryV2Summary';
 import type { GameState, RandomSource } from './types';
 
 const constant: RandomSource = { next: () => .5 };
@@ -60,6 +61,9 @@ describe('Inferno evaluation and consumption', () => {
     new Resolver(game, constant).engulfNow();
     expect(game.flameSlots.map(flame => flame?.instanceId ?? null)).toEqual([first.instanceId, null, null, null, last.instanceId]);
     expect(game.chargeAttribution[middle.instanceId]).toBeUndefined();
+    const event = [...game.historyV2].reverse().find(item => item.kind === 'engulfment_attempted');
+    expect(event).toMatchObject({ success: true, infernoLevelBefore: 0, infernoLevelAfter: 1 });
+    expect(summarizeRunHistoryV2(game.historyV2, game).experienced.flameLifecycle.engulfed).toBe(1);
   });
   it('preserves Inferno hand normalization behavior', () => {
     const game = state();

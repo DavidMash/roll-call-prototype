@@ -19,7 +19,8 @@ describe('FlameSelectionScreen', () => {
       board={board} event={null} busy={false} selectedOffer={null}
       setSelectedOffer={() => {}} submit={() => {}} skip={() => {}} openFlameDetails={() => {}}
     /></MantineProvider>);
-    expect(html).toContain('Your Flames · 5 / 5');
+    expect(html).not.toContain('Your Flames');
+    expect(html).not.toContain('global-flame-slots');
     expect(html).toContain('Third Rail');
     expect(html).toContain('SELECT TO REPLACE');
   });

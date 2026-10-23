@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-  activeEncounterDice, bossTypeForRound, BOSS_TYPES, createBossRuntime, createCursedDie,
+  activeEncounterDice, bossTypeForRound, BOSSES, BOSS_TYPES, createBossRuntime, createCursedDie,
   currentlyPlayableManualHands, isBigBossType, isMiniBossType, MINI_BOSS_TYPES,
 } from './bosses';
 import { dispatch, newRun, validateAction } from './engine';
 import { Resolver } from './effects';
-import { handIsStructurallyImpossible, HAND_IDS, upperBaselineLevel } from './hands';
+import { handIsStructurallyImpossible, HANDS, HAND_IDS, upperBaselineLevel } from './hands';
 import { createDieEffect, resetDieRoundState } from './specialDice';
+import { renderRunHistoryV2Event } from './runHistoryV2Renderer';
 import type { BossType, GameState, RandomSource, Rank } from './types';
 
 const constant = (value = .2): RandomSource => ({ next: () => value });
@@ -24,6 +25,12 @@ function encounter(type: BossType, values: Rank[] = [1, 2, 3, 5, 6]): GameState 
 }
 
 describe('boss fairness roster and structural availability', () => {
+  it('explains doubled Magician and Fly rerolls without exposing hidden assistance', () => {
+    for (const type of ['magician', 'fly'] as const) {
+      expect(BOSSES[type].shortRule).toMatch(/twice as many Manual Rerolls/i);
+      expect(BOSSES[type].shortRule).not.toMatch(/mercy|rig|assistance|qualified-hand/i);
+    }
+  });
   it('uses the final active tier rosters and chapter unlock bands', () => {
     expect(MINI_BOSS_TYPES).toEqual(['capitalReturn', 'neglected', 'tightrope', 'crawler', 'quickdraw', 'pendulum']);
     expect(BOSS_TYPES).toEqual(['magician', 'juggler', 'caller', 'warden', 'hexer', 'marathon', 'fly', 'snakeEyes', 'infected']);
@@ -81,9 +88,14 @@ describe('revised encounter mechanics', () => {
     new Resolver(pendulum, constant()).play('pair', [0, 1]);
     expect(pendulum.stats.handScores.at(-1)!.bossFactor).toBe(.5);
     expect(pendulum.boss.requestedSection).toBe('upper');
+    const wrong = pendulum.historyV2.filter(event => event.kind === 'hand_scored').at(-1)!;
+    expect(renderRunHistoryV2Event(wrong)).toContain('Pendulum ×0.5 · remained on UPPER');
+    expect(renderRunHistoryV2Event(wrong)).not.toContain('requested section: LOWER');
     new Resolver(pendulum, constant()).play('ones', [2]);
     expect(pendulum.stats.handScores.at(-1)!.bossFactor).toBe(1);
     expect(pendulum.boss.requestedSection).toBe('lower');
+    const correct = pendulum.historyV2.filter(event => event.kind === 'hand_scored').at(-1)!;
+    expect(renderRunHistoryV2Event(correct)).toContain('Pendulum requested section: LOWER');
   });
 
   it('doubles only normal rerolls for Magician and Fly', () => {
@@ -95,6 +107,18 @@ describe('revised encounter mechanics', () => {
       expect(state.manualRerollsRemaining).toBe(6);
       expect(state.specialOfferEffects.carePackageRerolls).toBe(2);
     }
+  });
+
+  it('records the actual Caller hand at encounter initialization', () => {
+    const state = newRun('caller-history-target', constant()).state;
+    state.round = 6;
+    state.bossSchedule[6] = 'caller';
+    new Resolver(state, constant()).startRound();
+    if (state.boss?.type !== 'caller') throw new Error('Expected Caller.');
+    const called = [...state.historyV2].reverse().find(event => event.kind === 'boss_state_changed'
+      && event.boss === 'caller' && event.change === 'called');
+    expect(called).toMatchObject({ hand: state.boss.calledHand });
+    expect(called && renderRunHistoryV2Event(called)).toContain(`Caller called ${HANDS[state.boss.calledHand].name}`);
   });
 
   it('rigs only Magician final manual and post-Play random opportunities to existing called faces', () => {
@@ -156,6 +180,8 @@ describe('revised encounter mechanics', () => {
     state.manualRerollsRemaining = 0;
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(0));
     expect(result.state.boss).toMatchObject({ type: 'fly', mercyActive: true, flyHand: 'pair' });
+    const movement = [...result.state.historyV2].reverse().find(event => event.kind === 'boss_state_changed' && event.boss === 'fly');
+    expect(movement && renderRunHistoryV2Event(movement)).toContain('Fly moved to Pair');
   });
 
   it('routes Free Plays through Warden and Hexer legality while retaining encounter score rules', () => {

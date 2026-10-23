@@ -883,6 +883,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         resolver.emit({ type: replaced ? 'FLAME_REPLACED' : 'FLAME_ACQUIRED', flame: offer.flame, rarity: FLAMES[offer.flame].rarity,
           message: replaced ? `Flame slot ${slot + 1} replaced ${FLAMES[replaced.type].name} with ${FLAMES[offer.flame].name}; prior investment was lost`
             : `Flame slot ${slot + 1} acquired ${FLAMES[offer.flame].name} as a 0-Gold Ember` });
+        resolver.recordUltimateTargets('acquired', offer.flame === 'ultimate');
         resolver.openShop();
         break;
       }
@@ -971,6 +972,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         next.stats.trainingGoldSpent += cost;
         resolver.emit({ type: 'TRAINING_PURCHASED', hand: action.hand, goldSpendSource: 'handTraining', amount: cost,
           message: `${HANDS[action.hand].name} trained to level ${formatPlayerNumber(toLevel)}` });
+        resolver.recordUltimateTargets('training');
         break;
       }
       case 'RESTORE_LIFE': {

@@ -8,6 +8,7 @@ import { scoreAnnouncement, scorePresentation, type ScoreMetric } from '../game/
 import type { ReactNode } from 'react';
 import { DieTypeIcon, DieTypeLabel } from './DieTypeLabel';
 import { isSpecialDieType, SPECIAL_DICE } from '../game/specialDice';
+import { CurrencyAmount } from './CurrencyAmount';
 
 function ScoreBox({ label, value, color, active, tutorial }: {
   label: 'INFERNO' | 'PIPS' | 'MULT' | 'XMULT';
@@ -51,9 +52,9 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText }: {
   else if (event?.flame) heading = FLAMES[event.flame].name.toUpperCase();
   else if (isSpecialDieType(event?.dieType)) heading = <DieTypeLabel type={event.dieType} />;
   else if (event?.type === 'TRAINING_PURCHASED' && event.hand) heading = `${HANDS[event.hand].name} · Lv. ${formatPlayerNumber(event.board.handLevels[event.hand])}`;
-  else if (event?.type === 'GOLD_ADDED') heading = `+${formatPlayerNumber(typeof event.amount === 'number' ? event.amount : 0)} Gold`;
-  else if (event?.type === 'TEMPER_CHANGED') heading = `${typeof event.amount === 'number' && event.amount > 0 ? '+' : ''}${formatPlayerNumber(typeof event.amount === 'number' ? event.amount : 0)} Temper`;
-  else if (event?.type === 'SCORECARD_REFRESHED') heading = 'BOARD REFRESH · +2 TEMPER';
+  else if (event?.type === 'GOLD_ADDED') heading = <CurrencyAmount currency="gold" value={typeof event.amount === 'number' ? event.amount : 0} sign="+" />;
+  else if (event?.type === 'TEMPER_CHANGED') heading = <CurrencyAmount currency="temper" value={Math.abs(typeof event.amount === 'number' ? event.amount : 0)} sign={typeof event.amount === 'number' && event.amount < 0 ? '−' : '+'} />;
+  else if (event?.type === 'SCORECARD_REFRESHED') heading = <>BOARD REFRESH · <CurrencyAmount currency="temper" value={2} sign="+" /></>;
   else if (event?.type === 'MANUAL_REROLL_STARTED') heading = 'Reroll';
   else if (event?.type === 'DEAD_BOARD') heading = 'Use a Reroll';
   else if (event?.type === 'DEAD_BOARD_RESCUED') heading = 'Dead board rescued';

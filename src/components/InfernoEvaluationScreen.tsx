@@ -4,6 +4,7 @@ import { engulfmentAnimationProfile, engulfmentAssetKey, infernoEvaluationDurati
 import { formatExactScore, formatPlayerNumber } from '../game/copy';
 import { FLAMES } from '../game/flames';
 import type { Action, Board, EngulfmentAssetRef } from '../game/types';
+import { CurrencyAmount } from './CurrencyAmount';
 
 export const INFERNO_RESULT_REVEAL_PAUSE_MS = 180;
 
@@ -68,7 +69,7 @@ export function InfernoEvaluationScreen({ board, submit }: {
       <Stack gap={3} mt="md">
         <Text fw={800}>Upper hand levels unify → Lv.{formatPlayerNumber(evaluation.upper.unifiedLevel)}</Text>
         <Text fw={800}>Lower hand levels unify → Lv.{formatPlayerNumber(evaluation.lower.unifiedLevel)}</Text>
-        <Text size="sm" c="orange" fw={900} mt={5}>Successful Engulfment: +25 Temper</Text>
+        <Text size="sm" c="orange" fw={900} mt={5}>Successful Engulfment: <CurrencyAmount currency="temper" value={25} sign="+" /></Text>
         <Text size="xs" c="red.3" fw={800} mt={5}>Engulfment cannot be undone.</Text>
       </Stack>
     </Paper>
@@ -89,7 +90,7 @@ export function InfernoEvaluationScreen({ board, submit }: {
     </Badge>)}</div>
     <Text>Upper hands unified → Lv.{formatPlayerNumber(evaluation.upper.unifiedLevel)}</Text>
     <Text>Lower hands unified → Lv.{formatPlayerNumber(evaluation.lower.unifiedLevel)}</Text>
-    <Text c="orange" fw={900}>+25 TEMPER</Text>
+    <Text c="orange" fw={900}><CurrencyAmount currency="temper" value={25} sign="+" /></Text>
     {evaluation.consumedFinalFlame && <Text c="orange">The Inferno craves more Flames.</Text>}
     <Button color="red" variant="white" onClick={() => submit({ type: 'CONTINUE_INFERNO_EVALUATION' })}>CONTINUE</Button>
   </Stack>;

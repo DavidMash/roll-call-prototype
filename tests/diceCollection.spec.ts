@@ -74,7 +74,10 @@ test('Shop uses clickable Mantine tabs, global Gold/Temper, Back-to-Shop copy, a
   await expect(page.getByText(/REROLL ALL DICE/i)).toHaveCount(0);
   await expect(page.getByRole('button', { name: /REROLL OFFERS/i })).toBeVisible();
   await expect(page.getByTestId('stat-gold')).toBeVisible();
-  await expect(page.getByTestId('stat-temper')).toContainText('12');
+  await expect(page.getByTestId('stat-gold')).toHaveAttribute('aria-label', 'Gold 100');
+  await expect(page.getByTestId('stat-gold').locator('.currency-symbol')).toHaveText('G');
+  await expect(page.getByTestId('stat-temper')).toHaveAttribute('aria-label', 'Temper 12');
+  await expect(page.getByTestId('stat-temper').locator('.currency-symbol')).toHaveText('T');
   await expect(page.getByTestId('shop-stage-gold')).toHaveCount(0);
   await expect(page.getByTestId('shop-stage-temper')).toHaveCount(0);
   await expect(page.getByTestId('dice-dock')).toHaveCount(0);
@@ -105,7 +108,7 @@ test('Forge uses the compact equation and click-placement without committing inv
   await expect(page.getByTestId('forge-shop')).not.toContainText('INGREDIENT 1');
   await expect(page.getByTestId('forge-shop')).not.toContainText('TRUE FORGE');
   await expect(page.getByTestId('forge-result-preview')).toBeVisible();
-  await expect(page.getByTestId('forge-preview')).toContainText('3 TEMPER');
+  await expect(page.getByTestId('forge-preview')).toContainText('T3');
   await page.screenshot({ path: test.info().outputPath('forge-preview-mobile.png'), fullPage: true });
   await page.getByTestId('forge-result-preview').click();
   await page.getByTestId('collection-slot-roster-2').locator('.collection-slot-main').click();

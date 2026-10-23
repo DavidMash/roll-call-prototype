@@ -44,7 +44,14 @@ function sideEffectLabel(effect: HandScoredEvent['sideEffects'][number]): string
       : `${die(effect.dieId)} Curtain Call Free Play before Manual Reroll · ×${number(effect.pipsMultiplier)} die Pips`;
     case 'sustainable': return `${die(effect.dieId)} Sustainable preserved ${HANDS[effect.hand].name} (${number(effect.chargesRemaining)} left)`;
     case 'conjoined': return `${die(effect.dieId)} Conjoined duplicated itself for ${HANDS[effect.hand].name} Qualification and Scoring`;
-    case 'boss_state': return `${label(effect.boss)} ${label(effect.change)}`;
+    case 'boss_state': {
+      if (effect.boss === 'caller' && effect.change === 'CALLER_CALLED' && effect.hand) return `Caller called ${HANDS[effect.hand].name}`;
+      if (effect.boss === 'fly' && effect.state === 'target' && effect.hand) return `Fly moved to ${HANDS[effect.hand].name}`;
+      if (effect.boss === 'fly' && effect.state === 'caught' && effect.hand) return `Fly caught on ${HANDS[effect.hand].name}`;
+      if (effect.boss === 'pendulum' && effect.state?.startsWith('requested_')) return `Pendulum requested section: ${effect.state.slice(10).toUpperCase()}`;
+      if (effect.boss === 'pendulum' && effect.state?.startsWith('remained_')) return `Pendulum ×0.5 · remained on ${effect.state.slice(9).toUpperCase()}`;
+      return `${label(effect.boss)} ${label(effect.change)}`;
+    }
   }
 }
 
@@ -110,7 +117,17 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     case 'engulfment_attempted': return `ENGULFMENT · Shop ${number(event.shopVisitId)} · ${event.success ? 'SUCCESS' : 'OFFERING REJECTED'}`;
     case 'inferno_evaluated': return `INFERNO EVALUATION · ${event.evaluation.success ? 'READY' : 'NOT YET'} · effective ×${number(event.evaluation.effectiveValue)} / ×${number(event.evaluation.threshold)} · meter ${number((event.evaluation.previousReadiness ?? 0) * 100)}% → ${number(event.evaluation.readiness * 100)}% · ${event.evaluation.flames.length} Flame${event.evaluation.flames.length === 1 ? '' : 's'}`;
     case 'inferno_suspension_changed': return `INFERNO · ${event.suspended ? 'SUSPENDED' : 'REACTIVATED'} · ${event.reason}`;
-    case 'boss_state_changed': return `BOSS · ${event.boss} · ${event.change}`;
+    case 'boss_state_changed': {
+      if (event.boss === 'caller' && event.change === 'called' && event.hand) return `BOSS · Caller called ${HANDS[event.hand].name}`;
+      if (event.boss === 'fly' && event.change === 'target' && event.hand) return `BOSS · Fly moved to ${HANDS[event.hand].name}`;
+      if (event.boss === 'fly' && event.change === 'caught' && event.hand) return `BOSS · Fly caught on ${HANDS[event.hand].name}`;
+      if (event.boss === 'pendulum' && event.change === 'requested' && event.state?.startsWith('requested_'))
+        return `BOSS · Pendulum requested section: ${event.state.slice(10).toUpperCase()}`;
+      if (event.boss === 'pendulum' && event.change === 'remained' && event.state?.startsWith('remained_'))
+        return `BOSS · Pendulum ×0.5 · remained on ${event.state.slice(9).toUpperCase()}`;
+      return `BOSS · ${label(event.boss)} · ${label(event.change)}`;
+    }
+    case 'ultimate_targets_changed': return `ULTIMATE TARGETS · ${event.targets.map(hand => HANDS[hand].name).join(', ')}`;
     case 'scorecard_refreshed': return 'SCORECARD · refreshed';
     case 'round_attempt_finished': return `${event.outcome === 'cleared' ? 'CLEAR' : 'BUST'} · ${number(event.score)} / ${number(event.target)}`;
     case 'checkpoint_restored': return `RESTORE · ${event.reason} · timeline ${event.fromTimelineId}→${event.toTimelineId}`;

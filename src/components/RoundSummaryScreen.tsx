@@ -1,9 +1,10 @@
 import { Button, Group, Paper, Stack, Text, Title } from '@mantine/core';
 import { BOSSES, isMiniBossType } from '../game/bosses';
 import type { Action, Board } from '../game/types';
-import { formatPlayerNumber, formatScoreProgress } from '../game/copy';
+import { formatScoreProgress } from '../game/copy';
 import { fullChapterLabels } from '../game/chapters';
 import { RunActionPortal } from './RunActionRow';
+import { CurrencyAmount } from './CurrencyAmount';
 
 export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy: boolean; submit: (action: Action) => void }) {
   const summary = board.roundSummary!;
@@ -36,23 +37,23 @@ export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy
       <Paper className="summary-gold-card" p="md" data-tutorial="payout">
         <Group justify="space-between" align="baseline">
           <Text fw={900}>GOLD EARNED</Text>
-          <Text className="summary-total" fw={950} size="xl" data-testid="summary-gold-earned">+{formatPlayerNumber(summary.totalGoldEarned)}</Text>
+          <Text className="summary-total" fw={950} size="xl" data-testid="summary-gold-earned"><CurrencyAmount currency="gold" value={summary.totalGoldEarned} sign="+" /></Text>
         </Group>
         <div className="summary-gold-rows" data-testid="summary-gold-breakdown">
           {rows.filter((row, index) => row.amount > 0 || index < 3).map(({ label, amount }) => <div className="summary-gold-row" key={label}
             data-tutorial={label === 'Unused Rerolls' ? 'payout-rerolls' : label === 'Interest' ? 'payout-interest' : undefined}>
-            <Text size="sm">{label}</Text><Text size="sm" fw={850}>+{formatPlayerNumber(amount)}</Text>
+            <Text size="sm">{label}</Text><Text size="sm" fw={850}><CurrencyAmount currency="gold" value={amount} sign="+" /></Text>
           </div>)}
         </div>
         <Group justify="space-between" mt="md" className="summary-gold-before-after" data-testid="summary-gold-before-after">
-          <Text c="dimmed">Gold</Text><Text fw={900}>{formatPlayerNumber(summary.goldBefore)} → {formatPlayerNumber(summary.goldAfter)}</Text>
+          <Text c="dimmed">Gold</Text><Text fw={900}><CurrencyAmount currency="gold" value={summary.goldBefore} /> → <CurrencyAmount currency="gold" value={summary.goldAfter} /></Text>
         </Group>
       </Paper>
       <Paper className="summary-gold-card summary-temper-card" p="md" data-testid="summary-temper">
         <Group justify="space-between" align="baseline"><Text fw={900}>TEMPER EARNED</Text>
-          <Text c="orange" fw={950} size="xl" data-testid="summary-temper-earned">+{formatPlayerNumber(summary.temper.total)}</Text></Group>
+          <Text c="orange" fw={950} size="xl" data-testid="summary-temper-earned"><CurrencyAmount currency="temper" value={summary.temper.total} sign="+" /></Text></Group>
         <div className="summary-gold-rows">{temperRows.filter(row => row.amount > 0).map(row => <div className="summary-gold-row" key={row.label}>
-          <Text size="sm">{row.label}</Text><Text size="sm" fw={850} c="orange">+{formatPlayerNumber(row.amount)}</Text></div>)}</div>
+          <Text size="sm">{row.label}</Text><Text size="sm" fw={850} c="orange"><CurrencyAmount currency="temper" value={row.amount} sign="+" /></Text></div>)}</div>
         {summary.temper.total === 0 && <Text size="sm" c="dimmed" mt="xs">No Temper earned this Round.</Text>}
       </Paper>
       <RunActionPortal><div className="run-action-primary"><Button size="md" disabled={busy}

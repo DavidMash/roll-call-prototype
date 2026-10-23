@@ -10,6 +10,7 @@ import type { Selection } from '../game/selection';
 import type { Action, Board, GameEvent } from '../game/types';
 import { HandScorecard } from './HandList';
 import { ScoreResolution } from './ScoreResolution';
+import { CurrencyAmount } from './CurrencyAmount';
 import { activeEncounterDice, currentlyPlayableManualHands, lastPlayDanger, requiredEncounterDieIds, unavailableEncounterHands } from '../game/bosses';
 import { BossPanel } from './BossPanel';
 import { CONFIG } from '../game/config';
@@ -140,7 +141,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     {scorecardRefreshing && <div className="scorecard-refresh-celebration" data-testid="scorecard-refresh-celebration"
       role="status" aria-live="polite" aria-atomic="true" aria-label="Board refresh. Plus 2 Temper. All hands refreshed.">
       <span aria-hidden="true">BOARD REFRESH</span>
-      <strong aria-hidden="true">+2 TEMPER · ALL HANDS REFRESHED</strong>
+      <strong aria-hidden="true"><CurrencyAmount currency="temper" value={2} sign="+" accessible={false} /> · ALL HANDS REFRESHED</strong>
     </div>}
     {!busy && !awaitingWardenChoice && deadBoard && <Alert className="round-status retreat-status" color="orange" py={5}
       title="NO PLAYABLE HANDS" role="status" data-testid="retreat-panel">

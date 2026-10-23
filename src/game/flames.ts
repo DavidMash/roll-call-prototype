@@ -150,6 +150,7 @@ export function flameFullEffectText(id: Flame): string {
   return FLAMES[id].bonfireDescription;
 }
 export const isFlame = (value: unknown): value is Flame => typeof value === 'string' && Object.hasOwn(FLAMES, value);
+export const FLAME_SLOT_COUNT = 5;
 export const emptyFlameSlots = (): FlameSlots => [null, null, null, null, null];
 export const flameInstances = (state: Pick<Board, 'flameSlots'>): FlameInstance[] =>
   state.flameSlots.filter((flame): flame is FlameInstance => flame !== null);
@@ -183,7 +184,7 @@ export function flameStokeLimits(state: Pick<Board, 'flameSlots' | 'gold'>,
 type FlameInstanceRuntime = Pick<Board, 'flameSlots' | 'nextFlameInstanceId'>;
 
 export function normalizeFlameInstanceRuntime(state: FlameInstanceRuntime): void {
-  if (!Array.isArray(state.flameSlots) || state.flameSlots.length !== 5) state.flameSlots = emptyFlameSlots();
+  if (!Array.isArray(state.flameSlots) || state.flameSlots.length !== FLAME_SLOT_COUNT) state.flameSlots = emptyFlameSlots();
   state.nextFlameInstanceId = Math.max(1, Math.floor(state.nextFlameInstanceId ?? 1));
   const normalized = emptyFlameSlots();
   const used = new Set<number>();
@@ -219,7 +220,7 @@ export function placeFlameInstance(state: Pick<Board, 'flameSlots' | 'nextFlameI
   if (flameByType(state, type)) throw new Error(`Flame type ${type} is already owned.`);
   const available = state.flameSlots.findIndex(slot => slot === null);
   const slot = requestedSlot ?? (available < 0 ? undefined : available as FlameSlotIndex);
-  if (slot === undefined || slot < 0 || slot >= 5 || state.flameSlots[slot] !== null)
+  if (slot === undefined || slot < 0 || slot >= FLAME_SLOT_COUNT || state.flameSlots[slot] !== null)
     throw new Error('Choose an empty Flame slot.');
   const instance = createFlameInstance(state, type);
   instance.investedGold = Math.max(0, Math.min(100, investedGold));

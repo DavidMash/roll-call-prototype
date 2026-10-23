@@ -33,9 +33,10 @@ button { font: inherit; }
 .game-title { flex: 0 0 auto; font-size: 1.15rem; font-weight: 850; letter-spacing: .12em; color: var(--mantine-color-gray-0); }
 .hud-stats { min-width: 0; width: 100%; overflow: hidden; justify-content: center; }
 .hud-stat { display: flex; align-items: baseline; gap: 5px; padding: 2px 7px; border-radius: 6px; font-size: .82rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.hud-stat-icon { color: var(--mantine-color-teal-4); font-size: .8rem; }
-[data-testid="stat-gold"] .hud-stat-icon { color: var(--mantine-color-yellow-5); }
-[data-testid="stat-temper"] .hud-stat-icon { color: var(--mantine-color-orange-4); }
+.currency-amount { display: inline-flex; align-items: baseline; gap: .32em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.currency-symbol { font-weight: 950; font-size: .92em; line-height: 1; }
+.currency-gold .currency-symbol { color: var(--mantine-color-yellow-4); }
+.currency-temper .currency-symbol { color: var(--mantine-color-orange-4); }
 .hud-stat-label { color: var(--mantine-color-dimmed); font-size: .65rem; text-transform: uppercase; letter-spacing: .04em; }
 .hud-stage-value { display: inline-flex; gap: 6px; }
 .hud-stage-segment { display: inline-flex; gap: 1px; }
@@ -362,7 +363,8 @@ button { font: inherit; }
 .phase-sticky-header { position: sticky; top: 0; z-index: 14; padding: 5px 7px; border-radius: var(--mantine-radius-md); background: rgba(20,26,30,.97); box-shadow: 0 7px 20px rgba(0,0,0,.2); backdrop-filter: blur(10px); }
 .flame-selection-screen { min-width: 0; }
 .flame-payout { background: rgba(230,119,0,.07); border: 1px solid rgba(255,146,43,.16); }
-.flame-offer { min-width: 0; min-height: 128px; display: flex; flex-direction: column; background: var(--mantine-color-dark-8); border: 1px solid rgba(255, 146, 43, .16); }
+.flame-offers { grid-template-columns: minmax(0, 1fr); max-width: 760px; width: 100%; margin-inline: auto; }
+.flame-offer { min-width: 0; min-height: 150px; display: flex; flex-direction: column; background: var(--mantine-color-dark-8); border: 1px solid rgba(255, 146, 43, .16); }
 .flame-offer.selected { border-color: var(--mantine-color-orange-5); background: rgba(230, 119, 0, .11); }
 .flame-offer-header, .flame-offer-identity, .flame-offer-name { min-width: 0; }
 .flame-offer-action { margin-top: auto !important; }
@@ -428,8 +430,9 @@ button { font: inherit; }
   .flame-selection-screen > .shop-section { padding: 8px !important; border-radius: 8px; }
   .shop-screen .section-heading { min-height: 24px; margin-bottom: 8px; }
   .shop-grid { grid-template-columns: 1fr; }
-  .training-grid, .flame-offers { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
-  .training-grid .training-card, .flame-offers .flame-offer { padding: 7px; }
+  .training-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .flame-offers { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+  .training-grid .training-card, .flame-offers .flame-offer { padding: 9px; }
   .training-grid .training-card { height: 145px; min-height: 145px; }
   .training-grid .mantine-Group-root, .flame-offers > * > .mantine-Group-root { gap: 3px !important; }
   .training-grid .training-card-header { display: block; }
@@ -444,14 +447,14 @@ button { font: inherit; }
   .training-grid .training-card-header > .mantine-Badge-root { width: max-content; max-width: 100%; margin-top: 4px; }
   .training-grid .training-stats { display: grid; gap: 1px !important; margin-top: 5px !important; }
   .training-grid .training-stats .mantine-Text-root { font-size: .64rem; line-height: 1.25; overflow-wrap: normal; word-break: normal; }
-  .flame-offers .flame-offer { min-height: 118px; }
-  .flame-offers .flame-offer-header { display: block; }
+  .flame-offers .flame-offer { min-height: 148px; }
+  .flame-offers .flame-offer-header { display: flex; }
   .flame-offers .flame-offer-identity {
-    width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 22px; align-items: start; gap: 3px !important;
+    min-width: 0; display: flex; align-items: center; gap: 5px !important;
   }
-  .flame-offers .flame-offer-icon { display: none; }
+  .flame-offers .flame-offer-icon { display: inline; }
   .flame-offers .flame-offer-name {
-    min-height: 2.3em; display: flex; align-items: center; font-size: .73rem; line-height: 1.15; overflow-wrap: normal; word-break: normal;
+    min-height: 0; display: flex; align-items: center; font-size: .82rem; line-height: 1.2; overflow-wrap: normal; word-break: normal;
   }
   .flame-offers .flame-offer-price { width: max-content; max-width: 100%; margin-top: 5px; white-space: nowrap; }
   .training-grid .mantine-Button-root, .flame-offers .mantine-Button-root { height: auto; min-height: 27px; padding: 3px 4px; font-size: .64rem; white-space: normal; line-height: 1.05; }

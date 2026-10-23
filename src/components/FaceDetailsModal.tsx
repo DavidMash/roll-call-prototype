@@ -13,6 +13,7 @@ import { DieNumberSelector } from './DieNumberSelector';
 import { DieEffectsLabel, DieTypeLabel } from './DieTypeLabel';
 import { PipFace } from './PipFace';
 import { RichDescription } from './RichDescription';
+import { CurrencyAmount } from './CurrencyAmount';
 
 export interface FaceDetailsTarget { dieId: number; face: Rank }
 
@@ -38,7 +39,7 @@ function EffectCommands({ board, die, effect, busy, actionsEnabled, submit, clos
     </>}
     {effect.type === 'furnace' && runtime && <Button size="sm" color="yellow"
       disabled={busy || !actionsEnabled || validateAction(board, { type: 'FEED_FURNACE', dieId: die.id, amount: 1 }) !== null}
-      onClick={() => submit({ type: 'FEED_FURNACE', dieId: die.id, amount: 1 })}>FEED 1 GOLD</Button>}
+      onClick={() => submit({ type: 'FEED_FURNACE', dieId: die.id, amount: 1 })}>FEED <CurrencyAmount currency="gold" value={1} /></Button>}
     {(effect.type === 'weighted' || effect.type === 'jumpingBean') && <DieNumberSelector
       label={`${SPECIAL_DICE[effect.type].name} · choose a number`}
       value={effect.type === 'weighted' ? effect.persistent.weightedFace : effect.persistent.jumpingBeanNumber}
@@ -83,7 +84,7 @@ function CollectibleDetails({ board, die, busy, actionsEnabled, onClose, submit 
       <Group align="center" wrap="nowrap" className="die-details-identity">
         <CollectibleDieVisual effects={die.effects} face={die.value as Exclude<Rank, 7>} />
         <Stack gap={4} className="die-details-heading"><Text fw={900}>{die.effects.length ? <DieEffectsLabel effects={die.effects} /> : 'Normal'}</Text>
-          <Text size="sm" c="dimmed">Current sell value: {sale.total} Gold</Text></Stack>
+          <Text size="sm" c="dimmed">Current sell value: <CurrencyAmount currency="gold" value={sale.total} /></Text></Stack>
       </Group>
       {die.effects.map(effect => <EffectPanel key={effect.id} board={board} die={die} effect={effect} busy={busy}
         actionsEnabled={actionsEnabled} submit={submit} onClose={onClose} />)}

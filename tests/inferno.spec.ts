@@ -86,7 +86,7 @@ for (const speed of ['normal', 'fast', 'instant'] as const) {
     await expect(ready).toContainText('Inferno ×1 → ×25');
     await expect(ready.getByText('Vineyard', { exact: true })).toBeVisible();
     await expect(ready.getByText(/EMBER · SLOT 1 · 0 \/ 100 GOLD/)).toBeVisible();
-    await expect(ready).toContainText('Successful Engulfment: +25 Temper');
+    await expect(ready).toContainText('Successful Engulfment: T+25');
     await expect(ready.getByRole('button', { name: 'ENGULF NOW', exact: true })).toBeVisible();
     await expect(ready.getByRole('button', { name: 'NOT YET', exact: true })).toBeVisible();
     const before = await storedState(page);
@@ -116,7 +116,7 @@ test('ENGULF NOW resolves the exact displayed offering and resets the persistent
   const resolved = page.getByTestId('engulfment-success');
   await expect(resolved).toBeVisible();
   await expect(resolved).toContainText('Vineyard · SNUFFED');
-  await expect(resolved).toContainText('+25 TEMPER');
+  await expect(resolved).toContainText('T+25');
   await expect.poll(async () => (await storedState(page)).engulfmentLevel).toBe(1);
   const stored = await storedState(page);
   expect(stored.engulfmentLevel).toBe(1);

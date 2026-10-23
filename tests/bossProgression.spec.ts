@@ -172,8 +172,8 @@ test('Caller preview hides the call, then encounter reveals it and its counter',
 
 for (const testCase of [
   { type: 'marathon', name: 'THE MARATHON', preview: 'Extra large Goal. Played hands return after 6 other hands are played.', hud: 'Hands return after 6 plays' },
-  { type: 'magician', name: 'THE MAGICIAN', preview: 'One die disappears until you play 3 called Upper hands.', hud: 'calls completed' },
-  { type: 'fly', name: 'THE FLY', preview: 'Your played hands are weakened until you catch The Fly on the marked Lower hand.', hud: 'Catch:' },
+  { type: 'magician', name: 'THE MAGICIAN', preview: 'One die disappears until you play 3 called Upper hands, but you have twice as many Manual Rerolls.', hud: 'calls completed' },
+  { type: 'fly', name: 'THE FLY', preview: 'Your played hands are weakened until you catch The Fly on the marked Lower hand, but you have twice as many Manual Rerolls.', hud: 'Catch:' },
   { type: 'snakeEyes', name: 'SNAKE EYES', preview: 'Scored faces turn into 1s.', hud: 'Scored faces become 1s' },
   { type: 'infected', name: 'THE INFECTED', preview: "Infected faces suppress the die's special effects. Played faces become infected.", hud: 'infected face' },
 ] as const) {

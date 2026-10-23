@@ -7,6 +7,7 @@ import { RarityBadge } from './RarityBadge';
 import { activeDieLabel } from '../game/inventory';
 import { RichDescription } from './RichDescription';
 import { HANDS } from '../game/hands';
+import { CurrencyAmount } from './CurrencyAmount';
 
 export interface FlameDetailsTarget {
   flame?: Flame;
@@ -52,11 +53,11 @@ export function FlameDetailsModal({ board, inventory: _inventory, target, busy, 
       <Group justify="space-between"><Group gap="xs"><Badge color={stage === 'bonfire' ? 'red' : 'orange'} variant="light">
         🔥 {target?.kind === 'offer' ? 'FLAME' : stage.toUpperCase()}
       </Badge><RarityBadge rarity={definition.rarity} /></Group>
-        {isEmber && <Badge color="yellow" variant="light">{formatPlayerNumber(board.gold)} Gold held</Badge>}</Group>
-      <div className="flame-detail-progress"><Group justify="space-between"><Text size="sm" fw={800}>Investment: {formatPlayerNumber(invested)} / 100 Gold</Text>
+        {isEmber && <Badge color="yellow" variant="light"><CurrencyAmount currency="gold" value={board.gold} /> held</Badge>}</Group>
+      <div className="flame-detail-progress"><Group justify="space-between"><Text size="sm" fw={800}>Investment: <CurrencyAmount currency="gold" value={invested} /> / <CurrencyAmount currency="gold" value={100} /></Text>
         <Text size="xs" c="dimmed">{stage === 'bonfire' ? 'FULL STRENGTH' : 'BONFIRE AT 100'}</Text></Group>
         <Progress value={invested} color="orange" size="lg" mt={5} aria-label={`${definition.name} investment`} /></div>
-      {isEmber && <Text size="sm" fw={850} c="orange">Complete this Bonfire: +10 Temper</Text>}
+      {isEmber && <Text size="sm" fw={850} c="orange">Complete this Bonfire: <CurrencyAmount currency="temper" value={10} sign="+" /></Text>}
       <div className="modal-stat flame-current-effect" data-testid="flame-current-effect">
         {details.maxChargeContribution !== null && <Text size="sm"><strong>Max Flame Contribution:</strong> +{formatPlayerNumber(details.maxChargeContribution)} Max Charge</Text>}
         <Text size="sm"><strong>{details.currentLabel}:</strong> {details.currentValue}</Text>
@@ -78,7 +79,7 @@ export function FlameDetailsModal({ board, inventory: _inventory, target, busy, 
           <div className="stoke-stepper-buttons"><button type="button" aria-label="Increase investment" disabled={busy || amount >= maxStoke} onClick={() => stepAmount(1)}>▲</button>
             <button type="button" aria-label="Decrease investment" disabled={busy || amount <= 0} onClick={() => stepAmount(-1)}>▼</button></div></div>
           <Button variant="default" disabled={busy || maxStoke < 1} onClick={() => setAmount(maxStoke)}>Max</Button></Group>
-        <Button color="orange" size="md" fullWidth disabled={busy || amount < 1} onClick={stoke}>STOKE {formatPlayerNumber(amount)} GOLD</Button>
+        <Button color="orange" size="md" fullWidth disabled={busy || amount < 1} onClick={stoke}>STOKE <CurrencyAmount currency="gold" value={amount} /></Button>
       </Stack>}
     </Stack>
   </Modal>;

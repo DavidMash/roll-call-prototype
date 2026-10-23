@@ -6,6 +6,7 @@ import type { Board } from '../game/types';
 import { formatExactScore, formatPlayerNumber } from '../game/copy';
 import { chapterLabel } from '../game/chapters';
 import { InfoCircleIcon } from './InfoPopover';
+import { CurrencyAmount } from './CurrencyAmount';
 
 export function BossPanel({ board }: { board: Board }) {
   const [infoOpen, setInfoOpen] = useState(false);
@@ -70,7 +71,7 @@ export function BossPanel({ board }: { board: Board }) {
         <Text>{definition.shortRule}</Text>
         <Paper p="sm" className="boss-info-current"><Text size="xs" fw={900} tt="uppercase" c="dimmed">Current state</Text>
           <Text size="sm" mt={3}>{modalState}</Text></Paper>
-        <Text size="sm" fw={850} c="orange">Defeat: +{temperReward} Temper</Text>
+        <Text size="sm" fw={850} c="orange">Defeat: <CurrencyAmount currency="temper" value={temperReward} sign="+" /></Text>
         {boss.type === 'magician' && !boss.returned && <Group gap={4} data-testid="magician-calls">
           {boss.calledHands.map(hand => <Badge key={hand} size="xs" variant="light"
             color={boss.completedHands.includes(hand) ? 'teal' : 'grape'}>{boss.completedHands.includes(hand) ? '✓ ' : ''}{HANDS[hand].name}</Badge>)}
@@ -90,6 +91,6 @@ export function BossPreview({ board }: { board: Board }) {
     <Group justify="space-between"><div><Text size="xs" fw={900} tt="uppercase" lts=".14em">Incoming · {chapterLabel(nextRound)}</Text>
       <Text fw={950}>{boss.name}</Text></div><Badge variant="light">{isMiniBossType(bossType) ? 'MINI-BOSS' : 'BOSS'}</Badge></Group>
     <Text size="sm" mt={5}>{boss.shortRule}</Text>
-    <Text size="xs" fw={850} c="orange" mt={4}>Defeat: +{temperReward} Temper</Text>
+    <Text size="xs" fw={850} c="orange" mt={4}>Defeat: <CurrencyAmount currency="temper" value={temperReward} sign="+" /></Text>
   </Paper>;
 }

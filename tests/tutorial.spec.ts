@@ -387,7 +387,7 @@ test('first Stoke highlights only the Flame badge and moves focus into modal con
   await expect(page.getByRole('dialog', { name: 'Double Down' }).locator('button').first()).toHaveAttribute('aria-disabled', 'true');
   await controls.getByRole('button', { name: 'Increase investment', exact: true }).click();
   await expectPopoverAndTargetSeparated(page, '[data-tutorial="stoke"]');
-  await controls.getByRole('button', { name: 'STOKE 1 GOLD', exact: true }).click();
+  await controls.getByRole('button', { name: 'STOKE 1 Gold', exact: true }).click();
   await expect(page.locator('.driver-popover')).toHaveCount(0);
   const close = page.getByRole('dialog', { name: 'Double Down' }).locator('button').first();
   await expect(close).not.toHaveAttribute('aria-disabled', 'true');

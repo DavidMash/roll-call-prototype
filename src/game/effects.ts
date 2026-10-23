@@ -7,7 +7,7 @@ import {
   removeFlameInstance,
   sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, thirdRailChargeGain,
 } from './flames';
-import { encounterHandIds, handIsStructurallyImpossible, handOptions, hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, planQualification, upperBaselineLevel, UPPER_HAND_IDS } from './hands';
+import { encounterHandIds, handIsStructurallyImpossible, handOptions, hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, planQualification, ultimateHands, upperBaselineLevel, UPPER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
 import { OFFER_RARITY_WEIGHTS, rarityFirstSelection, rarityLabel } from './rarity';
 import { createDiceOffers } from './diceEconomy';
@@ -234,7 +234,8 @@ export class Resolver {
           origin: this.flameOrigin(record.flame), dieId: record.dieIds?.[0] });
         this.emitV2FlameActivation(record.flame, record.xMult);
       }
-      else if ((record.type === 'BOSS_HAND_CHANGED' || record.type === 'BOSS_FACE_CHANGED' || record.type === 'CALLER_CHANGED') && record.boss)
+      else if ((record.type === 'BOSS_HAND_CHANGED' || record.type === 'BOSS_FACE_CHANGED'
+        || record.type === 'CALLER_CALLED' || record.type === 'CALLER_CHANGED') && record.boss)
         this.v2Hand.sideEffects.push({ type: 'boss_state', boss: record.boss, change: record.type, amount: record.amount,
           hand: record.hand, hands: record.hands, dieIds: record.dieIds, state: record.bossState });
       return true;
@@ -363,7 +364,11 @@ export class Resolver {
         if (record.boss) this.emitV2({ kind: 'boss_state_changed', boss: record.boss,
           change: record.type === 'BOSS_STARTED' ? 'started' : record.type === 'BOSS_CLEARED' ? 'cleared'
             : record.type === 'WARDEN_UNLOCK_TARGET' ? 'warden_target' : record.type === 'WARDEN_REINFORCEMENT' ? 'warden_unlock'
-              : record.type === 'BOSS_FACE_CHANGED' ? 'face' : 'state',
+              : record.type === 'BOSS_FACE_CHANGED' ? 'face' : record.type === 'CALLER_CALLED' ? 'called'
+                : record.boss === 'fly' && record.bossState === 'target' ? 'target'
+                  : record.boss === 'fly' && record.bossState === 'caught' ? 'caught'
+                    : record.boss === 'pendulum' && record.bossState?.startsWith('requested_') ? 'requested'
+                      : record.boss === 'pendulum' && record.bossState?.startsWith('remained_') ? 'remained' : 'state',
           hand: record.hand, hands: record.hands, dieIds: record.dieIds ?? [], amount: record.amount,
           state: record.bossState });
         break;
@@ -419,6 +424,14 @@ export class Resolver {
     this.state.stats.flameTriggers[flame] = (this.state.stats.flameTriggers[flame] ?? 0) + 1;
     this.emit({ type: 'FLAME_TRIGGERED', flame, hand, xMult,
       message: `${FLAMES[flame].name}${detail ? `: ${detail}` : ''}` });
+  }
+  recordUltimateTargets(reason: Extract<RunHistoryV2EventInput, { kind: 'ultimate_targets_changed' }>['reason'], force = false): void {
+    if (!flameByType(this.state, 'ultimate')) return;
+    const targets = ultimateHands(this.state.handLevels);
+    const prior = [...this.state.historyV2].reverse().find(event => event.kind === 'ultimate_targets_changed');
+    if (!force && prior?.kind === 'ultimate_targets_changed'
+      && prior.targets.length === targets.length && prior.targets.every((hand, index) => hand === targets[index])) return;
+    this.emitV2({ kind: 'ultimate_targets_changed', targets, reason });
   }
   setFetchTarget(previous = this.state.fetchTarget): void {
     const dice = flameByType(this.state, 'fetch') ? rosterDice(this.state) : [];
@@ -1118,12 +1131,14 @@ export class Resolver {
     const section = HANDS[hand].rank ? 'upper' : 'lower';
     if (section !== this.state.boss.requestedSection) {
       this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'pendulum', hand, amount: .5,
+        bossState: `remained_${this.state.boss.requestedSection}`,
         message: `${HANDS[hand].name} missed the requested ${this.state.boss.requestedSection.toUpperCase()} section · Pendulum ×0.5` });
       return;
     }
     this.state.boss.requestedSection = section === 'upper' ? 'lower' : 'upper';
     this.state.boss.switches++;
     this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'pendulum', hand, amount: 1,
+      bossState: `requested_${this.state.boss.requestedSection}`,
       message: `${HANDS[hand].name} satisfied The Pendulum · now requests ${this.state.boss.requestedSection.toUpperCase()}` });
   }
 
@@ -1134,7 +1149,7 @@ export class Resolver {
     if (source === 'manual' && hand === boss.flyHand) {
       boss.caught = true;
       boss.flyHand = null;
-      this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'fly', hand, amount: 1,
+      this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'fly', hand, amount: 1, bossState: 'caught',
         message: `The Fly was caught on ${HANDS[hand].name}; this hand scores at full value` });
       return 1;
     }
@@ -1161,7 +1176,7 @@ export class Resolver {
     if (!candidates.length) { boss.flyHand = null; return; }
     boss.flyHand = candidates[randomIndex(this.rng, candidates.length)];
     boss.moves++;
-    this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'fly', hand: boss.flyHand,
+    this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'fly', hand: boss.flyHand, bossState: 'target',
       message: `The Fly moved from ${HANDS[previous].name} to ${HANDS[boss.flyHand].name}` });
   }
 
@@ -1940,6 +1955,7 @@ export class Resolver {
       chapterRound: targetLocalRound, retry, target: historyTargetBreakdown,
       boss: this.state.boss?.type ?? null, lives: this.state.lives,
       dice: activeEncounterDice(this.state).map(die => this.historyDie(die.id)) });
+    this.recordUltimateTargets(retry ? 'retry' : 'round_start', retry);
     if (this.state.boss) {
       const boss = this.state.boss;
       this.state.stats.bossEncounters.push({ boss: boss.type, round: this.state.round, attempt: this.state.roundAttemptNumber,
@@ -1953,6 +1969,8 @@ export class Resolver {
         message: `Silence disabled ${boss.type.toUpperCase()} for this encounter` });
       if (!this.state.bossSilenced && boss.type === 'caller') this.emit({ type: 'CALLER_CALLED', boss: 'caller', hand: boss.calledHand, amount: 3,
         message: `The Caller demands ${HANDS[boss.calledHand].name} within 3 plays` });
+      if (!this.state.bossSilenced && boss.type === 'fly' && boss.flyHand) this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'fly', hand: boss.flyHand,
+        bossState: 'target', message: `The Fly started on ${HANDS[boss.flyHand].name}` });
       if (!this.state.bossSilenced && boss.type === 'magician') this.emit({ type: 'BOSS_HAND_CHANGED', boss: boss.type,
         message: boss.missingDieId === null
           ? `The Magician calls ${boss.calledHands.map(hand => HANDS[hand].name).join(', ')}; the final die remains`
@@ -2069,6 +2087,16 @@ export class Resolver {
       .filter(([flame]) => ownedFlameIds(this.state).has(flame as Flame)));
     recalculateMaxCharge(this.state);
     evaluation.engulfed = true;
+    this.emitV2({ kind: 'engulfment_attempted', shopVisitId: this.state.nextShopVisitId, attemptNumber: 1,
+      infernoLevelBefore: evaluation.infernoLevelBefore, infernoLevelAfter: evaluation.infernoLevelAfter,
+      infernoMultiplierBefore: evaluation.infernoMultiplierBefore, infernoMultiplierAfter: evaluation.infernoMultiplierAfter,
+      offerings: evaluation.flames.map(item => ({ asset: structuredClone(item.asset) })),
+      evidenceRounds: structuredClone(evaluation.evidenceRounds), offeringMultiplier: evaluation.effectiveValue,
+      requiredMultiplier: evaluation.threshold, success: true,
+      overqualification: Math.max(0, evaluation.effectiveValue - evaluation.threshold),
+      upper: structuredClone(evaluation.upper), lower: structuredClone(evaluation.lower),
+      flamesSnuffed: structuredClone(evaluation.flamesSnuffed), questForfeited: false, returnedToShop: true });
+    this.recordUltimateTargets('engulfment');
     this.addTemper(25, 'engulfment', 'Successful Engulfment');
     this.state.infernoProgress.previousReadiness = 0;
     this.emit({ type: 'INFERNO_EVALUATED',
@@ -2161,6 +2189,7 @@ export class Resolver {
       case 'focus':
         if (!offer.hand) throw new Error('Focus offer is missing its fixed hand.');
         this.state.handLevels[offer.hand] += 4;
+        this.recordUltimateTargets('focus');
         break;
       case 'timeTravel': {
         timeTravelDestination = timeTravelDestinationRound(this.state.round);
@@ -2196,6 +2225,7 @@ export class Resolver {
         for (const hand of HAND_IDS) this.state.handLevels[hand]++;
         this.emitV2({ kind: 'team_training_applied', offerId: offer.id, levelsBefore,
           levelsAfter: structuredClone(this.state.handLevels) });
+        this.recordUltimateTargets('team_training');
         break;
       }
     }

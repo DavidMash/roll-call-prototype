@@ -22,6 +22,24 @@ const fake = (seq: number, timelineId: number, event: Partial<RunHistoryV2Event>
 } as RunHistoryV2Event);
 
 describe('Run History V2 Pass 3 ownership', () => {
+  it('counts canonical successful Engulfment events rather than snuffed assets or rolled-back events', () => {
+    const engulfment = (seq: number, timelineId: number) => fake(seq, timelineId, {
+      kind: 'engulfment_attempted', success: true,
+      flamesSnuffed: [
+        { kind: 'ember', flame: 'ultimate', instanceId: 1, slot: 0 },
+        { kind: 'bonfire', flame: 'minigun', instanceId: 2, slot: 1 },
+      ],
+    } as Partial<RunHistoryV2Event>);
+    expect(summarizeRunHistoryV2([]).experienced.flameLifecycle.engulfed).toBe(0);
+    expect(summarizeRunHistoryV2([engulfment(0, 0)]).experienced.flameLifecycle.engulfed).toBe(1);
+    expect(summarizeRunHistoryV2([engulfment(0, 0), engulfment(1, 0)]).experienced.flameLifecycle.engulfed).toBe(2);
+
+    const rolledBack = [engulfment(0, 0), fake(1, 1, { kind: 'checkpoint_restored', reason: 'time_travel',
+      fromTimelineId: 0, toTimelineId: 1, abandonedFromSeq: 0, abandonedThroughSeq: 0,
+      canonicalRound: 1, canonicalAttempt: 1 })];
+    expect(summarizeRunHistoryV2(rolledBack).experienced.flameLifecycle.engulfed).toBe(0);
+  });
+
   it('captures gameplay-only RollbackState and leaves cumulative owners untouched on restore', () => {
     const state = newRun('rollback-owner').state;
     const rollback = captureRollbackState(state);

@@ -6,7 +6,7 @@ import type {
 import type { RoundGoalBreakdown } from './goals';
 import type { ExactDecimal, ExactScore } from './scoreMath';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 18 as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 19 as const;
 export const RUN_HISTORY_V2_RULESET = 'configurable-roll-effects-forge-v2' as const;
 
 export interface RunHistoryV2Coverage {
@@ -329,12 +329,19 @@ export interface ChargeChangedEvent extends RunHistoryV2Envelope {
 export interface BossStateChangedEvent extends RunHistoryV2Envelope {
   kind: 'boss_state_changed';
   boss: BossType;
-  change: 'started' | 'cleared' | 'state' | 'warden_target' | 'warden_unlock' | 'face';
+  change: 'started' | 'cleared' | 'state' | 'warden_target' | 'warden_unlock' | 'face'
+    | 'called' | 'target' | 'requested' | 'remained' | 'caught';
   hand?: HandId;
   hands?: HandId[];
   dieIds: number[];
   amount?: number | ExactScore;
   state?: string;
+}
+
+export interface UltimateTargetsChangedEvent extends RunHistoryV2Envelope {
+  kind: 'ultimate_targets_changed';
+  targets: HandId[];
+  reason: 'acquired' | 'training' | 'focus' | 'team_training' | 'engulfment' | 'round_start' | 'retry';
 }
 
 export interface TemperChangedEvent extends RunHistoryV2Envelope {
@@ -423,7 +430,7 @@ export type RunHistoryV2Event = RunStartedEvent | ChapterStartedEvent | RoundAtt
   | HandScoredEvent | SpecialDieActivatedEvent | ShopVisitStartedEvent | ShopStageChangedEvent | TrainingSessionStartedEvent | TeamTrainingAppliedEvent | ShopVisitCompletedEvent
   | ShopOffersPresentedEvent | ShopTransactionEvent | TemperChangedEvent | FlameChangedEvent | ChargeChangedEvent
   | EngulfmentAttemptedEvent | InfernoEvaluatedEvent | InfernoSuspensionChangedEvent
-  | BossStateChangedEvent | ScorecardRefreshedEvent | RoundAttemptFinishedEvent
+  | BossStateChangedEvent | UltimateTargetsChangedEvent | ScorecardRefreshedEvent | RoundAttemptFinishedEvent
   | CheckpointRestoredEvent | RunFinishedEvent | ErrorEvent | MapTransitionV2Event;
 
 type EnvelopeKeys = Exclude<keyof RunHistoryV2Envelope, 'kind'>;

@@ -489,11 +489,11 @@ test('successful normal encounter shows a reconciled Round Summary before the Sh
   await expect(page.getByTestId('round-summary')).toBeVisible();
   await expect(page.getByRole('heading', { name: `ROUND ${game.round} CLEARED` })).toBeVisible();
   await expect(page.getByTestId('summary-score')).toHaveText(`${summary.score.toLocaleString()} / ${summary.target.toLocaleString()}`);
-  await expect(page.getByTestId('summary-gold-earned')).toHaveText(`+${summary.totalGoldEarned}`);
+  await expect(page.getByTestId('summary-gold-earned')).toHaveText(`G+${summary.totalGoldEarned}`);
   await expect(page.getByTestId('summary-gold-breakdown')).toContainText('Base Reward');
   await expect(page.getByTestId('summary-gold-breakdown')).toContainText('Unused Rerolls');
   await expect(page.getByTestId('summary-gold-breakdown')).toContainText('Interest');
-  await expect(page.getByTestId('summary-gold-before-after')).toContainText(`${summary.goldBefore} → ${summary.goldAfter}`);
+  await expect(page.getByTestId('summary-gold-before-after')).toContainText(`G${summary.goldBefore} → G${summary.goldAfter}`);
   await expect(page.getByText('Flame Bonus')).toHaveCount(0);
   expect(summary.goldAfter - summary.goldBefore).toBe(summary.totalGoldEarned);
 
@@ -568,7 +568,8 @@ test('HUD hearts are interactive only in Shop and the restore modal enforces the
   await page.getByTestId('stat-lives').click();
   const modal = page.getByRole('dialog', { name: 'RESTORE LIVES' });
   await expect(modal).toContainText('All lives restored.');
-  await expect(modal).toContainText('Next restore: 25 Gold');
+  await expect(modal).toContainText('Next restore: G25');
+  await expect(modal.getByLabel('25 Gold')).toBeVisible();
   await expect(modal.getByRole('button', { name: 'ALL LIVES RESTORED', exact: true })).toBeDisabled();
 });
 
@@ -600,7 +601,7 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   expect(game.handLevels[hand]).toBe(2);
   await expect(page.getByTestId(`train-${hand}`)).toBeEnabled();
   await expect(page.getByTestId(`training-offer-${hand}`)).toContainText('TRAINED ×1');
-  await expect(page.getByTestId(`train-${hand}`)).toHaveText('4G');
+  await expect(page.getByTestId(`train-${hand}`)).toHaveText('G4');
   await expect(page.getByTestId(`train-${hand}`)).toHaveAccessibleName(`Train ${HANDS[hand].name} for 4 GOLD`);
   await expect(page.getByTestId(`training-stats-${hand}`)).toHaveText(`Lv. 2 · ${level2.basePips} × ${level2.baseMultiplier}`);
 
@@ -1017,11 +1018,11 @@ test('native drag-and-drop moves collection dice and Dice-offer rerolls stay aut
   await expect(page.getByTestId('collection-slot-roster-0').getByRole('button', { name: /Roster 1, empty/ })).toBeVisible();
   await expect(page.getByTestId('collection-slot-storage-0')).toHaveAttribute('data-die-id', '0');
   const oldOfferIds = game.shop!.offers.map(offer => offer.id);
-  await page.getByRole('button', { name: 'REROLL OFFERS · 3 GOLD', exact: true }).click();
+  await page.getByRole('button', { name: 'REROLL OFFERS · 3 Gold', exact: true }).click();
   game = dispatch(game, { type: 'REROLL_OFFERS' }).state;
   await expect(page.getByTestId('stat-gold').getByText(String(game.gold), { exact: true })).toBeVisible();
   await expect(page.locator('.dice-offer')).toHaveCount(3);
-  await expect(page.getByRole('button', { name: 'REROLL OFFERS · 6 GOLD', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'REROLL OFFERS · 6 Gold', exact: true })).toBeVisible();
   expect(game.shop!.offers.map(offer => offer.id)).not.toEqual(oldOfferIds);
 });
 
@@ -1032,7 +1033,7 @@ test('Vintage collectible details expose its authoritative appreciation and sell
   await matchBoard(page, game);
   const offer = game.shop!.offers.find(item => item.dieType === 'vintage')!;
   const card = page.getByTestId(`dice-offer-${offer.id}`);
-  await expect(card).toContainText('10 GOLD');
+  await expect(card).toContainText('G10');
   await card.getByRole('button', { name: /BUY/ }).click();
   game = dispatch(game, { type: 'BUY_DIE', offerId: offer.id }).state;
   const vintageId = game.diceInventory.storage[0]!;
@@ -1040,11 +1041,11 @@ test('Vintage collectible details expose its authoritative appreciation and sell
   await installRunState(page, game);
   await matchBoard(page, game);
   const slot = page.getByTestId('collection-slot-storage-0');
-  await expect(slot).toContainText('Sell 12G');
+  await expect(slot).toContainText('Sell G12');
   await slot.getByRole('button', { name: 'INFO' }).click();
   const details = page.getByRole('dialog', { name: 'DIE DETAILS' });
-  await expect(details).toContainText(/Appreciation:\s*\+7 Gold/);
-  await expect(details).toContainText('Current sell value: 12 Gold');
+  await expect(details).toContainText(/Appreciation:\s*G\+7/);
+  await expect(details).toContainText('Current sell value: G12');
 });
 
 test('mobile Dice offers keep long names and Legendary rarity inside the card', async ({ page }) => {
@@ -1054,7 +1055,7 @@ test('mobile Dice offers keep long names and Legendary rarity inside the card', 
   const card = page.getByTestId(`dice-offer-${offer.id}`);
   await expect(card.getByText('Conjoined', { exact: true })).toBeVisible();
   await expect(card).toContainText('Legendary');
-  await expect(card).toContainText('40 GOLD');
+  await expect(card).toContainText('G40');
   expect(await card.evaluate(element => {
     const cardRect = element.getBoundingClientRect();
     const identity = element.querySelector('.dice-offer-name')!.getBoundingClientRect();

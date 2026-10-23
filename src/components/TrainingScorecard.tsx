@@ -3,6 +3,7 @@ import { handStats, HANDS, LOWER_HAND_IDS, relativeHandStrengthTiers, UPPER_HAND
 import { createTrainingSession, quoteTraining } from '../game/training';
 import type { HandId, HandLevels, Shop } from '../game/types';
 import { formatPlayerNumber } from '../game/copy';
+import { CurrencyAmount } from './CurrencyAmount';
 
 const COMPACT_HAND_NAMES: Partial<Record<HandId, string>> = {
   threeKind: '3 of a Kind', smallStraight: 'Sm Straight', fourKind: '4 of a Kind',
@@ -31,7 +32,7 @@ function TrainingSection({ title, hands, levels, shop, gold, busy, onTrain }: {
           : quote.waivedByOnTheHouse ? `FREE · ${formatPlayerNumber(quote.normalPrice!)} GOLD VALUE`
           : `${formatPlayerNumber(quote.actualPrice)} GOLD`;
         const compactPrice = quote.actualPrice === null ? '—' : quote.waivedByOnTheHouse
-          ? 'FREE' : `${formatPlayerNumber(quote.actualPrice)}G`;
+          ? 'FREE' : <CurrencyAmount currency="gold" value={quote.actualPrice} />;
         return <div key={hand} className="training-scorecard-row" data-testid={`training-offer-${hand}`}
           data-tutorial={`training-${hand}`} data-strength-tier={strength}>
           <div className={`training-hand-summary strength-${strength}`}>
