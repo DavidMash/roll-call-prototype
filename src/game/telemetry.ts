@@ -14,7 +14,7 @@ export function createStats(seed: string): RunStats {
     goldEarned: 0,
     goldBySource: { golden: 0, jackpot: 0, diceSale: 0, roundBase: 0, unusedRerolls: 0, interest: 0, bossReward: 0, specialOffer: 0 },
     goldSpent: 0,
-    goldSpentBySource: { dicePurchase: 0, diceOfferReroll: 0, handTraining: 0, flameInvestment: 0, lifeRestore: 0, furnace: 0 },
+    goldSpentBySource: { dicePurchase: 0, diceOfferReroll: 0, handTraining: 0, flameInvestment: 0, lifeRestore: 0, furnace: 0, greaseTheEngine: 0 },
     temperEarned: 0, temperSpent: 0,
     temperBySource: { overkill: 0, boardRefresh: 0, miniBoss: 0, boss: 0, bonfire: 0, engulfment: 0 },
     temperSpentBySource: { fusion: 0, forge: 0 }, temperTransactions: [],
@@ -27,16 +27,16 @@ export function createStats(seed: string): RunStats {
 }
 export function boardSnapshot(state: GameState): Board {
   const { phase, round, target, score, gold, temper, forgeUnlocked, roundTemper, lives, engulfmentLevel, nextShopVisitId, nextFlameInstanceId, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, bustPresentationDice, flameTutorial,
-    manualRerollsRemaining, manualRerollsUsedThisRound, specialOfferEffects, bossSilenced, dice, dieRoundState, flameSlots, chargeAttribution, infernoProgress, infernoEvaluation, infernoEvaluationSuspendedUntilNewFlame, chargeXMult, maxCharge, decisionId, sixPackXMult, sixPackUpperHandsPlayed, minigunUpperStreak, roundPlayCount, roundStartLives, roundStartRosterSize, precedingShopDiePurchase,
+    manualRerollsRemaining, manualRerollsUsedThisRound, specialOfferEffects, bossSilenced, dice, dieRoundState, flameSlots, chargeAttribution, infernoProgress, infernoEvaluation, infernoEvaluationSuspendedUntilNewFlame, chargeXMult, maxCharge, decisionId, sixPackXMult, sixPackUpperHandsPlayed, minigunUpperStreak, roundPlayCount, roundStartLives, roundStartRosterSize, precedingShopDiePurchase, interactiveFlames, scoreWagers,
     chargeArmed, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, lifetimeNormalShopGoldSpent, consumed, scorecardCycleConsumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, fetchTarget, lastRoundPayout, roundSummary, shop, flameSelection, specialOffer } = state;
   return structuredClone({ phase, round, target, score, gold, temper, forgeUnlocked, roundTemper, lives, engulfmentLevel, nextShopVisitId, nextFlameInstanceId, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, bustPresentationDice, flameTutorial,
     manualRerollsRemaining, manualRerollsUsedThisRound, specialOfferEffects, bossSilenced, dice, dieRoundState, flameSlots, chargeAttribution, infernoProgress, infernoEvaluation, infernoEvaluationSuspendedUntilNewFlame,
-    chargeXMult, maxCharge, chargeArmed, decisionId, sixPackXMult, sixPackUpperHandsPlayed, minigunUpperStreak, roundPlayCount, roundStartLives, roundStartRosterSize, precedingShopDiePurchase, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, lifetimeNormalShopGoldSpent, consumed, scorecardCycleConsumed, scoreByHand, effectScore,
+    chargeXMult, maxCharge, chargeArmed, decisionId, sixPackXMult, sixPackUpperHandsPlayed, minigunUpperStreak, roundPlayCount, roundStartLives, roundStartRosterSize, precedingShopDiePurchase, interactiveFlames, scoreWagers, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, lifetimeNormalShopGoldSpent, consumed, scorecardCycleConsumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, fetchTarget, lastRoundPayout, roundSummary, shop, flameSelection, specialOffer });
 }
 export function exportRun(state: GameState) {
-  return toExactJsonValue({ schemaVersion: 28, scoringModel: 'composable-die-effects-v1', ...state.stats,
+  return toExactJsonValue({ schemaVersion: 30, scoringModel: 'composable-die-effects-v1', ...state.stats,
     actions: structuredClone(state.actionJournal),
     scoreByHand: structuredClone(state.scoreByHand),
     finalHandLevels: structuredClone(state.handLevels),

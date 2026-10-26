@@ -89,6 +89,7 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
       <DiceRow dice={dice} display={display} event={event} disabled={busy || !actionsEnabled}
         rosterSlotById={rosterSlotById}
         fetchTarget={board.fetchTarget}
+        hotPotatoDieId={board.interactiveFlames.hotPotatoDieId}
         detailsDisabled={cinematic} selected={selectedWardenDieId === null ? effectiveSelection.dieIds : [selectedWardenDieId]}
         eligibleIds={undefined}
         wardenLockedIds={wardenLockedIds} wardenSelectableIds={awaitingWardenChoice ? wardenLockedIds : []}

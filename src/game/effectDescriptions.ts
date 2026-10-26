@@ -89,6 +89,13 @@ export function flameVerboseDescription(id: Flame): RichText {
     blackHole: [text('Your first Play gains more '), term('xMult'), text(' for each Roster die missing at Round start, up to ×5.')],
     assemblyLine: [text('Playing more dice with an active '), effect({ kind: 'die', id: 'clockwork' }, 'Clockwork'), text(' effect increases that Hand’s '), term('xMult'), text(', up to ×2.5.')],
     gymBros: [text('Playing more dice with an active '), effect({ kind: 'die', id: 'workout' }, 'Workout'), text(' effect increases that Hand’s '), term('xMult'), text(', up to ×2.5.')],
+    burnItDown: [term('onCommand'), text(', sacrifice your current Round Score to add '), term('charge'), text(' based on how much of the Round Target you gave up.')],
+    greaseTheEngine: [term('onCommand'), text(', pay Gold to add '), term('charge'), text('. Each use costs more Gold until the Round ends.')],
+    lightningStrike: [text("Predict one die's next "), term('manualReroll'), text('. If the final face matches your prediction, add a large amount of '), term('charge'), text('.')],
+    hotPotatoClock: [text('One die is the Hot Potato. Avoid Playing it to build increasing '), term('charge'), text('. The Hot Potato moves after every Play.')],
+    dareDevil: [text('When your Ultimate Hand is playable, use Dare Devil to Roll all available player dice. Each Dare makes your next Ultimate Hand worth more '), term('xMult'), text(', up to ×9.')],
+    doubleOrNothing: [text("After a manual Play resolves, you may give up that Play's Score and reopen its Hand. Manually replay that Hand later for up to ×9 "), term('xMult'), text('.')],
+    allIn: [term('onCommand'), text(", arm your next manual Play for up to ×12 "), term('xMult'), text(". If that Play and its resulting Free Plays do not clear the Round, their Score is removed.")],
   };
   return descriptions[id];
 }

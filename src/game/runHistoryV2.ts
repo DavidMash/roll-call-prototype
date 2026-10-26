@@ -6,7 +6,7 @@ import type {
 import type { RoundGoalBreakdown } from './goals';
 import type { ExactDecimal, ExactScore } from './scoreMath';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 21 as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 23 as const;
 export const RUN_HISTORY_V2_RULESET = 'configurable-roll-effects-forge-v2' as const;
 
 export interface RunHistoryV2Coverage {
@@ -18,7 +18,7 @@ export interface RunHistoryV2Coverage {
 
 export type FlameOrigin = 'ember' | 'bonfire' | 'charge' | 'boss' | 'special_offer' | 'external';
 export type RollReason = 'initial_round' | 'warden_opening' | 'manual' | 'post_hand' | 'winning_settle'
-  | 'jumping_bean_followup' | 'juggler' | 'magician_return' | 'shop' | 'other';
+  | 'jumping_bean_followup' | 'juggler' | 'magician_return' | 'dare_devil' | 'shop' | 'other';
 
 export interface RunHistoryV2Envelope {
   seq: number;
@@ -152,6 +152,9 @@ export interface RollBatchEvent extends RunHistoryV2Envelope {
 
 export interface HandScoredEvent extends RunHistoryV2Envelope {
   kind: 'hand_scored';
+  scorePackageId: string;
+  rootPlayId: string;
+  parentPlayId: string | null;
   hand: HandId;
   level: number;
   playSource: HandPlaySource;
@@ -350,6 +353,73 @@ export interface FlameRuntimeChangedEvent extends RunHistoryV2Envelope {
   reason: 'setup_play' | 'payoff_play' | 'scorecard_refresh' | 'marathon_reuse' | 'lower_play';
 }
 
+export type FlameActionDetail =
+  | { type: 'burn_it_down'; scoreSacrificed: ExactScore; target: ExactScore; fraction: number;
+      chargeBefore: number; chargeRequested: number; chargeGained: number; useCount: number }
+  | { type: 'grease_the_engine'; cost: number; goldBefore: number; goldAfter: number; useCount: number;
+      chargeRequested: number; chargeGained: number }
+  | { type: 'lightning_strike'; dieId: number; predictedFace: Rank; actualFace: Rank; hit: boolean;
+      manualRerollSource: 'normal' | 'carePackage'; chargeGained: number }
+  | { type: 'hot_potato_play'; targetBefore: number; played: boolean; streak: number;
+      chargeRequested: number; chargeGained: number; targetAfter: number | null }
+  | { type: 'dare_activated'; dareCount: number; dieIds: number[]; storedFactor: number }
+  | { type: 'dare_payoff'; dareCount: number; hand: HandId; factor: number };
+
+export interface FlameActionEvent extends RunHistoryV2Envelope {
+  kind: 'flame_action';
+  flame: Flame;
+  action: FlameActionDetail;
+}
+
+export interface ScorePackageCompletedEvent extends RunHistoryV2Envelope {
+  kind: 'score_package_completed';
+  packageId: string;
+  rootPlayId: string;
+  hand: HandId;
+  initiatingSource: HandPlaySource;
+  score: ExactScore;
+  playIds: string[];
+  allIn: boolean;
+  doubleOrNothingRedemption: boolean;
+}
+
+export interface ScorePackageRemovedEvent extends RunHistoryV2Envelope {
+  kind: 'score_package_removed';
+  packageId: string;
+  reason: 'double_or_nothing' | 'all_in_failure';
+  amount: ExactScore;
+  roundScoreBefore: ExactScore;
+  roundScoreAfter: ExactScore;
+}
+
+export interface DoubleOrNothingEvent extends RunHistoryV2Envelope {
+  kind: 'double_or_nothing';
+  phase: 'offered' | 'accepted' | 'expired' | 'ignored' | 'redeemed';
+  packageId: string;
+  hand: HandId;
+  packageScore: ExactScore;
+  factor: number;
+  roundScore: ExactScore;
+  target: ExactScore;
+  handReopened?: boolean;
+  scoreRemoved?: ExactScore;
+  clearedRound?: boolean;
+  playsToRedemption?: number;
+}
+
+export interface AllInEvent extends RunHistoryV2Envelope {
+  kind: 'all_in';
+  phase: 'armed' | 'resolved';
+  hand?: HandId;
+  packageId?: string;
+  factor: number;
+  packageScore?: ExactScore;
+  prePackageRoundScore?: ExactScore;
+  temporaryRoundScore?: ExactScore;
+  success?: boolean;
+  scoreRemoved?: ExactScore;
+}
+
 export interface UltimateTargetsChangedEvent extends RunHistoryV2Envelope {
   kind: 'ultimate_targets_changed';
   targets: HandId[];
@@ -449,6 +519,8 @@ export type RunHistoryV2Event = RunStartedEvent | ChapterStartedEvent | RoundAtt
   | ShopOffersPresentedEvent | ShopTransactionEvent | TemperChangedEvent | FlameChangedEvent | ChargeChangedEvent
   | EngulfmentAttemptedEvent | InfernoEvaluatedEvent | InfernoSuspensionChangedEvent
   | BossStateChangedEvent | UltimateTargetsChangedEvent | BenchWarmerTargetChangedEvent | FlameRuntimeChangedEvent | ScorecardRefreshedEvent | RoundAttemptFinishedEvent
+  | FlameActionEvent
+  | ScorePackageCompletedEvent | ScorePackageRemovedEvent | DoubleOrNothingEvent | AllInEvent
   | CheckpointRestoredEvent | RunFinishedEvent | ErrorEvent | MapTransitionV2Event;
 
 type EnvelopeKeys = Exclude<keyof RunHistoryV2Envelope, 'kind'>;

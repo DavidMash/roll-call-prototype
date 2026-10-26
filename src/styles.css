@@ -1095,6 +1095,9 @@ body, #root { overflow: hidden; }
 .boss-face-badge.infected { border-color: #f87171; color: #fee2e2; background: #7f1d1d; }
 .fetch-face-badge { position: absolute; top: 18px; right: 2px; z-index: 3; padding: 1px 3px; border-radius: 4px;
   color: var(--mantine-color-orange-1); background: rgba(230,119,0,.88); font-size: .42rem; font-weight: 950; letter-spacing: .02em; }
+.hot-potato-badge { position: absolute; top: 3px; right: 2px; z-index: 4; padding: 1px 3px; border: 1px solid rgba(255,165,0,.72);
+  border-radius: 4px; color: #fff7ed; background: #9a3412; box-shadow: 0 0 8px rgba(249,115,22,.5);
+  font-size: .42rem; font-weight: 950; letter-spacing: .03em; line-height: 1.15; }
 .manage-face-fetch { color: var(--mantine-color-orange-2); font-size: .48rem; font-weight: 950; }
 .die-state-dot { position: absolute; left: -3px; bottom: -4px; z-index: 3; color: var(--mantine-color-violet-3); font-size: .62rem; }
 .dice-dock-context { margin-top: 2px; color: var(--mantine-color-teal-3); font-size: .58rem; font-weight: 800; text-align: center; text-transform: uppercase; }
@@ -1102,6 +1105,22 @@ body, #root { overflow: hidden; }
 .dice-dock-context.flame { color: var(--mantine-color-orange-3); }
 .gameplay-actions-panel { flex: none; background: var(--mantine-color-dark-7); box-shadow: inset 0 0 0 1px rgba(255,255,255,.035); }
 .gameplay-actions-panel .gameplay-actions { max-width: 560px; margin-left: auto; padding: 0; }
+.flame-actions-entry { min-height: 0; display: flex; justify-content: flex-end; }
+.flame-actions-entry:empty { display: none; }
+.double-or-nothing-offer { min-width: 0; border-color: rgba(249,115,22,.58); background: linear-gradient(135deg, rgba(154,52,18,.28), var(--mantine-color-dark-7)); }
+.double-or-nothing-countdown { flex: none; color: var(--mantine-color-orange-3); font-variant-numeric: tabular-nums; }
+.double-or-nothing-offer .mantine-Button-root { min-width: 0; max-width: 100%; }
+.flame-action-card { min-width: 0; overflow-wrap: anywhere; background: color-mix(in srgb, var(--mantine-color-dark-7) 88%, transparent); }
+.flame-action-card .mantine-Button-root { align-self: flex-end; max-width: 100%; }
+.lightning-die-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(82px, 1fr)); gap: 6px; min-width: 0; }
+.lightning-die-options .mantine-Button-root { min-width: 0; padding-inline: 5px; }
+@media (max-width: 360px) {
+  .flame-actions-modal .mantine-Modal-content { max-width: calc(100vw - 12px); }
+  .flame-action-card { padding: 8px !important; }
+  .lightning-die-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .double-or-nothing-offer { padding: 8px !important; }
+  .double-or-nothing-offer .mantine-Button-root { padding-inline: 7px; font-size: .68rem; }
+}
 .flame-detail-trigger { border: 0; cursor: pointer; text-transform: none; }
 .face-detail-list { max-height: min(42vh, 360px); overflow: auto; }
 .face-detail-item { background: var(--mantine-color-dark-7); }

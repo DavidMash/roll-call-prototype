@@ -2,6 +2,7 @@ import { Alert, Button, Group, Modal, Paper, Stack, Text } from '@mantine/core';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { validateAction } from '../game/engine';
 import { captureHandStart, composeXMult, handXMultContributions,
+  allInMultiplier, flameByType,
   hasOwnedFlame, isGuaranteedWinningPlay, speedDemonMultiplier } from '../game/flames';
 import { HANDS, planQualification } from '../game/hands';
 import { finalizeScore, handScore } from '../game/scoring';
@@ -20,6 +21,8 @@ import { usableManualRerolls } from '../game/specialOffers';
 import { RunActionLayout, RunActionPortal } from './RunActionRow';
 import { effectRuntime } from '../game/specialDice';
 import { DieTypeLabel } from './DieTypeLabel';
+import { FlameActions } from './FlameActions';
+import { DoubleOrNothingOffer } from './DoubleOrNothingOffer';
 
 export function RoundScreen({ board, event, busy, inputBlocked, selection, setSelection, submit, skip }: {
   board: Board; event: GameEvent | null; busy: boolean; inputBlocked: boolean;
@@ -34,11 +37,17 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     ? wardenDice.filter(die => !wardenBoss.activeDieIds.includes(die.id)).map(die => die.id)
     : [];
   const awaitingWardenChoice = !!wardenBoss && wardenBoss.pendingReinforcements > 0;
+  const doubleOrNothingOffer = board.scoreWagers.pendingDoubleOrNothing;
+  const awaitingDoubleOrNothing = doubleOrNothingOffer !== null;
+  const doubleOrNothingWager = board.scoreWagers.doubleOrNothing;
+  const allInFactor = allInMultiplier(flameByType(board, 'allIn')?.investedGold ?? 0);
+  const roundBusy = busy || awaitingDoubleOrNothing;
   const speedDemonOwned = hasOwnedFlame(board, 'speedDemon');
   const decisionTimer = useRef(new DecisionTimer());
   const [decisionMs, setDecisionMs] = useState(0);
   const [qualificationChoiceOpen, setQualificationChoiceOpen] = useState(false);
-  const blocked = inputBlocked || awaitingWardenChoice;
+  const [flameActionsOpen, setFlameActionsOpen] = useState(false);
+  const blocked = inputBlocked || awaitingWardenChoice || flameActionsOpen;
   useLayoutEffect(() => {
     const now = performance.now();
     decisionTimer.current.reset(now, blocked);
@@ -69,7 +78,10 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const preview = valid ? (() => {
     const hand = effectiveSelection.hand!;
     const base = handScore(encounterDice, hand, effectiveSelection.dieIds, board.handLevels[hand]);
-    const snapshot = captureHandStart(board, hand, effectiveSelection.dieIds);
+    const snapshot = captureHandStart(board, hand, effectiveSelection.dieIds, null, 'manual', {
+      allIn: board.scoreWagers.allInArmed,
+      doubleOrNothingRedemption: board.scoreWagers.doubleOrNothing?.hand === hand,
+    });
     const contributions = handXMultContributions(snapshot, hand, board.handLevels[hand], effectiveSelection.dieIds);
     const xMult = composeXMult(contributions);
     const bossFactor = snapshot.bossFactor;
@@ -120,7 +132,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     ? `${HANDS[effectiveSelection.hand].name} · ${effectiveSelection.dieIds.length} ${effectiveSelection.dieIds.length === 1 ? 'die' : 'dice'} selected`
     : effectiveSelection.dieIds.length ? `${effectiveSelection.dieIds.length} ${effectiveSelection.dieIds.length === 1 ? 'die' : 'dice'} selected` : undefined;
   useEffect(() => {
-    if (!valid || busy || awaitingWardenChoice) return;
+    if (!valid || roundBusy || awaitingWardenChoice) return;
     function playOnEnter(keyEvent: KeyboardEvent) {
       if (keyEvent.key !== 'Enter' || keyEvent.repeat || keyEvent.defaultPrevented) return;
       const target = keyEvent.target instanceof HTMLElement ? keyEvent.target : null;
@@ -132,7 +144,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     }
     window.addEventListener('keydown', playOnEnter, true);
     return () => window.removeEventListener('keydown', playOnEnter, true);
-  }, [awaitingWardenChoice, busy, effectiveSelection.dieIds, effectiveSelection.hand, submit, valid, speedDemonOwned]);
+  }, [awaitingWardenChoice, roundBusy, effectiveSelection.dieIds, effectiveSelection.hand, submit, valid, speedDemonOwned]);
   return <Stack gap="xs" className="round-screen">
     <div className="live-score-panel" data-testid="live-score-panel">
       <ScoreResolution event={event} busy={busy} onSkip={skip} idleText={idleText}
@@ -144,7 +156,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
       <span aria-hidden="true">BOARD REFRESH</span>
       <strong aria-hidden="true"><CurrencyAmount currency="temper" value={2} sign="+" accessible={false} /> · ALL HANDS REFRESHED</strong>
     </div>}
-    {!busy && !awaitingWardenChoice && deadBoard && <Alert className="round-status retreat-status" color="orange" py={5}
+    {!roundBusy && !awaitingWardenChoice && deadBoard && <Alert className="round-status retreat-status" color="orange" py={5}
       title="NO PLAYABLE HANDS" role="status" data-testid="retreat-panel">
       <Group justify="space-between" align="center" gap="xs">
         <Text size="sm">{board.lives > 1 ? 'Lose 1 Life and return to the previous Shop.'
@@ -158,8 +170,17 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
       {board.hotStreakGoal && <Text size="xs"><strong>🔥 HOT STREAK → {HANDS[board.hotStreakGoal].name}</strong></Text>}
       {board.targetPracticeHand && <Text size="xs"><strong>◎ TARGET: {HANDS[board.targetPracticeHand].name}</strong></Text>}
     </Group></Paper>}
+    {(board.scoreWagers.allInArmed || doubleOrNothingWager) && <Paper p="xs" className="score-wager-status"
+      data-testid="score-wager-status"><Group gap="lg">
+      {board.scoreWagers.allInArmed && <Text size="xs"><strong>ALL IN ARMED · NEXT MANUAL PLAY ×{formatPlayerNumber(allInFactor)}</strong></Text>}
+      {doubleOrNothingWager && <Text size="xs"><strong>DOUBLE OR NOTHING · REPLAY {HANDS[doubleOrNothingWager.hand].name.toUpperCase()} ×{formatPlayerNumber(
+        doubleOrNothingWager.factor)}</strong></Text>}
+    </Group></Paper>}
+    <div className="flame-actions-entry"><FlameActions board={board} busy={roundBusy || inputBlocked || awaitingWardenChoice}
+      submit={submit} onOpenChange={setFlameActionsOpen} /></div>
+    {doubleOrNothingOffer && <DoubleOrNothingOffer offer={doubleOrNothingOffer} submit={submit} />}
     <Paper className={`scorecard-panel${scorecardRefreshing ? ' is-refreshing' : ''}`} p="xs">
-      <HandScorecard board={board} selection={effectiveSelection} busy={busy || awaitingWardenChoice} canSubmit={valid && !busy && !awaitingWardenChoice}
+      <HandScorecard board={board} selection={effectiveSelection} busy={roundBusy || awaitingWardenChoice} canSubmit={valid && !roundBusy && !awaitingWardenChoice}
         submitPreview={preview}
         onSelect={hand => changeSelection(selectBoardHand(board, effectiveSelection, hand, decisionMs))}
         onSubmit={submitPlay} />
@@ -172,7 +193,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
           </Text>}
           <RunActionLayout className="round-action-layout"
             left={!awaitingWardenChoice ? <>
-              <Button className="reroll-action" size="sm" variant="default" disabled={busy || !canReroll} data-tutorial="reroll-button"
+              <Button className="reroll-action" size="sm" variant="default" disabled={roundBusy || !canReroll} data-tutorial="reroll-button"
                 aria-label={`${rerollMainText} · ${rerollResourceText}`} data-testid="manual-reroll"
                 data-normal-fill-percent={Math.round(normalRerollFill * 100)} onClick={() => submit(manualAction)}>
                 <span className="reroll-resource-fill" style={{ transform: `scaleX(${normalRerollFill})` }} aria-hidden="true" />
@@ -190,9 +211,9 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
               </div>}
             </> : undefined}
             right={awaitingWardenChoice
-              ? <Button className="unlock-action" size="sm" color="cyan" disabled={busy || selectedWardenDieId === null}
+              ? <Button className="unlock-action" size="sm" color="cyan" disabled={roundBusy || selectedWardenDieId === null}
                 onClick={() => submit({ type: 'UNLOCK_WARDEN_DIE', dieId: selectedWardenDieId! })}>UNLOCK DIE</Button>
-              : <Button className="play-action" size="sm" aria-label={preview ? playActionLabel(preview.danger, preview.guaranteedWin) : 'PLAY'} disabled={busy || !valid}
+              : <Button className="play-action" size="sm" aria-label={preview ? playActionLabel(preview.danger, preview.guaranteedWin) : 'PLAY'} disabled={roundBusy || !valid}
                 data-testid="play-action" data-tutorial="play-action" onClick={submitPlay}>
                 {speedEquation ?? (preview ? `${formatScoreEquation(preview.pips, preview.multiplier, preview.effectiveXMult,
                   preview.score, preview.infernoMultiplier)} • ${playActionLabel(preview.danger, preview.guaranteedWin)}` : 'PLAY')}

@@ -6,6 +6,8 @@ import {
   initialHandFamilyFlameStages, jumpStartChargeGain, momentumChargeGain, normalizeFlameInstanceRuntime, ownedFlameIds, recalculateMaxCharge,
   potentialEnergyChargeGain, removeFlameInstance,
   sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, thirdRailChargeGain,
+  burnItDownChargeGain, dareDevilMultiplier, FLAME_SCALING, greaseTheEngineChargeGain, greaseTheEngineCost,
+  hotPotatoClockChargeGain, lightningStrikeChargeGain, allInMultiplier, doubleOrNothingMultiplier,
 } from './flames';
 import { benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, handOptions, hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, planQualification, ultimateHands, upperBaselineLevel, UPPER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
@@ -37,12 +39,12 @@ import {
 import { createTrainingSession } from './training';
 import { forgeRevealEligible } from './forge';
 import type { ChargeFlame, HandStartSnapshot } from './flames';
-import type { CollectibleDie, DieEffectInstance, EventRecord, Face, Flame, FlameInstanceId, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, Rank, RunNode, ScoreSource, SpecialDieType, SpecialOffer, TemperSource, TemperSpendSource } from './types';
+import type { CollectibleDie, DieEffectInstance, EventRecord, Face, Flame, FlameInstanceId, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, Rank, RunNode, ScorePackage, ScoreSource, SpecialDieType, SpecialOffer, TemperSource, TemperSpendSource } from './types';
 import type {
   FlameOrigin, HandSideEffect, HistoryDieState, MultContribution, PipsContribution,
   RollEffect, RollReason, RunHistoryV2Event, RunHistoryV2EventInput, XMultContribution,
 } from './runHistoryV2';
-import { Decimal, roundPositiveScoreHalf, type ExactScore } from './scoreMath';
+import { Decimal, exactRatioNumber, roundPositiveScoreHalf, type ExactScore } from './scoreMath';
 import { createPlayIntent, createRollBatchIntent, createRollIntent } from './resolution';
 import { activeDieLabel, orderDieIdsByEncounter, rosterDice, rosterSlotOf, syncActiveDiceProjection } from './inventory';
 import type { PlayIntent, QualificationPlan, RollBatchIntent, RollContext, RollIntent, RollResolution, ScoreOccurrence } from './resolution';
@@ -100,6 +102,8 @@ export class Resolver {
   private lastV2RollSeq: number | undefined;
   private v2LastCharge: number;
   private curtainCallContext: CurtainCallContext | null = null;
+  private activeScorePackage: ScorePackage | null = null;
+  private playStack: string[] = [];
   constructor(readonly state: GameState, readonly rng: RandomSource, readonly options: ResolverOptions = {}) {
     state.historyV2 ??= [];
     state.historyV2TimelineId = Math.max(0, Math.floor(state.historyV2TimelineId ?? 0));
@@ -514,7 +518,7 @@ export class Resolver {
     this.emit({ type: 'TEMPER_CHANGED', amount, temperSpendSource: source, temperBalance: this.state.temper,
       message: `Forge spent ${amount} Temper` });
   }
-  private spendRoundGold(amount: number, message: string, goldSpendSource: 'furnace'): void {
+  private spendRoundGold(amount: number, message: string, goldSpendSource: 'furnace' | 'greaseTheEngine'): void {
     if (this.state.phase !== 'round') throw new Error('This Gold may only be spent during an active Round.');
     this.state.gold -= amount;
     this.state.stats.goldSpent += amount;
@@ -523,6 +527,11 @@ export class Resolver {
   }
   addScore(amount: ExactScore, source: Exclude<ScoreSource, 'hitchhiker'>, message: string, dieIds: number[], hand?: HandId): void {
     this.state.score += amount;
+    if (amount > 0n && this.activeScorePackage) {
+      this.activeScorePackage.score += amount;
+      this.activeScorePackage.contributions.push({ playId: this.playStack.at(-1) ?? this.activeScorePackage.rootPlayId,
+        hand: hand ?? null, source, amount });
+    }
     this.state.stats.scoreBySource[source] += amount;
     if (hand) {
       this.state.scoreByHand[hand] = (this.state.scoreByHand[hand] ?? 0n) + amount;
@@ -743,13 +752,13 @@ export class Resolver {
     return instance ? { investment: instance.investedGold, instanceId: instance.instanceId } : null;
   }
   private growCharge(flame: ChargeFlame, requestedGain: number,
-    detail: string, dieIds?: number[], diagnostics?: import('./types').FlameActivationDiagnostics): void {
+    detail: string, dieIds?: number[], diagnostics?: import('./types').FlameActivationDiagnostics): number {
     const source = this.chargeFlameSource(flame);
-    if (!source || requestedGain <= 0) return;
+    if (!source || requestedGain <= 0) return 0;
     const before = this.state.chargeXMult;
     const after = Number(Math.min(this.state.maxCharge, before + requestedGain).toFixed(12));
     const gain = Number((after - before).toFixed(12));
-    if (gain <= 0) return;
+    if (gain <= 0) return 0;
     this.state.chargeXMult = after;
     this.state.chargeAttribution[source.instanceId] = Number(((this.state.chargeAttribution[source.instanceId] ?? 0) + gain).toFixed(12));
     this.state.stats.chargeGained = Number((this.state.stats.chargeGained + gain).toFixed(12));
@@ -758,6 +767,7 @@ export class Resolver {
       flameDiagnostics);
     this.emit({ type: 'CHARGE_CHANGED', flame, dieIds, xMult: after, flameDiagnostics,
       message: `${FLAMES[flame].name}: Charge +${this.format(gain)} → ×${this.format(after)}` });
+    return gain;
   }
   private addMomentumCharge(hand: HandId): void {
     const source = this.chargeFlameSource('momentum');
@@ -801,6 +811,49 @@ export class Resolver {
     this.growCharge('allHandsOnDeck', allHandsOnDeckChargeGain(flame.investment, count),
       `all ${count} available dice Played`, snapshot.selectedDieIds,
       { availableDiceCount: count, playedDiceCount: snapshot.selectedDieIds.length });
+  }
+  private hotPotatoCandidates(): CollectibleDie[] {
+    return activeEncounterDice(this.state).filter((die): die is CollectibleDie => die.owner === 'player');
+  }
+  private ensureHotPotatoTarget(): number | null {
+    if (!flameByType(this.state, 'hotPotatoClock')) {
+      this.state.interactiveFlames.hotPotatoDieId = null;
+      return null;
+    }
+    const candidates = this.hotPotatoCandidates();
+    const current = this.state.interactiveFlames.hotPotatoDieId;
+    if (current !== null && candidates.some(die => die.id === current)) return current;
+    const next = candidates.length ? candidates[randomIndex(this.rng, candidates.length)].id : null;
+    this.state.interactiveFlames.hotPotatoDieId = next;
+    return next;
+  }
+  private moveHotPotato(previous: number | null): number | null {
+    const candidates = this.hotPotatoCandidates();
+    if (!flameByType(this.state, 'hotPotatoClock') || !candidates.length) {
+      this.state.interactiveFlames.hotPotatoDieId = null;
+      return null;
+    }
+    const pool = candidates.length > 1 ? candidates.filter(die => die.id !== previous) : candidates;
+    const next = pool[randomIndex(this.rng, pool.length)].id;
+    this.state.interactiveFlames.hotPotatoDieId = next;
+    return next;
+  }
+  private resolveHotPotatoPlay(targetBefore: number | null, playedDieIds: readonly number[]): void {
+    const flame = this.chargeFlameSource('hotPotatoClock');
+    if (!flame || targetBefore === null) return;
+    const played = playedDieIds.includes(targetBefore);
+    if (played) this.state.interactiveFlames.hotPotatoStreak = 0;
+    else this.state.interactiveFlames.hotPotatoStreak++;
+    const streak = this.state.interactiveFlames.hotPotatoStreak;
+    const requested = played ? 0 : hotPotatoClockChargeGain(flame.investment, streak);
+    const chargeBefore = this.state.chargeXMult;
+    const gained = this.growCharge('hotPotatoClock', requested,
+      `Hot Potato ${played ? 'was Played; streak reset' : `avoided for ${streak} consecutive Plays`}`,
+      [...playedDieIds], { hotPotatoBefore: targetBefore, hotPotatoPlayed: played, hotPotatoStreak: streak,
+        chargeBefore, chargeRequested: requested });
+    const targetAfter = this.moveHotPotato(targetBefore);
+    this.emitV2({ kind: 'flame_action', flame: 'hotPotatoClock', action: { type: 'hot_potato_play',
+      targetBefore, played, streak, chargeRequested: requested, chargeGained: gained, targetAfter } });
   }
   private advanceMinigun(hand: HandId): void {
     if (!ownedFlameIds(this.state).has('minigun')) return;
@@ -1403,7 +1456,7 @@ export class Resolver {
         this.rollBatch(rerolls, jugglerExtra !== null ? reason : 'Winning hand settle reroll',
           'settle', false, jugglerExtra !== null ? 'juggler' : 'winning_settle');
         this.drain();
-        this.evaluate();
+        if (!this.activeScorePackage || this.activeScorePackage.initiatingSource !== 'manual') this.evaluate();
       }
       return { winning, beanRecordIndex };
     }
@@ -1419,7 +1472,7 @@ export class Resolver {
     this.drain();
     this.moveFly();
     if (this.state.score < this.state.target) this.refreshScorecardIfFilled();
-    this.evaluate();
+    if (!this.activeScorePackage || this.activeScorePackage.initiatingSource !== 'manual') this.evaluate();
     if (this.state.phase === 'round') this.state.decisionId++;
     return { winning: this.state.score >= this.state.target, beanRecordIndex: null };
   }
@@ -1458,6 +1511,7 @@ export class Resolver {
     if (boss?.type !== 'warden' || boss.pendingReinforcements <= 0) throw new Error('Warden unlock attempted without a pending choice.');
     const starting = boss.startingDieId === null;
     boss.activeDieIds.push(dieId);
+    this.ensureHotPotatoTarget();
     if (starting) boss.startingDieId = dieId;
     boss.pendingReinforcements--;
     if (!boss.unlockCosts.length) {
@@ -1480,6 +1534,103 @@ export class Resolver {
     this.evaluate();
     if (this.state.phase === 'round' && boss.pendingReinforcements === 0) this.state.decisionId++;
   }
+
+  private beginScorePackage(playId: string, hand: HandId, source: HandPlaySource): ScorePackage {
+    const allIn = source === 'manual' && this.state.scoreWagers.allInArmed;
+    const doubleOrNothingRedemption = source === 'manual' && this.state.scoreWagers.doubleOrNothing?.hand === hand;
+    if (allIn) this.state.scoreWagers.allInArmed = false;
+    const scorePackage: ScorePackage = {
+      id: `score-package:${this.state.historyV2TimelineId}:${this.state.round}:${this.state.roundAttemptNumber}:${this.state.scoreWagers.nextPackageId++}`,
+      rootPlayId: playId,
+      initiatingHand: hand,
+      initiatingSource: source,
+      scoreBefore: this.state.score,
+      score: 0n,
+      plays: [],
+      contributions: [],
+      complete: false,
+      removedScore: 0n,
+      allIn,
+      doubleOrNothingRedemption,
+    };
+    this.state.scoreWagers.packages.push(scorePackage);
+    this.activeScorePackage = scorePackage;
+    return scorePackage;
+  }
+
+  private removeScorePackage(scorePackage: ScorePackage, reason: 'double_or_nothing' | 'all_in_failure'): ExactScore {
+    const roundScoreBefore = this.state.score;
+    const removed = scorePackage.score > roundScoreBefore ? roundScoreBefore : scorePackage.score;
+    this.state.score = roundScoreBefore - removed;
+    for (const contribution of scorePackage.contributions) {
+      if (contribution.hand) {
+        this.state.scoreByHand[contribution.hand] = (this.state.scoreByHand[contribution.hand] ?? 0n) - contribution.amount;
+        if (this.state.scoreByHand[contribution.hand]! < 0n) this.state.scoreByHand[contribution.hand] = 0n;
+        this.state.stats.rounds.at(-1)!.scoreByHand[contribution.hand] = this.state.scoreByHand[contribution.hand];
+      } else {
+        this.state.effectScore -= contribution.amount;
+        if (this.state.effectScore < 0n) this.state.effectScore = 0n;
+        this.state.stats.rounds.at(-1)!.effectScore = this.state.effectScore;
+      }
+    }
+    scorePackage.removedScore += removed;
+    this.state.stats.rounds.at(-1)!.finalScore = this.state.score;
+    this.emitV2({ kind: 'score_package_removed', packageId: scorePackage.id, reason, amount: removed,
+      roundScoreBefore, roundScoreAfter: this.state.score });
+    return removed;
+  }
+
+  private canOfferDoubleOrNothing(scorePackage: ScorePackage): boolean {
+    const flame = flameByType(this.state, 'doubleOrNothing');
+    return scorePackage.initiatingSource === 'manual' && !scorePackage.allIn && !scorePackage.doubleOrNothingRedemption
+      && scorePackage.score > 0n
+      && this.state.phase === 'round' && this.state.score < this.state.target
+      && !!flame && flame.investedGold > 0
+      && this.state.scoreWagers.doubleOrNothing === null
+      && this.state.scoreWagers.pendingDoubleOrNothing === null
+      && !handIsStructurallyImpossible(scorePackage.initiatingHand, activeEncounterDice(this.state).length);
+  }
+
+  private finalizeScorePackage(scorePackage: ScorePackage): void {
+    scorePackage.complete = true;
+    this.emitV2({ kind: 'score_package_completed', packageId: scorePackage.id, rootPlayId: scorePackage.rootPlayId,
+      hand: scorePackage.initiatingHand, initiatingSource: scorePackage.initiatingSource,
+      score: scorePackage.score, playIds: scorePackage.plays.map(play => play.playId), allIn: scorePackage.allIn,
+      doubleOrNothingRedemption: scorePackage.doubleOrNothingRedemption });
+
+    if (scorePackage.doubleOrNothingRedemption) {
+      const wager = this.state.scoreWagers.doubleOrNothing;
+      if (wager) {
+        this.state.scoreWagers.doubleOrNothing = null;
+        this.emitV2({ kind: 'double_or_nothing', phase: 'redeemed', packageId: scorePackage.id,
+          hand: wager.hand, packageScore: scorePackage.score, factor: wager.factor, roundScore: this.state.score,
+          target: this.state.target, clearedRound: this.state.score >= this.state.target,
+          playsToRedemption: Math.max(0, this.state.roundPlayCount - wager.acceptedAtPlayCount) });
+      }
+    }
+
+    if (scorePackage.allIn) {
+      const factor = allInMultiplier(flameByType(this.state, 'allIn')?.investedGold ?? 0);
+      const temporaryRoundScore = this.state.score;
+      const success = temporaryRoundScore >= this.state.target;
+      const removed = success ? 0n : this.removeScorePackage(scorePackage, 'all_in_failure');
+      this.emitV2({ kind: 'all_in', phase: 'resolved', hand: scorePackage.initiatingHand,
+        packageId: scorePackage.id, factor, packageScore: scorePackage.score,
+        prePackageRoundScore: scorePackage.scoreBefore, temporaryRoundScore, success, scoreRemoved: removed });
+    } else if (this.canOfferDoubleOrNothing(scorePackage)) {
+      const factor = doubleOrNothingMultiplier(flameByType(this.state, 'doubleOrNothing')!.investedGold);
+      this.state.scoreWagers.pendingDoubleOrNothing = { packageId: scorePackage.id,
+        hand: scorePackage.initiatingHand, packageScore: scorePackage.score, factor,
+        roundScore: this.state.score, target: this.state.target };
+      this.emitV2({ kind: 'double_or_nothing', phase: 'offered', packageId: scorePackage.id,
+        hand: scorePackage.initiatingHand, packageScore: scorePackage.score, factor,
+        roundScore: this.state.score, target: this.state.target });
+    }
+
+    if (scorePackage.initiatingSource === 'manual' && !this.state.scoreWagers.pendingDoubleOrNothing
+      && this.state.phase === 'round') this.evaluate();
+  }
+
   play(hand: HandId, dieIds: number[], playSource: HandPlaySource = 'manual', decisionMs: number | null = null,
     qualificationClaims: import('./resolution').QualificationResourceClaim[] = []): { winning: boolean; beanRecordIndex: number | null } {
     let legalDieIds = dieIds;
@@ -1498,8 +1649,28 @@ export class Resolver {
       legalDieIds = combination;
     }
     const playId = `${this.state.historyV2TimelineId}:${this.state.round}:${this.state.actionJournal.length}:${this.state.historyV2.length}:${playSource}`;
-    return this.resolvePlay(createPlayIntent(playId, hand, orderDieIdsByEncounter(this.state, legalDieIds), playSource, decisionMs,
-      qualificationClaims));
+    const root = this.activeScorePackage === null;
+    const scorePackage = this.activeScorePackage ?? this.beginScorePackage(playId, hand, playSource);
+    const parentPlayId = this.playStack.at(-1) ?? null;
+    const isRootPlay = playId === scorePackage.rootPlayId;
+    scorePackage.plays.push({ playId, parentPlayId, hand, source: playSource });
+    const intent = createPlayIntent(playId, hand, orderDieIdsByEncounter(this.state, legalDieIds), playSource, decisionMs,
+      qualificationClaims, { scorePackageId: scorePackage.id, rootPlayId: scorePackage.rootPlayId, parentPlayId,
+        allIn: isRootPlay && scorePackage.allIn,
+        doubleOrNothingRedemption: isRootPlay && scorePackage.doubleOrNothingRedemption });
+    this.playStack.push(playId);
+    let result: { winning: boolean; beanRecordIndex: number | null };
+    try {
+      result = this.resolvePlay(intent);
+    } finally {
+      this.playStack.pop();
+    }
+    if (root) {
+      this.activeScorePackage = null;
+      this.finalizeScorePackage(scorePackage);
+      result.winning = this.state.score >= this.state.target;
+    }
+    return result;
   }
 
   private resolvePlay(intent: PlayIntent): { winning: boolean; beanRecordIndex: number | null } {
@@ -1510,11 +1681,13 @@ export class Resolver {
       throw new Error('Committed Play has no unambiguous Qualification plan.');
     const freeBean = playSource === 'jumpingBean';
     const freePlay = playSource !== 'manual';
+    const hotPotatoBefore = this.ensureHotPotatoTarget();
     const wouldConsumeHand = !freePlay && (this.state.bossSilenced || this.state.boss?.type !== 'marathon');
     const consumesHand = wouldConsumeHand;
     const handLevel = this.state.handLevels[hand];
     const currentInfernoMultiplier = infernoMultiplier(this.state.engulfmentLevel);
-    const handStart = captureHandStart(this.state, hand, ids, playSource === 'manual' ? intent.decisionMs : null, playSource);
+    const handStart = captureHandStart(this.state, hand, ids, playSource === 'manual' ? intent.decisionMs : null, playSource,
+      { allIn: intent.allIn, doubleOrNothingRedemption: intent.doubleOrNothingRedemption });
     const chargeAttributionAtHandStart = structuredClone(this.state.chargeAttribution);
     if (freePlay) handStart.chargeArmed = false;
     const shapeParticipants = ids.map(id => ({ id, face: structuredClone(activeFace(this.state.dice.find(die => die.id === id)!)), role: 'selected' as const }));
@@ -1623,6 +1796,13 @@ export class Resolver {
       source: scoreSource, playSource, handConsumed: resolution.consumesHand, message: `Final awarded hand score: ${this.format(score)}` });
     this.addScore(score, scoreSource, `${freePlay ? 'Free play: ' : ''}${HANDS[hand].name}: round score +${this.format(score)}`, scoringIds, hand);
     const roundScoreAfterAward = this.state.score;
+    if (handStart.dareDevilCount > 0 && handStart.ultimateHands.includes(hand)) {
+      const flame = flameByType(this.state, 'dareDevil');
+      const factor = dareDevilMultiplier(flame?.investedGold ?? 0, handStart.dareDevilCount);
+      this.state.interactiveFlames.dareDevilCount = 0;
+      this.emitV2({ kind: 'flame_action', flame: 'dareDevil', action: { type: 'dare_payoff',
+        dareCount: handStart.dareDevilCount, hand, factor } });
+    }
     if (!freePlay && handStart.chargeArmed) {
       const consumed = this.state.chargeXMult;
       this.state.chargeXMult = 1; this.state.chargeArmed = false;
@@ -1663,6 +1843,7 @@ export class Resolver {
     this.resolveSnakeEyes(scoringIds);
     this.resolveInfected(scoringIds);
     const magicianReturned = this.resolveMiniBossHand(hand);
+    this.resolveHotPotatoPlay(hotPotatoBefore, ids);
     let winning = this.state.score >= this.state.target;
     if (magicianReturned && winning) {
       this.drain();
@@ -1683,6 +1864,7 @@ export class Resolver {
     this.trace({ kind: 'scoring_step', hand, stage: 'final', before: draft.roundScoreBefore,
       after: this.state.score, source: playSource });
     const handEvent = this.emitV2({ kind: 'hand_scored', parentSeq: draft.parentSeq, hand, level: handLevel,
+      scorePackageId: intent.scorePackageId, rootPlayId: intent.rootPlayId, parentPlayId: intent.parentPlayId,
       playSource, selectedDice: draft.selectedDice,
       scoringDice: scoringParticipants.map(participant => ({ ...this.historyDie(participant.id, participant.face), role: participant.role })),
       scoreOccurrences: resolution.scoreOccurrences.map(occurrence => ({ id: occurrence.id, rootId: occurrence.rootId,
@@ -1760,6 +1942,126 @@ export class Resolver {
     runtime.furnaceUnits += amount;
     this.emitSpecial(die, effect, `Furnace units ${before} → ${runtime.furnaceUnits}`, 'on_command',
       undefined, undefined, { amount });
+  }
+
+  burnItDown(): void {
+    const flame = this.chargeFlameSource('burnItDown');
+    if (!flame) throw new Error('Burn It Down requires its active Flame.');
+    const sacrificed = this.state.score;
+    const fraction = this.state.target > 0n ? Math.max(0, Math.min(1, exactRatioNumber(sacrificed, this.state.target))) : 0;
+    const requested = burnItDownChargeGain(flame.investment, fraction);
+    const chargeBefore = this.state.chargeXMult;
+    this.state.score = 0n;
+    this.state.interactiveFlames.burnItDownUses++;
+    const gained = this.growCharge('burnItDown', requested,
+      `sacrificed ${this.format(sacrificed)} Score (${this.format(fraction * 100)}% of target)`, undefined,
+      { scoreSacrificed: sacrificed, targetFraction: fraction, chargeBefore, chargeRequested: requested,
+        useCount: this.state.interactiveFlames.burnItDownUses });
+    this.emitV2({ kind: 'flame_action', flame: 'burnItDown', action: { type: 'burn_it_down',
+      scoreSacrificed: sacrificed, target: this.state.target, fraction, chargeBefore,
+      chargeRequested: requested, chargeGained: gained, useCount: this.state.interactiveFlames.burnItDownUses } });
+    this.state.decisionId++;
+  }
+
+  greaseTheEngine(): void {
+    const flame = this.chargeFlameSource('greaseTheEngine');
+    if (!flame) throw new Error('Grease the Engine requires its active Flame.');
+    const useCount = this.state.interactiveFlames.greaseTheEngineUses + 1;
+    const cost = greaseTheEngineCost(this.state.interactiveFlames.greaseTheEngineUses);
+    const goldBefore = this.state.gold;
+    const chargeBefore = this.state.chargeXMult;
+    const requested = greaseTheEngineChargeGain(flame.investment);
+    this.spendRoundGold(cost, `Grease the Engine bribe: -${this.format(cost)} Gold`, 'greaseTheEngine');
+    this.state.interactiveFlames.greaseTheEngineUses = useCount;
+    const gained = this.growCharge('greaseTheEngine', requested, `paid ${this.format(cost)} Gold`, undefined,
+      { goldCost: cost, goldBefore, goldAfter: this.state.gold, useCount, chargeBefore, chargeRequested: requested });
+    this.emitV2({ kind: 'flame_action', flame: 'greaseTheEngine', action: { type: 'grease_the_engine',
+      cost, goldBefore, goldAfter: this.state.gold, useCount, chargeRequested: requested, chargeGained: gained } });
+    this.state.decisionId++;
+  }
+
+  lightningStrike(dieId: number, predictedFace: Exclude<Rank, 7>): void {
+    const flame = this.chargeFlameSource('lightningStrike');
+    if (!flame) throw new Error('Lightning Strike requires its active Flame.');
+    const source = this.state.manualRerollsRemaining > 0 ? 'normal' as const : 'carePackage' as const;
+    const requested = lightningStrikeChargeGain(flame.investment);
+    this.manualReroll([dieId]);
+    const die = this.state.dice.find(item => item.id === dieId);
+    if (!die) throw new Error('Lightning Strike die disappeared during its Manual Reroll.');
+    const actualFace = activeFace(die).rank;
+    const hit = actualFace === predictedFace;
+    const chargeBefore = this.state.chargeXMult;
+    const gained = hit ? this.growCharge('lightningStrike', requested,
+      `predicted ${predictedFace}; ${this.dieLabel(dieId)} landed on ${actualFace}`, [dieId],
+      { predictedDieId: dieId, predictedFace, actualFace, predictionHit: true,
+        manualRerollSource: source, chargeBefore, chargeRequested: requested }) : 0;
+    if (!hit) this.triggerFlame('lightningStrike',
+      `predicted ${predictedFace}; ${this.dieLabel(dieId)} landed on ${actualFace}; no Charge`, undefined, undefined,
+      { predictedDieId: dieId, predictedFace, actualFace, predictionHit: false, manualRerollSource: source,
+        chargeBefore, chargeRequested: requested, chargeGained: 0 });
+    this.emitV2({ kind: 'flame_action', flame: 'lightningStrike', action: { type: 'lightning_strike',
+      dieId, predictedFace, actualFace, hit, manualRerollSource: source, chargeGained: gained } });
+  }
+
+  dareDevil(): void {
+    const flame = flameByType(this.state, 'dareDevil');
+    if (!flame) throw new Error('Dare Devil requires its active Flame.');
+    const dice = activeEncounterDice(this.state).filter(die => die.owner === 'player');
+    this.state.interactiveFlames.dareDevilCount++;
+    const dareCount = this.state.interactiveFlames.dareDevilCount;
+    const storedFactor = dareDevilMultiplier(flame.investedGold, dareCount);
+    const dieIds = dice.map(die => die.id);
+    this.triggerFlame('dareDevil', `Dare ${dareCount}/${FLAME_SCALING.dareDevil.maximumDares}; next Ultimate ×${this.format(storedFactor)}`,
+      undefined, undefined, { dareCount, availableDieIds: dieIds, storedUltimateFactor: storedFactor });
+    this.emitV2({ kind: 'flame_action', flame: 'dareDevil', action: { type: 'dare_activated',
+      dareCount, dieIds, storedFactor } });
+    this.rollBatch(dieIds, 'Dare Devil Roll', 'gameplay', false, 'dare_devil');
+    this.drain();
+    this.evaluate();
+    if (this.state.phase === 'round') this.state.decisionId++;
+  }
+
+  acceptDoubleOrNothing(): void {
+    const offer = this.state.scoreWagers.pendingDoubleOrNothing;
+    if (!offer) throw new Error('Double or Nothing acceptance requires a pending offer.');
+    const scorePackage = this.state.scoreWagers.packages.find(item => item.id === offer.packageId && item.complete);
+    if (!scorePackage) throw new Error('Double or Nothing score package is unavailable.');
+    const removed = this.removeScorePackage(scorePackage, 'double_or_nothing');
+    const consumedBefore = this.state.consumed.includes(offer.hand) || this.state.scorecardCycleConsumed.includes(offer.hand);
+    if (this.state.bossSilenced || this.state.boss?.type !== 'marathon') {
+      this.state.consumed = this.state.consumed.filter(hand => hand !== offer.hand);
+      this.state.scorecardCycleConsumed = this.state.scorecardCycleConsumed.filter(hand => hand !== offer.hand);
+    }
+    this.state.scoreWagers.doubleOrNothing = { hand: offer.hand, acceptedPackageId: offer.packageId,
+      factor: offer.factor, acceptedAtPlayCount: this.state.roundPlayCount };
+    this.state.scoreWagers.pendingDoubleOrNothing = null;
+    this.emitV2({ kind: 'double_or_nothing', phase: 'accepted', packageId: offer.packageId, hand: offer.hand,
+      packageScore: offer.packageScore, factor: offer.factor, roundScore: this.state.score, target: offer.target,
+      handReopened: consumedBefore && (this.state.bossSilenced || this.state.boss?.type !== 'marathon'),
+      scoreRemoved: removed });
+    this.state.decisionId++;
+    if (this.state.phase === 'round') this.evaluate();
+  }
+
+  declineDoubleOrNothing(reason: 'expired' | 'ignored'): void {
+    const offer = this.state.scoreWagers.pendingDoubleOrNothing;
+    if (!offer) throw new Error('Double or Nothing dismissal requires a pending offer.');
+    this.state.scoreWagers.pendingDoubleOrNothing = null;
+    this.emitV2({ kind: 'double_or_nothing', phase: reason, packageId: offer.packageId, hand: offer.hand,
+      packageScore: offer.packageScore, factor: offer.factor, roundScore: this.state.score, target: offer.target });
+    this.state.decisionId++;
+    if (this.state.phase === 'round') this.evaluate();
+  }
+
+  armAllIn(): void {
+    const flame = flameByType(this.state, 'allIn');
+    if (!flame) throw new Error('All In requires its active Flame.');
+    this.state.scoreWagers.allInArmed = true;
+    const factor = allInMultiplier(flame.investedGold);
+    this.emitV2({ kind: 'all_in', phase: 'armed', factor });
+    this.log({ type: 'ABILITY_EVALUATED', flame: 'allIn', xMult: factor,
+      message: `All In armed · next manual Play ×${this.format(factor)} · failed package Score will be removed` });
+    this.state.decisionId++;
   }
 
   manualReroll(dieIds: number[]): void {
@@ -1982,6 +2284,10 @@ export class Resolver {
     this.state.roundStartLives = roundStartLives;
     this.state.roundStartRosterSize = roundStartRosterSize;
     this.state.precedingShopDiePurchase = precedingShopDiePurchase;
+    this.state.interactiveFlames = { burnItDownUses: 0, greaseTheEngineUses: 0,
+      hotPotatoDieId: null, hotPotatoStreak: 0, dareDevilCount: 0 };
+    this.state.scoreWagers = { nextPackageId: 1, packages: [], pendingDoubleOrNothing: null,
+      doubleOrNothing: null, allInArmed: false };
     if (chargeBeforeRoundReset !== 1 || chargeWasArmed) this.emitV2({ kind: 'charge_changed', operation: 'round_reset',
       before: chargeBeforeRoundReset, after: 1, dieIds: [] });
     this.v2LastCharge = 1;
@@ -2073,6 +2379,7 @@ export class Resolver {
       this.state.encounterDice.push(createCursedDie());
       syncActiveDiceProjection(this.state);
     }
+    this.ensureHotPotatoTarget();
     this.v2ParentSeq = v2RoundStarted.seq;
     if (!this.state.bossSilenced && this.state.boss?.type === 'warden') {
       const playerDice = rosterDice(this.state);

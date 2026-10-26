@@ -6,8 +6,9 @@ import {
   createFlameInstance, emptyFlameSlots, flameByType, flameEffectText, flameInstances, flameStokeLimits, FLAMES, hasOwnedChargeFlame,
   HAND_FAMILY_FLAME_IDS, hasOwnedFlame, isFlame, ownedFlameIds, recalculateMaxCharge,
   normalizeFlameInstanceRuntime, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier,
+  greaseTheEngineCost, FLAME_SCALING,
 } from './flames';
-import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, planQualification } from './hands';
+import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, planQualification, ultimateHands } from './hands';
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
 import { activeEncounterDice, bossSchedule, currentlyPlayableManualHands, isBigBossRound, unavailableEncounterHands } from './bosses';
@@ -128,6 +129,19 @@ function normalizeHistoricalScores(state: GameState): void {
       event.evaluation.infernoMultiplierAfter = exactInferno(event.evaluation.infernoLevelAfter);
     } else if (event.kind === 'boss_state_changed' && (event.change === 'warden_target' || event.change === 'warden_unlock')
       && event.amount !== undefined) event.amount = exact(event.amount);
+    else if (event.kind === 'score_package_completed') event.score = exact(event.score);
+    else if (event.kind === 'score_package_removed') {
+      event.amount = exact(event.amount); event.roundScoreBefore = exact(event.roundScoreBefore);
+      event.roundScoreAfter = exact(event.roundScoreAfter);
+    } else if (event.kind === 'double_or_nothing') {
+      event.packageScore = exact(event.packageScore); event.roundScore = exact(event.roundScore); event.target = exact(event.target);
+      if (event.scoreRemoved !== undefined) event.scoreRemoved = exact(event.scoreRemoved);
+    } else if (event.kind === 'all_in') {
+      if (event.packageScore !== undefined) event.packageScore = exact(event.packageScore);
+      if (event.prePackageRoundScore !== undefined) event.prePackageRoundScore = exact(event.prePackageRoundScore);
+      if (event.temporaryRoundScore !== undefined) event.temporaryRoundScore = exact(event.temporaryRoundScore);
+      if (event.scoreRemoved !== undefined) event.scoreRemoved = exact(event.scoreRemoved);
+    }
   }
   const exactAmountEvents = new Set([
     'HAND_SCORE_FINALIZED', 'STANDALONE_SCORE_CALCULATED', 'SCORE_ROUNDING_AUDIT',
@@ -207,6 +221,40 @@ function normalizeHandFamilyFlameRuntime(state: Pick<Board, 'flameSlots' | 'hand
     const stage = stages[id];
     return [id, stage === 'payoff' || stage === 'spent' ? stage : 'setup'];
   }));
+}
+
+function normalizeInteractiveFlameRuntime(state: Pick<Board, 'interactiveFlames'>): void {
+  state.interactiveFlames ??= { burnItDownUses: 0, greaseTheEngineUses: 0,
+    hotPotatoDieId: null, hotPotatoStreak: 0, dareDevilCount: 0 };
+  state.interactiveFlames.burnItDownUses = Math.max(0, Math.floor(state.interactiveFlames.burnItDownUses ?? 0));
+  state.interactiveFlames.greaseTheEngineUses = Math.max(0, Math.floor(state.interactiveFlames.greaseTheEngineUses ?? 0));
+  state.interactiveFlames.hotPotatoDieId = Number.isInteger(state.interactiveFlames.hotPotatoDieId)
+    ? state.interactiveFlames.hotPotatoDieId : null;
+  state.interactiveFlames.hotPotatoStreak = Math.max(0, Math.floor(state.interactiveFlames.hotPotatoStreak ?? 0));
+  state.interactiveFlames.dareDevilCount = Math.max(0, Math.min(FLAME_SCALING.dareDevil.maximumDares,
+    Math.floor(state.interactiveFlames.dareDevilCount ?? 0)));
+}
+
+function normalizeScoreWagerRuntime(state: Pick<Board, 'scoreWagers'>): void {
+  state.scoreWagers ??= { nextPackageId: 1, packages: [], pendingDoubleOrNothing: null,
+    doubleOrNothing: null, allInArmed: false };
+  state.scoreWagers.nextPackageId = Math.max(1, Math.floor(state.scoreWagers.nextPackageId ?? 1));
+  state.scoreWagers.packages = (state.scoreWagers.packages ?? []).map(scorePackage => ({
+    ...scorePackage,
+    scoreBefore: exact(scorePackage.scoreBefore),
+    score: exact(scorePackage.score),
+    removedScore: exact(scorePackage.removedScore),
+    plays: Array.isArray(scorePackage.plays) ? scorePackage.plays : [],
+    contributions: (scorePackage.contributions ?? []).map(contribution => ({ ...contribution,
+      amount: exact(contribution.amount) })),
+    complete: scorePackage.complete === true,
+    allIn: scorePackage.allIn === true,
+    doubleOrNothingRedemption: scorePackage.doubleOrNothingRedemption === true,
+  }));
+  const pending = state.scoreWagers.pendingDoubleOrNothing;
+  if (pending) state.scoreWagers.pendingDoubleOrNothing = { ...pending,
+    packageScore: exact(pending.packageScore), roundScore: exact(pending.roundScore), target: exact(pending.target) };
+  state.scoreWagers.allInArmed = state.scoreWagers.allInArmed === true;
 }
 
 function normalizeSilencedBossGoal(state: GameState): void {
@@ -333,6 +381,8 @@ export function normalizeGameState(state: GameState): GameState {
       ?? checkpoint.dice.filter(die => die.owner === 'player').length));
     checkpoint.precedingShopDiePurchase = checkpoint.precedingShopDiePurchase === true;
     checkpoint.manualRerollsUsedThisRound = Math.max(0, Math.floor(checkpoint.manualRerollsUsedThisRound ?? 0));
+    normalizeInteractiveFlameRuntime(checkpoint);
+    normalizeScoreWagerRuntime(checkpoint);
     normalizeHandFamilyFlameRuntime(checkpoint);
   }
   if (next.flameSelection) next.flameSelection.offers = next.flameSelection.offers
@@ -382,6 +432,7 @@ export function normalizeGameState(state: GameState): GameState {
   next.stats.goldSpentBySource.lifeRestore ??= 0;
   next.stats.goldSpentBySource.dicePurchase ??= 0;
   next.stats.goldSpentBySource.diceOfferReroll ??= 0;
+  next.stats.goldSpentBySource.greaseTheEngine ??= 0;
   next.stats.diceOfferRerolls ??= 0;
   next.stats.temperEarned ??= 0;
   next.stats.temperSpent ??= 0;
@@ -398,6 +449,8 @@ export function normalizeGameState(state: GameState): GameState {
   next.roundStartRosterSize = Math.max(0, Math.floor(next.roundStartRosterSize ?? rosterDice(next).length));
   next.precedingShopDiePurchase = next.precedingShopDiePurchase === true;
   next.manualRerollsUsedThisRound = Math.max(0, Math.floor(next.manualRerollsUsedThisRound ?? 0));
+  normalizeInteractiveFlameRuntime(next);
+  normalizeScoreWagerRuntime(next);
   normalizeHandFamilyFlameRuntime(next);
   recalculateMaxCharge(next);
   return next;
@@ -408,7 +461,38 @@ export function availableShopStages(state: Pick<Board, 'forgeUnlocked' | 'flameS
     ...(state.flameSlots.some(Boolean) ? ['flames' as const] : [])];
 }
 
+function validateManualReroll(state: Board | GameState, dieIds: readonly number[]): string | null {
+  if (state.phase !== 'round') return 'Manual rerolls can only be used during a gameplay round.';
+  if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0)
+    return 'Unlock a Warden die before taking another action.';
+  if (!dieIds.length) return 'Select at least one die to reroll.';
+  if (new Set(dieIds).size !== dieIds.length
+    || dieIds.some(id => !Number.isInteger(id) || !activeEncounterDice(state).some(die => die.id === id)))
+    return 'Select distinct unlocked dice that are on the board.';
+  if (dieIds.length > usableManualRerolls(state)) return 'Not enough manual rerolls for these dice.';
+  return null;
+}
+
+function validateInteractiveFlame(state: Board | GameState, flame: import('./types').Flame): string | null {
+  if (state.phase !== 'round') return 'Flame actions can only be used during an active Round.';
+  if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0)
+    return 'Unlock a Warden die before taking another action.';
+  const instance = flameByType(state, flame);
+  if (!instance) return `This run does not own ${FLAMES[flame].name}.`;
+  if (instance.investedGold <= 0) return `${FLAMES[flame].name} needs investment before it can be used.`;
+  return null;
+}
+
 export function validateAction(state: Board | GameState, action: Action): string | null {
+  if (action.type === 'ACCEPT_DOUBLE_OR_NOTHING') {
+    if (state.phase !== 'round' || !state.scoreWagers.pendingDoubleOrNothing) return 'No Double or Nothing offer is pending.';
+    return null;
+  }
+  if (action.type === 'DECLINE_DOUBLE_OR_NOTHING') {
+    if (state.phase !== 'round' || !state.scoreWagers.pendingDoubleOrNothing) return 'No Double or Nothing offer is pending.';
+    return null;
+  }
+  if (state.scoreWagers.pendingDoubleOrNothing) return 'Resolve the Double or Nothing offer first.';
   if (action.type === 'RETREAT') {
     if (state.phase !== 'round') return 'Retreat is only available during a gameplay Round.';
     if (currentlyPlayableManualHands(state).length > 0) return 'Retreat is only available when no manual Hand can be played.';
@@ -425,13 +509,46 @@ export function validateAction(state: Board | GameState, action: Action): string
   if (action.type === 'NOT_YET') return state.phase === 'inferno' && !!state.infernoEvaluation?.success
     && !state.infernoEvaluation.engulfed ? null : 'A pending ready Inferno evaluation is required.';
   if (action.type === 'MANUAL_REROLL') {
-    if (state.phase !== 'round') return 'Manual rerolls can only be used during a gameplay round.';
-    if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0) return 'Unlock a Warden die before taking another action.';
-    if (!action.dieIds.length) return 'Select at least one die to reroll.';
-    if (new Set(action.dieIds).size !== action.dieIds.length
-      || action.dieIds.some(id => !Number.isInteger(id) || !activeEncounterDice(state).some(die => die.id === id))) return 'Select distinct unlocked dice that are on the board.';
-    const paidDice = action.dieIds.length;
-    if (paidDice > usableManualRerolls(state)) return 'Not enough manual rerolls for these dice.';
+    return validateManualReroll(state, action.dieIds);
+  }
+  if (action.type === 'ACTIVATE_BURN_IT_DOWN') {
+    const invalid = validateInteractiveFlame(state, 'burnItDown');
+    if (invalid) return invalid;
+    if (state.target > 0n && state.score >= state.target) return 'The Round is already resolved.';
+    if (state.score <= 0n) return 'Build Round Score before sacrificing it.';
+    if (state.chargeXMult >= state.maxCharge - 1e-9) return 'Charge is already full.';
+    return null;
+  }
+  if (action.type === 'ACTIVATE_GREASE_THE_ENGINE') {
+    const invalid = validateInteractiveFlame(state, 'greaseTheEngine');
+    if (invalid) return invalid;
+    if (state.chargeXMult >= state.maxCharge - 1e-9) return 'Charge is already full.';
+    const cost = greaseTheEngineCost(state.interactiveFlames.greaseTheEngineUses);
+    if (state.gold < cost) return `Not enough Gold; ${cost} required.`;
+    return null;
+  }
+  if (action.type === 'ACTIVATE_LIGHTNING_STRIKE') {
+    const invalid = validateInteractiveFlame(state, 'lightningStrike');
+    if (invalid) return invalid;
+    if (state.chargeXMult >= state.maxCharge - 1e-9) return 'Charge is already full.';
+    if (![1, 2, 3, 4, 5, 6].includes(action.predictedFace)) return 'Predict a face from 1 through 6.';
+    return validateManualReroll(state, [action.dieId]);
+  }
+  if (action.type === 'ACTIVATE_DARE_DEVIL') {
+    const invalid = validateInteractiveFlame(state, 'dareDevil');
+    if (invalid) return invalid;
+    if (state.interactiveFlames.dareDevilCount >= FLAME_SCALING.dareDevil.maximumDares)
+      return 'Dare Devil is at its stored payoff cap.';
+    if (!ultimateHands(state.handLevels).some(hand => currentlyPlayableManualHands(state).includes(hand)))
+      return 'Your Ultimate Hand is not currently playable.';
+    if (!activeEncounterDice(state).some(die => die.owner === 'player')) return 'No player die is currently available to Roll.';
+    return null;
+  }
+  if (action.type === 'ARM_ALL_IN') {
+    const invalid = validateInteractiveFlame(state, 'allIn');
+    if (invalid) return invalid;
+    if (state.scoreWagers.allInArmed) return 'All In is already armed for the next manual Play.';
+    if (currentlyPlayableManualHands(state).length === 0) return 'No manual Hand is currently playable.';
     return null;
   }
   if (action.type === 'INVOKE_CHAMELEON' || action.type === 'INVOKE_FLYWHEEL'
@@ -719,6 +836,10 @@ export function newRun(seed: string, random?: RandomSource, options?: { debugTra
     infernoEvaluation: null, infernoEvaluationSuspendedUntilNewFlame: false, chargeXMult: 1, maxCharge: 1,
     chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, minigunUpperStreak: 0,
     roundPlayCount: 0, roundStartLives: CONFIG.maxLives, roundStartRosterSize: CONFIG.diceCount, precedingShopDiePurchase: false,
+    interactiveFlames: { burnItDownUses: 0, greaseTheEngineUses: 0,
+      hotPotatoDieId: null, hotPotatoStreak: 0, dareDevilCount: 0 },
+    scoreWagers: { nextPackageId: 1, packages: [], pendingDoubleOrNothing: null,
+      doubleOrNothing: null, allInArmed: false },
     hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
     fetchTarget: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
@@ -758,6 +879,13 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
             resource: 'invocation' as const, amount: 1 };
         }) ?? []); break;
       case 'MANUAL_REROLL': resolver.manualReroll(action.dieIds); break;
+      case 'ACTIVATE_BURN_IT_DOWN': resolver.burnItDown(); break;
+      case 'ACTIVATE_GREASE_THE_ENGINE': resolver.greaseTheEngine(); break;
+      case 'ACTIVATE_LIGHTNING_STRIKE': resolver.lightningStrike(action.dieId, action.predictedFace); break;
+      case 'ACTIVATE_DARE_DEVIL': resolver.dareDevil(); break;
+      case 'ACCEPT_DOUBLE_OR_NOTHING': resolver.acceptDoubleOrNothing(); break;
+      case 'DECLINE_DOUBLE_OR_NOTHING': resolver.declineDoubleOrNothing(action.reason); break;
+      case 'ARM_ALL_IN': resolver.armAllIn(); break;
       case 'RETREAT': resolver.retreat(); break;
       case 'INVOKE_CHAMELEON': resolver.invokeChameleon(action.dieId); break;
       case 'INVOKE_FLYWHEEL': resolver.invokeFlywheel(action.dieId); break;

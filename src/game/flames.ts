@@ -63,11 +63,19 @@ export const FLAMES: Record<Flame, FlameDefinition> = {
   blackHole: flameDefinition('blackHole', 'Black Hole', 'BLACK', 'rare'),
   assemblyLine: flameDefinition('assemblyLine', 'Assembly Line', 'LINE', 'uncommon'),
   gymBros: flameDefinition('gymBros', 'Gym Bros', 'GYM', 'uncommon'),
+  burnItDown: flameDefinition('burnItDown', 'Burn It Down', 'BURN', 'rare'),
+  greaseTheEngine: flameDefinition('greaseTheEngine', 'Grease the Engine', 'GREASE', 'uncommon'),
+  lightningStrike: flameDefinition('lightningStrike', 'Lightning Strike', 'STRIKE', 'rare'),
+  hotPotatoClock: flameDefinition('hotPotatoClock', 'Hot Potato Clock', 'POTATO', 'uncommon'),
+  dareDevil: flameDefinition('dareDevil', 'Dare Devil', 'DARE', 'rare'),
+  doubleOrNothing: flameDefinition('doubleOrNothing', 'Double or Nothing', 'DOUBLE', 'rare'),
+  allIn: flameDefinition('allIn', 'All In', 'ALL IN', 'rare'),
 };
 export const FLAME_IDS = Object.keys(FLAMES) as Flame[];
 export const XMult_FLAME_IDS = FLAME_IDS.filter(flame => FLAMES[flame].affectsXMult);
 export const CHARGE_FLAME_IDS = ['momentum', 'thirdRail', 'jumpStart', 'powerSurge', 'fluxCapacitor',
-  'potentialEnergy', 'allHandsOnDeck'] as const satisfies readonly Flame[];
+  'potentialEnergy', 'allHandsOnDeck', 'burnItDown', 'greaseTheEngine', 'lightningStrike',
+  'hotPotatoClock'] as const satisfies readonly Flame[];
 export type ChargeFlame = typeof CHARGE_FLAME_IDS[number];
 export const HAND_FAMILY_FLAMES = {
   doubleDown: { setup: 'pair', payoff: 'twoPair' },
@@ -102,6 +110,13 @@ export const FLAME_SCALING = {
   blackHole: { bonusPerMissingDie: 1 },
   assemblyLine: { perMatchingDie: .3, maximumPlayedDice: 5 },
   gymBros: { perMatchingDie: .3, maximumPlayedDice: 5 },
+  burnItDown: { fullCharge: 5 },
+  greaseTheEngine: { baseCost: 5, charge: 1 },
+  lightningStrike: { charge: 3 },
+  hotPotatoClock: { chargePerStreak: .5 },
+  dareDevil: { bonusPerDare: 2, maximumDares: 4 },
+  doubleOrNothing: { fullBonus: 8, offerSeconds: 5 },
+  allIn: { fullBonus: 11 },
 } as const;
 export const standardFlameMultiplier = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
 export const targetPracticeMultiplier = (investedGold: number) => 1 + 8 * flameProgress(investedGold);
@@ -160,6 +175,20 @@ export const assemblyLineMultiplier = (investedGold: number, matchingPlayedDice:
   enhancementDensityMultiplier(investedGold, matchingPlayedDice, FLAME_SCALING.assemblyLine.perMatchingDie);
 export const gymBrosMultiplier = (investedGold: number, matchingPlayedDice: number) =>
   enhancementDensityMultiplier(investedGold, matchingPlayedDice, FLAME_SCALING.gymBros.perMatchingDie);
+export const burnItDownChargeGain = (investedGold: number, targetFraction: number) => Number((FLAME_SCALING.burnItDown.fullCharge
+  * Math.max(0, Math.min(1, targetFraction)) * flameProgress(investedGold)).toFixed(12));
+export const greaseTheEngineCost = (usesThisRound: number) => FLAME_SCALING.greaseTheEngine.baseCost * 2 ** Math.max(0, Math.floor(usesThisRound));
+export const greaseTheEngineChargeGain = (investedGold: number) => FLAME_SCALING.greaseTheEngine.charge * flameProgress(investedGold);
+export const lightningStrikeChargeGain = (investedGold: number) => FLAME_SCALING.lightningStrike.charge * flameProgress(investedGold);
+export const hotPotatoClockChargeGain = (investedGold: number, streak: number) => Number((FLAME_SCALING.hotPotatoClock.chargePerStreak
+  * Math.max(0, Math.floor(streak)) * flameProgress(investedGold)).toFixed(12));
+export const dareDevilMultiplier = (investedGold: number, dareCount: number) => Number((1 + FLAME_SCALING.dareDevil.bonusPerDare
+  * Math.min(FLAME_SCALING.dareDevil.maximumDares, Math.max(0, Math.floor(dareCount)))
+  * flameProgress(investedGold)).toFixed(12));
+export const doubleOrNothingMultiplier = (investedGold: number) =>
+  fixedFlameMultiplier(investedGold, FLAME_SCALING.doubleOrNothing.fullBonus);
+export const allInMultiplier = (investedGold: number) =>
+  fixedFlameMultiplier(investedGold, FLAME_SCALING.allIn.fullBonus);
 type FlameDisplayContext = Pick<Board, 'gold' | 'lifetimeNormalShopGoldSpent'>;
 export function flameEffectText(id: Flame, investedGold: number, _board: FlameDisplayContext): string {
   switch (id) {
@@ -196,6 +225,13 @@ export function flameEffectText(id: Flame, investedGold: number, _board: FlameDi
     case 'blackHole': return `The first Play gains XMult for each Roster die missing at Round start.`;
     case 'assemblyLine': return `Five Played Clockwork dice reach ×${formatPlayerNumber(assemblyLineMultiplier(investedGold, 5))} XMult.`;
     case 'gymBros': return `Five Played Workout dice reach ×${formatPlayerNumber(gymBrosMultiplier(investedGold, 5))} XMult.`;
+    case 'burnItDown': return `On Command, sacrifice your current Round Score to add up to +${formatPlayerNumber(burnItDownChargeGain(investedGold, 1))} Charge.`;
+    case 'greaseTheEngine': return `On Command, pay escalating Gold for +${formatPlayerNumber(greaseTheEngineChargeGain(investedGold))} Charge.`;
+    case 'lightningStrike': return `Predict one die's Manual Reroll for +${formatPlayerNumber(lightningStrikeChargeGain(investedGold))} Charge on a hit.`;
+    case 'hotPotatoClock': return 'Avoid Playing the Hot Potato die to build increasingly large Charge.';
+    case 'dareDevil': return `Each Dare stores more XMult for your next Ultimate Hand, up to ×${formatPlayerNumber(dareDevilMultiplier(investedGold, 4))}.`;
+    case 'doubleOrNothing': return `Give up one manual Play's Score, then replay that Hand later for ×${formatPlayerNumber(doubleOrNothingMultiplier(investedGold))} XMult.`;
+    case 'allIn': return `Arm your next manual Play for ×${formatPlayerNumber(allInMultiplier(investedGold))} XMult; if it does not clear the Round, that Play's Score is removed.`;
     default: return `The condition grants ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult.`;
   }
 }
@@ -216,7 +252,11 @@ export function flameDetailsPresentation(id: Flame, investedGold: number, board:
           : id === 'powerSurge' ? '×3 current Charge on highest-level Hand'
             : id === 'fluxCapacitor' ? `×${formatPlayerNumber(fluxCapacitorChargeMultiplier(investment, 1))} Charge when 1 other die is affected`
               : id === 'potentialEnergy' ? `+${formatPlayerNumber(potentialEnergyChargeGain(investment))} Charge per qualifying Play`
-                : `+${formatPlayerNumber(allHandsOnDeckChargeGain(investment, 1))} Charge per available die`;
+                : id === 'allHandsOnDeck' ? `+${formatPlayerNumber(allHandsOnDeckChargeGain(investment, 1))} Charge per available die`
+                  : id === 'burnItDown' ? `up to +${formatPlayerNumber(burnItDownChargeGain(investment, 1))} Charge per sacrifice`
+                    : id === 'greaseTheEngine' ? `+${formatPlayerNumber(greaseTheEngineChargeGain(investment))} Charge per bribe`
+                      : id === 'lightningStrike' ? `+${formatPlayerNumber(lightningStrikeChargeGain(investment))} Charge on a correct prediction`
+                        : `+${formatPlayerNumber(hotPotatoClockChargeGain(investment, 1))} Charge per current avoidance streak`;
     return { currentLabel: 'Current Effect', currentValue,
       maxChargeContribution: maxChargeContribution(investment) };
   }
@@ -246,6 +286,9 @@ export function flameDetailsPresentation(id: Flame, investedGold: number, board:
                                   : id === 'blackHole' ? blackHoleMultiplier(investment, 4)
                                     : id === 'assemblyLine' ? assemblyLineMultiplier(investment, 5)
                                       : id === 'gymBros' ? gymBrosMultiplier(investment, 5)
+                                        : id === 'dareDevil' ? dareDevilMultiplier(investment, 4)
+                                          : id === 'doubleOrNothing' ? doubleOrNothingMultiplier(investment)
+                                            : id === 'allIn' ? allInMultiplier(investment)
           : standardFlameMultiplier(investment);
   return { currentLabel: 'Current XMult', currentValue: `up to ×${formatPlayerNumber(multiplier)}`,
     maxChargeContribution: null };
@@ -366,6 +409,9 @@ export interface HandStartSnapshot {
   roundStartLives: number;
   roundStartRosterSize: number;
   precedingShopDiePurchase: boolean;
+  dareDevilCount: number;
+  allIn: boolean;
+  doubleOrNothingRedemption: boolean;
   previousPlays: number;
   ultimateHands: HandId[];
   ultimatePlayable: boolean;
@@ -396,7 +442,7 @@ export interface HandStartSnapshot {
     activeEffects: SpecialDieType[]; enhancementCount: number }[];
 }
 
-export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'engulfmentLevel' | 'gold' | 'manualRerollsRemaining' | 'manualRerollsUsedThisRound' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackUpperHandsPlayed' | 'minigunUpperStreak' | 'flameSlots' | 'dice' | 'dieRoundState' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget' | 'roundPlayCount' | 'roundStartLives' | 'roundStartRosterSize' | 'precedingShopDiePurchase'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null, playSource: import('./types').HandPlaySource = 'manual'): HandStartSnapshot {
+export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'engulfmentLevel' | 'gold' | 'manualRerollsRemaining' | 'manualRerollsUsedThisRound' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackUpperHandsPlayed' | 'minigunUpperStreak' | 'flameSlots' | 'dice' | 'dieRoundState' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget' | 'roundPlayCount' | 'roundStartLives' | 'roundStartRosterSize' | 'precedingShopDiePurchase' | 'interactiveFlames'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null, playSource: import('./types').HandPlaySource = 'manual', wager: { allIn?: boolean; doubleOrNothingRedemption?: boolean } = {}): HandStartSnapshot {
   const selectedScore = handScore(state.dice, hand, selectedDieIds, state.handLevels[hand]);
   const ultimate = ultimateHands(state.handLevels);
   const availableDice = availablePlayableDice(state);
@@ -412,6 +458,9 @@ export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'en
     roundStartLives: state.roundStartLives,
     roundStartRosterSize: state.roundStartRosterSize,
     precedingShopDiePurchase: state.precedingShopDiePurchase,
+    dareDevilCount: state.interactiveFlames.dareDevilCount,
+    allIn: wager.allIn === true,
+    doubleOrNothingRedemption: wager.doubleOrNothingRedemption === true,
     previousPlays: state.handPlayCounts[hand],
     ultimateHands: ultimate,
     ultimatePlayable: ultimate.some(target => currentlyPlayableManualHands(state).includes(target)),
@@ -515,6 +564,9 @@ const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId, scoring
     case 'blackHole': return snapshot.roundStartRosterSize < 5 && snapshot.roundPlayCount === 0;
     case 'assemblyLine': return countPlayedDiceWithActiveEffects(snapshot, ['clockwork']) > 0;
     case 'gymBros': return countPlayedDiceWithActiveEffects(snapshot, ['workout']) > 0;
+    case 'dareDevil': return snapshot.dareDevilCount > 0 && snapshot.ultimateHands.includes(hand);
+    case 'doubleOrNothing': return snapshot.playSource === 'manual' && snapshot.doubleOrNothingRedemption;
+    case 'allIn': return snapshot.playSource === 'manual' && snapshot.allIn;
     case 'hotStreak': return hand === snapshot.hotStreakGoal;
     case 'speedDemon': return snapshot.speedDemonDecisionMs !== null;
     default: return true;
@@ -547,6 +599,9 @@ function factorValue(id: Flame, investedGold: number, snapshot: HandStartSnapsho
     case 'blackHole': return blackHoleMultiplier(investedGold, Math.max(0, 5 - snapshot.roundStartRosterSize));
     case 'assemblyLine': return assemblyLineMultiplier(investedGold, countPlayedDiceWithActiveEffects(snapshot, ['clockwork']));
     case 'gymBros': return gymBrosMultiplier(investedGold, countPlayedDiceWithActiveEffects(snapshot, ['workout']));
+    case 'dareDevil': return dareDevilMultiplier(investedGold, snapshot.dareDevilCount);
+    case 'doubleOrNothing': return doubleOrNothingMultiplier(investedGold);
+    case 'allIn': return allInMultiplier(investedGold);
     default: return standardFlameMultiplier(investedGold);
   }
 }
@@ -596,6 +651,10 @@ function factorInput(id: Flame, snapshot: HandStartSnapshot, _scoringDieIds: num
   if (id === 'punchCard') return { diagnostics: { precedingShopDiePurchase: snapshot.precedingShopDiePurchase } };
   if (id === 'blackHole') return { input: Math.max(0, 5 - snapshot.roundStartRosterSize), diagnostics: {
     roundStartRosterSize: snapshot.roundStartRosterSize, missingRosterDice: Math.max(0, 5 - snapshot.roundStartRosterSize) } };
+  if (id === 'dareDevil') return { input: snapshot.dareDevilCount, diagnostics: {
+    dareCount: snapshot.dareDevilCount, storedUltimateFactor: dareDevilMultiplier(
+      snapshot.flames.find(flame => flame.type === 'dareDevil')?.investedGold ?? 0, snapshot.dareDevilCount),
+    ultimateHand: snapshot.ultimateHands[0] } };
   if (id === 'sixPack') return { input: snapshot.sixPackUpperHandsPlayed, diagnostics: {
     currentFactor: snapshot.sixPackXMult, upperDecayStep: snapshot.sixPackUpperHandsPlayed } };
   if (id === 'minigun') return { input: snapshot.minigunUpperStreak + 1, diagnostics: {

@@ -26,7 +26,9 @@ export type Flame =
   | 'potentialEnergy' | 'allHandsOnDeck' | 'casual' | 'freeRealEstate'
   | 'heavyHitters' | 'frankenstein' | 'highRoller' | 'cleanSweep'
   | 'benchWarmer' | 'epinephrine' | 'punchCard' | 'blackHole'
-  | 'assemblyLine' | 'gymBros';
+  | 'assemblyLine' | 'gymBros'
+  | 'burnItDown' | 'greaseTheEngine' | 'lightningStrike' | 'hotPotatoClock' | 'dareDevil'
+  | 'doubleOrNothing' | 'allIn';
 export type FlameInstanceId = number;
 export type FlameStage = 'ember' | 'bonfire';
 export type FlameSlotIndex = 0 | 1 | 2 | 3 | 4;
@@ -56,7 +58,7 @@ export type Phase = 'round' | 'roundSummary' | 'inferno' | 'bust' | 'flameSelect
 export type ScoreSource = 'hand' | 'curtainCall' | 'jumpingBean' | 'hitchhiker' | 'boss';
 export type HandPlaySource = 'manual' | 'jumpingBean' | 'freePlay';
 export type GoldSource = 'golden' | 'jackpot' | 'diceSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward' | 'specialOffer';
-export type GoldSpendSource = 'dicePurchase' | 'diceOfferReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore' | 'furnace';
+export type GoldSpendSource = 'dicePurchase' | 'diceOfferReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore' | 'furnace' | 'greaseTheEngine';
 export type TemperSource = 'overkill' | 'boardRefresh' | 'miniBoss' | 'boss' | 'bonfire' | 'engulfment';
 export type TemperSpendSource = 'fusion' | 'forge';
 export type RoundTemperState = { overkill: number; boardRefresh: number; miniBoss: number; boss: number };
@@ -156,6 +158,88 @@ export interface FlameActivationDiagnostics {
   precedingShopDiePurchase?: boolean;
   roundStartRosterSize?: number;
   missingRosterDice?: number;
+  scoreSacrificed?: ExactScore;
+  targetFraction?: number;
+  chargeRequested?: number;
+  chargeBefore?: number;
+  useCount?: number;
+  goldCost?: number;
+  goldBefore?: number;
+  goldAfter?: number;
+  predictedDieId?: DieId;
+  predictedFace?: Rank;
+  actualFace?: Rank;
+  predictionHit?: boolean;
+  manualRerollSource?: 'normal' | 'carePackage';
+  hotPotatoBefore?: DieId | null;
+  hotPotatoPlayed?: boolean;
+  hotPotatoStreak?: number;
+  hotPotatoAfter?: DieId | null;
+  dareCount?: number;
+  availableDieIds?: DieId[];
+  storedUltimateFactor?: number;
+}
+
+export interface InteractiveFlameRuntime {
+  burnItDownUses: number;
+  greaseTheEngineUses: number;
+  hotPotatoDieId: DieId | null;
+  hotPotatoStreak: number;
+  dareDevilCount: number;
+}
+
+export interface ScorePackagePlay {
+  playId: string;
+  parentPlayId: string | null;
+  hand: HandId;
+  source: HandPlaySource;
+}
+
+export interface ScorePackageContribution {
+  playId: string;
+  hand: HandId | null;
+  source: Exclude<ScoreSource, 'hitchhiker'>;
+  amount: ExactScore;
+}
+
+/** Canonical Score lineage for one root Play and every directly generated scoring descendant. */
+export interface ScorePackage {
+  id: string;
+  rootPlayId: string;
+  initiatingHand: HandId;
+  initiatingSource: HandPlaySource;
+  scoreBefore: ExactScore;
+  score: ExactScore;
+  plays: ScorePackagePlay[];
+  contributions: ScorePackageContribution[];
+  complete: boolean;
+  removedScore: ExactScore;
+  allIn: boolean;
+  doubleOrNothingRedemption: boolean;
+}
+
+export interface PendingDoubleOrNothingOffer {
+  packageId: string;
+  hand: HandId;
+  packageScore: ExactScore;
+  factor: number;
+  roundScore: ExactScore;
+  target: ExactScore;
+}
+
+export interface DoubleOrNothingWager {
+  hand: HandId;
+  acceptedPackageId: string;
+  factor: number;
+  acceptedAtPlayCount: number;
+}
+
+export interface ScoreWagerRuntime {
+  nextPackageId: number;
+  packages: ScorePackage[];
+  pendingDoubleOrNothing: PendingDoubleOrNothingOffer | null;
+  doubleOrNothing: DoubleOrNothingWager | null;
+  allInArmed: boolean;
 }
 export interface HandScoreAccumulator {
   hand: HandId;
@@ -501,6 +585,8 @@ export interface Board {
   roundStartLives: number;
   roundStartRosterSize: number;
   precedingShopDiePurchase: boolean;
+  interactiveFlames: InteractiveFlameRuntime;
+  scoreWagers: ScoreWagerRuntime;
   hotStreakGoal: HandId | null;
   hotStreakCharges: number;
   handFamilyFlameStages: Partial<Record<Flame, HandFamilyFlameStage>>;
@@ -845,6 +931,13 @@ export type Action =
   | { type: 'SET_DIE_EFFECT_NUMBER'; dieId: DieId; effect: 'weighted' | 'jumpingBean'; number: Exclude<Rank, 7> }
   | { type: 'UNLOCK_WARDEN_DIE'; dieId: number }
   | { type: 'TOGGLE_CHARGE'; hand?: HandId | null; dieIds?: number[] }
+  | { type: 'ACTIVATE_BURN_IT_DOWN' }
+  | { type: 'ACTIVATE_GREASE_THE_ENGINE' }
+  | { type: 'ACTIVATE_LIGHTNING_STRIKE'; dieId: DieId; predictedFace: Exclude<Rank, 7> }
+  | { type: 'ACTIVATE_DARE_DEVIL' }
+  | { type: 'ACCEPT_DOUBLE_OR_NOTHING' }
+  | { type: 'DECLINE_DOUBLE_OR_NOTHING'; reason: 'expired' | 'ignored' }
+  | { type: 'ARM_ALL_IN' }
   | { type: 'BUY_DIE'; offerId: number }
   | { type: 'MOVE_DIE'; source: DiceSlotRef; destination: DiceSlotRef;
       expectedSourceDieId: DieId; expectedDestinationDieId: DieId | null }

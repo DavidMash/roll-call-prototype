@@ -31,11 +31,12 @@ interface Props {
   onDetails: () => void;
   onDropOffer?: (offerId: number) => void;
   fetchTarget?: { dieId: number; physicalFace: Rank } | null;
+  hotPotato?: boolean;
 }
 
 export function Die({ die, rosterSlot, display, selected, highlighted, rolling, resolving = false, ability, flameAbility, disabled,
   detailsDisabled = false, eligible, wardenLocked = false, wardenSelectable = false, unlockAt, ineligibleReason,
-  lockedReason, allowIneligibleClick = false, onClick, onDetails, onDropOffer, fetchTarget }: Props) {
+  lockedReason, allowIneligibleClick = false, onClick, onDetails, onDropOffer, fetchTarget, hotPotato = false }: Props) {
   const face = activeFace(die);
   const pips = scoringPips(face);
   const mutation = face.bossMutation;
@@ -54,7 +55,7 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
     + `${temporaryState ? `, ${temporaryState}` : ''}${isFetchTarget ? ', Fetch target' : ''}`;
   const accessibilityLabel = wardenLocked
     ? `${dieDetails}, locked${unlockAt === undefined ? '' : ` until ${formatExactScore(unlockAt)} points`}${wardenSelectable ? ', selectable to unlock' : ''}`
-    : `${dieDetails}${lockedReason ? `, required: ${lockedReason}` : ineligibleReason ? `, unavailable: ${ineligibleReason}` : ''}`;
+    : `${dieDetails}${hotPotato ? ', Hot Potato' : ''}${lockedReason ? `, required: ${lockedReason}` : ineligibleReason ? `, unavailable: ${ineligibleReason}` : ''}`;
   const triggered = ability || flameAbility;
 
   return <div className={`die-wrap die-slot${detailsDisabled ? ' details-disabled' : ''}${effectSuppressed ? ' effect-suppressed' : ''}`} data-die-id={die.id}
@@ -79,6 +80,7 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
       {mutation?.kind === 'snakeEyes' && <span className="boss-face-badge" aria-hidden="true" title="Snake Eyes">S</span>}
       {mutation?.kind === 'infected' && <span className="boss-face-badge infected" aria-hidden="true" title="Infected">!</span>}
       {isFetchTarget && <span className="fetch-face-badge" aria-hidden="true" title="Fetch target">FETCH</span>}
+      {hotPotato && <span className="hot-potato-badge" aria-hidden="true" title="Hot Potato">HOT</span>}
       {display === 'pips'
         ? <PipFace value={face.rank} label={`${dieLabel} showing ${face.rank}`} />
         : <Text component="span" className="die-number" role="img" aria-label={`${dieLabel} showing ${face.rank}`}>{face.rank}</Text>}

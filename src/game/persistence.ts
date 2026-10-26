@@ -6,7 +6,7 @@ import { stringifyExactJson } from './scoreMath';
 import type { BadDreamCheckpoint, GameState } from './types';
 
 export const RUN_STORAGE_KEY = 'roll-call:active-run';
-export const RUN_STORAGE_VERSION = 23;
+export const RUN_STORAGE_VERSION = 25;
 
 type RunStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
@@ -52,6 +52,9 @@ function isGameState(value: unknown): value is GameState {
 
 export function compactGameStateForPersistence(state: GameState): GameState {
   const compact = structuredClone(state);
+  // Timed post-Play offers are deliberately ephemeral. Accepted wagers and an
+  // armed All In remain canonical and are persisted normally.
+  compact.scoreWagers.pendingDoubleOrNothing = null;
   // The V1 prose timeline is a playback surface, not durable analysis history.
   compact.history = [];
   // Ordinary/full trace records are reproduction data, not durable gameplay state.

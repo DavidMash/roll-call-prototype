@@ -2,7 +2,8 @@ import { chapterNumberForRound } from './chapters';
 import {
   assemblyLineMultiplier, benchWarmerMultiplier, blackHoleMultiplier, casualMultiplier, cleanSweepMultiplier,
   epinephrineMultiplier, fatCatMultiplier, freeRealEstateMultiplier, frankensteinMultiplier, gymBrosMultiplier,
-  handFamilyFlameMultiplier, heavyHittersMultiplier, highRollerMultiplier,
+  handFamilyFlameMultiplier, heavyHittersMultiplier, highRollerMultiplier, dareDevilMultiplier,
+  allInMultiplier, doubleOrNothingMultiplier,
   HOT_STREAK_SEQUENCE, hotStreakMultiplier, isChargeFlame, isHandFamilyFlame, lowballMultiplier, maxChargeContribution,
   minigunMultiplier, missingPairMultiplier, sixPackStartingMultiplier, speedDemonMultiplier,
   punchCardMultiplier, standardFlameMultiplier, targetPracticeMultiplier, vineyardMultiplier,
@@ -148,6 +149,9 @@ function maximumFlameFactorOnHand(flame: Flame, hand: HandId): number {
   if (flame === 'blackHole') return blackHoleMultiplier(100, 4);
   if (flame === 'assemblyLine') return assemblyLineMultiplier(100, 5);
   if (flame === 'gymBros') return gymBrosMultiplier(100, 5);
+  if (flame === 'dareDevil') return dareDevilMultiplier(100, 4);
+  if (flame === 'doubleOrNothing') return doubleOrNothingMultiplier(100);
+  if (flame === 'allIn') return allInMultiplier(100);
   if (isHandFamilyFlame(flame)) return handFamilyFlameMultiplier(flame, 100);
   return standardFlameMultiplier(100);
 }

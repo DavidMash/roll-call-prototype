@@ -116,6 +116,28 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     case 'flame_runtime_changed': return event.change === 'sequence_stage'
       ? `FLAME · ${FLAMES[event.flame].name} · ${String(event.from).toUpperCase()} → ${String(event.to).toUpperCase()} · ${label(event.reason)}`
       : `FLAME · ${FLAMES[event.flame].name} · streak reset${event.hand ? ` by ${HANDS[event.hand].name}` : ''}`;
+    case 'flame_action': {
+      const action = event.action;
+      if (action.type === 'burn_it_down') return `FLAME ACTION · Burn It Down · sacrificed ${number(action.scoreSacrificed)} / ${number(action.target)} · Charge +${number(action.chargeGained)}`;
+      if (action.type === 'grease_the_engine') return `FLAME ACTION · Grease the Engine · ${number(action.cost)} Gold · Charge +${number(action.chargeGained)}`;
+      if (action.type === 'lightning_strike') return `FLAME ACTION · Lightning Strike · ${die(action.dieId)} predicted ${number(action.predictedFace)}, rolled ${number(action.actualFace)} · ${action.hit ? `HIT · Charge +${number(action.chargeGained)}` : 'MISS'}`;
+      if (action.type === 'hot_potato_play') return `FLAME · Hot Potato Clock · ${die(action.targetBefore)} ${action.played ? 'Played; streak reset' : `avoided; streak ${number(action.streak)}`} · Charge +${number(action.chargeGained)}${action.targetAfter === null ? '' : ` · moved to ${die(action.targetAfter)}`}`;
+      if (action.type === 'dare_activated') return `FLAME ACTION · Dare Devil · Dare ${number(action.dareCount)} · next Ultimate ×${number(action.storedFactor)} · Rolled ${action.dieIds.map(die).join(', ')}`;
+      return `FLAME · Dare Devil payoff · ${HANDS[action.hand].name} ×${number(action.factor)} · ${number(action.dareCount)} Dare${action.dareCount === 1 ? '' : 's'} consumed`;
+    }
+    case 'score_package_completed': return `SCORE PACKAGE · ${HANDS[event.hand].name} · ${number(event.score)} Score`;
+    case 'score_package_removed': return `${event.reason === 'double_or_nothing' ? 'DOUBLE OR NOTHING' : 'ALL IN FAILED'} · −${number(event.amount)} Score`;
+    case 'double_or_nothing': {
+      if (event.phase === 'offered') return `DOUBLE OR NOTHING · ${HANDS[event.hand].name} · ${number(event.packageScore)} Score offered at ×${number(event.factor)}`;
+      if (event.phase === 'accepted') return `DOUBLE OR NOTHING · ${HANDS[event.hand].name} · −${number(event.scoreRemoved ?? event.packageScore)} Score · wager active`;
+      if (event.phase === 'redeemed') return `DOUBLE OR NOTHING · ${HANDS[event.hand].name} replayed · ×${number(event.factor)}`;
+      return `DOUBLE OR NOTHING · ${HANDS[event.hand].name} · ${event.phase.toUpperCase()}`;
+    }
+    case 'all_in': return event.phase === 'armed'
+      ? `ALL IN · armed at ×${number(event.factor)}`
+      : event.success
+        ? `ALL IN · ${event.hand ? HANDS[event.hand].name : 'manual Play'} · ×${number(event.factor)} · Round cleared`
+        : `ALL IN FAILED · ${event.hand ? HANDS[event.hand].name : 'manual Play'} · −${number(event.scoreRemoved ?? 0n)} Score`;
     case 'charge_changed': return `CHARGE · ${event.operation} · ×${number(event.before)}→×${number(event.after)}`;
     case 'engulfment_attempted': return `ENGULFMENT · Shop ${number(event.shopVisitId)} · ${event.success ? 'SUCCESS' : 'OFFERING REJECTED'}`;
     case 'inferno_evaluated': return `INFERNO EVALUATION · ${event.evaluation.success ? 'READY' : 'NOT YET'} · effective ×${number(event.evaluation.effectiveValue)} / ×${number(event.evaluation.threshold)} · meter ${number((event.evaluation.previousReadiness ?? 0) * 100)}% → ${number(event.evaluation.readiness * 100)}% · ${event.evaluation.flames.length} Flame${event.evaluation.flames.length === 1 ? '' : 's'}`;

@@ -6,6 +6,9 @@ export type PlayCause = 'player' | 'free_play_effect' | 'jumping_bean';
 /** A committed request to resolve one hand. This is deliberately distinct from its Score occurrences. */
 export interface PlayIntent {
   id: string;
+  scorePackageId: string;
+  rootPlayId: string;
+  parentPlayId: string | null;
   hand: HandId;
   source: HandPlaySource;
   cause: PlayCause;
@@ -17,6 +20,8 @@ export interface PlayIntent {
   playerSelectedDieIds: number[];
   decisionMs: number | null;
   qualificationClaims: QualificationResourceClaim[];
+  allIn: boolean;
+  doubleOrNothingRedemption: boolean;
 }
 
 export type QualificationEffect = 'mirror' | 'missingLink' | 'conjoined' | 'hexerWild';
@@ -130,10 +135,15 @@ export function createPlayIntent(
   source: HandPlaySource,
   decisionMs: number | null,
   qualificationClaims: QualificationResourceClaim[] = [],
+  lineage?: { scorePackageId: string; rootPlayId: string; parentPlayId: string | null;
+    allIn?: boolean; doubleOrNothingRedemption?: boolean },
 ): PlayIntent {
   const selectedDieIds = [...dieIds];
   return {
     id,
+    scorePackageId: lineage?.scorePackageId ?? id,
+    rootPlayId: lineage?.rootPlayId ?? id,
+    parentPlayId: lineage?.parentPlayId ?? null,
     hand,
     source,
     cause: source === 'manual' ? 'player' : source === 'jumpingBean' ? 'jumping_bean' : 'free_play_effect',
@@ -142,6 +152,8 @@ export function createPlayIntent(
     playerSelectedDieIds: source === 'manual' ? [...selectedDieIds] : [],
     decisionMs,
     qualificationClaims: structuredClone(qualificationClaims),
+    allIn: lineage?.allIn === true,
+    doubleOrNothingRedemption: lineage?.doubleOrNothingRedemption === true,
   };
 }
 
@@ -163,7 +175,7 @@ export function createRollBatchIntent(
     reroll: !initialRoundRoll,
     manual: reason === 'manual',
     postPlay: reason === 'post_hand' || reason === 'winning_settle' || reason === 'juggler',
-    effectGenerated: reason === 'jumping_bean_followup' || reason === 'magician_return',
+    effectGenerated: reason === 'jumping_bean_followup' || reason === 'magician_return' || reason === 'dare_devil',
   };
 }
 
