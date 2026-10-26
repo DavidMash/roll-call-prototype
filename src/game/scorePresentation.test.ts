@@ -6,7 +6,7 @@ import { rosterDice, syncActiveDiceProjection } from './inventory';
 import { createDieEffect } from './specialDice';
 
 describe('score resolution presentation', () => {
-  it('begins at authoritative Base Pips and Mult without an empty XMult stage', () => {
+  it('begins at zero Pips and reveals Hand Mult after dice resolve', () => {
     const state = newRun('score-presentation-base').state;
     state.target = 1_000_000n;
     state.dice.forEach((die, index) => { die.value = index < 2 ? 1 : (index + 1) as 1 | 2 | 3 | 4 | 5 | 6; });
@@ -14,8 +14,9 @@ describe('score resolution presentation', () => {
     const started = result.events.find(event => event.type === 'HAND_STARTED')!;
     const view = scorePresentation(started)!;
     expect(view).toMatchObject({
-      pips: started.handScore!.basePips,
-      mult: started.handScore!.baseMultiplier,
+      pips: 0,
+      mult: started.handScore!.handMultiplier,
+      showHandMult: false,
       xMult: 1,
       showXMult: false,
       finalScore: null,
@@ -30,11 +31,13 @@ describe('score resolution presentation', () => {
     die.effects = [createDieEffect(die.id, 'bonus')];
     syncActiveDiceProjection(state);
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] });
-    const bonus = result.events.find(event => event.type === 'HAND_PIPS_CHANGED' && event.dieType === 'bonus')!;
-    expect(scorePresentation(bonus)).toMatchObject({ pips: bonus.handScore!.currentPips, callout: 'BONUS +10', activeMetric: 'pips' });
+    const bonus = result.events.find(event => event.type === 'DIE_PIPS_RESOLVED')!;
+    expect(scorePresentation(bonus)).toMatchObject({ pips: 11, callout: expect.stringContaining('+11 PIPS'), activeMetric: 'pips' });
+    const mult = result.events.find(event => event.type === 'HAND_MULTIPLIER_CHANGED')!;
+    expect(scorePresentation(mult)).toMatchObject({ showHandMult: true, activeMetric: 'mult' });
   });
 
-  it('reveals meaningful XMult and announces the authoritative final summary', () => {
+  it('reveals meaningful XMult before the authoritative final summary', () => {
     const state = newRun('score-presentation-xmult').state;
     state.target = 1_000_000n;
     state.dice[0].value = 1;
@@ -46,7 +49,10 @@ describe('score resolution presentation', () => {
     event.handScore!.currentXMult = 1.8;
     event.handScore!.finalScore = 208n;
     const view = scorePresentation(event)!;
-    expect(view).toMatchObject({ showXMult: true, xMult: 1.8, callout: 'DOUBLE DOWN ×1.8', finalScore: 208n });
-    expect(scoreAnnouncement(view)).toContain('XMult 1.8. Final score 208');
+    expect(view).toMatchObject({ showXMult: true, xMult: 1.8, callout: 'DOUBLE DOWN ×1.8', finalScore: null });
+    expect(scoreAnnouncement(view)).toContain('XMult 1.8');
+    expect(scoreAnnouncement(view)).not.toContain('Final score');
+    event.type = 'HAND_SCORE_FINALIZED';
+    expect(scorePresentation(event)).toMatchObject({ finalScore: 208n, activeMetric: 'final' });
   });
 });

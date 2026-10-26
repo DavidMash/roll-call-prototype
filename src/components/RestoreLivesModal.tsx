@@ -17,13 +17,12 @@ export function RestoreLivesModal({ board, opened, busy, onClose, submit }: {
       <Text size="xl" fw={800} c="red" aria-label={`${board.lives} of ${CONFIG.maxLives} lives`}>{hearts(board.lives)}</Text>
       {full ? <Text>All lives restored.</Text> : <>
         <Text>Restore one lost life.</Text>
-        <Text fw={800}><CurrencyAmount currency="gold" value={cost} /></Text>
       </>}
       <Text size="sm" c="dimmed">Next restore: <CurrencyAmount currency="gold" value={full ? cost : nextCost} /></Text>
       <Text size="sm" c="dimmed">Gold held: <CurrencyAmount currency="gold" value={board.gold} /></Text>
       <Group justify="flex-end"><Button variant="default" onClick={onClose}>Close</Button>
         <Button color="red" disabled={busy || full || board.gold < cost} onClick={() => submit({ type: 'RESTORE_LIFE' })}>
-          {full ? 'ALL LIVES RESTORED' : board.gold < cost ? 'NOT ENOUGH GOLD' : 'RESTORE LIFE'}
+          {full ? 'ALL LIVES RESTORED' : <span aria-label={`Restore life for ${cost} Gold${board.gold < cost ? ', unavailable' : ''}`}>RESTORE LIFE <CurrencyAmount currency="gold" value={cost} accessible={false} /></span>}
         </Button>
       </Group>
     </Stack>

@@ -108,7 +108,7 @@ test('Forge uses the compact equation and click-placement without committing inv
   await expect(page.getByTestId('forge-shop')).not.toContainText('INGREDIENT 1');
   await expect(page.getByTestId('forge-shop')).not.toContainText('TRUE FORGE');
   await expect(page.getByTestId('forge-result-preview')).toBeVisible();
-  await expect(page.getByTestId('forge-preview')).toContainText('T3');
+  await expect(page.getByTestId('forge-preview')).toContainText('3T');
   await page.screenshot({ path: test.info().outputPath('forge-preview-mobile.png'), fullPage: true });
   await page.getByTestId('forge-result-preview').click();
   await page.getByTestId('collection-slot-roster-2').locator('.collection-slot-main').click();

@@ -84,8 +84,8 @@ export function createHandAccumulator(hand: HandId, dieIds: number[], level = 1,
   const stats = handStats(hand, level);
   return {
     hand, handLevel: level, infernoMultiplier, dieIds: [...dieIds],
-    basePips: stats.basePips, baseMultiplier: stats.baseMultiplier,
-    currentPips: stats.basePips, currentMultiplier: stats.baseMultiplier,
+    handMultiplier: stats.handMultiplier,
+    currentPips: 0, currentMultiplier: stats.handMultiplier,
     xMultFactors: [], currentXMult: 1, bossFactor: 1,
     bonusPips: 0, hitchhikerPips: 0, rawScore: null, finalScore: null,
   };

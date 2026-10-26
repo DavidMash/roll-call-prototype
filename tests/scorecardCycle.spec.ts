@@ -42,7 +42,7 @@ test('filled scorecard reactivates Used rows and shows the exact accessible cele
   const celebration = page.getByTestId('scorecard-refresh-celebration');
   await expect(celebration).toBeVisible();
   await expect(celebration.getByText('BOARD REFRESH', { exact: true })).toBeVisible();
-  await expect(celebration.locator('strong')).toHaveText('T+2 · ALL HANDS REFRESHED');
+  await expect(celebration.locator('strong')).toHaveText('+2T · ALL HANDS REFRESHED');
   await expect(celebration).toHaveAccessibleName('Board refresh. Plus 2 Temper. All hands refreshed.');
   await expect(page.locator('.scorecard-row.consumed')).toHaveCount(0);
   await expect(page.getByText('USED', { exact: true })).toHaveCount(0);
@@ -55,7 +55,7 @@ test('filled scorecard reactivates Used rows and shows the exact accessible cele
 
   await expect(celebration).toHaveCount(0, { timeout: 2_000 });
   await expect(page.getByTestId('scorecard-row-ones')).not.toBeDisabled();
-  await expect(page.getByTestId('round-score-progress')).toContainText('81');
+  await expect(page.getByTestId('round-score-progress')).toContainText('74');
   await expect(page.getByTestId('stat-gold')).toContainText('19');
   await expect(page.getByTestId('manual-reroll')).toHaveAccessibleName(/2 REROLLS LEFT/);
 });
@@ -68,7 +68,7 @@ for (const speed of ['fast', 'instant'] as const) {
     await playFinalHand(page);
     const celebration = page.getByTestId('scorecard-refresh-celebration');
     for (let step = 0; step < 100 && await celebration.count() === 0; step++) await page.clock.runFor(50);
-    await expect(celebration).toHaveText('BOARD REFRESHT+2 · ALL HANDS REFRESHED');
+    await expect(celebration).toHaveText('BOARD REFRESH+2T · ALL HANDS REFRESHED');
     await page.clock.runFor(1000);
     await expect(celebration).toHaveCount(0);
   });

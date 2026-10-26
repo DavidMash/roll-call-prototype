@@ -18,10 +18,10 @@ function historyHand(seq: number, hand: 'ones' | 'twos', awarded: bigint, before
   return { seq, kind: 'hand_scored', round: 1, attempt: 1, actionId: seq, timelineId: 0,
     scorePackageId: `package-${seq}`, rootPlayId: `play-${seq}`, parentPlayId: null,
     hand, level: 1, playSource: 'manual', selectedDice: [0], scoringDice: [], scoreOccurrences: [], consumed: true,
-    score: { infernoMultiplier: 1n, basePips: 1, finalPips: 1, baseMult: 1, finalMult: 1,
+    score: { infernoMultiplier: 1n, finalPips: 1, handMult: 1, finalMult: 1,
       finalXMult: 1, bossFactor: 1, raw: awarded.toString(), awarded, rounding: { mode: 'nearest_integer', delta: '0' } },
     roundScore: { before, afterAward: before + awarded, after: before + awarded },
-    pipsContributions: [], multContributions: [], xMultContributions: [], sideEffects: [] };
+    pipsContributions: [], resolvedDicePips: [], multContributions: [], xMultContributions: [], sideEffects: [] };
 }
 
 function scoringBoundary(scoreBefore: bigint): GameState {
@@ -36,23 +36,23 @@ function scoringBoundary(scoreBefore: bigint): GameState {
 
 describe('exact score gameplay boundaries', () => {
   it('distinguishes Goal - 1, Goal, and Goal + 1 far above MAX_SAFE_INTEGER', () => {
-    const below = dispatch(scoringBoundary(HUGE_GOAL - 9n), { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant).state;
+    const below = dispatch(scoringBoundary(HUGE_GOAL - 2n), { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant).state;
     expect(below.score).toBe(HUGE_GOAL - 1n);
     expect(below.phase).toBe('round');
 
-    const equal = dispatch(scoringBoundary(HUGE_GOAL - 8n), { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant).state;
+    const equal = dispatch(scoringBoundary(HUGE_GOAL - 1n), { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant).state;
     expect(equal.score).toBe(HUGE_GOAL);
     expect(equal.phase).toBe('roundSummary');
     expect(equal.stats.rounds[0]).toMatchObject({ firstCrossedScore: HUGE_GOAL, finalScore: HUGE_GOAL, clearMargin: 0n });
 
-    const above = dispatch(scoringBoundary(HUGE_GOAL - 7n), { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant).state;
+    const above = dispatch(scoringBoundary(HUGE_GOAL), { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant).state;
     expect(above.score).toBe(HUGE_GOAL + 1n);
     expect(above.phase).toBe('roundSummary');
     expect(above.stats.rounds[0].clearMargin).toBe(1n);
   });
 
   it('records an exact huge Bust score and shortfall before rollback', () => {
-    const state = scoringBoundary(HUGE_GOAL - 9n);
+    const state = scoringBoundary(HUGE_GOAL - 2n);
     state.manualRerollsRemaining = 0;
     state.specialOfferEffects.carePackageRerolls = 0;
     state.consumed = Object.keys(state.handLevels).filter(hand => hand !== 'ones') as (keyof typeof state.handLevels)[];
@@ -69,7 +69,7 @@ describe('exact score gameplay boundaries', () => {
     state.boss = { type: 'caller', calledHand: 'twos', playsRemaining: 1, satisfied: false,
       satisfyingSource: null, callsCompleted: 0, callsMissed: 0, manualHandsPlayed: 2, callDeadline: 3 };
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant).state;
-    expect(result.score).toBe((initial + 8n + 1n) / 2n);
+    expect(result.score).toBe((initial + 1n + 1n) / 2n);
   });
 
 });
@@ -80,7 +80,7 @@ describe('exact score state, Warden, and attribution', () => {
     const current = HUGE_GOAL + 3n;
     const cost = wardenUnlockCosts(levels, [], 10n ** 40n)[0];
     expect(wardenUnlockTarget(current, levels, [], 1)).toBe(roundScoreToStep(current + cost, 5n));
-    expect(wardenUnlockCosts(levels, [], 10n ** 40n)).toEqual([10n, 25n, 85n, 205n]);
+    expect(wardenUnlockCosts(levels, [], 10n ** 40n)).toEqual([5n, 20n, 55n, 170n]);
   });
 
   it('round-trips exact rollback state without number coercion', () => {
@@ -138,7 +138,7 @@ describe('exact score persistence and structured history', () => {
   });
 
   it('exports structured history with strings while retaining exact runtime integers', () => {
-    const state = scoringBoundary(HUGE_GOAL - 8n);
+    const state = scoringBoundary(HUGE_GOAL - 1n);
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant).state;
     const runtime = result.historyV2.find(event => event.kind === 'hand_scored');
     expect(runtime?.kind === 'hand_scored' ? runtime.roundScore.after : null).toBe(HUGE_GOAL);
@@ -146,8 +146,8 @@ describe('exact score persistence and structured history', () => {
     const hand = exported.events.find(event => event.kind === 'hand_scored') as unknown as {
       score: { awarded: string }; roundScore: { before: string; after: string };
     };
-    expect(hand.score.awarded).toBe('8');
-    expect(hand.roundScore).toEqual({ before: (HUGE_GOAL - 8n).toString(), afterAward: HUGE_GOAL.toString(), after: HUGE_GOAL.toString() });
+    expect(hand.score.awarded).toBe('1');
+    expect(hand.roundScore).toEqual({ before: (HUGE_GOAL - 1n).toString(), afterAward: HUGE_GOAL.toString(), after: HUGE_GOAL.toString() });
     expect(stringifyExactJson(exported)).toContain(`"after":"${HUGE_GOAL}"`);
   });
 
@@ -178,7 +178,7 @@ describe('exact score persistence and structured history', () => {
     const state = newRun('legacy-inferno-history', constant).state;
     const legacyInferno = Number('59604644775390625');
     state.stats.handScores.push({ round: 1, hand: 'ones', handLevel: 1, infernoMultiplier: legacyInferno as unknown as bigint,
-      dieIds: [0], basePips: 1, baseMultiplier: 1, pips: 1, multiplier: 1, xMult: 1, bossFactor: 1,
+      dieIds: [0], handMultiplier: 1, pips: 1, multiplier: 1, xMult: 1, bossFactor: 1,
       xMultFactors: [], rawScore: '1', score: 1n, bonusPips: 0, hitchhikerPips: 0,
       playSource: 'manual', consumedHand: true });
     const hand = historyHand(1, 'ones', 1n, 0n);

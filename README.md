@@ -27,7 +27,7 @@ Scoring is authoritative domain arithmetic:
 round(Inferno × Pips × Mult × XMult × Boss factor)
 ```
 
-Hand Base Pips and Base Mult come from the trained hand level. Composable effects contribute through typed Score, Qualification, Roll-controller, and post-Roll boundaries. Roll controllers use a fixed priority and only the winning controller spends a use.
+Dice and their effects provide all scoring Pips. A trained Hand provides Mult, while Flames, Charge, bosses, and other conditional build effects provide XMult. Composable effects contribute through typed Score, Qualification, Roll-controller, and post-Roll boundaries. Roll controllers use a fixed priority and only the winning controller spends a use.
 
 ## Rounds, Busts, and persistence
 

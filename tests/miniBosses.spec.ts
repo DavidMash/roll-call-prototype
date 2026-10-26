@@ -38,7 +38,7 @@ test('Mini-Boss map, preview, encounter label, and Neglected badges reuse the bo
 
   await expect(page.getByTestId('boss-preview')).toContainText('MINI-BOSS');
   await expect(page.getByTestId('boss-preview')).toContainText('THE NEGLECTED');
-  await expect(page.getByTestId('boss-preview')).toContainText('Defeat: T+2');
+  await expect(page.getByTestId('boss-preview')).toContainText('Defeat: +2T');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   const map = page.getByTestId('run-map-transition');
   await expect(map).toHaveAttribute('data-destination', 'boss:3');

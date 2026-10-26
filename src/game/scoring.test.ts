@@ -23,8 +23,8 @@ describe('whole-die scoring', () => {
     syncActiveDiceProjection(state);
     state.dieRoundState = resetDieRoundState(rosterDice(state));
     const preview = handScore(state.dice, 'threeKind', [0, 1, 2]);
-    expect(preview.pips).toBe(22);
+    expect(preview.pips).toBe(12);
     const resolved = dispatch(state, { type: 'PLAY', hand: 'threeKind', dieIds: [0, 1, 2] }, constant());
-    expect(resolved.state.stats.handScores[0]).toMatchObject({ pips: 42, bonusPips: 20 });
+    expect(resolved.state.stats.handScores[0]).toMatchObject({ pips: 32, bonusPips: 20 });
   });
 });

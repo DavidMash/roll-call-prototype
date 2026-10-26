@@ -79,7 +79,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
           className={`scorecard-row ${state} strength-${strengthTier} ${targeted ? 'targeted' : ''} ${board.boss?.type === 'caller' && board.boss.calledHand === hand ? 'caller-called' : ''} ${board.boss?.type === 'fly' && board.boss.flyHand === hand ? 'fly-row' : ''}`} data-testid={`scorecard-row-${hand}`} data-state={state} data-strength-tier={strengthTier}
           disabled={busy || impossible || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}
           aria-keyshortcuts={selected && canSubmit ? 'Enter' : undefined}
-          aria-label={`${definition.name} · Lv. ${formatPlayerNumber(stats.level)} · ${formatPlayerNumber(stats.basePips)} Pips · ×${formatPlayerNumber(stats.baseMultiplier)} Mult${isUltimate ? ' · Ultimate Hand' : ''}${isBenchWarmer ? ' · Bench Warmer Hand' : ''}${topDownTarget ? ' · Top Down next Hand' : ''}${countDownTarget ? ' · Count Down next Hand' : ''}${magicianCalled ? ` · Magician call ${magicianCompleted ? 'completed' : 'pending'}` : ''} · ${scoreLabel}${impossible ? ' · Impossible' : ''}${used ? ' · Used' : ''}${neglected ? ' · Neglected' : ''}`}>
+          aria-label={`${definition.name} · Lv. ${formatPlayerNumber(stats.level)} · ×${formatPlayerNumber(stats.handMultiplier)} Mult${isUltimate ? ' · Ultimate Hand' : ''}${isBenchWarmer ? ' · Bench Warmer Hand' : ''}${topDownTarget ? ' · Top Down next Hand' : ''}${countDownTarget ? ' · Count Down next Hand' : ''}${magicianCalled ? ` · Magician call ${magicianCompleted ? 'completed' : 'pending'}` : ''} · ${scoreLabel}${impossible ? ' · Impossible' : ''}${used ? ' · Used' : ''}${neglected ? ' · Neglected' : ''}`}>
           <span className="scorecard-row-copy">
             <span className="scorecard-hand-name" title={definition.name}>
               <span className="scorecard-name-line">
@@ -92,9 +92,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
               </span>
               <span className="hand-level" data-testid={`scorecard-stats-${hand}`}>
                 <span className="hand-level-value">Lv. {formatPlayerNumber(stats.level)}</span>
-                <span className="hand-stat"><strong>{formatPlayerNumber(stats.basePips)}</strong><small>PIPS</small></span>
-                <span className="hand-stat-times" aria-hidden="true">×</span>
-                <span className="hand-stat"><strong>{formatPlayerNumber(stats.baseMultiplier)}</strong><small>MULT</small></span>
+                <span className="hand-stat hand-mult-stat"><strong>×{formatPlayerNumber(stats.handMultiplier)}</strong><small>MULT</small></span>
               </span>
             </span>
             {(isUltimate || isBenchWarmer || magicianCalled) && <span className="scorecard-marker-badges">

@@ -13,6 +13,9 @@ const die = (id: number) => `Die #${id}`;
 const scoredDie = (item: HandScoredEvent['scoringDice'][number]) => item.face === item.pips
   ? `${die(item.dieId)}=${number(item.pips)}`
   : `${die(item.dieId)} face ${number(item.face)} · ${number(item.pips)} Pips`;
+const resolvedDie = (item: HandScoredEvent['resolvedDicePips'][number]) => item.face.rank === item.totalPips
+  ? `${die(item.dieId)}=${number(item.totalPips)}`
+  : `${die(item.dieId)} face ${number(item.face.rank)} · ${number(item.totalPips)} Pips`;
 const label = (value: string) => value.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
   .replace(/\b\w/g, character => character.toUpperCase());
 const specialDieLabel = (type: keyof typeof SPECIAL_DICE) => SPECIAL_DICE[type].name;
@@ -32,9 +35,17 @@ function xMultLabel(contribution: XMultContribution): string {
   return `${location} ${source} ×${number(contribution.factor)}`;
 }
 
+function scoreEquation(event: HandScoredEvent): string {
+  const effectiveXMult = event.score.finalXMult * event.score.bossFactor;
+  const factors = [`${number(event.score.finalPips)} Pips`, `${number(event.score.finalMult)} Mult`];
+  if (effectiveXMult !== 1) factors.push(`${number(effectiveXMult)} XMult`);
+  if ((event.score.infernoMultiplier ?? 1n) > 1n) factors.push(`${number(event.score.infernoMultiplier ?? 1n)} Inferno`);
+  return `${factors.join(' × ')} = ${number(event.score.awarded)}`;
+}
+
 function sideEffectLabel(effect: HandScoredEvent['sideEffects'][number]): string {
   switch (effect.type) {
-    case 'gold': return `${effect.dieId === undefined ? '' : `${die(effect.dieId)} `}${label(effect.source)} +${number(effect.amount)} Gold`;
+    case 'gold': return `${effect.dieId === undefined ? '' : `${die(effect.dieId)} `}${label(effect.source)} +${number(effect.amount)}G`;
     case 'double_time': return `${die(effect.dieId)} Double Time ${effect.succeeded ? 'succeeded' : 'failed'}`;
     case 'special_die': return `${die(effect.dieId)} ${specialDieLabel(effect.dieType)} ${effect.detail}`;
     case 'charge': return `Charge ${label(effect.operation)} ×${number(effect.before)}→×${number(effect.after)}`;
@@ -58,26 +69,27 @@ function sideEffectLabel(effect: HandScoredEvent['sideEffects'][number]): string
 export function renderHandScoredV2(event: HandScoredEvent): string {
   const play = event.playSource === 'manual' ? 'PLAY' : 'FREE PLAY';
   const title = `${play} · ${HANDS[event.hand].name} Lv${number(event.level)}`;
-  const meaningfulPips = event.pipsContributions.some(item => item.source !== 'hand_base' && item.source !== 'die_base');
-  const meaningfulMult = event.multContributions.some(item => item.source !== 'hand_base');
+  const meaningfulPips = event.pipsContributions.some(item => item.source !== 'die_base');
+  const meaningfulMult = event.multContributions.some(item => item.source !== 'hand');
   const expanded = meaningfulPips || meaningfulMult || event.xMultContributions.length > 0 || event.sideEffects.length > 0;
-  const unusualDice = event.scoringDice.filter(item => item.face !== item.pips).map(scoredDie);
-  if (!expanded) return `${title} · ${(event.score.infernoMultiplier ?? 1) > 1 ? `Inferno ×${number(event.score.infernoMultiplier ?? 1)} · ` : ''}${number(event.score.finalPips)} Pips × ${number(event.score.finalMult)} Mult × ${number(event.score.finalXMult * event.score.bossFactor)} XMult = ${number(event.score.awarded)}${unusualDice.length ? ` · Dice: ${unusualDice.join(', ')}` : ''}`;
+  const resolvedDice = event.resolvedDicePips.map(resolvedDie);
+  const unusualDice = event.resolvedDicePips.filter(item => item.face.rank !== item.totalPips).map(resolvedDie);
+  if (!expanded) return `${title} · ${scoreEquation(event)}${unusualDice.length ? ` · Dice: ${unusualDice.join(', ')}` : ''}`;
 
-  const dice = event.scoringDice.map(scoredDie).join(', ');
-  const pipsEffects = event.pipsContributions.filter(item => item.source !== 'hand_base' && item.source !== 'die_base')
+  const dice = resolvedDice.length ? resolvedDice.join(', ') : event.scoringDice.map(scoredDie).join(', ');
+  const pipsEffects = event.pipsContributions.filter(item => item.source !== 'die_base')
     .map(item => `${item.dieId === undefined ? '' : `${die(item.dieId)} `}${label(item.source)} +${number(item.amount)}`);
-  const multEffects = event.multContributions.filter(item => item.source !== 'hand_base')
+  const multEffects = event.multContributions.filter(item => item.source !== 'hand')
     .map(item => `${label(item.source)} ×${number(item.factor)}`);
   const xMultEffects = event.xMultContributions.map(xMultLabel);
   const other = event.sideEffects.map(sideEffectLabel);
   return [
     title,
     `Dice: ${dice}`,
-    `Pips: ${number(event.score.basePips)} → ${number(event.score.finalPips)}${pipsEffects.length ? ` [${pipsEffects.join(', ')}]` : ''}`,
-    `Mult: ${number(event.score.baseMult)} → ${number(event.score.finalMult)}${multEffects.length ? ` [${multEffects.join(', ')}]` : ''}`,
+    `Pips: ${number(event.score.finalPips)} from dice${pipsEffects.length ? ` [${pipsEffects.join(', ')}]` : ''}`,
+    `Hand Mult: ${number(event.score.handMult)}${event.score.finalMult !== event.score.handMult ? ` → ${number(event.score.finalMult)}` : ''}${multEffects.length ? ` [${multEffects.join(', ')}]` : ''}`,
     `XMult: 1 → ${number(event.score.finalXMult * event.score.bossFactor)}${xMultEffects.length ? ` [${xMultEffects.join(', ')}]` : ''}`,
-    `Score: ${(event.score.infernoMultiplier ?? 1) > 1 ? `Inferno ×${number(event.score.infernoMultiplier ?? 1)} · ` : ''}${number(event.score.awarded)}`,
+    `Score: ${scoreEquation(event)}`,
     ...(other.length ? [`Other: ${other.join(' · ')}`] : []),
   ].join('\n');
 }
@@ -95,7 +107,7 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     case 'roll_batch': return `ROLL · ${event.reason} · ${event.results.map(result => `${die(result.dieId)} ${number(result.beforeFace)}→${number(result.afterFace)}`).join(' · ')}`;
     case 'shop_visit_started': return `SHOP VISIT ${number(event.shopVisitId)} · ${event.reason} · ${label(event.initialStage)}`;
     case 'shop_stage_changed': return `SHOP ${number(event.shopVisitId)} · ${label(event.from)} → ${label(event.to)}`;
-    case 'temper_changed': return `TEMPER · ${event.operation.toUpperCase()} · ${event.source === 'fusion' ? 'Forge' : label(event.source)} ${event.operation === 'earned' ? '+' : '−'}${number(event.amount)} · balance ${number(event.balance)}`;
+    case 'temper_changed': return `TEMPER · ${event.operation.toUpperCase()} · ${event.source === 'fusion' ? 'Forge' : label(event.source)} ${event.operation === 'earned' ? '+' : '−'}${number(event.amount)}T · balance ${number(event.balance)}T`;
     case 'training_session_started': return `TRAINING SESSION · Shop ${number(event.shopVisitId)} · Upper baseline ${number(event.upperBaseline)} · Lower baseline ${number(event.lowerBaseline)}`;
     case 'team_training_applied': return `TEAM TRAINING · Offer ${number(event.offerId)} · all hands +1`;
     case 'shop_visit_completed': return `SHOP ${number(event.shopVisitId)} COMPLETE · ${label(event.progression)}`;
@@ -104,11 +116,11 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     case 'shop_transaction': {
       const transaction = event.transaction;
       switch (transaction.type) {
-        case 'dice_purchased': return `DICE PURCHASE · offer ${number(transaction.offerId)} · Die #${number(transaction.dieId)} ${specialDieLabel(transaction.dieType)} Lv${number(transaction.level)} · ${number(transaction.pricePaid)} Gold · ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)}`;
-        case 'dice_sold': return `DICE SALE · Die #${number(transaction.dieId)} ${transaction.effects.map(effect => `${specialDieLabel(effect.type)} Lv${number(effect.level)}`).join(' + ') || 'Normal'} · ${number(transaction.proceeds)} Gold (${number(transaction.componentSalvage)} components + ${number(transaction.complexityPremium)} complexity + ${number(transaction.vintageAppreciation)} Vintage) · ${label(transaction.source.area)} ${number(transaction.source.index + 1)}`;
+        case 'dice_purchased': return `DICE PURCHASE · offer ${number(transaction.offerId)} · Die #${number(transaction.dieId)} ${specialDieLabel(transaction.dieType)} Lv${number(transaction.level)} · ${number(transaction.pricePaid)}G · ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)}`;
+        case 'dice_sold': return `DICE SALE · Die #${number(transaction.dieId)} ${transaction.effects.map(effect => `${specialDieLabel(effect.type)} Lv${number(effect.level)}`).join(' + ') || 'Normal'} · ${number(transaction.proceeds)}G (${number(transaction.componentSalvage)} components + ${number(transaction.complexityPremium)} complexity + ${number(transaction.vintageAppreciation)} Vintage) · ${label(transaction.source.area)} ${number(transaction.source.index + 1)}`;
         case 'dice_moved': return `DICE MOVE · ${label(transaction.source.area)} ${number(transaction.source.index + 1)} → ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)} · source #${number(transaction.sourceDieId)}${transaction.destinationDieId === null ? '' : ` · destination #${number(transaction.destinationDieId)}`}`;
-        case 'dice_fused': return `DICE FORGE · ingredients #${number(transaction.ingredientIds[0])} + #${number(transaction.ingredientIds[1])} → result #${number(transaction.resultId)} · ${transaction.effects.map(effect => `${specialDieLabel(effect.type)}${effect.level > 1 ? ` ${formatEffectLevel(effect.level)}` : ''}`).join(' + ')} · ${transaction.temperCost} Temper · rating ${transaction.forgeRating} · ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)}`;
-        case 'dice_offers_rerolled': return `DICE OFFERS REROLLED · ${number(transaction.cost)} Gold · ${transaction.oldOfferIds.join(',')} → ${transaction.newOfferIds.join(',')} · reroll ${number(transaction.rerollCount)}`;
+        case 'dice_fused': return `DICE FORGE · ingredients #${number(transaction.ingredientIds[0])} + #${number(transaction.ingredientIds[1])} → result #${number(transaction.resultId)} · ${transaction.effects.map(effect => `${specialDieLabel(effect.type)}${effect.level > 1 ? ` ${formatEffectLevel(effect.level)}` : ''}`).join(' + ')} · ${transaction.temperCost}T · rating ${transaction.forgeRating} · ${label(transaction.destination.area)} ${number(transaction.destination.index + 1)}`;
+        case 'dice_offers_rerolled': return `DICE OFFERS REROLLED · ${number(transaction.cost)}G · ${transaction.oldOfferIds.join(',')} → ${transaction.newOfferIds.join(',')} · reroll ${number(transaction.rerollCount)}`;
         default: return `SHOP · ${transaction.type} · ${'amount' in transaction ? number(transaction.amount) : ''}`.trim();
       }
     }
@@ -124,7 +136,7 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     case 'flame_action': {
       const action = event.action;
       if (action.type === 'burn_it_down') return `FLAME ACTION · Burn It Down · sacrificed ${number(action.scoreSacrificed)} / ${number(action.target)} · Charge +${number(action.chargeGained)}`;
-      if (action.type === 'grease_the_engine') return `FLAME ACTION · Grease the Engine · ${number(action.cost)} Gold · Charge +${number(action.chargeGained)}`;
+      if (action.type === 'grease_the_engine') return `FLAME ACTION · Grease the Engine · ${number(action.cost)}G · Charge +${number(action.chargeGained)}`;
       if (action.type === 'lightning_strike') return `FLAME ACTION · Lightning Strike · ${die(action.dieId)} predicted ${number(action.predictedFace)}, rolled ${number(action.actualFace)} · ${action.hit ? `HIT · Charge +${number(action.chargeGained)}` : 'MISS'}`;
       if (action.type === 'hot_potato_play') return `FLAME · Hot Potato Clock · ${die(action.targetBefore)} ${action.played ? 'Played; streak reset' : `avoided; streak ${number(action.streak)}`} · Charge +${number(action.chargeGained)}${action.targetAfter === null ? '' : ` · moved to ${die(action.targetAfter)}`}`;
       if (action.type === 'dare_activated') return `FLAME ACTION · Dare Devil · Dare ${number(action.dareCount)} · next Ultimate ×${number(action.storedFactor)} · Rolled ${action.dieIds.map(die).join(', ')}`;

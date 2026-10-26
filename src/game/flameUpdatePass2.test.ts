@@ -221,7 +221,7 @@ describe('Ultimate, Free Play, and face-condition Flames', () => {
 });
 
 describe('resolved Pips and enhancement composition Flames', () => {
-  it('Heavy Hitters compares resolved Played-die Pips with face values and excludes Hand base/Hitchhikers', () => {
+  it('Heavy Hitters compares resolved Played-die Pips with face values and excludes Hitchhikers', () => {
     expect(heavyHittersMultiplier(100)).toBe(3);
     const normal = game([5, 2, 3, 4, 6]); own(normal, 'heavyHitters');
     new Resolver(normal, constant()).play('fives', [0]);

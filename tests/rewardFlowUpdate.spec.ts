@@ -153,7 +153,7 @@ test('Shop exit stays disabled for one second and Shop interactions do not resta
 
   await page.clock.fastForward(500);
   const offer = state.shop!.offers[0];
-  await page.getByTestId(`dice-offer-${offer.id}`).getByRole('button', { name: /BUY/ }).click();
+  await page.getByTestId(`dice-offer-${offer.id}`).getByRole('button', { name: /buy/i }).click();
   await expect(page.getByTestId(`dice-offer-${offer.id}`)).toContainText('PURCHASED');
 
   await goToShopStage(page, 'flames');

@@ -6,6 +6,8 @@ import { ultimateHands } from './hands';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
 import { canonicalPlayPreview } from './playPreview';
 import { createDieEffect, resetDieRoundState } from './specialDice';
+import { RUN_HISTORY_V2_RULESET, RUN_HISTORY_V2_SCHEMA_VERSION } from './runHistoryV2';
+import { renderHandScoredV2 } from './runHistoryV2Renderer';
 import type { Flame, GameState, RandomSource, Rank } from './types';
 
 const constant = (value = .99): RandomSource => ({ next: () => value });
@@ -43,7 +45,47 @@ describe('canonical scoring clarity preview', () => {
     expect(preview.pips).toBe(resolved.state.stats.handScores[0].pips);
     expect(preview.score).toBe(resolved.state.stats.handScores[0].score);
     const finalEvent = resolved.events.find(event => event.type === 'HAND_SCORE_FINALIZED')!;
-    expect(finalEvent.diePips).toEqual(preview.diePips);
+    expect(finalEvent.resolvedDicePips?.map(item => ({ dieId: item.dieId, pips: item.totalPips, role: item.role })))
+      .toEqual(preview.diePips);
+    const dieEvents = resolved.events.filter(event => event.type === 'DIE_PIPS_RESOLVED');
+    expect(dieEvents.map(event => event.resolvedDiePips?.dieId)).toEqual([...ids, dice[4].id]);
+    expect(dieEvents.map(event => event.resolvedDiePips?.resolutionId)).toEqual(
+      dieEvents.map(event => event.resolvedDiePips?.resolutionId).filter((id, index, all) => all.indexOf(id) === index),
+    );
+    expect(dieEvents[0].resolvedDiePips?.runningPipsBefore).toBe(0);
+    for (let index = 1; index < dieEvents.length; index++) {
+      expect(dieEvents[index].resolvedDiePips?.runningPipsBefore)
+        .toBe(dieEvents[index - 1].resolvedDiePips?.runningPipsAfter);
+    }
+    expect(dieEvents.at(-1)?.resolvedDiePips?.runningPipsAfter).toBe(preview.pips);
+    expect(resolved.events.findIndex(event => event.type === 'HAND_MULTIPLIER_CHANGED'))
+      .toBeGreaterThan(resolved.events.map(event => event.type).lastIndexOf('DIE_PIPS_RESOLVED'));
+    const history = resolved.state.historyV2.find(event => event.kind === 'hand_scored')!;
+    expect(history.kind === 'hand_scored' ? history.score : null).toMatchObject({ finalPips: 42, handMult: 3 });
+    expect(history).not.toHaveProperty('score.basePips');
+    expect(history).not.toHaveProperty('score.baseMult');
+    expect(history.kind === 'hand_scored' ? renderHandScoredV2(history) : '')
+      .toContain('42 Pips × 3 Mult = 126');
+    expect(resolved.state.historyV2.find(event => event.kind === 'run_started')).toMatchObject({
+      schemaVersion: RUN_HISTORY_V2_SCHEMA_VERSION,
+      ruleset: RUN_HISTORY_V2_RULESET,
+    });
+  });
+
+  it('aggregates duplicate Score occurrences into one authoritative die beat', () => {
+    const state = stateWith();
+    const dice = rosterDice(state);
+    const ids = setFaces(state, [2, 2]);
+    dice[0].effects = [createDieEffect(dice[0].id, 'doubleTime', 4)];
+    state.dieRoundState = resetDieRoundState(dice);
+    const preview = canonicalPlayPreview(state, 'pair', ids);
+    const resolved = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: ids }, constant());
+    const beats = resolved.events.filter(event => event.type === 'DIE_PIPS_RESOLVED');
+    expect(beats).toHaveLength(2);
+    expect(beats[0].resolvedDiePips).toMatchObject({ dieId: dice[0].id, totalPips: 4 });
+    expect(beats[0].resolvedDiePips?.occurrenceIds).toHaveLength(2);
+    expect(new Set(beats[0].resolvedDiePips?.components.map(component => component.occurrenceId)).size).toBe(2);
+    expect(beats.reduce((sum, event) => sum + (event.resolvedDiePips?.totalPips ?? 0), 0)).toBe(preview.pips);
   });
 
   it('combines multiple canonical Flame factors and deterministic Double Time', () => {

@@ -5,29 +5,29 @@ import type { Die, DieRoundState, HandId, HandLevels, HandOption, Rank } from '.
 
 export interface HandDefinition {
   name: string;
-  // Level 1 multiplier. All current hand stats derive from this and hand level.
-  baseMultiplier: number;
+  /** Level 1 Hand Mult. Dice are the sole source of scoring Pips. */
+  startingMultiplier: number;
   size?: number;
   rank?: Rank;
   groups?: readonly number[];
 }
 
 export const HANDS: Record<HandId, HandDefinition> = {
-  ones: { name: 'Ones', rank: 1, baseMultiplier: 1 },
-  twos: { name: 'Twos', rank: 2, baseMultiplier: 1 },
-  threes: { name: 'Threes', rank: 3, baseMultiplier: 1 },
-  fours: { name: 'Fours', rank: 4, baseMultiplier: 1 },
-  fives: { name: 'Fives', rank: 5, baseMultiplier: 1 },
-  sixes: { name: 'Sixes', rank: 6, baseMultiplier: 1 },
-  sevens: { name: 'Sevens', rank: 7, baseMultiplier: 1 },
-  pair: { name: 'Pair', size: 2, groups: [2], baseMultiplier: 1.5 },
-  twoPair: { name: 'Two Pair', size: 4, groups: [2, 2], baseMultiplier: 2 },
-  threeKind: { name: 'Three of a Kind', size: 3, groups: [3], baseMultiplier: 2.5 },
-  smallStraight: { name: 'Small Straight', size: 4, baseMultiplier: 2.5 },
-  fullHouse: { name: 'Full House', size: 5, groups: [3, 2], baseMultiplier: 3.5 },
-  fourKind: { name: 'Four of a Kind', size: 4, groups: [4], baseMultiplier: 4 },
-  largeStraight: { name: 'Large Straight', size: 5, baseMultiplier: 4 },
-  fiveKind: { name: 'Five of a Kind', size: 5, groups: [5], baseMultiplier: 5 },
+  ones: { name: 'Ones', rank: 1, startingMultiplier: 1 },
+  twos: { name: 'Twos', rank: 2, startingMultiplier: 1 },
+  threes: { name: 'Threes', rank: 3, startingMultiplier: 1 },
+  fours: { name: 'Fours', rank: 4, startingMultiplier: 1 },
+  fives: { name: 'Fives', rank: 5, startingMultiplier: 1 },
+  sixes: { name: 'Sixes', rank: 6, startingMultiplier: 1 },
+  sevens: { name: 'Sevens', rank: 7, startingMultiplier: 1 },
+  pair: { name: 'Pair', size: 2, groups: [2], startingMultiplier: 2 },
+  twoPair: { name: 'Two Pair', size: 4, groups: [2, 2], startingMultiplier: 2 },
+  threeKind: { name: 'Three of a Kind', size: 3, groups: [3], startingMultiplier: 3 },
+  smallStraight: { name: 'Small Straight', size: 4, startingMultiplier: 4 },
+  fullHouse: { name: 'Full House', size: 5, groups: [3, 2], startingMultiplier: 5 },
+  fourKind: { name: 'Four of a Kind', size: 4, groups: [4], startingMultiplier: 6 },
+  largeStraight: { name: 'Large Straight', size: 5, startingMultiplier: 7 },
+  fiveKind: { name: 'Five of a Kind', size: 5, groups: [5], startingMultiplier: 8 },
 };
 /** Normal scorecard hands. Sevens is encounter-scoped and never leaks into Shops or other Rounds. */
 export const HAND_IDS = (Object.keys(HANDS) as HandId[]).filter(id => id !== 'sevens');
@@ -38,13 +38,11 @@ export const ULTIMATE_HAND_COUNT = 1;
 
 export interface HandStats {
   level: number;
-  basePips: number;
-  baseMultiplier: number;
+  handMultiplier: number;
 }
-export const startingBasePips = (hand: HandId) => 5 + 2 * HANDS[hand].baseMultiplier;
 export const roundToNearestHalf = (value: number) => Math.round(value * 2) / 2;
 export const roundToNearestQuarter = (value: number) => Math.round(value * 4) / 4;
-export const HAND_MULT_EXPONENT = 2.3;
+export const HAND_MULT_EXPONENT = 3.3;
 
 function monotonicProgression(
   originalValue: number,
@@ -64,31 +62,45 @@ function monotonicProgression(
 
 export function handStats(hand: HandId, level: number): HandStats {
   if (!Number.isInteger(level) || level < 1) throw new Error('Hand level must be a positive integer.');
-  const originalBasePips = startingBasePips(hand);
-  const originalBaseMultiplier = HANDS[hand].baseMultiplier;
+  const startingMultiplier = HANDS[hand].startingMultiplier;
   return {
     level,
-    basePips: monotonicProgression(originalBasePips, level, 1,
-      currentLevel => Math.round(originalBasePips * ((currentLevel + 2) / 3))),
-    baseMultiplier: monotonicProgression(originalBaseMultiplier, level, 0.25,
-      currentLevel => roundToNearestQuarter(originalBaseMultiplier * ((currentLevel + 5) / 6) ** HAND_MULT_EXPONENT)),
+    handMultiplier: monotonicProgression(startingMultiplier, level, 0.25,
+      currentLevel => roundToNearestQuarter(startingMultiplier * ((currentLevel + 5) / 6) ** HAND_MULT_EXPONENT)),
   };
 }
-export const trainedBaselineStrength = (hand: HandId, level: number) => {
-  const stats = handStats(hand, level);
-  return stats.basePips * stats.baseMultiplier;
-};
+/**
+ * Deterministic natural-scoring benchmark used only for presentation/ranking tie-breaks.
+ * It never contributes Pips to an actual score and never inspects the current dice.
+ */
+export function naturalHandPipsBenchmark(hand: HandId): number {
+  const rule = HANDS[hand];
+  if (rule.rank) return rule.rank * 5;
+  switch (hand) {
+    case 'pair': return 12;
+    case 'twoPair': return 22;
+    case 'threeKind': return 18;
+    case 'smallStraight': return 18;
+    case 'fullHouse': return 28;
+    case 'fourKind': return 24;
+    case 'largeStraight': return 20;
+    case 'fiveKind': return 30;
+    default: return 0;
+  }
+}
+export const trainedHandStrength = (hand: HandId, level: number) =>
+  handStats(hand, level).handMultiplier * naturalHandPipsBenchmark(hand);
 export type HandStrengthTier = 'normal' | 'elevated' | 'strongest';
 
 /**
- * Groups current authoritative Base Pips × Base Mult into a few relative tiers.
+ * Groups current authoritative Hand Mult into a few relative tiers.
  * Call once per scorecard section so Upper and Lower hands are never compared.
  */
 export function relativeHandStrengthTiers(
   handLevels: HandLevels,
   hands: readonly HandId[],
 ): Partial<Record<HandId, HandStrengthTier>> {
-  const strengths = hands.map(hand => trainedBaselineStrength(hand, handLevels[hand]));
+  const strengths = hands.map(hand => trainedHandStrength(hand, handLevels[hand]));
   const strongest = Math.max(0, ...strengths);
   return Object.fromEntries(hands.map((hand, index) => {
     const relativeStrength = strongest > 0 ? strengths[index] / strongest : 0;
@@ -101,7 +113,7 @@ export function rankedHands(handLevels: HandLevels): HandId[] {
   return [...HAND_IDS].sort((a, b) => {
     const levelDifference = handLevels[b] - handLevels[a];
     if (levelDifference) return levelDifference;
-    const strengthDifference = trainedBaselineStrength(b, handLevels[b]) - trainedBaselineStrength(a, handLevels[a]);
+    const strengthDifference = trainedHandStrength(b, handLevels[b]) - trainedHandStrength(a, handLevels[a]);
     if (strengthDifference) return strengthDifference;
     const aRank = HANDS[a].rank;
     const bRank = HANDS[b].rank;
@@ -115,7 +127,7 @@ export function rankedBenchWarmerHands(handLevels: HandLevels): HandId[] {
   return [...HAND_IDS].sort((a, b) => {
     const levelDifference = handLevels[a] - handLevels[b];
     if (levelDifference) return levelDifference;
-    const strengthDifference = trainedBaselineStrength(a, handLevels[a]) - trainedBaselineStrength(b, handLevels[b]);
+    const strengthDifference = trainedHandStrength(a, handLevels[a]) - trainedHandStrength(b, handLevels[b]);
     if (strengthDifference) return strengthDifference;
     const aRank = HANDS[a].rank;
     const bRank = HANDS[b].rank;
@@ -305,4 +317,4 @@ export function planQualification(dice: Die[], hand: HandId, selected: readonly 
     ambiguousClaims: claimOptions.length > 1 && !requestedClaims.length,
   };
 }
-export const handMultiplier = (hand: HandId, level = 1) => handStats(hand, level).baseMultiplier;
+export const handMultiplier = (hand: HandId, level = 1) => handStats(hand, level).handMultiplier;

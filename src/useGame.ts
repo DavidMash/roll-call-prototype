@@ -6,7 +6,8 @@ import { browserRunStorage, loadPersistedRun, savePersistedRun } from './game/pe
 import type { Action, Resolution } from './game/types';
 import { appendCriticalDiagnostic, type DebugTraceMode } from './game/debugTrace';
 import { isChapterMapTransition, isPlaybackBarrier, isPlaybackCheckpoint, nextScorecardRefreshIndex,
-  playbackBoard, SCORECARD_REFRESH_HOLD_MS, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump, type ScoreSummaryJump } from './game/playback';
+  playbackBoard, playbackTickMs, SCORECARD_REFRESH_HOLD_MS, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump,
+  type ScoreSummaryJump } from './game/playback';
 
 export type PlaybackSpeed = keyof typeof CONFIG.tickMs;
 
@@ -68,8 +69,9 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
       }
       return;
     }
+    const baseDelay = playbackTickMs(currentEvent, speed);
     const delay = !reducedMotion && currentEvent?.type === 'ROUND_BUST'
-      ? Math.max(CONFIG.tickMs[speed], 1200) : CONFIG.tickMs[speed];
+      ? Math.max(baseDelay, 1200) : baseDelay;
     const timeout = window.setTimeout(() => setIndex(current => current + 1), delay);
     return () => window.clearTimeout(timeout);
   }, [result, index, speed, busy, reducedMotion, active, summaryJump]);

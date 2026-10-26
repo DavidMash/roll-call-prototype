@@ -51,7 +51,7 @@ export function renderRunSummaryV2(state: GameState): string {
   const diceEconomy = Object.entries(experienced.diceEconomy.byType)
     .map(([type, metric]) => `${SPECIAL_DICE[type as keyof typeof SPECIAL_DICE].name}: bought ${metric.purchased}, sold ${metric.sold}, forged ${metric.fused}`).join(' · ') || 'None';
   const training = Object.entries(experienced.trainingByHand)
-    .map(([hand, metric]) => `${HANDS[hand as keyof typeof HANDS].name}: ${metric.purchases} purchase${metric.purchases === 1 ? '' : 's'}, ${number(metric.goldSpent)} Gold, max tier ${metric.maximumRelativeTier}, max quote ${number(metric.maximumNormalPrice)}`).join(' · ') || 'None';
+    .map(([hand, metric]) => `${HANDS[hand as keyof typeof HANDS].name}: ${metric.purchases} purchase${metric.purchases === 1 ? '' : 's'}, ${number(metric.goldSpent)}G, max tier ${metric.maximumRelativeTier}, max quote ${number(metric.maximumNormalPrice)}G`).join(' · ') || 'None';
   const specialDice = Object.entries(experienced.specialDice)
     .filter(([type]) => type !== 'normal')
     .map(([type, metric]) => `${SPECIAL_DICE[type as keyof typeof SPECIAL_DICE].name}: ${metric.activations} activations, ${metric.invocationsSpent} Uses, ${metric.commandUses} commands, ${metric.scoreOccurrences} Scores (${metric.additionalScores} additional)`).join(' · ') || 'None';
@@ -85,12 +85,12 @@ export function renderRunSummaryV2(state: GameState): string {
     `Flame timeline experienced: ${experienced.flameTimeline.map(item => `R${item.round} ${item.type}${item.flame ? ` ${FLAMES[item.flame].name}` : ''}${item.abandoned ? ' [rolled back]' : ''}`).join(' · ') || 'None'}`,
     '',
     'ECONOMY · CANONICAL',
-    `Final Gold: ${number(canonical.finalGold)}`,
-    `Final Temper: ${number(canonical.finalTemper)} · earned ${number(experienced.temperEarned)} (${entries(experienced.temperBySource)}) · spent ${number(experienced.temperSpent)} (${forgeSpendEntries(experienced.temperSpentBySource)})`,
+    `Final Gold: ${number(canonical.finalGold)}G`,
+    `Final Temper: ${number(canonical.finalTemper)}T · earned ${number(experienced.temperEarned)}T (${entries(experienced.temperBySource)}) · spent ${number(experienced.temperSpent)}T (${forgeSpendEntries(experienced.temperSpentBySource)})`,
     `Earned: ${entries(canonical.goldEarnedBySource)}`,
     `Spent: ${entries(canonical.goldSpentByCategory)}`,
-    `Training spend: ${number(canonical.trainingGoldSpent)} Gold`,
-    `Dice economy: ${number(experienced.diceEconomy.purchases)} purchases / ${number(experienced.diceEconomy.purchaseGold)} Gold · ${number(experienced.diceEconomy.sales)} sales / ${number(experienced.diceEconomy.saleGold)} Gold · ${number(experienced.diceEconomy.moves)} moves · ${number(experienced.diceEconomy.fusions)} fusions`,
+    `Training spend: ${number(canonical.trainingGoldSpent)}G`,
+    `Dice economy: ${number(experienced.diceEconomy.purchases)} purchases / ${number(experienced.diceEconomy.purchaseGold)}G · ${number(experienced.diceEconomy.sales)} sales / ${number(experienced.diceEconomy.saleGold)}G · ${number(experienced.diceEconomy.moves)} moves · ${number(experienced.diceEconomy.fusions)} fusions`,
     `Dice types: ${diceEconomy}`,
     `Training by hand: ${training}`,
     `Shop reroll spend experienced: ${number(experienced.shopRerollSpend)}`,
@@ -104,7 +104,7 @@ export function renderRunSummaryV2(state: GameState): string {
     `Largest-hand share: median ${shares.median === null ? '—' : percent(shares.median)} · P90 ${shares.p90 === null ? '—' : percent(shares.p90)} · max ${shares.maximum === null ? '—' : percent(shares.maximum)} · >50% ${shares.over50Percent}/${shares.samples} · >80% ${shares.over80Percent}/${shares.samples}`,
     `Flame activations: ${entries(experienced.flameActivations)}`,
     `Flame balance: ${flameBalance}`,
-    `Flame lifecycle: acquired ${number(experienced.flameLifecycle.acquired)} · replaced ${number(experienced.flameLifecycle.replaced)} · invested ${number(experienced.flameLifecycle.stokedGold)} Gold · Bonfires ${number(experienced.flameLifecycle.bonfires)} · Engulfed ${number(experienced.flameLifecycle.engulfed)}`,
+    `Flame lifecycle: acquired ${number(experienced.flameLifecycle.acquired)} · replaced ${number(experienced.flameLifecycle.replaced)} · invested ${number(experienced.flameLifecycle.stokedGold)}G · Bonfires ${number(experienced.flameLifecycle.bonfires)} · Engulfed ${number(experienced.flameLifecycle.engulfed)}`,
     `Special dice: ${specialDice}`,
     `Charge: armed ${number(experienced.charge.arms)} · consumed ${number(experienced.charge.consumes)} · resets ${number(experienced.charge.resets)}`,
     `Boss outcomes: ${entries(experienced.bossOutcomes)} · Special Offers: ${entries(experienced.specialOffers)}`,

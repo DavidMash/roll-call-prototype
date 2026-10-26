@@ -233,7 +233,7 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
     {stage === 'shop' && <Paper p="xs" className="shop-section dice-shop-section" data-testid="dice-shop">
       <Group justify="space-between" className="section-heading"><Text fw={700} size="sm" tt="uppercase" lts=".08em">Dice</Text>
         <Button size="compact-xs" variant="default" disabled={busy || board.gold < offerRerollCost(shop.offerRerolls)}
-          aria-label={`REROLL OFFERS · ${offerRerollCost(shop.offerRerolls)} Gold`} onClick={() => submit({ type: 'REROLL_OFFERS' })}>REROLL OFFERS · <CurrencyAmount currency="gold" value={offerRerollCost(shop.offerRerolls)} /></Button></Group>
+          aria-label={`Reroll offers for ${offerRerollCost(shop.offerRerolls)} Gold`} onClick={() => submit({ type: 'REROLL_OFFERS' })}>REROLL OFFERS <CurrencyAmount currency="gold" value={offerRerollCost(shop.offerRerolls)} accessible={false} /></Button></Group>
       <div className="dice-offer-grid">{shop.offers.map(offer => {
         const effect = createDieEffect(-offer.id - 1, offer.dieType); const effects = [effect]; const free = dicePurchaseIsFree(shop);
         const affordable = free || board.gold >= offer.price; const available = !offer.purchased;
@@ -242,9 +242,10 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
             aria-label={`View ${SPECIAL_DICE[offer.dieType].name} details`} onClick={() => setDetailDie({ id: effect.id.length * -1, owner: 'player', value: 1, faces: [], effects })}>ⓘ</ActionIcon>
           <CollectibleDieVisual effects={effects} face={((offer.id % 6) + 1) as 1 | 2 | 3 | 4 | 5 | 6} />
           <Text className="dice-offer-name" fw={850}><DieTypeLabel type={offer.dieType} /></Text><RarityBadge rarity={offer.rarity} compact />
-          <Text size="xs" fw={850} c="yellow" data-testid={`dice-offer-price-${offer.id}`}><CurrencyAmount currency="gold" value={offer.price} /></Text>
           <Button className="dice-offer-buy" size="compact-xs" fullWidth disabled={busy || !available || !affordable || collectionFull}
-            onClick={() => submit({ type: 'BUY_DIE', offerId: offer.id })}>{offer.purchased ? 'PURCHASED' : collectionFull ? 'COLLECTION FULL' : !affordable ? <>NEED <CurrencyAmount currency="gold" value={offer.price} /></> : free ? 'FREE' : 'BUY'}</Button>
+            aria-label={offer.purchased ? 'Purchased' : collectionFull ? 'Collection full' : free ? 'Buy die for free'
+              : `Buy die for ${offer.price} Gold${affordable ? '' : ', unavailable'}`}
+            onClick={() => submit({ type: 'BUY_DIE', offerId: offer.id })}>{offer.purchased ? 'PURCHASED' : collectionFull ? 'COLLECTION FULL' : free ? 'FREE' : <>BUY <CurrencyAmount currency="gold" value={offer.price} accessible={false} /></>}</Button>
         </Card>;
       })}</div>
       <Stack gap={5} mt="xs" className="dice-collection"><Group justify="space-between"><Text size="xs" fw={850} tt="uppercase">Storage</Text><Text size="xs" c="dimmed">{inventory.storage.filter(Boolean).length} / 5</Text></Group>
@@ -285,8 +286,8 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
       {forgePreview && <div className="forge-commit" data-testid="forge-preview">
         {resultPlacementArmed && <Text size="xs" c="teal">Choose an empty or ingredient slot for the result.</Text>}
         <Button fullWidth color="orange" disabled={busy || !forgeAffordable} onClick={() => { setResultPlacementArmed(false); submit({ type: 'CONFIRM_FORGE' }); }}>
-          {forgePreview.cost > BigInt(board.temper) ? <>NEED <CurrencyAmount currency="temper" value={forgePreview.cost - BigInt(board.temper)} /></>
-            : <>FORGE · <CurrencyAmount currency="temper" value={forgePreview.cost} /></>}</Button></div>}</div>
+          <span aria-label={`Forge for ${forgePreview.cost} Temper${forgeAffordable ? '' : ', unavailable'}`}>FORGE <CurrencyAmount currency="temper" value={forgePreview.cost} accessible={false} /></span>
+        </Button></div>}</div>
       <Stack gap={5} mt="xs" className="dice-collection forge-collection"><Group justify="space-between"><Text size="xs" fw={850} tt="uppercase">Storage</Text><Text size="xs" c="dimmed">Select a die, then choose an ingredient slot.</Text></Group>
         <div className="collection-grid storage-grid" data-testid="forge-storage-grid">{slots('storage', inventory.storage)}</div>
         <div className="roster-collection-dock" data-testid="forge-roster-grid"><Group justify="space-between" className="collection-heading"><Text size="xs" fw={850} tt="uppercase">Roster</Text><Text size="xs" c="dimmed">Staged source slots are reserved.</Text></Group>

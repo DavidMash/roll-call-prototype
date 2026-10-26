@@ -81,6 +81,20 @@ describe('collectible Dice presentation', () => {
     expect(html).toContain('data-testid="shop-roster-dock"');
     expect(html).toContain('role="tablist"');
     expect(html).not.toMatch(/\bD6\b/);
+    // Three Buy totals + one offer-reroll total; the other five are legitimate sale values.
+    expect(html.match(/currency-amount currency-gold/g)).toHaveLength(9);
+    expect(html).not.toContain('dice-offer-price');
+  });
+
+  it('keeps each unaffordable offer total on its disabled Buy button without shortage copy', () => {
+    const state = openShop('unaffordable-dice-shop');
+    state.gold = 0;
+    const html = shopMarkup(state);
+    for (const offer of state.shop!.offers) {
+      expect(html).toContain(`Buy die for ${offer.price} Gold, unavailable`);
+      expect(html).toContain(`currency-value">${offer.price}</span><span class="currency-symbol">G`);
+    }
+    expect(html).not.toContain('NEED ');
   });
 });
 
@@ -97,7 +111,7 @@ describe('responsive Shop-stage presentation', () => {
     expect(html).not.toContain('TRUE FORGE');
     expect(html).not.toContain('FUSION');
     expect(html).toContain('data-testid="forge-result-preview"');
-    expect(html).toContain('FORGE ·');
+    expect(html).toContain('FORGE <span');
     expect(html).toContain('BACK TO SHOP');
     expect(html).not.toContain('shop-stage-gold');
     expect(html).not.toContain('shop-stage-temper');
@@ -110,6 +124,9 @@ describe('responsive Shop-stage presentation', () => {
     expect(html).toContain('class="scorecard-grid"');
     expect(html.match(/data-testid="training-offer-/g)).toHaveLength(14);
     expect(html).toContain('Baseline · Lv. 1');
+    expect(html).not.toContain('PIPS');
+    expect(html).toContain('MULT');
+    expect(html).toContain('TRAIN <span');
     expect(html).not.toContain('Frozen baseline');
   });
 

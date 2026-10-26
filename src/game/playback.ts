@@ -1,4 +1,11 @@
 import type { Board, GameEvent } from './types';
+import { CONFIG } from './config';
+
+export type PlaybackSpeed = keyof typeof CONFIG.tickMs;
+
+/** Scoring dice receive short individual beats without slowing the rest of playback. */
+export const playbackTickMs = (event: GameEvent | null | undefined, speed: PlaybackSpeed): number =>
+  event?.type === 'DIE_PIPS_RESOLVED' ? CONFIG.scoringDieTickMs[speed] : CONFIG.tickMs[speed];
 
 export const SCORE_SUMMARY_HOLD_MS = 420;
 export const SCORECARD_REFRESH_HOLD_MS = { normal: 720, fast: 260, instant: 420 } as const;

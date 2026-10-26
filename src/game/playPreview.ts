@@ -1,7 +1,7 @@
 import { activeEncounterDice } from './bosses';
 import { activeFace, wholeDieEffectSuppressed } from './dice';
 import { captureHandStart, composeXMult, countScoringDiceEnhancementComponents, handXMultContributions } from './flames';
-import { handStats } from './hands';
+import { handStats, planQualification } from './hands';
 import { finalizeScore, resolvedDiePipsContributions, type ScoringParticipant } from './scoring';
 import { effectOf, effectRuntime } from './specialDice';
 import type { Board, CollectibleDie, HandId, XMultFactor } from './types';
@@ -36,6 +36,7 @@ export function canonicalPlayPreview(board: Board, hand: HandId, selectedDieIds:
     }
   }
   const pipsByDie = new Map<number, { pips: number; role: 'selected' | 'hitchhiker' }>();
+  const qualification = planQualification(dice, hand, selectedDieIds, { roundState: board.dieRoundState });
   for (const participant of participants) {
     const die = dice.find(item => item.id === participant.id);
     const collectible = die?.owner === 'player' && !wholeDieEffectSuppressed(die) ? die : undefined;
@@ -44,6 +45,7 @@ export function canonicalPlayPreview(board: Board, hand: HandId, selectedDieIds:
       selectedDice, playSource: 'manual',
     });
     let occurrences = 1;
+    if (qualification.effects.some(effect => effect.dieId === participant.id && effect.effect === 'conjoined')) occurrences++;
     if (collectible) {
       const doubleTime = effectOf(collectible, 'doubleTime');
       if (doubleTime) occurrences += Math.floor(doubleTime.level / 4);
@@ -54,7 +56,7 @@ export function canonicalPlayPreview(board: Board, hand: HandId, selectedDieIds:
     pipsByDie.set(participant.id, { pips: amount, role: participant.role });
   }
   const stats = handStats(hand, board.handLevels[hand]);
-  const pips = stats.basePips + [...pipsByDie.values()].reduce((sum, item) => sum + item.pips, 0);
+  const pips = [...pipsByDie.values()].reduce((sum, item) => sum + item.pips, 0);
   const snapshot = captureHandStart(board, hand, selectedDieIds, decisionMs, 'manual', {
     allIn: board.scoreWagers.allInArmed,
     doubleOrNothingRedemption: board.scoreWagers.doubleOrNothing?.hand === hand,
@@ -65,8 +67,8 @@ export function canonicalPlayPreview(board: Board, hand: HandId, selectedDieIds:
   const xMultFactors = handXMultContributions(snapshot, hand, board.handLevels[hand], participants.map(item => item.id));
   const xMult = composeXMult(xMultFactors);
   const effectiveXMult = Number((xMult * snapshot.bossFactor).toFixed(12));
-  const score = finalizeScore(pips, stats.baseMultiplier, effectiveXMult, snapshot.infernoMultiplier).finalScore;
-  return { hand, pips, multiplier: stats.baseMultiplier, xMult, bossFactor: snapshot.bossFactor, effectiveXMult,
+  const score = finalizeScore(pips, stats.handMultiplier, effectiveXMult, snapshot.infernoMultiplier).finalScore;
+  return { hand, pips, multiplier: stats.handMultiplier, xMult, bossFactor: snapshot.bossFactor, effectiveXMult,
     infernoMultiplier: snapshot.infernoMultiplier, score,
     diePips: [...pipsByDie.entries()].map(([dieId, item]) => ({ dieId, ...item })), xMultFactors };
 }

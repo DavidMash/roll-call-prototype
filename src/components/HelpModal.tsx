@@ -41,7 +41,7 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
       </div>)}</SimpleGrid></Tabs.Panel>
       <Tabs.Panel value="scoring" pt="md"><Stack gap="xs">
         <Title order={3}>Pips × Mult × XMult = Score</Title>
-        <Text size="sm">Pips come from the hand and scoring dice.</Text>
+        <Text size="sm">Dice contribute Pips. The Hand applies Mult. Your build can add XMult.</Text>
         <Text size="sm">Mult comes from the hand.</Text>
         <Text size="sm">XMult comes from effects such as Flames.</Text>
       </Stack></Tabs.Panel>

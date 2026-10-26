@@ -11,7 +11,7 @@ export const INFERNO_RESULT_REVEAL_PAUSE_MS = 180;
 function offeredFlameStatus(board: Board, asset: EngulfmentAssetRef): string {
   if (asset.kind === 'bonfire') return 'BONFIRE';
   const diagnostic = board.infernoEvaluation?.flames.find(item => engulfmentAssetKey(item.asset) === engulfmentAssetKey(asset));
-  return `EMBER · SLOT ${asset.slot + 1} · ${formatPlayerNumber(diagnostic?.investment ?? 0)} / 100 GOLD`;
+  return `EMBER · SLOT ${asset.slot + 1} · ${formatPlayerNumber(diagnostic?.investment ?? 0)}G / 100G`;
 }
 
 export function InfernoEvaluationScreen({ board, submit }: {

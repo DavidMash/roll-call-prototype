@@ -1,8 +1,7 @@
 import { Alert, Button, Group, Modal, Paper, Stack, Text } from '@mantine/core';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { validateAction } from '../game/engine';
-import { captureHandStart, allInMultiplier, flameByType,
-  hasOwnedFlame, isGuaranteedWinningPlay, PROGRESSIVE_FLAME_SEQUENCES } from '../game/flames';
+import { allInMultiplier, flameByType, hasOwnedFlame, PROGRESSIVE_FLAME_SEQUENCES } from '../game/flames';
 import { HANDS, planQualification } from '../game/hands';
 import { finalizeScore } from '../game/scoring';
 import { canPlay, normalizeBoardSelection, selectBoardHand } from '../game/selection';
@@ -80,12 +79,8 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const preview = valid ? (() => {
     const hand = effectiveSelection.hand!;
     const canonical = canonicalPlayPreview(board, hand, effectiveSelection.dieIds, decisionMs);
-    const snapshot = captureHandStart(board, hand, effectiveSelection.dieIds, decisionMs, 'manual', {
-      allIn: board.scoreWagers.allInArmed,
-      doubleOrNothingRedemption: board.scoreWagers.doubleOrNothing?.hand === hand,
-    });
     return { ...canonical, hasXMult: canonical.effectiveXMult !== 1,
-      danger: lastPlayDanger(board, hand), guaranteedWin: isGuaranteedWinningPlay(snapshot, hand) };
+      danger: lastPlayDanger(board, hand), guaranteedWin: board.score + canonical.score >= board.target };
   })() : null;
   const flamePresentation = useMemo(() => deriveFlamePresentations(board, preview, decisionMs),
     [board, preview?.hand, preview?.score, preview?.effectiveXMult, effectiveSelection.dieIds.join(','), decisionMs]);

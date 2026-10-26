@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { captureHandStart, handXMultContributions, placeFlameInstance, standardFlameMultiplier } from './flames';
-import { HAND_IDS, initialHandLevels, rankedHands, trainedBaselineStrength, ultimateHands } from './hands';
+import { HAND_IDS, initialHandLevels, rankedHands, trainedHandStrength, ultimateHands } from './hands';
 import { newRun } from './engine';
 import { Resolver } from './effects';
 import { renderRunHistoryV2Event } from './runHistoryV2Renderer';
@@ -8,17 +8,17 @@ import { renderRunHistoryV2Event } from './runHistoryV2Renderer';
 const constant = (value = .2) => ({ next: () => value });
 
 describe('Ultimate Hand ranking', () => {
-  it('returns exactly one hand and uses trained baseline strength at tied levels', () => {
+  it('returns exactly one hand and uses intrinsic Hand Mult strength at tied levels', () => {
     const levels = initialHandLevels();
     expect(ultimateHands(levels)).toEqual(['fiveKind']);
     expect(ultimateHands(levels)).toHaveLength(1);
-    expect(trainedBaselineStrength('fiveKind', 1)).toBeGreaterThan(trainedBaselineStrength('fullHouse', 1));
+    expect(trainedHandStrength('fiveKind', 1)).toBeGreaterThan(trainedHandStrength('fullHouse', 1));
   });
 
   it('ranks level before strength even when the lower-level baseline is much stronger', () => {
     const levels = initialHandLevels();
     levels.ones = 2;
-    expect(trainedBaselineStrength('ones', 2)).toBeLessThan(trainedBaselineStrength('fiveKind', 1));
+    expect(trainedHandStrength('ones', 2)).toBeLessThan(trainedHandStrength('fiveKind', 1));
     expect(rankedHands(levels)[0]).toBe('ones');
   });
 
@@ -32,7 +32,8 @@ describe('Ultimate Hand ranking', () => {
     const levels = initialHandLevels();
     const ranked = rankedHands(levels);
     expect(ranked.indexOf('fourKind')).toBeLessThan(ranked.indexOf('largeStraight'));
-    expect(ranked.indexOf('threeKind')).toBeLessThan(ranked.indexOf('smallStraight'));
+    expect(ranked.indexOf('smallStraight')).toBeLessThan(ranked.indexOf('threeKind'));
+    expect(ranked.indexOf('twoPair')).toBeLessThan(ranked.indexOf('pair'));
   });
 
   it('lets training move a hand into the top rank and another out', () => {

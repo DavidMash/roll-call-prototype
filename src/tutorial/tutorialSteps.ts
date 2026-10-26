@@ -73,7 +73,7 @@ const candidates: Candidate[] = [
     { highlightTargets: [die(2), REROLL], interactiveTargets: [REROLL] }),
   info('c1-r1-nice', 'THREE OF A KIND', ['These three 1s make Three of a Kind.'], hand('threeKind'), s => has(s, R.reroll),
     { highlightTargets: [hand('threeKind'), die(1), die(2), die(3)] }),
-  info('c1-r1-pips-mult', 'PIPS AND MULT', ['Every hand starts with Base Pips and a Mult. The dice that score add their own Pips too.'], '[data-tutorial="hand-threeKind"]',
+  info('c1-r1-pips-mult', 'PIPS AND MULT', ['Dice contribute Pips. The Hand applies Mult. Your build can add XMult.'], '[data-tutorial="hand-threeKind"]',
     s => has(s, 'c1-r1-nice'), { highlightTargets: [hand('threeKind'), die(1), die(2), die(3)] }),
   required('c1-r1-select-three-kind', 'SELECT THE HAND', ['Choose Three of a Kind.'], hand('threeKind'),
     'Select Three of a Kind.', (s, ui) => s.game.round === 1 && s.game.phase === 'round' && has(s, 'c1-r1-pips-mult')
@@ -99,7 +99,7 @@ const candidates: Candidate[] = [
   required(R.training, undefined, ["Let's train Full House so it's stronger when we find one."], '[data-tutorial="training-fullHouse"] .training-action',
     'Train Full House once.', s => s.game.phase === 'shop' && s.game.round === 1 && has(s, 'shop1-training'),
     { highlightTargets: ['[data-tutorial="training-fullHouse"]'], interactiveTargets: ['[data-tutorial="training-fullHouse"] .training-action'] }),
-  info('shop1-training-result', 'FULL HOUSE · LV. 2', ['Its Base Pips and Mult are both higher now.'], '[data-tutorial="training-fullHouse"]',
+  info('shop1-training-result', 'FULL HOUSE · LV. 2', ['Its Hand Mult is higher now.'], '[data-tutorial="training-fullHouse"]',
     s => s.game.phase === 'shop' && s.game.round === 1 && has(s, R.training)),
   required('shop1-next-round', 'NEXT ROUND', ['You have no Flames to tend yet, so Training is the last stop in this Shop.'], '[data-testid="shop-progression-action"]',
     'Start the next Round.', s => s.game.phase === 'shop' && s.game.round === 1 && s.game.shop?.stage === 'train'

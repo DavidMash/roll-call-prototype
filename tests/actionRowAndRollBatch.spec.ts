@@ -119,5 +119,5 @@ test('Shop has no physical-dice reroll while offer rerolls remain available', as
   state.shop = { kind: 'between_rounds', offers: [], offerRerolls: 0, lifeRestores: 0 };
   await installRun(page, state, 'normal');
   await expect(page.getByRole('button', { name: /REROLL ALL DICE/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /REROLL OFFERS/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Reroll offers/i })).toBeVisible();
 });

@@ -60,7 +60,7 @@ test('a full fire requires an explicit replacement confirmation and leaves a hol
   await page.getByTestId('flame-offer-ultimate').getByRole('button', { name: 'SELECT TO REPLACE' }).click();
   await page.getByTestId('flame-replacement-picker').getByRole('button', { name: /Full of Grace/ }).click();
   const dialog = page.getByRole('dialog', { name: 'REPLACE A FLAME?' });
-  await expect(dialog).toContainText('lose 12 invested Gold');
+  await expect(dialog).toContainText('lose 12G invested');
   await dialog.getByRole('button', { name: 'REPLACE', exact: true }).click();
   await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
 
@@ -100,11 +100,11 @@ test('Fire Keeping renders only owned Flames and stokes an instance in place int
   await expect(page.getByTestId('fire-keeping-shop')).not.toContainText('EMPTY');
   const card = page.getByTestId(`fire-keeping-flame-${flame.instanceId}`);
   await expect(card).toContainText('EMBER');
-  await expect(card).toContainText('Complete this Bonfire: T+10');
+  await expect(card).toContainText('Complete this Bonfire: +10T');
   await page.screenshot({ path: test.info().outputPath('fire-keeping-one-flame-mobile.png'), fullPage: true });
   await card.getByRole('button', { name: 'MANAGE FLAME' }).click();
   const dialog = page.getByRole('dialog', { name: 'Double Down' });
-  await expect(dialog).toContainText('Complete this Bonfire: T+10');
+  await expect(dialog).toContainText('Complete this Bonfire: +10T');
   await dialog.getByRole('button', { name: 'Increase investment' }).click();
   await dialog.getByRole('button', { name: 'STOKE 1 Gold' }).click();
   await expect(card).toContainText('BONFIRE');
@@ -123,7 +123,7 @@ test('global Flame details remain available during a Round without appearing on 
   await expect(page.locator('.die-flame-cap')).toHaveCount(0);
   await page.getByRole('button', { name: /View Momentum ember details/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Momentum' });
-  await expect(dialog).toContainText('Investment: G25 / G100');
+  await expect(dialog).toContainText('Investment: 25G / 100G');
   await expect(dialog.getByLabel('25 Gold')).toBeVisible();
   await expect(dialog).toContainText('Current Effect: +0.125 Charge per Play');
   await expect(dialog.getByLabel('Stoke amount for Momentum')).toHaveCount(0);
@@ -140,7 +140,7 @@ test('global Flame state survives a responsive reload with exact instance identi
   await enterRun(page);
 
   await page.getByRole('button', { name: /View Fetch ember details/ }).click();
-  await expect(page.getByRole('dialog', { name: 'Fetch' })).toContainText('Investment: G44 / G100');
+  await expect(page.getByRole('dialog', { name: 'Fetch' })).toContainText('Investment: 44G / 100G');
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state as GameState, RUN_STORAGE_KEY);
   expect(flameByType(saved, 'fetch')).toMatchObject({ instanceId: flame.instanceId });
   expect(saved.fetchTarget).toEqual(state.fetchTarget);

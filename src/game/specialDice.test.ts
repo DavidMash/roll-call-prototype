@@ -11,6 +11,7 @@ import {
 } from './specialDice';
 import type { GameState, RandomSource, Rank, SpecialDieType } from './types';
 import { cleanupTemporaryBossFaces } from './bosses';
+import { canonicalPlayPreview } from './playPreview';
 
 const constant = (value = 0): RandomSource => ({ next: () => value });
 function game(): GameState {
@@ -232,8 +233,9 @@ describe('Conjoined qualification and real Score occurrences', () => {
     const die = setEffects(state, 0, [['conjoined', 2]]);
     const plan = planQualification(rosterDice(state), 'pair', [die.id], { roundState: state.dieRoundState });
     expect(plan).toMatchObject({ legal: true, resourceClaims: [{ dieId: die.id, effect: 'conjoined', amount: 1 }] });
+    expect(canonicalPlayPreview(state, 'pair', [die.id]).pips).toBe(8);
     new Resolver(state, constant()).play('pair', [die.id], 'manual', null, plan.resourceClaims);
-    expect(state.stats.handScores.at(-1)?.pips).toBe(16);
+    expect(state.stats.handScores.at(-1)?.pips).toBe(8);
     expect(effectRuntime(state.dieRoundState[die.id], effectOf(die, 'conjoined'))?.invocationsRemaining).toBe(1);
     const scored = [...state.historyV2].reverse().find(event => event.kind === 'hand_scored');
     expect(scored?.kind === 'hand_scored' ? scored.scoreOccurrences.map(item => item.cause) : [])
@@ -248,7 +250,7 @@ describe('Conjoined qualification and real Score occurrences', () => {
     expect(plan.resourceClaims).toEqual([expect.objectContaining({ dieId: die.id, effect: 'conjoined', amount: 1 })]);
     const played = dispatch(state, { type: 'PLAY', hand: 'fours', dieIds: [die.id] }, constant()).state;
     const playedDie = played.diceInventory.instances[die.id];
-    expect(played.stats.handScores.at(-1)?.pips).toBe(15);
+    expect(played.stats.handScores.at(-1)?.pips).toBe(8);
     expect(effectRuntime(played.dieRoundState[die.id], effectOf(playedDie, 'conjoined'))?.invocationsRemaining).toBe(0);
     expect(planQualification(rosterDice(played), 'fours', [die.id], { roundState: played.dieRoundState }).resourceClaims).toEqual([]);
     expect(planQualification(rosterDice(played), 'pair', [die.id], { roundState: played.dieRoundState }).legal).toBe(false);
@@ -265,7 +267,7 @@ describe('Conjoined qualification and real Score occurrences', () => {
     new Resolver(state, constant(.99)).play('fours', [die.id], 'manual', null, plan.resourceClaims);
     const scored = [...state.historyV2].reverse().find(event => event.kind === 'hand_scored');
     expect(scored?.kind === 'hand_scored' ? scored.scoreOccurrences : []).toHaveLength(2);
-    expect(state.stats.handScores.at(-1)?.pips).toBe(64);
+    expect(state.stats.handScores.at(-1)?.pips).toBe(57);
     expect(state.stats.goldBySource.golden).toBe(2);
     expect(effectOf(die, 'vintage')?.persistent.vintageAppreciation).toBe(2);
     expect(effectRuntime(state.dieRoundState[die.id], effectOf(die, 'workout'))?.temporaryPips).toBe(4);

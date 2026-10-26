@@ -118,7 +118,7 @@ export function FlameActions({ board, busy, submit, onOpenChange }: {
           disabledReason={validateAction(board, burnAction)} onAction={() => dispatchAndClose(burnAction)} testId="flame-action-burn-it-down" />}
         {grease && <ActionCard name={FLAMES.greaseTheEngine.name}
           explanation={`Pay ${greaseCost} Gold now. The next bribe costs ${greaseCost * 2} Gold.`}
-          status={`+${formatPlayerNumber(greaseGain)} Charge`} actionLabel={`PAY ${greaseCost} GOLD`}
+          status={`+${formatPlayerNumber(greaseGain)} Charge`} actionLabel={`PAY ${greaseCost}G`}
           disabledReason={validateAction(board, greaseAction)} onAction={() => dispatchAndClose(greaseAction)} testId="flame-action-grease-the-engine" />}
         {lightning && <ActionCard name={FLAMES.lightningStrike.name}
           explanation={`Predict one die's next Manual Reroll. ${rerollsAvailable} Reroll${rerollsAvailable === 1 ? '' : 's'} available.`}

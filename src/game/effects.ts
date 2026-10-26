@@ -40,7 +40,7 @@ import {
 import { createTrainingSession } from './training';
 import { forgeRevealEligible } from './forge';
 import type { ChargeFlame, HandStartSnapshot } from './flames';
-import type { CollectibleDie, DieEffectInstance, EventRecord, Face, Flame, FlameInstanceId, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, Rank, RunNode, ScorePackage, ScoreSource, SpecialDieType, SpecialOffer, TemperSource, TemperSpendSource } from './types';
+import type { CollectibleDie, DieEffectInstance, EventRecord, Face, Flame, FlameInstanceId, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, Rank, ResolvedDiePips, RunNode, ScorePackage, ScoreSource, SpecialDieType, SpecialOffer, TemperSource, TemperSpendSource } from './types';
 import type {
   FlameOrigin, HandSideEffect, HistoryDieState, MultContribution, PipsContribution,
   RollEffect, RollReason, RunHistoryV2Event, RunHistoryV2EventInput, XMultContribution,
@@ -62,6 +62,7 @@ type V2HandDraft = {
   consumed: boolean;
   roundScoreBefore: ExactScore;
   pipsContributions: PipsContribution[];
+  resolvedDicePips: ResolvedDiePips[];
   multContributions: MultContribution[];
   xMultContributions: XMultContribution[];
   sideEffects: HandSideEffect[];
@@ -73,6 +74,7 @@ type HandResolution = {
   selectedParticipants: ScoringParticipant[];
   scoringParticipants: ScoringParticipant[];
   scoreOccurrences: ScoreOccurrence[];
+  resolvedDicePips: ResolvedDiePips[];
   accumulator: HandScoreAccumulator;
   wouldConsumeHand: boolean;
   consumesHand: boolean;
@@ -565,24 +567,15 @@ export class Resolver {
     }
     void participation;
   }
-  private applyScoringContribution(contribution: HandScoreContribution, hand: HandId, playSource: HandPlaySource,
-    scoringDice: number): void {
+  private applyScoringContribution(contribution: HandScoreContribution, occurrenceId: string): void {
     const { dieId, face, kind, role, amount, sourceDieIds } = contribution;
-    const contributingDie = kind === 'special' ? this.collectible(dieId) : null;
-    void scoringDice;
     applyHandContribution(this.handAccumulator!, contribution);
     if (kind === 'special' && contribution.effectType === 'bonus') this.handAccumulator!.bonusPips += amount;
     this.v2Hand?.pipsContributions.push({
       source: kind === 'base' ? 'die_base' : kind === 'special' ? 'special_die' : 'team_player',
-      amount, dieId, face: face.rank, role, ...(contribution.effectType ? { effectType: contribution.effectType } : {}),
+      amount, occurrenceId, dieId, face: face.rank, role, ...(contribution.effectType ? { effectType: contribution.effectType } : {}),
       ...(sourceDieIds?.length ? { sourceDieIds: [...sourceDieIds] } : {}),
     });
-    this.emit({ type: role === 'hitchhiker' ? 'HITCHHIKER_ADDED_PIPS' : 'HAND_PIPS_CHANGED',
-      hand, dieIds: [dieId], face: face.rank, amount,
-      dieType: contribution.effectType ?? contributingDie?.effects[0]?.type,
-      source: playSource === 'jumpingBean' ? 'jumpingBean' : playSource === 'freePlay' ? 'curtainCall' : 'hand', playSource,
-      pips: this.handAccumulator!.currentPips, multiplier: this.handAccumulator!.currentMultiplier,
-      message: `${this.dieLabel(dieId)}${role === 'hitchhiker' ? ' Hitchhiker' : ''} added ${this.format(amount)} Pips` });
   }
 
   private scoringContributions(participant: ScoringParticipant, scoringDice: number,
@@ -654,6 +647,7 @@ export class Resolver {
     const { intent, scoringParticipants } = resolution;
     const scoringDice = scoringParticipants.length;
     for (const participant of scoringParticipants) {
+      const runningPipsBefore = this.handAccumulator!.currentPips;
       const rootId = `${intent.id}:score:${participant.id}`;
       const root: ScoreOccurrence = {
         id: rootId,
@@ -691,13 +685,35 @@ export class Resolver {
         && intent.playerSelectedDieIds[0] === participant.id) branches = branches.flatMap((branch, branchIndex) =>
           [branch, ...Array.from({ length: loneWolf.level }, (_, index) => ({ ...branch,
             id: `${rootId}:lone-wolf:${branchIndex + 1}:${index + 1}`, cause: 'lone_wolf' as const, additional: true }))]);
+      const components: ResolvedDiePips['components'] = [];
       for (const occurrence of branches) {
         resolution.scoreOccurrences.push(occurrence);
         const scoreParticipant: ScoringParticipant = { id: occurrence.dieId, face: occurrence.face, role: occurrence.role };
-        for (const contribution of this.scoringContributions(scoreParticipant, scoringDice, intent))
-          this.applyScoringContribution(contribution, intent.hand, intent.source, scoringDice);
+        for (const contribution of this.scoringContributions(scoreParticipant, scoringDice, intent)) {
+          this.applyScoringContribution(contribution, occurrence.id);
+          components.push({ occurrenceId: occurrence.id, kind: contribution.kind, amount: contribution.amount,
+            ...(contribution.effectType ? { effectType: contribution.effectType } : {}),
+            ...(contribution.sourceDieIds?.length ? { sourceDieIds: [...contribution.sourceDieIds] } : {}) });
+        }
         this.resolveScoreOccurrence(occurrence, scoringParticipants);
       }
+      const resolved: ResolvedDiePips = {
+        resolutionId: `${intent.id}:pips:${participant.id}`,
+        dieId: participant.id,
+        role: participant.role,
+        face: structuredClone(participant.face),
+        occurrenceIds: branches.map(item => item.id),
+        components,
+        totalPips: this.handAccumulator!.currentPips - runningPipsBefore,
+        runningPipsBefore,
+        runningPipsAfter: this.handAccumulator!.currentPips,
+      };
+      resolution.resolvedDicePips.push(resolved);
+      this.v2Hand!.resolvedDicePips.push(structuredClone(resolved));
+      this.emit({ type: 'DIE_PIPS_RESOLVED', hand: intent.hand, dieIds: [participant.id], face: participant.face.rank,
+        amount: resolved.totalPips, pips: resolved.runningPipsAfter, multiplier: this.handAccumulator!.currentMultiplier,
+        playSource: intent.source, resolvedDiePips: structuredClone(resolved),
+        message: `${this.dieLabel(participant.id)}${participant.role === 'hitchhiker' ? ' Hitchhiker' : ''} contributed ${this.format(resolved.totalPips)} Pips` });
     }
     return [];
   }
@@ -1722,9 +1738,9 @@ export class Resolver {
       parentSeq: this.v2ParentSeq,
       hand, level: handLevel, playSource, consumed: consumesHand, roundScoreBefore: this.state.score,
       selectedDice: shapeParticipants.map(item => item.id),
-      pipsContributions: [{ source: 'hand_base', amount: createHandAccumulator(hand, ids, handLevel).basePips }],
-      multContributions: [{ source: 'hand_base', factor: createHandAccumulator(hand, ids, handLevel).baseMultiplier,
-        before: 0, after: createHandAccumulator(hand, ids, handLevel).baseMultiplier }],
+      pipsContributions: [], resolvedDicePips: [],
+      multContributions: [{ source: 'hand', factor: createHandAccumulator(hand, ids, handLevel).handMultiplier,
+        before: 0, after: createHandAccumulator(hand, ids, handLevel).handMultiplier }],
       xMultContributions: [], sideEffects: playSource === 'freePlay'
         ? [{ type: 'free_play', dieId: ids[0], rerollEventId: this.curtainCallContext?.manualRerollEventId ?? 'unknown',
           pipsMultiplier: this.curtainCallContext?.multiplier }] : [],
@@ -1760,6 +1776,7 @@ export class Resolver {
       selectedParticipants: shapeParticipants,
       scoringParticipants,
       scoreOccurrences: [],
+      resolvedDicePips: [],
       accumulator: this.handAccumulator,
       wouldConsumeHand,
       consumesHand,
@@ -1800,6 +1817,8 @@ export class Resolver {
       }
     }
     this.resolveScoreOccurrences(resolution);
+    this.emit({ type: 'HAND_MULTIPLIER_CHANGED', hand, dieIds: scoringIds, multiplier: this.handAccumulator.currentMultiplier,
+      message: `${HANDS[hand].name} applies ×${this.format(this.handAccumulator.currentMultiplier)} Mult` });
     handStart.playedDiceScoringPips = this.v2Hand.pipsContributions
       .filter(contribution => contribution.role === 'selected' && contribution.dieId !== undefined
         && ids.includes(contribution.dieId))
@@ -1807,8 +1826,10 @@ export class Resolver {
     handStart.scoringDiceEnhancementCount = countScoringDiceEnhancementComponents(handStart, scoringIds);
     const { pips, multiplier, xMult, rawScore, score, bossFactor } =
       this.resolveHandScore(resolution, handStart, handLevel, chargeAttributionAtHandStart);
+    if (currentInfernoMultiplier > 1n) this.emit({ type: 'HAND_INFERNO_APPLIED', hand, dieIds: scoringIds,
+      amount: currentInfernoMultiplier, message: `Inferno applies ×${this.format(currentInfernoMultiplier)}` });
     this.state.stats.handScores.push({ round: this.state.round, hand, handLevel, dieIds: scoringIds,
-      basePips: this.handAccumulator.basePips, baseMultiplier: this.handAccumulator.baseMultiplier,
+      handMultiplier: this.handAccumulator.handMultiplier,
       infernoMultiplier: currentInfernoMultiplier,
       pips, multiplier, xMult, bossFactor, xMultFactors: structuredClone(this.handAccumulator.xMultFactors), rawScore, score,
       bonusPips: this.handAccumulator.bonusPips, hitchhikerPips: this.handAccumulator.hitchhikerPips,
@@ -1817,17 +1838,11 @@ export class Resolver {
     this.state.stats.hitchhikerPipsContributed += this.handAccumulator.hitchhikerPips;
     const scoreSource = playSource === 'jumpingBean' ? 'jumpingBean' as const
       : playSource === 'freePlay' ? 'curtainCall' as const : 'hand' as const;
+    const effectiveXMult = Number((xMult * bossFactor).toFixed(12));
     this.log({ type: 'SCORE_ROUNDING_AUDIT', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score, source: scoreSource, playSource,
-      message: `Final: ${this.format(pips)} × ${this.format(multiplier)} × ${this.format(xMult)}${bossFactor !== 1 ? ` × boss ${this.format(bossFactor)}` : ''} = ${this.format(rawScore)}; rounded ${this.format(score)}` });
-    const diePips = [...this.v2Hand.pipsContributions.reduce((totals, contribution) => {
-      if (contribution.dieId === undefined) return totals;
-      const existing = totals.get(contribution.dieId) ?? { pips: 0, role: contribution.role ?? 'selected' as const };
-      existing.pips += contribution.amount;
-      totals.set(contribution.dieId, existing);
-      return totals;
-    }, new Map<number, { pips: number; role: 'selected' | 'hitchhiker' }>()).entries()]
-      .map(([dieId, item]) => ({ dieId, ...item }));
-    this.emit({ type: 'HAND_SCORE_FINALIZED', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score, diePips,
+      message: `Final: ${this.format(pips)} Pips × ${this.format(multiplier)} Mult${effectiveXMult !== 1 ? ` × ${this.format(effectiveXMult)} XMult` : ''}${currentInfernoMultiplier > 1n ? ` × ${this.format(currentInfernoMultiplier)} Inferno` : ''} = ${this.format(rawScore)}; rounded ${this.format(score)}` });
+    this.emit({ type: 'HAND_SCORE_FINALIZED', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score,
+      resolvedDicePips: structuredClone(resolution.resolvedDicePips),
       source: scoreSource, playSource, handConsumed: resolution.consumesHand, message: `Final awarded hand score: ${this.format(score)}` });
     this.addScore(score, scoreSource, `${freePlay ? 'Free play: ' : ''}${HANDS[hand].name}: round score +${this.format(score)}`, scoringIds, hand);
     const roundScoreAfterAward = this.state.score;
@@ -1889,7 +1904,7 @@ export class Resolver {
     if (winning) jackpotPayout = this.resolveJackpot(scoringIds);
     const beanRecordIndex = freeBean ? this.state.stats.jumpingBeanFreePlays.push({
       round: this.state.round, dieId: ids[0], face: shapeParticipants[0].face.rank, hand, handLevel,
-      basePips: this.state.stats.handScores.at(-1)!.basePips, baseMultiplier: this.state.stats.handScores.at(-1)!.baseMultiplier,
+      handMultiplier: this.state.stats.handScores.at(-1)!.handMultiplier,
       score, xMultFactors: structuredClone(this.state.stats.handScores.at(-1)!.xMultFactors),
       previousPlayCount: handStart.previousPlays, handPlayCountAfter: this.state.handPlayCounts[hand], consumedHand: false,
       followupRerolled: false, roundCleared: winning, jackpotPayout,
@@ -1908,12 +1923,13 @@ export class Resolver {
         playerSelected: occurrence.playerSelected, additional: occurrence.additional,
         suppressedEffects: [...occurrence.suppressedEffects] })),
       consumed: resolution.consumesHand,
-      score: { infernoMultiplier: currentInfernoMultiplier, basePips: this.state.stats.handScores.at(-1)!.basePips,
-        finalPips: pips, baseMult: this.state.stats.handScores.at(-1)!.baseMultiplier,
+      score: { infernoMultiplier: currentInfernoMultiplier, finalPips: pips,
+        handMult: this.state.stats.handScores.at(-1)!.handMultiplier,
         finalMult: multiplier, finalXMult: xMult, bossFactor, raw: rawScore, awarded: score,
         rounding: { mode: 'nearest_integer', delta: new Decimal(score.toString()).minus(rawScore).toFixed() } },
       roundScore: { before: draft.roundScoreBefore, afterAward: roundScoreAfterAward, after: this.state.score },
-      pipsContributions: draft.pipsContributions, multContributions: draft.multContributions,
+      pipsContributions: draft.pipsContributions, resolvedDicePips: draft.resolvedDicePips,
+      multContributions: draft.multContributions,
       xMultContributions: draft.xMultContributions, sideEffects: draft.sideEffects });
     this.v2Hand = null;
     this.v2ParentSeq = handEvent.seq;

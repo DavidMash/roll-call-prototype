@@ -19,6 +19,6 @@ export function CurrencyAmount({ currency, value, sign = '', accessible = true, 
   const spokenSign = sign === '+' ? 'plus ' : sign === '−' ? 'minus ' : '';
   return <span className={`currency-amount currency-${currency}${className ? ` ${className}` : ''}`}
     data-currency={currency} {...(accessible ? { 'aria-label': `${spokenSign}${formatted} ${presentation.name}` } : { 'aria-hidden': true })}>
-    <span className="currency-symbol">{presentation.symbol}</span><span className="currency-value">{sign}{formatted}</span>
+    <span className="currency-value">{sign}{formatted}</span><span className="currency-symbol">{presentation.symbol}</span>
   </span>;
 }

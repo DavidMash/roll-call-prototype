@@ -209,7 +209,7 @@ export function wardenBaselineCapacity(handLevels: HandLevels, consumed: HandId[
   const used = new Set(consumed);
   return wardenNaturalHands(activeDice).filter(hand => !used.has(hand)).reduce((capacity, hand) => {
     const stats = handStats(hand, handLevels[hand]);
-    return capacity + finalizeExactScore(1n, stats.basePips + wardenIdealNaturalPips(hand, activeDice), stats.baseMultiplier, 1).finalScore;
+    return capacity + finalizeExactScore(1n, wardenIdealNaturalPips(hand, activeDice), stats.handMultiplier, 1).finalScore;
   }, 0n);
 }
 
@@ -218,7 +218,7 @@ const roundWardenCost = (score: ExactScore) => roundScoreToStep(score < 0n ? 0n 
 
 export function wardenBaselineHandScore(handLevels: HandLevels, hand: HandId, activeDice: number): ExactScore {
   const stats = handStats(hand, handLevels[hand]);
-  return finalizeExactScore(1n, stats.basePips + wardenIdealNaturalPips(hand, activeDice), stats.baseMultiplier, 1).finalScore;
+  return finalizeExactScore(1n, wardenIdealNaturalPips(hand, activeDice), stats.handMultiplier, 1).finalScore;
 }
 
 export function wardenUnlockCost(

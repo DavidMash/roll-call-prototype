@@ -253,8 +253,7 @@ export interface HandScoreAccumulator {
   handLevel: number;
   infernoMultiplier: ExactScore;
   dieIds: number[];
-  basePips: number;
-  baseMultiplier: number;
+  handMultiplier: number;
   currentPips: number;
   currentMultiplier: number;
   xMultFactors: XMultFactor[];
@@ -271,8 +270,7 @@ export interface HandScoreRecord {
   handLevel: number;
   infernoMultiplier: ExactScore;
   dieIds: number[];
-  basePips: number;
-  baseMultiplier: number;
+  handMultiplier: number;
   pips: number;
   multiplier: number;
   xMult: number;
@@ -284,6 +282,27 @@ export interface HandScoreRecord {
   hitchhikerPips: number;
   playSource: HandPlaySource;
   consumedHand: boolean;
+}
+
+export interface ResolvedPipsComponent {
+  occurrenceId: string;
+  kind: 'base' | 'special' | 'teamPlayer';
+  amount: number;
+  effectType?: SpecialDieType;
+  sourceDieIds?: number[];
+}
+
+/** Canonical ordered Pips result for one scoring die across all of its Score occurrences. */
+export interface ResolvedDiePips {
+  resolutionId: string;
+  dieId: number;
+  role: 'selected' | 'hitchhiker';
+  face: Face;
+  occurrenceIds: string[];
+  components: ResolvedPipsComponent[];
+  totalPips: number;
+  runningPipsBefore: number;
+  runningPipsAfter: number;
 }
 
 export type BossFaceMutation =
@@ -726,8 +745,7 @@ export interface JumpingBeanPlayRecord {
   face: Rank;
   hand: HandId;
   handLevel: number;
-  basePips: number;
-  baseMultiplier: number;
+  handMultiplier: number;
   score: ExactScore;
   xMultFactors: XMultFactor[];
   previousPlayCount: number;
@@ -801,7 +819,7 @@ export interface RunStats {
 }
 export type EventType =
   | 'CHAPTER_STARTED' | 'MAP_TRANSITION' | 'ROUND_STARTED' | 'BOSS_STARTED' | 'BOSS_CLEARED' | 'HAND_STARTED' | 'ABILITY_EVALUATED'
-  | 'HAND_PIPS_CHANGED' | 'HAND_MULTIPLIER_CHANGED' | 'HITCHHIKER_ADDED_PIPS'
+  | 'DIE_PIPS_RESOLVED' | 'HAND_MULTIPLIER_CHANGED' | 'HAND_INFERNO_APPLIED'
   | 'HAND_SCORE_FINALIZED' | 'STANDALONE_SCORE_CALCULATED' | 'SCORE_ROUNDING_AUDIT'
   | 'SCORE_ADDED' | 'GOLD_ADDED'
   | 'DICE_REROLL_STARTED' | 'DIE_ROLLED' | 'DIE_FLIPPED' | 'HAND_CONSUMED' | 'SCORECARD_REFRESHED' | 'ROUND_CLEARED'
@@ -882,8 +900,9 @@ export interface EventRecord {
   terminalDice?: { dieId: number; physicalFace: Rank; face: Rank; pips: number }[];
   bustPresentationUsedFrozenDice?: boolean;
   handScore?: HandScoreAccumulator;
-  /** Final resolved Pips grouped by scoring die for presentation. */
-  diePips?: { dieId: number; pips: number; role: 'selected' | 'hitchhiker' }[];
+  /** Ordered canonical Pips resolution for presentation and diagnostics. */
+  resolvedDiePips?: ResolvedDiePips;
+  resolvedDicePips?: ResolvedDiePips[];
 }
 export interface GameEvent extends EventRecord { board: Board }
 export interface BustSummary {

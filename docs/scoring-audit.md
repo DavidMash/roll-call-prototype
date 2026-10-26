@@ -7,7 +7,7 @@ The deterministic resolver owns all rolls, hand plays, effects, RNG, history, an
 Every manual or Jumping Bean hand creates one `HandScoreAccumulator` from the category's trained level. Scoring uses:
 
 ```text
-round((trained Base Pips + scoring-die Pips + Bonus) × trained Base Mult × product(XMult factors))
+round(scoring-die Pips × trained Hand Mult × product(XMult factors) × Inferno)
 ```
 
 Ordinary Mult comes only from the trained hand. Workout growth happens after its current face contribution. Successful manual Hitchhikers add Pips but never help form the selected shape. Golden resolves for every scoring face. Jackpot resolves only for scoring faces after that score is known to clear the round.
@@ -22,4 +22,4 @@ If the free play does not clear the round, Sticky may prevent its one follow-up 
 
 ## Telemetry
 
-Export schema 13 uses `lives-vintage-economy-v1`. Hand records include play source and consumption semantics. Every Flame XMult contribution is an `XMultFactor` and the accumulator recomputes the canonical product after each factor; event playback reports `prior XMult × factor = result`. Stoke records are Shop-only and retain investment, Flame, die, and round context. Bean records include category, scoring die, trained Base Pips/Mult, score, XMult factors, history before/after, Sticky/follow-up outcome, round clearance, Jackpot payout, and any Vintage growth. Jumping Bean does not add Effect Score or standalone-score records.
+Current Run History V2 uses the `dice-pips-hand-mult-v1` ruleset. Hand records include ordered resolved per-die Pips, Hand Mult, XMult, Inferno, play source, and consumption semantics. Every Flame XMult contribution is an `XMultFactor`; Jumping Bean remains a categorized Free Play rather than Effect Score.

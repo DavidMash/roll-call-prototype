@@ -6,7 +6,7 @@ import { handOptions, HANDS, HAND_IDS, ultimateHands } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { BigBossType, GameState } from '../src/game/types';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
-import { enterRun, goToShopStage, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
+import { enterRun, goToShopStage, installRunState, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 import { placeFlameInstance } from '../src/game/flames';
 
 function dieUiLabel(game: GameState, die: GameState['dice'][number]): string {
@@ -537,6 +537,12 @@ test('Hexer face 7 renders seven ordinary pips with no legacy face power and rem
 
 test('Boss clear shows its Boss Reward summary and transitions directly to Flame Selection', async ({ page }) => {
   let game = await reachBossShop(page, 'hexer');
+  // This fixture verifies the post-Boss reward flow, not whether an untrained natural
+  // roster can clear the round after the intentional scoring-model power reduction.
+  for (const hand of HAND_IDS) game.handLevels[hand] = 5;
+  await installRunState(page, game);
+  await ready(page);
+  await goToShopStage(page, 'flames');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
   game = dispatch(game, { type: 'NEXT_ROUND' }).state;
   await ready(page);

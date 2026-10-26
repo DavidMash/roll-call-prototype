@@ -35,12 +35,13 @@ export function DiceRow({ dice, rosterSlotById = {}, display, selected = [], eve
   return <div className="dice-row" data-dice-count={dice.length}
     style={{ '--dice-columns': dice.length } as CSSProperties}>{dice.map(die => {
     const involved = event?.dieIds?.includes(die.id) ?? false;
-    const resolving = involved && (event?.type === 'HAND_PIPS_CHANGED' || event?.type === 'HITCHHIKER_ADDED_PIPS'
+    const resolving = involved && (event?.type === 'DIE_PIPS_RESOLVED'
       || event?.type === 'HAND_XMULT_CHANGED' || event?.type === 'SPECIAL_DIE_EFFECT');
-    const resolvedPips = event?.type === 'HAND_SCORE_FINALIZED' ? event.diePips?.find(item => item.dieId === die.id) : undefined;
+    const resolvedPips = event?.type === 'DIE_PIPS_RESOLVED' && event.resolvedDiePips?.dieId === die.id
+      ? event.resolvedDiePips : undefined;
     return <Die key={die.id} die={die} rosterSlot={rosterSlotById[die.id]} display={display}
       fetchTarget={fetchTarget}
-      pipsPop={resolvedPips && resolvedPips.pips > 0 ? { eventId: event!.id, amount: resolvedPips.pips } : undefined}
+      pipsPop={resolvedPips && resolvedPips.totalPips > 0 ? { eventId: event!.id, amount: resolvedPips.totalPips } : undefined}
       hotPotato={hotPotatoDieId === die.id}
       selected={selected.includes(die.id)} highlighted={involved && event?.type !== 'DIE_ROLLED'}
       rolling={involved && event?.type === 'DICE_REROLL_STARTED'}

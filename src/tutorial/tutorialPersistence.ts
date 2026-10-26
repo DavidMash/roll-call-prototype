@@ -5,7 +5,7 @@ import { stringifyExactJson } from '../game/scoreMath';
 
 export const TUTORIAL_RUN_STORAGE_KEY = 'roll-call:tutorial-run';
 export const ONBOARDING_STORAGE_KEY = 'roll-call:onboarding';
-export const TUTORIAL_RUN_STORAGE_VERSION = 4;
+export const TUTORIAL_RUN_STORAGE_VERSION = 5;
 export const ONBOARDING_STORAGE_VERSION = 1;
 
 export type TutorialStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;

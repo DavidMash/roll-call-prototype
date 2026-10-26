@@ -1,11 +1,8 @@
 import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands } from './bosses';
-import { activeFace, scoringPips, wholeDieEffectSuppressed } from './dice';
-import { captureHandStart, composeXMult, handXMultContributions } from './flames';
 import { encounterHandIds, handIsStructurallyImpossible, handOptions, isValidSelection, sameDice } from './hands';
-import { finalizeScore, handScore } from './scoring';
-import type { Board, CollectibleDie, Die, HandId } from './types';
+import { canonicalPlayPreview } from './playPreview';
+import type { Board, Die, HandId } from './types';
 import { scoreCompare, type ExactScore } from './scoreMath';
-import { effectOf, effectRuntime } from './specialDice';
 
 export interface Selection { dieIds: number[]; hand: HandId | null; intent?: 'hand' | 'manual' }
 export const emptySelection = (): Selection => ({ dieIds: [], hand: null });
@@ -29,26 +26,7 @@ export function requiredSelectionDieIds(board: Board): number[] {
 }
 
 function projectedCombinationScore(board: Board, hand: HandId, dieIds: number[], decisionMs = 0): ExactScore {
-  const dice = activeEncounterDice(board);
-  const base = handScore(dice, hand, dieIds, board.handLevels[hand]);
-  const selected = dice.filter((die): die is CollectibleDie => dieIds.includes(die.id) && die.owner === 'player');
-  const deterministicWholeDiePips = selected.reduce((total, die) => {
-    if (wholeDieEffectSuppressed(die)) return total;
-    const runtime = board.dieRoundState[die.id];
-    const bonus = effectOf(die, 'bonus');
-    const furnace = effectOf(die, 'furnace');
-    const special = (bonus ? 10 * bonus.level : 0)
-      + (furnace ? (effectRuntime(runtime, furnace)?.furnaceUnits ?? 0) * 3 * furnace.level : 0)
-      + (effectRuntime(runtime, effectOf(die, 'workout'))?.temporaryPips ?? 0)
-      + (effectRuntime(runtime, effectOf(die, 'tank'))?.temporaryPips ?? 0);
-    const teamFactor = selected.filter(other => other.id !== die.id && !!effectOf(other, 'teamPlayer')
-      && !wholeDieEffectSuppressed(other)).reduce((factor, teamPlayer) => factor * (effectOf(teamPlayer, 'teamPlayer')!.level + 1), 1);
-    return total + special + (scoringPips(activeFace(die)) + special) * (teamFactor - 1);
-  }, 0);
-  const snapshot = captureHandStart(board, hand, dieIds, decisionMs);
-  const xMult = composeXMult(handXMultContributions(snapshot, hand, board.handLevels[hand], dieIds));
-  return finalizeScore(base.pips + deterministicWholeDiePips, base.multiplier,
-    xMult * snapshot.bossFactor, snapshot.infernoMultiplier).finalScore;
+  return canonicalPlayPreview(board, hand, dieIds, decisionMs).score;
 }
 
 /**

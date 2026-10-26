@@ -47,7 +47,7 @@ for (const hand of ['pair', 'twoPair'] as const) {
     await expect(die(page, removed)).toHaveAttribute('aria-pressed', 'false');
     for (const id of action.dieIds) await expect(die(page, id)).toHaveAttribute('aria-pressed', 'true');
     const score = handScore(game.dice, hand, action.dieIds);
-    expect(score.multiplier).toBe(hand === 'pair' ? 1.5 : 2);
+    expect(score.multiplier).toBe(2);
     await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText(
       `${score.pips} PIPS × ${score.multiplier} MULT = ${score.score.toLocaleString('en-US')} • PLAY`,
     );

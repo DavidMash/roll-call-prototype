@@ -60,7 +60,7 @@ export function FlameSelectionScreen({ board, event, busy, selectedOffer, setSel
       <RewardSkipConfirmation disabled={busy} onConfirm={() => submit({ type: 'SKIP_FLAME_SELECTION' })} />
     </div></RunActionPortal>}
     <Modal opened={replacement !== null} onClose={() => setReplacement(null)} title="REPLACE A FLAME?" centered>
-      {replacement !== null && selected && board.flameSlots[replacement] && <Stack><Text>Extinguish <strong>{FLAMES[board.flameSlots[replacement]!.type].name}</strong> and lose {board.flameSlots[replacement]!.investedGold} invested Gold?</Text>
+      {replacement !== null && selected && board.flameSlots[replacement] && <Stack><Text>Extinguish <strong>{FLAMES[board.flameSlots[replacement]!.type].name}</strong> and lose <CurrencyAmount currency="gold" value={board.flameSlots[replacement]!.investedGold} /> invested?</Text>
         <Group justify="flex-end"><Button variant="default" onClick={() => setReplacement(null)}>CANCEL</Button><Button color="orange" onClick={confirmReplacement}>REPLACE</Button></Group></Stack>}
     </Modal>
   </Stack>;

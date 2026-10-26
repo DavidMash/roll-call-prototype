@@ -88,13 +88,13 @@ describe('Curtain Call Pips multiplier', () => {
     const basicI = stateWithEffects([['basic', 1]], 5);
     new Resolver(basicI, constant(0)).play('fives', [0]);
     const basicIHand = basicI.historyV2.find(event => event.kind === 'hand_scored');
-    expect(basicIHand?.kind === 'hand_scored' ? basicIHand.score.finalPips : null).toBe(12);
+    expect(basicIHand?.kind === 'hand_scored' ? basicIHand.score.finalPips : null).toBe(5);
 
     const combined = stateWithEffects([['basic', 2], ['bonus', 2]], 5);
     new Resolver(combined, constant(0)).play('fives', [0]);
     const combinedHand = combined.historyV2.find(event => event.kind === 'hand_scored');
-    // Hand base 7 + (raw face 5 × Basic II) + Bonus II 20.
-    expect(combinedHand?.kind === 'hand_scored' ? combinedHand.score.finalPips : null).toBe(37);
+    // (Raw face 5 × Basic II) + Bonus II 20.
+    expect(combinedHand?.kind === 'hand_scored' ? combinedHand.score.finalPips : null).toBe(30);
     expect(combinedHand?.kind === 'hand_scored' ? combinedHand.scoreOccurrences : []).toHaveLength(1);
   });
 
@@ -102,16 +102,16 @@ describe('Curtain Call Pips multiplier', () => {
     const state = stateWithEffects([['basic', 2], ['bonus', 2], ['freePlay', 3]], 5);
     new Resolver(state, constant(0)).manualReroll([0]);
     const hand = curtainHands(state)[0];
-    // Hand base 7 + ((raw face 5 × Basic II) + Bonus II 20) × Curtain Call III.
-    expect(hand?.kind === 'hand_scored' ? hand.score.finalPips : null).toBe(97);
+    // ((Raw face 5 × Basic II) + Bonus II 20) × Curtain Call III.
+    expect(hand?.kind === 'hand_scored' ? hand.score.finalPips : null).toBe(90);
     expect(hand?.kind === 'hand_scored' ? hand.scoreOccurrences : []).toHaveLength(1);
   });
 
-  it.each([1, 2, 3, 7])('scales full die Pips linearly at Lv%s without multiplying Hand base Pips', level => {
+  it.each([1, 2, 3, 7])('scales full die Pips linearly at Lv%s', level => {
     const state = stateWithEffects([['freePlay', level]], 5);
     new Resolver(state, constant(0)).manualReroll([0]);
     const hand = curtainHands(state)[0];
-    expect(hand?.kind === 'hand_scored' ? hand.score.finalPips : null).toBe(7 + 5 * level);
+    expect(hand?.kind === 'hand_scored' ? hand.score.finalPips : null).toBe(5 * level);
     expect(hand?.kind === 'hand_scored' ? hand.scoreOccurrences : []).toHaveLength(1);
   });
 
@@ -126,8 +126,8 @@ describe('Curtain Call Pips multiplier', () => {
 
     new Resolver(state, constant(0)).manualReroll([0]);
     const hand = curtainHands(state)[0];
-    // Hand base 7 + (face 5 + Bonus 20 + Furnace 12 + Workout 7 + Tank 11) × 3.
-    expect(hand?.kind === 'hand_scored' ? hand.score.finalPips : null).toBe(172);
+    // (Face 5 + Bonus 20 + Furnace 12 + Workout 7 + Tank 11) × 3.
+    expect(hand?.kind === 'hand_scored' ? hand.score.finalPips : null).toBe(165);
     expect(hand?.kind === 'hand_scored' ? hand.scoreOccurrences : []).toHaveLength(1);
     expect(state.stats.scoreBySource.curtainCall).toBe(hand?.kind === 'hand_scored' ? hand.score.awarded : 0n);
     expect(state.stats.scoreBySource.jumpingBean).toBe(0n);

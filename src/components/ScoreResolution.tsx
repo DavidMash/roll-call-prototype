@@ -12,12 +12,13 @@ import { CurrencyAmount } from './CurrencyAmount';
 
 function ScoreBox({ label, value, color, active, tutorial }: {
   label: 'INFERNO' | 'PIPS' | 'MULT' | 'XMULT';
-  value: number | ExactScore;
+  value: number | ExactScore | string;
   color: 'inferno' | 'pips' | 'mult' | 'xmult';
   active: ScoreMetric;
   tutorial: string;
 }) {
-  const formatted = typeof value === 'bigint' ? formatExactScore(value) : formatPlayerNumber(value);
+  const formatted = typeof value === 'bigint' ? formatExactScore(value)
+    : typeof value === 'string' ? value : formatPlayerNumber(value);
   const lengthClass = formatted.length > 16 ? ' is-very-long' : formatted.length > 10 ? ' is-long' : '';
   return <div className={`score-box score-box-${color}${active === color ? ' is-changing' : ''}`}
     data-tutorial={tutorial} data-testid={`score-box-${color}`}>
@@ -38,7 +39,7 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText }: {
 }) {
   const score = scorePresentation(event);
   const scoreDieType = isSpecialDieType(event?.dieType) ? event.dieType
-    : event?.type === 'HITCHHIKER_ADDED_PIPS' ? 'hitchhiker' : null;
+    : event?.type === 'DIE_PIPS_RESOLVED' && event.resolvedDiePips?.role === 'hitchhiker' ? 'hitchhiker' : null;
   let heading: ReactNode = idleText ?? '';
   if (event?.type === 'HAND_SCORE_FINALIZED' || event?.type === 'STANDALONE_SCORE_CALCULATED') heading = `+${typeof event.amount === 'bigint' ? formatExactScore(event.amount) : formatPlayerNumber(event.amount ?? 0)}`;
   else if (event?.type === 'JUMPING_BEAN_FREE_PLAY' && event.hand) {
@@ -71,17 +72,17 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText }: {
       {busy && <Button size="compact-xs" variant="subtle" color="gray" onClick={onSkip}>Skip playback</Button>}
     </Group>
     {score ? <div className="score-resolution-stage" data-testid="hand-accumulator">
-      <div className={`score-formula${score.showXMult ? ' has-xmult' : ''}${score.inferno > 1n ? ' has-inferno' : ''}`} aria-hidden="true">
-        {score.inferno > 1n && <>
-          <ScoreBox label="INFERNO" value={score.inferno} color="inferno" active={score.activeMetric} tutorial="score-inferno" />
-          <span className="score-operator">×</span>
-        </>}
+      <div className={`score-formula${score.showXMult ? ' has-xmult' : ''}${score.showInferno && score.inferno > 1n ? ' has-inferno' : ''}`} aria-hidden="true">
         <ScoreBox label="PIPS" value={score.pips} color="pips" active={score.activeMetric} tutorial="score-pips" />
         <span className="score-operator">×</span>
-        <ScoreBox label="MULT" value={score.mult} color="mult" active={score.activeMetric} tutorial="score-mult" />
+        <ScoreBox label="MULT" value={score.showHandMult ? score.mult : '—'} color="mult" active={score.activeMetric} tutorial="score-mult" />
         {score.showXMult && <>
           <span className="score-operator score-xmult-entry">×</span>
           <ScoreBox label="XMULT" value={score.xMult} color="xmult" active={score.activeMetric} tutorial="score-xmult" />
+        </>}
+        {score.showInferno && score.inferno > 1n && <>
+          <span className="score-operator">×</span>
+          <ScoreBox label="INFERNO" value={score.inferno} color="inferno" active={score.activeMetric} tutorial="score-inferno" />
         </>}
       </div>
       {score.bossFactor !== 1 && <div className="score-boss-stage" data-testid="hand-boss-factor">

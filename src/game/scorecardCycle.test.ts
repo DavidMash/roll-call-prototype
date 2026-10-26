@@ -39,7 +39,7 @@ describe('authoritative scorecard cycles', () => {
     expect(result.state.temper).toBe(state.temper + 2);
     expect(result.state.phase).toBe('round');
     expect(result.state.round).toBe(state.round);
-    expect(result.state.score).toBe(BigInt(81n));
+    expect(result.state.score).toBe(74n);
     expect(result.state.score).toBeGreaterThan(state.score);
     expect(result.state.gold).toBe(19);
     expect(result.state.lives).toBe(2);
@@ -66,7 +66,7 @@ describe('authoritative scorecard cycles', () => {
 
   it('does not refresh when the final hand clears the Round', () => {
     const state = finalHandState();
-    state.target = 80n;
+    state.target = 74n;
     state.stats.rounds[0].target = state.target;
     const result = playFinalHand(state);
 
@@ -89,7 +89,7 @@ describe('authoritative scorecard cycles', () => {
 
     expect(second.events.filter(event => event.type === 'SCORECARD_REFRESHED')).toHaveLength(1);
     expect(second.state.historyV2.filter(event => event.kind === 'scorecard_refreshed')).toHaveLength(2);
-    expect(second.state.score).toBe(BigInt(first.state.score + 8n));
+    expect(second.state.score).toBe(first.state.score + 1n);
     expect(second.state.consumed).toEqual([]);
   });
 

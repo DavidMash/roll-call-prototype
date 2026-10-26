@@ -6,8 +6,8 @@ import type {
 import type { RoundGoalBreakdown } from './goals';
 import type { ExactDecimal, ExactScore } from './scoreMath';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 24 as const;
-export const RUN_HISTORY_V2_RULESET = 'configurable-roll-effects-forge-v2' as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 25 as const;
+export const RUN_HISTORY_V2_RULESET = 'dice-pips-hand-mult-v1' as const;
 
 export interface RunHistoryV2Coverage {
   complete: boolean;
@@ -45,8 +45,9 @@ export interface HistoryDieState {
 }
 
 export interface PipsContribution {
-  source: 'hand_base' | 'die_base' | 'special_die' | 'team_player';
+  source: 'die_base' | 'special_die' | 'team_player';
   amount: number;
+  occurrenceId?: string;
   dieId?: number;
   face?: Rank;
   role?: 'selected' | 'hitchhiker';
@@ -55,7 +56,7 @@ export interface PipsContribution {
 }
 
 export interface MultContribution {
-  source: 'hand_base';
+  source: 'hand';
   factor: number;
   before: number;
   after: number;
@@ -174,9 +175,8 @@ export interface HandScoredEvent extends RunHistoryV2Envelope {
   consumed: boolean;
   score: {
     infernoMultiplier?: ExactScore;
-    basePips: number;
     finalPips: number;
-    baseMult: number;
+    handMult: number;
     finalMult: number;
     finalXMult: number;
     bossFactor: number;
@@ -186,6 +186,7 @@ export interface HandScoredEvent extends RunHistoryV2Envelope {
   };
   roundScore: { before: ExactScore; afterAward: ExactScore; after: ExactScore };
   pipsContributions: PipsContribution[];
+  resolvedDicePips: import('./types').ResolvedDiePips[];
   multContributions: MultContribution[];
   xMultContributions: XMultContribution[];
   sideEffects: HandSideEffect[];

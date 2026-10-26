@@ -19,7 +19,7 @@ export function LandingScreen({ resumableRun, resumableTutorial, onboarding, onC
   const newRunButton = useRef<HTMLButtonElement>(null);
   const position = resumableRun ? chapterPosition(resumableRun.round) : null;
   const summary = resumableRun && position
-    ? `C${position.chapterNumber} R${position.chapterRound} · ${formatPlayerNumber(resumableRun.gold)} Gold · ${lifeDisplay(resumableRun.lives)}` : '';
+    ? `C${position.chapterNumber} R${position.chapterRound} · ${formatPlayerNumber(resumableRun.gold)}G · ${lifeDisplay(resumableRun.lives)}` : '';
   const continueLabel = resumableRun && position
     ? `Continue Chapter ${position.chapterNumber} Round ${position.chapterRound}, ${formatPlayerNumber(resumableRun.gold)} Gold, ${formatPlayerNumber(resumableRun.lives)} ${resumableRun.lives === 1 ? 'life' : 'lives'}` : '';
   const tutorialProminent = !onboarding.tutorialCompleted && !onboarding.normalRunFinishedOnce;

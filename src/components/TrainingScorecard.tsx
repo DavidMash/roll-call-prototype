@@ -25,14 +25,15 @@ function TrainingSection({ title, hands, levels, shop, gold, busy, onTrain }: {
     <div className="scorecard-rows">
       {hands.map(hand => {
         const stats = handStats(hand, levels[hand]);
+        const nextStats = handStats(hand, levels[hand] + 1);
         const quote = quoteTraining(session, levels, hand);
         const unaffordable = quote.actualPrice === null || gold < quote.actualPrice;
         const strength = strengthTiers[hand] ?? 'normal';
-        const priceLabel = quote.actualPrice === null ? 'UNAFFORDABLE'
-          : quote.waivedByOnTheHouse ? `FREE · ${formatPlayerNumber(quote.normalPrice!)} GOLD VALUE`
-          : `${formatPlayerNumber(quote.actualPrice)} GOLD`;
-        const compactPrice = quote.actualPrice === null ? '—' : quote.waivedByOnTheHouse
-          ? 'FREE' : <CurrencyAmount currency="gold" value={quote.actualPrice} />;
+        const priceLabel = quote.actualPrice === null ? 'unavailable'
+          : quote.waivedByOnTheHouse ? `free, ${formatPlayerNumber(quote.normalPrice!)} Gold value`
+          : `${formatPlayerNumber(quote.actualPrice)} Gold`;
+        const compactPrice = quote.actualPrice === null ? 'TRAIN —' : quote.waivedByOnTheHouse
+          ? 'TRAIN FREE' : <>TRAIN <CurrencyAmount currency="gold" value={quote.actualPrice} accessible={false} /></>;
         return <div key={hand} className="training-scorecard-row" data-testid={`training-offer-${hand}`}
           data-tutorial={`training-${hand}`} data-strength-tier={strength}>
           <div className={`training-hand-summary strength-${strength}`}>
@@ -40,9 +41,8 @@ function TrainingSection({ title, hands, levels, shop, gold, busy, onTrain }: {
               <span className="hand-name-compact">{COMPACT_HAND_NAMES[hand] ?? HANDS[hand].name}</span>
               <span className="hand-level" data-testid={`training-stats-${hand}`}>
                 <span className="hand-level-value">Lv. {formatPlayerNumber(stats.level)}</span>
-                <span className="hand-stat"><strong>{formatPlayerNumber(stats.basePips)}</strong><small>PIPS</small></span>
-                <span className="hand-stat-times" aria-hidden="true">×</span>
-                <span className="hand-stat"><strong>{formatPlayerNumber(stats.baseMultiplier)}</strong><small>MULT</small></span>
+                <span className="hand-stat hand-mult-stat"><strong>×{formatPlayerNumber(stats.handMultiplier)}</strong><small>MULT</small></span>
+                <span className="training-next-mult" aria-label={`Next level ${formatPlayerNumber(nextStats.handMultiplier)} Mult`}>→ ×{formatPlayerNumber(nextStats.handMultiplier)}</span>
               </span></span>
             {quote.purchaseCount > 0 && <Badge size="xs" color="teal" variant="light">TRAINED ×{quote.purchaseCount}</Badge>}
           </div>

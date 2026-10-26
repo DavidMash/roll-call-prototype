@@ -15,6 +15,11 @@ const REQUIRED_BEATS = {
   flameDemoSetup: 'c2-r1-setup', flameDemoPayoff: 'c2-r1-payoff',
 } as const;
 
+// The opening lesson is an authored scenario rather than a balance fixture. Under the
+// dice-Pips scoring model its required plays total 76 Score, so keep the target just
+// below that scripted total while normal-run targets remain unchanged.
+const OPENING_TUTORIAL_TARGET = 75n;
+
 const complete = (scenario: TutorialScenarioState, id: string) => {
   if (!scenario.completedBeatIds.includes(id)) scenario.completedBeatIds.push(id);
 };
@@ -140,6 +145,9 @@ export function newTutorialSession(): { session: TutorialSession; resolution: Re
   const initialDice = newRun(TUTORIAL_SEED).state.dice;
   const source = scriptedRollSource(initialDice, targetMap([1, 2, 1, 5, 6]), new SeededRng(0).state);
   const resolution = newRun(TUTORIAL_SEED, source);
+  resolution.state.target = OPENING_TUTORIAL_TARGET;
+  const openingRoundStats = resolution.state.stats.rounds.at(-1);
+  if (openingRoundStats) openingRoundStats.target = OPENING_TUTORIAL_TARGET;
   withBossPlan(resolution.state);
   for (const event of resolution.events) {
     if (event.type === 'CHAPTER_STARTED') { event.chapterMiniBoss = 'capitalReturn'; event.chapterBoss = 'magician'; }
@@ -149,6 +157,7 @@ export function newTutorialSession(): { session: TutorialSession; resolution: Re
     event.board.bossSchedule[12] = 'warden';
     event.board.chapterPlans[1] = { chapterNumber: 1, miniBoss: 'capitalReturn', boss: 'magician' };
     event.board.chapterPlans[2] = { chapterNumber: 2, miniBoss: 'quickdraw', boss: 'warden' };
+    event.board.target = OPENING_TUTORIAL_TARGET;
   }
   const scenario = initialTutorialScenario();
   curateTutorialOffers(resolution.state, scenario);

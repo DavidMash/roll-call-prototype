@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { dispatch, newRun } from './engine';
 import { HAND_IDS } from './hands';
-import { playbackBoard, rollBatchPresentation, SCORECARD_REFRESH_HOLD_MS, scoreSummaryJump } from './playback';
+import { playbackBoard, playbackTickMs, rollBatchPresentation, SCORECARD_REFRESH_HOLD_MS, scoreSummaryJump } from './playback';
 import { createDieEffect, resetDieRoundState } from './specialDice';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
 
 describe('score summary playback checkpoint', () => {
+  it('gives each scoring die a punchy speed-specific beat and instant mode no delay', () => {
+    const event = { type: 'DIE_PIPS_RESOLVED' } as Parameters<typeof playbackTickMs>[0];
+    expect(playbackTickMs(event, 'normal')).toBe(200);
+    expect(playbackTickMs(event, 'fast')).toBe(80);
+    expect(playbackTickMs(event, 'instant')).toBe(0);
+  });
   it('lands Instant and Skip on the final authoritative hand boxes before the batch ends', () => {
     const state = newRun('score-summary-jump').state;
     state.target = 1_000_000n;
