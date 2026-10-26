@@ -14,7 +14,7 @@ import { benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, handOp
 import { probabilityCheck, randomIndex } from './rng';
 import { OFFER_RARITY_WEIGHTS, rarityFirstSelection, rarityLabel } from './rarity';
 import { createDiceOffers } from './diceEconomy';
-import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, ordinaryFaceContributions, type HandScoreContribution, type ScoringParticipant } from './scoring';
+import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, resolvedDiePipsContributions, type HandScoreContribution, type ScoringParticipant } from './scoring';
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie, currentlyPlayableManualHands, handIsPhysicallyAttainable,
   isBigBossRound, isCursedDie, isMiniBossType, requiredEncounterDieIds, scorecardCycleRelevantHands, unavailableEncounterHands, wardenUnlockCosts,
@@ -587,44 +587,19 @@ export class Resolver {
 
   private scoringContributions(participant: ScoringParticipant, scoringDice: number,
     intent?: PlayIntent): HandScoreContribution[] {
-    const contributions = ordinaryFaceContributions(participant, scoringDice);
     const die = this.collectible(participant.id);
-    if (die && !wholeDieEffectSuppressed(die)) {
-      const basic = effectOf(die, 'basic');
-      const bonus = effectOf(die, 'bonus');
-      const furnace = effectOf(die, 'furnace');
-      const workoutRuntime = this.specialRuntime(die, 'workout');
-      const tankRuntime = this.specialRuntime(die, 'tank');
-      const furnaceRuntime = this.specialRuntime(die, 'furnace');
-      const specialParts: [SpecialDieType, number][] = [
-        ['basic', basic ? participant.face.rank * (basic.level - 1) : 0],
-        ['bonus', bonus ? 10 * bonus.level : 0],
-        ['furnace', furnace ? (furnaceRuntime?.furnaceUnits ?? 0) * 3 * furnace.level : 0],
-        ['workout', workoutRuntime?.temporaryPips ?? 0],
-        ['tank', tankRuntime?.temporaryPips ?? 0],
-      ];
-      for (const [effectType, amount] of specialParts) if (amount) contributions.push({ kind: 'special', role: participant.role,
-        dieId: participant.id, face: participant.face, amount, effectType });
-    }
+    const activeDie = die && !wholeDieEffectSuppressed(die) ? die : undefined;
     const curtainCall = intent?.source === 'freePlay' && this.curtainCallContext?.dieId === participant.id
       ? this.curtainCallContext : null;
-    if (curtainCall && curtainCall.multiplier > 1) {
-      const diePips = contributions.reduce((sum, contribution) => sum + contribution.amount, 0);
-      contributions.push({ kind: 'special', role: participant.role, dieId: participant.id, face: participant.face,
-        amount: diePips * (curtainCall.multiplier - 1), effectType: 'freePlay' });
-    }
-    if (intent?.source === 'manual' && intent.playerSelectedDieIds.includes(participant.id)) {
-      const teamPlayers = intent.playerSelectedDieIds.filter(id => id !== participant.id)
-        .map(id => this.collectible(id)).filter((item): item is CollectibleDie => !!item && hasEffect(item, 'teamPlayer') && !wholeDieEffectSuppressed(item));
-      const teamFactor = teamPlayers
-        .reduce((factor, teamPlayer) => factor * (requireEffect(teamPlayer, 'teamPlayer').level + 1), 1);
-      if (teamFactor > 1) {
-        const subtotal = contributions.reduce((sum, contribution) => sum + contribution.amount, 0);
-        contributions.push({ kind: 'teamPlayer', role: participant.role, dieId: participant.id,
-          face: participant.face, amount: subtotal * (teamFactor - 1), sourceDieIds: teamPlayers.map(item => item.id) });
-      }
-    }
-    return contributions;
+    const selectedDice = intent?.playerSelectedDieIds.map(id => this.collectible(id))
+      .filter((item): item is CollectibleDie => !!item && !wholeDieEffectSuppressed(item));
+    return resolvedDiePipsContributions(participant, scoringDice, {
+      die: activeDie,
+      runtime: activeDie ? this.state.dieRoundState[activeDie.id] : undefined,
+      selectedDice,
+      playSource: intent?.source,
+      curtainCallMultiplier: curtainCall?.multiplier,
+    });
   }
 
   private resolveScoreOccurrence(occurrence: ScoreOccurrence, participants: ScoringParticipant[]): {
@@ -1844,7 +1819,15 @@ export class Resolver {
       : playSource === 'freePlay' ? 'curtainCall' as const : 'hand' as const;
     this.log({ type: 'SCORE_ROUNDING_AUDIT', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score, source: scoreSource, playSource,
       message: `Final: ${this.format(pips)} × ${this.format(multiplier)} × ${this.format(xMult)}${bossFactor !== 1 ? ` × boss ${this.format(bossFactor)}` : ''} = ${this.format(rawScore)}; rounded ${this.format(score)}` });
-    this.emit({ type: 'HAND_SCORE_FINALIZED', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score,
+    const diePips = [...this.v2Hand.pipsContributions.reduce((totals, contribution) => {
+      if (contribution.dieId === undefined) return totals;
+      const existing = totals.get(contribution.dieId) ?? { pips: 0, role: contribution.role ?? 'selected' as const };
+      existing.pips += contribution.amount;
+      totals.set(contribution.dieId, existing);
+      return totals;
+    }, new Map<number, { pips: number; role: 'selected' | 'hitchhiker' }>()).entries()]
+      .map(([dieId, item]) => ({ dieId, ...item }));
+    this.emit({ type: 'HAND_SCORE_FINALIZED', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score, diePips,
       source: scoreSource, playSource, handConsumed: resolution.consumesHand, message: `Final awarded hand score: ${this.format(score)}` });
     this.addScore(score, scoreSource, `${freePlay ? 'Free play: ' : ''}${HANDS[hand].name}: round score +${this.format(score)}`, scoringIds, hand);
     const roundScoreAfterAward = this.state.score;

@@ -2,7 +2,8 @@ import { CONFIG } from './config';
 import { activeFace, scoringPips } from './dice';
 import { handStats } from './hands';
 import { exactInferno, exactWeightedFactorAverage, finalizeExactScore, type ExactScore } from './scoreMath';
-import type { Die, Face, HandId, HandScoreAccumulator, SpecialDieType } from './types';
+import type { CollectibleDie, Die, DieRoundRuntime, Face, HandId, HandScoreAccumulator, SpecialDieType } from './types';
+import { effectOf, effectRuntime } from './specialDice';
 
 export const INFERNO_BASE = 25;
 export const infernoMultiplier = (level: number): ExactScore => exactInferno(Math.max(0, Math.floor(level)));
@@ -29,6 +30,55 @@ export function ordinaryFaceContributions(participant: ScoringParticipant, scori
 
 export const resolvedOrdinaryPips = (participant: ScoringParticipant, scoringDice: number): number =>
   ordinaryFaceContributions(participant, scoringDice).reduce((sum, contribution) => sum + contribution.amount, 0);
+
+export interface DiePipsContext {
+  die?: CollectibleDie;
+  runtime?: DieRoundRuntime;
+  selectedDice?: readonly CollectibleDie[];
+  playSource?: 'manual' | 'freePlay' | 'jumpingBean';
+  curtainCallMultiplier?: number;
+}
+
+/**
+ * Canonical Pips contributed by one scoring occurrence. Both resolution and the
+ * pre-Play view use this helper so UI never re-implements enhancement arithmetic.
+ */
+export function resolvedDiePipsContributions(participant: ScoringParticipant, scoringDice: number,
+  context: DiePipsContext = {}): HandScoreContribution[] {
+  const contributions = ordinaryFaceContributions(participant, scoringDice);
+  const { die, runtime } = context;
+  if (die) {
+    const basic = effectOf(die, 'basic');
+    const bonus = effectOf(die, 'bonus');
+    const furnace = effectOf(die, 'furnace');
+    const specialParts: [SpecialDieType, number][] = [
+      ['basic', basic ? participant.face.rank * (basic.level - 1) : 0],
+      ['bonus', bonus ? 10 * bonus.level : 0],
+      ['furnace', furnace ? (effectRuntime(runtime, furnace)?.furnaceUnits ?? 0) * 3 * furnace.level : 0],
+      ['workout', effectRuntime(runtime, effectOf(die, 'workout'))?.temporaryPips ?? 0],
+      ['tank', effectRuntime(runtime, effectOf(die, 'tank'))?.temporaryPips ?? 0],
+    ];
+    for (const [effectType, amount] of specialParts) if (amount) contributions.push({
+      kind: 'special', role: participant.role, dieId: participant.id, face: participant.face, amount, effectType,
+    });
+  }
+  if (context.playSource === 'freePlay' && (context.curtainCallMultiplier ?? 1) > 1) {
+    const amount = contributions.reduce((sum, contribution) => sum + contribution.amount, 0)
+      * ((context.curtainCallMultiplier ?? 1) - 1);
+    contributions.push({ kind: 'special', role: participant.role, dieId: participant.id,
+      face: participant.face, amount, effectType: 'freePlay' });
+  }
+  if (context.playSource === 'manual' && participant.role === 'selected' && context.selectedDice?.some(item => item.id === participant.id)) {
+    const teamPlayers = context.selectedDice.filter(item => item.id !== participant.id && !!effectOf(item, 'teamPlayer'));
+    const teamFactor = teamPlayers.reduce((factor, teamPlayer) => factor * (effectOf(teamPlayer, 'teamPlayer')!.level + 1), 1);
+    if (teamFactor > 1) {
+      const subtotal = contributions.reduce((sum, contribution) => sum + contribution.amount, 0);
+      contributions.push({ kind: 'teamPlayer', role: participant.role, dieId: participant.id,
+        face: participant.face, amount: subtotal * (teamFactor - 1), sourceDieIds: teamPlayers.map(item => item.id) });
+    }
+  }
+  return contributions;
+}
 
 export function createHandAccumulator(hand: HandId, dieIds: number[], level = 1, infernoMultiplier: ExactScore = 1n): HandScoreAccumulator {
   const stats = handStats(hand, level);

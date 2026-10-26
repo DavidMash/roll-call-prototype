@@ -39,7 +39,10 @@ function TrainingSection({ title, hands, levels, shop, gold, busy, onTrain }: {
             <span className="scorecard-hand-name"><span className="hand-name-full">{HANDS[hand].name}</span>
               <span className="hand-name-compact">{COMPACT_HAND_NAMES[hand] ?? HANDS[hand].name}</span>
               <span className="hand-level" data-testid={`training-stats-${hand}`}>
-                Lv. {formatPlayerNumber(stats.level)} · {formatPlayerNumber(stats.basePips)} × {formatPlayerNumber(stats.baseMultiplier)}
+                <span className="hand-level-value">Lv. {formatPlayerNumber(stats.level)}</span>
+                <span className="hand-stat"><strong>{formatPlayerNumber(stats.basePips)}</strong><small>PIPS</small></span>
+                <span className="hand-stat-times" aria-hidden="true">×</span>
+                <span className="hand-stat"><strong>{formatPlayerNumber(stats.baseMultiplier)}</strong><small>MULT</small></span>
               </span></span>
             {quote.purchaseCount > 0 && <Badge size="xs" color="teal" variant="light">TRAINED ×{quote.purchaseCount}</Badge>}
           </div>

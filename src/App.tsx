@@ -35,6 +35,7 @@ import type { OnboardingMetadata, TutorialBeat } from './tutorial/types';
 import { isChapterMapTransition } from './game/playback';
 import { RunActionRow, RunActionRowContext } from './components/RunActionRow';
 import { InfernoEvaluationScreen } from './components/InfernoEvaluationScreen';
+import type { FlamePresentation } from './game/flamePresentation';
 
 const freshSeed = () => `roll-${Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join('-')}`;
 const query = new URLSearchParams(window.location.search);
@@ -59,6 +60,7 @@ export default function App() {
   const [faceDetails, setFaceDetails] = useState<FaceDetailsTarget | null>(null);
   const [flameDetails, setFlameDetails] = useState<FlameDetailsTarget | null>(null);
   const [actionRowTarget, setActionRowTarget] = useState<HTMLDivElement | null>(null);
+  const [flamePresentation, setFlamePresentation] = useState<FlamePresentation[]>([]);
   const normalGame = useGame(requestedSeed, initialSeed, speed, runMode === 'normal', initialDebugTraceMode);
   const tutorialGame = useTutorialGame(speed, runMode === 'tutorial');
   const game = runMode === 'tutorial' ? tutorialGame : normalGame;
@@ -185,7 +187,7 @@ export default function App() {
     className={`app-container screen-theme ${board.phase === 'round' ? 'active-gameplay' : ''}`}
     data-screen-theme={theme.id} data-playback-speed={speed}
     style={{ '--screen-primary': theme.accent, '--screen-secondary': theme.accentStrong } as React.CSSProperties}>
-    {!showingChapterSplash && <TopHud board={board} speed={speed} setSpeed={setSpeed} diceDisplay={diceDisplay} setDiceDisplay={setDiceDisplay}
+    {!showingChapterSplash && <TopHud board={board} event={event} flamePresentation={board.phase === 'round' ? flamePresentation : []} speed={speed} setSpeed={setSpeed} diceDisplay={diceDisplay} setDiceDisplay={setDiceDisplay}
       openRunInfo={() => setRunInfoOpen(true)} openHelp={() => setHelpOpen(true)}
       openRestoreLives={() => setRestoreLivesOpen(true)} openFlameDetails={openFlameDetails} onMenuOpenChange={setGameMenuOpen}
       returnToTitle={returnToTitle} />}
@@ -215,7 +217,8 @@ export default function App() {
           </Paper>
         </Stack>
         : <RoundScreen board={board} event={event} busy={busy} inputBlocked={busy || gameMenuOpen || runInfoOpen || helpOpen || restoreLivesOpen || faceDetails !== null || flameDetails !== null}
-          selection={selection} setSelection={setSelection} submit={submit} skip={game.skip} />}
+          selection={selection} setSelection={setSelection} submit={submit} skip={game.skip}
+          onFlamePresentationChange={setFlamePresentation} />}
     </main>
     {(board.phase === 'round' || board.phase === 'flameSelection') && <DiceDock board={diceBoard} event={event} busy={busy} actionsEnabled={dockActionsEnabled} cinematic={showingChapterSplash}
       display={diceDisplay} selection={selection} setSelection={setSelection}

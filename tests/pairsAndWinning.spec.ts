@@ -49,7 +49,7 @@ for (const hand of ['pair', 'twoPair'] as const) {
     const score = handScore(game.dice, hand, action.dieIds);
     expect(score.multiplier).toBe(hand === 'pair' ? 1.5 : 2);
     await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText(
-      `${score.pips} × ${score.multiplier} × 1 = ${score.score.toLocaleString('en-US')} • PLAY`,
+      `${score.pips} PIPS × ${score.multiplier} MULT = ${score.score.toLocaleString('en-US')} • PLAY`,
     );
     await expect(page.getByTestId('round-score-progress')).toHaveText(`0 / ${game.target}`);
     await page.getByRole('button', { name: 'PLAY', exact: true }).click();

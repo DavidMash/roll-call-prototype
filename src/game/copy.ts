@@ -28,8 +28,12 @@ export function formatExactDecimal(value: string): string {
 export const formatPercentage = (chance: number) => `${formatPlayerNumber(chance * 100)}%`;
 export const formatScore = formatExactScore;
 export const formatScoreProgress = (score: ExactScore, goal: ExactScore) => `${formatScore(score)} / ${formatScore(goal)}`;
-export const formatScoreEquation = (pips: number, mult: number, xMult: number, total: ExactScore, inferno: ExactScore = 1n) =>
-  `${inferno > 1n ? `${formatExactScore(inferno)} × ` : ''}${formatPlayerNumber(pips)} × ${formatPlayerNumber(mult)} × ${formatPlayerNumber(xMult)} = ${formatScore(total)}`;
+export const formatScoreEquation = (pips: number, mult: number, xMult: number, total: ExactScore, inferno: ExactScore = 1n) => {
+  const factors = [`${formatPlayerNumber(pips)} PIPS`, `${formatPlayerNumber(mult)} MULT`];
+  if (xMult !== 1) factors.push(`${formatPlayerNumber(xMult)} XMULT`);
+  if (inferno > 1n) factors.push(`${formatExactScore(inferno)} INFERNO`);
+  return `${factors.join(' × ')} = ${formatScore(total)}`;
+};
 
 export function playActionLabel(danger: LastPlayDanger, guaranteedWin: boolean): 'PLAY' | 'LAST PLAY?' | 'LAST PLAY.' {
   if (guaranteedWin || danger === 'none') return 'PLAY';

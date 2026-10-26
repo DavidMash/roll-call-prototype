@@ -257,7 +257,9 @@ test('scorecard keeps all fourteen categories visible with simplified actionable
     const row = page.getByTestId(`scorecard-row-${hand}`);
     const stats = handStats(hand, 1);
     await expect(row).toBeVisible();
-    await expect(page.getByTestId(`scorecard-stats-${hand}`)).toHaveText(`Lv. ${stats.level} · ${stats.basePips} × ${stats.baseMultiplier}`);
+    await expect(page.getByTestId(`scorecard-stats-${hand}`)).toContainText(`Lv. ${stats.level}`);
+    await expect(page.getByTestId(`scorecard-stats-${hand}`)).toContainText(`${stats.basePips}PIPS`);
+    await expect(page.getByTestId(`scorecard-stats-${hand}`)).toContainText(`${stats.baseMultiplier}MULT`);
     const section = UPPER_HAND_IDS.includes(hand) ? UPPER_HAND_IDS : LOWER_HAND_IDS;
     const expectedTier = relativeHandStrengthTiers(Object.fromEntries(HAND_IDS.map(id => [id, 1])) as GameState['handLevels'], section)[hand];
     await expect(row).toHaveAttribute('data-strength-tier', expectedTier!);
@@ -299,7 +301,7 @@ test('selected hands expose desktop score-slot and Enter PLAY shortcuts without 
   await row.click();
   const quickPlay = shell.getByRole('button', { name: /^Play .* for \d+ points$/ });
   await expect(quickPlay).toBeVisible();
-  await expect(quickPlay.locator('.quick-score-expression')).toHaveText(/^\d+ × \d+(?:\.\d+)? × \d+(?:\.\d+)? = [\d,]+$/);
+  await expect(quickPlay.locator('.quick-score-expression')).toHaveText(/^\d+ PIPS × \d+(?:\.\d+)? MULT(?: × \d+(?:\.\d+)? XMULT)? = [\d,]+$/);
   await expect(quickPlay).not.toContainText('PLAY');
   await expect(quickPlay.locator('.quick-submit-icon')).toBeVisible();
 
@@ -527,7 +529,7 @@ test('live scoring panel updates inside the fixed mobile gameplay viewport', asy
   const selectedScore = handScore(game.dice, choice.hand, choice.dieIds, game.handLevels[choice.hand]);
   await expect(page.locator('.mobile-score-total')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText(
-    `${selectedScore.pips} × ${selectedScore.multiplier} × 1 = ${selectedScore.score.toLocaleString('en-US')} • PLAY`,
+    `${selectedScore.pips} PIPS × ${selectedScore.multiplier} MULT = ${selectedScore.score.toLocaleString('en-US')} • PLAY`,
   );
   const before = await scorecard.boundingBox();
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
@@ -591,7 +593,9 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   await goToShopStage(page, 'training');
   game = dispatch(game, { type: 'SET_SHOP_STAGE', stage: 'train' }).state;
   await expect(page.locator('[data-testid^="training-offer-"]')).toHaveCount(14);
-  await expect(page.getByTestId(`training-stats-${hand}`)).toHaveText(`Lv. 1 · ${level1.basePips} × ${level1.baseMultiplier}`);
+  await expect(page.getByTestId(`training-stats-${hand}`)).toContainText(`Lv. 1`);
+  await expect(page.getByTestId(`training-stats-${hand}`)).toContainText(`${level1.basePips}PIPS`);
+  await expect(page.getByTestId(`training-stats-${hand}`)).toContainText(`${level1.baseMultiplier}MULT`);
 
   const goldBefore = game.gold;
   await page.getByTestId(`train-${hand}`).click();
@@ -603,7 +607,9 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   await expect(page.getByTestId(`training-offer-${hand}`)).toContainText('TRAINED ×1');
   await expect(page.getByTestId(`train-${hand}`)).toHaveText('G4');
   await expect(page.getByTestId(`train-${hand}`)).toHaveAccessibleName(`Train ${HANDS[hand].name} for 4 GOLD`);
-  await expect(page.getByTestId(`training-stats-${hand}`)).toHaveText(`Lv. 2 · ${level2.basePips} × ${level2.baseMultiplier}`);
+  await expect(page.getByTestId(`training-stats-${hand}`)).toContainText(`Lv. 2`);
+  await expect(page.getByTestId(`training-stats-${hand}`)).toContainText(`${level2.basePips}PIPS`);
+  await expect(page.getByTestId(`training-stats-${hand}`)).toContainText(`${level2.baseMultiplier}MULT`);
 
   await goToShopStage(page, 'flames');
   await page.getByRole('button', { name: 'NEXT ROUND', exact: true }).click();
@@ -612,9 +618,9 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   await matchBoard(page, game);
   const row = page.getByTestId(`scorecard-row-${hand}`);
   await expect(row).toContainText(`Lv. 2`);
-  await expect(page.getByTestId(`scorecard-stats-${hand}`)).toHaveText(
-    `Lv. 2 · ${level2.basePips} × ${level2.baseMultiplier}`,
-  );
+  await expect(page.getByTestId(`scorecard-stats-${hand}`)).toContainText(`Lv. 2`);
+  await expect(page.getByTestId(`scorecard-stats-${hand}`)).toContainText(`${level2.basePips}PIPS`);
+  await expect(page.getByTestId(`scorecard-stats-${hand}`)).toContainText(`${level2.baseMultiplier}MULT`);
   const section = UPPER_HAND_IDS.includes(hand) ? UPPER_HAND_IDS : LOWER_HAND_IDS;
   const expectedTier = relativeHandStrengthTiers(game.handLevels, section)[hand];
   await expect(row).toHaveAttribute('data-strength-tier', expectedTier!);
@@ -626,7 +632,7 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   const scored = handScore(game.dice, hand, option.combinations[0], 2);
   expect(Number.isInteger(scored.rawScore)).toBe(false);
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText(
-    `${scored.pips} × ${scored.multiplier} × 1 = ${scored.score.toLocaleString('en-US')} • PLAY`,
+    `${scored.pips} PIPS × ${scored.multiplier} MULT = ${scored.score.toLocaleString('en-US')} • PLAY`,
   );
   await page.getByRole('button', { name: /^(PLAY|LAST PLAY[?.])$/ }).click();
   const result = dispatch(game, { type: 'PLAY', hand, dieIds: option.combinations[0] });
@@ -1137,7 +1143,7 @@ for (const direction of ['hand-first', 'dice-first'] as const) {
     await expect(playedDie).toHaveAttribute('aria-pressed', 'true');
     await expect(fours).toHaveAttribute('aria-pressed', 'true');
     await expect(fours).toHaveAccessibleName(/^Fours · Lv\. 1 · 7 Pips · ×1 Mult /);
-    await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText('11 × 1 × 1 = 11 • PLAY');
+    await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toHaveText('11 PIPS × 1 MULT = 11 • PLAY');
     await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeEnabled();
     await matchBoard(page, game); // Selection alone never scores or rolls.
     await page.getByRole('button', { name: 'PLAY', exact: true }).click();

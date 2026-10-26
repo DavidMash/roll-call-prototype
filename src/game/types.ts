@@ -882,6 +882,8 @@ export interface EventRecord {
   terminalDice?: { dieId: number; physicalFace: Rank; face: Rank; pips: number }[];
   bustPresentationUsedFrozenDice?: boolean;
   handScore?: HandScoreAccumulator;
+  /** Final resolved Pips grouped by scoring die for presentation. */
+  diePips?: { dieId: number; pips: number; role: 'selected' | 'hitchhiker' }[];
 }
 export interface GameEvent extends EventRecord { board: Board }
 export interface BustSummary {

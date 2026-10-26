@@ -32,11 +32,12 @@ interface Props {
   onDropOffer?: (offerId: number) => void;
   fetchTarget?: { dieId: number; physicalFace: Rank } | null;
   hotPotato?: boolean;
+  pipsPop?: { eventId: number; amount: number };
 }
 
 export function Die({ die, rosterSlot, display, selected, highlighted, rolling, resolving = false, ability, flameAbility, disabled,
   detailsDisabled = false, eligible, wardenLocked = false, wardenSelectable = false, unlockAt, ineligibleReason,
-  lockedReason, allowIneligibleClick = false, onClick, onDetails, onDropOffer, fetchTarget, hotPotato = false }: Props) {
+  lockedReason, allowIneligibleClick = false, onClick, onDetails, onDropOffer, fetchTarget, hotPotato = false, pipsPop }: Props) {
   const face = activeFace(die);
   const pips = scoringPips(face);
   const mutation = face.bossMutation;
@@ -61,6 +62,8 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
   return <div className={`die-wrap die-slot${detailsDisabled ? ' details-disabled' : ''}${effectSuppressed ? ' effect-suppressed' : ''}`} data-die-id={die.id}
     data-tutorial={die.owner === 'player' ? `die-${(rosterSlot ?? 0) + 1}` : undefined}
     data-testid={die.owner === 'player' ? `flame-die-${die.id}` : 'cursed-die-slot'}>
+    {pipsPop && pipsPop.amount > 0 && <span key={`${pipsPop.eventId}:${die.id}`} className="resolution-pop die-pips-pop"
+      role="status" aria-live="polite">+{formatPlayerNumber(pipsPop.amount)} PIPS</span>}
     <Paper component="button" type="button" withBorder
       className={`die die-selection-target ${die.owner === 'boss' ? 'cursed-die' : ''}${specialName ? ' special-die' : ''} ${mutation?.kind === 'snakeEyes' ? 'snake-eyed-face' : ''} ${mutation?.kind === 'infected' ? 'infected-face' : ''}${selected ? ' selected is-die-selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${resolving ? 'resolving' : ''} ${triggered ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''} ${wardenLocked ? 'warden-locked' : ''}`}
       style={collectible ? diePresentationStyle(collectible) : undefined} data-effect-count={collectible?.effects.length ?? undefined}

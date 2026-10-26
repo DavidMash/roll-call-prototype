@@ -1,11 +1,10 @@
 import { Alert, Button, Group, Modal, Paper, Stack, Text } from '@mantine/core';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { validateAction } from '../game/engine';
-import { captureHandStart, composeXMult, handXMultContributions,
-  allInMultiplier, flameByType,
-  hasOwnedFlame, isGuaranteedWinningPlay, speedDemonMultiplier, PROGRESSIVE_FLAME_SEQUENCES } from '../game/flames';
+import { captureHandStart, allInMultiplier, flameByType,
+  hasOwnedFlame, isGuaranteedWinningPlay, PROGRESSIVE_FLAME_SEQUENCES } from '../game/flames';
 import { HANDS, planQualification } from '../game/hands';
-import { finalizeScore, handScore } from '../game/scoring';
+import { finalizeScore } from '../game/scoring';
 import { canPlay, normalizeBoardSelection, selectBoardHand } from '../game/selection';
 import type { Selection } from '../game/selection';
 import type { Action, Board, GameEvent } from '../game/types';
@@ -23,10 +22,13 @@ import { effectRuntime } from '../game/specialDice';
 import { DieTypeLabel } from './DieTypeLabel';
 import { FlameActions } from './FlameActions';
 import { DoubleOrNothingOffer } from './DoubleOrNothingOffer';
+import { canonicalPlayPreview } from '../game/playPreview';
+import { deriveFlamePresentations, type FlamePresentation } from '../game/flamePresentation';
 
-export function RoundScreen({ board, event, busy, inputBlocked, selection, setSelection, submit, skip }: {
+export function RoundScreen({ board, event, busy, inputBlocked, selection, setSelection, submit, skip, onFlamePresentationChange }: {
   board: Board; event: GameEvent | null; busy: boolean; inputBlocked: boolean;
   selection: Selection; setSelection: (selection: Selection) => void; submit: (action: Action) => void; skip: () => void;
+  onFlamePresentationChange?: (presentation: FlamePresentation[]) => void;
 }) {
   const encounterDice = activeEncounterDice(board);
   const wardenBoss = !board.bossSilenced && board.boss?.type === 'warden' ? board.boss : null;
@@ -77,19 +79,17 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     && !!qualification?.legal && (validationError === null || validationError === 'Choose which qualification die should spend its Use.');
   const preview = valid ? (() => {
     const hand = effectiveSelection.hand!;
-    const base = handScore(encounterDice, hand, effectiveSelection.dieIds, board.handLevels[hand]);
-    const snapshot = captureHandStart(board, hand, effectiveSelection.dieIds, null, 'manual', {
+    const canonical = canonicalPlayPreview(board, hand, effectiveSelection.dieIds, decisionMs);
+    const snapshot = captureHandStart(board, hand, effectiveSelection.dieIds, decisionMs, 'manual', {
       allIn: board.scoreWagers.allInArmed,
       doubleOrNothingRedemption: board.scoreWagers.doubleOrNothing?.hand === hand,
     });
-    const contributions = handXMultContributions(snapshot, hand, board.handLevels[hand], effectiveSelection.dieIds);
-    const xMult = composeXMult(contributions);
-    const bossFactor = snapshot.bossFactor;
-    return { ...base, hasXMult: contributions.length > 0, effectiveXMult: Number((xMult * bossFactor).toFixed(12)),
-      infernoMultiplier: snapshot.infernoMultiplier,
-      score: finalizeScore(base.pips, base.multiplier, xMult * bossFactor, snapshot.infernoMultiplier).finalScore,
+    return { ...canonical, hasXMult: canonical.effectiveXMult !== 1,
       danger: lastPlayDanger(board, hand), guaranteedWin: isGuaranteedWinningPlay(snapshot, hand) };
   })() : null;
+  const flamePresentation = useMemo(() => deriveFlamePresentations(board, preview, decisionMs),
+    [board, preview?.hand, preview?.score, preview?.effectiveXMult, effectiveSelection.dieIds.join(','), decisionMs]);
+  useEffect(() => onFlamePresentationChange?.(flamePresentation), [flamePresentation, onFlamePresentationChange]);
   const manualAction: Action = { type: 'MANUAL_REROLL', dieIds: effectiveSelection.dieIds };
   const canReroll = validateAction(board, manualAction) === null;
   const selectedRerollDice = effectiveSelection.dieIds.length;
@@ -102,9 +102,6 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const rerollVisualResourceText = `${board.manualRerollsRemaining} LEFT${carePackageRerolls ? ` + ${carePackageRerolls}` : ''}`;
   const normalRerollFill = Math.max(0, Math.min(1, board.manualRerollsRemaining / CONFIG.manualRerollsPerRound));
   const deadBoard = currentlyPlayableManualHands(board).length === 0;
-  const speedStrength = (speedDemonMultiplier(100, decisionMs) - 1)
-    / (speedDemonMultiplier(100, 0) - 1);
-  const speedReveal = event?.type === 'SPEED_DEMON_REVEALED' ? event : null;
   const scorecardRefreshing = event?.type === 'SCORECARD_REFRESHED';
   const speedEquation = event?.flame === 'speedDemon' && event.handScore && event.type !== 'SPEED_DEMON_REVEALED'
     ? (() => {
@@ -212,11 +209,6 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
                     : rerollVisualResourceText}</span>
                 </span>
               </Button>
-              {speedDemonOwned && <div className={`speed-demon-meter${speedReveal ? ' is-revealed' : ''}`} data-testid="speed-demon-meter"
-                aria-label="Speed Demon time remaining">
-                <div className="speed-demon-meter-fill" style={{ transform: `scaleX(${speedStrength})` }} />
-                {speedReveal && <span data-testid="speed-demon-reveal">SPEED DEMON ×{formatPlayerNumber(speedReveal.xMult ?? 1)}</span>}
-              </div>}
             </> : undefined}
             right={awaitingWardenChoice
               ? <Button className="unlock-action" size="sm" color="cyan" disabled={roundBusy || selectedWardenDieId === null}

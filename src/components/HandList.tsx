@@ -91,7 +91,10 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
                 <span className="hand-name-full">{definition.name}</span><span className="hand-name-compact">{MOBILE_HAND_NAMES[hand] ?? definition.name}</span>
               </span>
               <span className="hand-level" data-testid={`scorecard-stats-${hand}`}>
-                Lv. {formatPlayerNumber(stats.level)} <span aria-hidden="true">·</span> {formatPlayerNumber(stats.basePips)} × {formatPlayerNumber(stats.baseMultiplier)}
+                <span className="hand-level-value">Lv. {formatPlayerNumber(stats.level)}</span>
+                <span className="hand-stat"><strong>{formatPlayerNumber(stats.basePips)}</strong><small>PIPS</small></span>
+                <span className="hand-stat-times" aria-hidden="true">×</span>
+                <span className="hand-stat"><strong>{formatPlayerNumber(stats.baseMultiplier)}</strong><small>MULT</small></span>
               </span>
             </span>
             {(isUltimate || isBenchWarmer || magicianCalled) && <span className="scorecard-marker-badges">

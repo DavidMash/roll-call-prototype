@@ -1,7 +1,8 @@
 import { ActionIcon, Badge, Box, Button, Divider, Drawer, Group, Progress, SegmentedControl, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
 import { useState } from 'react';
+import type { CSSProperties } from 'react';
 import { CONFIG } from '../game/config';
-import type { Board } from '../game/types';
+import type { Board, GameEvent } from '../game/types';
 import { flameInstances, FLAMES, FLAME_SLOT_COUNT } from '../game/flames';
 import type { PlaybackSpeed } from '../useGame';
 import type { DiceDisplay } from '../uiSettings';
@@ -12,6 +13,7 @@ import type { FlameDetailsTarget } from './FlameDetailsModal';
 import { infernoMultiplier, infernoRoman } from '../game/engulfment';
 import { exactRatioNumber } from '../game/scoreMath';
 import { CurrencyAmount, type Currency } from './CurrencyAmount';
+import type { FlamePresentation } from '../game/flamePresentation';
 
 function HudStat({ testId, currency, label, value }: { testId: string; currency: Currency; label: string; value: number }) {
   const formatted = formatPlayerNumber(value);
@@ -21,8 +23,10 @@ function HudStat({ testId, currency, label, value }: { testId: string; currency:
   </div>;
 }
 
-export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, openRunInfo, openHelp, openRestoreLives, openFlameDetails, returnToTitle, onMenuOpenChange }: {
+export function TopHud({ board, event, flamePresentation = [], speed, setSpeed, diceDisplay, setDiceDisplay, openRunInfo, openHelp, openRestoreLives, openFlameDetails, returnToTitle, onMenuOpenChange }: {
   board: Board;
+  event?: GameEvent | null;
+  flamePresentation?: FlamePresentation[];
   speed: PlaybackSpeed;
   setSpeed: (speed: PlaybackSpeed) => void;
   diceDisplay: DiceDisplay;
@@ -38,6 +42,15 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
   const hearts = Array.from({ length: CONFIG.maxLives }, (_, index) => index < board.lives ? '♥' : '♡').join(' ');
   const specialOfferStatuses = activeSpecialOfferStatusItems(board.specialOfferEffects);
   const chapter = chapterPosition(board.round);
+  const presentationByInstance = new Map(flamePresentation.map(item => [item.instanceId, item]));
+  function resolvedContribution(instanceId: number, flameType: import('../game/types').Flame): { text: string; eventId: number } | null {
+    if (!event) return null;
+    const xFactor = event.type === 'HAND_SCORE_FINALIZED'
+      ? event.handScore?.xMultFactors.find(factor => factor.flameInstanceId === instanceId) : undefined;
+    if (xFactor && xFactor.value > 1) return { text: `×${formatPlayerNumber(xFactor.value)} XMULT`, eventId: event.id };
+    const gained = event.type === 'CHARGE_CHANGED' && event.flame === flameType ? event.flameDiagnostics?.chargeGained ?? 0 : 0;
+    return gained > 0 ? { text: `+${formatPlayerNumber(gained)} CHARGE`, eventId: event.id } : null;
+  }
   function launch(action: () => void) {
     setDrawerOpen(false);
     onMenuOpenChange?.(false);
@@ -76,9 +89,26 @@ export function TopHud({ board, speed, setSpeed, diceDisplay, setDiceDisplay, op
       aria-label="Round Goal progress" aria-valuetext={`${formatExactScore(board.score)} of ${formatExactScore(board.target)} points toward the Goal`} />}
     {(board.flameSlots.some(Boolean) || board.phase === 'flameSelection') && <Group gap={4} px="xs" py={3} className="bonfire-strip" data-tutorial="flames"
       data-testid="flames-strip" aria-label={`${flameInstances(board).length} of ${FLAME_SLOT_COUNT} Flames owned`}>
-      <Text size="xs" fw={700} c="orange">FLAMES · {flameInstances(board).length}/{FLAME_SLOT_COUNT}</Text>{board.flameSlots.flatMap(flame => flame ? [<Badge component="button" type="button" key={flame.instanceId}
-        data-testid={`active-flame-${flame.instanceId}`} size="xs" color={flame.stage === 'bonfire' ? 'red' : 'orange'} variant="light" className="flame-detail-trigger" aria-label={`View ${FLAMES[flame.type].name} ${flame.stage} details`}
-        onClick={() => openFlameDetails({ flameInstanceId: flame.instanceId, kind: flame.stage })}>🔥 {FLAMES[flame.type].shortName}</Badge>] : [])}
+      <Text size="xs" fw={700} c="orange">FLAMES · {flameInstances(board).length}/{FLAME_SLOT_COUNT}</Text>{board.flameSlots.flatMap(flame => {
+        if (!flame) return [];
+        const presentation = presentationByInstance.get(flame.instanceId);
+        const state = presentation?.state ?? 'normal';
+        const resolved = resolvedContribution(flame.instanceId, flame.type);
+        return [<span className="flame-badge-wrap" key={flame.instanceId}
+          style={{ '--flame-progress': presentation?.progress ?? 0 } as CSSProperties}>
+          <Badge component="button" type="button" data-testid={`active-flame-${flame.instanceId}`}
+            data-flame-state={state} data-flame-progress={presentation?.progress} size="xs"
+            color={flame.stage === 'bonfire' ? 'red' : 'orange'} variant="light"
+            className={`flame-detail-trigger flame-state-${state}`}
+            aria-label={`View ${FLAMES[flame.type].name} ${flame.stage} details. ${presentation?.accessibleLabel ?? 'Normal'}`}
+            onClick={() => openFlameDetails({ flameInstanceId: flame.instanceId, kind: flame.stage })}>
+            <span>🔥 {FLAMES[flame.type].shortName}</span>
+            {presentation?.statusText && <span className="flame-badge-status">{presentation.statusText}</span>}
+          </Badge>
+          {resolved && <span key={`${resolved.eventId}:${flame.instanceId}`} className="resolution-pop flame-resolution-pop"
+            role="status" aria-live="polite">{resolved.text}</span>}
+        </span>];
+      })}
     </Group>}
     {board.engulfmentLevel > 0 && <Group gap="xs" px="xs" py={3}
       className="inferno-strip" aria-label="Inferno status">
