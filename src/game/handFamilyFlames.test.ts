@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dispatch, newRun, validateAction } from './engine';
+import { HAND_IDS } from './hands';
 import {
   flameByType, handFamilyFlameTargets, handFamilyFlameMultiplier, placeFlameInstance, standardFlameMultiplier,
 } from './flames';
@@ -30,10 +31,10 @@ function play(state: GameState, hand: HandId, dieIds: number[]): GameState {
 }
 
 const sequences = [
-  { id: 'doubleDown', setup: 'pair', setupValues: [2, 2, 3, 4, 5], setupIds: [0, 1], payoff: 'twoPair', payoffValues: [2, 2, 3, 3, 5], payoffIds: [0, 1, 2, 3] },
-  { id: 'threesCompany', setup: 'threeKind', setupValues: [2, 2, 2, 4, 5], setupIds: [0, 1, 2], payoff: 'fullHouse', payoffValues: [2, 2, 2, 3, 3], payoffIds: [0, 1, 2, 3, 4] },
-  { id: 'straightShooter', setup: 'smallStraight', setupValues: [1, 2, 3, 4, 6], setupIds: [0, 1, 2, 3], payoff: 'largeStraight', payoffValues: [1, 2, 3, 4, 5], payoffIds: [0, 1, 2, 3, 4] },
-  { id: 'boxSet', setup: 'fourKind', setupValues: [2, 2, 2, 2, 5], setupIds: [0, 1, 2, 3], payoff: 'fiveKind', payoffValues: [2, 2, 2, 2, 2], payoffIds: [0, 1, 2, 3, 4] },
+  { id: 'doubleDown', setup: 'pair', setupValues: [2, 2, 3, 4, 5], setupIds: [0, 1], payoff: 'twoPair', payoffValues: [2, 2, 3, 3, 5], payoffIds: [0, 1, 2, 3], ember: 3.5, bonfire: 6 },
+  { id: 'threesCompany', setup: 'threeKind', setupValues: [2, 2, 2, 4, 5], setupIds: [0, 1, 2], payoff: 'fullHouse', payoffValues: [2, 2, 2, 3, 3], payoffIds: [0, 1, 2, 3, 4], ember: 5, bonfire: 9 },
+  { id: 'straightShooter', setup: 'smallStraight', setupValues: [1, 2, 3, 4, 6], setupIds: [0, 1, 2, 3], payoff: 'largeStraight', payoffValues: [1, 2, 3, 4, 5], payoffIds: [0, 1, 2, 3, 4], ember: 5, bonfire: 9 },
+  { id: 'boxSet', setup: 'fourKind', setupValues: [2, 2, 2, 2, 5], setupIds: [0, 1, 2, 3], payoff: 'fiveKind', payoffValues: [2, 2, 2, 2, 2], payoffIds: [0, 1, 2, 3, 4], ember: 6.5, bonfire: 12 },
 ] as const;
 
 describe('hand-family setup and payoff Flames', () => {
@@ -51,7 +52,7 @@ describe('hand-family setup and payoff Flames', () => {
     setValues(state, [...sequence.payoffValues] as Rank[]);
     state = play(state, sequence.payoff, [...sequence.payoffIds]);
     expect(state.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({
-      source: sequence.id, value: 5,
+      source: sequence.id, value: sequence.ember,
     }));
     expect(state.handFamilyFlameStages[sequence.id]).toBe('spent');
     expect(handFamilyFlameTargets(state)).not.toContain(sequence.payoff);
@@ -77,7 +78,7 @@ describe('hand-family setup and payoff Flames', () => {
     attach(ember, 'doubleDown', 100);
     ember.handFamilyFlameStages.doubleDown = 'payoff';
     ember = play(ember, 'twoPair', [1, 2, 3, 4]);
-    expect(ember.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: 'doubleDown', value: 9 }));
+    expect(ember.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: 'doubleDown', value: 6 }));
     expect(ember.handFamilyFlameStages.doubleDown).toBe('spent');
 
     const bonfire = game([6, 2, 2, 3, 3]);
@@ -85,7 +86,7 @@ describe('hand-family setup and payoff Flames', () => {
     bonfire.handFamilyFlameStages.doubleDown = 'payoff';
     const paid = play(bonfire, 'twoPair', [1, 2, 3, 4]);
     expect(paid.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({
-      source: 'doubleDown', value: 9,
+      source: 'doubleDown', value: 6,
     }));
     expect(paid.handFamilyFlameStages.doubleDown).toBe('spent');
   });
@@ -110,7 +111,7 @@ describe('hand-family setup and payoff Flames', () => {
     expect(state.boss?.type === 'marathon' ? state.boss.cooldowns.twoPair : undefined).toBeUndefined();
     setValues(state, [2, 2, 3, 3, 5]);
     state = play(state, 'twoPair', [0, 1, 2, 3]);
-    expect(state.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: 'doubleDown', value: 9 }));
+    expect(state.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: 'doubleDown', value: 6 }));
     expect(state.handFamilyFlameStages.doubleDown).toBe('spent');
   });
 
@@ -124,19 +125,64 @@ describe('hand-family setup and payoff Flames', () => {
     expect(next.handFamilyFlameStages).toEqual({ boxSet: 'setup' });
     expect(handFamilyFlameTargets(next)).toContain('fourKind');
   });
+
+  it.each(sequences)('$id resets only after a spent cycle on scorecard refresh and can pay out again', sequence => {
+    let state = game([1, 2, 3, 4, 5]);
+    attach(state, sequence.id, 100);
+    state.handFamilyFlameStages[sequence.id] = 'spent';
+    state.consumed = HAND_IDS.filter(hand => hand !== 'ones');
+    state.scorecardCycleConsumed = [...state.consumed];
+    state = play(state, 'ones', [0]);
+    expect(state.scorecardCycleConsumed).toEqual([]);
+    expect(state.handFamilyFlameStages[sequence.id]).toBe('setup');
+    expect(state.historyV2).toContainEqual(expect.objectContaining({ kind: 'flame_runtime_changed',
+      flame: sequence.id, change: 'sequence_stage', from: 'spent', to: 'setup', reason: 'scorecard_refresh' }));
+
+    setValues(state, [...sequence.setupValues] as Rank[]);
+    state = play(state, sequence.setup, [...sequence.setupIds]);
+    setValues(state, [...sequence.payoffValues] as Rank[]);
+    state = play(state, sequence.payoff, [...sequence.payoffIds]);
+    expect(state.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({
+      source: sequence.id, value: sequence.bonfire,
+    }));
+    expect(state.handFamilyFlameStages[sequence.id]).toBe('spent');
+  });
+
+  it.each(sequences)('$id resets once when Marathon makes its setup Hand reusable', sequence => {
+    let state = game([1, 2, 3, 4, 5]);
+    attach(state, sequence.id, 100);
+    state.handFamilyFlameStages[sequence.id] = 'spent';
+    state.boss = { type: 'marathon', cooldowns: { [sequence.setup]: 1 } };
+    state = play(state, 'ones', [0]);
+    expect(state.handFamilyFlameStages[sequence.id]).toBe('setup');
+    const resetEvents = () => state.historyV2.filter(event => event.kind === 'flame_runtime_changed'
+      && event.flame === sequence.id && event.change === 'sequence_stage' && event.reason === 'marathon_reuse');
+    expect(resetEvents()).toHaveLength(1);
+
+    setValues(state, [1, 2, 2, 4, 5]);
+    state = play(state, 'twos', [1]);
+    expect(resetEvents()).toHaveLength(1);
+    setValues(state, [...sequence.setupValues] as Rank[]);
+    state = play(state, sequence.setup, [...sequence.setupIds]);
+    setValues(state, [...sequence.payoffValues] as Rank[]);
+    state = play(state, sequence.payoff, [...sequence.payoffIds]);
+    expect(state.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({
+      source: sequence.id, value: sequence.bonfire,
+    }));
+  });
 });
 
 describe('Missing Pair and One Short', () => {
   it.each([
-    ['missingPair', 'pair', [2, 2, 3, 4, 5], [0, 1]],
-    ['missingPair', 'threeKind', [2, 2, 2, 4, 5], [0, 1, 2]],
-    ['oneShort', 'smallStraight', [1, 2, 3, 4, 6], [0, 1, 2, 3]],
-    ['oneShort', 'fourKind', [2, 2, 2, 2, 5], [0, 1, 2, 3]],
-  ] as const)('%s gives its static global scaling to %s', (id, hand, values, dieIds) => {
+    ['missingPair', 'pair', [2, 2, 3, 4, 5], [0, 1], 2],
+    ['missingPair', 'threeKind', [2, 2, 2, 4, 5], [0, 1, 2], 2],
+    ['oneShort', 'smallStraight', [1, 2, 3, 4, 6], [0, 1, 2, 3], 3],
+    ['oneShort', 'fourKind', [2, 2, 2, 2, 5], [0, 1, 2, 3], 3],
+  ] as const)('%s gives its static global scaling to %s', (id, hand, values, dieIds, factor) => {
     const state = game([...values] as Rank[]);
     attach(state, id, 50);
     const result = play(state, hand, [...dieIds]);
-    expect(result.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: id, value: 3 }));
+    expect(result.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: id, value: factor }));
     expect(handFamilyFlameTargets(result)).toEqual([]);
   });
 
@@ -144,16 +190,16 @@ describe('Missing Pair and One Short', () => {
     let ember = game([6, 2, 2, 3, 4]);
     attach(ember, 'missingPair', 100);
     ember = play(ember, 'pair', [1, 2]);
-    expect(ember.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: 'missingPair', value: 5 }));
+    expect(ember.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: 'missingPair', value: 3 }));
 
     const bonfire = game([6, 2, 2, 3, 4]);
     attach(bonfire, 'missingPair', 100);
     const result = play(bonfire, 'pair', [1, 2]);
-    expect(result.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: 'missingPair', value: 5 }));
+    expect(result.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: 'missingPair', value: 3 }));
     expect(standardFlameMultiplier(0)).toBe(1);
     expect(standardFlameMultiplier(100)).toBe(5);
-    expect(handFamilyFlameMultiplier(0)).toBe(1);
-    expect(handFamilyFlameMultiplier(100)).toBe(9);
+    expect(handFamilyFlameMultiplier('doubleDown', 0)).toBe(1);
+    expect(handFamilyFlameMultiplier('doubleDown', 100)).toBe(6);
   });
 
   it.each(['missingPair', 'oneShort'] as const)('%s participates in selection uniqueness and Bonfire lifecycle', id => {

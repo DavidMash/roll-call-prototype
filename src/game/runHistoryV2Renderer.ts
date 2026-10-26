@@ -113,6 +113,9 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
       }
     }
     case 'flame_changed': return `FLAME · ${event.change.type}${'flame' in event.change ? ` · ${FLAMES[event.change.flame].name}` : ''}`;
+    case 'flame_runtime_changed': return event.change === 'sequence_stage'
+      ? `FLAME · ${FLAMES[event.flame].name} · ${String(event.from).toUpperCase()} → ${String(event.to).toUpperCase()} · ${label(event.reason)}`
+      : `FLAME · ${FLAMES[event.flame].name} · streak reset${event.hand ? ` by ${HANDS[event.hand].name}` : ''}`;
     case 'charge_changed': return `CHARGE · ${event.operation} · ×${number(event.before)}→×${number(event.after)}`;
     case 'engulfment_attempted': return `ENGULFMENT · Shop ${number(event.shopVisitId)} · ${event.success ? 'SUCCESS' : 'OFFERING REJECTED'}`;
     case 'inferno_evaluated': return `INFERNO EVALUATION · ${event.evaluation.success ? 'READY' : 'NOT YET'} · effective ×${number(event.evaluation.effectiveValue)} / ×${number(event.evaluation.threshold)} · meter ${number((event.evaluation.previousReadiness ?? 0) * 100)}% → ${number(event.evaluation.readiness * 100)}% · ${event.evaluation.flames.length} Flame${event.evaluation.flames.length === 1 ? '' : 's'}`;
@@ -128,6 +131,7 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
       return `BOSS · ${label(event.boss)} · ${label(event.change)}`;
     }
     case 'ultimate_targets_changed': return `ULTIMATE TARGETS · ${event.targets.map(hand => HANDS[hand].name).join(', ')}`;
+    case 'bench_warmer_target_changed': return `BENCH WARMER · ${HANDS[event.target].name}`;
     case 'scorecard_refreshed': return 'SCORECARD · refreshed';
     case 'round_attempt_finished': return `${event.outcome === 'cleared' ? 'CLEAR' : 'BUST'} · ${number(event.score)} / ${number(event.target)}`;
     case 'checkpoint_restored': return `RESTORE · ${event.reason} · timeline ${event.fromTimelineId}→${event.toTimelineId}`;

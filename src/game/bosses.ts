@@ -411,6 +411,35 @@ export function currentlyPlayableManualHands(state: Pick<Board, 'boss' | 'consum
     .map(option => option.id);
 }
 
+/** The canonical dice that may currently participate in a Play, after encounter availability rules. */
+export const availablePlayableDice = activeEncounterDice;
+
+/** The exact Hand set used by ordinary scorecard-cycle refresh eligibility. */
+export function scorecardCycleRelevantHands(state: Pick<Board, 'boss' | 'bossSilenced' | 'dice'>): HandId[] {
+  const encounterLocks = !state.bossSilenced && state.boss?.type === 'neglected' && !state.boss.restored
+    ? state.boss.neglectedHands : [];
+  const activeDice = activeEncounterDice(state);
+  return encounterHandIds(state).filter(hand => !handIsStructurallyImpossible(hand, activeDice.length)
+    && !encounterLocks.includes(hand));
+}
+
+export function wouldCompleteScorecardCycle(
+  state: Pick<Board, 'boss' | 'bossSilenced' | 'dice' | 'scorecardCycleConsumed'>,
+  hand: HandId,
+  consumesHand: boolean,
+): boolean {
+  if (!consumesHand || state.boss?.type === 'marathon') return false;
+  const cycle = new Set(state.scorecardCycleConsumed);
+  cycle.add(hand);
+  // The sixth Neglected Play restores its locked Hands before the post-Play refresh check.
+  const neglectedWillRestore = !state.bossSilenced && state.boss?.type === 'neglected'
+    && !state.boss.restored && state.boss.handsPlayed >= 5;
+  const relevant = neglectedWillRestore
+    ? encounterHandIds(state).filter(id => !handIsStructurallyImpossible(id, activeEncounterDice(state).length))
+    : scorecardCycleRelevantHands(state);
+  return relevant.length > 0 && relevant.every(id => cycle.has(id));
+}
+
 export function lastPlayDanger(state: Pick<Board, 'boss' | 'consumed' | 'dice' | 'dieRoundState'> & { bossSilenced?: boolean }, hand: HandId): LastPlayDanger {
   const playable = currentlyPlayableManualHands(state);
   return playable.length === 1 && playable[0] === hand ? 'definite' : 'none';

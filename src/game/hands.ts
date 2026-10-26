@@ -111,6 +111,19 @@ export function rankedHands(handLevels: HandLevels): HandId[] {
 }
 export const ultimateHands = (handLevels: HandLevels): HandId[] =>
   rankedHands(handLevels).slice(0, ULTIMATE_HAND_COUNT);
+export function rankedBenchWarmerHands(handLevels: HandLevels): HandId[] {
+  return [...HAND_IDS].sort((a, b) => {
+    const levelDifference = handLevels[a] - handLevels[b];
+    if (levelDifference) return levelDifference;
+    const strengthDifference = trainedBaselineStrength(a, handLevels[a]) - trainedBaselineStrength(b, handLevels[b]);
+    if (strengthDifference) return strengthDifference;
+    const aRank = HANDS[a].rank;
+    const bRank = HANDS[b].rank;
+    if (aRank && bRank && aRank !== bRank) return aRank - bRank;
+    return HAND_IDS.indexOf(a) - HAND_IDS.indexOf(b);
+  });
+}
+export const benchWarmerHand = (handLevels: HandLevels): HandId => rankedBenchWarmerHands(handLevels)[0];
 export const initialHandLevels = (): Record<HandId, number> =>
   Object.fromEntries([...HAND_IDS, 'sevens'].map(hand => [hand, 1])) as Record<HandId, number>;
 export const initialHandPlayCounts = (): Record<HandId, number> =>

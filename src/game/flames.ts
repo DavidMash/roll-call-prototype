@@ -1,13 +1,12 @@
 import { activeFace, wholeDieEffectSuppressed } from './dice';
-import { lastPlayDanger } from './bosses';
-import { HANDS, LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from './hands';
+import { availablePlayableDice, currentlyPlayableManualHands, lastPlayDanger } from './bosses';
+import { benchWarmerHand, HANDS, LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from './hands';
 import { finalizeScore, handScore, infernoMultiplier } from './scoring';
-import type { Board, Flame, FlameInstance, FlameInstanceId, FlameSlotIndex, FlameSlots, GameState, HandId, Rarity, XMultFactor } from './types';
+import type { Board, Flame, FlameActivationDiagnostics, FlameInstance, FlameInstanceId, FlameSlotIndex, FlameSlots, GameState, HandId, Rarity, SpecialDieType, XMultFactor } from './types';
 import { formatPlayerNumber } from './copy';
 import type { ExactScore } from './scoreMath';
 import type { RichText } from './richText';
 import { flameVerboseDescription, plainDescription } from './effectDescriptions';
-import { hasEffect } from './specialDice';
 
 export interface FlameDefinition {
   name: string;
@@ -28,15 +27,15 @@ const flameDefinition = (id: Flame, name: string, shortName: string, rarity: Rar
 };
 export const FLAMES: Record<Flame, FlameDefinition> = {
   ultimate: flameDefinition('ultimate', 'Ultimate', 'ULT', 'uncommon', 'Your highest level hand gains up to ×5 XMult.'),
-  minigun: flameDefinition('minigun', 'Minigun', 'MINI', 'common', 'Ones–Sixes gain up to ×5 XMult.'),
+  minigun: flameDefinition('minigun', 'Minigun', 'MINI', 'common', 'Consecutive Upper Hands spin up to ×4 XMult.'),
   hailMary: flameDefinition('hailMary', 'Hail Mary', 'HAIL', 'common', 'Hands played with no Rerolls left gain up to ×5 XMult.'),
   fullOfGrace: flameDefinition('fullOfGrace', 'Full of Grace', 'GRACE', 'common', 'Last Play gains up to ×5 XMult.'),
   momentum: flameDefinition('momentum', 'Momentum', 'MOM', 'common', 'Playing a hand builds Charge.'),
   thirdRail: flameDefinition('thirdRail', 'Third Rail', 'RAIL', 'uncommon', 'Rolling 3s builds Charge.'),
   jumpStart: flameDefinition('jumpStart', 'Jump Start', 'JUMP', 'uncommon', 'Rerolls build Charge.'),
   powerSurge: flameDefinition('powerSurge', 'Power Surge', 'SURGE', 'rare'),
-  speedDemon: flameDefinition('speedDemon', 'Speed Demon', 'SPEED', 'rare', 'Play quickly for up to ×5 XMult.'),
-  sixPack: flameDefinition('sixPack', 'Six Pack', 'SIX', 'rare'),
+  speedDemon: flameDefinition('speedDemon', 'Speed Demon', 'SPEED', 'rare', 'Play within 5 seconds for up to ×4 XMult.'),
+  sixPack: flameDefinition('sixPack', 'Six Pack', 'SIX', 'rare', 'Starts at up to ×4 XMult and weakens after Upper Hands.'),
   fluxCapacitor: flameDefinition('fluxCapacitor', 'Flux Capacitor', 'FLUX', 'rare'),
   fatCat: flameDefinition('fatCat', 'Fat Cat', 'CAT', 'uncommon'),
   vineyard: flameDefinition('vineyard', 'Vineyard', 'VINE', 'uncommon'),
@@ -50,10 +49,25 @@ export const FLAMES: Record<Flame, FlameDefinition> = {
   boxSet: flameDefinition('boxSet', 'Box Set', 'BOX', 'uncommon'),
   missingPair: flameDefinition('missingPair', 'Missing Pair', 'MISS', 'common'),
   oneShort: flameDefinition('oneShort', 'One Short', 'SHORT', 'common'),
+  potentialEnergy: flameDefinition('potentialEnergy', 'Potential Energy', 'POT', 'uncommon'),
+  allHandsOnDeck: flameDefinition('allHandsOnDeck', 'All Hands on Deck', 'DECK', 'uncommon'),
+  casual: flameDefinition('casual', 'Casual', 'CAS', 'common'),
+  freeRealEstate: flameDefinition('freeRealEstate', 'Free Real Estate', 'FREE', 'uncommon'),
+  heavyHitters: flameDefinition('heavyHitters', 'Heavy Hitters', 'HEAVY', 'uncommon'),
+  frankenstein: flameDefinition('frankenstein', 'Frankenstein', 'FRANK', 'rare'),
+  highRoller: flameDefinition('highRoller', 'High Roller', 'HIGH', 'common'),
+  cleanSweep: flameDefinition('cleanSweep', 'Clean Sweep', 'SWEEP', 'rare'),
+  benchWarmer: flameDefinition('benchWarmer', 'Bench Warmer', 'BENCH', 'uncommon'),
+  epinephrine: flameDefinition('epinephrine', 'Epinephrine', 'EPI', 'rare'),
+  punchCard: flameDefinition('punchCard', 'Punch Card', 'PUNCH', 'common'),
+  blackHole: flameDefinition('blackHole', 'Black Hole', 'BLACK', 'rare'),
+  assemblyLine: flameDefinition('assemblyLine', 'Assembly Line', 'LINE', 'uncommon'),
+  gymBros: flameDefinition('gymBros', 'Gym Bros', 'GYM', 'uncommon'),
 };
 export const FLAME_IDS = Object.keys(FLAMES) as Flame[];
 export const XMult_FLAME_IDS = FLAME_IDS.filter(flame => FLAMES[flame].affectsXMult);
-export const CHARGE_FLAME_IDS = ['momentum', 'thirdRail', 'jumpStart', 'powerSurge', 'fluxCapacitor'] as const satisfies readonly Flame[];
+export const CHARGE_FLAME_IDS = ['momentum', 'thirdRail', 'jumpStart', 'powerSurge', 'fluxCapacitor',
+  'potentialEnergy', 'allHandsOnDeck'] as const satisfies readonly Flame[];
 export type ChargeFlame = typeof CHARGE_FLAME_IDS[number];
 export const HAND_FAMILY_FLAMES = {
   doubleDown: { setup: 'pair', payoff: 'twoPair' },
@@ -65,6 +79,30 @@ export type HandFamilyFlame = keyof typeof HAND_FAMILY_FLAMES;
 export const HAND_FAMILY_FLAME_IDS = Object.keys(HAND_FAMILY_FLAMES) as HandFamilyFlame[];
 export const HOT_STREAK_SEQUENCE: HandId[] = ['pair', 'twoPair', 'threeKind', 'smallStraight', 'fullHouse', 'fourKind', 'largeStraight', 'fiveKind'];
 export const flameProgress = (investedGold: number) => Math.max(0, Math.min(100, investedGold)) / 100;
+export const FLAME_SCALING = {
+  speedDemon: { fullBonus: 3, fullThroughMs: 1000, expiresAtMs: 5000 },
+  sixPack: { fullBonus: 3, upperDecay: .5, exhaustionSteps: 6 },
+  minigun: { upperStep: .5, cappedStreak: 6 },
+  lowball: { fullBonus: 2.5 },
+  fatCat: { perMatchingDie: .3, maximumPlayedDice: 5 },
+  vineyard: { perMatchingDie: .4, maximumPlayedDice: 5 },
+  missingPair: { fullBonus: 2 },
+  handFamily: { doubleDown: 5, threesCompany: 8, straightShooter: 8, boxSet: 11 },
+  potentialEnergy: { charge: 1 },
+  allHandsOnDeck: { chargePerDie: .5 },
+  casual: { fullBonus: 3 },
+  freeRealEstate: { fullBonus: 2 },
+  heavyHitters: { fullBonus: 2 },
+  frankenstein: { fullBonus: 3 },
+  highRoller: { fullBonus: 2 },
+  cleanSweep: { fullBonus: 11 },
+  benchWarmer: { fullBonus: 4 },
+  epinephrine: { fullBonus: 6 },
+  punchCard: { fullBonus: 2 },
+  blackHole: { bonusPerMissingDie: 1 },
+  assemblyLine: { perMatchingDie: .3, maximumPlayedDice: 5 },
+  gymBros: { perMatchingDie: .3, maximumPlayedDice: 5 },
+} as const;
 export const standardFlameMultiplier = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
 export const targetPracticeMultiplier = (investedGold: number) => 1 + 8 * flameProgress(investedGold);
 export const momentumChargeGain = (investedGold: number) => 0.5 * flameProgress(investedGold);
@@ -72,23 +110,56 @@ export const thirdRailChargeGain = (investedGold: number) => 0.5 * flameProgress
 export const jumpStartChargeGain = (investedGold: number) => 2 * flameProgress(investedGold);
 export const fluxCapacitorChargeMultiplier = (investedGold: number, pulledMagneticFaces: number) =>
   1 + Math.max(0, pulledMagneticFaces) * flameProgress(investedGold);
-export const handFamilyFlameMultiplier = (investedGold: number) => 1 + 8 * flameProgress(investedGold);
+export const handFamilyFlameMultiplier = (id: HandFamilyFlame, investedGold: number) =>
+  1 + FLAME_SCALING.handFamily[id] * flameProgress(investedGold);
 export const speedDemonMultiplier = (investedGold: number, decisionMs: number) => {
-  const strength = decisionMs <= 1000 ? 1 : Math.max(0, Math.min(1, (10000 - decisionMs) / 9000));
-  return Number((1 + 4 * flameProgress(investedGold) * strength).toFixed(12));
+  const { fullThroughMs, expiresAtMs, fullBonus } = FLAME_SCALING.speedDemon;
+  const strength = decisionMs <= fullThroughMs ? 1
+    : Math.max(0, Math.min(1, (expiresAtMs - decisionMs) / (expiresAtMs - fullThroughMs)));
+  return Number((1 + fullBonus * flameProgress(investedGold) * strength).toFixed(12));
 };
-export const sixPackStartingMultiplier = (investedGold: number) => 1 + 5 * flameProgress(investedGold);
-export const sixPackMultiplierAfterUpperHands = (startingFactor: number, upperHandsPlayed: number) =>
-  Number(Math.max(1, 1 + (Math.max(1, startingFactor) - 1) * (1 - Math.min(6, Math.max(0, upperHandsPlayed)) / 6)).toFixed(12));
+export const sixPackStartingMultiplier = (investedGold: number) =>
+  1 + FLAME_SCALING.sixPack.fullBonus * flameProgress(investedGold);
+export const sixPackMultiplierAfterUpperHands = (startingFactor: number, upperHandsPlayed: number) => {
+  const progress = Math.max(0, Math.min(1, (Math.max(1, startingFactor) - 1) / FLAME_SCALING.sixPack.fullBonus));
+  return Number(Math.max(1, startingFactor - Math.max(0, upperHandsPlayed)
+    * FLAME_SCALING.sixPack.upperDecay * progress).toFixed(12));
+};
+export const minigunMultiplier = (investedGold: number, streakAfterThisPlay: number) =>
+  Number((1 + Math.min(Math.max(0, streakAfterThisPlay), FLAME_SCALING.minigun.cappedStreak)
+    * FLAME_SCALING.minigun.upperStep * flameProgress(investedGold)).toFixed(12));
 export const maxChargeContribution = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
 export const hotStreakMultiplier = (investedGold: number, charges: number) => 1 + Math.max(0, charges) * flameProgress(investedGold);
-export function lowballFullMultiplier(averageQualifyingFace: number): number {
-  if (averageQualifyingFace <= 2) return 3;
-  if (averageQualifyingFace <= 3) return 2.5;
-  return 1;
-}
-export const lowballMultiplier = (investedGold: number, averageFace: number) =>
-  1 + 2 * (lowballFullMultiplier(averageFace) - 1) * flameProgress(investedGold);
+export const lowballMultiplier = (investedGold: number) =>
+  1 + FLAME_SCALING.lowball.fullBonus * flameProgress(investedGold);
+export const enhancementDensityMultiplier = (investedGold: number, matchingPlayedDice: number, fullBonusPerDie: number) =>
+  Number((1 + Math.max(0, matchingPlayedDice) * fullBonusPerDie * flameProgress(investedGold)).toFixed(12));
+export const fatCatMultiplier = (investedGold: number, matchingPlayedDice: number) =>
+  enhancementDensityMultiplier(investedGold, matchingPlayedDice, FLAME_SCALING.fatCat.perMatchingDie);
+export const vineyardMultiplier = (investedGold: number, matchingPlayedDice: number) =>
+  enhancementDensityMultiplier(investedGold, matchingPlayedDice, FLAME_SCALING.vineyard.perMatchingDie);
+export const missingPairMultiplier = (investedGold: number) =>
+  1 + FLAME_SCALING.missingPair.fullBonus * flameProgress(investedGold);
+export const potentialEnergyChargeGain = (investedGold: number) =>
+  FLAME_SCALING.potentialEnergy.charge * flameProgress(investedGold);
+export const allHandsOnDeckChargeGain = (investedGold: number, availableDiceCount: number) =>
+  FLAME_SCALING.allHandsOnDeck.chargePerDie * Math.max(0, availableDiceCount) * flameProgress(investedGold);
+const fixedFlameMultiplier = (investedGold: number, fullBonus: number) => 1 + fullBonus * flameProgress(investedGold);
+export const casualMultiplier = (investedGold: number) => fixedFlameMultiplier(investedGold, FLAME_SCALING.casual.fullBonus);
+export const freeRealEstateMultiplier = (investedGold: number) => fixedFlameMultiplier(investedGold, FLAME_SCALING.freeRealEstate.fullBonus);
+export const heavyHittersMultiplier = (investedGold: number) => fixedFlameMultiplier(investedGold, FLAME_SCALING.heavyHitters.fullBonus);
+export const frankensteinMultiplier = (investedGold: number) => fixedFlameMultiplier(investedGold, FLAME_SCALING.frankenstein.fullBonus);
+export const highRollerMultiplier = (investedGold: number) => fixedFlameMultiplier(investedGold, FLAME_SCALING.highRoller.fullBonus);
+export const cleanSweepMultiplier = (investedGold: number) => fixedFlameMultiplier(investedGold, FLAME_SCALING.cleanSweep.fullBonus);
+export const benchWarmerMultiplier = (investedGold: number) => fixedFlameMultiplier(investedGold, FLAME_SCALING.benchWarmer.fullBonus);
+export const epinephrineMultiplier = (investedGold: number) => fixedFlameMultiplier(investedGold, FLAME_SCALING.epinephrine.fullBonus);
+export const punchCardMultiplier = (investedGold: number) => fixedFlameMultiplier(investedGold, FLAME_SCALING.punchCard.fullBonus);
+export const blackHoleMultiplier = (investedGold: number, missingDice: number) =>
+  fixedFlameMultiplier(investedGold, Math.max(0, missingDice) * FLAME_SCALING.blackHole.bonusPerMissingDie);
+export const assemblyLineMultiplier = (investedGold: number, matchingPlayedDice: number) =>
+  enhancementDensityMultiplier(investedGold, matchingPlayedDice, FLAME_SCALING.assemblyLine.perMatchingDie);
+export const gymBrosMultiplier = (investedGold: number, matchingPlayedDice: number) =>
+  enhancementDensityMultiplier(investedGold, matchingPlayedDice, FLAME_SCALING.gymBros.perMatchingDie);
 type FlameDisplayContext = Pick<Board, 'gold' | 'lifetimeNormalShopGoldSpent'>;
 export function flameEffectText(id: Flame, investedGold: number, _board: FlameDisplayContext): string {
   switch (id) {
@@ -97,18 +168,34 @@ export function flameEffectText(id: Flame, investedGold: number, _board: FlameDi
     case 'jumpStart': return `Each Manual Reroll adds +${formatPlayerNumber(jumpStartChargeGain(investedGold))} Charge.`;
     case 'powerSurge': return 'Playing your highest-level Hand triples current Charge.';
     case 'fluxCapacitor': return `A Magnetic activation multiplies Charge by 1 + (${formatPlayerNumber(flameProgress(investedGold))} × other dice affected).`;
-    case 'speedDemon': return `A sufficiently fast Play reaches ×${formatPlayerNumber(speedDemonMultiplier(investedGold, 0))} XMult.`;
-    case 'sixPack': return `Each Round starts at ×${formatPlayerNumber(sixPackStartingMultiplier(investedGold))} XMult.`;
+    case 'speedDemon': return `A Play within 1 second reaches ×${formatPlayerNumber(speedDemonMultiplier(investedGold, 0))} XMult; the bonus expires after 5 seconds.`;
+    case 'sixPack': return `Each Round starts at ×${formatPlayerNumber(sixPackStartingMultiplier(investedGold))} XMult and loses ×${formatPlayerNumber(FLAME_SCALING.sixPack.upperDecay * flameProgress(investedGold))} after each Upper Hand.`;
+    case 'minigun': return `Consecutive Upper Hands spin up from ×${formatPlayerNumber(minigunMultiplier(investedGold, 1))} to ×${formatPlayerNumber(minigunMultiplier(investedGold, 6))} XMult.`;
     case 'targetPractice': return `Target Hand gains ×${formatPlayerNumber(targetPracticeMultiplier(investedGold))} XMult.`;
-    case 'fatCat': return `A scoring Golden or Jackpot face grants ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult.`;
-    case 'vineyard': return `A scoring Vintage face grants ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult.`;
+    case 'fatCat': return `Five Played Golden or Jackpot dice reach ×${formatPlayerNumber(fatCatMultiplier(investedGold, 5))} XMult.`;
+    case 'vineyard': return `Five Played Vintage dice reach ×${formatPlayerNumber(vineyardMultiplier(investedGold, 5))} XMult.`;
     case 'fetch': return `The marked FETCH face grants ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult, then moves.`;
     case 'hotStreak': return `A full top-to-bottom Lower Section Hand sequence reaches ×${formatPlayerNumber(hotStreakMultiplier(investedGold, HOT_STREAK_SEQUENCE.length))} XMult.`;
-    case 'lowball': return `Scoring faces 1, 2, or 3 gain up to ×${formatPlayerNumber(lowballMultiplier(investedGold, 2))} XMult.`;
+    case 'lowball': return `A majority of Played dice showing 1, 2, or 3 grants ×${formatPlayerNumber(lowballMultiplier(investedGold))} XMult.`;
     case 'straightShooter':
     case 'doubleDown':
     case 'threesCompany':
-    case 'boxSet': return `The payoff reaches ×${formatPlayerNumber(handFamilyFlameMultiplier(investedGold))} XMult after its setup hand.`;
+    case 'boxSet': return `The payoff reaches ×${formatPlayerNumber(handFamilyFlameMultiplier(id, investedGold))} XMult after its setup hand.`;
+    case 'missingPair': return `Pair and Three of a Kind gain ×${formatPlayerNumber(missingPairMultiplier(investedGold))} XMult.`;
+    case 'potentialEnergy': return `Playing a different Hand while Ultimate is playable adds +${formatPlayerNumber(potentialEnergyChargeGain(investedGold))} Charge.`;
+    case 'allHandsOnDeck': return `Playing every available die adds ${formatPlayerNumber(FLAME_SCALING.allHandsOnDeck.chargePerDie * flameProgress(investedGold))} Charge per die.`;
+    case 'casual': return `Ultimate gains ×${formatPlayerNumber(casualMultiplier(investedGold))} XMult before any Manual Reroll is used.`;
+    case 'freeRealEstate': return `Free Plays gain ×${formatPlayerNumber(freeRealEstateMultiplier(investedGold))} XMult.`;
+    case 'heavyHitters': return `Enhanced Played-die Pips grant ×${formatPlayerNumber(heavyHittersMultiplier(investedGold))} XMult.`;
+    case 'frankenstein': return `A sufficiently enhancement-dense scoring group gains ×${formatPlayerNumber(frankensteinMultiplier(investedGold))} XMult.`;
+    case 'highRoller': return `A majority of Played dice showing 4, 5, or 6 grants ×${formatPlayerNumber(highRollerMultiplier(investedGold))} XMult.`;
+    case 'cleanSweep': return `The final Possible Hand completing the scorecard gains ×${formatPlayerNumber(cleanSweepMultiplier(investedGold))} XMult.`;
+    case 'benchWarmer': return `Your lowest-level Hand gains ×${formatPlayerNumber(benchWarmerMultiplier(investedGold))} XMult.`;
+    case 'epinephrine': return `Starting with exactly 1 Life gives the first Play ×${formatPlayerNumber(epinephrineMultiplier(investedGold))} XMult.`;
+    case 'punchCard': return `Buying a die in the previous Shop gives the first Play ×${formatPlayerNumber(punchCardMultiplier(investedGold))} XMult.`;
+    case 'blackHole': return `The first Play gains XMult for each Roster die missing at Round start.`;
+    case 'assemblyLine': return `Five Played Clockwork dice reach ×${formatPlayerNumber(assemblyLineMultiplier(investedGold, 5))} XMult.`;
+    case 'gymBros': return `Five Played Workout dice reach ×${formatPlayerNumber(gymBrosMultiplier(investedGold, 5))} XMult.`;
     default: return `The condition grants ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult.`;
   }
 }
@@ -127,7 +214,9 @@ export function flameDetailsPresentation(id: Flame, investedGold: number, board:
       : id === 'thirdRail' ? `+${formatPlayerNumber(thirdRailChargeGain(investment))} Charge per Rolled 3`
         : id === 'jumpStart' ? `+${formatPlayerNumber(jumpStartChargeGain(investment))} Charge per Manual Reroll`
           : id === 'powerSurge' ? '×3 current Charge on highest-level Hand'
-            : `×${formatPlayerNumber(fluxCapacitorChargeMultiplier(investment, 1))} Charge when 1 other die is affected`;
+            : id === 'fluxCapacitor' ? `×${formatPlayerNumber(fluxCapacitorChargeMultiplier(investment, 1))} Charge when 1 other die is affected`
+              : id === 'potentialEnergy' ? `+${formatPlayerNumber(potentialEnergyChargeGain(investment))} Charge per qualifying Play`
+                : `+${formatPlayerNumber(allHandsOnDeckChargeGain(investment, 1))} Charge per available die`;
     return { currentLabel: 'Current Effect', currentValue,
       maxChargeContribution: maxChargeContribution(investment) };
   }
@@ -139,8 +228,24 @@ export function flameDetailsPresentation(id: Flame, investedGold: number, board:
   const multiplier = id === 'targetPractice' ? targetPracticeMultiplier(investment)
     : id === 'speedDemon' ? speedDemonMultiplier(investment, 0)
     : id === 'sixPack' ? sixPackStartingMultiplier(investment)
-      : isHandFamilyFlame(id) ? handFamilyFlameMultiplier(investment)
-        : id === 'lowball' ? lowballMultiplier(investment, 2)
+      : id === 'minigun' ? minigunMultiplier(investment, FLAME_SCALING.minigun.cappedStreak)
+      : isHandFamilyFlame(id) ? handFamilyFlameMultiplier(id, investment)
+        : id === 'lowball' ? lowballMultiplier(investment)
+          : id === 'fatCat' ? fatCatMultiplier(investment, FLAME_SCALING.fatCat.maximumPlayedDice)
+            : id === 'vineyard' ? vineyardMultiplier(investment, FLAME_SCALING.vineyard.maximumPlayedDice)
+              : id === 'missingPair' ? missingPairMultiplier(investment)
+                : id === 'casual' ? casualMultiplier(investment)
+                  : id === 'freeRealEstate' ? freeRealEstateMultiplier(investment)
+                    : id === 'heavyHitters' ? heavyHittersMultiplier(investment)
+                      : id === 'frankenstein' ? frankensteinMultiplier(investment)
+                        : id === 'highRoller' ? highRollerMultiplier(investment)
+                          : id === 'cleanSweep' ? cleanSweepMultiplier(investment)
+                            : id === 'benchWarmer' ? benchWarmerMultiplier(investment)
+                              : id === 'epinephrine' ? epinephrineMultiplier(investment)
+                                : id === 'punchCard' ? punchCardMultiplier(investment)
+                                  : id === 'blackHole' ? blackHoleMultiplier(investment, 4)
+                                    : id === 'assemblyLine' ? assemblyLineMultiplier(investment, 5)
+                                      : id === 'gymBros' ? gymBrosMultiplier(investment, 5)
           : standardFlameMultiplier(investment);
   return { currentLabel: 'Current XMult', currentValue: `up to ×${formatPlayerNumber(multiplier)}`,
     maxChargeContribution: null };
@@ -255,8 +360,16 @@ export interface HandStartSnapshot {
   infernoMultiplier: ExactScore;
   gold: number;
   manualRerollsRemaining: number;
+  manualRerollsUsed: number;
+  playSource: import('./types').HandPlaySource;
+  roundPlayCount: number;
+  roundStartLives: number;
+  roundStartRosterSize: number;
+  precedingShopDiePurchase: boolean;
   previousPlays: number;
   ultimateHands: HandId[];
+  ultimatePlayable: boolean;
+  benchWarmerHand: HandId;
   targetPracticeHand: HandId | null;
   hotStreakGoal: HandId | null;
   hotStreakCharges: number;
@@ -266,28 +379,43 @@ export interface HandStartSnapshot {
   speedDemonDecisionMs: number | null;
   sixPackXMult: number;
   sixPackUpperHandsPlayed: number;
+  minigunUpperStreak: number;
   lastPlayDanger: import('./bosses').LastPlayDanger;
   selectedBasePips: number;
   selectedBaseMultiplier: number;
   selectedDieIds: number[];
+  availablePlayableDieIds: number[];
+  playedDiceScoringPips: number;
+  cleanSweepCompletesCycle: boolean;
+  scoringDiceEnhancementCount: number;
   bossFactor: number;
   lifetimeNormalShopGoldSpent: number;
   flames: FlameInstance[];
   fetchTarget: { dieId: number; physicalFace: import('./types').Rank } | null;
   dice: { dieId: number; rosterSlot: number | null; faceValue: number; physicalFace: import('./types').Rank;
-    golden: boolean; jackpot: boolean; vintage: boolean }[];
+    activeEffects: SpecialDieType[]; enhancementCount: number }[];
 }
 
-export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'engulfmentLevel' | 'gold' | 'manualRerollsRemaining' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackUpperHandsPlayed' | 'flameSlots' | 'dice' | 'dieRoundState' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null): HandStartSnapshot {
+export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'engulfmentLevel' | 'gold' | 'manualRerollsRemaining' | 'manualRerollsUsedThisRound' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackUpperHandsPlayed' | 'minigunUpperStreak' | 'flameSlots' | 'dice' | 'dieRoundState' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget' | 'roundPlayCount' | 'roundStartLives' | 'roundStartRosterSize' | 'precedingShopDiePurchase'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null, playSource: import('./types').HandPlaySource = 'manual'): HandStartSnapshot {
   const selectedScore = handScore(state.dice, hand, selectedDieIds, state.handLevels[hand]);
+  const ultimate = ultimateHands(state.handLevels);
+  const availableDice = availablePlayableDice(state);
   return {
     score: state.score,
     target: state.target,
     infernoMultiplier: infernoMultiplier(state.engulfmentLevel),
     gold: state.gold,
     manualRerollsRemaining: state.manualRerollsRemaining,
+    manualRerollsUsed: state.manualRerollsUsedThisRound,
+    playSource,
+    roundPlayCount: state.roundPlayCount,
+    roundStartLives: state.roundStartLives,
+    roundStartRosterSize: state.roundStartRosterSize,
+    precedingShopDiePurchase: state.precedingShopDiePurchase,
     previousPlays: state.handPlayCounts[hand],
-    ultimateHands: ultimateHands(state.handLevels),
+    ultimateHands: ultimate,
+    ultimatePlayable: ultimate.some(target => currentlyPlayableManualHands(state).includes(target)),
+    benchWarmerHand: benchWarmerHand(state.handLevels),
     targetPracticeHand: state.targetPracticeHand,
     hotStreakGoal: state.hotStreakGoal,
     hotStreakCharges: state.hotStreakCharges,
@@ -297,10 +425,15 @@ export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'en
     speedDemonDecisionMs,
     sixPackXMult: state.sixPackXMult,
     sixPackUpperHandsPlayed: state.sixPackUpperHandsPlayed,
+    minigunUpperStreak: state.minigunUpperStreak,
     lastPlayDanger: lastPlayDanger(state, hand),
     selectedBasePips: selectedScore.pips,
     selectedBaseMultiplier: selectedScore.multiplier,
     selectedDieIds: [...selectedDieIds],
+    availablePlayableDieIds: availableDice.map(die => die.id),
+    playedDiceScoringPips: 0,
+    cleanSweepCompletesCycle: false,
+    scoringDiceEnhancementCount: 0,
     bossFactor: state.bossSilenced ? 1
       : state.boss?.type === 'fly' && !state.boss.caught && hand !== state.boss.flyHand ? .5
         : state.boss?.type === 'quickdraw' && !HANDS[hand].rank && state.boss.lowerShotUsed ? .25
@@ -312,10 +445,43 @@ export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'en
     dice: state.dice.map(die => ({ dieId: die.id,
       rosterSlot: die.owner === 'player' ? state.dice.filter(item => item.owner === 'player').findIndex(item => item.id === die.id) : null,
       faceValue: activeFace(die).rank, physicalFace: die.value,
-      golden: die.owner === 'player' && hasEffect(die, 'golden') && !wholeDieEffectSuppressed(die),
-      jackpot: die.owner === 'player' && hasEffect(die, 'jackpot') && !wholeDieEffectSuppressed(die),
-      vintage: die.owner === 'player' && hasEffect(die, 'vintage') && !wholeDieEffectSuppressed(die) })),
+      activeEffects: die.owner === 'player' && !wholeDieEffectSuppressed(die)
+        ? [...new Set(die.effects.map(effect => effect.type))] : [],
+      enhancementCount: die.owner === 'player' ? die.effects.length : 0 })),
   };
+}
+
+export const playedDice = (snapshot: HandStartSnapshot) => {
+  const selected = new Set(snapshot.selectedDieIds);
+  return snapshot.dice.filter(die => selected.has(die.dieId));
+};
+
+/** Counts selected/Played dice with at least one requested active effect. Each die counts at most once. */
+export function countPlayedDiceWithActiveEffects(snapshot: HandStartSnapshot,
+  requestedEffects: readonly SpecialDieType[]): number {
+  const requested = new Set<SpecialDieType>(requestedEffects);
+  return playedDice(snapshot).filter(die => die.activeEffects.some(effect => requested.has(effect))).length;
+}
+
+export function playedDiceFaceMajorityCounts(snapshot: HandStartSnapshot, faces: readonly number[]): {
+  played: number; matching: number; qualifies: boolean;
+} {
+  const dice = playedDice(snapshot);
+  const requested = new Set(faces);
+  const matching = dice.filter(die => requested.has(die.faceValue)).length;
+  return { played: dice.length, matching, qualifies: matching > dice.length / 2 };
+}
+export function lowballPlayedDiceCounts(snapshot: HandStartSnapshot): { played: number; low: number; qualifies: boolean } {
+  const { played, matching, qualifies } = playedDiceFaceMajorityCounts(snapshot, [1, 2, 3]);
+  return { played, low: matching, qualifies };
+}
+export function highRollerPlayedDiceCounts(snapshot: HandStartSnapshot): { played: number; high: number; qualifies: boolean } {
+  const { played, matching, qualifies } = playedDiceFaceMajorityCounts(snapshot, [4, 5, 6]);
+  return { played, high: matching, qualifies };
+}
+export function countScoringDiceEnhancementComponents(snapshot: HandStartSnapshot, scoringDieIds: readonly number[]): number {
+  const scoring = new Set(scoringDieIds);
+  return snapshot.dice.filter(die => scoring.has(die.dieId)).reduce((sum, die) => sum + die.enhancementCount, 0);
 }
 
 const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId, scoringDieIds: number[]) => {
@@ -324,10 +490,11 @@ const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId, scoring
     case 'minigun': return UPPER_HAND_IDS.includes(hand);
     case 'hailMary': return snapshot.manualRerollsRemaining === 0;
     case 'fullOfGrace': return snapshot.lastPlayDanger !== 'none';
-    case 'lowball': return snapshot.dice.some(die => scoringDieIds.includes(die.dieId) && die.faceValue >= 1 && die.faceValue <= 3);
+    case 'lowball': return lowballPlayedDiceCounts(snapshot).qualifies;
+    case 'highRoller': return highRollerPlayedDiceCounts(snapshot).qualifies;
     case 'targetPractice': return hand === snapshot.targetPracticeHand;
-    case 'fatCat': return snapshot.dice.some(die => scoringDieIds.includes(die.dieId) && (die.golden || die.jackpot));
-    case 'vineyard': return snapshot.dice.some(die => scoringDieIds.includes(die.dieId) && die.vintage);
+    case 'fatCat': return countPlayedDiceWithActiveEffects(snapshot, ['golden', 'jackpot']) > 0;
+    case 'vineyard': return countPlayedDiceWithActiveEffects(snapshot, ['vintage']) > 0;
     case 'fetch': return snapshot.fetchTarget !== null && snapshot.dice.some(die => scoringDieIds.includes(die.dieId)
       && die.dieId === snapshot.fetchTarget!.dieId && die.physicalFace === snapshot.fetchTarget!.physicalFace);
     case 'straightShooter':
@@ -336,68 +503,129 @@ const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId, scoring
     case 'boxSet': return snapshot.handFamilyFlameStages[id] === 'payoff' && hand === HAND_FAMILY_FLAMES[id].payoff;
     case 'missingPair': return hand === 'pair' || hand === 'threeKind';
     case 'oneShort': return hand === 'smallStraight' || hand === 'fourKind';
+    case 'casual': return snapshot.ultimateHands.includes(hand) && snapshot.manualRerollsUsed === 0;
+    case 'freeRealEstate': return snapshot.playSource !== 'manual';
+    case 'heavyHitters': return snapshot.playedDiceScoringPips > playedDice(snapshot)
+      .reduce((sum, die) => sum + die.faceValue, 0);
+    case 'frankenstein': return snapshot.scoringDiceEnhancementCount > 2 * snapshot.selectedDieIds.length;
+    case 'cleanSweep': return snapshot.cleanSweepCompletesCycle;
+    case 'benchWarmer': return hand === snapshot.benchWarmerHand;
+    case 'epinephrine': return snapshot.roundStartLives === 1 && snapshot.roundPlayCount === 0;
+    case 'punchCard': return snapshot.precedingShopDiePurchase && snapshot.roundPlayCount === 0;
+    case 'blackHole': return snapshot.roundStartRosterSize < 5 && snapshot.roundPlayCount === 0;
+    case 'assemblyLine': return countPlayedDiceWithActiveEffects(snapshot, ['clockwork']) > 0;
+    case 'gymBros': return countPlayedDiceWithActiveEffects(snapshot, ['workout']) > 0;
     case 'hotStreak': return hand === snapshot.hotStreakGoal;
     case 'speedDemon': return snapshot.speedDemonDecisionMs !== null;
     default: return true;
   }
 };
-function factorValue(id: Flame, investedGold: number, snapshot: HandStartSnapshot, scoringDieIds: number[]): number {
+function factorValue(id: Flame, investedGold: number, snapshot: HandStartSnapshot, _scoringDieIds: number[]): number {
   switch (id) {
     case 'targetPractice': return targetPracticeMultiplier(investedGold);
-    case 'lowball': {
-      const scorers = snapshot.dice.filter(die => scoringDieIds.includes(die.dieId) && die.faceValue >= 1 && die.faceValue <= 3);
-      const average = scorers.reduce((sum, die) => sum + die.faceValue, 0) / Math.max(1, scorers.length);
-      return lowballMultiplier(investedGold, average);
-    }
+    case 'minigun': return minigunMultiplier(investedGold, snapshot.minigunUpperStreak + 1);
+    case 'lowball': return lowballMultiplier(investedGold);
+    case 'fatCat': return fatCatMultiplier(investedGold, countPlayedDiceWithActiveEffects(snapshot, ['golden', 'jackpot']));
+    case 'vineyard': return vineyardMultiplier(investedGold, countPlayedDiceWithActiveEffects(snapshot, ['vintage']));
     case 'hotStreak': return hotStreakMultiplier(investedGold, snapshot.hotStreakCharges + 1);
     case 'speedDemon': return speedDemonMultiplier(investedGold, snapshot.speedDemonDecisionMs ?? 10000);
     case 'sixPack': return snapshot.sixPackXMult;
     case 'straightShooter':
     case 'doubleDown':
     case 'threesCompany':
-    case 'boxSet': return handFamilyFlameMultiplier(investedGold);
+    case 'boxSet': return handFamilyFlameMultiplier(id, investedGold);
+    case 'missingPair': return missingPairMultiplier(investedGold);
+    case 'highRoller': return highRollerMultiplier(investedGold);
+    case 'casual': return casualMultiplier(investedGold);
+    case 'freeRealEstate': return freeRealEstateMultiplier(investedGold);
+    case 'heavyHitters': return heavyHittersMultiplier(investedGold);
+    case 'frankenstein': return frankensteinMultiplier(investedGold);
+    case 'cleanSweep': return cleanSweepMultiplier(investedGold);
+    case 'benchWarmer': return benchWarmerMultiplier(investedGold);
+    case 'epinephrine': return epinephrineMultiplier(investedGold);
+    case 'punchCard': return punchCardMultiplier(investedGold);
+    case 'blackHole': return blackHoleMultiplier(investedGold, Math.max(0, 5 - snapshot.roundStartRosterSize));
+    case 'assemblyLine': return assemblyLineMultiplier(investedGold, countPlayedDiceWithActiveEffects(snapshot, ['clockwork']));
+    case 'gymBros': return gymBrosMultiplier(investedGold, countPlayedDiceWithActiveEffects(snapshot, ['workout']));
     default: return standardFlameMultiplier(investedGold);
   }
 }
-function factorInput(id: Flame, snapshot: HandStartSnapshot, scoringDieIds: number[]): { input?: number; detail?: string } {
-  if (id === 'fatCat') return { detail: 'scoring Golden or Jackpot die' };
-  if (id === 'vineyard') return { detail: 'scoring Vintage die' };
+function factorInput(id: Flame, snapshot: HandStartSnapshot, _scoringDieIds: number[]): {
+  input?: number; detail?: string; diagnostics?: FlameActivationDiagnostics;
+} {
+  if (id === 'fatCat') {
+    const matching = countPlayedDiceWithActiveEffects(snapshot, ['golden', 'jackpot']);
+    return { input: matching, detail: `${matching} matching Played dice`, diagnostics: {
+      playedDiceCount: snapshot.selectedDieIds.length, matchingPlayedDiceCount: matching } };
+  }
+  if (id === 'vineyard') {
+    const matching = countPlayedDiceWithActiveEffects(snapshot, ['vintage']);
+    return { input: matching, detail: `${matching} matching Played dice`, diagnostics: {
+      playedDiceCount: snapshot.selectedDieIds.length, matchingPlayedDiceCount: matching } };
+  }
+  if (id === 'assemblyLine' || id === 'gymBros') {
+    const matching = countPlayedDiceWithActiveEffects(snapshot, [id === 'assemblyLine' ? 'clockwork' : 'workout']);
+    return { input: matching, detail: `${matching} matching Played dice`, diagnostics: {
+      playedDiceCount: snapshot.selectedDieIds.length, matchingPlayedDiceCount: matching } };
+  }
   if (id === 'fetch' && snapshot.fetchTarget) {
     const slot = snapshot.dice.find(die => die.dieId === snapshot.fetchTarget!.dieId)?.rosterSlot;
     return { detail: `FETCH target ${slot === null || slot === undefined ? `die #${snapshot.fetchTarget.dieId}` : `D${slot + 1}`} face ${snapshot.fetchTarget.physicalFace}` };
   }
   if (id === 'lowball') {
-    const scorers = snapshot.dice.filter(die => scoringDieIds.includes(die.dieId) && die.faceValue >= 1 && die.faceValue <= 3);
-    const average = scorers.reduce((sum, die) => sum + die.faceValue, 0) / Math.max(1, scorers.length);
-    return { input: average, detail: `${formatPlayerNumber(average)} average printed face` };
+    const counts = lowballPlayedDiceCounts(snapshot);
+    return { input: counts.low, detail: `${counts.low} of ${counts.played} Played dice showed 1–3`, diagnostics: {
+      playedDiceCount: counts.played, qualifyingLowFaceCount: counts.low } };
   }
+  if (id === 'highRoller') {
+    const counts = highRollerPlayedDiceCounts(snapshot);
+    return { input: counts.high, detail: `${counts.high} of ${counts.played} Played dice showed 4–6`, diagnostics: {
+      playedDiceCount: counts.played, qualifyingHighFaceCount: counts.high } };
+  }
+  if (id === 'casual') return { diagnostics: { ultimateHand: snapshot.ultimateHands[0],
+    manualRerollsUsed: snapshot.manualRerollsUsed } };
+  if (id === 'freeRealEstate') return { diagnostics: { freePlaySource: snapshot.playSource } };
+  if (id === 'heavyHitters') return { diagnostics: {
+    playedFaceValueTotal: playedDice(snapshot).reduce((sum, die) => sum + die.faceValue, 0),
+    playedDiceScoringPips: snapshot.playedDiceScoringPips } };
+  if (id === 'frankenstein') return { diagnostics: { scoringDiceEnhancementCount: snapshot.scoringDiceEnhancementCount,
+    playedDiceCount: snapshot.selectedDieIds.length, enhancementThreshold: 2 * snapshot.selectedDieIds.length } };
+  if (id === 'cleanSweep') return { diagnostics: { scorecardCycleCompletion: true } };
+  if (id === 'benchWarmer') return { diagnostics: { benchWarmerHand: snapshot.benchWarmerHand } };
+  if (id === 'epinephrine') return { diagnostics: { roundStartLives: snapshot.roundStartLives } };
+  if (id === 'punchCard') return { diagnostics: { precedingShopDiePurchase: snapshot.precedingShopDiePurchase } };
+  if (id === 'blackHole') return { input: Math.max(0, 5 - snapshot.roundStartRosterSize), diagnostics: {
+    roundStartRosterSize: snapshot.roundStartRosterSize, missingRosterDice: Math.max(0, 5 - snapshot.roundStartRosterSize) } };
+  if (id === 'sixPack') return { input: snapshot.sixPackUpperHandsPlayed, diagnostics: {
+    currentFactor: snapshot.sixPackXMult, upperDecayStep: snapshot.sixPackUpperHandsPlayed } };
+  if (id === 'minigun') return { input: snapshot.minigunUpperStreak + 1, diagnostics: {
+    upperStreak: snapshot.minigunUpperStreak + 1 } };
+  if (id === 'speedDemon') return { input: snapshot.speedDemonDecisionMs ?? undefined,
+    diagnostics: { decisionMs: snapshot.speedDemonDecisionMs ?? undefined } };
   if (id === 'hotStreak') return { input: snapshot.hotStreakCharges + 1, detail: `successful sequence charge ${formatPlayerNumber(snapshot.hotStreakCharges + 1)}` };
   return {};
 }
-function contributions(snapshot: HandStartSnapshot, hand: HandId, scoringDieIds: number[], includeFullOfGrace: boolean): XMultFactor[] {
+function contributions(snapshot: HandStartSnapshot, hand: HandId, scoringDieIds: number[]): XMultFactor[] {
   const result: XMultFactor[] = [];
   if (snapshot.chargeArmed && snapshot.chargeXMult > 1) result.push({ source: 'charge', value: snapshot.chargeXMult, dieId: null, detail: 'armed stored Charge' });
   for (const flame of snapshot.flames) {
     const id = flame.type;
-    if (!FLAMES[id]?.affectsXMult || isChargeFlame(id) || (!includeFullOfGrace && id === 'fullOfGrace') || !qualifies(id, snapshot, hand, scoringDieIds)) continue;
+    if (!FLAMES[id]?.affectsXMult || isChargeFlame(id) || !qualifies(id, snapshot, hand, scoringDieIds)) continue;
     const value = factorValue(id, flame.investedGold, snapshot, scoringDieIds);
     if (value > 1 || id === 'speedDemon' || id === 'fetch' || isHandFamilyFlame(id)) {
       const context = factorInput(id, snapshot, scoringDieIds);
       result.push({ source: id, value, dieId: null, flameInstanceId: flame.instanceId, ...context,
+        diagnostics: { ...context.diagnostics, currentFactor: value },
         detail: `${flame.stage === 'bonfire' ? 'Bonfire' : 'Ember'}${context.detail ? `; ${context.detail}` : ''}` });
     }
   }
   return result;
 }
 export function handXMultContributions(snapshot: HandStartSnapshot, hand: HandId, _handLevel: number, scoringDieIds: number[]): XMultFactor[] {
-  const guaranteedFactors = contributions(snapshot, hand, snapshot.selectedDieIds, false);
-  const xMult = composeXMult(guaranteedFactors);
-  const guaranteed = snapshot.score + finalizeScore(snapshot.selectedBasePips, snapshot.selectedBaseMultiplier,
-    xMult * snapshot.bossFactor, snapshot.infernoMultiplier).finalScore >= snapshot.target;
-  return contributions(snapshot, hand, scoringDieIds, !guaranteed);
+  return contributions(snapshot, hand, scoringDieIds);
 }
 export function isGuaranteedWinningPlay(snapshot: HandStartSnapshot, hand: HandId): boolean {
-  const xMult = composeXMult(contributions(snapshot, hand, snapshot.selectedDieIds, false));
+  const xMult = composeXMult(contributions(snapshot, hand, snapshot.selectedDieIds));
   return snapshot.score + finalizeScore(snapshot.selectedBasePips, snapshot.selectedBaseMultiplier,
     xMult * snapshot.bossFactor, snapshot.infernoMultiplier).finalScore >= snapshot.target;
 }
@@ -407,12 +635,17 @@ export const composeXMult = (factors: readonly (number | XMultFactor)[]) =>
 export const ownedFlameIds = (state: Pick<Board, 'flameSlots'>) => new Set<Flame>(flameInstances(state).map(flame => flame.type));
 const hasBuildDie = (state: Pick<GameState, 'dice'>, types: readonly import('./types').DieType[]) =>
   state.dice.some(die => die.owner === 'player' && die.effects.some(effect => types.includes(effect.type)));
+export const FREE_PLAY_EFFECT_TYPES = ['freePlay', 'jumpingBean'] as const satisfies readonly SpecialDieType[];
+export const buildCanProduceFreePlays = (state: Pick<GameState, 'dice'>) => hasBuildDie(state, FREE_PLAY_EFFECT_TYPES);
 
 /** Build prerequisites required by actual Flame activation paths. Self-enabling Flames remain unrestricted. */
 export function flameEligible(state: Pick<GameState, 'dice' | 'flameSlots'>, id: Flame): boolean {
   if (id === 'fatCat') return hasBuildDie(state, ['golden', 'jackpot']);
   if (id === 'vineyard') return hasBuildDie(state, ['vintage']);
   if (id === 'fluxCapacitor') return hasBuildDie(state, ['magnetic']);
+  if (id === 'freeRealEstate') return buildCanProduceFreePlays(state);
+  if (id === 'assemblyLine') return hasBuildDie(state, ['clockwork']);
+  if (id === 'gymBros') return hasBuildDie(state, ['workout']);
   return true;
 }
 

@@ -94,7 +94,7 @@ button { font: inherit; }
 .scorecard-row.targeted.selected { box-shadow: inset 3px 0 var(--mantine-color-orange-5), inset 0 0 0 1px var(--mantine-color-teal-7); }
 .target-marker { color: var(--mantine-color-orange-4) !important; font-size: .56rem !important; font-weight: 850 !important; letter-spacing: .04em; }
 .scorecard-marker-badges { min-width: 0; flex: none; display: inline-flex; align-items: center; gap: 3px; }
-.ultimate-badge, .magician-call-badge { height: 14px; padding-inline: 4px; font-size: .46rem; letter-spacing: .025em; }
+.ultimate-badge, .bench-warmer-badge, .magician-call-badge { height: 14px; padding-inline: 4px; font-size: .46rem; letter-spacing: .025em; }
 .well-trained-preview { color: var(--mantine-color-violet-3); font-size: .52rem; font-weight: 750; white-space: nowrap; }
 .scorecard-row.unavailable:disabled { opacity: .35; }
 .scorecard-row.impossible:disabled { opacity: .42; filter: saturate(.35); }
@@ -735,9 +735,9 @@ button { font: inherit; }
   .active-gameplay .scorecard-hand-name { min-width: 0; justify-content: center; gap: 4px; }
   .active-gameplay .scorecard-name-line { font-size: clamp(.9rem, 4.6vw, 1.25rem); }
   .active-gameplay .scorecard-hand-name > .hand-level { font-size: clamp(.56rem, 2.45vw, .72rem); }
-  .active-gameplay .ultimate-badge, .active-gameplay .magician-call-badge,
+  .active-gameplay .ultimate-badge, .active-gameplay .bench-warmer-badge, .active-gameplay .magician-call-badge,
   .active-gameplay .scorecard-row-result .mantine-Badge-root { flex: none; height: 12px; padding-inline: 2px; font-size: .4rem; }
-  .active-gameplay .ultimate-badge { width: 12px; }
+  .active-gameplay .ultimate-badge, .active-gameplay .bench-warmer-badge { width: 12px; }
   .active-gameplay .scorecard-row-result { flex-direction: column; gap: 2px; font-size: .78rem; line-height: 1; }
   .active-gameplay .wide-label { display: none; }
   .active-gameplay .compact-label { display: inline; }

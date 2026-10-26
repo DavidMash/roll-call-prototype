@@ -1,8 +1,11 @@
 import { chapterNumberForRound } from './chapters';
 import {
-  handFamilyFlameMultiplier,
-  HOT_STREAK_SEQUENCE, hotStreakMultiplier, isChargeFlame, lowballMultiplier, maxChargeContribution,
-  sixPackStartingMultiplier, speedDemonMultiplier, standardFlameMultiplier, targetPracticeMultiplier,
+  assemblyLineMultiplier, benchWarmerMultiplier, blackHoleMultiplier, casualMultiplier, cleanSweepMultiplier,
+  epinephrineMultiplier, fatCatMultiplier, freeRealEstateMultiplier, frankensteinMultiplier, gymBrosMultiplier,
+  handFamilyFlameMultiplier, heavyHittersMultiplier, highRollerMultiplier,
+  HOT_STREAK_SEQUENCE, hotStreakMultiplier, isChargeFlame, isHandFamilyFlame, lowballMultiplier, maxChargeContribution,
+  minigunMultiplier, missingPairMultiplier, sixPackStartingMultiplier, speedDemonMultiplier,
+  punchCardMultiplier, standardFlameMultiplier, targetPracticeMultiplier, vineyardMultiplier,
 } from './flames';
 import { HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { canonicalRunHistoryV2Events } from './runHistoryV2Timeline';
@@ -113,16 +116,6 @@ const HAND_FAMILY_PAYOFFS: Partial<Record<Flame, HandId>> = {
   straightShooter: 'largeStraight', doubleDown: 'twoPair', threesCompany: 'fullHouse', boxSet: 'fiveKind',
 };
 
-function minimumQualifyingAverageForLowball(hand: HandId): number {
-  if (hand === 'ones' || hand === 'pair' || hand === 'threeKind' || hand === 'fourKind' || hand === 'fiveKind') return 1;
-  if (hand === 'twos') return 2;
-  if (hand === 'threes') return 3;
-  if (hand === 'fours' || hand === 'fives' || hand === 'sixes') return Number.POSITIVE_INFINITY;
-  if (hand === 'twoPair') return 1.5;
-  if (hand === 'fullHouse') return 1.4;
-  return 2; // Small and Large Straights can both contain qualifying 1, 2, and 3 faces.
-}
-
 /**
  * A perfect legal activation for one fully-developed Flame on a given hand.
  * Values come from the same formula functions used by live Flame resolution.
@@ -138,8 +131,24 @@ function maximumFlameFactorOnHand(flame: Flame, hand: HandId): number {
   if (flame === 'hotStreak') return hotStreakMultiplier(100, HOT_STREAK_SEQUENCE.length);
   if (flame === 'speedDemon') return speedDemonMultiplier(100, 0);
   if (flame === 'sixPack') return sixPackStartingMultiplier(100);
-  if (flame === 'lowball') return lowballMultiplier(100, minimumQualifyingAverageForLowball(hand));
-  if (HAND_FAMILY_PAYOFFS[flame]) return handFamilyFlameMultiplier(100);
+  if (flame === 'minigun') return minigunMultiplier(100, 6);
+  if (flame === 'lowball') return lowballMultiplier(100);
+  if (flame === 'fatCat') return fatCatMultiplier(100, 5);
+  if (flame === 'vineyard') return vineyardMultiplier(100, 5);
+  if (flame === 'missingPair') return missingPairMultiplier(100);
+  if (flame === 'casual') return casualMultiplier(100);
+  if (flame === 'freeRealEstate') return freeRealEstateMultiplier(100);
+  if (flame === 'heavyHitters') return heavyHittersMultiplier(100);
+  if (flame === 'frankenstein') return frankensteinMultiplier(100);
+  if (flame === 'highRoller') return highRollerMultiplier(100);
+  if (flame === 'cleanSweep') return cleanSweepMultiplier(100);
+  if (flame === 'benchWarmer') return benchWarmerMultiplier(100);
+  if (flame === 'epinephrine') return epinephrineMultiplier(100);
+  if (flame === 'punchCard') return punchCardMultiplier(100);
+  if (flame === 'blackHole') return blackHoleMultiplier(100, 4);
+  if (flame === 'assemblyLine') return assemblyLineMultiplier(100, 5);
+  if (flame === 'gymBros') return gymBrosMultiplier(100, 5);
+  if (isHandFamilyFlame(flame)) return handFamilyFlameMultiplier(flame, 100);
   return standardFlameMultiplier(100);
 }
 

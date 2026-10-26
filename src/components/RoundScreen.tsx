@@ -90,7 +90,8 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const rerollVisualResourceText = `${board.manualRerollsRemaining} LEFT${carePackageRerolls ? ` + ${carePackageRerolls}` : ''}`;
   const normalRerollFill = Math.max(0, Math.min(1, board.manualRerollsRemaining / CONFIG.manualRerollsPerRound));
   const deadBoard = currentlyPlayableManualHands(board).length === 0;
-  const speedStrength = (speedDemonMultiplier(100, decisionMs) - 1) / 4;
+  const speedStrength = (speedDemonMultiplier(100, decisionMs) - 1)
+    / (speedDemonMultiplier(100, 0) - 1);
   const speedReveal = event?.type === 'SPEED_DEMON_REVEALED' ? event : null;
   const scorecardRefreshing = event?.type === 'SCORECARD_REFRESHED';
   const speedEquation = event?.flame === 'speedDemon' && event.handScore && event.type !== 'SPEED_DEMON_REVEALED'

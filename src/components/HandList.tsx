@@ -1,5 +1,5 @@
 import { Badge, Button, Text, Tooltip } from '@mantine/core';
-import { encounterHandIds, handIsStructurallyImpossible, handStats, HANDS, relativeHandStrengthTiers, ultimateHands } from '../game/hands';
+import { benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, handStats, HANDS, relativeHandStrengthTiers, ultimateHands } from '../game/hands';
 import { handFamilyFlameTargets, hasOwnedFlame } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
@@ -39,6 +39,8 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
 }) {
   const ultimate = new Set(ultimateHands(board.handLevels));
   const ownsUltimate = hasOwnedFlame(board, 'ultimate');
+  const ownsBenchWarmer = hasOwnedFlame(board, 'benchWarmer');
+  const benchWarmer = benchWarmerHand(board.handLevels);
   const flameTargets = new Set(handFamilyFlameTargets(board));
   const strengthTiers = relativeHandStrengthTiers(board.handLevels, hands);
   const pendulumRequested = !board.bossSilenced && board.boss?.type === 'pendulum'
@@ -60,6 +62,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
         const targeted = board.targetPracticeHand === hand || flameTargets.has(hand);
         const hotTarget = board.hotStreakGoal === hand;
         const isUltimate = ownsUltimate && ultimate.has(hand);
+        const isBenchWarmer = ownsBenchWarmer && benchWarmer === hand;
         const magicianCalled = !board.bossSilenced && board.boss?.type === 'magician' && board.boss.calledHands.includes(hand);
         const magicianCompleted = magicianCalled && board.boss?.type === 'magician' && board.boss.completedHands.includes(hand);
         const score = board.scoreByHand[hand];
@@ -72,7 +75,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
           className={`scorecard-row ${state} strength-${strengthTier} ${targeted ? 'targeted' : ''} ${board.boss?.type === 'caller' && board.boss.calledHand === hand ? 'caller-called' : ''} ${board.boss?.type === 'fly' && board.boss.flyHand === hand ? 'fly-row' : ''}`} data-testid={`scorecard-row-${hand}`} data-state={state} data-strength-tier={strengthTier}
           disabled={busy || impossible || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}
           aria-keyshortcuts={selected && canSubmit ? 'Enter' : undefined}
-          aria-label={`${definition.name} · Lv. ${formatPlayerNumber(stats.level)} · ${formatPlayerNumber(stats.basePips)} Pips · ×${formatPlayerNumber(stats.baseMultiplier)} Mult${isUltimate ? ' · Ultimate Hand' : ''}${magicianCalled ? ` · Magician call ${magicianCompleted ? 'completed' : 'pending'}` : ''} · ${scoreLabel}${impossible ? ' · Impossible' : ''}${used ? ' · Used' : ''}${neglected ? ' · Neglected' : ''}`}>
+          aria-label={`${definition.name} · Lv. ${formatPlayerNumber(stats.level)} · ${formatPlayerNumber(stats.basePips)} Pips · ×${formatPlayerNumber(stats.baseMultiplier)} Mult${isUltimate ? ' · Ultimate Hand' : ''}${isBenchWarmer ? ' · Bench Warmer Hand' : ''}${magicianCalled ? ` · Magician call ${magicianCompleted ? 'completed' : 'pending'}` : ''} · ${scoreLabel}${impossible ? ' · Impossible' : ''}${used ? ' · Used' : ''}${neglected ? ' · Neglected' : ''}`}>
           <span className="scorecard-row-copy">
             <span className="scorecard-hand-name" title={definition.name}>
               <span className="scorecard-name-line">
@@ -85,9 +88,12 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
                 Lv. {formatPlayerNumber(stats.level)} <span aria-hidden="true">·</span> {formatPlayerNumber(stats.basePips)} × {formatPlayerNumber(stats.baseMultiplier)}
               </span>
             </span>
-            {(isUltimate || magicianCalled) && <span className="scorecard-marker-badges">
+            {(isUltimate || isBenchWarmer || magicianCalled) && <span className="scorecard-marker-badges">
               {isUltimate && <Tooltip label="Your highest level hand." multiline maw={300} withArrow>
                 <Badge className="ultimate-badge" size="xs" color="grape" variant="light" data-testid={`ultimate-badge-${hand}`}><span className="wide-label">ULTIMATE</span><span className="compact-label">U</span></Badge>
+              </Tooltip>}
+              {isBenchWarmer && <Tooltip label="Your lowest-level hand." multiline maw={300} withArrow>
+                <Badge className="bench-warmer-badge" size="xs" color="orange" variant="light" data-testid={`bench-warmer-badge-${hand}`}><span className="wide-label">BENCH WARMER</span><span className="compact-label">B</span></Badge>
               </Tooltip>}
               {magicianCalled && <Badge className="magician-call-badge" size="xs" color={magicianCompleted ? 'teal' : 'grape'} variant="light"
                 data-testid={`magician-call-${hand}`} data-state={magicianCompleted ? 'completed' : 'called'}

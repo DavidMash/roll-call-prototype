@@ -22,7 +22,11 @@ export type Flame =
   | 'speedDemon' | 'sixPack' | 'fluxCapacitor'
   | 'fatCat' | 'vineyard' | 'fetch' | 'targetPractice'
   | 'hotStreak' | 'lowball' | 'straightShooter' | 'doubleDown'
-  | 'threesCompany' | 'boxSet' | 'missingPair' | 'oneShort';
+  | 'threesCompany' | 'boxSet' | 'missingPair' | 'oneShort'
+  | 'potentialEnergy' | 'allHandsOnDeck' | 'casual' | 'freeRealEstate'
+  | 'heavyHitters' | 'frankenstein' | 'highRoller' | 'cleanSweep'
+  | 'benchWarmer' | 'epinephrine' | 'punchCard' | 'blackHole'
+  | 'assemblyLine' | 'gymBros';
 export type FlameInstanceId = number;
 export type FlameStage = 'ember' | 'bonfire';
 export type FlameSlotIndex = 0 | 1 | 2 | 3 | 4;
@@ -124,6 +128,34 @@ export interface XMultFactor {
   flameInstanceId?: FlameInstanceId;
   detail?: string;
   input?: number;
+  diagnostics?: FlameActivationDiagnostics;
+}
+export interface FlameActivationDiagnostics {
+  currentFactor?: number;
+  upperDecayStep?: number;
+  upperStreak?: number;
+  streakReset?: boolean;
+  playedDiceCount?: number;
+  qualifyingLowFaceCount?: number;
+  matchingPlayedDiceCount?: number;
+  decisionMs?: number;
+  ultimateHand?: HandId;
+  alternativeHand?: HandId;
+  chargeGained?: number;
+  availableDiceCount?: number;
+  manualRerollsUsed?: number;
+  freePlaySource?: HandPlaySource;
+  playedFaceValueTotal?: number;
+  playedDiceScoringPips?: number;
+  scoringDiceEnhancementCount?: number;
+  enhancementThreshold?: number;
+  qualifyingHighFaceCount?: number;
+  scorecardCycleCompletion?: boolean;
+  benchWarmerHand?: HandId;
+  roundStartLives?: number;
+  precedingShopDiePurchase?: boolean;
+  roundStartRosterSize?: number;
+  missingRosterDice?: number;
 }
 export interface HandScoreAccumulator {
   hand: HandId;
@@ -287,6 +319,8 @@ export interface Shop {
   lifeRestores: number;
   /** On The House: the first collectible-die purchase in this visit costs no Gold. */
   freeDicePurchaseAvailable?: boolean;
+  /** Canonical binary purchase record for Punch Card during this semantic Shop visit. */
+  diePurchased?: boolean;
   /** Persisted within a semantic Shop visit so tab navigation/reload does not lose Forge work. */
   forgeSelection?: ForgeSelection;
 }
@@ -439,6 +473,7 @@ export interface Board {
   bustPresentationDice: Die[] | null;
   flameTutorial: { pendingFlameInstanceId: FlameInstanceId | null; completed: boolean };
   manualRerollsRemaining: number;
+  manualRerollsUsedThisRound: number;
   specialOfferEffects: SpecialOfferEffects;
   /**
    * Active encounter reference projection in Roster order. Player entries alias the
@@ -460,6 +495,12 @@ export interface Board {
   decisionId: number;
   sixPackXMult: number;
   sixPackUpperHandsPlayed: number;
+  minigunUpperStreak: number;
+  /** Number of genuine Play events resolved in this Round attempt, including Free Plays. */
+  roundPlayCount: number;
+  roundStartLives: number;
+  roundStartRosterSize: number;
+  precedingShopDiePurchase: boolean;
   hotStreakGoal: HandId | null;
   hotStreakCharges: number;
   handFamilyFlameStages: Partial<Record<Flame, HandFamilyFlameStage>>;
@@ -743,6 +784,7 @@ export interface EventRecord {
   goldenGold?: number;
   jackpotGold?: number;
   decisionMs?: number;
+  flameDiagnostics?: FlameActivationDiagnostics;
   terminalDice?: { dieId: number; physicalFace: Rank; face: Rank; pips: number }[];
   bustPresentationUsedFrozenDice?: boolean;
   handScore?: HandScoreAccumulator;

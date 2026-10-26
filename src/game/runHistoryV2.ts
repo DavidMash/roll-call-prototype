@@ -6,7 +6,7 @@ import type {
 import type { RoundGoalBreakdown } from './goals';
 import type { ExactDecimal, ExactScore } from './scoreMath';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 19 as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 21 as const;
 export const RUN_HISTORY_V2_RULESET = 'configurable-roll-effects-forge-v2' as const;
 
 export interface RunHistoryV2Coverage {
@@ -69,6 +69,7 @@ export interface XMultContribution {
   sourceInstanceId?: FlameInstanceId;
   dieId?: number;
   input?: number;
+  diagnostics?: import('./types').FlameActivationDiagnostics;
   /** Counterfactual factors attributing a consumed shared Charge factor to its producing Flames. */
   chargeSources?: { flame: Flame; instanceId?: FlameInstanceId; origin?: Exclude<FlameOrigin, 'charge' | 'boss' | 'special_offer' | 'external'>;
     attributed?: number; factor: number }[];
@@ -309,7 +310,8 @@ export type FlameChange =
   | { type: 'skipped' }
   | { type: 'stoked'; flame: Flame; instanceId: FlameInstanceId; slot: FlameSlotIndex; amount: number; from: number; to: number }
   | { type: 'bonfire_created'; flame: Flame; instanceId: FlameInstanceId; slot: FlameSlotIndex }
-  | { type: 'activated'; flame: Flame; instanceId: FlameInstanceId; slot: FlameSlotIndex; origin: FlameOrigin; factor?: number };
+  | { type: 'activated'; flame: Flame; instanceId: FlameInstanceId; slot: FlameSlotIndex; origin: FlameOrigin;
+      factor?: number; diagnostics?: import('./types').FlameActivationDiagnostics };
 
 export interface FlameChangedEvent extends RunHistoryV2Envelope {
   kind: 'flame_changed';
@@ -338,10 +340,26 @@ export interface BossStateChangedEvent extends RunHistoryV2Envelope {
   state?: string;
 }
 
+export interface FlameRuntimeChangedEvent extends RunHistoryV2Envelope {
+  kind: 'flame_runtime_changed';
+  flame: Flame;
+  change: 'sequence_stage' | 'streak_reset';
+  hand?: HandId;
+  from?: import('./types').HandFamilyFlameStage | number;
+  to?: import('./types').HandFamilyFlameStage | number;
+  reason: 'setup_play' | 'payoff_play' | 'scorecard_refresh' | 'marathon_reuse' | 'lower_play';
+}
+
 export interface UltimateTargetsChangedEvent extends RunHistoryV2Envelope {
   kind: 'ultimate_targets_changed';
   targets: HandId[];
   reason: 'acquired' | 'training' | 'focus' | 'team_training' | 'engulfment' | 'round_start' | 'retry';
+}
+
+export interface BenchWarmerTargetChangedEvent extends RunHistoryV2Envelope {
+  kind: 'bench_warmer_target_changed';
+  target: HandId;
+  reason: UltimateTargetsChangedEvent['reason'];
 }
 
 export interface TemperChangedEvent extends RunHistoryV2Envelope {
@@ -430,7 +448,7 @@ export type RunHistoryV2Event = RunStartedEvent | ChapterStartedEvent | RoundAtt
   | HandScoredEvent | SpecialDieActivatedEvent | ShopVisitStartedEvent | ShopStageChangedEvent | TrainingSessionStartedEvent | TeamTrainingAppliedEvent | ShopVisitCompletedEvent
   | ShopOffersPresentedEvent | ShopTransactionEvent | TemperChangedEvent | FlameChangedEvent | ChargeChangedEvent
   | EngulfmentAttemptedEvent | InfernoEvaluatedEvent | InfernoSuspensionChangedEvent
-  | BossStateChangedEvent | UltimateTargetsChangedEvent | ScorecardRefreshedEvent | RoundAttemptFinishedEvent
+  | BossStateChangedEvent | UltimateTargetsChangedEvent | BenchWarmerTargetChangedEvent | FlameRuntimeChangedEvent | ScorecardRefreshedEvent | RoundAttemptFinishedEvent
   | CheckpointRestoredEvent | RunFinishedEvent | ErrorEvent | MapTransitionV2Event;
 
 type EnvelopeKeys = Exclude<keyof RunHistoryV2Envelope, 'kind'>;

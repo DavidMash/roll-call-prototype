@@ -37,11 +37,12 @@ function magnetic(state: GameState, dieId: number, level = 1): void {
 
 describe('Speed Demon', () => {
   it('has a one-second grace period, smooth decay, and linear investment scaling', () => {
-    expect(speedDemonMultiplier(100, 0)).toBe(5);
-    expect(speedDemonMultiplier(100, 1000)).toBe(5);
-    expect(speedDemonMultiplier(100, 5500)).toBe(3);
+    expect(speedDemonMultiplier(100, 0)).toBe(4);
+    expect(speedDemonMultiplier(100, 1000)).toBe(4);
+    expect(speedDemonMultiplier(100, 3000)).toBe(2.5);
+    expect(speedDemonMultiplier(100, 5000)).toBe(1);
     expect(speedDemonMultiplier(100, 10000)).toBe(1);
-    expect(speedDemonMultiplier(50, 0)).toBe(3);
+    expect(speedDemonMultiplier(50, 0)).toBe(2.5);
     expect(speedDemonMultiplier(0, 0)).toBe(1);
   });
 
@@ -62,34 +63,34 @@ describe('Speed Demon', () => {
     const preview = captureHandStart(state, 'ones', [0]);
     expect(handXMultContributions(preview, 'ones', 1, [0])).toEqual([]);
 
-    const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0], decisionMs: 5500 }, constant(.8));
-    expect(result.state.stats.handScores[0].xMultFactors).toContainEqual(expect.objectContaining({ source: 'speedDemon', value: 3 }));
+    const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0], decisionMs: 3000 }, constant(.8));
+    expect(result.state.stats.handScores[0].xMultFactors).toContainEqual(expect.objectContaining({ source: 'speedDemon', value: 2.5 }));
     const revealIndex = result.events.findIndex(event => event.type === 'SPEED_DEMON_REVEALED');
     const updateIndex = result.events.findIndex(event => event.type === 'HAND_XMULT_CHANGED' && event.flame === 'speedDemon');
-    expect(result.events[revealIndex]).toMatchObject({ decisionMs: 5500, xMult: 3 });
+    expect(result.events[revealIndex]).toMatchObject({ decisionMs: 3000, xMult: 2.5 });
     expect(revealIndex).toBeGreaterThan(-1);
     expect(updateIndex).toBeGreaterThan(revealIndex);
   });
 });
 
 describe('Six Pack', () => {
-  it('scales its Round-start factor from ×1 to ×6', () => {
+  it('scales its Round-start factor from ×1 to ×4', () => {
     expect(sixPackStartingMultiplier(0)).toBe(1);
-    expect(sixPackStartingMultiplier(50)).toBe(3.5);
-    expect(sixPackStartingMultiplier(100)).toBe(6);
-    expect(sixPackMultiplierAfterUpperHands(6, 1)).toBeCloseTo(5.166666666667);
+    expect(sixPackStartingMultiplier(50)).toBe(2.5);
+    expect(sixPackStartingMultiplier(100)).toBe(4);
+    expect(sixPackMultiplierAfterUpperHands(4, 1)).toBe(3.5);
     expect(sixPackMultiplierAfterUpperHands(1.4, 1)).toBeCloseTo(1.333333333333);
-    expect(sixPackMultiplierAfterUpperHands(6, 6)).toBe(1);
+    expect(sixPackMultiplierAfterUpperHands(4, 6)).toBe(1);
   });
 
   it('applies the current factor before six equal Upper-hand reductions and floors at ×1', () => {
     const state = game([1, 2, 3, 4, 5]);
     flame(state, 0, 'sixPack', 100);
-    state.sixPackXMult = 6;
+    state.sixPackXMult = 4;
     const resolver = new Resolver(state, constant(.8));
     for (let count = 0; count < 7; count++) resolver.play('ones', [0], 'jumpingBean');
     expect(state.stats.handScores.map(score => score.xMult)).toEqual([
-      6, 5.166666666667, 4.333333333333, 3.5, 2.666666666667, 1.833333333333, 1,
+      4, 3.5, 3, 2.5, 2, 1.5, 1,
     ]);
     expect(state.sixPackXMult).toBe(1);
     expect(state.sixPackUpperHandsPlayed).toBe(6);
@@ -98,29 +99,43 @@ describe('Six Pack', () => {
   it('reduces after a manual Upper hand but not after a Lower hand', () => {
     const upper = game([1, 2, 3, 4, 5]);
     flame(upper, 0, 'sixPack', 100);
-    upper.sixPackXMult = 6;
+    upper.sixPackXMult = 4;
     const played = dispatch(upper, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.8));
-    expect(played.state.stats.handScores[0].xMult).toBe(6);
-    expect(played.state.sixPackXMult).toBeCloseTo(5.166666666667);
+    expect(played.state.stats.handScores[0].xMult).toBe(4);
+    expect(played.state.sixPackXMult).toBe(3.5);
 
     const lower = game([2, 2, 3, 4, 5]);
     flame(lower, 0, 'sixPack', 100);
-    lower.sixPackXMult = 6;
-    expect(dispatch(lower, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.8)).state.sixPackXMult).toBe(6);
+    lower.sixPackXMult = 4;
+    expect(dispatch(lower, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.8)).state.sixPackXMult).toBe(4);
   });
 
   it('counts Jumping Bean Upper free plays and resets to invested strength each Round', () => {
     const state = game([1, 2, 3, 4, 5]);
     flame(state, 0, 'sixPack', 50);
-    state.sixPackXMult = 3.5;
+    state.sixPackXMult = 2.5;
     new Resolver(state, constant(.8)).play('ones', [0], 'jumpingBean');
-    expect(state.sixPackXMult).toBeCloseTo(3.083333333333);
+    expect(state.sixPackXMult).toBe(2.25);
 
     state.phase = 'shop';
     state.shop = { offers: [], offerRerolls: 0, lifeRestores: 0 };
     new Resolver(state, constant(.8)).startRound();
-    expect(state.sixPackXMult).toBe(3.5);
+    expect(state.sixPackXMult).toBe(2.5);
     expect(state.sixPackUpperHandsPlayed).toBe(0);
+  });
+
+  it('does not restore its spent strength on scorecard refresh', () => {
+    const state = game([1, 2, 3, 4, 5]);
+    flame(state, 0, 'sixPack', 100);
+    state.sixPackXMult = 2.5;
+    state.sixPackUpperHandsPlayed = 3;
+    state.consumed = ['twos', 'threes', 'fours', 'fives', 'sixes', 'pair', 'twoPair', 'threeKind',
+      'fourKind', 'fiveKind', 'fullHouse', 'smallStraight', 'largeStraight'];
+    state.scorecardCycleConsumed = [...state.consumed];
+    const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.8)).state;
+    expect(result.scorecardCycleConsumed).toEqual([]);
+    expect(result.sixPackXMult).toBe(2);
+    expect(result.sixPackUpperHandsPlayed).toBe(4);
   });
 });
 

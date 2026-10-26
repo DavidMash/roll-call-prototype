@@ -2,19 +2,20 @@ import { bossRewardForEncounter, CONFIG, interestForGold, roundReward } from './
 import { activeFace, rollPhysicalDie, scoringPips, weightedSelectedFaceWeight, wholeDieEffectSuppressed } from './dice';
 import {
   captureHandStart, currentFlameInstanceId, eligibleFlameIds, flameByType, flameInstances, flameSlotOf, FLAMES, handXMultContributions,
-  fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, HOT_STREAK_SEQUENCE,
+  allHandsOnDeckChargeGain, countScoringDiceEnhancementComponents, fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, HOT_STREAK_SEQUENCE,
   initialHandFamilyFlameStages, jumpStartChargeGain, momentumChargeGain, normalizeFlameInstanceRuntime, ownedFlameIds, recalculateMaxCharge,
-  removeFlameInstance,
+  potentialEnergyChargeGain, removeFlameInstance,
   sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, thirdRailChargeGain,
 } from './flames';
-import { encounterHandIds, handIsStructurallyImpossible, handOptions, hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, planQualification, ultimateHands, upperBaselineLevel, UPPER_HAND_IDS } from './hands';
+import { benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, handOptions, hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, planQualification, ultimateHands, upperBaselineLevel, UPPER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
 import { OFFER_RARITY_WEIGHTS, rarityFirstSelection, rarityLabel } from './rarity';
 import { createDiceOffers } from './diceEconomy';
 import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, ordinaryFaceContributions, type HandScoreContribution, type ScoringParticipant } from './scoring';
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie, currentlyPlayableManualHands, handIsPhysicallyAttainable,
-  isBigBossRound, isCursedDie, isMiniBossType, requiredEncounterDieIds, unavailableEncounterHands, wardenUnlockCosts } from './bosses';
+  isBigBossRound, isCursedDie, isMiniBossType, requiredEncounterDieIds, scorecardCycleRelevantHands, unavailableEncounterHands, wardenUnlockCosts,
+  wouldCompleteScorecardCycle } from './bosses';
 import { getEncounterGoalBreakdown } from './goals';
 import { encounterNode, flameNodeAfter, postBossShopNodeAfter, shopNodeBefore, specialOfferNodeAfter, timeTravelDestinationRound } from './progression';
 import { formatExactDecimal, formatExactScore, formatPlayerNumber } from './copy';
@@ -179,12 +180,14 @@ export class Resolver {
     return flameByType(this.state, flame)?.stage ?? 'external';
   }
 
-  private emitV2FlameActivation(flame: Flame, factor?: number): void {
+  private emitV2FlameActivation(flame: Flame, factor?: number,
+    diagnostics?: import('./types').FlameActivationDiagnostics): void {
     const instanceId = currentFlameInstanceId(this.state, flame);
     const slot = instanceId === null ? null : flameSlotOf(this.state, instanceId);
     if (instanceId === null || slot === null) return;
     this.emitV2({ kind: 'flame_changed', change: { type: 'activated', flame, instanceId, slot,
-      origin: this.flameOrigin(flame), ...(factor === undefined ? {} : { factor }) } });
+      origin: this.flameOrigin(flame), ...(factor === undefined ? {} : { factor }),
+      ...(diagnostics ? { diagnostics: structuredClone(diagnostics) } : {}) } });
   }
 
   private nextTimeline(reason: 'bust' | 'bad_dream' | 'time_travel', canonicalRound: number, canonicalAttempt: number,
@@ -232,7 +235,7 @@ export class Resolver {
       else if (record.type === 'FLAME_TRIGGERED' && record.flame) {
         if (record.xMult === undefined) this.v2Hand.sideEffects.push({ type: 'flame_activation', flame: record.flame,
           origin: this.flameOrigin(record.flame), dieId: record.dieIds?.[0] });
-        this.emitV2FlameActivation(record.flame, record.xMult);
+        this.emitV2FlameActivation(record.flame, record.xMult, record.flameDiagnostics);
       }
       else if ((record.type === 'BOSS_HAND_CHANGED' || record.type === 'BOSS_FACE_CHANGED'
         || record.type === 'CALLER_CALLED' || record.type === 'CALLER_CHANGED') && record.boss)
@@ -248,7 +251,7 @@ export class Resolver {
       } else if (record.type === 'FLAME_TRIGGERED' && record.flame) {
         this.v2Roll.effects.push({ type: 'flame_activation', flame: record.flame,
           origin: this.flameOrigin(record.flame), dieIds: record.dieIds ?? [] });
-        this.emitV2FlameActivation(record.flame, record.xMult);
+        this.emitV2FlameActivation(record.flame, record.xMult, record.flameDiagnostics);
       }
       else if ((record.type === 'BOSS_FACE_CHANGED' || record.type === 'CURSED_DIE_ROLLED') && record.boss)
         this.v2Roll.effects.push({ type: 'boss', boss: record.boss, change: record.type, dieIds: record.dieIds ?? [] });
@@ -337,7 +340,7 @@ export class Resolver {
             slot: flameSlotOf(this.state, currentFlameInstanceId(this.state, record.flame)!)! } });
         break;
       case 'FLAME_TRIGGERED':
-        if (record.flame) this.emitV2FlameActivation(record.flame, record.xMult);
+        if (record.flame) this.emitV2FlameActivation(record.flame, record.xMult, record.flameDiagnostics);
         break;
       case 'CHARGE_ARMED':
         this.emitV2({ kind: 'charge_changed', operation: this.state.chargeArmed ? 'arm' : 'disarm',
@@ -420,9 +423,10 @@ export class Resolver {
     const record = { ...event, id: this.state.nextPlaybackEventId++, round: this.state.round };
     this.recordV2FromPlaybackEvent(record);
   }
-  triggerFlame(flame: Flame, detail = '', hand?: HandId, xMult?: number): void {
+  triggerFlame(flame: Flame, detail = '', hand?: HandId, xMult?: number,
+    flameDiagnostics?: import('./types').FlameActivationDiagnostics): void {
     this.state.stats.flameTriggers[flame] = (this.state.stats.flameTriggers[flame] ?? 0) + 1;
-    this.emit({ type: 'FLAME_TRIGGERED', flame, hand, xMult,
+    this.emit({ type: 'FLAME_TRIGGERED', flame, hand, xMult, flameDiagnostics,
       message: `${FLAMES[flame].name}${detail ? `: ${detail}` : ''}` });
   }
   recordUltimateTargets(reason: Extract<RunHistoryV2EventInput, { kind: 'ultimate_targets_changed' }>['reason'], force = false): void {
@@ -432,6 +436,13 @@ export class Resolver {
     if (!force && prior?.kind === 'ultimate_targets_changed'
       && prior.targets.length === targets.length && prior.targets.every((hand, index) => hand === targets[index])) return;
     this.emitV2({ kind: 'ultimate_targets_changed', targets, reason });
+  }
+  recordBenchWarmerTarget(reason: Extract<RunHistoryV2EventInput, { kind: 'bench_warmer_target_changed' }>['reason'], force = false): void {
+    if (!flameByType(this.state, 'benchWarmer')) return;
+    const target = benchWarmerHand(this.state.handLevels);
+    const prior = [...this.state.historyV2].reverse().find(event => event.kind === 'bench_warmer_target_changed');
+    if (!force && prior?.kind === 'bench_warmer_target_changed' && prior.target === target) return;
+    this.emitV2({ kind: 'bench_warmer_target_changed', target, reason });
   }
   setFetchTarget(previous = this.state.fetchTarget): void {
     const dice = flameByType(this.state, 'fetch') ? rosterDice(this.state) : [];
@@ -732,7 +743,7 @@ export class Resolver {
     return instance ? { investment: instance.investedGold, instanceId: instance.instanceId } : null;
   }
   private growCharge(flame: ChargeFlame, requestedGain: number,
-    detail: string, dieIds?: number[]): void {
+    detail: string, dieIds?: number[], diagnostics?: import('./types').FlameActivationDiagnostics): void {
     const source = this.chargeFlameSource(flame);
     if (!source || requestedGain <= 0) return;
     const before = this.state.chargeXMult;
@@ -742,8 +753,10 @@ export class Resolver {
     this.state.chargeXMult = after;
     this.state.chargeAttribution[source.instanceId] = Number(((this.state.chargeAttribution[source.instanceId] ?? 0) + gain).toFixed(12));
     this.state.stats.chargeGained = Number((this.state.stats.chargeGained + gain).toFixed(12));
-    this.triggerFlame(flame, `${detail} · Charge +${this.format(gain)} → ×${this.format(after)}`);
-    this.emit({ type: 'CHARGE_CHANGED', flame, dieIds, xMult: after,
+    const flameDiagnostics = { ...diagnostics, chargeGained: gain };
+    this.triggerFlame(flame, `${detail} · Charge +${this.format(gain)} → ×${this.format(after)}`, undefined, undefined,
+      flameDiagnostics);
+    this.emit({ type: 'CHARGE_CHANGED', flame, dieIds, xMult: after, flameDiagnostics,
       message: `${FLAMES[flame].name}: Charge +${this.format(gain)} → ×${this.format(after)}` });
   }
   private addMomentumCharge(hand: HandId): void {
@@ -764,10 +777,58 @@ export class Resolver {
     for (const id of HAND_FAMILY_FLAME_IDS) {
       const stage = this.state.handFamilyFlameStages[id];
       if (stage === 'setup' && hand === HAND_FAMILY_FLAMES[id].setup) {
-        this.state.handFamilyFlameStages[id] = 'payoff';
+        this.setHandFamilyFlameStage(id, 'payoff', 'setup_play', hand);
       } else if (stage === 'payoff' && hand === HAND_FAMILY_FLAMES[id].payoff && applied.has(id)) {
-        this.state.handFamilyFlameStages[id] = 'spent';
+        this.setHandFamilyFlameStage(id, 'spent', 'payoff_play', hand);
       }
+    }
+  }
+  private addPotentialEnergyCharge(snapshot: HandStartSnapshot, hand: HandId, source: HandPlaySource): void {
+    const flame = this.chargeFlameSource('potentialEnergy');
+    const ultimate = snapshot.ultimateHands[0];
+    if (!flame || source !== 'manual' || !ultimate || !snapshot.ultimatePlayable || snapshot.ultimateHands.includes(hand)) return;
+    this.growCharge('potentialEnergy', potentialEnergyChargeGain(flame.investment),
+      `${HANDS[ultimate].name} was playable; ${HANDS[hand].name} played`, undefined,
+      { ultimateHand: ultimate, alternativeHand: hand });
+  }
+  private addAllHandsOnDeckCharge(snapshot: HandStartSnapshot): void {
+    const flame = this.chargeFlameSource('allHandsOnDeck');
+    if (!flame || !snapshot.availablePlayableDieIds.length) return;
+    const selected = new Set(snapshot.selectedDieIds);
+    if (!snapshot.availablePlayableDieIds.every(id => selected.has(id))
+      || selected.size !== snapshot.availablePlayableDieIds.length) return;
+    const count = snapshot.availablePlayableDieIds.length;
+    this.growCharge('allHandsOnDeck', allHandsOnDeckChargeGain(flame.investment, count),
+      `all ${count} available dice Played`, snapshot.selectedDieIds,
+      { availableDiceCount: count, playedDiceCount: snapshot.selectedDieIds.length });
+  }
+  private advanceMinigun(hand: HandId): void {
+    if (!ownedFlameIds(this.state).has('minigun')) return;
+    if (UPPER_HAND_IDS.includes(hand)) {
+      this.state.minigunUpperStreak = Math.min(6, this.state.minigunUpperStreak + 1);
+      return;
+    }
+    const before = this.state.minigunUpperStreak;
+    if (before <= 0) return;
+    this.state.minigunUpperStreak = 0;
+    this.emitV2({ kind: 'flame_runtime_changed', flame: 'minigun', change: 'streak_reset', hand,
+      from: before, to: 0, reason: 'lower_play' });
+  }
+  private setHandFamilyFlameStage(id: (typeof HAND_FAMILY_FLAME_IDS)[number],
+    to: import('./types').HandFamilyFlameStage,
+    reason: 'setup_play' | 'payoff_play' | 'scorecard_refresh' | 'marathon_reuse', hand?: HandId): void {
+    const from = this.state.handFamilyFlameStages[id];
+    if (!from || from === to) return;
+    this.state.handFamilyFlameStages[id] = to;
+    this.emitV2({ kind: 'flame_runtime_changed', flame: id, change: 'sequence_stage',
+      ...(hand ? { hand } : {}), from, to, reason });
+  }
+  private resetSpentHandFamilyFlames(reason: 'scorecard_refresh' | 'marathon_reuse', availableSetupHand?: HandId): void {
+    for (const id of HAND_FAMILY_FLAME_IDS) {
+      if (this.state.handFamilyFlameStages[id] !== 'spent') continue;
+      const setup = HAND_FAMILY_FLAMES[id].setup;
+      if (availableSetupHand && setup !== availableSetupHand) continue;
+      this.setHandFamilyFlameStage(id, 'setup', reason, setup);
     }
   }
   private applyFluxCapacitor(pulledMagneticFaces: number, dieIds: number[]): void {
@@ -1086,12 +1147,14 @@ export class Resolver {
     if (this.state.bossSilenced) return;
     const boss = this.state.boss;
     if (boss?.type !== 'marathon' || source !== 'manual') return;
+    const reusedHands: HandId[] = [];
     for (const id of HAND_IDS) {
       const remaining = boss.cooldowns[id];
       if (!remaining) continue;
-      if (remaining <= 1) delete boss.cooldowns[id];
+      if (remaining <= 1) { delete boss.cooldowns[id]; reusedHands.push(id); }
       else boss.cooldowns[id] = remaining - 1;
     }
+    for (const reused of reusedHands) this.resetSpentHandFamilyFlames('marathon_reuse', reused);
     boss.cooldowns[hand] = 6;
     this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'marathon', hand, amount: 6,
       message: `${HANDS[hand].name} entered a 6-play cooldown` });
@@ -1100,15 +1163,14 @@ export class Resolver {
   private refreshScorecardIfFilled(): boolean {
     // Marathon owns hand availability through cooldowns, not ordinary Used state.
     if (this.state.boss?.type === 'marathon') return false;
+    const cycle = new Set(this.state.scorecardCycleConsumed);
+    const relevantHands = scorecardCycleRelevantHands(this.state);
+    if (!relevantHands.length || !relevantHands.every(hand => cycle.has(hand))) return false;
     const encounterLocks = !this.state.bossSilenced && this.state.boss?.type === 'neglected' && !this.state.boss.restored
       ? this.state.boss.neglectedHands : [];
-    const cycle = new Set(this.state.scorecardCycleConsumed);
-    const activeDice = activeEncounterDice(this.state);
-    const relevantHands = encounterHandIds(this.state).filter(hand => !handIsStructurallyImpossible(hand, activeDice.length)
-      && !encounterLocks.includes(hand));
-    if (!relevantHands.length || !relevantHands.every(hand => cycle.has(hand))) return false;
     this.state.consumed = [...encounterLocks];
     this.state.scorecardCycleConsumed = [];
+    this.resetSpentHandFamilyFlames('scorecard_refresh');
     this.addTemper(2, 'boardRefresh', 'BOARD REFRESH');
     this.emit({ type: 'SCORECARD_REFRESHED', amount: 2, message: 'BOARD REFRESH \u00b7 +2 TEMPER \u00b7 all Hands refreshed' });
     return true;
@@ -1252,6 +1314,7 @@ export class Resolver {
         ...(sourceInstanceId === null ? {} : { sourceInstanceId }),
         ...(factor.dieId === null ? {} : { dieId: factor.dieId }),
         ...(factor.input === undefined ? {} : { input: factor.input }),
+        ...(factor.diagnostics ? { diagnostics: structuredClone(factor.diagnostics) } : {}),
         ...(chargeSources?.length ? { chargeSources } : {}) });
       if (factor.source === 'speedDemon') this.emit({ type: 'SPEED_DEMON_REVEALED', flame: 'speedDemon', hand,
         dieIds: factor.dieId === null ? undefined : [factor.dieId], xMult: factor.value, xMultFactor: factor,
@@ -1260,7 +1323,7 @@ export class Resolver {
       const beforeXMult = resolution.accumulator.currentXMult;
       applyXMult(resolution.accumulator, factor);
       if (factor.source !== 'charge')
-        this.triggerFlame(factor.source, `factor ×${this.format(factor.value)}`, hand, factor.value);
+        this.triggerFlame(factor.source, `factor ×${this.format(factor.value)}`, hand, factor.value, factor.diagnostics);
       this.emit({ type: 'HAND_XMULT_CHANGED', flame: factor.source === 'charge' ? undefined : factor.source, hand,
         dieIds: factor.dieId === null ? undefined : [factor.dieId], xMult: resolution.accumulator.currentXMult,
         xMultFactor: factor,
@@ -1451,7 +1514,7 @@ export class Resolver {
     const consumesHand = wouldConsumeHand;
     const handLevel = this.state.handLevels[hand];
     const currentInfernoMultiplier = infernoMultiplier(this.state.engulfmentLevel);
-    const handStart = captureHandStart(this.state, hand, ids, playSource === 'manual' ? intent.decisionMs : null);
+    const handStart = captureHandStart(this.state, hand, ids, playSource === 'manual' ? intent.decisionMs : null, playSource);
     const chargeAttributionAtHandStart = structuredClone(this.state.chargeAttribution);
     if (freePlay) handStart.chargeArmed = false;
     const shapeParticipants = ids.map(id => ({ id, face: structuredClone(activeFace(this.state.dice.find(die => die.id === id)!)), role: 'selected' as const }));
@@ -1519,6 +1582,7 @@ export class Resolver {
       this.v2Hand.sideEffects.push({ type: 'sustainable', dieId: sustainableParticipant.id, hand,
         chargesRemaining: remaining });
     }
+    handStart.cleanSweepCompletesCycle = wouldCompleteScorecardCycle(this.state, hand, resolution.consumesHand);
     this.emit({ type: 'HAND_STARTED', hand, dieIds: ids, playSource, handConsumed: resolution.consumesHand,
       message: `${freePlay ? 'Free-played' : 'Played'} ${HANDS[hand].name} Lv. ${this.format(handLevel)}` });
     for (const claim of resolution.qualification.resourceClaims) {
@@ -1536,6 +1600,11 @@ export class Resolver {
       }
     }
     this.resolveScoreOccurrences(resolution);
+    handStart.playedDiceScoringPips = this.v2Hand.pipsContributions
+      .filter(contribution => contribution.role === 'selected' && contribution.dieId !== undefined
+        && ids.includes(contribution.dieId))
+      .reduce((sum, contribution) => sum + contribution.amount, 0);
+    handStart.scoringDiceEnhancementCount = countScoringDiceEnhancementComponents(handStart, scoringIds);
     const { pips, multiplier, xMult, rawScore, score, bossFactor } =
       this.resolveHandScore(resolution, handStart, handLevel, chargeAttributionAtHandStart);
     this.state.stats.handScores.push({ round: this.state.round, hand, handLevel, dieIds: scoringIds,
@@ -1563,16 +1632,22 @@ export class Resolver {
     }
     this.addMomentumCharge(hand);
     this.applyPowerSurge(hand, handStart.ultimateHands.includes(hand));
+    this.addPotentialEnergyCharge(handStart, hand, playSource);
+    this.addAllHandsOnDeckCharge(handStart);
+    this.advanceMinigun(hand);
     if (UPPER_HAND_IDS.includes(hand) && ownedFlameIds(this.state).has('sixPack')) {
       const before = this.state.sixPackXMult;
       const startingFactor = sixPackStartingMultiplier(flameByType(this.state, 'sixPack')?.investedGold ?? 0);
       this.state.sixPackUpperHandsPlayed = Math.min(6, this.state.sixPackUpperHandsPlayed + 1);
       this.state.sixPackXMult = sixPackMultiplierAfterUpperHands(startingFactor, this.state.sixPackUpperHandsPlayed);
       this.emit({ type: 'SIX_PACK_CHANGED', flame: 'sixPack', hand, xMult: this.state.sixPackXMult,
+        flameDiagnostics: { currentFactor: this.state.sixPackXMult,
+          upperDecayStep: this.state.sixPackUpperHandsPlayed },
         message: `Six Pack ×${this.format(before)} → ×${this.format(this.state.sixPackXMult)}` });
     }
     if (!freePlay) this.advanceHotStreak(hand, scoringIds);
     this.state.handPlayCounts[hand]++;
+    this.state.roundPlayCount++;
     this.log({ type: 'ABILITY_EVALUATED', dieType: freeBean ? 'jumpingBean' : undefined, hand, dieIds: scoringIds, playSource,
       message: `${HANDS[hand].name} hand history incremented: ${this.format(handStart.previousPlays)} → ${this.format(this.state.handPlayCounts[hand])}` });
     this.handAccumulator = null;
@@ -1699,6 +1774,7 @@ export class Resolver {
     this.state.specialOfferEffects.carePackageRerolls -= carePackageSpent;
     const round = this.state.stats.rounds.at(-1)!;
     round.lastAction = 'MANUAL_REROLL'; round.manualRerollChargesSpent += paidDice; round.manualRerollActions++;
+    this.state.manualRerollsUsedThisRound++;
     this.state.stats.manualRerollActions++; this.state.stats.manualDiceRerolled += ids.length;
     const record = { round: this.state.round, dieIds: ids, charges: paidDice, remaining: this.state.manualRerollsRemaining, startedDeadBoard, rescuedDeadBoard: false };
     this.state.stats.manualRerolls.push(record);
@@ -1887,6 +1963,9 @@ export class Resolver {
       const priorBust = this.state.stats.busts.at(-1);
       if (priorBust?.round === this.state.round && !priorBust.retryStarted) priorBust.retryStarted = true;
     }
+    const precedingShopDiePurchase = this.state.shop?.diePurchased === true;
+    const roundStartLives = this.state.lives;
+    const roundStartRosterSize = rosterDice(this.state).length;
     this.enterChapterIfNeeded(this.state.round);
     const chargeBeforeRoundReset = this.state.chargeXMult;
     const chargeWasArmed = this.state.chargeArmed;
@@ -1895,8 +1974,14 @@ export class Resolver {
     this.state.roundTemper = { overkill: 0, boardRefresh: 0, miniBoss: 0, boss: 0 };
     if (!retry) this.state.specialOfferEffects.bottledFairyTriggeredThisRound = false;
     this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound;
+    this.state.manualRerollsUsedThisRound = 0;
     this.state.consumed = []; this.state.scorecardCycleConsumed = []; this.state.targetPracticeHand = null; this.state.lastRoundPayout = null; this.state.roundSummary = null;
     this.state.chargeXMult = 1; this.state.chargeArmed = false; this.state.chargeAttribution = {}; this.state.hotStreakCharges = 0;
+    this.state.minigunUpperStreak = 0;
+    this.state.roundPlayCount = 0;
+    this.state.roundStartLives = roundStartLives;
+    this.state.roundStartRosterSize = roundStartRosterSize;
+    this.state.precedingShopDiePurchase = precedingShopDiePurchase;
     if (chargeBeforeRoundReset !== 1 || chargeWasArmed) this.emitV2({ kind: 'charge_changed', operation: 'round_reset',
       before: chargeBeforeRoundReset, after: 1, dieIds: [] });
     this.v2LastCharge = 1;
@@ -1956,6 +2041,7 @@ export class Resolver {
       boss: this.state.boss?.type ?? null, lives: this.state.lives,
       dice: activeEncounterDice(this.state).map(die => this.historyDie(die.id)) });
     this.recordUltimateTargets(retry ? 'retry' : 'round_start', retry);
+    this.recordBenchWarmerTarget(retry ? 'retry' : 'round_start', retry);
     if (this.state.boss) {
       const boss = this.state.boss;
       this.state.stats.bossEncounters.push({ boss: boss.type, round: this.state.round, attempt: this.state.roundAttemptNumber,
@@ -2097,6 +2183,7 @@ export class Resolver {
       upper: structuredClone(evaluation.upper), lower: structuredClone(evaluation.lower),
       flamesSnuffed: structuredClone(evaluation.flamesSnuffed), questForfeited: false, returnedToShop: true });
     this.recordUltimateTargets('engulfment');
+    this.recordBenchWarmerTarget('engulfment');
     this.addTemper(25, 'engulfment', 'Successful Engulfment');
     this.state.infernoProgress.previousReadiness = 0;
     this.emit({ type: 'INFERNO_EVALUATED',
@@ -2125,6 +2212,7 @@ export class Resolver {
     this.state.shop = { visitId, stage: 'shop', kind: postBoss ? 'post_boss' : 'between_rounds', exitUnlocked: false,
       offers: [], offerRerolls: 0, lifeRestores: 0,
       freeDicePurchaseAvailable: onTheHouse,
+      diePurchased: false,
       trainingSession: createTrainingSession(this.state.handLevels, onTheHouse),
       forgeSelection: { dieAId: null, dieBId: null } };
     const upcomingRound = this.state.round + 1;
@@ -2190,6 +2278,7 @@ export class Resolver {
         if (!offer.hand) throw new Error('Focus offer is missing its fixed hand.');
         this.state.handLevels[offer.hand] += 4;
         this.recordUltimateTargets('focus');
+        this.recordBenchWarmerTarget('focus');
         break;
       case 'timeTravel': {
         timeTravelDestination = timeTravelDestinationRound(this.state.round);
@@ -2226,6 +2315,7 @@ export class Resolver {
         this.emitV2({ kind: 'team_training_applied', offerId: offer.id, levelsBefore,
           levelsAfter: structuredClone(this.state.handLevels) });
         this.recordUltimateTargets('team_training');
+        this.recordBenchWarmerTarget('team_training');
         break;
       }
     }

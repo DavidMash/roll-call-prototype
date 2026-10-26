@@ -21,15 +21,15 @@ function game(values: Rank[] = [4, 4, 4, 2, 6]): GameState {
 
 describe('Flame formulas', () => {
   it('keeps the active Flame roster and central formulas', () => {
-    expect(FLAME_IDS).toHaveLength(23);
+    expect(FLAME_IDS).toHaveLength(37);
     expect(XMult_FLAME_IDS).toEqual(FLAME_IDS);
     expect(standardFlameMultiplier(0)).toBe(1);
     expect(standardFlameMultiplier(50)).toBe(3);
     expect(standardFlameMultiplier(100)).toBe(5);
-    expect(handFamilyFlameMultiplier(50)).toBe(5);
+    expect(handFamilyFlameMultiplier('doubleDown', 50)).toBe(3.5);
     expect(targetPracticeMultiplier(25)).toBe(3);
     expect(momentumChargeGain(25)).toBe(.125);
-    expect(lowballMultiplier(100, 2)).toBe(5);
+    expect(lowballMultiplier(100)).toBe(3.5);
     expect(hotStreakMultiplier(50, 2)).toBe(2);
     expect(composeXMult([3, 2.2, 1.5])).toBe(9.9);
   });
@@ -50,7 +50,7 @@ describe('global activation', () => {
       expect(preview.some(factor => factor.source === 'lowball'), `face ${face}`).toBe(face <= 3);
       new Resolver(state, constant()).play(hand, [0]);
       expect(state.stats.handScores.at(-1)?.xMult, `face ${face}`)
-        .toBe(face <= 3 ? lowballMultiplier(100, face) : 1);
+        .toBe(face <= 3 ? lowballMultiplier(100) : 1);
     }
   });
 

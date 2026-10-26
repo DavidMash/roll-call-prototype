@@ -8,9 +8,9 @@ const board = () => newRun('flame-details', { next: () => 0 }).state;
 describe('shared Flame numeric details', () => {
   it('reports authoritative conditional XMult scaling at Ember and Bonfire strength', () => {
     expect(flameDetailsPresentation('doubleDown', 35, board())).toMatchObject({
-      currentLabel: 'Current XMult', currentValue: 'up to ×3.8', maxChargeContribution: null,
+      currentLabel: 'Current XMult', currentValue: 'up to ×2.75', maxChargeContribution: null,
     });
-    expect(flameDetailsPresentation('doubleDown', 100, board()).currentValue).toBe('up to ×9');
+    expect(flameDetailsPresentation('doubleDown', 100, board()).currentValue).toBe('up to ×6');
   });
 
   it.each(CHARGE_FLAME_IDS)('%s reports its authoritative Max Charge contribution', flame => {
@@ -28,10 +28,15 @@ describe('shared Flame numeric details', () => {
     expect(flameDetailsPresentation(flame, 25, board())).toMatchObject({ currentLabel: 'Current Effect', currentValue });
   });
 
-  it('uses the standard curve for the new scoring-condition Flames', () => {
+  it('uses each scoring-condition Flame\'s authoritative density curve', () => {
     const state = board();
-    expect(flameDetailsPresentation('fatCat', 35, state).currentValue).toBe('up to ×2.4');
-    expect(flameDetailsPresentation('vineyard', 35, state).currentValue).toBe('up to ×2.4');
+    expect(flameDetailsPresentation('fatCat', 35, state).currentValue).toBe('up to ×1.525');
+    expect(flameDetailsPresentation('vineyard', 35, state).currentValue).toBe('up to ×1.7');
     expect(flameDetailsPresentation('fetch', 35, state).currentValue).toBe('up to ×2.4');
+  });
+
+  it('presents the two new Charge generators without Flux Capacitor wording', () => {
+    expect(flameDetailsPresentation('potentialEnergy', 100, board()).currentValue).toBe('+1 Charge per qualifying Play');
+    expect(flameDetailsPresentation('allHandsOnDeck', 100, board()).currentValue).toBe('+0.5 Charge per available die');
   });
 });

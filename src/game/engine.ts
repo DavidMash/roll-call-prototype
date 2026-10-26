@@ -161,6 +161,7 @@ function normalizeShop(shop: Shop, state: Pick<Board, 'nextShopVisitId' | 'handL
     shop.trainingSession.freeTrainingAvailable = shop.trainingSession.freeTrainingAvailable === true;
   }
   shop.lifeRestores = Math.max(0, Math.floor(shop.lifeRestores ?? 0));
+  shop.diePurchased = shop.diePurchased === true;
   if (!Number.isInteger(shop.visitId) || (shop.visitId ?? 0) < 1) shop.visitId = state.nextShopVisitId++;
   else state.nextShopVisitId = Math.max(state.nextShopVisitId, shop.visitId! + 1);
 }
@@ -191,7 +192,9 @@ function normalizeChapterLifecycle(state: Board): void {
 function normalizeSixPackRuntime(state: Pick<Board, 'flameSlots' | 'sixPackXMult' | 'sixPackUpperHandsPlayed'>): void {
   const startingFactor = sixPackStartingMultiplier(flameByType(state, 'sixPack')?.investedGold ?? 0);
   const missingCount = state.sixPackUpperHandsPlayed === undefined;
-  const inferred = startingFactor <= 1 ? 0 : Math.round(6 * (startingFactor - Math.max(1, state.sixPackXMult ?? 1)) / (startingFactor - 1));
+  const progress = Math.max(0, (startingFactor - 1) / 3);
+  const inferred = progress <= 0 ? 0
+    : Math.round((startingFactor - Math.max(1, state.sixPackXMult ?? 1)) / (.5 * progress));
   state.sixPackUpperHandsPlayed = Math.max(0, Math.min(6, Math.floor(missingCount ? inferred : state.sixPackUpperHandsPlayed)));
   state.sixPackXMult = missingCount ? sixPackMultiplierAfterUpperHands(startingFactor, state.sixPackUpperHandsPlayed)
     : Math.max(1, state.sixPackXMult ?? 1);
@@ -323,6 +326,13 @@ export function normalizeGameState(state: GameState): GameState {
     recalculateMaxCharge(checkpoint);
     checkpoint.decisionId = Math.max(0, Math.floor(checkpoint.decisionId ?? 0));
     normalizeSixPackRuntime(checkpoint);
+    checkpoint.minigunUpperStreak = Math.max(0, Math.floor(checkpoint.minigunUpperStreak ?? 0));
+    checkpoint.roundPlayCount = Math.max(0, Math.floor(checkpoint.roundPlayCount ?? 0));
+    checkpoint.roundStartLives = Math.max(0, Math.floor(checkpoint.roundStartLives ?? checkpoint.lives));
+    checkpoint.roundStartRosterSize = Math.max(0, Math.floor(checkpoint.roundStartRosterSize
+      ?? checkpoint.dice.filter(die => die.owner === 'player').length));
+    checkpoint.precedingShopDiePurchase = checkpoint.precedingShopDiePurchase === true;
+    checkpoint.manualRerollsUsedThisRound = Math.max(0, Math.floor(checkpoint.manualRerollsUsedThisRound ?? 0));
     normalizeHandFamilyFlameRuntime(checkpoint);
   }
   if (next.flameSelection) next.flameSelection.offers = next.flameSelection.offers
@@ -382,6 +392,12 @@ export function normalizeGameState(state: GameState): GameState {
   next.stats.highestEffectCount ??= 0; next.stats.highestForgeRating ??= '0'; next.stats.mostValuableDieSold ??= 0;
   next.decisionId = Math.max(0, Math.floor(next.decisionId ?? 0));
   normalizeSixPackRuntime(next);
+  next.minigunUpperStreak = Math.max(0, Math.floor(next.minigunUpperStreak ?? 0));
+  next.roundPlayCount = Math.max(0, Math.floor(next.roundPlayCount ?? 0));
+  next.roundStartLives = Math.max(0, Math.floor(next.roundStartLives ?? next.lives));
+  next.roundStartRosterSize = Math.max(0, Math.floor(next.roundStartRosterSize ?? rosterDice(next).length));
+  next.precedingShopDiePurchase = next.precedingShopDiePurchase === true;
+  next.manualRerollsUsedThisRound = Math.max(0, Math.floor(next.manualRerollsUsedThisRound ?? 0));
   normalizeHandFamilyFlameRuntime(next);
   recalculateMaxCharge(next);
   return next;
@@ -701,11 +717,13 @@ export function newRun(seed: string, random?: RandomSource, options?: { debugTra
     diceInventory, encounterDice: [], dice: [], dieRoundState: resetDieRoundState(Object.values(diceInventory.instances)), flameSlots: emptyFlameSlots(),
     chargeAttribution: {}, infernoProgress: { evaluationIndex: 0, previousReadiness: null, recentMessageIds: [], recentAction: 'none' },
     infernoEvaluation: null, infernoEvaluationSuspendedUntilNewFlame: false, chargeXMult: 1, maxCharge: 1,
-    chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
+    chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, minigunUpperStreak: 0,
+    roundPlayCount: 0, roundStartLives: CONFIG.maxLives, roundStartRosterSize: CONFIG.diceCount, precedingShopDiePurchase: false,
+    hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
     fetchTarget: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
     scoreByHand: {}, effectScore: 0n, lastRoundPayout: null, roundSummary: null, flameSelection: null, specialOffer: null,
-    manualRerollsRemaining: CONFIG.manualRerollsPerRound, specialOfferEffects: initialSpecialOfferEffects(),
+    manualRerollsRemaining: CONFIG.manualRerollsPerRound, manualRerollsUsedThisRound: 0, specialOfferEffects: initialSpecialOfferEffects(),
     nextOfferId: 0, nextPlaybackEventId: 0, stats: createStats(seed), actionJournal: [], history: [], historyV2: [], historyV2TimelineId: 0,
     historyV2Coverage: { complete: true, firstRound: 1, firstActionId: 0, firstSeq: 0 },
     debugTrace: createDebugTrace(options?.debugTraceMode),
@@ -778,6 +796,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         if (cost) resolver.spendGold(cost, `Bought ${SPECIAL_DICE[offer.dieType!].name}: −${formatPlayerNumber(cost)} Gold`, 'dicePurchase');
         next.shop!.freeDicePurchaseAvailable = false;
         const { die, slot } = purchaseDie(next.diceInventory, offer.dieType!);
+        next.shop!.diePurchased = true;
         next.forgeUnlocked ||= forgeRevealEligible(next.diceInventory, next.temper);
         offer.purchased = true;
         syncActiveDiceProjection(next);
@@ -884,6 +903,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
           message: replaced ? `Flame slot ${slot + 1} replaced ${FLAMES[replaced.type].name} with ${FLAMES[offer.flame].name}; prior investment was lost`
             : `Flame slot ${slot + 1} acquired ${FLAMES[offer.flame].name} as a 0-Gold Ember` });
         resolver.recordUltimateTargets('acquired', offer.flame === 'ultimate');
+        resolver.recordBenchWarmerTarget('acquired', offer.flame === 'benchWarmer');
         resolver.openShop();
         break;
       }
@@ -973,6 +993,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         resolver.emit({ type: 'TRAINING_PURCHASED', hand: action.hand, goldSpendSource: 'handTraining', amount: cost,
           message: `${HANDS[action.hand].name} trained to level ${formatPlayerNumber(toLevel)}` });
         resolver.recordUltimateTargets('training');
+        resolver.recordBenchWarmerTarget('training');
         break;
       }
       case 'RESTORE_LIFE': {
