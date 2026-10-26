@@ -116,6 +116,11 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     case 'flame_runtime_changed': return event.change === 'sequence_stage'
       ? `FLAME · ${FLAMES[event.flame].name} · ${String(event.from).toUpperCase()} → ${String(event.to).toUpperCase()} · ${label(event.reason)}`
       : `FLAME · ${FLAMES[event.flame].name} · streak reset${event.hand ? ` by ${HANDS[event.hand].name}` : ''}`;
+    case 'flame_sequence': {
+      if (event.resetReason) return `FLAME · ${FLAMES[event.flame].name} · sequence reset after scorecard refresh`;
+      if (!event.advanced || !event.playedHand) return '';
+      return `FLAME · ${FLAMES[event.flame].name} · ${HANDS[event.playedHand].name}${event.factorApplied ? ` ×${number(event.factorApplied)}` : ''}${event.completed ? ' · COMPLETE' : event.newRequiredHand ? ` · next ${HANDS[event.newRequiredHand].name}` : ''}`;
+    }
     case 'flame_action': {
       const action = event.action;
       if (action.type === 'burn_it_down') return `FLAME ACTION · Burn It Down · sacrificed ${number(action.scoreSacrificed)} / ${number(action.target)} · Charge +${number(action.chargeGained)}`;
@@ -139,6 +144,7 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
         ? `ALL IN · ${event.hand ? HANDS[event.hand].name : 'manual Play'} · ×${number(event.factor)} · Round cleared`
         : `ALL IN FAILED · ${event.hand ? HANDS[event.hand].name : 'manual Play'} · −${number(event.scoreRemoved ?? 0n)} Score`;
     case 'charge_changed': return `CHARGE · ${event.operation} · ×${number(event.before)}→×${number(event.after)}`;
+    case 'flame_charge_generated': return '';
     case 'engulfment_attempted': return `ENGULFMENT · Shop ${number(event.shopVisitId)} · ${event.success ? 'SUCCESS' : 'OFFERING REJECTED'}`;
     case 'inferno_evaluated': return `INFERNO EVALUATION · ${event.evaluation.success ? 'READY' : 'NOT YET'} · effective ×${number(event.evaluation.effectiveValue)} / ×${number(event.evaluation.threshold)} · meter ${number((event.evaluation.previousReadiness ?? 0) * 100)}% → ${number(event.evaluation.readiness * 100)}% · ${event.evaluation.flames.length} Flame${event.evaluation.flames.length === 1 ? '' : 's'}`;
     case 'inferno_suspension_changed': return `INFERNO · ${event.suspended ? 'SUSPENDED' : 'REACTIVATED'} · ${event.reason}`;
@@ -164,7 +170,7 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
 }
 
 export function renderRunHistoryV2(events: readonly RunHistoryV2Event[]): string {
-  return events.map(renderRunHistoryV2Event).join('\n');
+  return events.map(renderRunHistoryV2Event).filter(Boolean).join('\n');
 }
 
 export function renderGroupedRunHistoryV2(events: readonly RunHistoryV2Event[], coverage?: RunHistoryV2Coverage): string {
@@ -178,6 +184,7 @@ export function renderGroupedRunHistoryV2(events: readonly RunHistoryV2Event[], 
       lines.push('', `CHAPTER ${chapterNumberForRound(event.round)} · ROUND ${event.round} (LOCAL ${chapterRoundForRound(event.round)}) · ATTEMPT ${event.attempt}`);
     }
     const rendered = renderRunHistoryV2Event(event);
+    if (!rendered) continue;
     const status = classification.status(event);
     lines.push(status === 'canonical' ? rendered
       : status === 'abandoned' ? `[ROLLED BACK · TIMELINE ${event.timelineId}] ${rendered}`

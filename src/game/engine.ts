@@ -223,6 +223,12 @@ function normalizeHandFamilyFlameRuntime(state: Pick<Board, 'flameSlots' | 'hand
   }));
 }
 
+function normalizeProgressiveFlameRuntime(state: Pick<Board, 'progressiveFlames'>): void {
+  state.progressiveFlames ??= { topDown: 0, countDown: 0 };
+  state.progressiveFlames.topDown = Math.max(0, Math.min(8, Math.floor(state.progressiveFlames.topDown ?? 0)));
+  state.progressiveFlames.countDown = Math.max(0, Math.min(6, Math.floor(state.progressiveFlames.countDown ?? 0)));
+}
+
 function normalizeInteractiveFlameRuntime(state: Pick<Board, 'interactiveFlames'>): void {
   state.interactiveFlames ??= { burnItDownUses: 0, greaseTheEngineUses: 0,
     hotPotatoDieId: null, hotPotatoStreak: 0, dareDevilCount: 0 };
@@ -384,6 +390,7 @@ export function normalizeGameState(state: GameState): GameState {
     normalizeInteractiveFlameRuntime(checkpoint);
     normalizeScoreWagerRuntime(checkpoint);
     normalizeHandFamilyFlameRuntime(checkpoint);
+    normalizeProgressiveFlameRuntime(checkpoint);
   }
   if (next.flameSelection) next.flameSelection.offers = next.flameSelection.offers
     .map(offer => ({ ...offer, flame: (offer.flame as string) === 'charge' ? 'momentum' as const : offer.flame }))
@@ -452,6 +459,7 @@ export function normalizeGameState(state: GameState): GameState {
   normalizeInteractiveFlameRuntime(next);
   normalizeScoreWagerRuntime(next);
   normalizeHandFamilyFlameRuntime(next);
+  normalizeProgressiveFlameRuntime(next);
   recalculateMaxCharge(next);
   return next;
 }
@@ -840,7 +848,7 @@ export function newRun(seed: string, random?: RandomSource, options?: { debugTra
       hotPotatoDieId: null, hotPotatoStreak: 0, dareDevilCount: 0 },
     scoreWagers: { nextPackageId: 1, packages: [], pendingDoubleOrNothing: null,
       doubleOrNothing: null, allInArmed: false },
-    hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
+    hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, progressiveFlames: { topDown: 0, countDown: 0 }, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
     fetchTarget: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
     scoreByHand: {}, effectScore: 0n, lastRoundPayout: null, roundSummary: null, flameSelection: null, specialOffer: null,

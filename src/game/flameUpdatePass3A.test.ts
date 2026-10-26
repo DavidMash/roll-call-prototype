@@ -48,7 +48,6 @@ function startFromShop(state: GameState, retry = false): void {
 describe('Flame Update Pass 3A catalog and formulas', () => {
   it('retains exactly the five Pass 3A Flames without later interactive Flames', () => {
     expect(FLAME_IDS.filter(id => (PASS_3A_FLAMES as readonly string[]).includes(id))).toEqual(PASS_3A_FLAMES);
-    expect(FLAME_IDS).not.toEqual(expect.arrayContaining(['topDown', 'countDown']));
   });
 
   it('centralizes the exact initial scaling', () => {

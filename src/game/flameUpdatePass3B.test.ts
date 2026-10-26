@@ -48,7 +48,6 @@ function factor(state: GameState, flame: Flame): number | undefined {
 describe('Flame Update Pass 3B catalog and scaling', () => {
   it('adds exactly Double or Nothing and All In, without later wager Flames', () => {
     expect(FLAME_IDS).toEqual(expect.arrayContaining(['doubleOrNothing', 'allIn']));
-    expect(FLAME_IDS).not.toEqual(expect.arrayContaining(['topDown', 'countDown']));
     expect(doubleOrNothingMultiplier(100)).toBe(9);
     expect(allInMultiplier(100)).toBe(12);
   });

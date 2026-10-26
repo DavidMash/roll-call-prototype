@@ -96,6 +96,8 @@ export function flameVerboseDescription(id: Flame): RichText {
     dareDevil: [text('When your Ultimate Hand is playable, use Dare Devil to Roll all available player dice. Each Dare makes your next Ultimate Hand worth more '), term('xMult'), text(', up to ×9.')],
     doubleOrNothing: [text("After a manual Play resolves, you may give up that Play's Score and reopen its Hand. Manually replay that Hand later for up to ×9 "), term('xMult'), text('.')],
     allIn: [term('onCommand'), text(", arm your next manual Play for up to ×12 "), term('xMult'), text(". If that Play and its resulting Free Plays do not clear the Round, their Score is removed.")],
+    topDown: [text('Play '), term('lowerSectionHand', 'Lower Section Hands'), text(' from Five of a Kind down to Pair. Each correct step gains increasingly large '), term('xMult'), text(', up to ×12. Unrelated Plays do not break the sequence.')],
+    countDown: [text('Play '), term('upperHand', 'Upper Hands'), text(' in order from Sixes down to Ones. Each correct step gains increasingly large '), term('xMult'), text(', up to ×4.5. Unrelated Plays do not break the sequence.')],
   };
   return descriptions[id];
 }

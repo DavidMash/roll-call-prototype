@@ -6,7 +6,7 @@ import type {
 import type { RoundGoalBreakdown } from './goals';
 import type { ExactDecimal, ExactScore } from './scoreMath';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 23 as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 24 as const;
 export const RUN_HISTORY_V2_RULESET = 'configurable-roll-effects-forge-v2' as const;
 
 export interface RunHistoryV2Coverage {
@@ -114,6 +114,7 @@ export interface RoundAttemptStartedEvent extends RunHistoryV2Envelope {
   boss: BossType | null;
   lives: number;
   dice: HistoryDieState[];
+  flames?: Array<{ instanceId: FlameInstanceId; type: Flame; investedGold: number; stage: FlameStage }>;
 }
 
 export interface RollResult {
@@ -343,6 +344,17 @@ export interface BossStateChangedEvent extends RunHistoryV2Envelope {
   state?: string;
 }
 
+export interface FlameChargeGeneratedEvent extends RunHistoryV2Envelope {
+  kind: 'flame_charge_generated';
+  flame: Flame;
+  requested: number;
+  gained: number;
+  lostToCap: number;
+  before: number;
+  after: number;
+  diagnostics?: import('./types').FlameActivationDiagnostics;
+}
+
 export interface FlameRuntimeChangedEvent extends RunHistoryV2Envelope {
   kind: 'flame_runtime_changed';
   flame: Flame;
@@ -351,6 +363,20 @@ export interface FlameRuntimeChangedEvent extends RunHistoryV2Envelope {
   from?: import('./types').HandFamilyFlameStage | number;
   to?: import('./types').HandFamilyFlameStage | number;
   reason: 'setup_play' | 'payoff_play' | 'scorecard_refresh' | 'marathon_reuse' | 'lower_play';
+}
+
+export interface FlameSequenceEvent extends RunHistoryV2Envelope {
+  kind: 'flame_sequence';
+  flame: 'hotStreak' | 'topDown' | 'countDown';
+  stepIndex: number;
+  requiredHandBefore: HandId | null;
+  playedHand: HandId | null;
+  advanced: boolean;
+  factorApplied?: number;
+  newRequiredHand: HandId | null;
+  completed: boolean;
+  resetReason?: 'scorecard_refresh';
+  playSource?: HandPlaySource;
 }
 
 export type FlameActionDetail =
@@ -516,9 +542,9 @@ export interface MapTransitionV2Event extends RunHistoryV2Envelope {
 
 export type RunHistoryV2Event = RunStartedEvent | ChapterStartedEvent | RoundAttemptStartedEvent | RollBatchEvent
   | HandScoredEvent | SpecialDieActivatedEvent | ShopVisitStartedEvent | ShopStageChangedEvent | TrainingSessionStartedEvent | TeamTrainingAppliedEvent | ShopVisitCompletedEvent
-  | ShopOffersPresentedEvent | ShopTransactionEvent | TemperChangedEvent | FlameChangedEvent | ChargeChangedEvent
+  | ShopOffersPresentedEvent | ShopTransactionEvent | TemperChangedEvent | FlameChangedEvent | ChargeChangedEvent | FlameChargeGeneratedEvent
   | EngulfmentAttemptedEvent | InfernoEvaluatedEvent | InfernoSuspensionChangedEvent
-  | BossStateChangedEvent | UltimateTargetsChangedEvent | BenchWarmerTargetChangedEvent | FlameRuntimeChangedEvent | ScorecardRefreshedEvent | RoundAttemptFinishedEvent
+  | BossStateChangedEvent | UltimateTargetsChangedEvent | BenchWarmerTargetChangedEvent | FlameRuntimeChangedEvent | FlameSequenceEvent | ScorecardRefreshedEvent | RoundAttemptFinishedEvent
   | FlameActionEvent
   | ScorePackageCompletedEvent | ScorePackageRemovedEvent | DoubleOrNothingEvent | AllInEvent
   | CheckpointRestoredEvent | RunFinishedEvent | ErrorEvent | MapTransitionV2Event;

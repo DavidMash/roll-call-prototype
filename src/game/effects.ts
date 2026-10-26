@@ -7,7 +7,8 @@ import {
   potentialEnergyChargeGain, removeFlameInstance,
   sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, thirdRailChargeGain,
   burnItDownChargeGain, dareDevilMultiplier, FLAME_SCALING, greaseTheEngineChargeGain, greaseTheEngineCost,
-  hotPotatoClockChargeGain, lightningStrikeChargeGain, allInMultiplier, doubleOrNothingMultiplier,
+  hotPotatoClockChargeGain, lightningStrikeChargeGain, allInMultiplier, doubleOrNothingMultiplier, hotStreakMultiplier,
+  PROGRESSIVE_FLAME_SEQUENCES, progressiveSequenceMultiplier, type ProgressiveSequenceFlame,
 } from './flames';
 import { benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, handOptions, hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, planQualification, ultimateHands, upperBaselineLevel, UPPER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
@@ -758,6 +759,8 @@ export class Resolver {
     const before = this.state.chargeXMult;
     const after = Number(Math.min(this.state.maxCharge, before + requestedGain).toFixed(12));
     const gain = Number((after - before).toFixed(12));
+    this.emitV2({ kind: 'flame_charge_generated', flame, requested: requestedGain, gained: gain,
+      lostToCap: Number(Math.max(0, requestedGain - gain).toFixed(12)), before, after, diagnostics });
     if (gain <= 0) return 0;
     this.state.chargeXMult = after;
     this.state.chargeAttribution[source.instanceId] = Number(((this.state.chargeAttribution[source.instanceId] ?? 0) + gain).toFixed(12));
@@ -891,6 +894,10 @@ export class Resolver {
     const multiplier = fluxCapacitorChargeMultiplier(source.investment, pulledMagneticFaces);
     const after = Number(Math.min(this.state.maxCharge, before * multiplier).toFixed(12));
     const gain = Number((after - before).toFixed(12));
+    const requested = Number((before * (multiplier - 1)).toFixed(12));
+    this.emitV2({ kind: 'flame_charge_generated', flame: 'fluxCapacitor', requested, gained: gain,
+      lostToCap: Number(Math.max(0, requested - gain).toFixed(12)), before, after,
+      diagnostics: { availableDiceCount: pulledMagneticFaces } });
     this.state.chargeXMult = after;
     if (gain > 0) this.state.chargeAttribution[source.instanceId] = Number(((this.state.chargeAttribution[source.instanceId] ?? 0) + gain).toFixed(12));
     this.state.stats.chargeGained = Number((this.state.stats.chargeGained + gain).toFixed(12));
@@ -1132,6 +1139,11 @@ export class Resolver {
       index++;
     }
     this.state.hotStreakGoal = HOT_STREAK_SEQUENCE[index] ?? null;
+    this.emitV2({ kind: 'flame_sequence', flame: 'hotStreak', stepIndex: index - 1,
+      requiredHandBefore: hand, playedHand: hand, advanced: true,
+      factorApplied: qualified ? hotStreakMultiplier(flameByType(this.state, 'hotStreak')?.investedGold ?? 0,
+        this.state.hotStreakCharges) : undefined,
+      newRequiredHand: this.state.hotStreakGoal, completed: this.state.hotStreakGoal === null, playSource: 'manual' });
     this.emit({ type: 'HOT_STREAK_CHANGED', flame: 'hotStreak', hand, amount: this.state.hotStreakCharges,
       message: `Hot Streak ${qualified ? `gained charge ${this.format(this.state.hotStreakCharges)}` : 'advanced without charge'}; next ${this.state.hotStreakGoal ? HANDS[this.state.hotStreakGoal].name : 'complete'}` });
   }
@@ -1224,6 +1236,7 @@ export class Resolver {
     this.state.consumed = [...encounterLocks];
     this.state.scorecardCycleConsumed = [];
     this.resetSpentHandFamilyFlames('scorecard_refresh');
+    this.resetCompletedFullSequences();
     this.addTemper(2, 'boardRefresh', 'BOARD REFRESH');
     this.emit({ type: 'SCORECARD_REFRESHED', amount: 2, message: 'BOARD REFRESH \u00b7 +2 TEMPER \u00b7 all Hands refreshed' });
     return true;
@@ -1239,6 +1252,45 @@ export class Resolver {
     this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'quickdraw', hand,
       message: first ? `${HANDS[hand].name} used Quickdraw's full-value Lower Play`
         : `${HANDS[hand].name} scored with Quickdraw ×0.25` });
+  }
+  private advanceProgressiveFlames(hand: HandId, source: HandPlaySource): void {
+    for (const id of ['topDown', 'countDown'] as const satisfies readonly ProgressiveSequenceFlame[]) {
+      const flame = flameByType(this.state, id);
+      if (!flame) continue;
+      const definition = PROGRESSIVE_FLAME_SEQUENCES[id];
+      const before = Math.max(0, Math.min(definition.hands.length, this.state.progressiveFlames[id]));
+      const required = definition.hands[before] ?? null;
+      const advanced = required === hand;
+      let after = before;
+      if (advanced) {
+        after++;
+        while (after < definition.hands.length && this.state.consumed.includes(definition.hands[after])) after++;
+        this.state.progressiveFlames[id] = after;
+      }
+      this.emitV2({ kind: 'flame_sequence', flame: id, stepIndex: before,
+        requiredHandBefore: required, playedHand: hand, advanced,
+        ...(advanced ? { factorApplied: progressiveSequenceMultiplier(id, flame.investedGold, before) } : {}),
+        newRequiredHand: definition.hands[after] ?? null, completed: after >= definition.hands.length,
+        playSource: source });
+    }
+  }
+
+  private resetCompletedFullSequences(): void {
+    if (this.state.hotStreakGoal === null && flameByType(this.state, 'hotStreak')) {
+      this.state.hotStreakGoal = HOT_STREAK_SEQUENCE[0];
+      this.state.hotStreakCharges = 0;
+      this.emitV2({ kind: 'flame_sequence', flame: 'hotStreak', stepIndex: HOT_STREAK_SEQUENCE.length,
+        requiredHandBefore: null, playedHand: null, advanced: false, newRequiredHand: HOT_STREAK_SEQUENCE[0],
+        completed: false, resetReason: 'scorecard_refresh' });
+    }
+    for (const id of ['topDown', 'countDown'] as const satisfies readonly ProgressiveSequenceFlame[]) {
+      const sequence = PROGRESSIVE_FLAME_SEQUENCES[id];
+      if (!flameByType(this.state, id) || this.state.progressiveFlames[id] < sequence.hands.length) continue;
+      this.state.progressiveFlames[id] = 0;
+      this.emitV2({ kind: 'flame_sequence', flame: id, stepIndex: sequence.hands.length,
+        requiredHandBefore: null, playedHand: null, advanced: false, newRequiredHand: sequence.hands[0],
+        completed: false, resetReason: 'scorecard_refresh' });
+    }
   }
 
   private resolvePendulum(hand: HandId): void {
@@ -1826,6 +1878,7 @@ export class Resolver {
         message: `Six Pack ×${this.format(before)} → ×${this.format(this.state.sixPackXMult)}` });
     }
     if (!freePlay) this.advanceHotStreak(hand, scoringIds);
+    this.advanceProgressiveFlames(hand, playSource);
     this.state.handPlayCounts[hand]++;
     this.state.roundPlayCount++;
     this.log({ type: 'ABILITY_EVALUATED', dieType: freeBean ? 'jumpingBean' : undefined, hand, dieIds: scoringIds, playSource,
@@ -2334,6 +2387,7 @@ export class Resolver {
     this.state.sixPackUpperHandsPlayed = 0;
     this.state.hotStreakGoal = ownedFlameIds(this.state).has('hotStreak') ? 'pair' : null;
     this.state.handFamilyFlameStages = initialHandFamilyFlameStages(this.state);
+    this.state.progressiveFlames = { topDown: 0, countDown: 0 };
     this.captureRoundCheckpoint();
     this.state.shop = null;
     this.mapTransition(encounterNode(this.state.round, bossType), direction);
@@ -2345,7 +2399,8 @@ export class Resolver {
     const v2RoundStarted = this.emitV2({ kind: 'round_attempt_started', chapter: targetChapter,
       chapterRound: targetLocalRound, retry, target: historyTargetBreakdown,
       boss: this.state.boss?.type ?? null, lives: this.state.lives,
-      dice: activeEncounterDice(this.state).map(die => this.historyDie(die.id)) });
+      dice: activeEncounterDice(this.state).map(die => this.historyDie(die.id)),
+      flames: structuredClone(flameInstances(this.state)) });
     this.recordUltimateTargets(retry ? 'retry' : 'round_start', retry);
     this.recordBenchWarmerTarget(retry ? 'retry' : 'round_start', retry);
     if (this.state.boss) {

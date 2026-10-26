@@ -4,6 +4,7 @@ import {
   epinephrineMultiplier, fatCatMultiplier, freeRealEstateMultiplier, frankensteinMultiplier, gymBrosMultiplier,
   handFamilyFlameMultiplier, heavyHittersMultiplier, highRollerMultiplier, dareDevilMultiplier,
   allInMultiplier, doubleOrNothingMultiplier,
+  PROGRESSIVE_FLAME_SEQUENCES, progressiveSequenceMultiplier,
   HOT_STREAK_SEQUENCE, hotStreakMultiplier, isChargeFlame, isHandFamilyFlame, lowballMultiplier, maxChargeContribution,
   minigunMultiplier, missingPairMultiplier, sixPackStartingMultiplier, speedDemonMultiplier,
   punchCardMultiplier, standardFlameMultiplier, targetPracticeMultiplier, vineyardMultiplier,
@@ -152,6 +153,10 @@ function maximumFlameFactorOnHand(flame: Flame, hand: HandId): number {
   if (flame === 'dareDevil') return dareDevilMultiplier(100, 4);
   if (flame === 'doubleOrNothing') return doubleOrNothingMultiplier(100);
   if (flame === 'allIn') return allInMultiplier(100);
+  if (flame === 'topDown' || flame === 'countDown') {
+    const step = PROGRESSIVE_FLAME_SEQUENCES[flame].hands.indexOf(hand as never);
+    return step < 0 ? 1 : progressiveSequenceMultiplier(flame, 100, step);
+  }
   if (isHandFamilyFlame(flame)) return handFamilyFlameMultiplier(flame, 100);
   return standardFlameMultiplier(100);
 }

@@ -70,6 +70,8 @@ export const FLAMES: Record<Flame, FlameDefinition> = {
   dareDevil: flameDefinition('dareDevil', 'Dare Devil', 'DARE', 'rare'),
   doubleOrNothing: flameDefinition('doubleOrNothing', 'Double or Nothing', 'DOUBLE', 'rare'),
   allIn: flameDefinition('allIn', 'All In', 'ALL IN', 'rare'),
+  topDown: flameDefinition('topDown', 'Top Down', 'TOP', 'rare'),
+  countDown: flameDefinition('countDown', 'Count Down', 'COUNT', 'uncommon'),
 };
 export const FLAME_IDS = Object.keys(FLAMES) as Flame[];
 export const XMult_FLAME_IDS = FLAME_IDS.filter(flame => FLAMES[flame].affectsXMult);
@@ -86,6 +88,13 @@ export const HAND_FAMILY_FLAMES = {
 export type HandFamilyFlame = keyof typeof HAND_FAMILY_FLAMES;
 export const HAND_FAMILY_FLAME_IDS = Object.keys(HAND_FAMILY_FLAMES) as HandFamilyFlame[];
 export const HOT_STREAK_SEQUENCE: HandId[] = ['pair', 'twoPair', 'threeKind', 'smallStraight', 'fullHouse', 'fourKind', 'largeStraight', 'fiveKind'];
+export const PROGRESSIVE_FLAME_SEQUENCES = {
+  topDown: { hands: ['fiveKind', 'largeStraight', 'fourKind', 'fullHouse', 'smallStraight', 'threeKind', 'twoPair', 'pair'],
+    bonfireFactors: [3, 4, 5, 6, 7, 8, 10, 12] },
+  countDown: { hands: ['sixes', 'fives', 'fours', 'threes', 'twos', 'ones'],
+    bonfireFactors: [1.5, 2, 2.5, 3, 3.5, 4.5] },
+} as const satisfies Record<'topDown' | 'countDown', { hands: readonly HandId[]; bonfireFactors: readonly number[] }>;
+export type ProgressiveSequenceFlame = keyof typeof PROGRESSIVE_FLAME_SEQUENCES;
 export const flameProgress = (investedGold: number) => Math.max(0, Math.min(100, investedGold)) / 100;
 export const FLAME_SCALING = {
   speedDemon: { fullBonus: 3, fullThroughMs: 1000, expiresAtMs: 5000 },
@@ -117,6 +126,7 @@ export const FLAME_SCALING = {
   dareDevil: { bonusPerDare: 2, maximumDares: 4 },
   doubleOrNothing: { fullBonus: 8, offerSeconds: 5 },
   allIn: { fullBonus: 11 },
+  progressiveSequences: PROGRESSIVE_FLAME_SEQUENCES,
 } as const;
 export const standardFlameMultiplier = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
 export const targetPracticeMultiplier = (investedGold: number) => 1 + 8 * flameProgress(investedGold);
@@ -189,6 +199,11 @@ export const doubleOrNothingMultiplier = (investedGold: number) =>
   fixedFlameMultiplier(investedGold, FLAME_SCALING.doubleOrNothing.fullBonus);
 export const allInMultiplier = (investedGold: number) =>
   fixedFlameMultiplier(investedGold, FLAME_SCALING.allIn.fullBonus);
+export const progressiveSequenceMultiplier = (id: ProgressiveSequenceFlame, investedGold: number, stepIndex: number) => {
+  const rewards = PROGRESSIVE_FLAME_SEQUENCES[id].bonfireFactors;
+  const bonfireFactor = rewards[Math.max(0, Math.min(rewards.length - 1, Math.floor(stepIndex)))] ?? 1;
+  return Number((1 + (bonfireFactor - 1) * flameProgress(investedGold)).toFixed(12));
+};
 type FlameDisplayContext = Pick<Board, 'gold' | 'lifetimeNormalShopGoldSpent'>;
 export function flameEffectText(id: Flame, investedGold: number, _board: FlameDisplayContext): string {
   switch (id) {
@@ -232,6 +247,8 @@ export function flameEffectText(id: Flame, investedGold: number, _board: FlameDi
     case 'dareDevil': return `Each Dare stores more XMult for your next Ultimate Hand, up to ×${formatPlayerNumber(dareDevilMultiplier(investedGold, 4))}.`;
     case 'doubleOrNothing': return `Give up one manual Play's Score, then replay that Hand later for ×${formatPlayerNumber(doubleOrNothingMultiplier(investedGold))} XMult.`;
     case 'allIn': return `Arm your next manual Play for ×${formatPlayerNumber(allInMultiplier(investedGold))} XMult; if it does not clear the Round, that Play's Score is removed.`;
+    case 'topDown': return `Play Lower Section Hands from Five of a Kind down to Pair; the final step reaches ×${formatPlayerNumber(progressiveSequenceMultiplier('topDown', investedGold, 7))} XMult.`;
+    case 'countDown': return `Play Upper Hands from Sixes down to Ones; the final step reaches ×${formatPlayerNumber(progressiveSequenceMultiplier('countDown', investedGold, 5))} XMult.`;
     default: return `The condition grants ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult.`;
   }
 }
@@ -265,6 +282,15 @@ export function flameDetailsPresentation(id: Flame, investedGold: number, board:
       currentValue: `×${formatPlayerNumber(hotStreakMultiplier(investment, board.hotStreakCharges))} at current chain`,
       maxChargeContribution: null };
   }
+  if (id === 'topDown' || id === 'countDown') {
+    const sequence = PROGRESSIVE_FLAME_SEQUENCES[id];
+    const progress = Math.max(0, Math.min(sequence.hands.length, board.progressiveFlames[id] ?? 0));
+    return { currentLabel: 'Current XMult',
+      currentValue: progress >= sequence.hands.length
+        ? `Complete · ${progress}/${sequence.hands.length}`
+        : `Next: ${HANDS[sequence.hands[progress]].name} · ${progress}/${sequence.hands.length} · ×${formatPlayerNumber(progressiveSequenceMultiplier(id, investment, progress))}`,
+      maxChargeContribution: null };
+  }
   const multiplier = id === 'targetPractice' ? targetPracticeMultiplier(investment)
     : id === 'speedDemon' ? speedDemonMultiplier(investment, 0)
     : id === 'sixPack' ? sixPackStartingMultiplier(investment)
@@ -289,7 +315,7 @@ export function flameDetailsPresentation(id: Flame, investedGold: number, board:
                                         : id === 'dareDevil' ? dareDevilMultiplier(investment, 4)
                                           : id === 'doubleOrNothing' ? doubleOrNothingMultiplier(investment)
                                             : id === 'allIn' ? allInMultiplier(investment)
-          : standardFlameMultiplier(investment);
+                                              : standardFlameMultiplier(investment);
   return { currentLabel: 'Current XMult', currentValue: `up to ×${formatPlayerNumber(multiplier)}`,
     maxChargeContribution: null };
 }
@@ -420,6 +446,7 @@ export interface HandStartSnapshot {
   hotStreakGoal: HandId | null;
   hotStreakCharges: number;
   handFamilyFlameStages: Partial<Record<Flame, import('./types').HandFamilyFlameStage>>;
+  progressiveFlames: import('./types').ProgressiveFlameRuntime;
   chargeXMult: number;
   chargeArmed: boolean;
   speedDemonDecisionMs: number | null;
@@ -442,7 +469,7 @@ export interface HandStartSnapshot {
     activeEffects: SpecialDieType[]; enhancementCount: number }[];
 }
 
-export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'engulfmentLevel' | 'gold' | 'manualRerollsRemaining' | 'manualRerollsUsedThisRound' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackUpperHandsPlayed' | 'minigunUpperStreak' | 'flameSlots' | 'dice' | 'dieRoundState' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget' | 'roundPlayCount' | 'roundStartLives' | 'roundStartRosterSize' | 'precedingShopDiePurchase' | 'interactiveFlames'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null, playSource: import('./types').HandPlaySource = 'manual', wager: { allIn?: boolean; doubleOrNothingRedemption?: boolean } = {}): HandStartSnapshot {
+export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'engulfmentLevel' | 'gold' | 'manualRerollsRemaining' | 'manualRerollsUsedThisRound' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'progressiveFlames' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackUpperHandsPlayed' | 'minigunUpperStreak' | 'flameSlots' | 'dice' | 'dieRoundState' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget' | 'roundPlayCount' | 'roundStartLives' | 'roundStartRosterSize' | 'precedingShopDiePurchase' | 'interactiveFlames'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null, playSource: import('./types').HandPlaySource = 'manual', wager: { allIn?: boolean; doubleOrNothingRedemption?: boolean } = {}): HandStartSnapshot {
   const selectedScore = handScore(state.dice, hand, selectedDieIds, state.handLevels[hand]);
   const ultimate = ultimateHands(state.handLevels);
   const availableDice = availablePlayableDice(state);
@@ -469,6 +496,7 @@ export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'en
     hotStreakGoal: state.hotStreakGoal,
     hotStreakCharges: state.hotStreakCharges,
     handFamilyFlameStages: { ...state.handFamilyFlameStages },
+    progressiveFlames: { ...state.progressiveFlames },
     chargeXMult: state.chargeXMult,
     chargeArmed: state.chargeArmed,
     speedDemonDecisionMs,
@@ -567,6 +595,11 @@ const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId, scoring
     case 'dareDevil': return snapshot.dareDevilCount > 0 && snapshot.ultimateHands.includes(hand);
     case 'doubleOrNothing': return snapshot.playSource === 'manual' && snapshot.doubleOrNothingRedemption;
     case 'allIn': return snapshot.playSource === 'manual' && snapshot.allIn;
+    case 'topDown':
+    case 'countDown': {
+      const sequence = PROGRESSIVE_FLAME_SEQUENCES[id];
+      return sequence.hands[snapshot.progressiveFlames[id]] === hand;
+    }
     case 'hotStreak': return hand === snapshot.hotStreakGoal;
     case 'speedDemon': return snapshot.speedDemonDecisionMs !== null;
     default: return true;
@@ -602,6 +635,8 @@ function factorValue(id: Flame, investedGold: number, snapshot: HandStartSnapsho
     case 'dareDevil': return dareDevilMultiplier(investedGold, snapshot.dareDevilCount);
     case 'doubleOrNothing': return doubleOrNothingMultiplier(investedGold);
     case 'allIn': return allInMultiplier(investedGold);
+    case 'topDown':
+    case 'countDown': return progressiveSequenceMultiplier(id, investedGold, snapshot.progressiveFlames[id]);
     default: return standardFlameMultiplier(investedGold);
   }
 }
@@ -662,6 +697,13 @@ function factorInput(id: Flame, snapshot: HandStartSnapshot, _scoringDieIds: num
   if (id === 'speedDemon') return { input: snapshot.speedDemonDecisionMs ?? undefined,
     diagnostics: { decisionMs: snapshot.speedDemonDecisionMs ?? undefined } };
   if (id === 'hotStreak') return { input: snapshot.hotStreakCharges + 1, detail: `successful sequence charge ${formatPlayerNumber(snapshot.hotStreakCharges + 1)}` };
+  if (id === 'topDown' || id === 'countDown') {
+    const step = snapshot.progressiveFlames[id];
+    const required = PROGRESSIVE_FLAME_SEQUENCES[id].hands[step];
+    return { input: step + 1, detail: `sequence step ${step + 1}`,
+      diagnostics: { sequenceStepIndex: step, sequenceRequiredHand: required,
+        sequenceCompleted: step + 1 >= PROGRESSIVE_FLAME_SEQUENCES[id].hands.length } };
+  }
   return {};
 }
 function contributions(snapshot: HandStartSnapshot, hand: HandId, scoringDieIds: number[]): XMultFactor[] {

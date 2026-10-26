@@ -1,6 +1,6 @@
 import { Badge, Button, Text, Tooltip } from '@mantine/core';
 import { benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, handStats, HANDS, relativeHandStrengthTiers, ultimateHands } from '../game/hands';
-import { handFamilyFlameTargets, hasOwnedFlame } from '../game/flames';
+import { handFamilyFlameTargets, hasOwnedFlame, PROGRESSIVE_FLAME_SEQUENCES } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
 import { EMPTY_TEXT, formatExactScore, formatPlayerNumber, formatScoreEquation } from '../game/copy';
@@ -61,6 +61,10 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
         const selected = selection.hand === hand;
         const targeted = board.targetPracticeHand === hand || flameTargets.has(hand);
         const hotTarget = board.hotStreakGoal === hand;
+        const topDownTarget = hasOwnedFlame(board, 'topDown')
+          && PROGRESSIVE_FLAME_SEQUENCES.topDown.hands[board.progressiveFlames.topDown] === hand;
+        const countDownTarget = hasOwnedFlame(board, 'countDown')
+          && PROGRESSIVE_FLAME_SEQUENCES.countDown.hands[board.progressiveFlames.countDown] === hand;
         const isUltimate = ownsUltimate && ultimate.has(hand);
         const isBenchWarmer = ownsBenchWarmer && benchWarmer === hand;
         const magicianCalled = !board.bossSilenced && board.boss?.type === 'magician' && board.boss.calledHands.includes(hand);
@@ -75,12 +79,14 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
           className={`scorecard-row ${state} strength-${strengthTier} ${targeted ? 'targeted' : ''} ${board.boss?.type === 'caller' && board.boss.calledHand === hand ? 'caller-called' : ''} ${board.boss?.type === 'fly' && board.boss.flyHand === hand ? 'fly-row' : ''}`} data-testid={`scorecard-row-${hand}`} data-state={state} data-strength-tier={strengthTier}
           disabled={busy || impossible || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}
           aria-keyshortcuts={selected && canSubmit ? 'Enter' : undefined}
-          aria-label={`${definition.name} · Lv. ${formatPlayerNumber(stats.level)} · ${formatPlayerNumber(stats.basePips)} Pips · ×${formatPlayerNumber(stats.baseMultiplier)} Mult${isUltimate ? ' · Ultimate Hand' : ''}${isBenchWarmer ? ' · Bench Warmer Hand' : ''}${magicianCalled ? ` · Magician call ${magicianCompleted ? 'completed' : 'pending'}` : ''} · ${scoreLabel}${impossible ? ' · Impossible' : ''}${used ? ' · Used' : ''}${neglected ? ' · Neglected' : ''}`}>
+          aria-label={`${definition.name} · Lv. ${formatPlayerNumber(stats.level)} · ${formatPlayerNumber(stats.basePips)} Pips · ×${formatPlayerNumber(stats.baseMultiplier)} Mult${isUltimate ? ' · Ultimate Hand' : ''}${isBenchWarmer ? ' · Bench Warmer Hand' : ''}${topDownTarget ? ' · Top Down next Hand' : ''}${countDownTarget ? ' · Count Down next Hand' : ''}${magicianCalled ? ` · Magician call ${magicianCompleted ? 'completed' : 'pending'}` : ''} · ${scoreLabel}${impossible ? ' · Impossible' : ''}${used ? ' · Used' : ''}${neglected ? ' · Neglected' : ''}`}>
           <span className="scorecard-row-copy">
             <span className="scorecard-hand-name" title={definition.name}>
               <span className="scorecard-name-line">
                 {targeted && <span className="target-marker" title={board.targetPracticeHand === hand ? 'Target Practice target' : 'Flame target'}><span className="wide-label">◎ TARGET </span><span className="compact-label">◎ </span></span>}
                 {hotTarget && <span className="target-marker" title="Hot Streak goal"><span className="wide-label">🔥 NEXT </span><span className="compact-label">🔥 </span></span>}
+                {topDownTarget && <span className="target-marker" title="Top Down next Hand"><span className="wide-label">↓ TOP </span><span className="compact-label">↓ </span></span>}
+                {countDownTarget && <span className="target-marker" title="Count Down next Hand"><span className="wide-label">↓ COUNT </span><span className="compact-label">↓ </span></span>}
                 {board.boss?.type === 'fly' && board.boss.flyHand === hand && <span className="fly-marker" title="The Fly is here"><span className="wide-label">● FLY </span><span className="compact-label">● </span></span>}
                 <span className="hand-name-full">{definition.name}</span><span className="hand-name-compact">{MOBILE_HAND_NAMES[hand] ?? definition.name}</span>
               </span>

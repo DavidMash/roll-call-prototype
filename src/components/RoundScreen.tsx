@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { validateAction } from '../game/engine';
 import { captureHandStart, composeXMult, handXMultContributions,
   allInMultiplier, flameByType,
-  hasOwnedFlame, isGuaranteedWinningPlay, speedDemonMultiplier } from '../game/flames';
+  hasOwnedFlame, isGuaranteedWinningPlay, speedDemonMultiplier, PROGRESSIVE_FLAME_SEQUENCES } from '../game/flames';
 import { HANDS, planQualification } from '../game/hands';
 import { finalizeScore, handScore } from '../game/scoring';
 import { canPlay, normalizeBoardSelection, selectBoardHand } from '../game/selection';
@@ -166,9 +166,17 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
       </Group>
       {manualRerolls > 0 && <Text size="xs" c="dimmed" mt={3}>Use a Reroll.</Text>}
     </Alert>}
-    {(board.hotStreakGoal || board.targetPracticeHand) && <Paper p="xs" className="flame-goals"><Group gap="lg">
+    {(board.hotStreakGoal || board.targetPracticeHand || hasOwnedFlame(board, 'topDown') || hasOwnedFlame(board, 'countDown')) && <Paper p="xs" className="flame-goals"><Group gap="lg">
       {board.hotStreakGoal && <Text size="xs"><strong>🔥 HOT STREAK → {HANDS[board.hotStreakGoal].name}</strong></Text>}
       {board.targetPracticeHand && <Text size="xs"><strong>◎ TARGET: {HANDS[board.targetPracticeHand].name}</strong></Text>}
+      {(['topDown', 'countDown'] as const).map(id => {
+        if (!hasOwnedFlame(board, id)) return null;
+        const definition = PROGRESSIVE_FLAME_SEQUENCES[id];
+        const progress = board.progressiveFlames[id];
+        return <Text size="xs" key={id} data-testid={`${id}-progress`}><strong>{id === 'topDown' ? 'TOP DOWN' : 'COUNT DOWN'} · {progress >= definition.hands.length
+          ? `COMPLETE · ${progress}/${definition.hands.length}`
+          : `Next: ${HANDS[definition.hands[progress]].name} · ${progress}/${definition.hands.length}`}</strong></Text>;
+      })}
     </Group></Paper>}
     {(board.scoreWagers.allInArmed || doubleOrNothingWager) && <Paper p="xs" className="score-wager-status"
       data-testid="score-wager-status"><Group gap="lg">

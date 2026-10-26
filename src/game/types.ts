@@ -28,7 +28,7 @@ export type Flame =
   | 'benchWarmer' | 'epinephrine' | 'punchCard' | 'blackHole'
   | 'assemblyLine' | 'gymBros'
   | 'burnItDown' | 'greaseTheEngine' | 'lightningStrike' | 'hotPotatoClock' | 'dareDevil'
-  | 'doubleOrNothing' | 'allIn';
+  | 'doubleOrNothing' | 'allIn' | 'topDown' | 'countDown';
 export type FlameInstanceId = number;
 export type FlameStage = 'ember' | 'bonfire';
 export type FlameSlotIndex = 0 | 1 | 2 | 3 | 4;
@@ -64,6 +64,10 @@ export type TemperSpendSource = 'fusion' | 'forge';
 export type RoundTemperState = { overkill: number; boardRefresh: number; miniBoss: number; boss: number };
 export type HandLevels = Record<HandId, number>;
 export type HandFamilyFlameStage = 'setup' | 'payoff' | 'spent';
+export interface ProgressiveFlameRuntime {
+  topDown: number;
+  countDown: number;
+}
 
 export interface RunNode {
   id: string;
@@ -178,6 +182,9 @@ export interface FlameActivationDiagnostics {
   dareCount?: number;
   availableDieIds?: DieId[];
   storedUltimateFactor?: number;
+  sequenceStepIndex?: number;
+  sequenceRequiredHand?: HandId;
+  sequenceCompleted?: boolean;
 }
 
 export interface InteractiveFlameRuntime {
@@ -590,6 +597,7 @@ export interface Board {
   hotStreakGoal: HandId | null;
   hotStreakCharges: number;
   handFamilyFlameStages: Partial<Record<Flame, HandFamilyFlameStage>>;
+  progressiveFlames: ProgressiveFlameRuntime;
   lifetimeNormalShopGoldSpent: number;
   consumed: HandId[];
   /** Hands normally consumed since the current Round's last scorecard refresh. */

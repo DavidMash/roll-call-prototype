@@ -21,7 +21,7 @@ function game(values: Rank[] = [4, 4, 4, 2, 6]): GameState {
 
 describe('Flame formulas', () => {
   it('keeps the active Flame roster and central formulas', () => {
-    expect(FLAME_IDS).toHaveLength(44);
+    expect(FLAME_IDS).toHaveLength(46);
     expect(XMult_FLAME_IDS).toEqual(FLAME_IDS);
     expect(standardFlameMultiplier(0)).toBe(1);
     expect(standardFlameMultiplier(50)).toBe(3);

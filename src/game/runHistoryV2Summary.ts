@@ -9,6 +9,7 @@ import type {
 } from './types';
 import type { RunHistoryV2Coverage, RunHistoryV2Event } from './runHistoryV2';
 import { exactRatioNumber, scoreMax, type ExactScore } from './scoreMath';
+import { CHARGE_FLAME_IDS } from './flames';
 
 type Counts<Key extends string> = Partial<Record<Key, number>>;
 type ScoreCounts<Key extends string> = Partial<Record<Key, ExactScore>>;
@@ -27,6 +28,29 @@ export interface LargestHandShareSummary {
   maximum: number | null;
   over50Percent: number;
   over80Percent: number;
+}
+
+export interface FlameBalanceMetric {
+  activations: number;
+  roundsOwned: number;
+  activeRounds: number;
+  totalFactorApplications: number;
+  averageActivationsPerActiveRound: number;
+  maximumActivationsInOneRound: number;
+  averageAppliedFactor: number | null;
+  maximumAppliedFactor: number | null;
+  chargeRequested: number;
+  chargeGained: number;
+  chargeLostToCap: number;
+  chargeBuildConsumptions: number;
+  diagnostics: {
+    maxUpperDecay: number; maxStreak: number; sequenceAdvances: number; sequenceCompletions: number;
+    sequenceResets: number; maxSequenceProgress: number; lightningHits: number; lightningMisses: number;
+    burnItDownUses: number; burnItDownSacrificeFractionTotal: number;
+    doubleOrNothingOffers: number; doubleOrNothingAcceptances: number; doubleOrNothingExpirations: number;
+    doubleOrNothingRedemptions: number; doubleOrNothingScoreSacrificed: ExactScore;
+    allInArmed: number; allInSuccesses: number; allInFailures: number; allInScoreRetained: ExactScore; allInScoreRemoved: ExactScore;
+  };
 }
 
 export interface ExperiencedRunMetrics {
@@ -64,6 +88,7 @@ export interface ExperiencedRunMetrics {
   temperSpentBySource: Counts<TemperSpendSource>;
   flameTimeline: { round: number; attempt: number; type: string; flame?: Flame; abandoned: boolean }[];
   flameActivations: Counts<Flame>;
+  flames: Partial<Record<Flame, FlameBalanceMetric>>;
   flameLifecycle: { acquired: number; replaced: number; stokedGold: number; bonfires: number; engulfed: number };
   charge: { gains: number; arms: number; consumes: number; resets: number };
   specialOffers: Counts<SpecialOfferType>;
@@ -130,13 +155,25 @@ function initialExperienced(): ExperiencedRunMetrics {
     diceEconomy: { purchases: 0, sales: 0, moves: 0, fusions: 0, purchaseGold: 0, saleGold: 0, byType: {} },
     specialDice: {},
     shopRerollSpend: 0, temperEarned: 0, temperSpent: 0, temperBySource: {}, temperSpentBySource: {},
-    flameTimeline: [], flameActivations: {},
+    flameTimeline: [], flameActivations: {}, flames: {},
     flameLifecycle: { acquired: 0, replaced: 0, stokedGold: 0, bonfires: 0, engulfed: 0 },
     charge: { gains: 0, arms: 0, consumes: 0, resets: 0 }, specialOffers: {},
     bossOutcomes: {},
     largestHandShare: { samples: 0, median: null, p90: null, maximum: null, over50Percent: 0, over80Percent: 0 },
   };
 }
+
+const newFlameMetric = (): FlameBalanceMetric => ({
+  activations: 0, roundsOwned: 0, activeRounds: 0, totalFactorApplications: 0,
+  averageActivationsPerActiveRound: 0, maximumActivationsInOneRound: 0,
+  averageAppliedFactor: null, maximumAppliedFactor: null,
+  chargeRequested: 0, chargeGained: 0, chargeLostToCap: 0, chargeBuildConsumptions: 0,
+  diagnostics: { maxUpperDecay: 0, maxStreak: 0, sequenceAdvances: 0, sequenceCompletions: 0,
+    sequenceResets: 0, maxSequenceProgress: 0, lightningHits: 0, lightningMisses: 0,
+    burnItDownUses: 0, burnItDownSacrificeFractionTotal: 0,
+    doubleOrNothingOffers: 0, doubleOrNothingAcceptances: 0, doubleOrNothingExpirations: 0,
+    doubleOrNothingRedemptions: 0, doubleOrNothingScoreSacrificed: 0n,
+    allInArmed: 0, allInSuccesses: 0, allInFailures: 0, allInScoreRetained: 0n, allInScoreRemoved: 0n } });
 
 function canonicalFromState(state: GameState | undefined, events: readonly RunHistoryV2Event[],
   coverage: RunHistoryV2Coverage): CanonicalRunMetrics {
@@ -199,11 +236,22 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
   const classification = classifyRunHistoryV2Timelines(events, coverage);
   const start = events.find(event => event.kind === 'run_started');
   const handMaxByAttempt = new Map<string, ExactScore>();
+  const ownedByAttempt = new Map<string, Flame[]>();
+  const activationCounts = new Map<string, number>();
+  const activeAttempts = new Map<Flame, Set<string>>();
+  const factorTotals = new Map<Flame, number>();
+  const metricFor = (flame: Flame) => experienced.flames[flame] ??= newFlameMetric();
   for (const event of events) {
     const abandoned = !classification.isCanonical(event);
     const attemptKey = `${event.timelineId}:${event.round}:${event.attempt}`;
     switch (event.kind) {
-      case 'round_attempt_started': experienced.attempts++; break;
+      case 'round_attempt_started': {
+        experienced.attempts++;
+        const flames = event.flames?.map(flame => flame.type) ?? [];
+        ownedByAttempt.set(attemptKey, flames);
+        for (const flame of flames) metricFor(flame).roundsOwned++;
+        break;
+      }
       case 'hand_scored': {
         add(experienced.handUsage, event.hand, 1); addScore(experienced.scoreByHand, event.hand, event.score.awarded);
         experienced.highestHandLevels[event.hand] = Math.max(experienced.highestHandLevels[event.hand] ?? 0, event.level);
@@ -218,7 +266,11 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
           if (effect.type === 'charge') {
             if (effect.operation === 'gain') experienced.charge.gains += Math.max(0, effect.after - effect.before);
             else if (effect.operation === 'arm') experienced.charge.arms++;
-            else if (effect.operation === 'consume_reset') experienced.charge.consumes++;
+            else if (effect.operation === 'consume_reset') {
+              experienced.charge.consumes++;
+              for (const flame of ownedByAttempt.get(attemptKey) ?? [])
+                if ((CHARGE_FLAME_IDS as readonly Flame[]).includes(flame)) metricFor(flame).chargeBuildConsumptions++;
+            }
           }
         }
         for (const occurrence of event.scoreOccurrences) {
@@ -313,7 +365,22 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
         const change = event.change;
         experienced.flameTimeline.push({ round: event.round, attempt: event.attempt, type: change.type, abandoned,
           ...('flame' in change ? { flame: change.flame } : {}) });
-        if (change.type === 'activated') add(experienced.flameActivations, change.flame, 1);
+        if (change.type === 'activated') {
+          add(experienced.flameActivations, change.flame, 1);
+          const metric = metricFor(change.flame);
+          metric.activations++;
+          activeAttempts.set(change.flame, (activeAttempts.get(change.flame) ?? new Set()).add(attemptKey));
+          const key = `${change.flame}:${attemptKey}`;
+          activationCounts.set(key, (activationCounts.get(key) ?? 0) + 1);
+          if (change.factor !== undefined) {
+            metric.totalFactorApplications++;
+            factorTotals.set(change.flame, (factorTotals.get(change.flame) ?? 0) + change.factor);
+            metric.maximumAppliedFactor = Math.max(metric.maximumAppliedFactor ?? change.factor, change.factor);
+          }
+          metric.diagnostics.maxUpperDecay = Math.max(metric.diagnostics.maxUpperDecay, change.diagnostics?.upperDecayStep ?? 0);
+          metric.diagnostics.maxStreak = Math.max(metric.diagnostics.maxStreak, change.diagnostics?.upperStreak ?? 0,
+            change.diagnostics?.hotPotatoStreak ?? 0);
+        }
         if (change.type === 'acquired') experienced.flameLifecycle.acquired++;
         else if (change.type === 'replaced') { experienced.flameLifecycle.acquired++; experienced.flameLifecycle.replaced++; }
         else if (change.type === 'stoked') experienced.flameLifecycle.stokedGold += change.amount;
@@ -338,8 +405,67 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
         else if (event.operation === 'consume_reset') experienced.charge.consumes++;
         else if (event.operation === 'round_reset') experienced.charge.resets++;
         break;
+      case 'flame_charge_generated': {
+        const metric = metricFor(event.flame);
+        metric.chargeRequested += event.requested;
+        metric.chargeGained += event.gained;
+        metric.chargeLostToCap += event.lostToCap;
+        break;
+      }
+      case 'flame_action': {
+        const metric = metricFor(event.flame);
+        if (event.action.type === 'lightning_strike') event.action.hit
+          ? metric.diagnostics.lightningHits++ : metric.diagnostics.lightningMisses++;
+        if (event.action.type === 'burn_it_down') {
+          metric.diagnostics.burnItDownUses++;
+          metric.diagnostics.burnItDownSacrificeFractionTotal += event.action.fraction;
+        }
+        if (event.action.type === 'hot_potato_play') metric.diagnostics.maxStreak = Math.max(
+          metric.diagnostics.maxStreak, event.action.streak);
+        break;
+      }
+      case 'flame_sequence': {
+        const metric = metricFor(event.flame);
+        if (event.advanced) metric.diagnostics.sequenceAdvances++;
+        if (event.advanced && event.completed) metric.diagnostics.sequenceCompletions++;
+        if (event.resetReason) metric.diagnostics.sequenceResets++;
+        metric.diagnostics.maxSequenceProgress = Math.max(metric.diagnostics.maxSequenceProgress,
+          event.advanced ? event.stepIndex + 1 : event.stepIndex);
+        break;
+      }
+      case 'double_or_nothing': {
+        const d = metricFor('doubleOrNothing').diagnostics;
+        if (event.phase === 'offered') d.doubleOrNothingOffers++;
+        if (event.phase === 'accepted') {
+          d.doubleOrNothingAcceptances++;
+          d.doubleOrNothingScoreSacrificed += event.scoreRemoved ?? event.packageScore;
+        }
+        if (event.phase === 'expired') d.doubleOrNothingExpirations++;
+        if (event.phase === 'redeemed') d.doubleOrNothingRedemptions++;
+        break;
+      }
+      case 'all_in': {
+        const d = metricFor('allIn').diagnostics;
+        if (event.phase === 'armed') d.allInArmed++;
+        else if (event.success) {
+          d.allInSuccesses++;
+          d.allInScoreRetained += event.packageScore ?? 0n;
+        } else {
+          d.allInFailures++;
+          d.allInScoreRemoved += event.scoreRemoved ?? event.packageScore ?? 0n;
+        }
+        break;
+      }
       case 'boss_state_changed': add(experienced.bossOutcomes, `${event.boss}:${event.change}`, 1); break;
     }
+  }
+  for (const [flame, metric] of Object.entries(experienced.flames) as [Flame, FlameBalanceMetric][]) {
+    metric.activeRounds = activeAttempts.get(flame)?.size ?? 0;
+    metric.averageActivationsPerActiveRound = metric.activeRounds ? metric.activations / metric.activeRounds : 0;
+    metric.maximumActivationsInOneRound = Math.max(0, ...[...activationCounts.entries()]
+      .filter(([key]) => key.startsWith(`${flame}:`)).map(([, count]) => count));
+    metric.averageAppliedFactor = metric.totalFactorApplications
+      ? (factorTotals.get(flame) ?? 0) / metric.totalFactorApplications : null;
   }
   const shares = ((experienced.largestHandShare as LargestHandShareSummary & { values?: number[] }).values ?? []);
   experienced.largestHandShare = { samples: shares.length, median: percentile(shares, .5), p90: percentile(shares, .9),

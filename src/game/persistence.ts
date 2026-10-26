@@ -6,7 +6,7 @@ import { stringifyExactJson } from './scoreMath';
 import type { BadDreamCheckpoint, GameState } from './types';
 
 export const RUN_STORAGE_KEY = 'roll-call:active-run';
-export const RUN_STORAGE_VERSION = 25;
+export const RUN_STORAGE_VERSION = 26;
 
 type RunStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
