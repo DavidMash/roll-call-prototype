@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Resolver } from './effects';
 import { dispatch, newRun, validateAction } from './engine';
-import { allInMultiplier, doubleOrNothingMultiplier, FLAME_IDS, placeFlameInstance } from './flames';
+import { allInMultiplier, doubleOrNothingEligibleHands, doubleOrNothingMultiplier, FLAME_IDS, placeFlameInstance } from './flames';
 import { HAND_IDS } from './hands';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
 import { compactGameStateForPersistence, RUN_STORAGE_VERSION } from './persistence';
@@ -21,6 +21,10 @@ function game(values: Rank[] = [1, 2, 3, 4, 5]): GameState {
 
 function own(state: GameState, flame: Flame, investment = 100): void {
   placeFlameInstance(state, flame, investment);
+}
+
+function prioritize(state: GameState, ...hands: Array<keyof GameState['handLevels']>): void {
+  hands.forEach((hand, index) => { state.handLevels[hand] = hands.length - index + 1; });
 }
 
 function effects(state: GameState, dieIndex: number, values: Array<[SpecialDieType, number]>): void {
@@ -112,9 +116,26 @@ describe('canonical score packages', () => {
 });
 
 describe('Double or Nothing', () => {
+  it('selects exactly the three highest-level non-IMPOSSIBLE encounter Hands', () => {
+    const state = game();
+    prioritize(state, 'fiveKind', 'largeStraight', 'fourKind', 'pair');
+    expect(doubleOrNothingEligibleHands(state)).toEqual(['fiveKind', 'largeStraight', 'fourKind']);
+
+    state.dice = state.dice.slice(0, 4);
+    expect(doubleOrNothingEligibleHands(state)).toEqual(['fourKind', 'pair', 'smallStraight']);
+
+    state.boss = { type: 'hexer', cursedDieId: -1 };
+    state.handLevels.sevens = 101;
+    expect(doubleOrNothingEligibleHands(state)[0]).toBe('sevens');
+
+    state.dice = [];
+    expect(doubleOrNothingEligibleHands(state)).toEqual([]);
+  });
+
   it('offers only after the full manual package resolves, then removes it and reopens only the initiating Hand', () => {
     const state = game([1, 1, 1, 1, 1]);
     own(state, 'doubleOrNothing');
+    prioritize(state, 'pair');
     effects(state, 0, [['jumpingBean', 1]]);
     const bean = rosterDice(state)[0];
     bean.faces.forEach(face => { face.rank = 1; });
@@ -140,6 +161,7 @@ describe('Double or Nothing', () => {
   it('expires or is ignored without changing Score and suppresses overlapping offers', () => {
     for (const reason of ['expired', 'ignored'] as const) {
       const state = game(); own(state, 'doubleOrNothing');
+      prioritize(state, 'ones');
       new Resolver(state, constant()).play('ones', [0]);
       const score = state.score;
       new Resolver(state, constant()).declineDoubleOrNothing(reason);
@@ -149,6 +171,7 @@ describe('Double or Nothing', () => {
     }
 
     const active = game(); own(active, 'doubleOrNothing');
+    prioritize(active, 'ones', 'twos');
     new Resolver(active, constant()).play('ones', [0]);
     new Resolver(active, constant()).acceptDoubleOrNothing();
     setFace(active, 1, 2);
@@ -157,8 +180,43 @@ describe('Double or Nothing', () => {
     expect(active.scoreWagers.doubleOrNothing?.hand).toBe('ones');
   });
 
+  it('keeps an offer through Rerolls, replaces it on the next manual Play, and protects dead-board recovery', () => {
+    const state = game(); own(state, 'doubleOrNothing');
+    prioritize(state, 'ones', 'twos');
+    new Resolver(state, constant()).play('ones', [0]);
+    const firstPackageId = state.scoreWagers.pendingDoubleOrNothing?.packageId;
+
+    new Resolver(state, constant()).manualReroll([2]);
+    expect(state.scoreWagers.pendingDoubleOrNothing?.packageId).toBe(firstPackageId);
+
+    setFace(state, 1, 2);
+    new Resolver(state, constant()).play('twos', [1]);
+    expect(state.scoreWagers.pendingDoubleOrNothing).toMatchObject({ hand: 'twos' });
+    expect(state.historyV2).toContainEqual(expect.objectContaining({ kind: 'double_or_nothing',
+      phase: 'ignored', packageId: firstPackageId }));
+
+    state.consumed = [...HAND_IDS];
+    state.manualRerollsRemaining = 0;
+    new Resolver(state, constant()).evaluate();
+    expect(state.phase).toBe('round');
+  });
+
+  it('invalidates the pending offer before Burn It Down sacrifices its backing Score', () => {
+    const state = game(); own(state, 'doubleOrNothing'); own(state, 'burnItDown');
+    prioritize(state, 'ones');
+    new Resolver(state, constant()).play('ones', [0]);
+    const packageId = state.scoreWagers.pendingDoubleOrNothing?.packageId;
+
+    new Resolver(state, constant()).burnItDown();
+    expect(state.score).toBe(0n);
+    expect(state.scoreWagers.pendingDoubleOrNothing).toBeNull();
+    expect(state.historyV2).toContainEqual(expect.objectContaining({ kind: 'double_or_nothing',
+      phase: 'ignored', packageId }));
+  });
+
   it('redeems only on a manual replay, applies ×9, and permits a later offer after redemption', () => {
     const state = game(); own(state, 'doubleOrNothing');
+    prioritize(state, 'ones', 'twos');
     new Resolver(state, constant()).play('ones', [0]);
     new Resolver(state, constant()).acceptDoubleOrNothing();
     setFace(state, 0, 1);
@@ -175,11 +233,12 @@ describe('Double or Nothing', () => {
     expect(state.scoreWagers.pendingDoubleOrNothing?.hand).toBe('twos');
   });
 
-  it('preserves accepted wagers across persistence and removes ephemeral timed offers', () => {
+  it('preserves pending and accepted wagers across persistence', () => {
     const state = game(); own(state, 'doubleOrNothing');
+    prioritize(state, 'ones');
     new Resolver(state, constant()).play('ones', [0]);
     const pending = compactGameStateForPersistence(state);
-    expect(pending.scoreWagers.pendingDoubleOrNothing).toBeNull();
+    expect(pending.scoreWagers.pendingDoubleOrNothing).toEqual(state.scoreWagers.pendingDoubleOrNothing);
     new Resolver(state, constant()).acceptDoubleOrNothing();
     own(state, 'allIn');
     new Resolver(state, constant()).armAllIn();
@@ -191,6 +250,7 @@ describe('Double or Nothing', () => {
 
   it('preserves an active wager through refresh, Marathon cooldown, and temporary unavailability', () => {
     const refresh = game(); own(refresh, 'doubleOrNothing');
+    prioritize(refresh, 'ones');
     new Resolver(refresh, constant()).play('ones', [0]);
     new Resolver(refresh, constant()).acceptDoubleOrNothing();
     refresh.consumed = HAND_IDS.filter(hand => hand !== 'twos');
@@ -201,6 +261,7 @@ describe('Double or Nothing', () => {
     expect(refresh.scoreWagers.doubleOrNothing?.hand).toBe('ones');
 
     const marathon = game(); own(marathon, 'doubleOrNothing');
+    prioritize(marathon, 'ones');
     new Resolver(marathon, constant()).play('ones', [0]);
     new Resolver(marathon, constant()).acceptDoubleOrNothing();
     marathon.boss = { type: 'marathon', cooldowns: { ones: 2 } };
@@ -213,6 +274,7 @@ describe('Double or Nothing', () => {
 
   it('clears pending and active wager state at a new attempt', () => {
     const state = game(); own(state, 'doubleOrNothing'); own(state, 'allIn');
+    prioritize(state, 'ones');
     new Resolver(state, constant()).play('ones', [0]);
     new Resolver(state, constant()).acceptDoubleOrNothing();
     new Resolver(state, constant()).armAllIn();
@@ -285,6 +347,7 @@ describe('Double or Nothing and All In interaction', () => {
   it('does not offer Double or Nothing after either an All In success or failure', () => {
     for (const target of [1n, 1_000_000n]) {
       const state = game(); own(state, 'doubleOrNothing'); own(state, 'allIn');
+      prioritize(state, 'ones');
       state.target = target; state.stats.rounds.at(-1)!.target = target;
       new Resolver(state, constant()).armAllIn();
       new Resolver(state, constant()).play('ones', [0]);
@@ -294,6 +357,7 @@ describe('Double or Nothing and All In interaction', () => {
 
   it('stacks both factors on redemption, consumes the wager, and never removes the failed package twice', () => {
     const state = game(); own(state, 'doubleOrNothing'); own(state, 'allIn');
+    prioritize(state, 'ones');
     state.score = 100n;
     new Resolver(state, constant()).play('ones', [0]);
     new Resolver(state, constant()).acceptDoubleOrNothing();

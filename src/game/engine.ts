@@ -256,6 +256,7 @@ function normalizeScoreWagerRuntime(state: Pick<Board, 'scoreWagers'>): void {
     complete: scorePackage.complete === true,
     allIn: scorePackage.allIn === true,
     doubleOrNothingRedemption: scorePackage.doubleOrNothingRedemption === true,
+    doubleOrNothingEligibleAtStart: scorePackage.doubleOrNothingEligibleAtStart === true,
   }));
   const pending = state.scoreWagers.pendingDoubleOrNothing;
   if (pending) state.scoreWagers.pendingDoubleOrNothing = { ...pending,
@@ -500,7 +501,6 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (state.phase !== 'round' || !state.scoreWagers.pendingDoubleOrNothing) return 'No Double or Nothing offer is pending.';
     return null;
   }
-  if (state.scoreWagers.pendingDoubleOrNothing) return 'Resolve the Double or Nothing offer first.';
   if (action.type === 'RETREAT') {
     if (state.phase !== 'round') return 'Retreat is only available during a gameplay Round.';
     if (currentlyPlayableManualHands(state).length > 0) return 'Retreat is only available when no manual Hand can be played.';

@@ -15,7 +15,7 @@ const effectCopies = (): RichText[] => [
 
 describe('structured beginner-facing effect copy', () => {
   it('registers every glossary term and resolves nested references without self-definition', () => {
-    expect(GLOSSARY_TERM_IDS).toHaveLength(31);
+    expect(GLOSSARY_TERM_IDS).toHaveLength(32);
     for (const id of GLOSSARY_TERM_IDS) {
       const definition = GLOSSARY[id];
       expect(definition.label).not.toBe('');

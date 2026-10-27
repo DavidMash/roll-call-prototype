@@ -20,7 +20,6 @@ import { RunActionLayout, RunActionPortal } from './RunActionRow';
 import { effectRuntime } from '../game/specialDice';
 import { DieTypeLabel } from './DieTypeLabel';
 import { FlameActions } from './FlameActions';
-import { DoubleOrNothingOffer } from './DoubleOrNothingOffer';
 import { canonicalPlayPreview } from '../game/playPreview';
 import { deriveFlamePresentations, type FlamePresentation } from '../game/flamePresentation';
 
@@ -38,11 +37,9 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     ? wardenDice.filter(die => !wardenBoss.activeDieIds.includes(die.id)).map(die => die.id)
     : [];
   const awaitingWardenChoice = !!wardenBoss && wardenBoss.pendingReinforcements > 0;
-  const doubleOrNothingOffer = board.scoreWagers.pendingDoubleOrNothing;
-  const awaitingDoubleOrNothing = doubleOrNothingOffer !== null;
   const doubleOrNothingWager = board.scoreWagers.doubleOrNothing;
   const allInFactor = allInMultiplier(flameByType(board, 'allIn')?.investedGold ?? 0);
-  const roundBusy = busy || awaitingDoubleOrNothing;
+  const roundBusy = busy;
   const speedDemonOwned = hasOwnedFlame(board, 'speedDemon');
   const decisionTimer = useRef(new DecisionTimer());
   const [decisionMs, setDecisionMs] = useState(0);
@@ -178,12 +175,11 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     </Group></Paper>}
     <div className="flame-actions-entry"><FlameActions board={board} busy={roundBusy || inputBlocked || awaitingWardenChoice}
       submit={submit} onOpenChange={setFlameActionsOpen} /></div>
-    {doubleOrNothingOffer && <DoubleOrNothingOffer offer={doubleOrNothingOffer} submit={submit} />}
     <Paper className={`scorecard-panel${scorecardRefreshing ? ' is-refreshing' : ''}`} p="xs">
       <HandScorecard board={board} selection={effectiveSelection} busy={roundBusy || awaitingWardenChoice} canSubmit={valid && !roundBusy && !awaitingWardenChoice}
         submitPreview={preview}
         onSelect={hand => changeSelection(selectBoardHand(board, effectiveSelection, hand, decisionMs))}
-        onSubmit={submitPlay} />
+        onSubmit={submitPlay} onAcceptDoubleOrNothing={() => submit({ type: 'ACCEPT_DOUBLE_OR_NOTHING' })} />
     </Paper>
     <RunActionPortal><Paper className="gameplay-actions-panel" p="xs">
         <div className="gameplay-actions">

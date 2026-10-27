@@ -48,6 +48,9 @@ export const GLOSSARY: Record<GlossaryTermId, GlossaryDefinition> = {
   weightedFace: { label: 'Weighted Number', definition: [text('The number a Weighted die currently makes more likely during a randomized Roll.')] },
   sellValue: { label: 'Sell Value', definition: [text('Sell Value is the amount of Gold you receive when you sell a die in the Shop.')] },
   bossEffect: { label: 'Boss Effect', definition: [text('A Boss Effect is the special rule imposed by a Boss encounter.')] },
+  possibleHand: { label: 'Possible Hand', definition: [text('A Possible Hand is any '), term('hand'),
+    text(' that is not currently marked IMPOSSIBLE on the scorecard. It may still be unavailable because it was used, is on cooldown, or does not match the '),
+    term('exposedFace', 'Exposed Faces'), text('.')] },
 };
 
 export const GLOSSARY_TERM_IDS = Object.keys(GLOSSARY) as GlossaryTermId[];

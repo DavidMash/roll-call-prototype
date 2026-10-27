@@ -1,6 +1,6 @@
 import { Badge, Button, Text, Tooltip } from '@mantine/core';
 import { benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, handStats, HANDS, relativeHandStrengthTiers, ultimateHands } from '../game/hands';
-import { handFamilyFlameTargets, hasOwnedFlame, PROGRESSIVE_FLAME_SEQUENCES } from '../game/flames';
+import { doubleOrNothingEligibleHands, flameByType, handFamilyFlameTargets, hasOwnedFlame, PROGRESSIVE_FLAME_SEQUENCES } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
 import { EMPTY_TEXT, formatExactScore, formatPlayerNumber, formatScoreEquation } from '../game/copy';
@@ -33,15 +33,18 @@ function SendIcon() {
   </svg>;
 }
 
-function ScorecardSection({ title, hands, board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit }: {
+function ScorecardSection({ title, hands, board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }: {
   title: string; hands: HandId[]; board: Board; selection: Selection; busy: boolean; canSubmit: boolean; submitPreview: HandSubmitPreview | null;
-  onSelect: (hand: HandId) => void; onSubmit: () => void;
+  onSelect: (hand: HandId) => void; onSubmit: () => void; onAcceptDoubleOrNothing: () => void;
 }) {
   const ultimate = new Set(ultimateHands(board.handLevels));
   const ownsUltimate = hasOwnedFlame(board, 'ultimate');
   const ownsBenchWarmer = hasOwnedFlame(board, 'benchWarmer');
   const benchWarmer = benchWarmerHand(board.handLevels);
   const flameTargets = new Set(handFamilyFlameTargets(board));
+  const doubleOrNothing = flameByType(board, 'doubleOrNothing');
+  const doubleOrNothingTargets = new Set(doubleOrNothing && doubleOrNothing.investedGold > 0
+    && board.scoreWagers.doubleOrNothing === null ? doubleOrNothingEligibleHands(board) : []);
   const strengthTiers = relativeHandStrengthTiers(board.handLevels, hands);
   const pendulumRequested = !board.bossSilenced && board.boss?.type === 'pendulum'
     && board.boss.requestedSection === title.toLowerCase();
@@ -66,6 +69,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
         const countDownTarget = hasOwnedFlame(board, 'countDown')
           && PROGRESSIVE_FLAME_SEQUENCES.countDown.hands[board.progressiveFlames.countDown] === hand;
         const isUltimate = ownsUltimate && ultimate.has(hand);
+        const isDoubleOrNothingTarget = doubleOrNothingTargets.has(hand);
         const isBenchWarmer = ownsBenchWarmer && benchWarmer === hand;
         const magicianCalled = !board.bossSilenced && board.boss?.type === 'magician' && board.boss.calledHands.includes(hand);
         const magicianCompleted = magicianCalled && board.boss?.type === 'magician' && board.boss.completedHands.includes(hand);
@@ -74,7 +78,9 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
         const strengthTier = strengthTiers[hand] ?? 'normal';
         const scoreLabel = score === undefined ? EMPTY_TEXT.score : `${formatExactScore(score)} points`;
         const showQuickPlay = selected && canSubmit;
-        return <div key={hand} className={`scorecard-row-shell ${showQuickPlay ? 'has-quick-play' : ''}`} data-tutorial={`hand-${hand}`}>
+        const wagerOffer = board.scoreWagers.pendingDoubleOrNothing?.hand === hand
+          ? board.scoreWagers.pendingDoubleOrNothing : null;
+        return <div key={hand} className={`scorecard-row-shell ${showQuickPlay ? 'has-quick-play' : ''}${wagerOffer ? ' has-double-wager' : ''}`} data-tutorial={`hand-${hand}`}>
         <Button variant={selected ? 'light' : 'subtle'} color={selected ? 'teal' : 'gray'}
           className={`scorecard-row ${state} strength-${strengthTier} ${targeted ? 'targeted' : ''} ${board.boss?.type === 'caller' && board.boss.calledHand === hand ? 'caller-called' : ''} ${board.boss?.type === 'fly' && board.boss.flyHand === hand ? 'fly-row' : ''}`} data-testid={`scorecard-row-${hand}`} data-state={state} data-strength-tier={strengthTier}
           disabled={busy || impossible || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}
@@ -95,9 +101,13 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
                 <span className="hand-stat hand-mult-stat"><strong>×{formatPlayerNumber(stats.handMultiplier)}</strong><small>MULT</small></span>
               </span>
             </span>
-            {(isUltimate || isBenchWarmer || magicianCalled) && <span className="scorecard-marker-badges">
+            {(isUltimate || isDoubleOrNothingTarget || isBenchWarmer || magicianCalled) && <span className="scorecard-marker-badges">
               {isUltimate && <Tooltip label="Your highest level hand." multiline maw={300} withArrow>
                 <Badge className="ultimate-badge" size="xs" color="grape" variant="light" data-testid={`ultimate-badge-${hand}`}><span className="wide-label">ULTIMATE</span><span className="compact-label">U</span></Badge>
+              </Tooltip>}
+              {isDoubleOrNothingTarget && <Tooltip label="One of your three highest-level Possible Hands." multiline maw={300} withArrow>
+                <Badge className="double-or-nothing-target-badge" size="xs" color="orange" variant="light"
+                  data-testid={`double-or-nothing-target-${hand}`}><span className="wide-label">DOUBLE</span><span className="compact-label">D/N</span></Badge>
               </Tooltip>}
               {isBenchWarmer && <Tooltip label="Your lowest-level hand." multiline maw={300} withArrow>
                 <Badge className="bench-warmer-badge" size="xs" color="orange" variant="light" data-testid={`bench-warmer-badge-${hand}`}><span className="wide-label">BENCH WARMER</span><span className="compact-label">B</span></Badge>
@@ -126,15 +136,24 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
           </span>
           <SendIcon />
         </Button>}
+        {wagerOffer && <Tooltip label={`Give up ${formatExactScore(wagerOffer.packageScore)} Score and reopen ${definition.name} for ×${formatPlayerNumber(wagerOffer.factor)} XMult.`}
+          multiline maw={320} withArrow>
+          <Button className="double-or-nothing-wager" size="compact-xs" color="orange" disabled={busy}
+            aria-label={`Accept Double or Nothing for ${definition.name}: give up ${formatExactScore(wagerOffer.packageScore)} Score and replay it for ×${formatPlayerNumber(wagerOffer.factor)} XMult`}
+            data-testid={`accept-double-or-nothing-${hand}`} onClick={onAcceptDoubleOrNothing}>
+            <span className="wide-label">WAGER ×{formatPlayerNumber(wagerOffer.factor)}</span>
+            <span className="compact-label">×{formatPlayerNumber(wagerOffer.factor)}</span>
+          </Button>
+        </Tooltip>}
         </div>;
       })}
     </div>
   </section>;
 }
 
-export function HandScorecard({ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit }: {
+export function HandScorecard({ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }: {
   board: Board; selection: Selection; busy: boolean; canSubmit: boolean; submitPreview: HandSubmitPreview | null;
-  onSelect: (hand: HandId) => void; onSubmit: () => void;
+  onSelect: (hand: HandId) => void; onSubmit: () => void; onAcceptDoubleOrNothing: () => void;
 }) {
   const activeHands = encounterHandIds(board);
   const upperHands = activeHands.filter(hand => HANDS[hand].rank !== undefined);
@@ -144,8 +163,8 @@ export function HandScorecard({ board, selection, busy, canSubmit, submitPreview
       && combination.every(id => selection.dieIds.includes(id))));
   return <div className="scorecard" data-tutorial="scorecard">
     <div className="scorecard-grid">
-      <ScorecardSection title="Upper" hands={upperHands} {...{ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit }} />
-      <ScorecardSection title="Lower" hands={lowerHands} {...{ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit }} />
+      <ScorecardSection title="Upper" hands={upperHands} {...{ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }} />
+      <ScorecardSection title="Lower" hands={lowerHands} {...{ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }} />
     </div>
     {selection.intent === 'manual' && selection.dieIds.length > 0 && !hasExactHand && <Text size="xs" c="orange" className="scorecard-hint">
       {board.boss?.type === 'hexer' ? 'This selection does not form a hand with the Cursed Die.' : 'Selected dice do not form one complete available hand.'}

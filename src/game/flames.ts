@@ -1,6 +1,6 @@
 import { activeFace, wholeDieEffectSuppressed } from './dice';
-import { availablePlayableDice, currentlyPlayableManualHands, lastPlayDanger } from './bosses';
-import { benchWarmerHand, HANDS, LOWER_HAND_IDS, ultimateHands, UPPER_HAND_IDS } from './hands';
+import { activeEncounterDice, availablePlayableDice, currentlyPlayableManualHands, lastPlayDanger } from './bosses';
+import { benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, HANDS, LOWER_HAND_IDS, rankedHands, ultimateHands, UPPER_HAND_IDS } from './hands';
 import { infernoMultiplier } from './scoring';
 import type { Board, Flame, FlameActivationDiagnostics, FlameInstance, FlameInstanceId, FlameSlotIndex, FlameSlots, GameState, HandId, Rarity, SpecialDieType, XMultFactor } from './types';
 import { formatPlayerNumber } from './copy';
@@ -124,7 +124,7 @@ export const FLAME_SCALING = {
   lightningStrike: { charge: 3 },
   hotPotatoClock: { chargePerStreak: .5 },
   dareDevil: { bonusPerDare: 2, maximumDares: 4 },
-  doubleOrNothing: { fullBonus: 8, offerSeconds: 5 },
+  doubleOrNothing: { fullBonus: 8 },
   allIn: { fullBonus: 11 },
   progressiveSequences: PROGRESSIVE_FLAME_SEQUENCES,
 } as const;
@@ -197,6 +197,15 @@ export const dareDevilMultiplier = (investedGold: number, dareCount: number) => 
   * flameProgress(investedGold)).toFixed(12));
 export const doubleOrNothingMultiplier = (investedGold: number) =>
   fixedFlameMultiplier(investedGold, FLAME_SCALING.doubleOrNothing.fullBonus);
+export const DOUBLE_OR_NOTHING_HAND_COUNT = 3;
+export function doubleOrNothingEligibleHands(
+  state: Pick<Board, 'handLevels' | 'dice' | 'boss' | 'bossSilenced'>,
+): HandId[] {
+  const activeDieCount = activeEncounterDice(state).length;
+  const possibleHands = encounterHandIds(state)
+    .filter(hand => !handIsStructurallyImpossible(hand, activeDieCount));
+  return rankedHands(state.handLevels, possibleHands).slice(0, DOUBLE_OR_NOTHING_HAND_COUNT);
+}
 export const allInMultiplier = (investedGold: number) =>
   fixedFlameMultiplier(investedGold, FLAME_SCALING.allIn.fullBonus);
 export const progressiveSequenceMultiplier = (id: ProgressiveSequenceFlame, investedGold: number, stepIndex: number) => {
@@ -245,7 +254,7 @@ export function flameEffectText(id: Flame, investedGold: number, _board: FlameDi
     case 'lightningStrike': return `Predict one die's Manual Reroll for +${formatPlayerNumber(lightningStrikeChargeGain(investedGold))} Charge on a hit.`;
     case 'hotPotatoClock': return 'Avoid Playing the Hot Potato die to build increasingly large Charge.';
     case 'dareDevil': return `Each Dare stores more XMult for your next Ultimate Hand, up to ×${formatPlayerNumber(dareDevilMultiplier(investedGold, 4))}.`;
-    case 'doubleOrNothing': return `Give up one manual Play's Score, then replay that Hand later for ×${formatPlayerNumber(doubleOrNothingMultiplier(investedGold))} XMult.`;
+    case 'doubleOrNothing': return `Wager one of your three highest-level Possible Hands, then replay it later for ×${formatPlayerNumber(doubleOrNothingMultiplier(investedGold))} XMult.`;
     case 'allIn': return `Arm your next manual Play for ×${formatPlayerNumber(allInMultiplier(investedGold))} XMult; if it does not clear the Round, that Play's Score is removed.`;
     case 'topDown': return `Play Lower Section Hands from Five of a Kind down to Pair; the final step reaches ×${formatPlayerNumber(progressiveSequenceMultiplier('topDown', investedGold, 7))} XMult.`;
     case 'countDown': return `Play Upper Hands from Sixes down to Ones; the final step reaches ×${formatPlayerNumber(progressiveSequenceMultiplier('countDown', investedGold, 5))} XMult.`;

@@ -223,6 +223,7 @@ export interface ScorePackage {
   removedScore: ExactScore;
   allIn: boolean;
   doubleOrNothingRedemption: boolean;
+  doubleOrNothingEligibleAtStart: boolean;
 }
 
 export interface PendingDoubleOrNothingOffer {

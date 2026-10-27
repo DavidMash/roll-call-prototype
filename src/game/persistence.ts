@@ -52,9 +52,6 @@ function isGameState(value: unknown): value is GameState {
 
 export function compactGameStateForPersistence(state: GameState): GameState {
   const compact = structuredClone(state);
-  // Timed post-Play offers are deliberately ephemeral. Accepted wagers and an
-  // armed All In remain canonical and are persisted normally.
-  compact.scoreWagers.pendingDoubleOrNothing = null;
   // The V1 prose timeline is a playback surface, not durable analysis history.
   compact.history = [];
   // Ordinary/full trace records are reproduction data, not durable gameplay state.

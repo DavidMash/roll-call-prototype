@@ -8,7 +8,7 @@ import {
   sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, thirdRailChargeGain,
   burnItDownChargeGain, dareDevilMultiplier, FLAME_SCALING, greaseTheEngineChargeGain, greaseTheEngineCost,
   hotPotatoClockChargeGain, lightningStrikeChargeGain, allInMultiplier, doubleOrNothingMultiplier, hotStreakMultiplier,
-  PROGRESSIVE_FLAME_SEQUENCES, progressiveSequenceMultiplier, type ProgressiveSequenceFlame,
+  doubleOrNothingEligibleHands, PROGRESSIVE_FLAME_SEQUENCES, progressiveSequenceMultiplier, type ProgressiveSequenceFlame,
 } from './flames';
 import { benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, handOptions, hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, planQualification, ultimateHands, upperBaselineLevel, UPPER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
@@ -1598,6 +1598,7 @@ export class Resolver {
       removedScore: 0n,
       allIn,
       doubleOrNothingRedemption,
+      doubleOrNothingEligibleAtStart: source === 'manual' && doubleOrNothingEligibleHands(this.state).includes(hand),
     };
     this.state.scoreWagers.packages.push(scorePackage);
     this.activeScorePackage = scorePackage;
@@ -1629,6 +1630,7 @@ export class Resolver {
   private canOfferDoubleOrNothing(scorePackage: ScorePackage): boolean {
     const flame = flameByType(this.state, 'doubleOrNothing');
     return scorePackage.initiatingSource === 'manual' && !scorePackage.allIn && !scorePackage.doubleOrNothingRedemption
+      && scorePackage.doubleOrNothingEligibleAtStart
       && scorePackage.score > 0n
       && this.state.phase === 'round' && this.state.score < this.state.target
       && !!flame && flame.investedGold > 0
@@ -1679,6 +1681,9 @@ export class Resolver {
 
   play(hand: HandId, dieIds: number[], playSource: HandPlaySource = 'manual', decisionMs: number | null = null,
     qualificationClaims: import('./resolution').QualificationResourceClaim[] = []): { winning: boolean; beanRecordIndex: number | null } {
+    const root = this.activeScorePackage === null;
+    if (root && playSource === 'manual' && this.state.scoreWagers.pendingDoubleOrNothing)
+      this.dismissDoubleOrNothing('ignored');
     let legalDieIds = dieIds;
     if (playSource !== 'manual') {
       const dice = activeEncounterDice(this.state);
@@ -1695,7 +1700,6 @@ export class Resolver {
       legalDieIds = combination;
     }
     const playId = `${this.state.historyV2TimelineId}:${this.state.round}:${this.state.actionJournal.length}:${this.state.historyV2.length}:${playSource}`;
-    const root = this.activeScorePackage === null;
     const scorePackage = this.activeScorePackage ?? this.beginScorePackage(playId, hand, playSource);
     const parentPlayId = this.playStack.at(-1) ?? null;
     const isRootPlay = playId === scorePackage.rootPlayId;
@@ -2005,6 +2009,7 @@ export class Resolver {
   burnItDown(): void {
     const flame = this.chargeFlameSource('burnItDown');
     if (!flame) throw new Error('Burn It Down requires its active Flame.');
+    if (this.state.scoreWagers.pendingDoubleOrNothing) this.dismissDoubleOrNothing('ignored');
     const sacrificed = this.state.score;
     const fraction = this.state.target > 0n ? Math.max(0, Math.min(1, exactRatioNumber(sacrificed, this.state.target))) : 0;
     const requested = burnItDownChargeGain(flame.investment, fraction);
@@ -2101,12 +2106,16 @@ export class Resolver {
     if (this.state.phase === 'round') this.evaluate();
   }
 
-  declineDoubleOrNothing(reason: 'expired' | 'ignored'): void {
+  private dismissDoubleOrNothing(reason: 'expired' | 'ignored'): void {
     const offer = this.state.scoreWagers.pendingDoubleOrNothing;
     if (!offer) throw new Error('Double or Nothing dismissal requires a pending offer.');
     this.state.scoreWagers.pendingDoubleOrNothing = null;
     this.emitV2({ kind: 'double_or_nothing', phase: reason, packageId: offer.packageId, hand: offer.hand,
       packageScore: offer.packageScore, factor: offer.factor, roundScore: this.state.score, target: offer.target });
+  }
+
+  declineDoubleOrNothing(reason: 'expired' | 'ignored'): void {
+    this.dismissDoubleOrNothing(reason);
     this.state.decisionId++;
     if (this.state.phase === 'round') this.evaluate();
   }
@@ -2801,6 +2810,7 @@ export class Resolver {
         requiredEncounterDieIds(this.state), this.state.dieRoundState)) return;
       const rerolls = usableManualRerolls(this.state);
       if (rerolls > 0) { this.emit({ type: 'DEAD_BOARD', message: `No playable hands — ${this.format(rerolls)} rerolls remain` }); return; }
+      if (this.state.scoreWagers.pendingDoubleOrNothing) return;
       if (this.state.specialOfferEffects.bottledFairyRounds > 0 && !this.state.specialOfferEffects.bottledFairyTriggeredThisRound) {
         this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound;
         this.state.specialOfferEffects.bottledFairyTriggeredThisRound = true;

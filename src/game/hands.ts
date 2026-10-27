@@ -109,8 +109,8 @@ export function relativeHandStrengthTiers(
     return [hand, tier];
   })) as Partial<Record<HandId, HandStrengthTier>>;
 }
-export function rankedHands(handLevels: HandLevels): HandId[] {
-  return [...HAND_IDS].sort((a, b) => {
+export function rankedHands(handLevels: HandLevels, hands: readonly HandId[] = HAND_IDS): HandId[] {
+  return [...hands].sort((a, b) => {
     const levelDifference = handLevels[b] - handLevels[a];
     if (levelDifference) return levelDifference;
     const strengthDifference = trainedHandStrength(b, handLevels[b]) - trainedHandStrength(a, handLevels[a]);
@@ -118,7 +118,7 @@ export function rankedHands(handLevels: HandLevels): HandId[] {
     const aRank = HANDS[a].rank;
     const bRank = HANDS[b].rank;
     if (aRank && bRank && aRank !== bRank) return bRank - aRank;
-    return HAND_IDS.indexOf(a) - HAND_IDS.indexOf(b);
+    return hands.indexOf(a) - hands.indexOf(b);
   });
 }
 export const ultimateHands = (handLevels: HandLevels): HandId[] =>
