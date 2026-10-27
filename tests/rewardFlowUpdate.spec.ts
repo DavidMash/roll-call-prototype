@@ -2,9 +2,8 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { newRun } from '../src/game/engine';
 import { Resolver } from '../src/game/effects';
-import { RUN_STORAGE_KEY } from '../src/game/persistence';
 import type { Flame, GameState, SpecialOfferType } from '../src/game/types';
-import { enterRun, goToShopStage, installRunState } from './uiHelpers';
+import { enterRun, goToShopStage, installRunState, readRunState } from './uiHelpers';
 import { placeFlameInstance } from '../src/game/flames';
 
 const fixedRandom = { next: () => .25 };
@@ -40,7 +39,7 @@ function shopState(kind: 'normal' | 'post_boss' = 'normal'): GameState {
 }
 
 async function persistedState(page: Page): Promise<GameState> {
-  return page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state, RUN_STORAGE_KEY);
+  return (await readRunState(page))!;
 }
 
 test('Flame selection claims into the first global slot and advances exactly once', async ({ page }) => {

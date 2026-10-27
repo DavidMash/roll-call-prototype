@@ -21,7 +21,7 @@ export const CONFIG = {
   jackpotGold: 3,
   tickMs: { normal: 350, fast: 90, instant: 0 },
   scoringDieTickMs: { normal: 200, fast: 80, instant: 0 },
-  resolutionEventCap: 10000,
+  resolutionEventCap: 1000,
 } as const;
 export const roundReward = (_round?: number) => CONFIG.roundRewardBase;
 export const MINI_BOSS_REWARD_GOLD = 15;

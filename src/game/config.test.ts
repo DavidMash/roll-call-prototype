@@ -26,7 +26,7 @@ describe('prototype balance configuration', () => {
       jackpotGold: 3,
       tickMs: { normal: 350, fast: 90, instant: 0 },
       scoringDieTickMs: { normal: 200, fast: 80, instant: 0 },
-      resolutionEventCap: 10_000,
+      resolutionEventCap: 1_000,
     });
   });
 

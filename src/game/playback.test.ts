@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { cloneGameState } from './ledger';
 import { dispatch, newRun } from './engine';
 import { HAND_IDS } from './hands';
 import { firstPresentedEventIndex, isPresentationSilentEvent, nextPresentedEventIndex, playbackBoard,
@@ -88,7 +89,7 @@ describe('simultaneous roll batch presentation', () => {
     const postHandState = newRun('simultaneous-post-hand').state;
     postHandState.target = 1_000_000n;
     postHandState.dice.forEach((die, index) => { die.value = index < 4 ? 1 : 2; });
-    const winningState = structuredClone(postHandState);
+    const winningState = cloneGameState(postHandState);
     winningState.target = 1n;
     const cases = [
       { result: newRun('simultaneous-opening'), reason: 'Initial round roll', ids: [0, 1, 2, 3, 4] },

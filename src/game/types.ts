@@ -925,6 +925,10 @@ export interface GameStateBase extends Board {
   rngState: number;
   nextOfferId: number;
   nextPlaybackEventId: number;
+  /** Monotonic durable action identifier; unlike the in-memory journal tail, this never resets during a run. */
+  nextActionId: number;
+  /** Monotonic Run History V2 sequence identifier. */
+  nextHistorySeq: number;
   stats: RunStats;
   actionJournal: Action[];
   history: EventRecord[];
@@ -996,6 +1000,30 @@ export type Action =
   | { type: 'UNLOCK_SHOP_EXIT' }
   | { type: 'NEXT_CHAPTER' }
   | { type: 'NEXT_ROUND' };
-export interface Resolution { state: GameState; events: GameEvent[]; error?: string }
+export interface RunLedgerRuntime {
+  runId: string;
+  actions: Action[];
+  events: RunHistoryV2Event[];
+  coverage: RunHistoryV2Coverage;
+  committedActionId: number;
+  committedHistorySeq: number;
+}
+
+export interface RunLedgerChunk {
+  runId: string;
+  ordinal: number;
+  actionId: number | null;
+  action: Action | null;
+  events: RunHistoryV2Event[];
+}
+
+export interface RunSession { state: GameState; ledger: RunLedgerRuntime }
+export interface Resolution {
+  state: GameState;
+  session: RunSession;
+  events: GameEvent[];
+  ledgerChunk: RunLedgerChunk;
+  error?: string;
+}
 export interface RandomSource { next(): number }
 export interface HandOption { id: HandId; combinations: number[][]; consumed: boolean }

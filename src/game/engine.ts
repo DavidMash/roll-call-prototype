@@ -24,6 +24,7 @@ import { firstPurchaseSlot, purchaseDie, setSlotValue, slotExists, slotValue } f
 import { dieForgeRating, dieSellBreakdown, forgeRevealEligible, formatForgeValue, mergedEffects, previewForge } from './forge';
 import { formatEffectLevel } from './effectLevel';
 import { Decimal, exactInferno, scoreFromUnknown, type ExactScore } from './scoreMath';
+import { attachLedger, chunkForResolution, cloneGameState, createRunLedger, sessionForState } from './ledger';
 import { getEncounterGoalBreakdown, targetForRound } from './goals';
 import type { Action, Board, FlameSlotIndex, GameState, RandomSource, Resolution, Shop, ShopStage } from './types';
 
@@ -281,7 +282,10 @@ function normalizeSilencedBossGoal(state: GameState): void {
 }
 
 export function normalizeGameState(state: GameState): GameState {
-  const next = structuredClone(state);
+  const next = cloneGameState(state);
+  next.nextActionId = Math.max(0, Math.floor(next.nextActionId ?? next.actionJournal.length));
+  next.nextHistorySeq = Math.max(0, Math.floor(next.nextHistorySeq
+    ?? next.historyV2.reduce((maximum, event) => Math.max(maximum, event.seq + 1), 0)));
   next.temper = Math.max(0, Math.floor(next.temper ?? 0));
   next.roundTemper ??= { overkill: 0, boardRefresh: 0, miniBoss: 0, boss: 0 };
   if (!next.diceInventory || !Array.isArray(next.encounterDice))
@@ -332,7 +336,7 @@ export function normalizeGameState(state: GameState): GameState {
   next.historyV2Coverage ??= next.historyV2.some(event => event.kind === 'run_started')
     ? { complete: true, firstRound: 1, firstActionId: 0, firstSeq: 0 }
     : { complete: false, firstRound: next.historyV2[0]?.round ?? next.round,
-      firstActionId: next.historyV2[0]?.actionId ?? next.actionJournal.length,
+      firstActionId: next.historyV2[0]?.actionId ?? next.nextActionId,
       firstSeq: next.historyV2[0]?.seq ?? 0 };
   next.debugTrace = normalizeDebugTrace(next.debugTrace);
   normalizeBossRuntime(next);
@@ -783,8 +787,9 @@ export function validateAction(state: Board | GameState, action: Action): string
 }
 
 function execute(state: GameState, run: (resolver: Resolver) => void, random?: RandomSource, rngStateOverride?: number,
-  options?: ResolverOptions): Resolution {
-  const next = structuredClone(state);
+  options?: ResolverOptions, action: Action | null = null, stateIsOwned = false): Resolution {
+  const eventStartSeq = state.nextHistorySeq;
+  const next = stateIsOwned ? state : cloneGameState(state);
   assertDiceInventory(next.diceInventory, next.encounterDice);
   syncActiveDiceProjection(next);
   if (rngStateOverride !== undefined) next.rngState = rngStateOverride;
@@ -804,13 +809,15 @@ function execute(state: GameState, run: (resolver: Resolver) => void, random?: R
     resolver.events.push({ ...record, board: boardSnapshot(next) });
     resolver.emitV2Error(message);
     appendCriticalDiagnostic(next.debugTrace, { round: next.round, attempt: next.roundAttemptNumber,
-      actionId: next.actionJournal.length }, { kind: 'error', detail: message });
+      actionId: next.nextActionId }, { kind: 'error', detail: message });
   }
   next.rngState = resolver.rngStateAfterResolution ?? seeded.state;
   appendDebugTrace(next.debugTrace, { round: next.round, attempt: next.roundAttemptNumber,
-    actionId: next.actionJournal.length }, { kind: 'resolution', rngBefore, rngAfter: next.rngState,
+    actionId: next.nextActionId }, { kind: 'resolution', rngBefore, rngAfter: next.rngState,
     playbackEvents: resolver.events.length });
-  return { state: next, events: resolver.events };
+  const actionId = action ? next.nextActionId : null;
+  const ledgerChunk = chunkForResolution(next, action, actionId, eventStartSeq);
+  return { state: next, session: sessionForState(next), events: resolver.events, ledgerChunk };
 }
 
 function rejectedActionHasLegacyMigration(state: GameState, normalized: GameState): boolean {
@@ -854,21 +861,24 @@ export function newRun(seed: string, random?: RandomSource, options?: { debugTra
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
     scoreByHand: {}, effectScore: 0n, lastRoundPayout: null, roundSummary: null, flameSelection: null, specialOffer: null,
     manualRerollsRemaining: CONFIG.manualRerollsPerRound, manualRerollsUsedThisRound: 0, specialOfferEffects: initialSpecialOfferEffects(),
-    nextOfferId: 0, nextPlaybackEventId: 0, stats: createStats(seed), actionJournal: [], history: [], historyV2: [], historyV2TimelineId: 0,
+    nextOfferId: 0, nextPlaybackEventId: 0, nextActionId: 0, nextHistorySeq: 0,
+    stats: createStats(seed), actionJournal: [], history: [], historyV2: [], historyV2TimelineId: 0,
     historyV2Coverage: { complete: true, firstRound: 1, firstActionId: 0, firstSeq: 0 },
     debugTrace: createDebugTrace(options?.debugTraceMode),
     roundCheckpoint: null, badDreamCheckpoint: null,
   };
+  attachLedger(state, createRunLedger(seed));
   return execute(state, resolver => { resolver.emitRunStarted(); resolver.startRound(); }, random, random ? undefined : attemptSeed(seed, 1, 1));
 }
 
 export function dispatch(state: GameState, action: Action, random?: RandomSource, options?: ResolverOptions): Resolution {
   const normalized = normalizeGameState(state);
   const error = validateAction(normalized, action);
-  if (error) return {
-    state: rejectedActionHasLegacyMigration(state, normalized) ? normalized : state,
-    events: [], error,
-  };
+  if (error) {
+    const rejected = rejectedActionHasLegacyMigration(state, normalized) ? normalized : state;
+    return { state: rejected, session: sessionForState(rejected), events: [],
+      ledgerChunk: chunkForResolution(rejected, null, null, rejected.nextHistorySeq), error };
+  }
   const chosenSpecialOffer = action.type === 'CHOOSE_SPECIAL_OFFER'
     ? normalized.specialOffer?.offers.find(offer => offer.id === action.offerId) : null;
   const rngStateOverride = random ? undefined : action.type === 'NEXT_ROUND' || action.type === 'NEXT_CHAPTER'
@@ -880,6 +890,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
   return execute(normalized, resolver => {
     const next = resolver.state;
     next.actionJournal.push(structuredClone(action));
+    next.nextActionId++;
     switch (action.type) {
       case 'PLAY': resolver.play(action.hand, action.dieIds, 'manual', action.decisionMs ?? null,
         action.qualificationClaims?.map(claim => {
@@ -1167,5 +1178,5 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         if (next.flameTutorial.pendingFlameInstanceId !== null && !next.flameTutorial.completed) next.flameTutorial = { pendingFlameInstanceId: null, completed: true };
         next.round++; next.roundAttemptNumber = 1; resolver.startRound(); break;
     }
-  }, random, rngStateOverride, options);
+  }, random, rngStateOverride, options, action, true);
 }

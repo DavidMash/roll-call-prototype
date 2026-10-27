@@ -2,6 +2,7 @@ import { scoreFromUnknown, stringifyExactJson, type ExactScore } from './scoreMa
 
 export const DEBUG_TRACE_MAX_RECORDS = 256;
 export const DEBUG_TRACE_MAX_BYTES = 64 * 1024;
+export const DEBUG_TRACE_FULL_MAX_BYTES = 16 * 1024 * 1024;
 export const DEBUG_TRACE_SCHEMA_VERSION = 1 as const;
 
 export type DebugTraceMode = 'bounded' | 'full';
@@ -72,8 +73,9 @@ export function appendDebugTrace(trace: DebugTraceState, context: TraceContext, 
   const record = { ...envelope(trace, context), ...input } as DebugTraceRecord;
   trace.records.push(record);
   trace.bufferBytes += serializedBytes(record);
-  if (trace.mode === 'bounded') {
-    while (trace.records.length > DEBUG_TRACE_MAX_RECORDS || trace.bufferBytes > DEBUG_TRACE_MAX_BYTES) {
+  const byteLimit = trace.mode === 'bounded' ? DEBUG_TRACE_MAX_BYTES : DEBUG_TRACE_FULL_MAX_BYTES;
+  if (trace.mode === 'bounded' || trace.bufferBytes > byteLimit) {
+    while ((trace.mode === 'bounded' && trace.records.length > DEBUG_TRACE_MAX_RECORDS) || trace.bufferBytes > byteLimit) {
       const dropped = trace.records.shift();
       if (!dropped) break;
       trace.bufferBytes -= serializedBytes(dropped);

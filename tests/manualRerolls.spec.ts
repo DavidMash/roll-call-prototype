@@ -5,8 +5,7 @@ import { dispatch, newRun } from '../src/game/engine';
 import { hasPlayableHand, handOptions, HANDS, HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import type { Action, GameState } from '../src/game/types';
-import { enterRun, goToShopStage, setPlaybackSpeed } from './uiHelpers';
-import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
+import { enterRun, goToShopStage, seedRunSession, setPlaybackSpeed } from './uiHelpers';
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
@@ -120,8 +119,7 @@ function deadBoardRun(rescue: boolean) {
   throw new Error('No suitable deterministic dead-board run found');
 }
 async function installRun(page: Page, state: GameState) {
-  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
-    [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
+  await seedRunSession(page, state);
   await page.reload();
   await ready(page);
 }

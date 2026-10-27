@@ -1,14 +1,11 @@
 import { expect, test } from '@playwright/test';
 import { newRun } from '../src/game/engine';
-import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import { initialSpecialOfferEffects, SPECIAL_OFFERS } from '../src/game/specialOffers';
 import type { GameState } from '../src/game/types';
-import { enterRun } from './uiHelpers';
+import { enterRun, seedRunSession } from './uiHelpers';
 
 async function installRun(page: import('@playwright/test').Page, state: GameState) {
-  await page.evaluate(([key, version, saved]) => {
-    localStorage.setItem(key, JSON.stringify({ version, state: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value));
-  }, [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
+  await seedRunSession(page, state);
   await page.reload();
   await expect(page.locator('main')).toBeVisible();
   await enterRun(page);

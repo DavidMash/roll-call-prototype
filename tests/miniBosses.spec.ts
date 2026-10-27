@@ -2,9 +2,8 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { dispatch, newRun } from '../src/game/engine';
 import { HAND_IDS } from '../src/game/hands';
-import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import type { BossType, GameState, RandomSource } from '../src/game/types';
-import { enterRun } from './uiHelpers';
+import { enterRun, seedRunSession } from './uiHelpers';
 import { placeFlameInstance } from '../src/game/flames';
 
 const constant = (value = .2): RandomSource => ({ next: () => value });
@@ -20,8 +19,7 @@ function shopBeforeMini(type: BossType): GameState {
 }
 
 async function install(page: Page, state: GameState) {
-  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
-    [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
+  await seedRunSession(page, state);
   await page.reload();
   await expect(page.locator('main')).toBeVisible();
   await enterRun(page);

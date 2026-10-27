@@ -8,6 +8,7 @@ import { loadPersistedRun, savePersistedRun } from './persistence';
 import { postBossRewardForRound, routeThrough } from './progression';
 import { flameByType, placeFlameInstance } from './flames';
 import type { BossType, GameState, HandId, RandomSource, Rank } from './types';
+import { cloneGameState } from './ledger';
 
 const constant = (value = 0): RandomSource => ({ next: () => value });
 
@@ -138,7 +139,7 @@ describe('Mini-Boss mechanics', () => {
     const first = miniBossRound('juggler');
     first.target = 1_000_000n;
     expose(first, [6, 2, 3, 4, 5]);
-    const second = structuredClone(first);
+    const second = cloneGameState(first);
     const a = dispatch(first, { type: 'PLAY', hand: 'sixes', dieIds: [0] });
     const b = dispatch(second, { type: 'PLAY', hand: 'sixes', dieIds: [0] });
     expect(a.state.dice.map(die => die.value)).toEqual(b.state.dice.map(die => die.value));

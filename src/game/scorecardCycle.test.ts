@@ -4,6 +4,7 @@ import { dispatch, newRun, normalizeGameState } from './engine';
 import { Resolver } from './effects';
 import { HAND_IDS } from './hands';
 import type { BossRuntimeState, GameState, HandId, Rank } from './types';
+import { cloneGameState } from './ledger';
 
 const constant = (value = 0) => ({ next: () => value });
 
@@ -81,7 +82,7 @@ describe('authoritative scorecard cycles', () => {
     const first = playFinalHand(finalHandState());
     expect(first.events.filter(event => event.type === 'SCORECARD_REFRESHED')).toHaveLength(1);
 
-    const secondCycle = structuredClone(first.state);
+    const secondCycle = cloneGameState(first.state);
     secondCycle.consumed = HAND_IDS.filter(hand => hand !== 'ones');
     secondCycle.scorecardCycleConsumed = HAND_IDS.filter(hand => hand !== 'ones');
     secondCycle.dice[0].value = 1;
@@ -114,7 +115,7 @@ describe('authoritative scorecard cycles', () => {
   ])('preserves %s state while refreshing only ordinary Used hands', (_name, boss) => {
     const refreshing = finalHandState();
     refreshing.boss = structuredClone(boss);
-    const control = structuredClone(refreshing);
+    const control = cloneGameState(refreshing);
     control.scorecardCycleConsumed = control.scorecardCycleConsumed.filter(hand => hand !== 'twos');
 
     const refreshed = playFinalHand(refreshing);

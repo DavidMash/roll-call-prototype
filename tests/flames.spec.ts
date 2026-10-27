@@ -2,8 +2,7 @@ import { expect, test } from '@playwright/test';
 import { newRun } from '../src/game/engine';
 import { flameByType, placeFlameInstance } from '../src/game/flames';
 import type { Flame, GameState } from '../src/game/types';
-import { enterRun, goToShopStage, installRunState } from './uiHelpers';
-import { RUN_STORAGE_KEY } from '../src/game/persistence';
+import { enterRun, goToShopStage, installRunState, readRunState } from './uiHelpers';
 
 function reward(flame: Flame = 'ultimate'): GameState {
   const state = newRun(`global-flame-reward-${flame}`).state;
@@ -45,7 +44,7 @@ test('Flame reward fills the first empty global slot without asking for a carrie
   await page.getByTestId('flame-offer-ultimate').getByRole('button', { name: 'SELECT FLAME' }).click();
   await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
 
-  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state as GameState, RUN_STORAGE_KEY);
+  const saved = (await readRunState(page))!;
   expect(saved.flameSlots[1]).toMatchObject({ type: 'ultimate', investedGold: 0, stage: 'ember' });
   expect(saved.flameSlots).toHaveLength(5);
 });
@@ -64,7 +63,7 @@ test('a full fire requires an explicit replacement confirmation and leaves a hol
   await dialog.getByRole('button', { name: 'REPLACE', exact: true }).click();
   await expect(page.getByRole('main').getByText('SHOP', { exact: true })).toBeVisible();
 
-  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state as GameState, RUN_STORAGE_KEY);
+  const saved = (await readRunState(page))!;
   expect(saved.flameSlots[2]).toMatchObject({ type: 'ultimate', investedGold: 0, stage: 'ember' });
   expect(saved.flameSlots.filter(Boolean)).toHaveLength(5);
 });
@@ -79,12 +78,12 @@ test('Fire Keeping renders only owned Flames and stokes an instance in place int
   state.nextShopVisitId = 2;
   await installRunState(page, state);
   await enterRun(page);
-  const beforeTabs = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state as GameState, RUN_STORAGE_KEY);
+  const beforeTabs = (await readRunState(page))!;
   await expect(page.getByRole('tab')).toHaveCount(3);
   await expect(page.getByTestId('shop-stage-back')).toHaveCount(0);
   await page.getByTestId('shop-stage-flames').click();
   await expect(page.getByTestId('shop-stage-flames')).toHaveAttribute('data-active', 'true');
-  const afterDirect = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state as GameState, RUN_STORAGE_KEY);
+  const afterDirect = (await readRunState(page))!;
   expect(afterDirect.shop!.stage).toBe('flames');
   expect(afterDirect.shop!.visitId).toBe(beforeTabs.shop!.visitId);
   expect(afterDirect.rngState).toBe(beforeTabs.rngState);
@@ -109,7 +108,7 @@ test('Fire Keeping renders only owned Flames and stokes an instance in place int
   await dialog.getByRole('button', { name: 'STOKE 1 Gold' }).click();
   await expect(card).toContainText('BONFIRE');
 
-  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state as GameState, RUN_STORAGE_KEY);
+  const saved = (await readRunState(page))!;
   expect(saved.flameSlots[3]).toMatchObject({ instanceId: flame.instanceId, type: 'doubleDown', investedGold: 100, stage: 'bonfire' });
   expect(saved.flameSlots[0]).toBeNull();
 });
@@ -141,7 +140,7 @@ test('global Flame state survives a responsive reload with exact instance identi
 
   await page.getByRole('button', { name: /View Fetch ember details/ }).click();
   await expect(page.getByRole('dialog', { name: 'Fetch' })).toContainText('Investment: 44G / 100G');
-  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state as GameState, RUN_STORAGE_KEY);
+  const saved = (await readRunState(page))!;
   expect(flameByType(saved, 'fetch')).toMatchObject({ instanceId: flame.instanceId });
   expect(saved.fetchTarget).toEqual(state.fetchTarget);
   expect(saved.flameSlots[2]?.instanceId).toBe(flame.instanceId);

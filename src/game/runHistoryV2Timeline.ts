@@ -14,7 +14,7 @@ export interface AbandonedTimelineRange {
 
 export interface RunHistoryV2TimelineClassification {
   ranges: AbandonedTimelineRange[];
-  abandonedSeqs: Set<number>;
+  abandonedSeqs: { has(seq: number): boolean };
   timelineIds: number[];
   status(event: RunHistoryV2Event): TimelineEventStatus;
   isCanonical(event: RunHistoryV2Event): boolean;
@@ -35,10 +35,29 @@ export function classifyRunHistoryV2Timelines(events: readonly RunHistoryV2Event
     .map(event => ({ reason: event.reason, fromTimelineId: event.fromTimelineId, toTimelineId: event.toTimelineId,
       fromSeq: event.abandonedFromSeq, throughSeq: event.abandonedThroughSeq,
       canonicalRound: event.canonicalRound, canonicalAttempt: event.canonicalAttempt }));
-  const abandonedSeqs = new Set<number>();
-  for (const range of ranges) for (let seq = range.fromSeq; seq <= range.throughSeq; seq++) abandonedSeqs.add(seq);
+  const intervals = ranges.map(range => [range.fromSeq, range.throughSeq] as [number, number])
+    .filter(([from, through]) => from <= through).sort((a, b) => a[0] - b[0])
+    .reduce<[number, number][]>((merged, current) => {
+      const prior = merged.at(-1);
+      if (prior && current[0] <= prior[1] + 1) prior[1] = Math.max(prior[1], current[1]);
+      else merged.push([...current]);
+      return merged;
+    }, []);
+  const retainedSeqs = new Set<number>();
   for (const restore of ordered.filter((event): event is CheckpointRestoredEvent => event.kind === 'checkpoint_restored'))
-    for (const seq of restore.retainedSeqs ?? []) abandonedSeqs.delete(seq);
+    for (const seq of restore.retainedSeqs ?? []) retainedSeqs.add(seq);
+  const abandonedSeqs = { has(seq: number) {
+    if (retainedSeqs.has(seq)) return false;
+    let low = 0; let high = intervals.length - 1;
+    while (low <= high) {
+      const middle = (low + high) >> 1;
+      const [from, through] = intervals[middle];
+      if (seq < from) high = middle - 1;
+      else if (seq > through) low = middle + 1;
+      else return true;
+    }
+    return false;
+  } };
   const timelineIds = [...new Set(ordered.map(event => event.timelineId))].sort((a, b) => a - b);
   const firstKnownCanonicalSeq = coverage.complete ? Number.NEGATIVE_INFINITY
     : ordered.find(event => event.kind === 'checkpoint_restored')?.seq ?? Number.POSITIVE_INFINITY;

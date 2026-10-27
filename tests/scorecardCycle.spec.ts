@@ -2,9 +2,8 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { newRun } from '../src/game/engine';
 import { HAND_IDS } from '../src/game/hands';
-import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
 import type { GameState, Rank } from '../src/game/types';
-import { enterRun } from './uiHelpers';
+import { enterRun, installRunState } from './uiHelpers';
 
 function cycleState(seed: string): GameState {
   const state = newRun(seed, { next: () => 0 }).state;
@@ -21,10 +20,7 @@ function cycleState(seed: string): GameState {
 }
 
 async function install(page: Page, state: GameState, speed: 'normal' | 'fast' | 'instant') {
-  await page.goto(`/?seed=${state.seed}&speed=${speed}`);
-  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, state: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
-    [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
-  await page.reload();
+  await installRunState(page, state, speed);
   await enterRun(page);
 }
 

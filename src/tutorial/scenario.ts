@@ -1,6 +1,7 @@
 import { dispatch, newRun } from '../game/engine';
 import { SeededRng } from '../game/rng';
 import { boardSnapshot } from '../game/telemetry';
+import { chunkForResolution, cloneGameState, sessionForState } from '../game/ledger';
 import type { Action, GameState, Rank, Resolution } from '../game/types';
 import { chapterNumberForRound } from '../game/chapters';
 import { combinationsForHand, UPPER_HAND_IDS } from '../game/hands';
@@ -194,9 +195,11 @@ export function tutorialActionError(session: TutorialSession, action: Action): s
 }
 
 export function dispatchTutorial(session: TutorialSession, action: Action): { session: TutorialSession; resolution: Resolution; error?: string } {
-  const prepared = structuredClone(session);
+  const prepared: TutorialSession = { ...session, game: cloneGameState(session.game), scenario: structuredClone(session.scenario) };
   const restriction = tutorialActionError(prepared, action);
-  if (restriction) return { session: prepared, resolution: { state: prepared.game, events: [], error: restriction }, error: restriction };
+  if (restriction) return { session: prepared, resolution: { state: prepared.game,
+    session: sessionForState(prepared.game), events: [],
+    ledgerChunk: chunkForResolution(prepared.game, null, null, prepared.game.nextHistorySeq), error: restriction }, error: restriction };
   let source = sourceForAction(prepared, action);
   const nextRound = action.type === 'NEXT_ROUND' || action.type === 'NEXT_CHAPTER' ? prepared.game.round + 1
     : action.type === 'RETRY_ROUND' ? prepared.game.round : null;
@@ -221,7 +224,7 @@ export function dispatchTutorial(session: TutorialSession, action: Action): { se
 }
 
 export function acknowledgeBeat(session: TutorialSession, beatId: string): TutorialSession {
-  const next = structuredClone(session);
+  const next: TutorialSession = { ...session, game: cloneGameState(session.game), scenario: structuredClone(session.scenario) };
   complete(next.scenario, beatId);
   const lessonByBeat: Record<string, TutorialScenarioState['seenLessonIds'][number]> = {
     'context-interest': 'interest', 'context-bust': 'bust', 'context-selling': 'selling',
@@ -235,7 +238,7 @@ export function acknowledgeBeat(session: TutorialSession, beatId: string): Tutor
 }
 
 export function markLessonSeen(session: TutorialSession, lesson: TutorialScenarioState['seenLessonIds'][number]): TutorialSession {
-  const next = structuredClone(session);
+  const next: TutorialSession = { ...session, game: cloneGameState(session.game), scenario: structuredClone(session.scenario) };
   if (!next.scenario.seenLessonIds.includes(lesson)) next.scenario.seenLessonIds.push(lesson);
   return next;
 }

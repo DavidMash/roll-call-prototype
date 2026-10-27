@@ -1,5 +1,5 @@
 import { Badge, Button, Group, Modal, ScrollArea, SimpleGrid, Table, Tabs, Text, Textarea, TextInput } from '@mantine/core';
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { chapterNumberForRound, chapterRoundForRound } from '../game/chapters';
 import { formatExactScore, formatPlayerNumber, formatScoreProgress } from '../game/copy';
 import { scoringPips } from '../game/dice';
@@ -10,6 +10,9 @@ import { renderRunHistoryV2Event } from '../game/runHistoryV2Renderer';
 import { classifyRunHistoryV2Timelines } from '../game/runHistoryV2Timeline';
 import { activeSpecialOfferStatuses } from '../game/specialOffers';
 import type { GameState } from '../game/types';
+import type { RunRepository } from '../game/runRepository';
+import type { RunHistoryV2Event } from '../game/runHistoryV2';
+import { ledgerForState, recentHistory, stateWithLedger } from '../game/ledger';
 import { DieEffectsLabel } from './DieTypeLabel';
 
 function OverviewStat({ label, value }: { label: string; value: string | number }) {
@@ -17,25 +20,41 @@ function OverviewStat({ label, value }: { label: string; value: string | number 
     <Text fw={700}>{typeof value === 'number' ? formatPlayerNumber(value) : value}</Text></div>;
 }
 
-export function RunInfoModal({ state, busy, opened, onClose, seedInput, setSeedInput, startSeed, restartSeed, newSeed }: {
+export function RunInfoModal({ state, repository, runId, busy, opened, onClose, seedInput, setSeedInput, startSeed, restartSeed, newSeed }: {
   state: GameState; busy: boolean; opened: boolean; onClose: () => void;
+  repository: RunRepository; runId: string;
   seedInput: string; setSeedInput: (seed: string) => void; startSeed: () => void; restartSeed: () => void; newSeed: () => void;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
   const [fallback, setFallback] = useState<string | null>(null);
-  const timeline = useMemo(() => classifyRunHistoryV2Timelines(state.historyV2), [state.historyV2]);
-  const visibleHistory = useMemo(() => state.historyV2
-    .filter(event => !busy || event.actionId < state.actionJournal.length).slice(-200),
-  [state.historyV2, state.actionJournal.length, busy]);
+  const [visibleHistory, setVisibleHistory] = useState<RunHistoryV2Event[]>(() => recentHistory(state));
+  useEffect(() => {
+    let cancelled = false;
+    void repository.recentHistory(runId, 200).then(events => {
+      if (!cancelled && events.length) setVisibleHistory(events);
+    });
+    return () => { cancelled = true; };
+  }, [repository, runId]);
+  const timeline = useMemo(() => classifyRunHistoryV2Timelines(visibleHistory), [visibleHistory]);
 
-  async function copy(createContent: () => string, label: string) {
+  async function completeExport<T>(create: (exportState: GameState) => T): Promise<T> {
+    const archive = await repository.readLedger(runId);
+    const runtime = ledgerForState(state);
+    const missingActions = Math.max(0, state.nextActionId - runtime.committedActionId);
+    const actions = missingActions ? [...archive.actions, ...runtime.actions.slice(-missingActions)] : archive.actions;
+    const events = [...new Map([...archive.events, ...runtime.events].map(event => [event.seq, event])).values()]
+      .sort((a, b) => a.seq - b.seq);
+    return create(stateWithLedger(state, actions, events));
+  }
+
+  async function copy(createContent: () => string | Promise<string>, label: string) {
     let content: string | undefined;
     try {
-      content = createContent();
+      content = await createContent();
       await navigator.clipboard.writeText(content);
       setFallback(null); setCopied(label);
     } catch {
-      try { content ??= createContent(); setFallback(content); setCopied('Clipboard unavailable · use manual copy'); }
+      try { content ??= await createContent(); setFallback(content); setCopied('Clipboard unavailable · use manual copy'); }
       catch { setCopied('Export failed'); }
     }
   }
@@ -45,7 +64,7 @@ export function RunInfoModal({ state, busy, opened, onClose, seedInput, setSeedI
       <Tabs defaultValue="overview">
         <Tabs.List grow>
           <Tabs.Tab value="overview">Overview</Tabs.Tab><Tabs.Tab value="dice">Dice</Tabs.Tab>
-          <Tabs.Tab value="history">History <Badge ml={5} size="xs">{state.historyV2.length}</Badge></Tabs.Tab>
+          <Tabs.Tab value="history">History <Badge ml={5} size="xs">{state.nextHistorySeq}</Badge></Tabs.Tab>
           <Tabs.Tab value="debug">Debug</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="overview" pt="md">
@@ -88,7 +107,7 @@ export function RunInfoModal({ state, busy, opened, onClose, seedInput, setSeedI
         <Tabs.Panel value="history" pt="md">
           <Group justify="space-between" mb="xs"><Text size="sm" c="dimmed">Latest 200 structured events · rendered on demand</Text>
             <Button size="compact-xs" variant="default" disabled={busy}
-              onClick={() => copy(() => createRunHistoryTextV2(state), 'Run history copied')}>COPY RUN HISTORY</Button></Group>
+              onClick={() => copy(() => completeExport(createRunHistoryTextV2), 'Run history copied')}>COPY RUN HISTORY</Button></Group>
           {!state.historyV2Coverage.complete && <Text size="xs" c="orange" mb="xs">Run History V2 begins at Round {state.historyV2Coverage.firstRound}, action {state.historyV2Coverage.firstActionId}. Earlier activity is unavailable in V2 format.</Text>}
           <ScrollArea h={430}>{visibleHistory.map((event, index) => {
             const previous = visibleHistory[index - 1];
@@ -111,9 +130,9 @@ export function RunInfoModal({ state, busy, opened, onClose, seedInput, setSeedI
             <Button size="xs" variant="light" disabled={busy} onClick={newSeed}>New seed</Button></Group>
           <Text size="xs" c="dimmed" mt="md">Debug Trace: {state.debugTrace.mode} · {state.debugTrace.records.length} buffered · {state.debugTrace.bufferBytes} bytes · {state.debugTrace.droppedRecords} dropped{state.debugTrace.mode === 'bounded' ? ' · use ?debugTrace=full before reproduction for full retention' : ''}</Text>
           <Group gap="xs" mt="sm"><Button size="xs" variant="light" disabled={busy}
-            onClick={() => copy(() => JSON.stringify(exportRunHistoryV2(state), null, 2), 'Run data copied')}>COPY RUN DATA</Button>
+            onClick={() => copy(() => completeExport(full => JSON.stringify(exportRunHistoryV2(full), null, 2)), 'Run data copied')}>COPY RUN DATA</Button>
             <Button size="xs" variant="light" disabled={busy}
-              onClick={() => copy(() => JSON.stringify(exportDebugTrace(state), null, 2), 'Debug trace copied')}>COPY DEBUG TRACE</Button></Group>
+              onClick={() => copy(() => completeExport(full => JSON.stringify(exportDebugTrace(full), null, 2)), 'Debug trace copied')}>COPY DEBUG TRACE</Button></Group>
           {copied && <Text size="xs" c={copied.includes('copied') ? 'teal' : 'orange'} mt="xs">{copied}</Text>}
         </Tabs.Panel>
       </Tabs>

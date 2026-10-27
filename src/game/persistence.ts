@@ -4,6 +4,7 @@ import { isRollbackState } from './rollback';
 import { createStats } from './telemetry';
 import { stringifyExactJson } from './scoreMath';
 import type { BadDreamCheckpoint, GameState } from './types';
+import { cloneGameState } from './ledger';
 
 export const RUN_STORAGE_KEY = 'roll-call:active-run';
 export const RUN_STORAGE_VERSION = 28;
@@ -51,9 +52,9 @@ function isGameState(value: unknown): value is GameState {
 }
 
 export function compactGameStateForPersistence(state: GameState): GameState {
-  const compact = structuredClone(state);
+  const compact = cloneGameState(state);
   // The V1 prose timeline is a playback surface, not durable analysis history.
-  compact.history = [];
+  // `history` is a non-enumerable empty compatibility view on ledger-backed states.
   // Ordinary/full trace records are reproduction data, not durable gameplay state.
   const trace = createDebugTrace('bounded');
   trace.critical = structuredClone(state.debugTrace.critical);
@@ -101,7 +102,10 @@ export function isResumableRun(state: GameState | null): state is GameState {
 
 export function savePersistedRun(storage: RunStorage | null, state: GameState): boolean {
   if (!storage) return false;
-  const saved: PersistedRun = { version: RUN_STORAGE_VERSION, state: compactGameStateForPersistence(state) };
+  const compact = compactGameStateForPersistence(state);
+  const serializable = { ...compact, history: [], historyV2: [...compact.historyV2],
+    actionJournal: [...compact.actionJournal] } as GameState;
+  const saved: PersistedRun = { version: RUN_STORAGE_VERSION, state: serializable };
   try {
     storage.setItem(RUN_STORAGE_KEY, stringifyExactJson(saved));
     return true;

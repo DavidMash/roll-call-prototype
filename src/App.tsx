@@ -195,6 +195,17 @@ export default function App() {
       openRestoreLives={() => setRestoreLivesOpen(true)} openFlameDetails={openFlameDetails} onMenuOpenChange={setGameMenuOpen}
       returnToTitle={returnToTitle} />}
     {game.error && <Alert color="orange" withCloseButton onClose={game.clearError} my="xs" py={5} title="Action unavailable">{game.error}</Alert>}
+    {game.persistenceStatus.kind === 'unsaved' && <Alert color="red" my="xs" py={5} title="Run is not saved">
+      <Group justify="space-between" align="center" wrap="wrap" gap="xs">
+        <Text size="sm">{game.persistenceStatus.message}{game.persistenceStatus.partialHistory
+          ? ' Oldest diagnostic history was discarded after the unsaved queue exceeded 16 MiB; exports are partial.' : ' Gameplay can continue while saving retries automatically.'}</Text>
+        <Button size="compact-xs" color="red" variant="light" onClick={game.retryPersistence}>RETRY</Button>
+      </Group>
+    </Alert>}
+    {game.persistenceStatus.kind === 'saved' && !state.historyV2Coverage.complete
+      && <Alert color="orange" my="xs" py={5} title="Run history is partial">
+        <Text size="sm">Saving has recovered, but the oldest diagnostic history was discarded while storage was unavailable. Gameplay remains saved and exports identify the missing interval.</Text>
+      </Alert>}
     <main className="main-content">
       {busy && !showingMap && event?.type !== 'ROUND_BUST' && event?.type !== 'CHAPTER_STARTED'
         && <span className="visually-hidden">EVENT {progress.current} / {progress.total}</span>}
@@ -228,9 +239,10 @@ export default function App() {
       selectedFlameOffer={selectedFlameOffer}
       submit={submit} openFaceDetails={setFaceDetails} openFlameDetails={openFlameDetails} />}
     {board.phase !== 'inferno' && <RunActionRow setTarget={setActionRowTarget} />}
-    <RunInfoModal state={state} busy={busy} opened={runInfoOpen} onClose={() => setRunInfoOpen(false)}
+    {runInfoOpen && <RunInfoModal state={state} repository={game.repository} runId={game.runSession.ledger.runId}
+      busy={busy} opened onClose={() => setRunInfoOpen(false)}
       seedInput={seedInput} setSeedInput={setSeedInput} startSeed={() => restart(seedInput.trim())}
-      restartSeed={() => restart(state.seed)} newSeed={() => restart(freshSeed())} />
+      restartSeed={() => restart(state.seed)} newSeed={() => restart(freshSeed())} />}
     <HelpModal opened={helpOpen} onClose={() => setHelpOpen(false)} />
     <RestoreLivesModal board={board} opened={restoreLivesOpen && board.phase === 'shop'} busy={busy}
       onClose={() => setRestoreLivesOpen(false)} submit={submit} />

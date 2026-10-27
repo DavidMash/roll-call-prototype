@@ -2,8 +2,7 @@ import { expect, test } from '@playwright/test';
 import { createInfernoEvaluation, infernoEvaluationDuration } from '../src/game/engulfment';
 import { newRun } from '../src/game/engine';
 import type { GameState } from '../src/game/types';
-import { enterRun, installRunState } from './uiHelpers';
-import { RUN_STORAGE_KEY } from '../src/game/persistence';
+import { enterRun, installRunState, readRunState } from './uiHelpers';
 import { placeFlameInstance } from '../src/game/flames';
 
 const REVEAL_PAUSE_MS = 180;
@@ -37,7 +36,7 @@ function infernoState(seed: string, success: boolean): GameState {
 }
 
 async function storedState(page: import('@playwright/test').Page) {
-  return page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state, RUN_STORAGE_KEY);
+  return (await readRunState(page))!;
 }
 
 for (const speed of ['normal', 'fast', 'instant'] as const) {
@@ -91,13 +90,13 @@ for (const speed of ['normal', 'fast', 'instant'] as const) {
     await expect(ready.getByRole('button', { name: 'NOT YET', exact: true })).toBeVisible();
     const before = await storedState(page);
     expect(before.engulfmentLevel).toBe(0);
-    expect(before.flameSlots[0].type).toBe('vineyard');
+    expect(before.flameSlots[0]!.type).toBe('vineyard');
     await ready.getByRole('button', { name: 'NOT YET', exact: true }).click();
     await page.clock.runFor(10_000);
     await expect(ready).toHaveCount(0);
     const deferred = await storedState(page);
     expect(deferred.engulfmentLevel).toBe(0);
-    expect(deferred.flameSlots[0].type).toBe('vineyard');
+    expect(deferred.flameSlots[0]!.type).toBe('vineyard');
     expect(deferred.infernoProgress.previousReadiness).toBe(1);
   });
 }
@@ -122,5 +121,5 @@ test('ENGULF NOW resolves the exact displayed offering and resets the persistent
   expect(stored.engulfmentLevel).toBe(1);
   expect(stored.flameSlots[0]).toBeNull();
   expect(stored.infernoProgress.previousReadiness).toBe(0);
-  expect(stored.infernoEvaluation.engulfed).toBe(true);
+  expect(stored.infernoEvaluation!.engulfed).toBe(true);
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { cloneGameState } from './ledger';
 import {
   activeEncounterDice, bossTypeForRound, BOSSES, BOSS_TYPES, createBossRuntime, createCursedDie,
   currentlyPlayableManualHands, isBigBossType, isMiniBossType, MINI_BOSS_TYPES,
@@ -226,7 +227,7 @@ describe('last play and Retreat', () => {
     expect(result.state.lives).toBe(2);
     expect(result.state.bust).toMatchObject({ round: 1, livesBefore: 3, livesAfter: 2 });
 
-    const finalLife = structuredClone(state);
+    const finalLife = cloneGameState(state);
     finalLife.lives = 1;
     expect(validateAction(finalLife, { type: 'RETREAT' })).toContain('end the run');
   });

@@ -1,14 +1,15 @@
 import { expect, test } from '@playwright/test';
-import { ONBOARDING_STORAGE_KEY, TUTORIAL_RUN_STORAGE_KEY, TUTORIAL_RUN_STORAGE_VERSION } from '../src/tutorial/tutorialPersistence';
-import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
+import { ONBOARDING_STORAGE_KEY } from '../src/tutorial/tutorialPersistence';
 import { dispatchTutorial, newTutorialSession } from '../src/tutorial/scenario';
 import type { Action, Flame, HandId, Rank } from '../src/game/types';
 import type { TutorialSession } from '../src/tutorial/types';
 import { placeFlameInstance } from '../src/game/flames';
+import { clearRunDatabase, installRunState, readRunState, seedRunSession } from './uiHelpers';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/?speed=instant');
   await page.evaluate(() => localStorage.clear());
+  await clearRunDatabase(page);
   await page.reload();
 });
 
@@ -41,8 +42,7 @@ function shopOneSession() {
 }
 
 async function resumeSession(page: import('@playwright/test').Page, session: TutorialSession) {
-  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, session: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
-    [TUTORIAL_RUN_STORAGE_KEY, TUTORIAL_RUN_STORAGE_VERSION, session] as const);
+  await seedRunSession(page, session.game, 'tutorial', session.scenario);
   await page.reload();
   await page.getByRole('button', { name: 'CONTINUE TUTORIAL', exact: true }).click();
   await expect(page.locator('.driver-popover')).toBeVisible();
@@ -110,8 +110,8 @@ test('onboarding prioritizes an isolated tutorial and resumes it after refresh',
   await expect(page.locator('.driver-popover')).toContainText('WELCOME TO ROLL CALL');
   await page.getByRole('button', { name: 'GOT IT', exact: true }).click();
   await expect(page.locator('.driver-popover')).toContainText('THE GOAL');
-  expect(await page.evaluate(key => localStorage.getItem(key), TUTORIAL_RUN_STORAGE_KEY)).not.toBeNull();
-  expect(await page.evaluate(key => localStorage.getItem(key), RUN_STORAGE_KEY)).toBeNull();
+  expect(await readRunState(page, 'tutorial')).not.toBeNull();
+  expect(await readRunState(page, 'normal')).toBeNull();
 
   await page.reload();
   await expect(page.getByRole('button', { name: 'CONTINUE TUTORIAL', exact: true })).toBeVisible();
@@ -294,8 +294,7 @@ test('obsolete Workout shopping lesson cannot reappear in a resumed tutorial', a
   session.game.round = 3;
   session.game.gold = 20;
   session.scenario.completedBeatIds.push('shop1-training');
-  await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, session: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
-    [TUTORIAL_RUN_STORAGE_KEY, TUTORIAL_RUN_STORAGE_VERSION, session] as const);
+  await seedRunSession(page, session.game, 'tutorial', session.scenario);
   await page.reload();
   await page.getByRole('button', { name: 'CONTINUE TUTORIAL', exact: true }).click();
   await expect(page.locator('.driver-popover')).toHaveCount(0);
@@ -407,8 +406,7 @@ test('Tutorial Shop progression nudge waits for five neutral seconds and stops a
     session.game.shop!.stage = 'flames';
     session.scenario.completedBeatIds.push('chapter-2');
     if (round > 12) session.scenario.completedBeatIds.push('curriculum-complete');
-    await page.evaluate(([key, version, saved]) => localStorage.setItem(key, JSON.stringify({ version, session: saved }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
-      [TUTORIAL_RUN_STORAGE_KEY, TUTORIAL_RUN_STORAGE_VERSION, session] as const);
+    await seedRunSession(page, session.game, 'tutorial', session.scenario);
     await page.reload();
     await page.getByRole('button', { name: 'CONTINUE TUTORIAL', exact: true }).click();
     const action = page.getByTestId('shop-progression-action');
@@ -444,9 +442,7 @@ test('Shop progression nudge is not used in a normal run', async ({ page }) => {
   const session = shopOneSession();
   session.game.round = 2;
   session.game.shop!.stage = 'flames';
-  await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
-    [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, session.game] as const);
-  await page.reload();
+  await installRunState(page, session.game);
   await page.getByRole('button', { name: /^Continue Chapter 1 Round 2,/ }).click();
   const progression = page.getByTestId('shop-progression-action');
   await expect(progression).toBeVisible();
@@ -500,8 +496,8 @@ test('normal and tutorial saves coexist and Skip Tutorial does not complete onbo
   await expect(page.getByRole('button', { name: 'CONTINUE TUTORIAL', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'SKIP TUTORIAL', exact: true }).click();
   await expect(page.getByTestId('dice-dock')).toBeVisible();
-  expect(await page.evaluate(key => localStorage.getItem(key), TUTORIAL_RUN_STORAGE_KEY)).not.toBeNull();
-  expect(await page.evaluate(key => localStorage.getItem(key), RUN_STORAGE_KEY)).not.toBeNull();
+  expect(await readRunState(page, 'tutorial')).not.toBeNull();
+  expect(await readRunState(page, 'normal')).not.toBeNull();
   const metadata = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).metadata, ONBOARDING_STORAGE_KEY);
   expect(metadata.tutorialCompleted).toBe(false);
 });

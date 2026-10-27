@@ -161,8 +161,8 @@ export class Resolver {
 
   emitV2(input: RunHistoryV2EventInput): RunHistoryV2Event {
     const { parentSeq, ...payload } = input;
-    const event = { ...payload, seq: this.state.historyV2.length, round: this.state.round,
-      attempt: this.state.roundAttemptNumber, actionId: this.state.actionJournal.length,
+    const event = { ...payload, seq: this.state.nextHistorySeq++, round: this.state.round,
+      attempt: this.state.roundAttemptNumber, actionId: this.state.nextActionId,
       timelineId: this.state.historyV2TimelineId, ...(parentSeq === undefined ? {} : { parentSeq }) } as RunHistoryV2Event;
     if (!this.options.disableHistoryV2) this.state.historyV2.push(event);
     return event;
@@ -180,7 +180,7 @@ export class Resolver {
 
   private trace(input: Parameters<typeof appendDebugTrace>[2]): void {
     appendDebugTrace(this.state.debugTrace, { round: this.state.round, attempt: this.state.roundAttemptNumber,
-      actionId: this.state.actionJournal.length }, input);
+      actionId: this.state.nextActionId }, input);
   }
 
   private flameOrigin(flame: Flame): FlameOrigin {
@@ -200,7 +200,7 @@ export class Resolver {
   private nextTimeline(reason: 'bust' | 'bad_dream' | 'time_travel', canonicalRound: number, canonicalAttempt: number,
     relocation?: 'chapter_start' | 'post_r3_shop'): void {
     const fromTimelineId = this.state.historyV2TimelineId;
-    const abandonedThroughSeq = Math.max(-1, this.state.historyV2.length - 1);
+    const abandonedThroughSeq = Math.max(-1, this.state.nextHistorySeq - 1);
     const sameTimeline = this.state.historyV2.filter(event => event.timelineId === fromTimelineId);
     const latestAttempt = [...sameTimeline].reverse().find(event => event.kind === 'round_attempt_started');
     const badDreamSelection = [...sameTimeline].reverse().find(event => event.kind === 'shop_transaction'
@@ -226,7 +226,7 @@ export class Resolver {
       ...(reason === 'bust' ? {} : { preservedState: 'current_build' as const, retainedHandSideEffects,
         retainedCarePackageSpends }) });
     appendCriticalDiagnostic(this.state.debugTrace, { round: this.state.round, attempt: this.state.roundAttemptNumber,
-      actionId: this.state.actionJournal.length }, { kind: 'checkpoint_restore', reason, fromTimelineId,
+      actionId: this.state.nextActionId }, { kind: 'checkpoint_restore', reason, fromTimelineId,
       toTimelineId: this.state.historyV2TimelineId });
   }
 
@@ -1020,7 +1020,7 @@ export class Resolver {
     reasonId: RollReason = 'other'): void {
     const ids = orderDieIdsByEncounter(this.state, [...new Set(dieIds)]);
     if (!ids.length) return;
-    const batchId = `${this.state.historyV2TimelineId}:${this.state.round}:${this.state.actionJournal.length}:${this.state.historyV2.length}`;
+    const batchId = `${this.state.historyV2TimelineId}:${this.state.round}:${this.state.nextActionId}:${this.state.nextHistorySeq}`;
     const batch = createRollBatchIntent(batchId, ids, reason, context, reasonId);
     if (batch.manual) this.resolveCurtainCallsBeforeManualReroll(batch);
     const parentSeq = this.v2ParentSeq;
@@ -1699,7 +1699,7 @@ export class Resolver {
       }
       legalDieIds = combination;
     }
-    const playId = `${this.state.historyV2TimelineId}:${this.state.round}:${this.state.actionJournal.length}:${this.state.historyV2.length}:${playSource}`;
+    const playId = `${this.state.historyV2TimelineId}:${this.state.round}:${this.state.nextActionId}:${this.state.nextHistorySeq}:${playSource}`;
     const scorePackage = this.activeScorePackage ?? this.beginScorePackage(playId, hand, playSource);
     const parentPlayId = this.playStack.at(-1) ?? null;
     const isRootPlay = playId === scorePackage.rootPlayId;

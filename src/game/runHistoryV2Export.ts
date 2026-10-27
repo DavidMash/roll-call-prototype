@@ -144,7 +144,7 @@ export function exportDebugTrace(state: GameState) {
     historySchemaVersion: RUN_HISTORY_V2_SCHEMA_VERSION,
     ruleset: RUN_HISTORY_V2_RULESET,
     reproduction: { seed: state.seed, rngState: state.rngState, phase: state.phase, round: state.round,
-      attempt: state.roundAttemptNumber, actionCount: state.actionJournal.length, traceMode: state.debugTrace.mode },
+      attempt: state.roundAttemptNumber, actionCount: state.nextActionId, traceMode: state.debugTrace.mode },
     historyCoverage: state.historyV2Coverage,
     actionJournal: state.actionJournal,
     trace: { mode: state.debugTrace.mode, firstAvailableSeq: state.debugTrace.firstAvailableSeq,

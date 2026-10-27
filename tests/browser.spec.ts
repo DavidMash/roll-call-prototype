@@ -7,8 +7,7 @@ import { handScore } from '../src/game/scoring';
 import { CONFIG } from '../src/game/config';
 import type { Action, GameState, SpecialDieType } from '../src/game/types';
 import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
-import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION } from '../src/game/persistence';
-import { enterRun, goToShopStage, installRunState, openGameMenu, openMenuItem, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
+import { enterRun, goToShopStage, installRunState, openGameMenu, openMenuItem, readRunState, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 import { specialOfferName } from '../src/game/specialOffers';
 import { chapterLabel } from '../src/game/chapters';
 import { createDieEffect, effectOf, resetDieRoundState, runtimeFor } from '../src/game/specialDice';
@@ -335,8 +334,7 @@ test('Play action distinguishes possible, definite, and guaranteed final chances
   async function load(consumed: typeof HAND_IDS, score: bigint) {
     state.consumed = [...consumed];
     state.score = score;
-    await page.evaluate(([key, version, stored]) => localStorage.setItem(key, JSON.stringify({ version, state: stored }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
-      [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, state] as const);
+    await installRunState(page, state);
     await page.reload();
     await ready(page);
     await page.getByTestId(`scorecard-row-${selected.id}`).click();
@@ -823,8 +821,7 @@ test('mobile staged Shop keeps each section, navigation, and the compact Roster 
   const game = await reachShop(page, findShopSeed());
   game.round = 2;
   game.gold = 100;
-  await page.evaluate(([key, version, state]) => localStorage.setItem(key, JSON.stringify({ version, state }, (_key, value) => typeof value === 'bigint' ? value.toString() : value)),
-    [RUN_STORAGE_KEY, RUN_STORAGE_VERSION, game] as const);
+  await installRunState(page, game);
   await page.reload();
   await enterRun(page);
   await expect(page.locator('.shop-screen')).toBeVisible();
@@ -977,6 +974,7 @@ test('full seeded run: select/play, clear, buy a collectible die, next round, lo
   const runInfo = page.getByRole('dialog', { name: 'Run Info' });
   await runInfo.getByRole('tab', { name: 'Debug' }).click();
   await runInfo.getByRole('button', { name: 'COPY RUN DATA' }).click();
+  await expect(runInfo.getByRole('tabpanel', { name: 'Debug' }).getByText('Run data copied', { exact: true })).toBeVisible();
   const data = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
   expect(data.exportType).toBe('roll_call_run_history_v2');
   expect(data.identity.seed).toBe(seed);
@@ -987,12 +985,14 @@ test('full seeded run: select/play, clear, buy a collectible die, next round, lo
   expect(data.events.some((event: { kind: string }) => event.kind === 'hand_scored')).toBe(true);
   await runInfo.getByRole('tab', { name: /History/ }).click();
   await runInfo.getByRole('button', { name: 'COPY RUN HISTORY' }).click();
+  await expect(runInfo.getByRole('tabpanel', { name: /History/ }).getByText('Run history copied', { exact: true })).toBeVisible();
   const historyExport = await page.evaluate(() => navigator.clipboard.readText());
   expect(historyExport).toContain('ROLL CALL · RUN HISTORY V2');
   expect(historyExport).toContain('Outcome: lost');
   expect(historyExport).toContain('CHRONOLOGICAL HISTORY');
   await runInfo.getByRole('tab', { name: 'Debug' }).click();
   await runInfo.getByRole('button', { name: 'COPY DEBUG TRACE' }).click();
+  await expect(runInfo.getByRole('tabpanel', { name: 'Debug' }).getByText('Debug trace copied', { exact: true })).toBeVisible();
   const debugData = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
   expect(debugData.exportType).toBe('roll_call_debug_trace');
   const withoutTimerUnlocks = (actions: Action[]) => actions.filter(action => action.type !== 'UNLOCK_SHOP_EXIT');
@@ -1187,13 +1187,13 @@ test('fast event playback and skipping produce the same outcome as instant playb
 test('a seedless first visit generates a random seed and then resumes it', async ({ page }) => {
   await page.goto('/?speed=instant');
   await ready(page);
-  const firstSeed = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state.seed as string, RUN_STORAGE_KEY);
+  const firstSeed = (await readRunState(page))!.seed;
   expect(firstSeed).toMatch(/^roll-[a-z0-9]+-[a-z0-9]+$/);
   expect(firstSeed).not.toBe('roll-call');
 
   await page.reload();
   await ready(page);
-  const resumedSeed = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).state.seed as string, RUN_STORAGE_KEY);
+  const resumedSeed = (await readRunState(page))!.seed;
   expect(resumedSeed).toBe(firstSeed);
 });
 
