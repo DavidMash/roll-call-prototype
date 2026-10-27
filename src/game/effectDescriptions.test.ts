@@ -68,7 +68,7 @@ describe('structured beginner-facing effect copy', () => {
   });
 
   it('keeps dynamic values and Round terminology tied to the canonical descriptions', () => {
-    expect(plainDescription(specialDieVerboseDescription('bonus', 3))).toContain('+30 Pips');
+    expect(plainDescription(specialDieVerboseDescription('bonus', 3))).toContain('+12 Pips');
     expect(plainDescription(specialDieVerboseDescription('clockwork', 2))).toContain('next 6 Rolls');
     expect(plainDescription(specialDieVerboseDescription('teamPlayer', 2))).toContain('3 times as many Pips');
     expect(plainDescription(specialDieVerboseDescription('doubleTime', 5))).toContain('1 additional time, with a 25% chance');

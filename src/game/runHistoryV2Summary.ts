@@ -10,6 +10,7 @@ import type {
 import type { RunHistoryV2Coverage, RunHistoryV2Event } from './runHistoryV2';
 import { exactRatioNumber, scoreMax, type ExactScore } from './scoreMath';
 import { CHARGE_FLAME_IDS } from './flames';
+import { isSpecialDieType } from './specialDice';
 
 type Counts<Key extends string> = Partial<Record<Key, number>>;
 type ScoreCounts<Key extends string> = Partial<Record<Key, ExactScore>>;
@@ -79,8 +80,7 @@ export interface ExperiencedRunMetrics {
     purchases: number; sales: number; moves: number; fusions: number; purchaseGold: number; saleGold: number;
     byType: Partial<Record<SpecialDieType, { purchased: number; sold: number; fused: number }>>;
   };
-  specialDice: Partial<Record<SpecialDieType, { activations: number; invocationsSpent: number;
-    commandUses: number; scoreOccurrences: number; additionalScores: number }>>;
+  specialDice: Partial<Record<SpecialDieType, SpecialDieBalanceMetric>>;
   shopRerollSpend: number;
   temperEarned: number;
   temperSpent: number;
@@ -163,6 +163,19 @@ function initialExperienced(): ExperiencedRunMetrics {
   };
 }
 
+export interface SpecialDieBalanceMetric {
+  offersShown: number;
+  purchases: number;
+  purchaseRate: number;
+  rosterPlacements: number;
+  scoringParticipations: number;
+  activations: number;
+  invocationsSpent: number;
+  commandUses: number;
+  scoreOccurrences: number;
+  additionalScores: number;
+}
+
 const newFlameMetric = (): FlameBalanceMetric => ({
   activations: 0, roundsOwned: 0, activeRounds: 0, totalFactorApplications: 0,
   averageActivationsPerActiveRound: 0, maximumActivationsInOneRound: 0,
@@ -174,6 +187,11 @@ const newFlameMetric = (): FlameBalanceMetric => ({
     doubleOrNothingOffers: 0, doubleOrNothingAcceptances: 0, doubleOrNothingExpirations: 0,
     doubleOrNothingRedemptions: 0, doubleOrNothingScoreSacrificed: 0n,
     allInArmed: 0, allInSuccesses: 0, allInFailures: 0, allInScoreRetained: 0n, allInScoreRemoved: 0n } });
+
+const newSpecialDieMetric = (): SpecialDieBalanceMetric => ({
+  offersShown: 0, purchases: 0, purchaseRate: 0, rosterPlacements: 0, scoringParticipations: 0,
+  activations: 0, invocationsSpent: 0, commandUses: 0, scoreOccurrences: 0, additionalScores: 0,
+});
 
 function canonicalFromState(state: GameState | undefined, events: readonly RunHistoryV2Event[],
   coverage: RunHistoryV2Coverage): CanonicalRunMetrics {
@@ -240,7 +258,9 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
   const activationCounts = new Map<string, number>();
   const activeAttempts = new Map<Flame, Set<string>>();
   const factorTotals = new Map<Flame, number>();
+  const effectsByDieId = new Map<number, SpecialDieType[]>();
   const metricFor = (flame: Flame) => experienced.flames[flame] ??= newFlameMetric();
+  const specialDieMetricFor = (effect: SpecialDieType) => experienced.specialDice[effect] ??= newSpecialDieMetric();
   for (const event of events) {
     const abandoned = !classification.isCanonical(event);
     const attemptKey = `${event.timelineId}:${event.round}:${event.attempt}`;
@@ -273,11 +293,12 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
             }
           }
         }
+        for (const die of event.scoringDice)
+          for (const effect of die.effects ?? []) specialDieMetricFor(effect.type).scoringParticipations++;
         for (const occurrence of event.scoreOccurrences) {
           const effects = event.scoringDice.find(die => die.dieId === occurrence.dieId)?.effects ?? [];
           for (const effect of effects) {
-            const metric = experienced.specialDice[effect.type] ??= {
-              activations: 0, invocationsSpent: 0, commandUses: 0, scoreOccurrences: 0, additionalScores: 0 };
+            const metric = specialDieMetricFor(effect.type);
             metric.scoreOccurrences++;
             if (occurrence.additional) metric.additionalScores++;
           }
@@ -285,8 +306,7 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
         break;
       }
       case 'special_die_activated': {
-        const metric = experienced.specialDice[event.dieType] ??= {
-          activations: 0, invocationsSpent: 0, commandUses: 0, scoreOccurrences: 0, additionalScores: 0 };
+        const metric = specialDieMetricFor(event.dieType);
         metric.activations++;
         metric.invocationsSpent += Math.max(0, (event.invocationBefore ?? 0) - (event.invocationAfter ?? event.invocationBefore ?? 0));
         if (event.context === 'command') metric.commandUses++;
@@ -313,7 +333,10 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
       }
       case 'shop_offers_presented': {
         const pool = experienced.offerImpressions[event.pool];
-        for (const offer of event.offers) { pool.total++; add(pool.byRarity, offer.rarity, 1); }
+        for (const offer of event.offers) {
+          pool.total++; add(pool.byRarity, offer.rarity, 1);
+          if (event.pool === 'dice' && isSpecialDieType(offer.contentId)) specialDieMetricFor(offer.contentId).offersShown++;
+        }
         pool.bySource[event.reason] = (pool.bySource[event.reason] ?? 0) + event.offers.length;
         break;
       }
@@ -343,19 +366,33 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
           experienced.diceEconomy.purchases++; experienced.diceEconomy.purchaseGold += transaction.pricePaid;
           const type = experienced.diceEconomy.byType[transaction.dieType] ??= { purchased: 0, sold: 0, fused: 0 };
           type.purchased++;
+          const metric = specialDieMetricFor(transaction.dieType);
+          metric.purchases++;
+          if (transaction.destination.area === 'roster') metric.rosterPlacements++;
+          effectsByDieId.set(transaction.dieId, [transaction.dieType]);
         } else if (transaction.type === 'dice_sold') {
           experienced.diceEconomy.sales++; experienced.diceEconomy.saleGold += transaction.proceeds;
           for (const effect of transaction.effects) {
             const type = experienced.diceEconomy.byType[effect.type] ??= { purchased: 0, sold: 0, fused: 0 };
             type.sold++;
           }
-        } else if (transaction.type === 'dice_moved') experienced.diceEconomy.moves++;
+          effectsByDieId.delete(transaction.dieId);
+        } else if (transaction.type === 'dice_moved') {
+          experienced.diceEconomy.moves++;
+          if (transaction.source.area !== 'roster' && transaction.destination.area === 'roster')
+            for (const effect of effectsByDieId.get(transaction.sourceDieId) ?? []) specialDieMetricFor(effect).rosterPlacements++;
+        }
         else if (transaction.type === 'dice_fused') {
           experienced.diceEconomy.fusions++;
           for (const effect of transaction.effects) {
             const type = experienced.diceEconomy.byType[effect.type] ??= { purchased: 0, sold: 0, fused: 0 };
             type.fused++;
           }
+          for (const ingredientId of transaction.ingredientIds) effectsByDieId.delete(ingredientId);
+          const effects = transaction.effects.map(effect => effect.type);
+          effectsByDieId.set(transaction.resultId, effects);
+          if (transaction.destination.area === 'roster')
+            for (const effect of effects) specialDieMetricFor(effect).rosterPlacements++;
         }
         if (transaction.type === 'life_restored') experienced.livesRestored += transaction.livesAfter - transaction.livesBefore;
         if (transaction.type === 'special_offer_selected') add(experienced.specialOffers, transaction.offer, 1);
@@ -467,6 +504,8 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
     metric.averageAppliedFactor = metric.totalFactorApplications
       ? (factorTotals.get(flame) ?? 0) / metric.totalFactorApplications : null;
   }
+  for (const metric of Object.values(experienced.specialDice)) if (metric)
+    metric.purchaseRate = metric.offersShown ? metric.purchases / metric.offersShown : 0;
   const shares = ((experienced.largestHandShare as LargestHandShareSummary & { values?: number[] }).values ?? []);
   experienced.largestHandShare = { samples: shares.length, median: percentile(shares, .5), p90: percentile(shares, .9),
     maximum: shares.length ? Math.max(...shares) : null,

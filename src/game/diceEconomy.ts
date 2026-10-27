@@ -4,6 +4,7 @@ import { SHOP_SPECIAL_DIE_TYPES, SPECIAL_DICE } from './specialDice';
 import type { CollectibleDie, DiceInventory, DiceOffer, DiceRarity, DiceSlotRef, DieId, RandomSource, SpecialDieType } from './types';
 export type { SpecialDieType } from './types';
 import { plainDescription, specialDieVerboseDescription } from './effectDescriptions';
+import { CONFIG } from './config';
 export { dieSellBreakdown } from './forge';
 
 export const DICE_OFFER_COUNT = 3;
@@ -12,12 +13,6 @@ export const DICE_RARITY_WEIGHTS: Readonly<Record<DiceRarity, number>> = {
   uncommon: 30,
   rare: 13,
   legendary: 2,
-};
-export const DICE_PRICES: Readonly<Record<DiceRarity, number>> = {
-  common: 10,
-  uncommon: 20,
-  rare: 30,
-  legendary: 40,
 };
 export const DICE_RARITY_ORDER: readonly DiceRarity[] = ['common', 'uncommon', 'rare', 'legendary'];
 export function specialDieRarity(type: SpecialDieType): DiceRarity {
@@ -91,15 +86,15 @@ export function fusionEffectSummary(type: SpecialDieType, fromLevel: number, toL
   const numeric = (level: number): string => {
     switch (type) {
       case 'basic': return `×${level} raw face Pips`;
-      case 'bonus': return `+${10 * level} Pips`;
-      case 'workout': return `+${2 * level} Pips per Score`;
+      case 'bonus': return `+${CONFIG.bonusPips * level} Pips`;
+      case 'workout': return `+${CONFIG.workoutPipsPerScore * level} Pips per Score`;
       case 'vintage': return `+${level} Gold per Score, max +${90 * level}`;
       case 'golden': return `${3 * level} Gold/Round`;
       case 'clockwork': return `${3 * level} controlled Rerolls`;
       case 'jackpot': return `+${3 * level} Gold`;
       case 'teamPlayer': return `×${level + 1}`;
       case 'loneWolf': return `${level + 1} Scores`;
-      case 'tank': return `+${10 * level} Pips`;
+      case 'tank': return `+${CONFIG.tankPipsPerTrigger * level} Pips`;
       case 'freePlay': return `×${level} die Pips`;
       case 'jumpingBean': return `${level * 3} Uses per Round`;
       case 'doubleTime': {
@@ -108,7 +103,7 @@ export function fusionEffectSummary(type: SpecialDieType, fromLevel: number, toL
         const base = guaranteed ? `Always Scores ${guaranteed + 1} times` : `${remainder * 25}% chance to Score twice`;
         return guaranteed && remainder ? `${base} + ${remainder * 25}% chance to Score ${guaranteed + 2} times` : base;
       }
-      case 'furnace': return `+${3 * level} Pips/Gold, max +${15 * level}`;
+      case 'furnace': return `+${CONFIG.furnacePipsPerGoldPerLevel * level} Pips/Gold, max +${CONFIG.furnaceMaxGoldPerRound * CONFIG.furnacePipsPerGoldPerLevel * level}`;
       default: return `${level} Use${level === 1 ? '' : 's'} per Round`;
     }
   };

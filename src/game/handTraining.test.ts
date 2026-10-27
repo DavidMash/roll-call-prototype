@@ -92,9 +92,9 @@ describe('derived hand levels', () => {
     syncActiveDiceProjection(game);
     game.dieRoundState = resetDieRoundState(rosterDice(game));
     const result = dispatch(game, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(0));
-    expect(result.state.score).toBe(126n);
+    expect(result.state.score).toBe(95n);
     expect(result.state.stats.handScores[0]).toMatchObject({ handLevel: 3, handMultiplier: 5.25,
-      pips: 24, multiplier: 5.25, rawScore: '126', score: 126n });
+      pips: 18, multiplier: 5.25, rawScore: '94.5', score: 95n });
   });
 });
 

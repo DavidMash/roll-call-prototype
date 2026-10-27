@@ -1044,7 +1044,7 @@ test('Vintage collectible details expose its authoritative appreciation and sell
   await matchBoard(page, game);
   const offer = game.shop!.offers.find(item => item.dieType === 'vintage')!;
   const card = page.getByTestId(`dice-offer-${offer.id}`);
-  await expect(card).toContainText('10G');
+  await expect(card).toContainText('15G');
   await card.getByRole('button', { name: /buy/i }).click();
   game = dispatch(game, { type: 'BUY_DIE', offerId: offer.id }).state;
   const vintageId = game.diceInventory.storage[0]!;

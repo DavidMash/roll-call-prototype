@@ -54,7 +54,7 @@ export function renderRunSummaryV2(state: GameState): string {
     .map(([hand, metric]) => `${HANDS[hand as keyof typeof HANDS].name}: ${metric.purchases} purchase${metric.purchases === 1 ? '' : 's'}, ${number(metric.goldSpent)}G, max tier ${metric.maximumRelativeTier}, max quote ${number(metric.maximumNormalPrice)}G`).join(' · ') || 'None';
   const specialDice = Object.entries(experienced.specialDice)
     .filter(([type]) => type !== 'normal')
-    .map(([type, metric]) => `${SPECIAL_DICE[type as keyof typeof SPECIAL_DICE].name}: ${metric.activations} activations, ${metric.invocationsSpent} Uses, ${metric.commandUses} commands, ${metric.scoreOccurrences} Scores (${metric.additionalScores} additional)`).join(' · ') || 'None';
+    .map(([type, metric]) => `${SPECIAL_DICE[type as keyof typeof SPECIAL_DICE].name}: offered ${metric.offersShown}, bought ${metric.purchases} (${percent(metric.purchaseRate)}), roster placements ${metric.rosterPlacements}, scoring participations ${metric.scoringParticipations}, ${metric.activations} activations, ${metric.invocationsSpent} Uses, ${metric.commandUses} commands, ${metric.scoreOccurrences} Scores (${metric.additionalScores} additional)`).join(' · ') || 'None';
   const flameBalance = Object.entries(experienced.flames).map(([id, metric]) => {
     const factor = metric.averageAppliedFactor === null ? ''
       : ` · factor avg ×${number(metric.averageAppliedFactor)}, max ×${number(metric.maximumAppliedFactor ?? 1)}`;

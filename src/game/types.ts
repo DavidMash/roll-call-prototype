@@ -384,7 +384,8 @@ export interface DieEffectRoundRuntime {
   goldenGoldEarned: number;
   temporaryPips: number;
   clockworkRolls: number;
-  furnaceUnits: number;
+  furnaceGoldFed: number;
+  furnacePips: number;
   magicArmedFace: Exclude<Rank, 7> | null;
   weightedFace: Exclude<Rank, 7>;
   jumpingBeanNumber: Exclude<Rank, 7>;

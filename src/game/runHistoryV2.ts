@@ -6,7 +6,7 @@ import type {
 import type { RoundGoalBreakdown } from './goals';
 import type { ExactDecimal, ExactScore } from './scoreMath';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 25 as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 26 as const;
 export const RUN_HISTORY_V2_RULESET = 'dice-pips-hand-mult-v1' as const;
 
 export interface RunHistoryV2Coverage {

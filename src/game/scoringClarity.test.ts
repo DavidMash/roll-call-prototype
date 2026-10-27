@@ -39,7 +39,7 @@ describe('canonical scoring clarity preview', () => {
     const preview = canonicalPlayPreview(state, 'threeKind', ids);
     const resolved = dispatch(state, { type: 'PLAY', hand: 'threeKind', dieIds: ids }, constant());
     expect(preview.diePips).toEqual(expect.arrayContaining([
-      expect.objectContaining({ dieId: dice[0].id, pips: 28 }),
+      expect.objectContaining({ dieId: dice[0].id, pips: 16 }),
       expect.objectContaining({ dieId: dice[4].id, pips: 6, role: 'hitchhiker' }),
     ]));
     expect(preview.pips).toBe(resolved.state.stats.handScores[0].pips);
@@ -61,11 +61,11 @@ describe('canonical scoring clarity preview', () => {
     expect(resolved.events.findIndex(event => event.type === 'HAND_MULTIPLIER_CHANGED'))
       .toBeGreaterThan(resolved.events.map(event => event.type).lastIndexOf('DIE_PIPS_RESOLVED'));
     const history = resolved.state.historyV2.find(event => event.kind === 'hand_scored')!;
-    expect(history.kind === 'hand_scored' ? history.score : null).toMatchObject({ finalPips: 42, handMult: 3 });
+    expect(history.kind === 'hand_scored' ? history.score : null).toMatchObject({ finalPips: 30, handMult: 3 });
     expect(history).not.toHaveProperty('score.basePips');
     expect(history).not.toHaveProperty('score.baseMult');
     expect(history.kind === 'hand_scored' ? renderHandScoredV2(history) : '')
-      .toContain('42 Pips × 3 Mult = 126');
+      .toContain('30 Pips × 3 Mult = 90');
     expect(resolved.state.historyV2.find(event => event.kind === 'run_started')).toMatchObject({
       schemaVersion: RUN_HISTORY_V2_SCHEMA_VERSION,
       ruleset: RUN_HISTORY_V2_RULESET,

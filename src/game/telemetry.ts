@@ -36,7 +36,7 @@ export function boardSnapshot(state: GameState): Board {
     handLevels, handPlayCounts, targetPracticeHand, fetchTarget, lastRoundPayout, roundSummary, shop, flameSelection, specialOffer });
 }
 export function exportRun(state: GameState) {
-  return toExactJsonValue({ schemaVersion: 32, scoringModel: 'dice-pips-hand-mult-v1', ...state.stats,
+  return toExactJsonValue({ schemaVersion: 33, scoringModel: 'dice-pips-hand-mult-v1', ...state.stats,
     actions: structuredClone(state.actionJournal),
     scoreByHand: structuredClone(state.scoreByHand),
     finalHandLevels: structuredClone(state.handLevels),

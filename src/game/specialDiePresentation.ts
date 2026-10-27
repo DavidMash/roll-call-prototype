@@ -3,6 +3,7 @@ import { dieEffectDescription, fusionEffectSummary } from './diceEconomy';
 import { dieSellBreakdown } from './forge';
 import { SPECIAL_DICE, effectRuntime, invocationCapacity } from './specialDice';
 import type { CollectibleDie, DieEffectInstance, DieEffectRoundRuntime, DieRoundRuntime, SpecialDieType } from './types';
+import { CONFIG } from './config';
 
 export const saturationFactor = (level: number): number => Math.min(1, .8 + .03 * (Math.max(1, level) - 1));
 
@@ -64,9 +65,9 @@ export function effectDetails(die: CollectibleDie, effect: DieEffectInstance,
   const status: DieStatusRow[] = [];
   switch (effect.type) {
     case 'basic': status.push({ label: 'Raw face Pips', value: `×${level}` }); break;
-    case 'bonus': status.push({ label: 'Current bonus', value: `+${10 * level} Pips` }); break;
+    case 'bonus': status.push({ label: 'Current bonus', value: `+${CONFIG.bonusPips * level} Pips` }); break;
     case 'workout': status.push({ label: 'Current bonus this Round', value: `+${runtime?.temporaryPips ?? 0} Pips` },
-      { label: 'Gains per Score', value: `+${2 * level} Pips` }); break;
+      { label: 'Gains per Score', value: `+${CONFIG.workoutPipsPerScore * level} Pips` }); break;
     case 'vintage': {
       const sale = dieSellBreakdown(die);
       status.push({ label: 'Current sell value', value: `${sale.total} Gold` },
@@ -102,8 +103,9 @@ export function effectDetails(die: CollectibleDie, effect: DieEffectInstance,
     case 'magic': status.push({ label: 'Uses Remaining', value: usesRemaining(effect, runtime) },
       { label: 'Next Reroll', value: runtime?.magicArmedFace == null ? 'Not armed' : String(runtime.magicArmedFace) }); break;
     case 'furnace': {
-      const units = runtime?.furnaceUnits ?? 0;
-      status.push({ label: 'Fed Gold', value: `${units} / 5` }, { label: 'Current bonus', value: `+${units * 3 * level} Pips` });
+      const goldFed = runtime?.furnaceGoldFed ?? 0;
+      status.push({ label: 'Gold fed this Round', value: `${goldFed} / ${CONFIG.furnaceMaxGoldPerRound}` },
+        { label: 'Furnace reserve', value: `+${runtime?.furnacePips ?? 0} Pips` });
       break;
     }
   }

@@ -32,7 +32,7 @@ describe('score resolution presentation', () => {
     syncActiveDiceProjection(state);
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] });
     const bonus = result.events.find(event => event.type === 'DIE_PIPS_RESOLVED')!;
-    expect(scorePresentation(bonus)).toMatchObject({ pips: 11, callout: expect.stringContaining('+11 PIPS'), activeMetric: 'pips' });
+    expect(scorePresentation(bonus)).toMatchObject({ pips: 5, callout: expect.stringContaining('+5 PIPS'), activeMetric: 'pips' });
     const mult = result.events.find(event => event.type === 'HAND_MULTIPLIER_CHANGED')!;
     expect(scorePresentation(mult)).toMatchObject({ showHandMult: true, activeMetric: 'mult' });
   });

@@ -614,7 +614,7 @@ export class Resolver {
       const workout = effectOf(collectible, 'workout');
       const workoutRuntime = this.specialRuntime(collectible, 'workout');
       if (workout && workoutRuntime) {
-        const growth = 2 * workout.level;
+        const growth = CONFIG.workoutPipsPerScore * workout.level;
         const before = workoutRuntime.temporaryPips;
         workoutRuntime.temporaryPips += growth;
         this.emitSpecial(collectible, workout, `Workout future Pips ${before} → ${workoutRuntime.temporaryPips}`, 'score');
@@ -629,18 +629,21 @@ export class Resolver {
       const tankRuntime = this.specialRuntime(collectible, 'tank');
       if (tank && tankRuntime) {
         const before = tankRuntime.temporaryPips;
-        tankRuntime.temporaryPips += 10 * tank.level;
+        tankRuntime.temporaryPips += CONFIG.tankPipsPerTrigger * tank.level;
         this.emitSpecial(collectible, tank, `Tank future Pips ${before} → ${tankRuntime.temporaryPips}`, 'score');
-      }
-      const furnace = effectOf(collectible, 'furnace');
-      const furnaceRuntime = this.specialRuntime(collectible, 'furnace');
-      if (furnace && furnaceRuntime && furnaceRuntime.furnaceUnits > 0) {
-        const before = furnaceRuntime.furnaceUnits;
-        furnaceRuntime.furnaceUnits--;
-        this.emitSpecial(collectible, furnace, `Furnace units ${before} → ${furnaceRuntime.furnaceUnits}`, 'score');
       }
     }
     return { additionalOccurrences: [] };
+  }
+
+  private decayFurnacesAfterPlay(): void {
+    for (const die of rosterDice(this.state)) {
+      if (wholeDieEffectSuppressed(die)) continue;
+      const furnace = effectOf(die, 'furnace');
+      const runtime = furnace ? this.specialRuntime(die, 'furnace') : undefined;
+      if (!runtime || runtime.furnacePips <= 0) continue;
+      runtime.furnacePips = Math.max(0, runtime.furnacePips - 1);
+    }
   }
 
   private resolveScoreOccurrences(resolution: HandResolution): ScoringParticipant[] {
@@ -949,7 +952,7 @@ export class Resolver {
     const tankRuntime = collectible ? this.specialRuntime(collectible, 'tank') : undefined;
     if (specialAllowed && collectible && tank && tankRuntime && intent.reroll) {
       const beforePips = tankRuntime.temporaryPips;
-      tankRuntime.temporaryPips += 10 * tank.level;
+      tankRuntime.temporaryPips += CONFIG.tankPipsPerTrigger * tank.level;
       this.emitSpecial(collectible, tank, `Tank intercepted Reroll; future Pips ${beforePips} → ${tankRuntime.temporaryPips}`,
         'reroll_intercept');
       return { ...forced('tank', before, die.id), physicalFace: beforePhysical, intercepted: true };
@@ -1783,7 +1786,8 @@ export class Resolver {
     };
     const sustainableParticipant = resolution.wouldConsumeHand ? scoringParticipants.find(participant => {
       const die = this.collectible(participant.id);
-      return !!die && hasEffect(die, 'sustainable') && !wholeDieEffectSuppressed(die)
+      return participant.role === 'selected' && intent.source === 'manual' && intent.playerSelectedDieIds.includes(participant.id)
+        && !!die && hasEffect(die, 'sustainable') && !wholeDieEffectSuppressed(die)
         && (this.specialRuntime(die, 'sustainable')?.invocationsRemaining ?? 0) > 0;
     }) : undefined;
     if (sustainableParticipant) {
@@ -1931,6 +1935,7 @@ export class Resolver {
       pipsContributions: draft.pipsContributions, resolvedDicePips: draft.resolvedDicePips,
       multContributions: draft.multContributions,
       xMultContributions: draft.xMultContributions, sideEffects: draft.sideEffects });
+    this.decayFurnacesAfterPlay();
     this.v2Hand = null;
     this.v2ParentSeq = handEvent.seq;
     this.advanceNeglected();
@@ -1990,10 +1995,11 @@ export class Resolver {
     if (wholeDieEffectSuppressed(die)) throw new Error('Furnace is suppressed while its infected face is exposed.');
     const runtime = this.specialRuntime(die, 'furnace')!;
     this.spendRoundGold(amount, `Fed ${this.dieLabel(die.id)} Furnace: -${amount} Gold`, 'furnace');
-    const before = runtime.furnaceUnits;
-    runtime.furnaceUnits += amount;
-    this.emitSpecial(die, effect, `Furnace units ${before} → ${runtime.furnaceUnits}`, 'on_command',
-      undefined, undefined, { amount });
+    const before = runtime.furnacePips;
+    runtime.furnaceGoldFed += amount;
+    runtime.furnacePips += amount * CONFIG.furnacePipsPerGoldPerLevel * effect.level;
+    this.emitSpecial(die, effect, `Furnace reserve ${before} → ${runtime.furnacePips} Pips`, 'on_command',
+      undefined, undefined, { amount: runtime.furnacePips - before });
   }
 
   burnItDown(): void {

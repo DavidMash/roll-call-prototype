@@ -9,7 +9,7 @@ import type { GameState } from '../game/types';
 import { Die } from './Die';
 import { ShopScreen } from './ShopScreen';
 import { CollectibleDieVisual } from './CollectibleDieVisual';
-import { createDieEffect } from '../game/specialDice';
+import { createDieEffect, SPECIAL_DICE } from '../game/specialDice';
 import { DieEffectsLabel, DieTypeLabel } from './DieTypeLabel';
 
 const fixed = { next: () => .2 };
@@ -95,6 +95,20 @@ describe('collectible Dice presentation', () => {
       expect(html).toContain(`currency-value">${offer.price}</span><span class="currency-symbol">G`);
     }
     expect(html).not.toContain('NEED ');
+  });
+
+  it('renders the independent 10G, 15G, and 20G price bands on purchase buttons', () => {
+    const state = openShop('independent-price-bands');
+    (['flywheel', 'golden', 'mirror'] as const).forEach((dieType, index) => {
+      state.shop!.offers[index] = { ...state.shop!.offers[index], dieType,
+        rarity: SPECIAL_DICE[dieType].rarity, price: SPECIAL_DICE[dieType].purchasePrice };
+    });
+    const html = shopMarkup(state);
+    for (const price of [10, 15, 20]) {
+      expect(html).toContain(`Buy die for ${price} Gold`);
+      expect(html).toContain(`currency-value">${price}</span><span class="currency-symbol">G`);
+    }
+    expect(html).not.toContain('dice-offer-price');
   });
 });
 

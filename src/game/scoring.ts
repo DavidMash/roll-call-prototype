@@ -53,8 +53,8 @@ export function resolvedDiePipsContributions(participant: ScoringParticipant, sc
     const furnace = effectOf(die, 'furnace');
     const specialParts: [SpecialDieType, number][] = [
       ['basic', basic ? participant.face.rank * (basic.level - 1) : 0],
-      ['bonus', bonus ? 10 * bonus.level : 0],
-      ['furnace', furnace ? (effectRuntime(runtime, furnace)?.furnaceUnits ?? 0) * 3 * furnace.level : 0],
+      ['bonus', bonus ? CONFIG.bonusPips * bonus.level : 0],
+      ['furnace', furnace ? (effectRuntime(runtime, furnace)?.furnacePips ?? 0) : 0],
       ['workout', effectRuntime(runtime, effectOf(die, 'workout'))?.temporaryPips ?? 0],
       ['tank', effectRuntime(runtime, effectOf(die, 'tank'))?.temporaryPips ?? 0],
     ];
@@ -70,7 +70,7 @@ export function resolvedDiePipsContributions(participant: ScoringParticipant, sc
   }
   if (context.playSource === 'manual' && participant.role === 'selected' && context.selectedDice?.some(item => item.id === participant.id)) {
     const teamPlayers = context.selectedDice.filter(item => item.id !== participant.id && !!effectOf(item, 'teamPlayer'));
-    const teamFactor = teamPlayers.reduce((factor, teamPlayer) => factor * (effectOf(teamPlayer, 'teamPlayer')!.level + 1), 1);
+    const teamFactor = 1 + teamPlayers.reduce((levels, teamPlayer) => levels + effectOf(teamPlayer, 'teamPlayer')!.level, 0);
     if (teamFactor > 1) {
       const subtotal = contributions.reduce((sum, contribution) => sum + contribution.amount, 0);
       contributions.push({ kind: 'teamPlayer', role: participant.role, dieId: participant.id,

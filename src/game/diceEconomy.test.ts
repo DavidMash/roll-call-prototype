@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createCollectibleDie } from './dice';
-import { DICE_PRICES, DICE_RARITY_WEIGHTS, generateDiceOfferTypes } from './diceEconomy';
+import { DICE_RARITY_WEIGHTS, generateDiceOfferTypes } from './diceEconomy';
 import { dispatch, newRun } from './engine';
 import { Resolver } from './effects';
 import { classifyForge, dieForgeRating, dieSellBreakdown, mergedEffects, previewForge } from './forge';
@@ -18,9 +18,8 @@ function shopGame(random: RandomSource = constant(.1)): GameState {
 }
 
 describe('Dice Shop offers and capacity', () => {
-  it('uses authoritative rarity weights/prices and creates three deterministic offers', () => {
+  it('uses authoritative rarity weights and creates three deterministic offers', () => {
     expect(DICE_RARITY_WEIGHTS).toEqual({ common: 55, uncommon: 30, rare: 13, legendary: 2 });
-    expect(DICE_PRICES).toEqual({ common: 10, uncommon: 20, rare: 30, legendary: 40 });
     expect(generateDiceOfferTypes(constant(0))).toEqual(['bonus', 'bonus', 'bonus']);
     expect(shopGame(constant(0)).shop!.offers).toHaveLength(3);
   });

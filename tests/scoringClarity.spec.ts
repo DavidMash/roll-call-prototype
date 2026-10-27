@@ -59,7 +59,7 @@ test('resolved die PIPS and Flame XMULT feedback originate from playback events'
     return values.some(value => value.includes('PIPS')) && values.some(value => value.includes('XMULT'));
   });
   const values = await page.evaluate(() => (window as typeof window & { __resolutionPops?: string[] }).__resolutionPops ?? []);
-  expect(values).toEqual(expect.arrayContaining(['+12 PIPS', '+2 PIPS']));
+  expect(values).toEqual(expect.arrayContaining(['+6 PIPS', '+2 PIPS']));
   expect(values).toContain('×3 XMULT');
   expect(await page.evaluate(() => (window as typeof window & { __maxPops?: number }).__maxPops)).toBe(1);
 });

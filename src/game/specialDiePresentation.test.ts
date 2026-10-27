@@ -36,9 +36,10 @@ describe('special-die presentation', () => {
     die.effects.push(createDieEffect(8, 'furnace', 3));
     const runtime = initialDieRoundRuntime(die);
     runtime.effects['8:magic'].magicArmedFace = 5;
-    runtime.effects['8:furnace'].furnaceUnits = 4;
+    runtime.effects['8:furnace'].furnaceGoldFed = 4;
+    runtime.effects['8:furnace'].furnacePips = 36;
     expect(effectDetails(die, die.effects[0], runtime).status).toContainEqual({ label: 'Next Reroll', value: '5' });
-    expect(effectDetails(die, die.effects[1], runtime).status).toContainEqual({ label: 'Current bonus', value: '+36 Pips' });
+    expect(effectDetails(die, die.effects[1], runtime).status).toContainEqual({ label: 'Furnace reserve', value: '+36 Pips' });
   });
 
   it('reports Curtain Call scaling without old per-face counters and Jumping Bean uses at three per level', () => {

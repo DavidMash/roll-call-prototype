@@ -10,6 +10,7 @@ import type {
 } from './types';
 import type { RichText } from './richText';
 import { specialDieVerboseDescription } from './effectDescriptions';
+import { CONFIG } from './config';
 
 export interface SpecialDieDefinition {
   type: SpecialDieType;
@@ -26,51 +27,44 @@ export interface SpecialDieDefinition {
   shortDescription?: string;
 }
 
-const RARITY_ECONOMY: Record<DiceRarity, { price: number; weight: number }> = {
-  common: { price: 10, weight: 2 },
-  uncommon: { price: 20, weight: 3 },
-  rare: { price: 30, weight: 5 },
-  legendary: { price: 40, weight: 8 },
-};
-
 const definition = (type: SpecialDieType, name: string, rarity: DiceRarity, icon: Icon, color: string,
+  economy: Pick<SpecialDieDefinition, 'purchasePrice' | 'componentSalvage' | 'forgeBaseWeight'>,
   invocationScale: SpecialDieDefinition['invocationScale'] = 'none',
   activation: SpecialDieDefinition['activation'] = 'automatic'): SpecialDieDefinition => ({
-    type, name, rarity, icon, color, invocationScale, activation,
-    purchasePrice: RARITY_ECONOMY[rarity].price,
-    componentSalvage: RARITY_ECONOMY[rarity].price / 2,
-    forgeBaseWeight: RARITY_ECONOMY[rarity].weight,
+    type, name, rarity, icon, color, invocationScale, activation, ...economy,
     verboseDescription: level => specialDieVerboseDescription(type, level),
   });
 
+const economy = (purchasePrice: number, componentSalvage: number, forgeBaseWeight: number) =>
+  ({ purchasePrice, componentSalvage, forgeBaseWeight });
+
 /** Authoritative metadata for all collectible special effects. */
 export const SPECIAL_DICE: Record<SpecialDieType, SpecialDieDefinition> = {
-  basic: { ...definition('basic', 'Basic', 'common', IconHexagon, '#adb5bd'),
-    purchasePrice: 2, componentSalvage: 1, forgeBaseWeight: 1 },
-  bonus: definition('bonus', 'Bonus', 'common', IconPlus, '#12b886'),
-  workout: definition('workout', 'Workout', 'common', IconBarbell, '#ff922b'),
-  vintage: definition('vintage', 'Vintage', 'common', IconHourglassHigh, '#d6a756'),
-  golden: definition('golden', 'Golden', 'common', IconCoin, '#fcc419'),
-  weighted: definition('weighted', 'Weighted', 'common', IconScale, '#74c0fc'),
-  clockwork: definition('clockwork', 'Clockwork', 'common', IconClockCog, '#a5d8ff'),
-  hitchhiker: definition('hitchhiker', 'Hitchhiker', 'uncommon', IconRoute, '#94d82d', 'level'),
-  magnetic: definition('magnetic', 'Magnetic', 'uncommon', IconMagnet, '#22b8cf', 'level'),
-  jackpot: definition('jackpot', 'Jackpot', 'uncommon', IconClover, '#69db7c'),
-  chameleon: definition('chameleon', 'Chameleon', 'uncommon', IconPalette, '#e599f7', 'level', 'onCommand'),
-  flywheel: definition('flywheel', 'Flywheel', 'uncommon', IconRefresh, '#4dabf7', 'level', 'onCommand'),
-  teamPlayer: definition('teamPlayer', 'Team Player', 'rare', IconUsersGroup, '#63e6be'),
-  loneWolf: definition('loneWolf', 'Lone Wolf', 'rare', IconUser, '#ffa8a8'),
+  basic: definition('basic', 'Basic', 'common', IconHexagon, '#adb5bd', economy(2, 1, 1)),
+  bonus: definition('bonus', 'Bonus', 'common', IconPlus, '#12b886', economy(10, 5, 2)),
+  workout: definition('workout', 'Workout', 'common', IconBarbell, '#ff922b', economy(10, 5, 2)),
+  vintage: definition('vintage', 'Vintage', 'common', IconHourglassHigh, '#d6a756', economy(15, 5, 2)),
+  golden: definition('golden', 'Golden', 'common', IconCoin, '#fcc419', economy(15, 5, 2)),
+  weighted: definition('weighted', 'Weighted', 'common', IconScale, '#74c0fc', economy(10, 5, 2)),
+  clockwork: definition('clockwork', 'Clockwork', 'common', IconClockCog, '#a5d8ff', economy(15, 5, 2)),
+  hitchhiker: definition('hitchhiker', 'Hitchhiker', 'uncommon', IconRoute, '#94d82d', economy(20, 10, 3), 'level'),
+  magnetic: definition('magnetic', 'Magnetic', 'uncommon', IconMagnet, '#22b8cf', economy(20, 10, 3), 'level'),
+  jackpot: definition('jackpot', 'Jackpot', 'uncommon', IconClover, '#69db7c', economy(15, 10, 3)),
+  chameleon: definition('chameleon', 'Chameleon', 'rare', IconPalette, '#e599f7', economy(30, 10, 3), 'level', 'onCommand'),
+  flywheel: definition('flywheel', 'Flywheel', 'uncommon', IconRefresh, '#4dabf7', economy(10, 5, 3), 'level', 'onCommand'),
+  teamPlayer: definition('teamPlayer', 'Team Player', 'rare', IconUsersGroup, '#63e6be', economy(30, 15, 5)),
+  loneWolf: definition('loneWolf', 'Lone Wolf', 'rare', IconUser, '#ffa8a8', economy(30, 15, 5)),
   // Keep the stable `freePlay` key so existing dice and saves become Curtain Call without migration.
-  freePlay: definition('freePlay', 'Curtain Call', 'rare', IconPlayerPlay, '#38d9a9'),
-  tank: definition('tank', 'Tank', 'rare', IconShield, '#ff8787'),
-  mirror: definition('mirror', 'Mirror', 'rare', IconCopy, '#b197fc', 'level', 'qualification'),
-  missingLink: definition('missingLink', 'Missing Link', 'rare', IconLink, '#9775fa', 'level', 'qualification'),
-  jumpingBean: definition('jumpingBean', 'Jumping Bean', 'rare', IconJumpRope, '#ff6b6b', 'level'),
-  furnace: definition('furnace', 'Furnace', 'rare', IconFlame, '#ff6b35', 'none', 'onCommand'),
-  sustainable: definition('sustainable', 'Sustainable', 'rare', IconRecycle, '#20c997', 'level'),
-  doubleTime: definition('doubleTime', 'Double Time', 'legendary', IconClockBolt, '#91a7ff'),
-  magic: definition('magic', 'Magic', 'legendary', IconWand, '#da77f2', 'level', 'onCommand'),
-  conjoined: definition('conjoined', 'Conjoined', 'legendary', IconCirclesRelation, '#f783ac', 'level', 'qualification'),
+  freePlay: definition('freePlay', 'Curtain Call', 'rare', IconPlayerPlay, '#38d9a9', economy(30, 15, 5)),
+  tank: definition('tank', 'Tank', 'rare', IconShield, '#ff8787', economy(30, 15, 5)),
+  mirror: definition('mirror', 'Mirror', 'rare', IconCopy, '#b197fc', economy(20, 15, 5), 'level', 'qualification'),
+  missingLink: definition('missingLink', 'Missing Link', 'rare', IconLink, '#9775fa', economy(20, 15, 5), 'level', 'qualification'),
+  jumpingBean: definition('jumpingBean', 'Jumping Bean', 'rare', IconJumpRope, '#ff6b6b', economy(30, 15, 5), 'level'),
+  furnace: definition('furnace', 'Furnace', 'rare', IconFlame, '#ff6b35', economy(30, 15, 5), 'none', 'onCommand'),
+  sustainable: definition('sustainable', 'Sustainable', 'rare', IconRecycle, '#20c997', economy(30, 15, 5), 'level'),
+  doubleTime: definition('doubleTime', 'Double Time', 'legendary', IconClockBolt, '#91a7ff', economy(40, 20, 8)),
+  magic: definition('magic', 'Magic', 'legendary', IconWand, '#da77f2', economy(40, 20, 8), 'level', 'onCommand'),
+  conjoined: definition('conjoined', 'Conjoined', 'legendary', IconCirclesRelation, '#f783ac', economy(40, 20, 8), 'level', 'qualification'),
 };
 
 export const SPECIAL_DIE_TYPES = Object.keys(SPECIAL_DICE) as SpecialDieType[];
@@ -103,7 +97,8 @@ export function initialEffectRoundRuntime(effect: DieEffectInstance): DieEffectR
     goldenGoldEarned: 0,
     temporaryPips: 0,
     clockworkRolls: 0,
-    furnaceUnits: 0,
+    furnaceGoldFed: 0,
+    furnacePips: 0,
     magicArmedFace: null,
     weightedFace: effect.persistent.weightedFace,
     jumpingBeanNumber: effect.persistent.jumpingBeanNumber,
@@ -159,7 +154,9 @@ export function normalizeDieRoundRuntime(die: CollectibleDie, runtime: DieRoundR
     target.goldenGoldEarned = Math.max(0, Math.floor(target.goldenGoldEarned ?? 0));
     target.temporaryPips = Math.max(0, Math.floor(target.temporaryPips ?? 0));
     target.clockworkRolls = Math.max(0, Math.floor(target.clockworkRolls ?? 0));
-    target.furnaceUnits = Math.max(0, Math.min(5, Math.floor(target.furnaceUnits ?? 0)));
+    target.furnaceGoldFed = Math.max(0, Math.min(CONFIG.furnaceMaxGoldPerRound, Math.floor(target.furnaceGoldFed ?? 0)));
+    target.furnacePips = Math.max(0, Math.floor(target.furnacePips ?? 0));
+    delete (target as unknown as Record<string, unknown>).furnaceUnits;
     target.magicArmedFace = [1, 2, 3, 4, 5, 6].includes(target.magicArmedFace as number) ? target.magicArmedFace : null;
     target.weightedFace = [1, 2, 3, 4, 5, 6].includes(target.weightedFace as number)
       ? target.weightedFace : effect.persistent.weightedFace;

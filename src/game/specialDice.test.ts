@@ -35,6 +35,15 @@ function values(state: GameState, ranks: Rank[]) {
 
 describe('composable special-die registry', () => {
   it('registers the complete 24-component catalog with authoritative presentation and economy metadata', () => {
+    const economy: Record<SpecialDieType, [number, number, number]> = {
+      basic: [2, 1, 1], bonus: [10, 5, 2], workout: [10, 5, 2], vintage: [15, 5, 2],
+      golden: [15, 5, 2], weighted: [10, 5, 2], clockwork: [15, 5, 2],
+      hitchhiker: [20, 10, 3], magnetic: [20, 10, 3], jackpot: [15, 10, 3],
+      chameleon: [30, 10, 3], flywheel: [10, 5, 3], teamPlayer: [30, 15, 5],
+      loneWolf: [30, 15, 5], freePlay: [30, 15, 5], tank: [30, 15, 5], mirror: [20, 15, 5],
+      missingLink: [20, 15, 5], jumpingBean: [30, 15, 5], furnace: [30, 15, 5],
+      sustainable: [30, 15, 5], doubleTime: [40, 20, 8], magic: [40, 20, 8], conjoined: [40, 20, 8],
+    };
     expect(SPECIAL_DIE_TYPES).toHaveLength(24);
     expect(new Set(SPECIAL_DIE_TYPES)).toHaveLength(24);
     for (const type of SPECIAL_DIE_TYPES) {
@@ -43,10 +52,7 @@ describe('composable special-die registry', () => {
       expect(definition.name).toBeTruthy();
       expect(definition.icon).toBeTypeOf('object');
       expect(definition.color).toMatch(/^#[0-9a-f]{6}$/i);
-      if (type !== 'basic') {
-        expect(definition.purchasePrice).toBe({ common: 10, uncommon: 20, rare: 30, legendary: 40 }[definition.rarity]);
-        expect(definition.forgeBaseWeight).toBe({ common: 2, uncommon: 3, rare: 5, legendary: 8 }[definition.rarity]);
-      }
+      expect([definition.purchasePrice, definition.componentSalvage, definition.forgeBaseWeight]).toEqual(economy[type]);
       expect(definition.verboseDescription(1).length).toBeGreaterThan(0);
     }
     expect(new Set(SPECIAL_DIE_TYPES.map(type => SPECIAL_DICE[type].icon))).toHaveLength(24);
@@ -262,16 +268,16 @@ describe('Conjoined qualification and real Score occurrences', () => {
     const die = setEffects(state, 0, [
       ['conjoined', 1], ['bonus', 1], ['golden', 1], ['vintage', 1], ['workout', 1], ['furnace', 1], ['sustainable', 1],
     ]);
-    effectRuntime(state.dieRoundState[die.id], effectOf(die, 'furnace'))!.furnaceUnits = 5;
+    effectRuntime(state.dieRoundState[die.id], effectOf(die, 'furnace'))!.furnacePips = 15;
     const plan = planQualification(rosterDice(state), 'fours', [die.id], { roundState: state.dieRoundState });
     new Resolver(state, constant(.99)).play('fours', [die.id], 'manual', null, plan.resourceClaims);
     const scored = [...state.historyV2].reverse().find(event => event.kind === 'hand_scored');
     expect(scored?.kind === 'hand_scored' ? scored.scoreOccurrences : []).toHaveLength(2);
-    expect(state.stats.handScores.at(-1)?.pips).toBe(57);
+    expect(state.stats.handScores.at(-1)?.pips).toBe(48);
     expect(state.stats.goldBySource.golden).toBe(2);
     expect(effectOf(die, 'vintage')?.persistent.vintageAppreciation).toBe(2);
     expect(effectRuntime(state.dieRoundState[die.id], effectOf(die, 'workout'))?.temporaryPips).toBe(4);
-    expect(effectRuntime(state.dieRoundState[die.id], effectOf(die, 'furnace'))?.furnaceUnits).toBe(3);
+    expect(effectRuntime(state.dieRoundState[die.id], effectOf(die, 'furnace'))?.furnacePips).toBe(14);
     expect(effectRuntime(state.dieRoundState[die.id], effectOf(die, 'sustainable'))?.invocationsRemaining).toBe(0);
     expect(state.handPlayCounts.fours).toBe(1);
     expect(state.consumed).not.toContain('fours');

@@ -584,7 +584,8 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (action.type === 'DISARM_MAGIC' && runtime.magicArmedFace === null) return 'Magic is not armed.';
     if (action.type === 'FEED_FURNACE') {
       if (!Number.isSafeInteger(action.amount) || action.amount <= 0) return 'Feed Furnace a positive whole Gold amount.';
-      if (runtime.furnaceUnits + action.amount > 5) return 'Furnace can hold at most 5 units.';
+      if (runtime.furnaceGoldFed + action.amount > CONFIG.furnaceMaxGoldPerRound)
+        return `Furnace can be fed at most ${CONFIG.furnaceMaxGoldPerRound} Gold per Round.`;
       if (state.gold < action.amount) return 'Not enough Gold to feed Furnace.';
     }
     return null;

@@ -94,7 +94,7 @@ describe('Curtain Call Pips multiplier', () => {
     new Resolver(combined, constant(0)).play('fives', [0]);
     const combinedHand = combined.historyV2.find(event => event.kind === 'hand_scored');
     // (Raw face 5 × Basic II) + Bonus II 20.
-    expect(combinedHand?.kind === 'hand_scored' ? combinedHand.score.finalPips : null).toBe(30);
+    expect(combinedHand?.kind === 'hand_scored' ? combinedHand.score.finalPips : null).toBe(18);
     expect(combinedHand?.kind === 'hand_scored' ? combinedHand.scoreOccurrences : []).toHaveLength(1);
   });
 
@@ -103,7 +103,7 @@ describe('Curtain Call Pips multiplier', () => {
     new Resolver(state, constant(0)).manualReroll([0]);
     const hand = curtainHands(state)[0];
     // ((Raw face 5 × Basic II) + Bonus II 20) × Curtain Call III.
-    expect(hand?.kind === 'hand_scored' ? hand.score.finalPips : null).toBe(90);
+    expect(hand?.kind === 'hand_scored' ? hand.score.finalPips : null).toBe(54);
     expect(hand?.kind === 'hand_scored' ? hand.scoreOccurrences : []).toHaveLength(1);
   });
 
@@ -120,22 +120,22 @@ describe('Curtain Call Pips multiplier', () => {
       ['freePlay', 3], ['bonus', 2], ['furnace', 2], ['workout', 1], ['tank', 1], ['golden', 1], ['vintage', 1],
     ], 5);
     const die = state.diceInventory.instances[0];
-    effectRuntime(state.dieRoundState[0], effectOf(die, 'furnace'))!.furnaceUnits = 2;
+    effectRuntime(state.dieRoundState[0], effectOf(die, 'furnace'))!.furnacePips = 12;
     effectRuntime(state.dieRoundState[0], effectOf(die, 'workout'))!.temporaryPips = 7;
     effectRuntime(state.dieRoundState[0], effectOf(die, 'tank'))!.temporaryPips = 11;
 
     new Resolver(state, constant(0)).manualReroll([0]);
     const hand = curtainHands(state)[0];
     // (Face 5 + Bonus 20 + Furnace 12 + Workout 7 + Tank 11) × 3.
-    expect(hand?.kind === 'hand_scored' ? hand.score.finalPips : null).toBe(165);
+    expect(hand?.kind === 'hand_scored' ? hand.score.finalPips : null).toBe(129);
     expect(hand?.kind === 'hand_scored' ? hand.scoreOccurrences : []).toHaveLength(1);
     expect(state.stats.scoreBySource.curtainCall).toBe(hand?.kind === 'hand_scored' ? hand.score.awarded : 0n);
     expect(state.stats.scoreBySource.jumpingBean).toBe(0n);
-    expect(effectRuntime(state.dieRoundState[0], effectOf(die, 'furnace'))!.furnaceUnits).toBe(1);
+    expect(effectRuntime(state.dieRoundState[0], effectOf(die, 'furnace'))!.furnacePips).toBe(11);
     expect(effectRuntime(state.dieRoundState[0], effectOf(die, 'workout'))!.temporaryPips).toBe(9);
     // Curtain Call's one Score grows Tank 11→21; the requested Manual Reroll then
     // proceeds and Tank's normal interception adds another 10 (21→31).
-    expect(effectRuntime(state.dieRoundState[0], effectOf(die, 'tank'))!.temporaryPips).toBe(31);
+    expect(effectRuntime(state.dieRoundState[0], effectOf(die, 'tank'))!.temporaryPips).toBe(21);
     expect(effectRuntime(state.dieRoundState[0], effectOf(die, 'golden'))!.goldenGoldEarned).toBe(1);
     expect(effectOf(die, 'vintage')!.persistent.vintageAppreciation).toBe(1);
   });
