@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { CONFIG } from '../src/game/config';
 import { HANDS } from '../src/game/hands';
+import { firstPresentedEventIndex, nextPresentedEventIndex, playbackTickMs } from '../src/game/playback';
 import { handScore } from '../src/game/scoring';
 import { pairSelectionRun, winningSettleRun } from './handFixtures';
 import { enterRun, installRunState, setPlaybackSpeed } from './uiHelpers';
@@ -80,11 +80,18 @@ test('winning hand shows its final award, physical settle, and ROUND CLEARED in 
   await setPlaybackSpeed(page, 'NORMAL');
   await page.getByRole('button', { name: 'PLAY', exact: true }).click();
   const observed: string[] = [];
-  for (const event of fixture.result.events) {
+  let rollBeats = 0;
+  for (let index = firstPresentedEventIndex(fixture.result.events); index < fixture.result.events.length;
+    index = nextPresentedEventIndex(fixture.result.events, index)) {
+    const event = fixture.result.events[index];
     await expect(page.getByTestId('round-score-progress')).toHaveText(
       `${event.board.score.toLocaleString('en-US')} / ${event.board.target.toLocaleString('en-US')}`,
     );
-    if (event.type === 'DICE_REROLL_STARTED') await expect(page.locator('.die.rolling')).not.toHaveCount(0);
+    if (event.type === 'DICE_REROLL_STARTED') {
+      await expect(page.locator('.die.rolling')).not.toHaveCount(0);
+      await expect(page.getByText('Rolling dice', { exact: true })).toBeVisible();
+      rollBeats++;
+    }
     if (event.type === 'HAND_SCORE_FINALIZED') {
       await expect(page.locator('.score-tick')).toHaveText(`+${event.amount}`);
       observed.push(event.type);
@@ -98,13 +105,14 @@ test('winning hand shows its final award, physical settle, and ROUND CLEARED in 
       observed.push(event.type);
       break;
     }
-    await page.clock.runFor(CONFIG.tickMs.normal);
+    await page.clock.runFor(playbackTickMs(event, 'normal'));
   }
   expect(observed).toEqual(['HAND_SCORE_FINALIZED', 'SCORE_ADDED', 'ROUND_CLEARED']);
-  await page.getByRole('button', { name: 'Skip playback' }).click();
+  expect(rollBeats).toBe(1);
+  await page.clock.runFor(playbackTickMs(fixture.result.events.find(event => event.type === 'ROUND_CLEARED'), 'normal'));
+  await expect(page.getByTestId('round-summary')).toBeVisible();
   await page.clock.runFor(500);
   await ready(page);
-  await expect(page.getByTestId('round-summary')).toBeVisible();
   await expect(page.getByTestId('summary-score')).toContainText(`${fixture.result.state.score}`);
   await page.clock.resume();
   await page.getByRole('button', { name: 'CONTINUE', exact: false }).click();

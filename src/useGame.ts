@@ -5,8 +5,9 @@ import { dispatch, newRun } from './game/engine';
 import { browserRunStorage, loadPersistedRun, savePersistedRun } from './game/persistence';
 import type { Action, Resolution } from './game/types';
 import { appendCriticalDiagnostic, type DebugTraceMode } from './game/debugTrace';
-import { isChapterMapTransition, isPlaybackBarrier, isPlaybackCheckpoint, nextScorecardRefreshIndex,
-  playbackBoard, playbackTickMs, SCORECARD_REFRESH_HOLD_MS, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump,
+import { firstPresentedEventIndex, isChapterMapTransition, isPlaybackBarrier, isPlaybackCheckpoint,
+  nextPresentedEventIndex, nextScorecardRefreshIndex, playbackBoard, playbackTickMs,
+  SCORECARD_REFRESH_HOLD_MS, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump,
   type ScoreSummaryJump } from './game/playback';
 
 export type PlaybackSpeed = keyof typeof CONFIG.tickMs;
@@ -29,7 +30,7 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
   });
   const [result, setResult] = useState<Resolution>(initial.result);
   const [hasStoredRun, setHasStoredRun] = useState(initial.restored);
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(() => firstPresentedEventIndex(initial.result.events));
   const [summaryJump, setSummaryJump] = useState<ScoreSummaryJump | null>(null);
   const [error, setError] = useState<string | null>(null);
   const submitting = useRef(false);
@@ -46,15 +47,15 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
       return () => window.clearTimeout(timeout);
     }
     if (speed === 'instant' && currentEvent?.type === 'CHAPTER_STARTED') {
-      setIndex(current => current + 1);
+      setIndex(current => nextPresentedEventIndex(result.events, current));
       return;
     }
     if (currentEvent?.type === 'MAP_TRANSITION' && !isChapterMapTransition(currentEvent)) {
-      setIndex(current => current + 1);
+      setIndex(current => nextPresentedEventIndex(result.events, current));
       return;
     }
     if (currentEvent?.type === 'SCORECARD_REFRESHED') {
-      const timeout = window.setTimeout(() => setIndex(current => current + 1), SCORECARD_REFRESH_HOLD_MS[speed]);
+      const timeout = window.setTimeout(() => setIndex(current => nextPresentedEventIndex(result.events, current)), SCORECARD_REFRESH_HOLD_MS[speed]);
       return () => window.clearTimeout(timeout);
     }
     if (isPlaybackBarrier(currentEvent)) return;
@@ -72,7 +73,7 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
     const baseDelay = playbackTickMs(currentEvent, speed);
     const delay = !reducedMotion && currentEvent?.type === 'ROUND_BUST'
       ? Math.max(baseDelay, 1200) : baseDelay;
-    const timeout = window.setTimeout(() => setIndex(current => current + 1), delay);
+    const timeout = window.setTimeout(() => setIndex(current => nextPresentedEventIndex(result.events, current)), delay);
     return () => window.clearTimeout(timeout);
   }, [result, index, speed, busy, reducedMotion, active, summaryJump]);
   function load(next: Resolution) {
@@ -81,7 +82,7 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
     setHasStoredRun(saved);
     setError(null);
     setResult(next);
-    setIndex(0);
+    setIndex(firstPresentedEventIndex(next.events));
     setSummaryJump(null);
   }
   return {
@@ -112,7 +113,7 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
         setIndex(refreshIndex === -1 ? result.events.length : refreshIndex);
       }
     },
-    continuePlayback: () => setIndex(current => Math.min(current + 1, result.events.length)),
+    continuePlayback: () => setIndex(current => nextPresentedEventIndex(result.events, current)),
     clearError: () => setError(null),
   };
 }

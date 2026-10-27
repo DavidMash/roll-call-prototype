@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { dispatch, newRun } from './engine';
 import { HAND_IDS } from './hands';
-import { playbackBoard, playbackTickMs, rollBatchPresentation, SCORECARD_REFRESH_HOLD_MS, scoreSummaryJump } from './playback';
+import { firstPresentedEventIndex, isPresentationSilentEvent, nextPresentedEventIndex, playbackBoard,
+  playbackTickMs, rollBatchPresentation, SCORECARD_REFRESH_HOLD_MS, scoreSummaryJump } from './playback';
 import { createDieEffect, resetDieRoundState } from './specialDice';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
+import type { GameEvent } from './types';
 
 describe('score summary playback checkpoint', () => {
   it('gives each scoring die a punchy speed-specific beat and instant mode no delay', () => {
@@ -103,5 +105,76 @@ describe('simultaneous roll batch presentation', () => {
       expect(playbackBoard(result.events, resultIndex, result.state).dice.filter(die => ids.includes(die.id)).map(die => die.value))
         .toEqual(result.events[batch.settleIndex].board.dice.filter(die => ids.includes(die.id)).map(die => die.value));
     }
+  });
+});
+
+describe('player-visible playback cursor', () => {
+  it('keeps one batch roll beat while retaining every raw per-die result', () => {
+    const state = newRun('single-visible-roll-beat').state;
+    const result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0, 2, 4] }, { next: () => 0 });
+    const visibleTypes: string[] = [];
+    for (let index = firstPresentedEventIndex(result.events); index < result.events.length;
+      index = nextPresentedEventIndex(result.events, index)) visibleTypes.push(result.events[index].type);
+
+    expect(result.events.filter(event => event.type === 'DIE_ROLLED')).toHaveLength(3);
+    expect(visibleTypes.filter(type => type === 'DICE_REROLL_STARTED')).toHaveLength(1);
+    expect(visibleTypes).not.toContain('DIE_ROLLED');
+  });
+
+  it('skips silent die results without swallowing interleaved effect beats', () => {
+    const events = [
+      { type: 'DICE_REROLL_STARTED' },
+      { type: 'DIE_ROLLED' },
+      { type: 'CHARGE_CHANGED' },
+      { type: 'DIE_ROLLED' },
+      { type: 'DEAD_BOARD' },
+    ] as GameEvent[];
+
+    expect(nextPresentedEventIndex(events, 0)).toBe(2);
+    expect(nextPresentedEventIndex(events, 2)).toBe(4);
+  });
+
+  it('silences only round-end rewards and preserves in-round currency beats', () => {
+    for (const goldSource of ['roundBase', 'unusedRerolls', 'interest', 'bossReward'] as const)
+      expect(isPresentationSilentEvent({ type: 'GOLD_ADDED', goldSource } as GameEvent)).toBe(true);
+    for (const temperSource of ['overkill', 'miniBoss', 'boss'] as const)
+      expect(isPresentationSilentEvent({ type: 'TEMPER_CHANGED', temperSource } as GameEvent)).toBe(true);
+
+    expect(isPresentationSilentEvent({ type: 'GOLD_ADDED', goldSource: 'golden' } as GameEvent)).toBe(false);
+    expect(isPresentationSilentEvent({ type: 'GOLD_ADDED', goldSource: 'jackpot' } as GameEvent)).toBe(false);
+    expect(isPresentationSilentEvent({ type: 'TEMPER_CHANGED', temperSource: 'boardRefresh' } as GameEvent)).toBe(false);
+    expect(isPresentationSilentEvent({ type: 'TEMPER_CHANGED', temperSource: 'bonfire' } as GameEvent)).toBe(false);
+  });
+
+  it('moves from ROUND CLEARED directly to the authoritative results event', () => {
+    const state = newRun('direct-round-summary').state;
+    state.target = 1n;
+    state.dice[0].value = 6;
+    const result = dispatch(state, { type: 'PLAY', hand: 'sixes', dieIds: [0] }, { next: () => 0 });
+    const clearedIndex = result.events.findIndex(event => event.type === 'ROUND_CLEARED');
+    const summaryIndex = result.events.findIndex(event => event.type === 'ROUND_SUMMARY_SHOWN');
+
+    expect(clearedIndex).toBeGreaterThanOrEqual(0);
+    expect(result.events.slice(clearedIndex + 1, summaryIndex).some(event => event.type === 'GOLD_ADDED')).toBe(true);
+    expect(result.events.slice(clearedIndex + 1, summaryIndex).some(event => event.type === 'TEMPER_CHANGED')).toBe(true);
+    expect(nextPresentedEventIndex(result.events, clearedIndex)).toBe(summaryIndex);
+    expect(isPresentationSilentEvent({ type: 'BOSS_CLEARED' } as GameEvent)).toBe(true);
+  });
+
+  it('folds the diagnostic Boss clear event into the visible ROUND CLEARED beat', () => {
+    const state = newRun('direct-boss-summary').state;
+    state.round = 6;
+    state.target = 1n;
+    state.dice[0].value = 6;
+    state.boss = { type: 'caller', calledHand: 'sixes', playsRemaining: 3, satisfied: true, satisfyingSource: 'manual' };
+    const result = dispatch(state, { type: 'PLAY', hand: 'sixes', dieIds: [0] }, { next: () => 0 });
+    const visibleTypes: string[] = [];
+    for (let index = firstPresentedEventIndex(result.events); index < result.events.length;
+      index = nextPresentedEventIndex(result.events, index)) visibleTypes.push(result.events[index].type);
+
+    expect(result.events.some(event => event.type === 'BOSS_CLEARED')).toBe(true);
+    expect(visibleTypes).not.toContain('BOSS_CLEARED');
+    expect(visibleTypes).toContain('ROUND_CLEARED');
+    expect(visibleTypes.at(-1)).toBe('ROUND_SUMMARY_SHOWN');
   });
 });

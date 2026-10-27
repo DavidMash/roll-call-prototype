@@ -5,8 +5,9 @@ import type { PlaybackSpeed } from '../useGame';
 import { acknowledgeBeat, dispatchTutorial, newTutorialSession } from './scenario';
 import { clearTutorialSession, loadTutorialSession, saveTutorialSession, type TutorialStorage } from './tutorialPersistence';
 import type { TutorialSession } from './types';
-import { isChapterMapTransition, isPlaybackBarrier, isPlaybackCheckpoint, nextScorecardRefreshIndex,
-  playbackBoard, playbackTickMs, SCORECARD_REFRESH_HOLD_MS, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump, type ScoreSummaryJump } from '../game/playback';
+import { firstPresentedEventIndex, isChapterMapTransition, isPlaybackBarrier, isPlaybackCheckpoint,
+  nextPresentedEventIndex, nextScorecardRefreshIndex, playbackBoard, playbackTickMs,
+  SCORECARD_REFRESH_HOLD_MS, SCORE_SUMMARY_HOLD_MS, scoreSummaryJump, type ScoreSummaryJump } from '../game/playback';
 
 const browserStorage = (): TutorialStorage | null => {
   if (typeof window === 'undefined') return null;
@@ -26,7 +27,7 @@ export function useTutorialGame(speed: PlaybackSpeed, active = true) {
   const [session, setSession] = useState<TutorialSession>(initial.session);
   const [result, setResult] = useState<Resolution>(initial.resolution);
   const [hasStoredRun, setHasStoredRun] = useState(initial.restored);
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(() => firstPresentedEventIndex(initial.resolution.events));
   const [summaryJump, setSummaryJump] = useState<ScoreSummaryJump | null>(null);
   const [error, setError] = useState<string | null>(null);
   const submitting = useRef(false);
@@ -43,13 +44,15 @@ export function useTutorialGame(speed: PlaybackSpeed, active = true) {
       }, SCORE_SUMMARY_HOLD_MS);
       return () => window.clearTimeout(timeout);
     }
-    if (speed === 'instant' && currentEvent?.type === 'CHAPTER_STARTED') { setIndex(current => current + 1); return; }
+    if (speed === 'instant' && currentEvent?.type === 'CHAPTER_STARTED') {
+      setIndex(current => nextPresentedEventIndex(result.events, current)); return;
+    }
     if (currentEvent?.type === 'MAP_TRANSITION' && !isChapterMapTransition(currentEvent)) {
-      setIndex(current => current + 1);
+      setIndex(current => nextPresentedEventIndex(result.events, current));
       return;
     }
     if (currentEvent?.type === 'SCORECARD_REFRESHED') {
-      const timeout = window.setTimeout(() => setIndex(current => current + 1), SCORECARD_REFRESH_HOLD_MS[speed]);
+      const timeout = window.setTimeout(() => setIndex(current => nextPresentedEventIndex(result.events, current)), SCORECARD_REFRESH_HOLD_MS[speed]);
       return () => window.clearTimeout(timeout);
     }
     if (isPlaybackBarrier(currentEvent)) return;
@@ -64,7 +67,7 @@ export function useTutorialGame(speed: PlaybackSpeed, active = true) {
     }
     const baseDelay = playbackTickMs(currentEvent, speed);
     const delay = !reducedMotion && currentEvent?.type === 'ROUND_BUST' ? Math.max(baseDelay, 1200) : baseDelay;
-    const timeout = window.setTimeout(() => setIndex(current => current + 1), delay);
+    const timeout = window.setTimeout(() => setIndex(current => nextPresentedEventIndex(result.events, current)), delay);
     return () => window.clearTimeout(timeout);
   }, [active, busy, index, reducedMotion, result, speed, summaryJump]);
 
@@ -73,7 +76,7 @@ export function useTutorialGame(speed: PlaybackSpeed, active = true) {
     setHasStoredRun(true);
     setSession(nextSession);
     setResult(nextResult);
-    setIndex(0);
+    setIndex(firstPresentedEventIndex(nextResult.events));
     setSummaryJump(null);
     setError(null);
   }
@@ -116,7 +119,7 @@ export function useTutorialGame(speed: PlaybackSpeed, active = true) {
         setIndex(refreshIndex === -1 ? result.events.length : refreshIndex);
       }
     },
-    continuePlayback: () => setIndex(current => Math.min(current + 1, result.events.length)),
+    continuePlayback: () => setIndex(current => nextPresentedEventIndex(result.events, current)),
     clearError: () => setError(null),
   };
 }

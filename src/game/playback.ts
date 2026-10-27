@@ -23,6 +23,29 @@ export const isPlaybackCheckpoint = (event: GameEvent | undefined) =>
 export const nextScorecardRefreshIndex = (events: GameEvent[], fromIndex: number) =>
   events.findIndex((event, index) => index > fromIndex && event.type === 'SCORECARD_REFRESHED');
 
+/**
+ * Raw resolution events that remain authoritative for state, history, and
+ * diagnostics but do not deserve their own timed presentation frame.
+ */
+export function isPresentationSilentEvent(event: GameEvent | null | undefined): boolean {
+  if (!event) return false;
+  if (event.type === 'DIE_ROLLED' || event.type === 'BOSS_CLEARED') return true;
+  if (event.type === 'GOLD_ADDED') return event.goldSource === 'roundBase'
+    || event.goldSource === 'unusedRerolls' || event.goldSource === 'interest' || event.goldSource === 'bossReward';
+  if (event.type === 'TEMPER_CHANGED') return event.temperSource === 'overkill'
+    || event.temperSource === 'miniBoss' || event.temperSource === 'boss';
+  return false;
+}
+
+/** Advances to the next player-visible beat while retaining the raw event list. */
+export function nextPresentedEventIndex(events: GameEvent[], fromIndex: number): number {
+  let nextIndex = Math.max(0, Math.min(fromIndex + 1, events.length));
+  while (nextIndex < events.length && isPresentationSilentEvent(events[nextIndex])) nextIndex++;
+  return nextIndex;
+}
+
+export const firstPresentedEventIndex = (events: GameEvent[]) => nextPresentedEventIndex(events, -1);
+
 export interface ScoreSummaryJump {
   summaryIndex: number;
   boundaryIndex: number;
@@ -37,7 +60,7 @@ export interface RollBatchPresentation {
 /**
  * Finds the logical base-roll batch surrounding an individual roll event.
  * The engine still emits deterministic per-die results and follow-up effects;
- * presentation can use the final base-roll faces without skipping those events.
+ * presentation can project the final base-roll faces while retaining those raw events.
  */
 export function rollBatchPresentation(events: GameEvent[], index: number): RollBatchPresentation | null {
   let startIndex = index;

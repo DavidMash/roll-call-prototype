@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { CONFIG } from '../src/game/config';
 import { dispatch, newRun } from '../src/game/engine';
 import { hasPlayableHand, handOptions, HANDS, HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
@@ -172,6 +173,31 @@ test('strategic single-die and multi-die rerolls cost charges, clear selection a
   game = dispatch(game, { type: 'PLAY', hand: option.id, dieIds: option.combinations[0] }).state;
   await matchRound(page, game);
   expect(game.manualRerollsRemaining).toBe(0);
+});
+
+test('a multi-die manual reroll presents one simultaneous Rolling dice beat', async ({ page }) => {
+  const game = newRun('batch-roll-browser').state;
+  const dieIds = [0, 2, 4];
+  const expected = dispatch(game, { type: 'MANUAL_REROLL', dieIds });
+  await page.goto('/?seed=batch-roll-browser&speed=normal');
+  await installRun(page, game);
+  await page.clock.install({ time: new Date('2026-10-27T12:00:00Z') });
+
+  for (const dieId of dieIds) await page.getByRole('button', { name: new RegExp(`^Die ${dieId + 1},`) }).click();
+  await page.getByTestId('manual-reroll').click();
+  await expect(page.locator('.score-tick')).toHaveText('Reroll');
+
+  await page.clock.runFor(CONFIG.tickMs.normal);
+  await expect(page.locator('.score-tick')).toHaveText('Rolling dice');
+  await expect(page.locator('.die.rolling')).toHaveCount(dieIds.length);
+
+  await page.clock.runFor(CONFIG.tickMs.normal);
+  await expect(page.getByText('Rolling dice', { exact: true })).toHaveCount(0);
+  for (const dieId of dieIds) {
+    const face = expected.state.dice.find(die => die.id === dieId)!.value;
+    await expect(page.getByRole('button', { name: new RegExp(`^Die ${dieId + 1}, face ${face},`) })).toBeVisible();
+  }
+  await page.clock.resume();
 });
 
 test('Reroll control separates selected dice from Care Package resources responsively', async ({ page }) => {
