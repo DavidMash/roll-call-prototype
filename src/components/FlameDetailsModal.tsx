@@ -79,7 +79,7 @@ export function FlameDetailsModal({ board, inventory: _inventory, target, busy, 
           <div className="stoke-stepper-buttons"><button type="button" aria-label="Increase investment" disabled={busy || amount >= maxStoke} onClick={() => stepAmount(1)}>▲</button>
             <button type="button" aria-label="Decrease investment" disabled={busy || amount <= 0} onClick={() => stepAmount(-1)}>▼</button></div></div>
           <Button variant="default" disabled={busy || maxStoke < 1} onClick={() => setAmount(maxStoke)}>Max</Button></Group>
-        <Button color="orange" size="md" fullWidth disabled={busy || amount < 1} onClick={stoke}>STOKE <CurrencyAmount currency="gold" value={amount} /></Button>
+        <Button color="orange" size="md" fullWidth disabled={busy || amount < 1} onClick={stoke}><span className="button-currency-label">STOKE <CurrencyAmount currency="gold" value={amount} /></span></Button>
       </Stack>}
     </Stack>
   </Modal>;

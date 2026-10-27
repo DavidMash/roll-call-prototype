@@ -33,7 +33,7 @@ function TrainingSection({ title, hands, levels, shop, gold, busy, onTrain }: {
           : quote.waivedByOnTheHouse ? `free, ${formatPlayerNumber(quote.normalPrice!)} Gold value`
           : `${formatPlayerNumber(quote.actualPrice)} Gold`;
         const compactPrice = quote.actualPrice === null ? 'TRAIN —' : quote.waivedByOnTheHouse
-          ? 'TRAIN FREE' : <>TRAIN <CurrencyAmount currency="gold" value={quote.actualPrice} accessible={false} /></>;
+          ? 'TRAIN FREE' : <span className="button-currency-label">TRAIN <CurrencyAmount currency="gold" value={quote.actualPrice} accessible={false} /></span>;
         return <div key={hand} className="training-scorecard-row" data-testid={`training-offer-${hand}`}
           data-tutorial={`training-${hand}`} data-strength-tier={strength}>
           <div className={`training-hand-summary strength-${strength}`}>

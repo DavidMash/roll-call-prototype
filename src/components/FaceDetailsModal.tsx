@@ -39,7 +39,7 @@ function EffectCommands({ board, die, effect, busy, actionsEnabled, submit, clos
     </>}
     {effect.type === 'furnace' && runtime && <Button size="sm" color="yellow"
       disabled={busy || !actionsEnabled || validateAction(board, { type: 'FEED_FURNACE', dieId: die.id, amount: 1 }) !== null}
-      onClick={() => submit({ type: 'FEED_FURNACE', dieId: die.id, amount: 1 })}>FEED <CurrencyAmount currency="gold" value={1} /></Button>}
+      onClick={() => submit({ type: 'FEED_FURNACE', dieId: die.id, amount: 1 })}><span className="button-currency-label">FEED <CurrencyAmount currency="gold" value={1} /></span></Button>}
     {(effect.type === 'weighted' || effect.type === 'jumpingBean') && <DieNumberSelector
       label={`${SPECIAL_DICE[effect.type].name} · choose a number`}
       value={effect.type === 'weighted' ? effect.persistent.weightedFace : effect.persistent.jumpingBeanNumber}

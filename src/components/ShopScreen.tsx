@@ -233,7 +233,7 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
     {stage === 'shop' && <Paper p="xs" className="shop-section dice-shop-section" data-testid="dice-shop">
       <Group justify="space-between" className="section-heading"><Text fw={700} size="sm" tt="uppercase" lts=".08em">Dice</Text>
         <Button size="compact-xs" variant="default" disabled={busy || board.gold < offerRerollCost(shop.offerRerolls)}
-          aria-label={`Reroll offers for ${offerRerollCost(shop.offerRerolls)} Gold`} onClick={() => submit({ type: 'REROLL_OFFERS' })}>REROLL OFFERS <CurrencyAmount currency="gold" value={offerRerollCost(shop.offerRerolls)} accessible={false} /></Button></Group>
+          aria-label={`Reroll offers for ${offerRerollCost(shop.offerRerolls)} Gold`} onClick={() => submit({ type: 'REROLL_OFFERS' })}><span className="button-currency-label">REROLL OFFERS <CurrencyAmount currency="gold" value={offerRerollCost(shop.offerRerolls)} accessible={false} /></span></Button></Group>
       <div className="dice-offer-grid">{shop.offers.map(offer => {
         const effect = createDieEffect(-offer.id - 1, offer.dieType); const effects = [effect]; const free = dicePurchaseIsFree(shop);
         const affordable = free || board.gold >= offer.price; const available = !offer.purchased;
@@ -245,7 +245,7 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
           <Button className="dice-offer-buy" size="compact-xs" fullWidth disabled={busy || !available || !affordable || collectionFull}
             aria-label={offer.purchased ? 'Purchased' : collectionFull ? 'Collection full' : free ? 'Buy die for free'
               : `Buy die for ${offer.price} Gold${affordable ? '' : ', unavailable'}`}
-            onClick={() => submit({ type: 'BUY_DIE', offerId: offer.id })}>{offer.purchased ? 'PURCHASED' : collectionFull ? 'COLLECTION FULL' : free ? 'FREE' : <>BUY <CurrencyAmount currency="gold" value={offer.price} accessible={false} /></>}</Button>
+            onClick={() => submit({ type: 'BUY_DIE', offerId: offer.id })}>{offer.purchased ? 'PURCHASED' : collectionFull ? 'COLLECTION FULL' : free ? 'FREE' : <span className="button-currency-label">BUY <CurrencyAmount currency="gold" value={offer.price} accessible={false} /></span>}</Button>
         </Card>;
       })}</div>
       <Stack gap={5} mt="xs" className="dice-collection"><Group justify="space-between"><Text size="xs" fw={850} tt="uppercase">Storage</Text><Text size="xs" c="dimmed">{inventory.storage.filter(Boolean).length} / 5</Text></Group>
