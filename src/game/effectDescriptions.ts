@@ -101,6 +101,7 @@ export function flameVerboseDescription(id: Flame): RichText {
     allIn: [term('onCommand'), text(", arm your next manual Play for up to ×12 "), term('xMult'), text(". If that Play and its resulting Free Plays do not clear the Round, their Score is removed.")],
     topDown: [text('Play '), term('lowerSectionHand', 'Lower Section Hands'), text(' from Five of a Kind down to Pair. Each correct step gains increasingly large '), term('xMult'), text(', up to ×12. Unrelated Plays do not break the sequence.')],
     countDown: [text('Play '), term('upperHand', 'Upper Hands'), text(' in order from Sixes down to Ones. Each correct step gains increasingly large '), term('xMult'), text(', up to ×4.5. Unrelated Plays do not break the sequence.')],
+    bribery: [term('onCommand'), text(', pay Gold to add '), term('xMult'), text(' to your next manual Play. Each Bribe adds more XMult as this Flame grows stronger. The first Bribe each Round costs 5 Gold, and each additional Bribe costs 5 Gold more. You can Bribe multiple times before the same Play; their bonuses add together inside one Bribery factor.')],
   };
   return descriptions[id];
 }

@@ -5,7 +5,7 @@ import { validateAction } from '../game/engine';
 import {
   burnItDownChargeGain, dareDevilMultiplier, flameByType, FLAMES, greaseTheEngineChargeGain,
   greaseTheEngineCost, lightningStrikeChargeGain,
-  allInMultiplier,
+  allInMultiplier, briberyFactor, briberyNextCost, briberyXMultIncrement,
 } from '../game/flames';
 import { activeEncounterDice } from '../game/bosses';
 import { exactRatioNumber } from '../game/scoreMath';
@@ -14,7 +14,7 @@ import { formatExactScore, formatPlayerNumber } from '../game/copy';
 import type { Action, Board, Flame, Rank } from '../game/types';
 import { DieNumberSelector } from './DieNumberSelector';
 
-const COMMAND_FLAMES = ['burnItDown', 'greaseTheEngine', 'lightningStrike', 'dareDevil', 'allIn'] as const satisfies readonly Flame[];
+const COMMAND_FLAMES = ['burnItDown', 'greaseTheEngine', 'lightningStrike', 'dareDevil', 'allIn', 'bribery'] as const satisfies readonly Flame[];
 
 function ActionCard({ name, explanation, status, actionLabel, disabledReason, onAction, testId }: {
   name: string; explanation: string; status: string; actionLabel: string; disabledReason: string | null;
@@ -68,6 +68,12 @@ export function FlameActions({ board, busy, submit, onOpenChange }: {
   const allIn = flameByType(board, 'allIn');
   const allInFactor = allInMultiplier(allIn?.investedGold ?? 0);
   const allInAction: Action = { type: 'ARM_ALL_IN' };
+  const bribery = flameByType(board, 'bribery');
+  const briberyCost = briberyNextCost(board.interactiveFlames.briberyPurchasedThisRound);
+  const briberyPendingFactor = briberyFactor(bribery?.investedGold ?? 0, board.interactiveFlames.briberyPendingCount);
+  const briberyIncrement = briberyXMultIncrement(bribery?.investedGold ?? 0);
+  const briberyAction: Action = { type: 'ACTIVATE_BRIBERY' };
+  const otherCommands = owned.filter(flame => flame !== 'bribery');
 
   function changeOpened(next: boolean) {
     setOpened(next);
@@ -82,8 +88,18 @@ export function FlameActions({ board, busy, submit, onOpenChange }: {
   }
 
   return <>
-    <Button size="compact-xs" variant="light" color="orange" disabled={busy}
-      onClick={() => changeOpened(true)} data-testid="flame-actions-trigger">FLAME ACTIONS</Button>
+    <Group gap="xs" wrap="wrap">
+      {bribery && <Button size="compact-xs" color="orange" disabled={busy || validateAction(board, briberyAction) !== null}
+        onClick={() => submit(briberyAction)} data-testid="flame-action-bribery-direct"
+        aria-label={`Bribe ${briberyCost} Gold. ${board.interactiveFlames.briberyPendingCount > 0
+          ? `Bribery times ${formatPlayerNumber(briberyPendingFactor)} armed.`
+          : `Adds ${formatPlayerNumber(briberyIncrement)} XMult to the next manual Play.`}`}>
+        BRIBE {briberyCost}G
+      </Button>}
+      {bribery && briberyIncrement <= 0 && <Text size="xs" c="dimmed" role="status">STOKE EMBER TO ENABLE BRIBERY</Text>}
+      {otherCommands.length > 0 && <Button size="compact-xs" variant="light" color="orange" disabled={busy}
+        onClick={() => changeOpened(true)} data-testid="flame-actions-trigger">FLAME ACTIONS</Button>}
+    </Group>
     <Modal opened={opened} onClose={() => { changeOpened(false); setLightningOpen(false); setLightningDieId(null); }}
       title={lightningOpen ? 'LIGHTNING STRIKE' : 'FLAME ACTIONS'} centered className="flame-actions-modal">
       {lightningOpen ? <Stack gap="sm" data-testid="lightning-strike-flow">
@@ -136,6 +152,15 @@ export function FlameActions({ board, busy, submit, onOpenChange }: {
             : `NEXT MANUAL PLAY ×${formatPlayerNumber(allInFactor)}`}
           actionLabel={board.scoreWagers.allInArmed ? 'ALL IN ARMED' : 'ARM ALL IN'}
           disabledReason={validateAction(board, allInAction)} onAction={() => dispatchAndClose(allInAction)} testId="flame-action-all-in" />}
+        {bribery && <ActionCard name={FLAMES.bribery.name}
+          explanation={briberyIncrement > 0
+            ? `Each Bribe adds +${formatPlayerNumber(briberyIncrement)} XMult to one Bribery factor on your next manual Play.`
+            : 'Stoke this Flame before Bribery can add XMult.'}
+          status={board.interactiveFlames.briberyPendingCount > 0
+            ? `BRIBERY ×${formatPlayerNumber(briberyPendingFactor)} ARMED · NEXT ${briberyCost}G`
+            : `NEXT BRIBE ${briberyCost}G`}
+          actionLabel={`BRIBE ${briberyCost}G`}
+          disabledReason={validateAction(board, briberyAction)} onAction={() => dispatchAndClose(briberyAction)} testId="flame-action-bribery" />}
       </Stack>}
     </Modal>
   </>;

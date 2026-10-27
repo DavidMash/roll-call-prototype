@@ -28,7 +28,7 @@ export type Flame =
   | 'benchWarmer' | 'epinephrine' | 'punchCard' | 'blackHole'
   | 'assemblyLine' | 'gymBros'
   | 'burnItDown' | 'greaseTheEngine' | 'lightningStrike' | 'hotPotatoClock' | 'dareDevil'
-  | 'doubleOrNothing' | 'allIn' | 'topDown' | 'countDown';
+  | 'doubleOrNothing' | 'allIn' | 'topDown' | 'countDown' | 'bribery';
 export type FlameInstanceId = number;
 export type FlameStage = 'ember' | 'bonfire';
 export type FlameSlotIndex = 0 | 1 | 2 | 3 | 4;
@@ -66,7 +66,7 @@ export interface ScenarioRunState {
   completionAcknowledged: boolean;
 }
 export type GoldSource = 'golden' | 'jackpot' | 'diceSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward' | 'specialOffer';
-export type GoldSpendSource = 'dicePurchase' | 'diceOfferReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore' | 'furnace' | 'greaseTheEngine';
+export type GoldSpendSource = 'dicePurchase' | 'diceOfferReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore' | 'furnace' | 'greaseTheEngine' | 'bribery';
 export type TemperSource = 'overkill' | 'boardRefresh' | 'miniBoss' | 'boss' | 'bonfire' | 'engulfment';
 export type TemperSpendSource = 'fusion' | 'forge';
 export type RoundTemperState = { overkill: number; boardRefresh: number; miniBoss: number; boss: number };
@@ -201,6 +201,8 @@ export interface InteractiveFlameRuntime {
   hotPotatoDieId: DieId | null;
   hotPotatoStreak: number;
   dareDevilCount: number;
+  briberyPurchasedThisRound: number;
+  briberyPendingCount: number;
 }
 
 export interface ScorePackagePlay {
@@ -980,6 +982,7 @@ export type Action =
   | { type: 'TOGGLE_CHARGE'; hand?: HandId | null; dieIds?: number[] }
   | { type: 'ACTIVATE_BURN_IT_DOWN' }
   | { type: 'ACTIVATE_GREASE_THE_ENGINE' }
+  | { type: 'ACTIVATE_BRIBERY' }
   | { type: 'ACTIVATE_LIGHTNING_STRIKE'; dieId: DieId; predictedFace: Exclude<Rank, 7> }
   | { type: 'ACTIVATE_DARE_DEVIL' }
   | { type: 'ACCEPT_DOUBLE_OR_NOTHING' }

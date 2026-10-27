@@ -1,6 +1,6 @@
 import { Badge, Button, Group, Modal, Progress, Stack, Text } from '@mantine/core';
 import { useEffect, useState } from 'react';
-import { flameDetailsPresentation, flameEffectText, flameInstanceById, flameStokeLimits, fluxCapacitorChargeMultiplier, FLAMES } from '../game/flames';
+import { briberyFactor, briberyNextCost, briberyXMultIncrement, flameDetailsPresentation, flameEffectText, flameInstanceById, flameStokeLimits, fluxCapacitorChargeMultiplier, FLAMES } from '../game/flames';
 import type { Action, Board, DiceInventory, Flame, FlameInstanceId, FlameStage } from '../game/types';
 import { formatPlayerNumber } from '../game/copy';
 import { RarityBadge } from './RarityBadge';
@@ -48,7 +48,8 @@ export function FlameDetailsModal({ board, inventory: _inventory, target, busy, 
   }
   const stage = instance?.stage ?? 'ember';
   return <Modal opened={target !== null && (target.kind === 'offer' || !!instance)} onClose={onClose}
-    title={definition.name} centered transitionProps={{ duration: 0 }} data-testid="flame-details-modal">
+    title={definition.name} centered transitionProps={{ duration: 0 }} data-testid="flame-details-modal"
+    closeButtonProps={{ 'aria-label': 'Close' }}>
     <Stack gap="sm">
       <Group justify="space-between"><Group gap="xs"><Badge color={stage === 'bonfire' ? 'red' : 'orange'} variant="light">
         🔥 {target?.kind === 'offer' ? 'FLAME' : stage.toUpperCase()}
@@ -66,6 +67,14 @@ export function FlameDetailsModal({ board, inventory: _inventory, target, busy, 
       {flameId === 'fluxCapacitor' && <Text size="xs" c="dimmed">Example at current strength: if Magnetic affects 2 other dice, your Charge is multiplied by ×{formatPlayerNumber(fluxCapacitorChargeMultiplier(invested, 2))}.</Text>}
       {flameId === 'fetch' && <Text size="sm" fw={700} c="orange">FETCH Face: {board.fetchTarget ? `${activeDieLabel(board, board.fetchTarget.dieId)} face ${board.fetchTarget.physicalFace}` : 'Not set'}</Text>}
       {flameId === 'targetPractice' && <Text size="sm" fw={700} c="orange">Target Hand: {board.targetPracticeHand ? HANDS[board.targetPracticeHand].name : 'Not set'}</Text>}
+      {flameId === 'bribery' && <div className="modal-stat" data-testid="bribery-runtime-details">
+        <Text size="sm"><strong>Added per Bribe:</strong> +{formatPlayerNumber(briberyXMultIncrement(invested))} XMult</Text>
+        <Text size="sm"><strong>Next Bribe:</strong> <CurrencyAmount currency="gold" value={briberyNextCost(board.interactiveFlames.briberyPurchasedThisRound)} /></Text>
+        <Text size="sm"><strong>Pending:</strong> {board.interactiveFlames.briberyPendingCount > 0
+          ? `×${formatPlayerNumber(briberyFactor(invested, board.interactiveFlames.briberyPendingCount))} armed (${board.interactiveFlames.briberyPendingCount} Bribe${board.interactiveFlames.briberyPendingCount === 1 ? '' : 's'})`
+          : '×1 · not armed'}</Text>
+        {invested <= 0 && <Text size="xs" c="dimmed">Stoke this Ember before Bribery can add XMult.</Text>}
+      </div>}
       {stage === 'bonfire' && <Text size="xs" c="dimmed">{definition.bonfireDescription}</Text>}
       {canStoke && <Stack gap="sm" data-testid="stoke-flame-controls" data-tutorial="stoke">
         {amount > 0 && <div className="modal-stat stoke-preview"><Text size="xs" c="teal" tt="uppercase">AFTER STOKE · {formatPlayerNumber(afterInvestment)}/100</Text>

@@ -14,7 +14,7 @@ export function createStats(seed: string): RunStats {
     goldEarned: 0,
     goldBySource: { golden: 0, jackpot: 0, diceSale: 0, roundBase: 0, unusedRerolls: 0, interest: 0, bossReward: 0, specialOffer: 0 },
     goldSpent: 0,
-    goldSpentBySource: { dicePurchase: 0, diceOfferReroll: 0, handTraining: 0, flameInvestment: 0, lifeRestore: 0, furnace: 0, greaseTheEngine: 0 },
+    goldSpentBySource: { dicePurchase: 0, diceOfferReroll: 0, handTraining: 0, flameInvestment: 0, lifeRestore: 0, furnace: 0, greaseTheEngine: 0, bribery: 0 },
     temperEarned: 0, temperSpent: 0,
     temperBySource: { overkill: 0, boardRefresh: 0, miniBoss: 0, boss: 0, bonfire: 0, engulfment: 0 },
     temperSpentBySource: { fusion: 0, forge: 0 }, temperTransactions: [],

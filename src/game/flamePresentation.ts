@@ -3,6 +3,7 @@ import {
   allHandsOnDeckChargeGain, flameInstances, FLAMES, HAND_FAMILY_FLAMES,
   hotPotatoClockChargeGain, isChargeFlame, momentumChargeGain, potentialEnergyChargeGain,
   PROGRESSIVE_FLAME_SEQUENCES, speedDemonMultiplier,
+  briberyFactor,
 } from './flames';
 import { HANDS, ultimateHands } from './hands';
 import { canonicalPlayPreview, type CanonicalPlayPreview } from './playPreview';
@@ -36,6 +37,7 @@ const candidateSignature = (board: Board) => JSON.stringify({
   progressive: board.progressiveFlames,
   wagers: [board.scoreWagers.doubleOrNothing?.hand, board.scoreWagers.doubleOrNothing?.factor, board.scoreWagers.allInArmed],
   dare: board.interactiveFlames.dareDevilCount,
+  bribery: [board.interactiveFlames.briberyPurchasedThisRound, board.interactiveFlames.briberyPendingCount],
   dice: board.dice.map(die => [die.id, die.value, die.faces[die.value - 1], die.owner === 'player'
     ? die.effects.map(effect => [effect.type, effect.level]) : []]),
 });
@@ -82,6 +84,8 @@ function sequenceState(board: Board, flame: FlameInstance): Partial<FlamePresent
     targetHand: ultimateHands(board.handLevels)[0], progress: board.interactiveFlames.dareDevilCount / 4,
     statusText: `${board.interactiveFlames.dareDevilCount} DARE${board.interactiveFlames.dareDevilCount === 1 ? '' : 'S'} STORED` };
   if (flame.type === 'allIn' && board.scoreWagers.allInArmed) return { state: 'setup', statusText: 'ARMED · NEXT MANUAL PLAY' };
+  if (flame.type === 'bribery' && board.interactiveFlames.briberyPendingCount > 0) return { state: 'setup',
+    statusText: `×${formatPlayerNumber(briberyFactor(flame.investedGold, board.interactiveFlames.briberyPendingCount))} ARMED · NEXT MANUAL PLAY` };
   return {};
 }
 
@@ -90,6 +94,7 @@ function actionPossible(board: Board, flame: Flame): boolean {
   if (flame === 'greaseTheEngine') return validateAction(board, { type: 'ACTIVATE_GREASE_THE_ENGINE' }) === null;
   if (flame === 'dareDevil') return validateAction(board, { type: 'ACTIVATE_DARE_DEVIL' }) === null;
   if (flame === 'allIn') return validateAction(board, { type: 'ARM_ALL_IN' }) === null;
+  if (flame === 'bribery') return validateAction(board, { type: 'ACTIVATE_BRIBERY' }) === null;
   if (flame === 'lightningStrike') {
     return availablePlayableDice(board).some(die =>
       validateAction(board, { type: 'ACTIVATE_LIGHTNING_STRIKE', dieId: die.id, predictedFace: 1 }) === null);

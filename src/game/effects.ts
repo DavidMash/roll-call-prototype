@@ -9,6 +9,7 @@ import {
   burnItDownChargeGain, dareDevilMultiplier, FLAME_SCALING, greaseTheEngineChargeGain, greaseTheEngineCost,
   hotPotatoClockChargeGain, lightningStrikeChargeGain, allInMultiplier, doubleOrNothingMultiplier, hotStreakMultiplier,
   doubleOrNothingEligibleHands, PROGRESSIVE_FLAME_SEQUENCES, progressiveSequenceMultiplier, type ProgressiveSequenceFlame,
+  briberyFactor, briberyNextCost, briberyXMultIncrement,
 } from './flames';
 import { benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, handOptions, hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, planQualification, ultimateHands, upperBaselineLevel, UPPER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
@@ -524,7 +525,7 @@ export class Resolver {
     this.emit({ type: 'TEMPER_CHANGED', amount, temperSpendSource: source, temperBalance: this.state.temper,
       message: `Forge spent ${amount} Temper` });
   }
-  private spendRoundGold(amount: number, message: string, goldSpendSource: 'furnace' | 'greaseTheEngine'): void {
+  private spendRoundGold(amount: number, message: string, goldSpendSource: 'furnace' | 'greaseTheEngine' | 'bribery'): void {
     if (this.state.phase !== 'round') throw new Error('This Gold may only be spent during an active Round.');
     this.state.gold -= amount;
     this.state.stats.goldSpent += amount;
@@ -1857,6 +1858,13 @@ export class Resolver {
       source: scoreSource, playSource, handConsumed: resolution.consumesHand, message: `Final awarded hand score: ${this.format(score)}` });
     this.addScore(score, scoreSource, `${freePlay ? 'Free play: ' : ''}${HANDS[hand].name}: round score +${this.format(score)}`, scoringIds, hand);
     const roundScoreAfterAward = this.state.score;
+    if (playSource === 'manual' && handStart.briberyPendingCount > 0) {
+      const flame = flameByType(this.state, 'bribery');
+      const factor = briberyFactor(flame?.investedGold ?? 0, handStart.briberyPendingCount);
+      this.state.interactiveFlames.briberyPendingCount = 0;
+      this.emitV2({ kind: 'flame_action', flame: 'bribery', action: { type: 'bribery_consumed',
+        hand, pendingCount: handStart.briberyPendingCount, factor } });
+    }
     if (handStart.dareDevilCount > 0 && handStart.ultimateHands.includes(hand)) {
       const flame = flameByType(this.state, 'dareDevil');
       const factor = dareDevilMultiplier(flame?.investedGold ?? 0, handStart.dareDevilCount);
@@ -2043,6 +2051,23 @@ export class Resolver {
       { goldCost: cost, goldBefore, goldAfter: this.state.gold, useCount, chargeBefore, chargeRequested: requested });
     this.emitV2({ kind: 'flame_action', flame: 'greaseTheEngine', action: { type: 'grease_the_engine',
       cost, goldBefore, goldAfter: this.state.gold, useCount, chargeRequested: requested, chargeGained: gained } });
+    this.state.decisionId++;
+  }
+
+  bribe(): void {
+    const flame = flameByType(this.state, 'bribery');
+    if (!flame) throw new Error('Bribery requires its active Flame.');
+    const ordinal = this.state.interactiveFlames.briberyPurchasedThisRound + 1;
+    const cost = briberyNextCost(this.state.interactiveFlames.briberyPurchasedThisRound);
+    const goldBefore = this.state.gold;
+    const pendingCount = this.state.interactiveFlames.briberyPendingCount + 1;
+    const increment = briberyXMultIncrement(flame.investedGold);
+    const pendingFactor = briberyFactor(flame.investedGold, pendingCount);
+    this.spendRoundGold(cost, `Bribery payment #${this.format(ordinal)}: -${this.format(cost)} Gold`, 'bribery');
+    this.state.interactiveFlames.briberyPurchasedThisRound = ordinal;
+    this.state.interactiveFlames.briberyPendingCount = pendingCount;
+    this.emitV2({ kind: 'flame_action', flame: 'bribery', action: { type: 'bribe_purchased', cost, ordinal,
+      increment, pendingCount, pendingFactor, goldBefore, goldAfter: this.state.gold } });
     this.state.decisionId++;
   }
 
@@ -2341,6 +2366,8 @@ export class Resolver {
     this.enterChapterIfNeeded(this.state.round);
     const chargeBeforeRoundReset = this.state.chargeXMult;
     const chargeWasArmed = this.state.chargeArmed;
+    const priorBribery = { purchasedCount: this.state.interactiveFlames.briberyPurchasedThisRound ?? 0,
+      pendingCount: this.state.interactiveFlames.briberyPendingCount ?? 0 };
     if (this.state.chargeXMult !== 1 || this.state.chargeArmed) this.state.stats.chargeResets++;
     this.state.phase = 'round'; this.state.score = 0n; this.state.scoreByHand = {}; this.state.effectScore = 0n;
     this.state.roundTemper = { overkill: 0, boardRefresh: 0, miniBoss: 0, boss: 0 };
@@ -2355,11 +2382,14 @@ export class Resolver {
     this.state.roundStartRosterSize = roundStartRosterSize;
     this.state.precedingShopDiePurchase = precedingShopDiePurchase;
     this.state.interactiveFlames = { burnItDownUses: 0, greaseTheEngineUses: 0,
-      hotPotatoDieId: null, hotPotatoStreak: 0, dareDevilCount: 0 };
+      hotPotatoDieId: null, hotPotatoStreak: 0, dareDevilCount: 0,
+      briberyPurchasedThisRound: 0, briberyPendingCount: 0 };
     this.state.scoreWagers = { nextPackageId: 1, packages: [], pendingDoubleOrNothing: null,
       doubleOrNothing: null, allInArmed: false };
     if (chargeBeforeRoundReset !== 1 || chargeWasArmed) this.emitV2({ kind: 'charge_changed', operation: 'round_reset',
       before: chargeBeforeRoundReset, after: 1, dieIds: [] });
+    if (priorBribery.purchasedCount > 0 || priorBribery.pendingCount > 0)
+      this.emitV2({ kind: 'flame_action', flame: 'bribery', action: { type: 'bribery_round_reset', ...priorBribery } });
     this.v2LastCharge = 1;
     this.state.flameSelection = null; this.state.specialOffer = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;
     this.state.encounterDice = [];

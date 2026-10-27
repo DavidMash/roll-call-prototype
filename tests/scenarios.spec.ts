@@ -13,9 +13,17 @@ test.describe('Scenarios mode', () => {
     await expect(page.getByRole('heading', { name: 'SCENARIOS', exact: true })).toBeVisible();
     await expect(page.locator('[data-testid^="scenario-card-"]')).toHaveCount(6);
     await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
+    const scenarioPage = page.locator('.scenario-page-container');
+    await expect.poll(() => scenarioPage.evaluate(element => ({
+      vertical: element.scrollHeight > element.clientHeight,
+      horizontal: element.scrollWidth > element.clientWidth,
+    }))).toEqual({ vertical: true, horizontal: false });
 
     await page.getByRole('button', { name: 'View Loneliest Number Scenario' }).click();
     await expect(page.getByRole('heading', { name: 'Reach Engulfment' })).toBeVisible();
+    await expect.poll(() => scenarioPage.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+    await scenarioPage.evaluate(element => { element.scrollTop = element.scrollHeight; });
+    await expect(page.getByRole('button', { name: 'Start Loneliest Number' })).toBeVisible();
     await expect(page.locator('.scenario-loadout-die')).toHaveCount(1);
     await page.getByRole('button', { name: /Inspect starting die 1/ }).click();
     const details = page.getByTestId('die-details-modal');
@@ -30,7 +38,7 @@ test.describe('Scenarios mode', () => {
     await expect(page.getByTestId('stat-gold')).toHaveAttribute('aria-label', 'Gold 10');
   });
 
-  test('keeps multi-effect dice intact and reports the unavailable Bribery request', async ({ page }) => {
+  test('keeps multi-effect dice intact and presents canonical Bribery details', async ({ page }) => {
     await page.goto('/?speed=instant');
     await page.getByRole('button', { name: 'SCENARIOS', exact: true }).click();
     await page.getByRole('button', { name: 'View Popcorn Scenario' }).click();
@@ -40,7 +48,21 @@ test.describe('Scenarios mode', () => {
     await expect(page.locator('.scenario-loadout-die').first()).toContainText('Weighted');
     await page.getByRole('button', { name: 'BACK TO SCENARIOS' }).click();
     await page.getByRole('button', { name: 'View Money Bags Scenario' }).click();
-    await expect(page.getByText(/Bribery is not present in the current canonical Flame registry/)).toBeVisible();
+    await expect(page.getByText('Bribery', { exact: true }).first()).toBeVisible();
+    await page.getByRole('button', { name: /Inspect Bribery/ }).click();
+    await expect(page.getByTestId('flame-details-modal')).toContainText('The first Bribe each Round costs 5 Gold');
+    await expect(page.getByTestId('flame-details-modal')).toContainText('Added per Bribe: +1.6 XMult');
+    await page.getByTestId('flame-details-modal').getByRole('button', { name: 'Close', exact: true }).click();
+    await page.getByRole('button', { name: 'Start Money Bags' }).click();
+    const bribe = page.getByTestId('flame-action-bribery-direct');
+    await expect(bribe).toHaveText('BRIBE 5G');
+    await bribe.click();
+    await expect(bribe).toHaveText('BRIBE 10G');
+    await bribe.click();
+    await expect(page.getByTestId('stat-gold')).toHaveAttribute('aria-label', 'Gold 0');
+    await expect(bribe).toHaveText('BRIBE 15G');
+    await expect(bribe).toBeDisabled();
+    await expect(page.getByText('×4.2 ARMED · NEXT MANUAL PLAY')).toBeVisible();
   });
 
   test('persists completion immediately and continues the same run after the one-time screen', async ({ page }) => {

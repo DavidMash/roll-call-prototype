@@ -394,7 +394,11 @@ export type FlameActionDetail =
   | { type: 'hot_potato_play'; targetBefore: number; played: boolean; streak: number;
       chargeRequested: number; chargeGained: number; targetAfter: number | null }
   | { type: 'dare_activated'; dareCount: number; dieIds: number[]; storedFactor: number }
-  | { type: 'dare_payoff'; dareCount: number; hand: HandId; factor: number };
+  | { type: 'dare_payoff'; dareCount: number; hand: HandId; factor: number }
+  | { type: 'bribe_purchased'; cost: number; ordinal: number; increment: number; pendingCount: number; pendingFactor: number;
+      goldBefore: number; goldAfter: number }
+  | { type: 'bribery_consumed'; hand: HandId; pendingCount: number; factor: number }
+  | { type: 'bribery_round_reset'; purchasedCount: number; pendingCount: number };
 
 export interface FlameActionEvent extends RunHistoryV2Envelope {
   kind: 'flame_action';

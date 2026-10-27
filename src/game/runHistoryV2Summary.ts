@@ -48,6 +48,8 @@ export interface FlameBalanceMetric {
     maxUpperDecay: number; maxStreak: number; sequenceAdvances: number; sequenceCompletions: number;
     sequenceResets: number; maxSequenceProgress: number; lightningHits: number; lightningMisses: number;
     burnItDownUses: number; burnItDownSacrificeFractionTotal: number;
+    briberyPurchases: number; briberyGoldSpent: number; briberyPayoffHands: number;
+    briberyMaxStack: number; briberyMaxFactor: number;
     doubleOrNothingOffers: number; doubleOrNothingAcceptances: number; doubleOrNothingExpirations: number;
     doubleOrNothingRedemptions: number; doubleOrNothingScoreSacrificed: ExactScore;
     allInArmed: number; allInSuccesses: number; allInFailures: number; allInScoreRetained: ExactScore; allInScoreRemoved: ExactScore;
@@ -185,6 +187,7 @@ const newFlameMetric = (): FlameBalanceMetric => ({
   diagnostics: { maxUpperDecay: 0, maxStreak: 0, sequenceAdvances: 0, sequenceCompletions: 0,
     sequenceResets: 0, maxSequenceProgress: 0, lightningHits: 0, lightningMisses: 0,
     burnItDownUses: 0, burnItDownSacrificeFractionTotal: 0,
+    briberyPurchases: 0, briberyGoldSpent: 0, briberyPayoffHands: 0, briberyMaxStack: 0, briberyMaxFactor: 1,
     doubleOrNothingOffers: 0, doubleOrNothingAcceptances: 0, doubleOrNothingExpirations: 0,
     doubleOrNothingRedemptions: 0, doubleOrNothingScoreSacrificed: 0n,
     allInArmed: 0, allInSuccesses: 0, allInFailures: 0, allInScoreRetained: 0n, allInScoreRemoved: 0n } });
@@ -205,7 +208,7 @@ function canonicalFromState(state: GameState | undefined, events: readonly RunHi
   const earned: Record<GoldSource, number> = { golden: 0, jackpot: 0, diceSale: 0, roundBase: 0,
     unusedRerolls: 0, interest: 0, bossReward: 0, specialOffer: 0 };
   const spent: Record<GoldSpendSource, number> = { dicePurchase: 0, diceOfferReroll: 0,
-    handTraining: 0, flameInvestment: 0, lifeRestore: 0, furnace: 0, greaseTheEngine: 0 };
+    handTraining: 0, flameInvestment: 0, lifeRestore: 0, furnace: 0, greaseTheEngine: 0, bribery: 0 };
   let retainedPurchases = 0;
   let retainedTrainingPurchases = 0;
   let individualTraining = 0;
@@ -460,6 +463,17 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
         }
         if (event.action.type === 'hot_potato_play') metric.diagnostics.maxStreak = Math.max(
           metric.diagnostics.maxStreak, event.action.streak);
+        if (event.action.type === 'bribe_purchased') {
+          metric.diagnostics.briberyPurchases++;
+          metric.diagnostics.briberyGoldSpent += event.action.cost;
+          metric.diagnostics.briberyMaxStack = Math.max(metric.diagnostics.briberyMaxStack, event.action.pendingCount);
+          metric.diagnostics.briberyMaxFactor = Math.max(metric.diagnostics.briberyMaxFactor, event.action.pendingFactor);
+        }
+        if (event.action.type === 'bribery_consumed') {
+          metric.diagnostics.briberyPayoffHands++;
+          metric.diagnostics.briberyMaxStack = Math.max(metric.diagnostics.briberyMaxStack, event.action.pendingCount);
+          metric.diagnostics.briberyMaxFactor = Math.max(metric.diagnostics.briberyMaxFactor, event.action.factor);
+        }
         break;
       }
       case 'flame_sequence': {

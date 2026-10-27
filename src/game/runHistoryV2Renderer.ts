@@ -141,7 +141,10 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
       if (action.type === 'lightning_strike') return `FLAME ACTION · Lightning Strike · ${die(action.dieId)} predicted ${number(action.predictedFace)}, rolled ${number(action.actualFace)} · ${action.hit ? `HIT · Charge +${number(action.chargeGained)}` : 'MISS'}`;
       if (action.type === 'hot_potato_play') return `FLAME · Hot Potato Clock · ${die(action.targetBefore)} ${action.played ? 'Played; streak reset' : `avoided; streak ${number(action.streak)}`} · Charge +${number(action.chargeGained)}${action.targetAfter === null ? '' : ` · moved to ${die(action.targetAfter)}`}`;
       if (action.type === 'dare_activated') return `FLAME ACTION · Dare Devil · Dare ${number(action.dareCount)} · next Ultimate ×${number(action.storedFactor)} · Rolled ${action.dieIds.map(die).join(', ')}`;
-      return `FLAME · Dare Devil payoff · ${HANDS[action.hand].name} ×${number(action.factor)} · ${number(action.dareCount)} Dare${action.dareCount === 1 ? '' : 's'} consumed`;
+      if (action.type === 'dare_payoff') return `FLAME · Dare Devil payoff · ${HANDS[action.hand].name} ×${number(action.factor)} · ${number(action.dareCount)} Dare${action.dareCount === 1 ? '' : 's'} consumed`;
+      if (action.type === 'bribe_purchased') return `FLAME ACTION · Bribery · Bribe ${number(action.ordinal)} cost ${number(action.cost)}G · +${number(action.increment)} XMult · ${number(action.pendingCount)} stacked at ×${number(action.pendingFactor)}`;
+      if (action.type === 'bribery_consumed') return `FLAME · Bribery payoff · ${HANDS[action.hand].name} ×${number(action.factor)} · ${number(action.pendingCount)} Bribe${action.pendingCount === 1 ? '' : 's'} consumed`;
+      return `FLAME · Bribery reset · ${number(action.purchasedCount)} purchased · ${number(action.pendingCount)} pending`;
     }
     case 'score_package_completed': return `SCORE PACKAGE · ${HANDS[event.hand].name} · ${number(event.score)} Score`;
     case 'score_package_removed': return `${event.reason === 'double_or_nothing' ? 'DOUBLE OR NOTHING' : 'ALL IN FAILED'} · −${number(event.amount)} Score`;

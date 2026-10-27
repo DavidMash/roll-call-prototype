@@ -7,6 +7,7 @@ import {
   HAND_FAMILY_FLAME_IDS, hasOwnedFlame, isFlame, ownedFlameIds, recalculateMaxCharge,
   normalizeFlameInstanceRuntime, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier,
   greaseTheEngineCost, FLAME_SCALING,
+  briberyNextCost,
 } from './flames';
 import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, planQualification, ultimateHands } from './hands';
 import { hashSeed, SeededRng } from './rng';
@@ -233,7 +234,8 @@ function normalizeProgressiveFlameRuntime(state: Pick<Board, 'progressiveFlames'
 
 function normalizeInteractiveFlameRuntime(state: Pick<Board, 'interactiveFlames'>): void {
   state.interactiveFlames ??= { burnItDownUses: 0, greaseTheEngineUses: 0,
-    hotPotatoDieId: null, hotPotatoStreak: 0, dareDevilCount: 0 };
+    hotPotatoDieId: null, hotPotatoStreak: 0, dareDevilCount: 0,
+    briberyPurchasedThisRound: 0, briberyPendingCount: 0 };
   state.interactiveFlames.burnItDownUses = Math.max(0, Math.floor(state.interactiveFlames.burnItDownUses ?? 0));
   state.interactiveFlames.greaseTheEngineUses = Math.max(0, Math.floor(state.interactiveFlames.greaseTheEngineUses ?? 0));
   state.interactiveFlames.hotPotatoDieId = Number.isInteger(state.interactiveFlames.hotPotatoDieId)
@@ -241,6 +243,10 @@ function normalizeInteractiveFlameRuntime(state: Pick<Board, 'interactiveFlames'
   state.interactiveFlames.hotPotatoStreak = Math.max(0, Math.floor(state.interactiveFlames.hotPotatoStreak ?? 0));
   state.interactiveFlames.dareDevilCount = Math.max(0, Math.min(FLAME_SCALING.dareDevil.maximumDares,
     Math.floor(state.interactiveFlames.dareDevilCount ?? 0)));
+  state.interactiveFlames.briberyPurchasedThisRound = Math.max(0,
+    Math.floor(state.interactiveFlames.briberyPurchasedThisRound ?? 0));
+  state.interactiveFlames.briberyPendingCount = Math.max(0,
+    Math.floor(state.interactiveFlames.briberyPendingCount ?? 0));
 }
 
 function normalizeScoreWagerRuntime(state: Pick<Board, 'scoreWagers'>): void {
@@ -453,6 +459,7 @@ export function normalizeGameState(state: GameState): GameState {
   next.stats.goldSpentBySource.dicePurchase ??= 0;
   next.stats.goldSpentBySource.diceOfferReroll ??= 0;
   next.stats.goldSpentBySource.greaseTheEngine ??= 0;
+  next.stats.goldSpentBySource.bribery ??= 0;
   next.stats.diceOfferRerolls ??= 0;
   next.stats.temperEarned ??= 0;
   next.stats.temperSpent ??= 0;
@@ -547,6 +554,14 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (invalid) return invalid;
     if (state.chargeXMult >= state.maxCharge - 1e-9) return 'Charge is already full.';
     const cost = greaseTheEngineCost(state.interactiveFlames.greaseTheEngineUses);
+    if (state.gold < cost) return `Not enough Gold; ${cost} required.`;
+    return null;
+  }
+  if (action.type === 'ACTIVATE_BRIBERY') {
+    const invalid = validateInteractiveFlame(state, 'bribery');
+    if (invalid) return invalid;
+    if (currentlyPlayableManualHands(state).length === 0) return 'No manual Hand is currently playable.';
+    const cost = briberyNextCost(state.interactiveFlames.briberyPurchasedThisRound);
     if (state.gold < cost) return `Not enough Gold; ${cost} required.`;
     return null;
   }
@@ -867,7 +882,8 @@ export function newRun(seed: string, random?: RandomSource, options?: NewRunOpti
     chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, minigunUpperStreak: 0,
     roundPlayCount: 0, roundStartLives: CONFIG.maxLives, roundStartRosterSize: CONFIG.diceCount, precedingShopDiePurchase: false,
     interactiveFlames: { burnItDownUses: 0, greaseTheEngineUses: 0,
-      hotPotatoDieId: null, hotPotatoStreak: 0, dareDevilCount: 0 },
+      hotPotatoDieId: null, hotPotatoStreak: 0, dareDevilCount: 0,
+      briberyPurchasedThisRound: 0, briberyPendingCount: 0 },
     scoreWagers: { nextPackageId: 1, packages: [], pendingDoubleOrNothing: null,
       doubleOrNothing: null, allInArmed: false },
     hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, progressiveFlames: { topDown: 0, countDown: 0 }, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
@@ -916,6 +932,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       case 'MANUAL_REROLL': resolver.manualReroll(action.dieIds); break;
       case 'ACTIVATE_BURN_IT_DOWN': resolver.burnItDown(); break;
       case 'ACTIVATE_GREASE_THE_ENGINE': resolver.greaseTheEngine(); break;
+      case 'ACTIVATE_BRIBERY': resolver.bribe(); break;
       case 'ACTIVATE_LIGHTNING_STRIKE': resolver.lightningStrike(action.dieId, action.predictedFace); break;
       case 'ACTIVATE_DARE_DEVIL': resolver.dareDevil(); break;
       case 'ACCEPT_DOUBLE_OR_NOTHING': resolver.acceptDoubleOrNothing(); break;

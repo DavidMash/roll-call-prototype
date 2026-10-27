@@ -62,6 +62,7 @@ export function renderRunSummaryV2(state: GameState): string {
       ? ` · Charge ${number(metric.chargeGained)}/${number(metric.chargeRequested)} gained (${number(metric.chargeLostToCap)} capped)` : '';
     return `${FLAMES[id as keyof typeof FLAMES].name}: ${metric.activations} activations · ${metric.activeRounds}/${metric.roundsOwned} active/owned Rounds · avg ${number(metric.averageActivationsPerActiveRound)}, max ${metric.maximumActivationsInOneRound}${factor}${charge}`;
   }).join(' · ') || 'None';
+  const bribery = experienced.flames.bribery?.diagnostics;
   const shares = experienced.largestHandShare;
   return [
     'ROLL CALL · RUN HISTORY V2',
@@ -105,6 +106,7 @@ export function renderRunSummaryV2(state: GameState): string {
     `Largest-hand share: median ${shares.median === null ? '—' : percent(shares.median)} · P90 ${shares.p90 === null ? '—' : percent(shares.p90)} · max ${shares.maximum === null ? '—' : percent(shares.maximum)} · >50% ${shares.over50Percent}/${shares.samples} · >80% ${shares.over80Percent}/${shares.samples}`,
     `Flame activations: ${entries(experienced.flameActivations)}`,
     `Flame balance: ${flameBalance}`,
+    ...(bribery ? [`Bribery: ${number(bribery.briberyPurchases)} purchased · ${number(bribery.briberyGoldSpent)}G spent · ${number(bribery.briberyPayoffHands)} payoff Hands · max ${number(bribery.briberyMaxStack)} stacked / ×${number(bribery.briberyMaxFactor)}`] : []),
     `Flame lifecycle: acquired ${number(experienced.flameLifecycle.acquired)} · replaced ${number(experienced.flameLifecycle.replaced)} · invested ${number(experienced.flameLifecycle.stokedGold)}G · Bonfires ${number(experienced.flameLifecycle.bonfires)} · Engulfed ${number(experienced.flameLifecycle.engulfed)}`,
     `Special dice: ${specialDice}`,
     `Charge: armed ${number(experienced.charge.arms)} · consumed ${number(experienced.charge.consumes)} · resets ${number(experienced.charge.resets)}`,

@@ -207,14 +207,16 @@ export default function App() {
     tutorialGame.clearStored();
     setRunMode(null);
   }
-  if (runMode === 'scenario' && scenarioView === 'browser') return <Container size={1180} px={{ base: 8, sm: 'sm' }} py="md">
+  if (runMode === 'scenario' && scenarioView === 'browser') return <Container size={1180} px={{ base: 8, sm: 'sm' }} py="md"
+    className="scenario-page-container">
     <ScenarioBrowser progress={scenarioProgress} onOpen={scenario => { setSelectedScenario(scenario); setScenarioView('details'); }}
       activeScenario={scenarioGame.hasStoredRun && isResumableRun(scenarioGame.state) && scenarioGame.state.scenario
         ? { name: scenarioGame.state.scenario.name, round: scenarioGame.state.round } : null}
       onResume={() => { const definition = scenarioById(scenarioGame.state.scenario?.id); if (definition) setSelectedScenario(definition); setScenarioView('playing'); }}
       onBack={() => setRunMode(null)} />
   </Container>;
-  if (runMode === 'scenario' && scenarioView === 'details') return <Container size={1050} px={{ base: 8, sm: 'sm' }} py="md">
+  if (runMode === 'scenario' && scenarioView === 'details') return <Container size={1050} px={{ base: 8, sm: 'sm' }} py="md"
+    className="scenario-page-container">
     <ScenarioDetails scenario={selectedScenario} completed={scenarioProgress.completions[selectedScenario.id]?.completed === true}
       onBack={() => setScenarioView('browser')} onStart={() => startScenario(selectedScenario)} />
   </Container>;

@@ -84,12 +84,10 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     featuredHands: ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'],
   },
   {
-    id: 'money-bags', version: 1, name: 'Money Bags', tagline: 'It takes money to make money.',
+    id: 'money-bags', version: 2, name: 'Money Bags', tagline: 'It takes money to make money.',
     startingGoal: 4_000n, startingGold: 15, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'golden', level: 1 }, { key: 'jackpot', level: 1 }, { key: 'furnace', level: 3 }]),
-    flames: [],
-    unavailableStartingFlames: [{ name: 'Bribery', investedGold: 40,
-      reason: 'Bribery is not present in the current canonical Flame registry.' }],
+    flames: [{ key: 'bribery', investedGold: 40 }],
     handTraining: { upper: 4, lower: 5 },
   },
 ] as const;

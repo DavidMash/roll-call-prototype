@@ -25,10 +25,9 @@ describe('Scenario definitions', () => {
       'weighted', 'golden', 'jackpot', 'furnace'].map(key => SPECIAL_DICE[key as keyof typeof SPECIAL_DICE].name))
       .toEqual(['Lone Wolf', 'Clockwork', 'Flywheel', 'Tank', 'Vintage', 'Magnetic', 'Jumping Bean', 'Chameleon',
         'Weighted', 'Golden', 'Jackpot', 'Furnace']);
-    expect(['minigun', 'countDown', 'straightShooter', 'oneShort', 'fluxCapacitor', 'dareDevil', 'vineyard', 'hailMary']
+    expect(['minigun', 'countDown', 'straightShooter', 'oneShort', 'fluxCapacitor', 'dareDevil', 'vineyard', 'hailMary', 'bribery']
       .map(key => FLAMES[key as keyof typeof FLAMES].name))
-      .toEqual(['Minigun', 'Count Down', 'Straight Shooter', 'One Short', 'Flux Capacitor', 'Dare Devil', 'Vineyard', 'Hail Mary']);
-    expect(Object.values(FLAMES).some(flame => flame.name === 'Bribery')).toBe(false);
+      .toEqual(['Minigun', 'Count Down', 'Straight Shooter', 'One Short', 'Flux Capacitor', 'Dare Devil', 'Vineyard', 'Hail Mary', 'Bribery']);
   });
 
   it('maps every launch Goal to the canonical progression', () => {
@@ -125,7 +124,11 @@ describe('Scenario progression and completion', () => {
       hands: retry.handLevels, flames: flameInstances(retry).map(flame => [flame.type, flame.investedGold]) })
       .toEqual({ round: 1, goal: definition.startingGoal, gold: 15, temper: 0, lives: 3,
         roster: definition.roster.map(die => die.effects.map(effect => [effect.key, effect.level])),
-        hands: handLevelsForScenario(definition), flames: [] });
+        hands: handLevelsForScenario(definition), flames: [['bribery', 40]] });
+    expect(definition.version).toBe(2);
+    expect(Object.values(retry.dieRoundState).flatMap(runtime => Object.values(runtime.effects))
+      .filter(effect => effect.type === 'furnace')
+      .every(effect => effect.furnaceGoldFed === 0 && effect.furnacePips === 0)).toBe(true);
   });
 });
 
