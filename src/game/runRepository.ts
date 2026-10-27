@@ -5,7 +5,7 @@ import { createStats } from './telemetry';
 import type { GameState, RunLedgerChunk, RunSession } from './types';
 import type { RunHistoryV2Coverage, RunHistoryV2Event } from './runHistoryV2';
 
-export type RunSlot = 'normal' | 'tutorial';
+export type RunSlot = 'normal' | 'tutorial' | 'scenario';
 export type PersistenceStatus =
   | { kind: 'loading' }
   | { kind: 'saved' }

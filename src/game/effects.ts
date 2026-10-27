@@ -22,7 +22,7 @@ import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTempora
 import { getEncounterGoalBreakdown } from './goals';
 import { encounterNode, flameNodeAfter, postBossShopNodeAfter, shopNodeBefore, specialOfferNodeAfter, timeTravelDestinationRound } from './progression';
 import { formatExactDecimal, formatExactScore, formatPlayerNumber } from './copy';
-import { chapterEncounterRounds, chapterNumberForRound, ensureChapterPlan } from './chapters';
+import { chapterEncounterRounds, chapterNumberForRound, chapterPosition, ensureChapterPlan } from './chapters';
 import { chapterRoundForRound } from './chapters';
 import { RUN_HISTORY_V2_RULESET, RUN_HISTORY_V2_SCHEMA_VERSION } from './runHistoryV2';
 import {
@@ -171,7 +171,10 @@ export class Resolver {
   emitRunStarted(): void {
     this.emitV2({ kind: 'run_started', schemaVersion: RUN_HISTORY_V2_SCHEMA_VERSION, ruleset: RUN_HISTORY_V2_RULESET,
       seed: this.state.seed, initialLives: this.state.lives, initialGold: this.state.gold,
-      initialHandLevels: structuredClone(this.state.handLevels) });
+      initialHandLevels: structuredClone(this.state.handLevels),
+      ...(this.state.runMode === 'scenario' && this.state.scenario ? { runMode: 'scenario' as const,
+        scenarioId: this.state.scenario.id, scenarioVersion: this.state.scenario.version,
+        scenarioName: this.state.scenario.name } : {}) });
   }
 
   emitV2Error(detail: string): void {
@@ -2366,12 +2369,17 @@ export class Resolver {
       ?? (this.state.round > 60 ? bossTypeForRound(this.state.seed, this.state.round) : null);
     if (bossType) this.state.bossSchedule[this.state.round] = bossType;
     const bossSilenced = !!bossType && this.state.specialOfferEffects.silence;
-    const bossForGoalRound = (round: number) => this.state.bossSchedule[round]
-      ?? (round > 60 ? bossTypeForRound(this.state.seed, round) : null);
+    const goalRound = this.state.round + this.state.goalProgressionOffset;
+    const bossForGoalRound = (candidateGoalRound: number) => {
+      const scenarioRound = candidateGoalRound - this.state.goalProgressionOffset;
+      return this.state.bossSchedule[scenarioRound]
+        ?? (scenarioRound > 60 ? bossTypeForRound(this.state.seed, scenarioRound) : null);
+    };
     const targetBreakdown = getEncounterGoalBreakdown(
-      this.state.round, bossType ?? null, bossSilenced, bossForGoalRound,
+      goalRound, bossType ?? null, bossSilenced, bossForGoalRound,
     );
-    const { chapter: targetChapter, localRound: targetLocalRound, ...historyTargetBreakdown } = targetBreakdown;
+    const { chapter: _targetChapter, localRound: _targetLocalRound, ...historyTargetBreakdown } = targetBreakdown;
+    const { chapterNumber: scenarioChapter, chapterRound: scenarioChapterRound } = chapterPosition(this.state.round);
     this.state.target = targetBreakdown.finalGoal;
     this.state.boss = bossType ? createBossRuntime(this.state.seed, this.state.round, bossType, {
       handPlayCounts: this.state.handPlayCounts,
@@ -2410,8 +2418,8 @@ export class Resolver {
       manualRerollsGranted: this.state.manualRerollsRemaining, manualRerollChargesSpent: 0,
       manualRerollsRemainingAtClear: null, manualRerollActions: 0, deadBoardRescues: 0, scoreByHand: {}, effectScore: 0n,
       goldBefore: this.state.gold, goldBySourceBefore: structuredClone(this.state.stats.goldBySource), payout: null });
-    const v2RoundStarted = this.emitV2({ kind: 'round_attempt_started', chapter: targetChapter,
-      chapterRound: targetLocalRound, retry, target: historyTargetBreakdown,
+    const v2RoundStarted = this.emitV2({ kind: 'round_attempt_started', chapter: scenarioChapter,
+      chapterRound: scenarioChapterRound, retry, target: historyTargetBreakdown,
       boss: this.state.boss?.type ?? null, lives: this.state.lives,
       dice: activeEncounterDice(this.state).map(die => this.historyDie(die.id)),
       flames: structuredClone(flameInstances(this.state)) });
@@ -2549,6 +2557,8 @@ export class Resolver {
       .filter(([flame]) => ownedFlameIds(this.state).has(flame as Flame)));
     recalculateMaxCharge(this.state);
     evaluation.engulfed = true;
+    if (this.state.runMode === 'scenario' && this.state.scenario && !this.state.scenario.completionAcknowledged)
+      this.state.scenario.completionPending = true;
     this.emitV2({ kind: 'engulfment_attempted', shopVisitId: this.state.nextShopVisitId, attemptNumber: 1,
       infernoLevelBefore: evaluation.infernoLevelBefore, infernoLevelAfter: evaluation.infernoLevelAfter,
       infernoMultiplierBefore: evaluation.infernoMultiplierBefore, infernoMultiplierAfter: evaluation.infernoMultiplierAfter,
@@ -2724,12 +2734,24 @@ export class Resolver {
     if (!this.state.infernoEvaluation) throw new Error('Inferno evaluation is not available.');
     if (this.state.infernoEvaluation.success && !this.state.infernoEvaluation.engulfed)
       throw new Error('Choose whether to Engulf now or not yet.');
+    if (this.state.runMode === 'scenario' && this.state.scenario?.completionPending) {
+      this.state.phase = 'scenarioComplete';
+      return;
+    }
     if (this.state.infernoEvaluation.suspendAfterContinue) {
       this.state.infernoEvaluationSuspendedUntilNewFlame = true;
       this.emitV2({ kind: 'inferno_suspension_changed', suspended: true, reason: 'collection_insufficient' });
     }
     this.state.infernoEvaluation = null;
     this.continuePostRoundFlow();
+  }
+  continueScenarioRun(): void {
+    if (this.state.phase !== 'scenarioComplete' || !this.state.scenario?.completionPending || !this.state.infernoEvaluation?.engulfed)
+      throw new Error('Scenario completion is not awaiting continuation.');
+    this.state.scenario.completionPending = false;
+    this.state.scenario.completionAcknowledged = true;
+    this.state.phase = 'inferno';
+    this.continueInfernoEvaluation();
   }
   private completeSpecialOfferRound(): void {
     const effects = this.state.specialOfferEffects;

@@ -36,6 +36,12 @@ import { isChapterMapTransition } from './game/playback';
 import { RunActionRow, RunActionRowContext } from './components/RunActionRow';
 import { InfernoEvaluationScreen } from './components/InfernoEvaluationScreen';
 import type { FlamePresentation } from './game/flamePresentation';
+import { ScenarioBrowser } from './components/ScenarioBrowser';
+import { ScenarioDetails } from './components/ScenarioDetails';
+import { ScenarioCompleteScreen } from './components/ScenarioCompleteScreen';
+import { SCENARIOS, scenarioById, type ScenarioDefinition } from './game/scenarios';
+import { emptyScenarioProgress, loadScenarioProgress, recordScenarioCompletion } from './game/scenarioProgress';
+import { newRun } from './game/engine';
 
 const freshSeed = () => `roll-${Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join('-')}`;
 const query = new URLSearchParams(window.location.search);
@@ -45,7 +51,12 @@ const initialSpeed = ['normal', 'fast', 'instant'].includes(query.get('speed') ?
 const initialDebugTraceMode = query.get('debugTrace') === 'full' ? 'full' as const : 'bounded' as const;
 
 export default function App() {
-  const [runMode, setRunMode] = useState<'normal' | 'tutorial' | null>(null);
+  const [runMode, setRunMode] = useState<'normal' | 'tutorial' | 'scenario' | null>(null);
+  const [scenarioView, setScenarioView] = useState<'browser' | 'details' | 'playing'>('browser');
+  const [selectedScenario, setSelectedScenario] = useState<ScenarioDefinition>(SCENARIOS[0]);
+  const [scenarioProgress, setScenarioProgress] = useState(() => {
+    try { return loadScenarioProgress(window.localStorage); } catch { return emptyScenarioProgress(); }
+  });
   const atLanding = runMode === null;
   const [seedInput, setSeedInput] = useState(initialSeed);
   const [speed, setSpeed] = useState<PlaybackSpeed>(initialSpeed);
@@ -66,7 +77,9 @@ export default function App() {
   }, []);
   const normalGame = useGame(requestedSeed, initialSeed, speed, runMode === 'normal', initialDebugTraceMode);
   const tutorialGame = useTutorialGame(speed, runMode === 'tutorial');
-  const game = runMode === 'tutorial' ? tutorialGame : normalGame;
+  const scenarioGame = useGame(null, `scenario-${initialSeed}`, speed,
+    runMode === 'scenario' && scenarioView === 'playing', initialDebugTraceMode, undefined, 'scenario');
+  const game = runMode === 'tutorial' ? tutorialGame : runMode === 'scenario' ? scenarioGame : normalGame;
   const [onboarding, setOnboarding] = useState<OnboardingMetadata>(() => {
     try { return loadOnboardingMetadata(window.localStorage); }
     catch { return defaultOnboardingMetadata(); }
@@ -109,6 +122,14 @@ export default function App() {
       setOnboarding(next);
     }
   }, [normalGame.hasStoredRun, normalGame.state.phase, onboarding]);
+  useEffect(() => {
+    const scenario = scenarioGame.state.scenario;
+    if (!scenario || (!scenario.completionPending && !scenario.completionAcknowledged)) return;
+    try {
+      setScenarioProgress(recordScenarioCompletion(window.localStorage, scenario.id, scenario.version,
+        scenarioGame.runSession.ledger.runId));
+    } catch { /* Scenario completion remains in the durable run even if local progress storage is unavailable. */ }
+  }, [scenarioGame.state.scenario, scenarioGame.runSession.ledger.runId]);
   function submit(action: Action) {
     if (busy) return;
     if (!game.submit(action)) return;
@@ -122,6 +143,15 @@ export default function App() {
       setSelection(emptySelection());
       setSelectedOffer(null);
       setSelectedFlameOffer(null);
+      return;
+    }
+    if (runMode === 'scenario') {
+      const definition = scenarioById(state.scenario?.id) ?? selectedScenario;
+      const resolution = newRun(seed, undefined, { debugTraceMode: initialDebugTraceMode, scenario: definition });
+      if (scenarioGame.restartResolution(resolution)) {
+        setSelectedScenario(definition); setScenarioView('playing'); setSeedInput(seed);
+        setSelection(emptySelection()); setSelectedOffer(null); setSelectedFlameOffer(null);
+      }
       return;
     }
     const url = new URL(window.location.href);
@@ -148,6 +178,24 @@ export default function App() {
     setSelectedFlameOffer(null);
     setRunMode('tutorial');
   }
+  function openScenarios() {
+    try { setScenarioProgress(loadScenarioProgress(window.localStorage)); } catch { /* keep in-memory progress */ }
+    setScenarioView('browser');
+    setRunMode('scenario');
+  }
+  function startScenario(definition: ScenarioDefinition) {
+    const seed = `scenario-${definition.id}-${freshSeed()}`;
+    const resolution = newRun(seed, undefined, { debugTraceMode: initialDebugTraceMode, scenario: definition });
+    if (!scenarioGame.restartResolution(resolution)) return;
+    setSelectedScenario(definition); setSeedInput(seed); setScenarioView('playing');
+    setSelection(emptySelection()); setSelectedOffer(null); setSelectedFlameOffer(null);
+    setRunInfoOpen(false); setRestoreLivesOpen(false); setFaceDetails(null); setFlameDetails(null);
+  }
+  function continueScenarioCompletion(destination: 'run' | 'scenarios' | 'home') {
+    submit({ type: 'CONTINUE_SCENARIO_RUN' });
+    if (destination === 'scenarios') setScenarioView('browser');
+    if (destination === 'home') setRunMode(null);
+  }
   function returnToTitle() {
     setGameMenuOpen(false);
     setRunMode(null);
@@ -159,6 +207,17 @@ export default function App() {
     tutorialGame.clearStored();
     setRunMode(null);
   }
+  if (runMode === 'scenario' && scenarioView === 'browser') return <Container size={1180} px={{ base: 8, sm: 'sm' }} py="md">
+    <ScenarioBrowser progress={scenarioProgress} onOpen={scenario => { setSelectedScenario(scenario); setScenarioView('details'); }}
+      activeScenario={scenarioGame.hasStoredRun && isResumableRun(scenarioGame.state) && scenarioGame.state.scenario
+        ? { name: scenarioGame.state.scenario.name, round: scenarioGame.state.round } : null}
+      onResume={() => { const definition = scenarioById(scenarioGame.state.scenario?.id); if (definition) setSelectedScenario(definition); setScenarioView('playing'); }}
+      onBack={() => setRunMode(null)} />
+  </Container>;
+  if (runMode === 'scenario' && scenarioView === 'details') return <Container size={1050} px={{ base: 8, sm: 'sm' }} py="md">
+    <ScenarioDetails scenario={selectedScenario} completed={scenarioProgress.completions[selectedScenario.id]?.completed === true}
+      onBack={() => setScenarioView('browser')} onStart={() => startScenario(selectedScenario)} />
+  </Container>;
   function openFlameDetails(target: FlameDetailsTarget) {
     if (target.kind === 'ember' && target.flameInstanceId === state.flameTutorial.pendingFlameInstanceId && !state.flameTutorial.completed) {
       submit({ type: 'DISMISS_FLAME_TUTORIAL' });
@@ -184,7 +243,8 @@ export default function App() {
   }
   if (atLanding) return <Container size={1180} px={{ base: 6, sm: 'sm' }} py={8} className="landing-container">
     <LandingScreen resumableRun={resumableRun} resumableTutorial={resumableTutorial} onboarding={onboarding}
-      onContinue={() => setRunMode('normal')} onTutorial={startTutorialFromLanding} onNewRun={startNewRunFromLanding} />
+      onContinue={() => setRunMode('normal')} onTutorial={startTutorialFromLanding} onNewRun={startNewRunFromLanding}
+      onScenarios={openScenarios} />
   </Container>;
   return <RunActionRowContext.Provider value={actionRowTarget}><Container size={1180} px={{ base: 6, sm: 'sm' }} py={8}
     className={`app-container screen-theme ${board.phase === 'round' ? 'active-gameplay' : ''}`}
@@ -213,6 +273,9 @@ export default function App() {
         : showingMap ? <RunMapTransition key={event!.id} seed={state.seed} event={event!} onContinue={game.continuePlayback} />
         : board.phase === 'roundSummary' && board.roundSummary ? <RoundSummaryScreen board={board} busy={busy} submit={submit} />
         : board.phase === 'inferno' && board.infernoEvaluation ? <InfernoEvaluationScreen board={board} submit={submit} />
+        : board.phase === 'scenarioComplete' && board.scenario ? <ScenarioCompleteScreen board={board}
+          onContinue={() => continueScenarioCompletion('run')} onScenarios={() => continueScenarioCompletion('scenarios')}
+          onHome={() => continueScenarioCompletion('home')} />
         : board.phase === 'flameSelection' && board.flameSelection ? <FlameSelectionScreen board={board} event={event} busy={busy}
         selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} openFlameDetails={openFlameDetails} />
         : board.phase === 'specialOffer' && board.specialOffer ? <SpecialOfferScreen board={board} busy={busy} submit={submit} />
@@ -221,13 +284,17 @@ export default function App() {
         tutorialProgressNudgeEligible={tutorialProgressNudgeEligible} />
       : (board.phase === 'bust' || (board.phase === 'lost' && board.bust)) ? <BustScreen board={board}
           onContinue={event?.type === 'ROUND_BUST' && (board.bust?.livesAfter ?? 0) > 0 ? game.continuePlayback : undefined}
-          restartSame={() => restart(state.seed)} newRun={() => restart(freshSeed())} />
+          restartSame={() => restart(runMode === 'scenario' ? `scenario-${state.scenario?.id}-${freshSeed()}` : state.seed)}
+          newRun={() => restart(freshSeed())} scenarioFailure={runMode === 'scenario'}
+          backToScenarios={runMode === 'scenario' ? () => setScenarioView('browser') : undefined} />
         : board.phase === 'lost' || board.phase === 'error' ? <Stack gap="sm">
           <Paper p="xl" ta="center" className="end-state">
             <Title order={2}>{board.phase === 'lost' ? 'Run Over' : 'Resolution stopped'}</Title>
             <Text mt="sm">{board.phase === 'lost' && board.bust ? `Bust on ${chapterLabel(board.bust.round)}: ${formatScoreProgress(board.bust.score, board.bust.target)}. No lives remain.` : state.stats.resolutionError}</Text>
             <Text size="sm" c="dimmed" mt="sm">Run details and event history are available in Run Info.</Text>
-            <Group justify="center" mt="lg"><Button onClick={() => restart(state.seed)}>Restart same seed</Button><Button variant="default" onClick={() => restart(freshSeed())}>New seed</Button></Group>
+            {runMode === 'scenario' ? <Group justify="center" mt="lg"><Button onClick={() => restart(`scenario-${state.scenario?.id}-${freshSeed()}`)}>TRY AGAIN</Button>
+              <Button variant="default" onClick={() => setScenarioView('browser')}>BACK TO SCENARIOS</Button></Group>
+              : <Group justify="center" mt="lg"><Button onClick={() => restart(state.seed)}>Restart same seed</Button><Button variant="default" onClick={() => restart(freshSeed())}>New seed</Button></Group>}
           </Paper>
         </Stack>
         : <RoundScreen board={board} event={event} busy={busy} inputBlocked={busy || gameMenuOpen || runInfoOpen || helpOpen || restoreLivesOpen || faceDetails !== null || flameDetails !== null}

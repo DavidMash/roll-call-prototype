@@ -16,7 +16,7 @@ interface PersistedRun {
   state: GameState;
 }
 
-const PHASES = new Set(['round', 'roundSummary', 'inferno', 'bust', 'flameSelection', 'specialOffer', 'shop', 'lost', 'error']);
+const PHASES = new Set(['round', 'roundSummary', 'inferno', 'scenarioComplete', 'bust', 'flameSelection', 'specialOffer', 'shop', 'lost', 'error']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

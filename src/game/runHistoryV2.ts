@@ -97,6 +97,10 @@ export interface RunStartedEvent extends RunHistoryV2Envelope {
   initialLives: number;
   initialGold: number;
   initialHandLevels: Record<HandId, number>;
+  runMode?: 'scenario';
+  scenarioId?: string;
+  scenarioVersion?: number;
+  scenarioName?: string;
 }
 
 export interface ChapterStartedEvent extends RunHistoryV2Envelope {

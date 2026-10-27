@@ -7,13 +7,14 @@ import type { OnboardingMetadata, TutorialSession } from '../tutorial/types';
 
 const lifeDisplay = (lives: number) => '♥'.repeat(Math.max(0, lives));
 
-export function LandingScreen({ resumableRun, resumableTutorial, onboarding, onContinue, onTutorial, onNewRun }: {
+export function LandingScreen({ resumableRun, resumableTutorial, onboarding, onContinue, onTutorial, onNewRun, onScenarios }: {
   resumableRun: GameState | null;
   resumableTutorial: TutorialSession | null;
   onboarding: OnboardingMetadata;
   onContinue: () => void;
   onTutorial: () => void;
   onNewRun: () => void;
+  onScenarios: () => void;
 }) {
   const [confirmingNewRun, setConfirmingNewRun] = useState(false);
   const newRunButton = useRef<HTMLButtonElement>(null);
@@ -58,6 +59,7 @@ export function LandingScreen({ resumableRun, resumableTutorial, onboarding, onC
             : <Button variant="subtle" color="gray" size="sm" className="secondary-tutorial-action"
               onClick={onTutorial}>{tutorialLabel}</Button>}
         </div>
+        <Button variant="light" color="orange" size="md" className="scenarios-action" onClick={onScenarios}>SCENARIOS</Button>
       </Stack>
     </main>
     <Modal opened={confirmingNewRun} onClose={() => setConfirmingNewRun(false)}

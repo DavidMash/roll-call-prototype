@@ -5,7 +5,7 @@ import { dispatch, newRun } from './game/engine';
 import { savePersistedRun } from './game/persistence';
 import type { Action, Resolution, RunLedgerChunk } from './game/types';
 import { appendCriticalDiagnostic, type DebugTraceMode } from './game/debugTrace';
-import { browserRunRepository, type PersistenceStatus, type RunRepository } from './game/runRepository';
+import { browserRunRepository, type PersistenceStatus, type RunRepository, type RunSlot } from './game/runRepository';
 import { chunkForResolution, compactRuntimeLedger } from './game/ledger';
 import { stringifyExactJson } from './game/scoreMath';
 import { firstPresentedEventIndex, isChapterMapTransition, isPlaybackBarrier, isPlaybackCheckpoint,
@@ -24,7 +24,7 @@ export function persistResolvedRun(storage: Parameters<typeof savePersistedRun>[
 }
 
 export function useGame(requestedSeed: string | null, fallbackSeed: string, speed: PlaybackSpeed, active = true,
-  debugTraceMode: DebugTraceMode = 'bounded', suppliedRepository?: RunRepository) {
+  debugTraceMode: DebugTraceMode = 'bounded', suppliedRepository?: RunRepository, slot: RunSlot = 'normal') {
   const reducedMotion = useReducedMotion();
   const [repository] = useState(() => suppliedRepository ?? browserRunRepository());
   const [initial] = useState(() => newRun(requestedSeed ?? fallbackSeed, undefined, { debugTraceMode }));
@@ -44,7 +44,7 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
 
   useEffect(() => {
     let cancelled = false;
-    void repository.load('normal').then(stored => {
+    void repository.load(slot).then(stored => {
       if (cancelled) return;
       if (stored && (!requestedSeed || stored.session.state.seed === requestedSeed)) {
         const state = stored.session.state;
@@ -58,19 +58,19 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
         message: cause instanceof Error ? cause.message : 'Run storage is unavailable.' });
     });
     return () => { cancelled = true; };
-  }, [initial, repository, requestedSeed]);
+  }, [initial, repository, requestedSeed, slot]);
   useEffect(() => {
     if (!active || hasStoredRun || persistenceStatus.kind !== 'saved' || initialSaveStarted.current) return;
     initialSaveStarted.current = true;
     pendingChunks.current = [result.ledgerChunk];
     setSaving(true);
-    void repository.commit('normal', result.session, pendingChunks.current).then(() => {
+    void repository.commit(slot, result.session, pendingChunks.current).then(() => {
       pendingChunks.current = [];
       setHasStoredRun(true);
     }).catch(cause => setPersistenceStatus({ kind: 'unsaved', partialHistory: false,
       message: cause instanceof Error ? cause.message : 'Run storage is unavailable.' }))
       .finally(() => setSaving(false));
-  }, [active, hasStoredRun, persistenceStatus.kind, repository, result]);
+  }, [active, hasStoredRun, persistenceStatus.kind, repository, result, slot]);
 
   useEffect(() => {
     if (result.events.length === 0 || playbackBusy) return;
@@ -155,7 +155,7 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
     pendingChunks.current.push(next.ledgerChunk);
     const partial = enforcePendingLimit(next);
     setSaving(true);
-    void repository.commit('normal', next.session, pendingChunks.current).then(() => {
+    void repository.commit(slot, next.session, pendingChunks.current).then(() => {
       pendingChunks.current = [];
       retryAttempt.current = 0;
       compactRuntimeLedger(next.state);
@@ -180,7 +180,7 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
     if (saving) return;
     submitting.current = true;
     setSaving(true);
-    void repository.commit('normal', result.session, pendingChunks.current).then(() => {
+    void repository.commit(slot, result.session, pendingChunks.current).then(() => {
       pendingChunks.current = [];
       retryAttempt.current = 0;
       compactRuntimeLedger(result.state);
@@ -216,6 +216,16 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
       commit(newRun(nextSeed, undefined, { debugTraceMode }));
       return true;
     },
+    restartResolution: (next: Resolution) => {
+      // A mode browser may replace a dormant hook whose unplayed placeholder resolution is still queued.
+      if (submitting.current || saving || persistenceStatus.kind === 'loading' || (active && playbackBusy)) return false;
+      submitting.current = true;
+      pendingChunks.current = [];
+      initialSaveStarted.current = true;
+      commit(next);
+      return true;
+    },
+    clearStored: () => repository.remove(slot),
     skip: () => {
       const jump = scoreSummaryJump(result.events, index);
       if (jump) { setSummaryJump(jump); setIndex(jump.summaryIndex); }

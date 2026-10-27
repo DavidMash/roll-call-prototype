@@ -123,7 +123,8 @@ export interface CanonicalRunMetrics {
 }
 
 export interface RunHistoryV2Summary {
-  identity: { schemaVersion: number | null; ruleset: string | null; seed: string | null };
+  identity: { schemaVersion: number | null; ruleset: string | null; seed: string | null;
+    runMode: 'normal' | 'scenario'; scenarioId: string | null; scenarioVersion: number | null; scenarioName: string | null };
   coverage: RunHistoryV2Coverage & { metricsComplete: boolean };
   timelines: { count: number; abandonedRanges: ReturnType<typeof classifyRunHistoryV2Timelines>['ranges'] };
   experienced: ExperiencedRunMetrics;
@@ -513,7 +514,11 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
   return {
     identity: { schemaVersion: start?.kind === 'run_started' ? start.schemaVersion : null,
       ruleset: start?.kind === 'run_started' ? start.ruleset : null,
-      seed: start?.kind === 'run_started' ? start.seed : state?.seed ?? null },
+      seed: start?.kind === 'run_started' ? start.seed : state?.seed ?? null,
+      runMode: start?.kind === 'run_started' && start.runMode === 'scenario' ? 'scenario' : 'normal',
+      scenarioId: start?.kind === 'run_started' ? start.scenarioId ?? null : state?.scenario?.id ?? null,
+      scenarioVersion: start?.kind === 'run_started' ? start.scenarioVersion ?? null : state?.scenario?.version ?? null,
+      scenarioName: start?.kind === 'run_started' ? start.scenarioName ?? null : state?.scenario?.name ?? null },
     coverage: { ...coverage, metricsComplete: coverage.complete },
     timelines: { count: Math.max(1, classification.timelineIds.length), abandonedRanges: classification.ranges },
     experienced,

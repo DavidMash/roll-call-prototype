@@ -26,17 +26,19 @@ export function createStats(seed: string): RunStats {
   };
 }
 export function boardSnapshot(state: GameState): Board {
-  const { phase, round, target, score, gold, temper, forgeUnlocked, roundTemper, lives, engulfmentLevel, nextShopVisitId, nextFlameInstanceId, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, bustPresentationDice, flameTutorial,
+  const { phase, runMode, scenario, round, goalProgressionOffset, target, score, gold, temper, forgeUnlocked, roundTemper, lives, engulfmentLevel, nextShopVisitId, nextFlameInstanceId, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, bustPresentationDice, flameTutorial,
     manualRerollsRemaining, manualRerollsUsedThisRound, specialOfferEffects, bossSilenced, dice, dieRoundState, flameSlots, chargeAttribution, infernoProgress, infernoEvaluation, infernoEvaluationSuspendedUntilNewFlame, chargeXMult, maxCharge, decisionId, sixPackXMult, sixPackUpperHandsPlayed, minigunUpperStreak, roundPlayCount, roundStartLives, roundStartRosterSize, precedingShopDiePurchase, interactiveFlames, scoreWagers,
     chargeArmed, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, progressiveFlames, lifetimeNormalShopGoldSpent, consumed, scorecardCycleConsumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, fetchTarget, lastRoundPayout, roundSummary, shop, flameSelection, specialOffer } = state;
-  return structuredClone({ phase, round, target, score, gold, temper, forgeUnlocked, roundTemper, lives, engulfmentLevel, nextShopVisitId, nextFlameInstanceId, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, bustPresentationDice, flameTutorial,
+  return structuredClone({ phase, runMode, scenario, round, goalProgressionOffset, target, score, gold, temper, forgeUnlocked, roundTemper, lives, engulfmentLevel, nextShopVisitId, nextFlameInstanceId, roundAttemptNumber, bossSchedule, chapterPlans, presentedChapters, chapterLifecycle, boss, currentNodeId, bust, bustPresentationDice, flameTutorial,
     manualRerollsRemaining, manualRerollsUsedThisRound, specialOfferEffects, bossSilenced, dice, dieRoundState, flameSlots, chargeAttribution, infernoProgress, infernoEvaluation, infernoEvaluationSuspendedUntilNewFlame,
     chargeXMult, maxCharge, chargeArmed, decisionId, sixPackXMult, sixPackUpperHandsPlayed, minigunUpperStreak, roundPlayCount, roundStartLives, roundStartRosterSize, precedingShopDiePurchase, interactiveFlames, scoreWagers, hotStreakGoal, hotStreakCharges, handFamilyFlameStages, progressiveFlames, lifetimeNormalShopGoldSpent, consumed, scorecardCycleConsumed, scoreByHand, effectScore,
     handLevels, handPlayCounts, targetPracticeHand, fetchTarget, lastRoundPayout, roundSummary, shop, flameSelection, specialOffer });
 }
 export function exportRun(state: GameState) {
   return toExactJsonValue({ schemaVersion: 33, scoringModel: 'dice-pips-hand-mult-v1', ...state.stats,
+    runMode: state.runMode, ...(state.scenario ? { scenarioId: state.scenario.id,
+      scenarioVersion: state.scenario.version, scenarioName: state.scenario.name } : {}),
     actions: structuredClone(state.actionJournal),
     scoreByHand: structuredClone(state.scoreByHand),
     finalHandLevels: structuredClone(state.handLevels),

@@ -66,10 +66,13 @@ export function TopHud({ board, event, flamePresentation = [], speed, setSpeed, 
       <Text className="game-title">ROLL CALL</Text>
       <Group className="hud-stats" gap="xs" wrap="nowrap">
         <div className="hud-stat hud-stage" data-testid="stat-round"
-          aria-label={`Chapter ${formatPlayerNumber(chapter.chapterNumber)}, Round ${formatPlayerNumber(chapter.chapterRound)}`}>
+          aria-label={board.runMode === 'scenario' ? `Scenario Round ${formatPlayerNumber(board.round)}`
+            : `Chapter ${formatPlayerNumber(chapter.chapterNumber)}, Round ${formatPlayerNumber(chapter.chapterRound)}`}>
           <strong className="hud-stage-value">
-            <span className="hud-stage-segment"><span className="hud-stage-letter">C</span>{formatPlayerNumber(chapter.chapterNumber)}</span>{' '}
-            <span className="hud-stage-segment"><span className="hud-stage-letter">R</span>{formatPlayerNumber(chapter.chapterRound)}</span>
+            {board.runMode === 'scenario' ? <><span className="hud-stage-segment"><span className="hud-stage-letter">S</span></span>{' '}
+              <span className="hud-stage-segment"><span className="hud-stage-letter">R</span>{formatPlayerNumber(board.round)}</span></>
+              : <><span className="hud-stage-segment"><span className="hud-stage-letter">C</span>{formatPlayerNumber(chapter.chapterNumber)}</span>{' '}
+                <span className="hud-stage-segment"><span className="hud-stage-letter">R</span>{formatPlayerNumber(chapter.chapterRound)}</span></>}
           </strong>
         </div>
         <HudStat testId="stat-gold" currency="gold" label="Gold" value={board.gold} />

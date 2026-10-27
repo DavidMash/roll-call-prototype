@@ -54,9 +54,17 @@ export type HandId =
   | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
 export type UpperHandId = 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes' | 'sevens';
 export type LowerHandId = Exclude<HandId, UpperHandId>;
-export type Phase = 'round' | 'roundSummary' | 'inferno' | 'bust' | 'flameSelection' | 'specialOffer' | 'shop' | 'lost' | 'error';
+export type Phase = 'round' | 'roundSummary' | 'inferno' | 'scenarioComplete' | 'bust' | 'flameSelection' | 'specialOffer' | 'shop' | 'lost' | 'error';
 export type ScoreSource = 'hand' | 'curtainCall' | 'jumpingBean' | 'hitchhiker' | 'boss';
 export type HandPlaySource = 'manual' | 'jumpingBean' | 'freePlay';
+export type RunMode = 'normal' | 'tutorial' | 'scenario';
+export interface ScenarioRunState {
+  id: string;
+  version: number;
+  name: string;
+  completionPending: boolean;
+  completionAcknowledged: boolean;
+}
 export type GoldSource = 'golden' | 'jackpot' | 'diceSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward' | 'specialOffer';
 export type GoldSpendSource = 'dicePurchase' | 'diceOfferReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore' | 'furnace' | 'greaseTheEngine';
 export type TemperSource = 'overkill' | 'boardRefresh' | 'miniBoss' | 'boss' | 'bonfire' | 'engulfment';
@@ -556,7 +564,11 @@ export interface RoundSummary {
 }
 export interface Board {
   phase: Phase;
+  runMode: RunMode;
+  scenario: ScenarioRunState | null;
   round: number;
+  /** Canonical Goal-track offset. Scenario Round N uses normal Goal Round N + this value. */
+  goalProgressionOffset: number;
   target: ExactScore;
   score: ExactScore;
   gold: number;
@@ -984,6 +996,7 @@ export type Action =
   | { type: 'STOKE_FLAME'; flameInstanceId: FlameInstanceId; amount: number }
   | { type: 'CONTINUE_ROUND_SUMMARY' }
   | { type: 'CONTINUE_INFERNO_EVALUATION' }
+  | { type: 'CONTINUE_SCENARIO_RUN' }
   | { type: 'ENGULF_NOW' }
   | { type: 'NOT_YET' }
   | { type: 'CONTINUE_FLAME_SELECTION' }

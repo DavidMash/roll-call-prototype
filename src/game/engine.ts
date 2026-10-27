@@ -26,6 +26,7 @@ import { formatEffectLevel } from './effectLevel';
 import { Decimal, exactInferno, scoreFromUnknown, type ExactScore } from './scoreMath';
 import { attachLedger, chunkForResolution, cloneGameState, createRunLedger, sessionForState } from './ledger';
 import { getEncounterGoalBreakdown, targetForRound } from './goals';
+import { applyScenarioStart, type ScenarioDefinition } from './scenarios';
 import type { Action, Board, FlameSlotIndex, GameState, RandomSource, Resolution, Shop, ShopStage } from './types';
 
 const exact = (value: unknown, fallback: ExactScore = 0n): ExactScore => value === undefined || value === null
@@ -267,7 +268,7 @@ function normalizeScoreWagerRuntime(state: Pick<Board, 'scoreWagers'>): void {
 
 function normalizeSilencedBossGoal(state: GameState): void {
   if (state.phase !== 'round' || !state.bossSilenced || !state.boss) return;
-  const breakdown = getEncounterGoalBreakdown(state.round, state.boss.type, true);
+  const breakdown = getEncounterGoalBreakdown(state.round + (state.goalProgressionOffset ?? 0), state.boss.type, true);
   state.target = breakdown.finalGoal;
   const currentRound = [...state.stats.rounds].reverse().find(round =>
     round.round === state.round && round.attempt === state.roundAttemptNumber && !round.cleared);
@@ -283,6 +284,9 @@ function normalizeSilencedBossGoal(state: GameState): void {
 
 export function normalizeGameState(state: GameState): GameState {
   const next = cloneGameState(state);
+  next.runMode ??= 'normal';
+  next.scenario ??= null;
+  next.goalProgressionOffset = Math.max(0, Math.floor(next.goalProgressionOffset ?? 0));
   next.nextActionId = Math.max(0, Math.floor(next.nextActionId ?? next.actionJournal.length));
   next.nextHistorySeq = Math.max(0, Math.floor(next.nextHistorySeq
     ?? next.historyV2.reduce((maximum, event) => Math.max(maximum, event.seq + 1), 0)));
@@ -305,7 +309,8 @@ export function normalizeGameState(state: GameState): GameState {
   next.dieRoundState = Object.fromEntries(ownedDice(next).filter(die => next.diceInventory.roster.includes(die.id))
     .map(die => [die.id, normalizeDieRoundRuntime(die, next.dieRoundState[die.id])]));
   if (typeof next.target === 'number' && !Number.isSafeInteger(next.target))
-    next.target = targetForRound(next.round, next.boss?.type ?? next.bossSchedule?.[next.round] ?? null);
+    next.target = targetForRound(next.round + next.goalProgressionOffset,
+      next.boss?.type ?? next.bossSchedule?.[next.round] ?? null);
   normalizeBoardScores(next);
   normalizeHistoricalScores(next);
   next.engulfmentLevel = Math.max(0, Math.floor(next.engulfmentLevel ?? 0));
@@ -356,7 +361,10 @@ export function normalizeGameState(state: GameState): GameState {
     assertDiceInventory(next.roundCheckpoint.diceInventory, next.roundCheckpoint.encounterDice);
     const checkpoint = next.roundCheckpoint.board;
     if (typeof checkpoint.target === 'number' && !Number.isSafeInteger(checkpoint.target))
-      checkpoint.target = targetForRound(checkpoint.round,
+      checkpoint.runMode ??= next.runMode;
+      checkpoint.scenario ??= structuredClone(next.scenario);
+      checkpoint.goalProgressionOffset = Math.max(0, Math.floor(checkpoint.goalProgressionOffset ?? next.goalProgressionOffset));
+      checkpoint.target = targetForRound(checkpoint.round + checkpoint.goalProgressionOffset,
         checkpoint.boss?.type ?? checkpoint.bossSchedule?.[checkpoint.round] ?? null);
     normalizeBoardScores(checkpoint);
     checkpoint.engulfmentLevel = Math.max(0, Math.floor(checkpoint.engulfmentLevel ?? 0));
@@ -379,7 +387,7 @@ export function normalizeGameState(state: GameState): GameState {
     ensureChapterPlan({ ...checkpoint, seed: next.seed }, chapterNumberForRound(checkpoint.round));
     normalizeSpecialRuntime(checkpoint);
     if (checkpoint.specialOfferEffects.silence && checkpoint.bossSchedule[checkpoint.round])
-      checkpoint.target = targetForRound(checkpoint.round);
+      checkpoint.target = targetForRound(checkpoint.round + (checkpoint.goalProgressionOffset ?? next.goalProgressionOffset));
     normalizeChapterLifecycle(checkpoint);
     if (checkpoint.shop) normalizeShop(checkpoint.shop, checkpoint);
     recalculateMaxCharge(checkpoint);
@@ -516,6 +524,9 @@ export function validateAction(state: Board | GameState, action: Action): string
   if (action.type === 'CONTINUE_INFERNO_EVALUATION') return state.phase === 'inferno' && !!state.infernoEvaluation
     && (!state.infernoEvaluation.success || state.infernoEvaluation.engulfed)
     ? null : 'A completed or insufficient Inferno evaluation is required.';
+  if (action.type === 'CONTINUE_SCENARIO_RUN') return state.phase === 'scenarioComplete'
+    && !!state.scenario?.completionPending && !!state.infernoEvaluation?.engulfed
+    ? null : 'A completed Scenario is required.';
   if (action.type === 'ENGULF_NOW') return state.phase === 'inferno' && !!state.infernoEvaluation?.success
     && !state.infernoEvaluation.engulfed ? null : 'A ready Inferno evaluation is required.';
   if (action.type === 'NOT_YET') return state.phase === 'inferno' && !!state.infernoEvaluation?.success
@@ -837,10 +848,13 @@ function rejectedActionHasLegacyMigration(state: GameState, normalized: GameStat
   return exactJson(comparable) !== exactJson(state);
 }
 
-export function newRun(seed: string, random?: RandomSource, options?: { debugTraceMode?: DebugTraceMode }): Resolution {
+export interface NewRunOptions { debugTraceMode?: DebugTraceMode; scenario?: ScenarioDefinition; runMode?: 'normal' | 'tutorial' }
+
+export function newRun(seed: string, random?: RandomSource, options?: NewRunOptions): Resolution {
   const diceInventory = createDiceInventory();
   const state: GameState = {
-    phase: 'round', seed, rngState: hashSeed(seed), round: 1, target: BigInt(CONFIG.baseTarget),
+    phase: 'round', runMode: options?.runMode ?? 'normal', scenario: null,
+    seed, rngState: hashSeed(seed), round: 1, goalProgressionOffset: 0, target: BigInt(CONFIG.baseTarget),
     score: 0n, gold: CONFIG.startingGold, temper: 0, forgeUnlocked: false,
     roundTemper: { overkill: 0, boardRefresh: 0, miniBoss: 0, boss: 0 },
     lives: CONFIG.maxLives, engulfmentLevel: 0, nextShopVisitId: 1,
@@ -867,6 +881,7 @@ export function newRun(seed: string, random?: RandomSource, options?: { debugTra
     debugTrace: createDebugTrace(options?.debugTraceMode),
     roundCheckpoint: null, badDreamCheckpoint: null,
   };
+  if (options?.scenario) applyScenarioStart(state, options.scenario);
   attachLedger(state, createRunLedger(seed));
   return execute(state, resolver => { resolver.emitRunStarted(); resolver.startRound(); }, random, random ? undefined : attemptSeed(seed, 1, 1));
 }
@@ -1082,6 +1097,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       }
       case 'CONTINUE_ROUND_SUMMARY': resolver.continueRoundSummary(); break;
       case 'CONTINUE_INFERNO_EVALUATION': resolver.continueInfernoEvaluation(); break;
+      case 'CONTINUE_SCENARIO_RUN': resolver.continueScenarioRun(); break;
       case 'ENGULF_NOW': resolver.engulfNow(); break;
       case 'NOT_YET': resolver.deferEngulfment(); break;
       case 'CONTINUE_FLAME_SELECTION': resolver.openShop(); break;

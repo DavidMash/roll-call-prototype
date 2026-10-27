@@ -171,3 +171,7 @@ export function targetForRound(globalRound: number, boss: BossType | null = null
   bossForRound?: BossForRound): ExactScore {
   return getRoundGoalBreakdown(globalRound, boss, bossForRound).finalGoal;
 }
+
+/** Maps the displayed run Round onto the canonical Goal track. Normal runs use offset 0. */
+export const goalProgressionRound = (round: number, offset = 0): number =>
+  Math.max(1, Math.floor(round) + Math.max(0, Math.floor(offset)));

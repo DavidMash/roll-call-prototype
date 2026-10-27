@@ -96,7 +96,8 @@ export function renderHandScoredV2(event: HandScoredEvent): string {
 
 export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
   switch (event.kind) {
-    case 'run_started': return `RUN · ${event.seed} · schema ${event.schemaVersion} · ${event.ruleset}`;
+    case 'run_started': return `RUN · ${event.seed} · schema ${event.schemaVersion} · ${event.ruleset}`
+      + (event.runMode === 'scenario' ? ` · SCENARIO ${event.scenarioName ?? event.scenarioId} (${event.scenarioId} v${event.scenarioVersion})` : '');
     case 'chapter_started': return `CHAPTER ${number(event.chapter)} · ${event.miniBoss} / ${event.boss}`;
     case 'round_attempt_started': {
       const target = event.target as typeof event.target & { final?: number };

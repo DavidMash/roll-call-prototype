@@ -3,7 +3,7 @@ import type { GameState } from '../src/game/types';
 import { ledgerForState } from '../src/game/ledger';
 import { RUN_DATABASE_NAME, RUN_DATABASE_VERSION } from '../src/game/runRepository';
 
-export async function seedRunSession(page: Page, state: GameState, slot: 'normal' | 'tutorial' = 'normal', scenario?: unknown) {
+export async function seedRunSession(page: Page, state: GameState, slot: 'normal' | 'tutorial' | 'scenario' = 'normal', scenario?: unknown) {
   const ledger = ledgerForState(state);
   const firstRuntimeActionId = state.nextActionId - ledger.actions.length + 1;
   const actionById = new Map(ledger.actions.map((action, index) => [firstRuntimeActionId + index, action]));
@@ -60,7 +60,7 @@ export async function clearRunDatabase(page: Page): Promise<void> {
   }, { databaseName: RUN_DATABASE_NAME, databaseVersion: RUN_DATABASE_VERSION });
 }
 
-export async function readRunState(page: Page, slot: 'normal' | 'tutorial' = 'normal'): Promise<GameState | null> {
+export async function readRunState(page: Page, slot: 'normal' | 'tutorial' | 'scenario' = 'normal'): Promise<GameState | null> {
   return page.evaluate(async ({ databaseName, databaseVersion, slot }) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open(databaseName, databaseVersion);

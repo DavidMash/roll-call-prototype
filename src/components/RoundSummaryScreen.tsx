@@ -1,7 +1,7 @@
 import { Button, Group, Paper, Stack, Text, Title } from '@mantine/core';
 import { BOSSES, isMiniBossType } from '../game/bosses';
 import type { Action, Board } from '../game/types';
-import { formatScoreProgress } from '../game/copy';
+import { formatPlayerNumber, formatScoreProgress } from '../game/copy';
 import { fullChapterLabels } from '../game/chapters';
 import { RunActionPortal } from './RunActionRow';
 import { CurrencyAmount } from './CurrencyAmount';
@@ -10,6 +10,8 @@ export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy
   const summary = board.roundSummary!;
   const miniBoss = summary.bossType ? isMiniBossType(summary.bossType) : false;
   const labels = fullChapterLabels(summary.round);
+  const displayLabels = board.runMode === 'scenario'
+    ? { chapter: 'SCENARIO', round: `ROUND ${formatPlayerNumber(summary.round)}` } : labels;
   const rows: { label: string; amount: number }[] = [
     { label: 'Base Reward', amount: summary.sources.baseRewardGold },
     { label: 'Unused Rerolls', amount: summary.sources.unusedRerollGold },
@@ -28,9 +30,9 @@ export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy
   return <Paper className="round-summary-screen" p={{ base: 'md', sm: 'xl' }} data-testid="round-summary">
     <Stack gap="md">
       <div className="round-summary-heading">
-        <Text className="summary-chapter" fw={900}>{labels.chapter}</Text>
-        <Text className="summary-kicker" fw={900}>{labels.round}</Text>
-        <Title order={2}>{summary.encounterType === 'boss' ? `${miniBoss ? 'MINI-BOSS' : 'BOSS'} DEFEATED` : `${labels.round} CLEARED`}</Title>
+        <Text className="summary-chapter" fw={900}>{displayLabels.chapter}</Text>
+        <Text className="summary-kicker" fw={900}>{displayLabels.round}</Text>
+        <Title order={2}>{summary.encounterType === 'boss' ? `${miniBoss ? 'MINI-BOSS' : 'BOSS'} DEFEATED` : `${displayLabels.round} CLEARED`}</Title>
         {summary.encounterType === 'boss' && <Text fw={850}>{BOSSES[summary.bossType!].name}</Text>}
         <Text fw={800} size="lg" data-testid="summary-score">{formatScoreProgress(summary.score, summary.target)}</Text>
       </div>
