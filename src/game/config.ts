@@ -1,7 +1,7 @@
 export const CONFIG = {
   diceCount: 5,
   baseTarget: 100,
-  targetGrowth: 1.28,
+  targetGrowth: 1.26,
   targetRounding: 5,
   startingGold: 0,
   maxLives: 3,

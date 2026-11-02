@@ -54,7 +54,7 @@ function exactBossGoal(D: typeof Decimal, type: BossType | null | undefined, raw
 export function getChapterBaseGoal(chapter: number): ExactDecimal {
   const normalized = positiveInteger(chapter);
   const D = goalContext(normalized);
-  return new D('100').times(new D('1.28').pow(ROUNDS_PER_CHAPTER * (normalized - 1))).toFixed();
+  return new D('100').times(new D(String(CONFIG.targetGrowth)).pow(ROUNDS_PER_CHAPTER * (normalized - 1))).toFixed();
 }
 
 export function getRawRoundGoal(globalRound: number): ExactDecimal {

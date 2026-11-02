@@ -62,6 +62,7 @@ export interface ScenarioRunState {
   id: string;
   version: number;
   name: string;
+  startingGoal?: ExactScore;
   completionPending: boolean;
   completionAcknowledged: boolean;
 }

@@ -292,6 +292,7 @@ export function normalizeGameState(state: GameState): GameState {
   const next = cloneGameState(state);
   next.runMode ??= 'normal';
   next.scenario ??= null;
+  if (next.scenario?.startingGoal !== undefined) next.scenario.startingGoal = exact(next.scenario.startingGoal);
   next.goalProgressionOffset = Math.max(0, Math.floor(next.goalProgressionOffset ?? 0));
   next.nextActionId = Math.max(0, Math.floor(next.nextActionId ?? next.actionJournal.length));
   next.nextHistorySeq = Math.max(0, Math.floor(next.nextHistorySeq

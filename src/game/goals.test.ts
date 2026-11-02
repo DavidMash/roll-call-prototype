@@ -10,10 +10,11 @@ import {
 
 const EXPECTED_CHAPTERS = [
   [100n, 150n, 200n, 250n, 300n, 400n],
-  [450n, 700n, 900n, 1_100n, 1_300n, 1_800n],
-  [2_000n, 3_000n, 4_000n, 5_000n, 6_000n, 8_000n],
-  [9_000n, 13_000n, 17_000n, 20_000n, 26_000n, 34_000n],
-  [40_000n, 60_000n, 70_000n, 90_000n, 110_000n, 150_000n],
+  [400n, 600n, 800n, 1_000n, 1_200n, 1_600n],
+  [1_600n, 2_400n, 3_000n, 4_000n, 5_000n, 6_400n],
+  [6_400n, 10_000n, 13_000n, 16_000n, 20_000n, 26_000n],
+  [26_000n, 40_000n, 50_000n, 60_000n, 80_000n, 100_000n],
+  [100_000n, 150_000n, 200_000n, 260_000n, 300_000n, 410_000n],
 ] as const;
 
 describe('Chapter Goal curve', () => {
@@ -29,16 +30,16 @@ describe('Chapter Goal curve', () => {
     ]);
   });
 
-  it('starts at exactly 100 and grows each Chapter by 1.28^6 without accumulated rounding', () => {
+  it('starts at exactly 100 and grows each Chapter by 1.26^6 without accumulated rounding', () => {
     expect(CONFIG.baseTarget).toBe(100);
-    expect(CONFIG.targetGrowth).toBe(1.28);
+    expect(CONFIG.targetGrowth).toBe(1.26);
     expect(getChapterBaseGoal(1)).toBe('100');
-    expect(CONFIG.targetGrowth ** 6).toBeCloseTo(4.398046511104, 12);
+    expect(CONFIG.targetGrowth ** 6).toBeCloseTo(4.001504141376, 12);
     for (let chapter = 2; chapter <= 40; chapter++) {
       expect(new Decimal(getChapterBaseGoal(chapter)).div(getChapterBaseGoal(chapter - 1)).toNumber())
         .toBeCloseTo(CONFIG.targetGrowth ** 6, 12);
       expect(new Decimal(getChapterBaseGoal(chapter))
-        .div(String(100 * Math.pow(1.28, 6 * (chapter - 1)))).toNumber()).toBeCloseTo(1, 12);
+        .div(String(100 * Math.pow(1.26, 6 * (chapter - 1)))).toNumber()).toBeCloseTo(1, 12);
     }
   });
 
@@ -50,7 +51,7 @@ describe('Chapter Goal curve', () => {
     }
   });
 
-  it('matches the exact neutral targets for Chapters 1 through 5', () => {
+  it('matches the exact neutral targets for Chapters 1 through 6', () => {
     expect(EXPECTED_CHAPTERS.map((_, chapterIndex) =>
       Array.from({ length: 6 }, (_, localIndex) => targetForRound(chapterIndex * 6 + localIndex + 1))))
       .toEqual(EXPECTED_CHAPTERS);
@@ -102,13 +103,13 @@ describe('Goal beautification', () => {
   it('uses deterministic lookahead to reject coarse collisions on both adjacent Rounds', () => {
     const round36 = getRoundGoalBreakdown(36);
     const round37 = getRoundGoalBreakdown(37);
-    expect(round36).toMatchObject({ coarseCandidate: 700_000n, coarseAccepted: false,
-      coarseCollision: true, fineFallback: 660_000n, finalGoal: 660_000n });
-    expect(round37).toMatchObject({ coarseCandidate: 700_000n, coarseAccepted: false,
-      coarseCollision: true, fineFallback: 720_000n, finalGoal: 720_000n });
+    expect(round36).toMatchObject({ coarseCandidate: 400_000n, coarseAccepted: false,
+      coarseCollision: true, fineFallback: 410_000n, finalGoal: 410_000n });
+    expect(round37).toMatchObject({ coarseCandidate: 400_000n, coarseAccepted: false,
+      coarseCollision: true, fineFallback: 410_000n, finalGoal: 410_000n });
     expect(getRoundGoalBreakdown(36)).toEqual(round36);
     expect(getRoundGoalBreakdown(37)).toEqual(round37);
-    expect(targetForRound(37, null, round => round === 36 ? 'marathon' : null)).toBe(700_000n);
+    expect(targetForRound(37, null, round => round === 36 ? 'marathon' : null)).toBe(400_000n);
     expect(beautifyGoal(101, [102])).toMatchObject({ coarseAccepted: false,
       coarseCollision: true, fineFallback: 100n, finalGoal: 100n });
   });
@@ -169,12 +170,12 @@ describe('long-run Goal stability', () => {
         finalGoal: breakdown.finalGoal.toString() };
     });
     expect(samples.map(({ chapter, finalGoal }) => ({ chapter, finalGoal }))).toEqual([
-      { chapter: 21, finalGoal: '730000000000000' },
-      { chapter: 22, finalGoal: '3200000000000000' },
-      { chapter: 23, finalGoal: '14000000000000000' },
-      { chapter: 32, finalGoal: '9000000000000000000000' },
-      { chapter: 100, finalGoal: '500000000000000000000000000000000000000000000000000000000000000000' },
-      { chapter: 500, finalGoal: `1${'0'.repeat(323)}` },
+      { chapter: 21, finalGoal: '110000000000000' },
+      { chapter: 22, finalGoal: '440000000000000' },
+      { chapter: 23, finalGoal: '1800000000000000' },
+      { chapter: 32, finalGoal: '470000000000000000000' },
+      { chapter: 100, finalGoal: `42${'0'.repeat(60)}` },
+      { chapter: 500, finalGoal: `32${'0'.repeat(301)}` },
     ]);
     expect(samples.every(sample => /^\d+(?:\.\d+)?$/.test(sample.chapterBase) && /^\d+$/.test(sample.finalGoal))).toBe(true);
   });

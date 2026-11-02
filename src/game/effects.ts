@@ -2408,9 +2408,13 @@ export class Resolver {
     const targetBreakdown = getEncounterGoalBreakdown(
       goalRound, bossType ?? null, bossSilenced, bossForGoalRound,
     );
-    const { chapter: _targetChapter, localRound: _targetLocalRound, ...historyTargetBreakdown } = targetBreakdown;
+    const scenarioOpeningGoal = this.state.runMode === 'scenario' && this.state.round === 1
+      ? this.state.scenario?.startingGoal : undefined;
+    const { chapter: _targetChapter, localRound: _targetLocalRound, ...computedHistoryTargetBreakdown } = targetBreakdown;
+    const historyTargetBreakdown = scenarioOpeningGoal === undefined ? computedHistoryTargetBreakdown
+      : { ...computedHistoryTargetBreakdown, finalGoal: scenarioOpeningGoal };
     const { chapterNumber: scenarioChapter, chapterRound: scenarioChapterRound } = chapterPosition(this.state.round);
-    this.state.target = targetBreakdown.finalGoal;
+    this.state.target = scenarioOpeningGoal ?? targetBreakdown.finalGoal;
     this.state.boss = bossType ? createBossRuntime(this.state.seed, this.state.round, bossType, {
       handPlayCounts: this.state.handPlayCounts,
       playerDieIds: rosterDice(this.state).map(die => die.id),

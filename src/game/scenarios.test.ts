@@ -30,9 +30,10 @@ describe('Scenario definitions', () => {
       .toEqual(['Minigun', 'Count Down', 'Straight Shooter', 'One Short', 'Flux Capacitor', 'Dare Devil', 'Vineyard', 'Hail Mary', 'Bribery']);
   });
 
-  it('maps every launch Goal to the canonical progression', () => {
-    expect(SCENARIOS.map(scenario => [scenario.startingGoal, canonicalRoundForScenarioGoal(scenario.startingGoal)]))
+  it('keeps every launch Goal and its established progression anchor', () => {
+    expect(SCENARIOS.map(scenario => [scenario.startingGoal, scenario.goalProgressionRound]))
       .toEqual([[4_000n, 15], [6_000n, 17], [2_000n, 13], [6_000n, 17], [9_000n, 19], [4_000n, 15]]);
+    expect(canonicalRoundForScenarioGoal(4_000n)).toBe(16);
   });
 
   it('applies configured dice, levels, and real Flame investment', () => {
@@ -77,7 +78,7 @@ describe('Scenario progression and completion', () => {
     const state = newRun('scenario-goal-track', constant, { scenario }).state;
     state.round = 2;
     new Resolver(state, constant).startRound();
-    expect(state.target).toBe(5_000n);
+    expect(state.target).toBe(4_000n);
     expect(state.boss).toBeNull();
     state.round = 3;
     new Resolver(state, constant).startRound();

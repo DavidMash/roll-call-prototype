@@ -27,6 +27,8 @@ export interface ScenarioDefinition {
   name: string;
   tagline: string;
   startingGoal: bigint;
+  /** Existing canonical Goal-track anchor; the fixed opening Goal overrides this track on Scenario Round 1. */
+  goalProgressionRound: number;
   startingGold: number;
   startingTemper: number;
   startingLives: number;
@@ -46,7 +48,7 @@ const repeatedDice = (count: number, effects: readonly ScenarioDieEffectDefiniti
 export const SCENARIOS: readonly ScenarioDefinition[] = [
   {
     id: 'loneliest-number', version: 1, name: 'Loneliest Number', tagline: 'One die. Six numbers. Count it down.',
-    startingGoal: 4_000n, startingGold: 10, startingTemper: 0, startingLives: 3,
+    startingGoal: 4_000n, goalProgressionRound: 15, startingGold: 10, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(1, [{ key: 'loneWolf', level: 1 }, { key: 'clockwork', level: 1 }, { key: 'flywheel', level: 3 }]),
     flames: [{ key: 'minigun', investedGold: 40 }, { key: 'countDown', investedGold: 40 }],
     handTraining: { lower: 3, overrides: { ones: 12, twos: 9, threes: 8, fours: 7, fives: 6, sixes: 5 } },
@@ -54,7 +56,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   },
   {
     id: 'scared-straight', version: 1, name: 'Scared Straight', tagline: 'Line them up before the pressure gets to you.',
-    startingGoal: 6_000n, startingGold: 10, startingTemper: 0, startingLives: 3,
+    startingGoal: 6_000n, goalProgressionRound: 17, startingGold: 10, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'tank', level: 3 }, { key: 'clockwork', level: 1 }]),
     flames: [{ key: 'straightShooter', investedGold: 40 }, { key: 'oneShort', investedGold: 40 }],
     handTraining: { all: 4, overrides: { largeStraight: 10, smallStraight: 8 } },
@@ -62,14 +64,14 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   },
   {
     id: 'chicken-salesman', version: 1, name: 'Chicken Salesman', tagline: 'How long can you hold before you cash out?',
-    startingGoal: 2_000n, startingGold: 0, startingTemper: 0, startingLives: 3,
+    startingGoal: 2_000n, goalProgressionRound: 13, startingGold: 0, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'vintage', level: 3 }]),
     flames: [{ key: 'vineyard', investedGold: 40 }],
     handTraining: { upper: 4, lower: 5 },
   },
   {
     id: 'short-circuit', version: 1, name: 'Short Circuit', tagline: 'Five magnets. One enormous payoff.',
-    startingGoal: 6_000n, startingGold: 10, startingTemper: 0, startingLives: 3,
+    startingGoal: 6_000n, goalProgressionRound: 17, startingGold: 10, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'magnetic', level: 1 }]),
     flames: [{ key: 'fluxCapacitor', investedGold: 40 }, { key: 'dareDevil', investedGold: 40 }],
     handTraining: { all: 4, overrides: { fiveKind: 9 } },
@@ -77,7 +79,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   },
   {
     id: 'popcorn', version: 1, name: 'Popcorn', tagline: 'Once they start popping, try to keep up.',
-    startingGoal: 9_000n, startingGold: 5, startingTemper: 0, startingLives: 3,
+    startingGoal: 9_000n, goalProgressionRound: 19, startingGold: 5, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'jumpingBean', level: 5 }, { key: 'chameleon', level: 1 }, { key: 'weighted', level: 1 }]),
     flames: [{ key: 'minigun', investedGold: 40 }, { key: 'hailMary', investedGold: 40 }],
     handTraining: { upper: 6, lower: 4 },
@@ -85,7 +87,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   },
   {
     id: 'money-bags', version: 2, name: 'Money Bags', tagline: 'It takes money to make money.',
-    startingGoal: 4_000n, startingGold: 15, startingTemper: 0, startingLives: 3,
+    startingGoal: 4_000n, goalProgressionRound: 15, startingGold: 15, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'golden', level: 1 }, { key: 'jackpot', level: 1 }, { key: 'furnace', level: 3 }]),
     flames: [{ key: 'bribery', investedGold: 40 }],
     handTraining: { upper: 4, lower: 5 },
@@ -123,12 +125,10 @@ export function canonicalRoundForScenarioGoal(goal: bigint, limit = 300): number
 }
 
 export function applyScenarioStart(state: GameState, definition: ScenarioDefinition): void {
-  const canonicalRound = canonicalRoundForScenarioGoal(definition.startingGoal);
-  if (canonicalRound === null) throw new Error(`${definition.name} starting Goal is not on the canonical Goal progression.`);
   state.runMode = 'scenario';
   state.scenario = { id: definition.id, version: definition.version, name: definition.name,
-    completionPending: false, completionAcknowledged: false };
-  state.goalProgressionOffset = canonicalRound - 1;
+    startingGoal: definition.startingGoal, completionPending: false, completionAcknowledged: false };
+  state.goalProgressionOffset = definition.goalProgressionRound - 1;
   state.gold = definition.startingGold;
   state.temper = definition.startingTemper;
   state.forgeUnlocked = definition.startingTemper > 0;
@@ -153,7 +153,9 @@ export function applyScenarioStart(state: GameState, definition: ScenarioDefinit
 export function validateScenarioDefinition(definition: ScenarioDefinition): string[] {
   const errors: string[] = [];
   if (!definition.id || !Number.isSafeInteger(definition.version) || definition.version < 1) errors.push('Scenario identity is invalid.');
-  if (canonicalRoundForScenarioGoal(definition.startingGoal) === null) errors.push('Starting Goal is not canonical.');
+  if (definition.startingGoal <= 0n) errors.push('Starting Goal must be positive.');
+  if (!Number.isSafeInteger(definition.goalProgressionRound) || definition.goalProgressionRound < 1)
+    errors.push('Goal progression Round must be a positive safe integer.');
   if (definition.roster.length < 1 || definition.roster.length > 5) errors.push('Roster must contain 1–5 dice.');
   if (new Set(definition.roster.map(die => die.rosterSlot)).size !== definition.roster.length) errors.push('Roster slots must be unique.');
   for (const die of definition.roster) for (const effect of die.effects) {
