@@ -26,9 +26,9 @@ describe('Flame formulas', () => {
     expect(standardFlameMultiplier(0)).toBe(1);
     expect(standardFlameMultiplier(50)).toBe(3);
     expect(standardFlameMultiplier(100)).toBe(5);
-    expect(handFamilyFlameMultiplier('doubleDown', 50)).toBe(3.5);
+    expect(handFamilyFlameMultiplier('doubleDown', 50)).toBe(4);
     expect(targetPracticeMultiplier(25)).toBe(3);
-    expect(momentumChargeGain(25)).toBe(.125);
+    expect(momentumChargeGain(25)).toBe(1.0625);
     expect(lowballMultiplier(100)).toBe(3.5);
     expect(hotStreakMultiplier(50, 2)).toBe(2);
     expect(composeXMult([3, 2.2, 1.5])).toBe(9.9);
@@ -36,7 +36,7 @@ describe('Flame formulas', () => {
   it('derives UI copy from authoritative formulas', () => {
     const state = game();
     expect(flameEffectText('ultimate', 25, state)).toContain('×2 XMult');
-    expect(flameEffectText('momentum', 25, state)).toContain('+0.125');
+    expect(flameEffectText('momentum', 25, state)).toContain('×1.063');
   });
 });
 
@@ -150,8 +150,10 @@ describe('Charge identity', () => {
   it('builds and arms Charge without selecting a carrier die', () => {
     let state = game(); const momentum = placeFlameInstance(state, 'momentum', 50, 4);
     state = dispatch(state, { type: 'PLAY', hand: 'threeKind', dieIds: [0, 1, 2] }, constant()).state;
-    expect(state.chargeXMult).toBe(1.25);
-    expect(state.chargeAttribution[momentum.instanceId]).toBe(.25);
+    expect(state.chargeXMult).toBe(1.125);
+    expect(state.chargeAttribution[momentum.instanceId]).toBeUndefined();
+    expect(state.chargeEvents).toContainEqual(expect.objectContaining({ sourceInstanceId: momentum.instanceId,
+      sourceFlame: 'momentum', factorRequested: 1.125, factorApplied: 1.125 }));
     expect(validateAction(state, { type: 'TOGGLE_CHARGE' })).toBeNull();
   });
   it('keeps Hot Streak eligibility global', () => {

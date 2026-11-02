@@ -136,10 +136,10 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     }
     case 'flame_action': {
       const action = event.action;
-      if (action.type === 'burn_it_down') return `FLAME ACTION · Burn It Down · sacrificed ${number(action.scoreSacrificed)} / ${number(action.target)} · Charge +${number(action.chargeGained)}`;
-      if (action.type === 'grease_the_engine') return `FLAME ACTION · Grease the Engine · ${number(action.cost)}G · Charge +${number(action.chargeGained)}`;
-      if (action.type === 'lightning_strike') return `FLAME ACTION · Lightning Strike · ${die(action.dieId)} predicted ${number(action.predictedFace)}, rolled ${number(action.actualFace)} · ${action.hit ? `HIT · Charge +${number(action.chargeGained)}` : 'MISS'}`;
-      if (action.type === 'hot_potato_play') return `FLAME · Hot Potato Clock · ${die(action.targetBefore)} ${action.played ? 'Played; streak reset' : `avoided; streak ${number(action.streak)}`} · Charge +${number(action.chargeGained)}${action.targetAfter === null ? '' : ` · moved to ${die(action.targetAfter)}`}`;
+      if (action.type === 'burn_it_down') return `FLAME ACTION · Burn It Down · sacrificed ${number(action.scoreSacrificed)} / ${number(action.target)} · Charge ×${number(action.chargeRequested)}`;
+      if (action.type === 'grease_the_engine') return `FLAME ACTION · Grease the Engine · ${number(action.cost)}G · Charge ×${number(action.chargeRequested)}`;
+      if (action.type === 'lightning_strike') return `FLAME ACTION · Lightning Strike · ${die(action.dieId)} predicted ${number(action.predictedFace)}, rolled ${number(action.actualFace)} · ${action.hit ? 'HIT · multiplicative Charge event recorded' : 'MISS'}`;
+      if (action.type === 'hot_potato_play') return `FLAME · Hot Potato Clock · ${die(action.targetBefore)} ${action.played ? 'Played; streak reset' : `avoided; streak ${number(action.streak)}`} · Charge ×${number(action.chargeRequested)}${action.targetAfter === null ? '' : ` · moved to ${die(action.targetAfter)}`}`;
       if (action.type === 'dare_activated') return `FLAME ACTION · Dare Devil · Dare ${number(action.dareCount)} · next Ultimate ×${number(action.storedFactor)} · Rolled ${action.dieIds.map(die).join(', ')}`;
       if (action.type === 'dare_payoff') return `FLAME · Dare Devil payoff · ${HANDS[action.hand].name} ×${number(action.factor)} · ${number(action.dareCount)} Dare${action.dareCount === 1 ? '' : 's'} consumed`;
       if (action.type === 'bribe_purchased') return `FLAME ACTION · Bribery · Bribe ${number(action.ordinal)} cost ${number(action.cost)}G · +${number(action.increment)} XMult · ${number(action.pendingCount)} stacked at ×${number(action.pendingFactor)}`;

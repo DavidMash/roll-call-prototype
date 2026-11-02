@@ -10,6 +10,8 @@ import {
   hotPotatoClockChargeGain, lightningStrikeChargeGain, allInMultiplier, doubleOrNothingMultiplier, hotStreakMultiplier,
   doubleOrNothingEligibleHands, PROGRESSIVE_FLAME_SEQUENCES, progressiveSequenceMultiplier, type ProgressiveSequenceFlame,
   briberyFactor, briberyNextCost, briberyXMultIncrement,
+  powerSurgeChargeMultiplier,
+  isChargeFlame,
 } from './flames';
 import { benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, handOptions, hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, planQualification, ultimateHands, upperBaselineLevel, UPPER_HAND_IDS } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
@@ -29,8 +31,8 @@ import { RUN_HISTORY_V2_RULESET, RUN_HISTORY_V2_SCHEMA_VERSION } from './runHist
 import {
   createInfernoEvaluation,
   engulfmentAssetKey,
-  infernoMultiplier,
   ownedEngulfmentAssets,
+  withInfernoSelection,
 } from './engulfment';
 import { appendCriticalDiagnostic, appendDebugTrace } from './debugTrace';
 import { captureRollbackState, restoreRollbackState } from './rollback';
@@ -750,24 +752,31 @@ export class Resolver {
     const instance = flameByType(this.state, flame);
     return instance ? { investment: instance.investedGold, instanceId: instance.instanceId } : null;
   }
-  private growCharge(flame: ChargeFlame, requestedGain: number,
+  private growCharge(flame: ChargeFlame, factorRequested: number,
     detail: string, dieIds?: number[], diagnostics?: import('./types').FlameActivationDiagnostics): number {
     const source = this.chargeFlameSource(flame);
-    if (!source || requestedGain <= 0) return 0;
+    if (!source || factorRequested <= 1) return 0;
     const before = this.state.chargeXMult;
-    const after = Number(Math.min(this.state.maxCharge, before + requestedGain).toFixed(12));
+    const after = Number(Math.min(this.state.maxCharge, before * factorRequested).toFixed(12));
     const gain = Number((after - before).toFixed(12));
-    this.emitV2({ kind: 'flame_charge_generated', flame, requested: requestedGain, gained: gain,
-      lostToCap: Number(Math.max(0, requestedGain - gain).toFixed(12)), before, after, diagnostics });
+    const factorApplied = Number((after / Math.max(1, before)).toFixed(12));
+    const factorLostToCap = Number(Math.max(0, factorRequested - factorApplied).toFixed(12));
+    const order = this.state.chargeEvents.length + 1;
+    this.emitV2({ kind: 'flame_charge_generated', flame, sourceInstanceId: source.instanceId, order,
+      factorRequested, factorApplied, maxCharge: this.state.maxCharge, factorLostToCap,
+      requested: Number((before * (factorRequested - 1)).toFixed(12)), gained: gain,
+      lostToCap: Number(Math.max(0, before * factorRequested - after).toFixed(12)), before, after, diagnostics });
+    this.state.chargeEvents.push({ order, sourceInstanceId: source.instanceId, sourceFlame: flame,
+      factorRequested, factorApplied, before, after, maxCharge: this.state.maxCharge, factorLostToCap });
     if (gain <= 0) return 0;
     this.state.chargeXMult = after;
-    this.state.chargeAttribution[source.instanceId] = Number(((this.state.chargeAttribution[source.instanceId] ?? 0) + gain).toFixed(12));
     this.state.stats.chargeGained = Number((this.state.stats.chargeGained + gain).toFixed(12));
-    const flameDiagnostics = { ...diagnostics, chargeGained: gain };
-    this.triggerFlame(flame, `${detail} · Charge +${this.format(gain)} → ×${this.format(after)}`, undefined, undefined,
+    const flameDiagnostics = { ...diagnostics, chargeGained: gain, chargeFactorRequested: factorRequested,
+      chargeFactorApplied: factorApplied, chargeMaximum: this.state.maxCharge, chargeFactorLostToCap: factorLostToCap };
+    this.triggerFlame(flame, `${detail} · Charge ×${this.format(factorApplied)} → ×${this.format(after)}`, undefined, undefined,
       flameDiagnostics);
     this.emit({ type: 'CHARGE_CHANGED', flame, dieIds, xMult: after, flameDiagnostics,
-      message: `${FLAMES[flame].name}: Charge +${this.format(gain)} → ×${this.format(after)}` });
+      message: `${FLAMES[flame].name}: Charge ×${this.format(factorApplied)} → ×${this.format(after)}` });
     return gain;
   }
   private addMomentumCharge(hand: HandId): void {
@@ -778,10 +787,8 @@ export class Resolver {
   private applyPowerSurge(hand: HandId, isHighestLevelHand: boolean): void {
     const source = this.chargeFlameSource('powerSurge');
     if (!source || !isHighestLevelHand) return;
-    const before = this.state.chargeXMult;
-    const ratio = 3;
-    const requestedGain = before * (ratio - 1);
-    this.growCharge('powerSurge', requestedGain, `${HANDS[hand].name} multiplied current Charge by ${this.format(ratio)}`);
+    const ratio = powerSurgeChargeMultiplier(source.investment);
+    this.growCharge('powerSurge', ratio, `${HANDS[hand].name} multiplied current Charge by ${this.format(ratio)}`);
   }
   private advanceHandFamilyFlames(hand: HandId, appliedFactors: readonly import('./types').XMultFactor[]): void {
     const applied = new Set(appliedFactors.map(factor => factor.source));
@@ -846,7 +853,7 @@ export class Resolver {
     if (played) this.state.interactiveFlames.hotPotatoStreak = 0;
     else this.state.interactiveFlames.hotPotatoStreak++;
     const streak = this.state.interactiveFlames.hotPotatoStreak;
-    const requested = played ? 0 : hotPotatoClockChargeGain(flame.investment, streak);
+    const requested = played ? 1 : hotPotatoClockChargeGain(flame.investment, streak);
     const chargeBefore = this.state.chargeXMult;
     const gained = this.growCharge('hotPotatoClock', requested,
       `Hot Potato ${played ? 'was Played; streak reset' : `avoided for ${streak} consecutive Plays`}`,
@@ -888,22 +895,10 @@ export class Resolver {
   private applyFluxCapacitor(pulledMagneticFaces: number, dieIds: number[]): void {
     const source = this.chargeFlameSource('fluxCapacitor');
     if (!source || pulledMagneticFaces <= 0) return;
-    const before = this.state.chargeXMult;
     const multiplier = fluxCapacitorChargeMultiplier(source.investment, pulledMagneticFaces);
-    const after = Number(Math.min(this.state.maxCharge, before * multiplier).toFixed(12));
-    const gain = Number((after - before).toFixed(12));
-    const requested = Number((before * (multiplier - 1)).toFixed(12));
-    this.emitV2({ kind: 'flame_charge_generated', flame: 'fluxCapacitor', requested, gained: gain,
-      lostToCap: Number(Math.max(0, requested - gain).toFixed(12)), before, after,
-      diagnostics: { availableDiceCount: pulledMagneticFaces } });
-    this.state.chargeXMult = after;
-    if (gain > 0) this.state.chargeAttribution[source.instanceId] = Number(((this.state.chargeAttribution[source.instanceId] ?? 0) + gain).toFixed(12));
-    this.state.stats.chargeGained = Number((this.state.stats.chargeGained + gain).toFixed(12));
-    if (multiplier <= 1) return;
-    this.triggerFlame('fluxCapacitor',
-      `${this.format(pulledMagneticFaces)} Roll${pulledMagneticFaces === 1 ? '' : 's'} pulled by Magnetic dice · Charge ×${this.format(multiplier)} → ×${this.format(after)}`);
-    this.emit({ type: 'CHARGE_CHANGED', flame: 'fluxCapacitor', dieIds, xMult: after,
-      message: `${FLAMES.fluxCapacitor.name}: Charge ×${this.format(before)} × ${this.format(multiplier)} = ×${this.format(after)}` });
+    this.growCharge('fluxCapacitor', multiplier,
+      `${this.format(pulledMagneticFaces)} Roll${pulledMagneticFaces === 1 ? '' : 's'} pulled by Magnetic dice`, dieIds,
+      { availableDiceCount: pulledMagneticFaces });
   }
   private resolveRoll(intent: RollIntent, rolling: ReadonlySet<number>): RollResolution {
     const die = this.state.dice.find(item => item.id === intent.dieId)!;
@@ -1395,30 +1390,26 @@ export class Resolver {
   }
 
   private resolveHandScore(resolution: HandResolution, handStart: HandStartSnapshot, handLevel: number,
-    chargeAttributionAtHandStart: Partial<Record<FlameInstanceId, number>>) {
+    chargeEventsAtHandStart: import('./types').ChargeGrowthRecord[]) {
     const { hand, source: playSource } = resolution.intent;
     const scoringIds = resolution.scoringParticipants.map(participant => participant.id);
     const xMultFactors = handXMultContributions(handStart, hand, handLevel, scoringIds);
     for (const factor of xMultFactors) {
       const origin: FlameOrigin = factor.source === 'charge' ? 'charge'
         : handStart.flames.find(flame => flame.instanceId === factor.flameInstanceId)?.stage ?? 'external';
-      const chargeSources = factor.source === 'charge' ? Object.entries(chargeAttributionAtHandStart)
-        .filter((entry): entry is [string, number] => (entry[1] ?? 0) > 0)
-        .flatMap(([rawInstanceId, attributed]) => {
-          const instanceId = Number(rawInstanceId);
-          const instance = handStart.flames.find(flame => flame.instanceId === instanceId);
-          return instance ? [{ flame: instance.type, instanceId,
-          origin: instance.stage,
-          attributed,
-          factor: handStart.chargeXMult / Math.max(1, handStart.chargeXMult - attributed) }] : [];
-        }) : undefined;
+      const chargeReplay = factor.source === 'charge' ? {
+        flames: handStart.flames.filter(flame => isChargeFlame(flame.type)).map(flame => ({
+          instanceId: flame.instanceId, flame: flame.type, investedGold: flame.investedGold,
+        })),
+        events: structuredClone(chargeEventsAtHandStart),
+      } : undefined;
       const sourceInstanceId = factor.source === 'charge' ? null : factor.flameInstanceId ?? null;
       this.v2Hand!.xMultContributions.push({ sourceId: factor.source, origin, factor: factor.value,
         ...(sourceInstanceId === null ? {} : { sourceInstanceId }),
         ...(factor.dieId === null ? {} : { dieId: factor.dieId }),
         ...(factor.input === undefined ? {} : { input: factor.input }),
         ...(factor.diagnostics ? { diagnostics: structuredClone(factor.diagnostics) } : {}),
-        ...(chargeSources?.length ? { chargeSources } : {}) });
+        ...(chargeReplay ? { chargeReplay } : {}) });
       if (factor.source === 'speedDemon') this.emit({ type: 'SPEED_DEMON_REVEALED', flame: 'speedDemon', hand,
         dieIds: factor.dieId === null ? undefined : [factor.dieId], xMult: factor.value, xMultFactor: factor,
         decisionMs: handStart.speedDemonDecisionMs ?? undefined,
@@ -1739,10 +1730,10 @@ export class Resolver {
     const wouldConsumeHand = !freePlay && (this.state.bossSilenced || this.state.boss?.type !== 'marathon');
     const consumesHand = wouldConsumeHand;
     const handLevel = this.state.handLevels[hand];
-    const currentInfernoMultiplier = infernoMultiplier(this.state.engulfmentLevel);
+    const currentInfernoMultiplier = this.state.infernoMultiplier;
     const handStart = captureHandStart(this.state, hand, ids, playSource === 'manual' ? intent.decisionMs : null, playSource,
       { allIn: intent.allIn, doubleOrNothingRedemption: intent.doubleOrNothingRedemption });
-    const chargeAttributionAtHandStart = structuredClone(this.state.chargeAttribution);
+    const chargeEventsAtHandStart = structuredClone(this.state.chargeEvents);
     if (freePlay) handStart.chargeArmed = false;
     const shapeParticipants = ids.map(id => ({ id, face: structuredClone(activeFace(this.state.dice.find(die => die.id === id)!)), role: 'selected' as const }));
     this.v2Hand = {
@@ -1837,7 +1828,7 @@ export class Resolver {
       .reduce((sum, contribution) => sum + contribution.amount, 0);
     handStart.scoringDiceEnhancementCount = countScoringDiceEnhancementComponents(handStart, scoringIds);
     const { pips, multiplier, xMult, rawScore, score, bossFactor } =
-      this.resolveHandScore(resolution, handStart, handLevel, chargeAttributionAtHandStart);
+      this.resolveHandScore(resolution, handStart, handLevel, chargeEventsAtHandStart);
     if (currentInfernoMultiplier > 1n) this.emit({ type: 'HAND_INFERNO_APPLIED', hand, dieIds: scoringIds,
       amount: currentInfernoMultiplier, message: `Inferno applies ×${this.format(currentInfernoMultiplier)}` });
     this.state.stats.handScores.push({ round: this.state.round, hand, handLevel, dieIds: scoringIds,
@@ -1876,6 +1867,7 @@ export class Resolver {
       const consumed = this.state.chargeXMult;
       this.state.chargeXMult = 1; this.state.chargeArmed = false;
       this.state.chargeAttribution = {};
+      this.state.chargeEvents = [];
       this.state.stats.chargeConsumed = Number((this.state.stats.chargeConsumed + Math.max(0, consumed - 1)).toFixed(12));
       this.emit({ type: 'CHARGE_CHANGED', xMult: 1, message: `Charge ×${this.format(consumed)} consumed; meter reset to ×1` });
     }
@@ -1894,7 +1886,7 @@ export class Resolver {
           upperDecayStep: this.state.sixPackUpperHandsPlayed },
         message: `Six Pack ×${this.format(before)} → ×${this.format(this.state.sixPackXMult)}` });
     }
-    if (!freePlay) this.advanceHotStreak(hand, scoringIds);
+    this.advanceHotStreak(hand, scoringIds);
     this.advanceProgressiveFlames(hand, playSource);
     this.state.handPlayCounts[hand]++;
     this.state.roundPlayCount++;
@@ -2375,7 +2367,7 @@ export class Resolver {
     this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound;
     this.state.manualRerollsUsedThisRound = 0;
     this.state.consumed = []; this.state.scorecardCycleConsumed = []; this.state.targetPracticeHand = null; this.state.lastRoundPayout = null; this.state.roundSummary = null;
-    this.state.chargeXMult = 1; this.state.chargeArmed = false; this.state.chargeAttribution = {}; this.state.hotStreakCharges = 0;
+    this.state.chargeXMult = 1; this.state.chargeArmed = false; this.state.chargeAttribution = {}; this.state.chargeEvents = []; this.state.hotStreakCharges = 0;
     this.state.minigunUpperStreak = 0;
     this.state.roundPlayCount = 0;
     this.state.roundStartLives = roundStartLives;
@@ -2571,9 +2563,20 @@ export class Resolver {
     this.state.infernoEvaluation = evaluation;
     this.emitV2({ kind: 'inferno_evaluated', evaluation: structuredClone(evaluation) });
   }
-  engulfNow(): void {
+  toggleEngulfmentFlame(instanceId: FlameInstanceId): void {
     const evaluation = this.state.infernoEvaluation;
     if (!evaluation?.success || evaluation.engulfed) throw new Error('A ready Inferno evaluation is required.');
+    if (!evaluation.flames.some(item => item.asset.instanceId === instanceId))
+      throw new Error('Choose a Flame from the current Inferno evaluation.');
+    const selected = new Set(evaluation.selectedFlameInstanceIds);
+    if (selected.has(instanceId)) selected.delete(instanceId); else selected.add(instanceId);
+    this.state.infernoEvaluation = withInfernoSelection(this.state, evaluation, [...selected]);
+  }
+  engulfNow(): void {
+    const evaluation = this.state.infernoEvaluation;
+    if (!evaluation?.success || evaluation.engulfed
+      || evaluation.selectedEffectiveValue < evaluation.threshold)
+      throw new Error('Select Flames with enough joint effective power.');
     const ownedKeys = new Set(ownedEngulfmentAssets(this.state).map(engulfmentAssetKey));
     if (evaluation.flamesSnuffed.some(asset => !ownedKeys.has(engulfmentAssetKey(asset))))
       throw new Error('The frozen Inferno offering no longer matches the current build.');
@@ -2583,6 +2586,7 @@ export class Resolver {
       removeFlameInstance(this.state, asset.instanceId);
     }
     this.state.engulfmentLevel = evaluation.infernoLevelAfter;
+    this.state.infernoMultiplier = evaluation.infernoMultiplierAfter;
     for (const item of evaluation.upper.levelsBefore) this.state.handLevels[item.hand] = evaluation.upper.unifiedLevel;
     for (const item of evaluation.lower.levelsBefore) this.state.handLevels[item.hand] = evaluation.lower.unifiedLevel;
     if (!ownedFlameIds(this.state).has('fetch')) this.state.fetchTarget = null;
@@ -2596,10 +2600,17 @@ export class Resolver {
     this.emitV2({ kind: 'engulfment_attempted', shopVisitId: this.state.nextShopVisitId, attemptNumber: 1,
       infernoLevelBefore: evaluation.infernoLevelBefore, infernoLevelAfter: evaluation.infernoLevelAfter,
       infernoMultiplierBefore: evaluation.infernoMultiplierBefore, infernoMultiplierAfter: evaluation.infernoMultiplierAfter,
+      engulfmentCountBefore: evaluation.engulfmentCountBefore, engulfmentCountAfter: evaluation.engulfmentCountAfter,
       offerings: evaluation.flames.map(item => ({ asset: structuredClone(item.asset) })),
-      evidenceRounds: structuredClone(evaluation.evidenceRounds), offeringMultiplier: evaluation.effectiveValue,
+      evidenceRounds: structuredClone(evaluation.evidenceRounds), offeringMultiplier: evaluation.selectedEffectiveValue,
+      fullCollectionEffectivePower: evaluation.effectiveValue,
+      individualFlamePowers: evaluation.flames.map(item => ({ asset: structuredClone(item.asset),
+        effectivePower: item.hiddenStrength })),
+      selectedInstanceIds: [...evaluation.selectedFlameInstanceIds],
+      selectedEffectivePower: evaluation.selectedEffectiveValue,
+      earnedInfernoFactor: evaluation.earnedInfernoFactor,
       requiredMultiplier: evaluation.threshold, success: true,
-      overqualification: Math.max(0, evaluation.effectiveValue - evaluation.threshold),
+      overqualification: Math.max(0, evaluation.selectedEffectiveValue - evaluation.threshold),
       upper: structuredClone(evaluation.upper), lower: structuredClone(evaluation.lower),
       flamesSnuffed: structuredClone(evaluation.flamesSnuffed), questForfeited: false, returnedToShop: true });
     this.recordUltimateTargets('engulfment');

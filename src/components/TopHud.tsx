@@ -10,7 +10,7 @@ import { formatExactScore, formatPlayerNumber } from '../game/copy';
 import { activeSpecialOfferStatusItems } from '../game/specialOffers';
 import { chapterPosition } from '../game/chapters';
 import type { FlameDetailsTarget } from './FlameDetailsModal';
-import { infernoMultiplier, infernoRoman } from '../game/engulfment';
+import { infernoRoman } from '../game/engulfment';
 import { exactRatioNumber } from '../game/scoreMath';
 import { CurrencyAmount, type Currency } from './CurrencyAmount';
 import type { FlamePresentation } from '../game/flamePresentation';
@@ -48,8 +48,9 @@ export function TopHud({ board, event, flamePresentation = [], speed, setSpeed, 
     const xFactor = event.type === 'HAND_SCORE_FINALIZED'
       ? event.handScore?.xMultFactors.find(factor => factor.flameInstanceId === instanceId) : undefined;
     if (xFactor && xFactor.value > 1) return { text: `×${formatPlayerNumber(xFactor.value)} XMULT`, eventId: event.id };
-    const gained = event.type === 'CHARGE_CHANGED' && event.flame === flameType ? event.flameDiagnostics?.chargeGained ?? 0 : 0;
-    return gained > 0 ? { text: `+${formatPlayerNumber(gained)} CHARGE`, eventId: event.id } : null;
+    const factor = event.type === 'CHARGE_CHANGED' && event.flame === flameType
+      ? event.flameDiagnostics?.chargeFactorApplied ?? 1 : 1;
+    return factor > 1 ? { text: `×${formatPlayerNumber(factor)} CHARGE`, eventId: event.id } : null;
   }
   function launch(action: () => void) {
     setDrawerOpen(false);
@@ -115,7 +116,7 @@ export function TopHud({ board, event, flamePresentation = [], speed, setSpeed, 
     </Group>}
     {board.engulfmentLevel > 0 && <Group gap="xs" px="xs" py={3}
       className="inferno-strip" aria-label="Inferno status">
-      {board.engulfmentLevel > 0 && <Text size="xs" fw={900} c="red">INFERNO {infernoRoman(board.engulfmentLevel)} · ×{formatExactScore(infernoMultiplier(board.engulfmentLevel))}</Text>}
+      {board.engulfmentLevel > 0 && <Text size="xs" fw={900} c="red">INFERNO {infernoRoman(board.engulfmentLevel)} · ×{formatExactScore(board.infernoMultiplier)}</Text>}
     </Group>}
     {specialOfferStatuses.length > 0 && <Group gap={4} px="xs" py={3} wrap="nowrap" className="special-effects-strip" data-tutorial="special-offer-status"
       aria-label="Active Special Offers" data-testid="special-effects-status">

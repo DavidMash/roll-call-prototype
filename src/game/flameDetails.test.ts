@@ -8,9 +8,9 @@ const board = () => newRun('flame-details', { next: () => 0 }).state;
 describe('shared Flame numeric details', () => {
   it('reports authoritative conditional XMult scaling at Ember and Bonfire strength', () => {
     expect(flameDetailsPresentation('doubleDown', 35, board())).toMatchObject({
-      currentLabel: 'Current XMult', currentValue: 'up to ×2.75', maxChargeContribution: null,
+      currentLabel: 'Current XMult', currentValue: 'up to ×3.1', maxChargeContribution: null,
     });
-    expect(flameDetailsPresentation('doubleDown', 100, board()).currentValue).toBe('up to ×6');
+    expect(flameDetailsPresentation('doubleDown', 100, board()).currentValue).toBe('up to ×7');
   });
 
   it.each(CHARGE_FLAME_IDS)('%s reports its authoritative Max Charge contribution', flame => {
@@ -19,24 +19,24 @@ describe('shared Flame numeric details', () => {
   });
 
   it.each<[Flame, string]>([
-    ['momentum', '+0.125 Charge per Play'],
-    ['thirdRail', '+0.125 Charge per Rolled 3'],
-    ['jumpStart', '+0.5 Charge per Manual Reroll'],
-    ['powerSurge', '×3 current Charge on highest-level Hand'],
-    ['fluxCapacitor', '×1.25 Charge when 1 other die is affected'],
+    ['momentum', '×1.063 Charge per Play'],
+    ['thirdRail', '×1.063 Charge per Rolled 3'],
+    ['jumpStart', '×1.125 Charge per rerolled die'],
+    ['powerSurge', '×2 Charge on highest-level Hand'],
+    ['fluxCapacitor', '×1.313 Charge when 1 other die is affected'],
   ])('%s keeps its own Current Effect wording', (flame, currentValue) => {
     expect(flameDetailsPresentation(flame, 25, board())).toMatchObject({ currentLabel: 'Current Effect', currentValue });
   });
 
   it('uses each scoring-condition Flame\'s authoritative density curve', () => {
     const state = board();
-    expect(flameDetailsPresentation('fatCat', 35, state).currentValue).toBe('up to ×1.525');
-    expect(flameDetailsPresentation('vineyard', 35, state).currentValue).toBe('up to ×1.7');
+    expect(flameDetailsPresentation('fatCat', 35, state).currentValue).toBe('up to ×1.7');
+    expect(flameDetailsPresentation('vineyard', 35, state).currentValue).toBe('up to ×1.875');
     expect(flameDetailsPresentation('fetch', 35, state).currentValue).toBe('up to ×2.4');
   });
 
   it('presents the two new Charge generators without Flux Capacitor wording', () => {
-    expect(flameDetailsPresentation('potentialEnergy', 100, board()).currentValue).toBe('+1 Charge per qualifying Play');
-    expect(flameDetailsPresentation('allHandsOnDeck', 100, board()).currentValue).toBe('+0.5 Charge per available die');
+    expect(flameDetailsPresentation('potentialEnergy', 100, board()).currentValue).toBe('×2 Charge per qualifying Play');
+    expect(flameDetailsPresentation('allHandsOnDeck', 100, board()).currentValue).toBe('×1.2 Charge per available die');
   });
 });

@@ -44,7 +44,7 @@ describe('Flame Update Pass 4 catalog and curves', () => {
     expect(PROGRESSIVE_FLAME_SEQUENCES.topDown.hands).toEqual(TOP_PLAYS.map(([hand]) => hand));
     expect(PROGRESSIVE_FLAME_SEQUENCES.countDown.hands).toEqual(['sixes', 'fives', 'fours', 'threes', 'twos', 'ones']);
     expect(PROGRESSIVE_FLAME_SEQUENCES.topDown.bonfireFactors).toEqual([3, 4, 5, 6, 7, 8, 10, 12]);
-    expect(PROGRESSIVE_FLAME_SEQUENCES.countDown.bonfireFactors).toEqual([1.5, 2, 2.5, 3, 3.5, 4.5]);
+    expect(PROGRESSIVE_FLAME_SEQUENCES.countDown.bonfireFactors).toEqual([2, 3, 4, 6, 8, 12]);
     expect(PROGRESSIVE_FLAME_SEQUENCES.topDown.bonfireFactors.map((_, index) =>
       progressiveSequenceMultiplier('topDown', 100, index))).toEqual([3, 4, 5, 6, 7, 8, 10, 12]);
   });
@@ -97,7 +97,7 @@ describe('Count Down', () => {
       resolver.play(hand, faces(state, [rank]), index === 2 ? 'jumpingBean' : 'manual');
       factors.push(lastFactor(state, 'countDown')!);
     }
-    expect(factors).toEqual([1.5, 2, 2.5, 3, 3.5, 4.5]);
+    expect(factors).toEqual([2, 3, 4, 6, 8, 12]);
     expect(state.progressiveFlames.countDown).toBe(6);
     expect(state.historyV2.filter(event => event.kind === 'flame_sequence'
       && event.flame === 'countDown' && event.advanced)).toHaveLength(6);

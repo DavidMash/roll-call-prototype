@@ -8,6 +8,7 @@ import { ScoreResolution } from './ScoreResolution';
 function scoringEvents(level: number) {
   const state = newRun(`inferno-presentation-${level}`, { next: () => 0.99 }).state;
   state.engulfmentLevel = level;
+  state.infernoMultiplier = 25n ** BigInt(level);
   state.target = 1_000_000n;
   state.dice[0].value = 1;
   return dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }).events;

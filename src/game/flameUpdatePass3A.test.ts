@@ -52,29 +52,29 @@ describe('Flame Update Pass 3A catalog and formulas', () => {
 
   it('centralizes the exact initial scaling', () => {
     expect([.1, .25, .5, .75, 1].map(fraction => burnItDownChargeGain(100, fraction)))
-      .toEqual([.5, 1.25, 2.5, 3.75, 5]);
+      .toEqual([1.3, 1.75, 2.5, 3.25, 4]);
     expect([0, 1, 2, 3, 4, 5].map(greaseTheEngineCost)).toEqual([5, 10, 20, 40, 80, 160]);
-    expect(greaseTheEngineChargeGain(100)).toBe(1);
+    expect(greaseTheEngineChargeGain(100)).toBe(1.5);
     expect(lightningStrikeChargeGain(100)).toBe(3);
-    expect([1, 2, 3].map(streak => hotPotatoClockChargeGain(100, streak))).toEqual([.5, 1, 1.5]);
+    expect([1, 2, 3].map(streak => hotPotatoClockChargeGain(100, streak))).toEqual([1.2, 1.4, 1.6]);
     expect([1, 2, 3, 4, 5].map(count => dareDevilMultiplier(100, count))).toEqual([3, 5, 7, 9, 9]);
 
     const state = game();
     for (const flame of ['burnItDown', 'greaseTheEngine', 'lightningStrike', 'hotPotatoClock'] as const) own(state, flame);
-    expect(state.maxCharge).toBe(20);
+    expect(state.maxCharge).toBe(35);
   });
 });
 
 describe('Burn It Down', () => {
-  it.each([[10n, .5], [25n, 1.25], [50n, 2.5], [75n, 3.75]] as const)(
-    'sacrifices %s%% of a 100 target for %s Charge at Bonfire', (score, expectedGain) => {
+  it.each([[10n, 1.3], [25n, 1.75], [50n, 2.5], [75n, 3.25]] as const)(
+    'sacrifices %s%% of a 100 target for a %s Charge factor at Bonfire', (score, expectedFactor) => {
       const state = game(); own(state, 'burnItDown'); state.score = score;
       const result = dispatch(state, { type: 'ACTIVATE_BURN_IT_DOWN' }, constant()).state;
       expect(result.score).toBe(0n);
-      expect(result.chargeXMult).toBe(1 + expectedGain);
+      expect(result.chargeXMult).toBe(expectedFactor);
       expect(result.historyV2.at(-1)).toMatchObject({ kind: 'flame_action', flame: 'burnItDown',
         action: { type: 'burn_it_down', scoreSacrificed: score, target: 100n,
-          chargeRequested: expectedGain, chargeGained: expectedGain, useCount: 1 } });
+          chargeRequested: expectedFactor, chargeGained: Number((expectedFactor - 1).toFixed(12)), useCount: 1 } });
     },
   );
 
@@ -88,7 +88,7 @@ describe('Burn It Down', () => {
     state.score = 25n;
     state = dispatch(state, { type: 'ACTIVATE_BURN_IT_DOWN' }, constant()).state;
     expect(state.interactiveFlames.burnItDownUses).toBe(2);
-    expect(state.chargeXMult).toBe(3.5);
+    expect(state.chargeXMult).toBe(3.0625);
     state.chargeXMult = state.maxCharge; state.score = 10n;
     expect(validateAction(state, { type: 'ACTIVATE_BURN_IT_DOWN' })).toContain('already full');
     state.chargeXMult = 1; state.score = 0n;
@@ -119,7 +119,7 @@ describe('Grease the Engine', () => {
       expect(state.gold).toBe(beforeGold - price);
       expect(state.interactiveFlames.greaseTheEngineUses).toBe(index + 1);
     }
-    expect(state.chargeXMult).toBe(6);
+    expect(state.chargeXMult).toBe(7.59375);
     expect(state.stats.goldSpentBySource.greaseTheEngine).toBe(155);
     expect(state.historyV2.filter(event => event.kind === 'flame_action' && event.flame === 'greaseTheEngine')).toHaveLength(5);
   });
@@ -147,13 +147,13 @@ describe('Lightning Strike', () => {
       const beforeNormal = state.manualRerollsRemaining;
       state = dispatch(state, { type: 'ACTIVATE_LIGHTNING_STRIKE', dieId: 0, predictedFace: 2 }, constant()).state;
       expect(activeFace(state.dice[0]).rank).toBe(2);
-      expect(state.chargeXMult).toBe(4);
+      expect(state.chargeXMult).toBe(3);
       expect(state.manualRerollsUsedThisRound).toBe(1);
       expect(reserve ? state.specialOfferEffects.carePackageRerolls : state.manualRerollsRemaining)
         .toBe(reserve ? 0 : beforeNormal - 1);
       expect(state.historyV2.find(event => event.kind === 'flame_action' && event.flame === 'lightningStrike'))
         .toMatchObject({ action: { type: 'lightning_strike', predictedFace: 2, actualFace: 2, hit: true,
-          manualRerollSource: reserve ? 'carePackage' : 'normal', chargeGained: 3 } });
+          manualRerollSource: reserve ? 'carePackage' : 'normal', chargeGained: 2 } });
     }
   });
 
@@ -173,7 +173,7 @@ describe('Lightning Strike', () => {
     own(state, 'lightningStrike'); own(state, 'jumpStart'); own(state, 'casual');
     state.manualRerollsRemaining = 1;
     state = dispatch(state, { type: 'ACTIVATE_LIGHTNING_STRIKE', dieId: 0, predictedFace: 2 }, constant()).state;
-    expect(state.chargeXMult).toBe(6);
+    expect(state.chargeXMult).toBe(4.5);
     state.dice.forEach(die => { die.value = 1; });
     new Resolver(state, constant()).play('fiveKind', [0, 1, 2, 3, 4]);
     expect(factor(state, 'casual')).toBeUndefined();
@@ -193,7 +193,7 @@ describe('Lightning Strike', () => {
     effectRuntime(magic.dieRoundState[0], effectOf(rosterDice(magic)[0], 'magic'))!.magicArmedFace = 6;
     new Resolver(magic, constant()).lightningStrike(0, 6);
     expect(activeFace(magic.dice[0]).rank).toBe(6);
-    expect(magic.chargeXMult).toBe(4);
+    expect(magic.chargeXMult).toBe(3);
   });
 });
 
@@ -214,12 +214,12 @@ describe('Hot Potato Clock', () => {
       expect(state.interactiveFlames.hotPotatoStreak).toBe(expectedStreak);
       expect(state.interactiveFlames.hotPotatoDieId).not.toBe(prior);
     }
-    expect(state.chargeXMult).toBe(4);
+    expect(state.chargeXMult).toBe(2.688);
     const target = state.interactiveFlames.hotPotatoDieId!;
     const targetDie = state.dice.find(die => die.id === target)!;
     new Resolver(state, constant()).play(upperByFace[activeFace(targetDie).rank]!, [target], 'jumpingBean');
     expect(state.interactiveFlames.hotPotatoStreak).toBe(0);
-    expect(state.chargeXMult).toBe(4);
+    expect(state.chargeXMult).toBe(2.688);
     expect(state.historyV2.filter(event => event.kind === 'flame_action' && event.flame === 'hotPotatoClock')).toHaveLength(4);
   });
 

@@ -124,7 +124,7 @@ test('global Flame details remain available during a Round without appearing on 
   const dialog = page.getByRole('dialog', { name: 'Momentum' });
   await expect(dialog).toContainText('Investment: 25G / 100G');
   await expect(dialog.getByLabel('25 Gold')).toBeVisible();
-  await expect(dialog).toContainText('Current Effect: +0.125 Charge per Play');
+  await expect(dialog).toContainText('Current Effect: ×1.063 Charge per Play');
   await expect(dialog.getByLabel('Stoke amount for Momentum')).toHaveCount(0);
 });
 

@@ -5,9 +5,10 @@ import {
   handFamilyFlameMultiplier, heavyHittersMultiplier, highRollerMultiplier, dareDevilMultiplier,
   allInMultiplier, doubleOrNothingMultiplier,
   PROGRESSIVE_FLAME_SEQUENCES, progressiveSequenceMultiplier,
-  HOT_STREAK_SEQUENCE, hotStreakMultiplier, isChargeFlame, isHandFamilyFlame, lowballMultiplier, maxChargeContribution,
+  HOT_STREAK_SEQUENCE, hotStreakMultiplier, isChargeFlame, isHandFamilyFlame, lowballMultiplier,
   minigunMultiplier, missingPairMultiplier, sixPackStartingMultiplier, speedDemonMultiplier,
-  punchCardMultiplier, standardFlameMultiplier, targetPracticeMultiplier, vineyardMultiplier,
+  punchCardMultiplier, standardFlameMultiplier, targetPracticeMultiplier, vineyardMultiplier, oneShortMultiplier,
+  calculateMaxChargeForInstances,
 } from './flames';
 import { HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
 import { canonicalRunHistoryV2Events } from './runHistoryV2Timeline';
@@ -19,8 +20,8 @@ import type {
   InfernoTrend, InfernoWeakness,
 } from './types';
 
-export const ENGULFMENT_EVIDENCE_ROUNDS = 6;
-export const ENGULFMENT_REQUIRED_MULTIPLIER = 25;
+export const ENGULFMENT_EVIDENCE_ROUNDS = 3;
+export const ENGULFMENT_REQUIRED_MULTIPLIER = 15;
 export const INFERNO_TREND_DEAD_ZONE = 0.05;
 export const INFERNO_CLOSE_READINESS = 0.8;
 export const INFERNO_SUSPENSION_MESSAGE = 'The Inferno will return when you have more Flames to offer.';
@@ -48,12 +49,25 @@ export function selectedOfferingFactor(event: Pick<HandScoredEvent, 'xMultContri
   let factor = 1;
   for (const contribution of event.xMultContributions) {
     if (contribution.sourceId === 'charge') {
-      const selectedAttributed = (contribution.chargeSources ?? []).reduce((sum, source) =>
-        source.instanceId !== undefined && selectedInstanceIds.has(source.instanceId)
-          ? sum + Math.max(0, source.attributed ?? 0) : sum, 0);
-      if (selectedAttributed > 0) {
-        const charge = Math.max(1, contribution.factor);
-        factor *= charge / Math.max(1, charge - selectedAttributed);
+      const replay = contribution.chargeReplay;
+      if (replay) {
+        const remaining = replay.flames.filter(flame => !selectedInstanceIds.has(flame.instanceId));
+        const counterfactualCap = calculateMaxChargeForInstances(remaining.map(flame => ({
+          type: flame.flame, investedGold: flame.investedGold,
+        })));
+        const counterfactualCharge = replay.events.reduce((charge, chargeEvent) =>
+          selectedInstanceIds.has(chargeEvent.sourceInstanceId) ? charge
+            : Math.min(counterfactualCap, charge * Math.max(1, chargeEvent.factorRequested)), 1);
+        factor *= Math.max(1, contribution.factor) / Math.max(1, counterfactualCharge);
+      } else {
+        // Legacy schema fallback for histories recorded before multiplicative Charge replay.
+        const selectedAttributed = (contribution.chargeSources ?? []).reduce((sum, source) =>
+          source.instanceId !== undefined && selectedInstanceIds.has(source.instanceId)
+            ? sum + Math.max(0, source.attributed ?? 0) : sum, 0);
+        if (selectedAttributed > 0) {
+          const charge = Math.max(1, contribution.factor);
+          factor *= charge / Math.max(1, charge - selectedAttributed);
+        }
       }
     } else if (contribution.sourceInstanceId !== undefined && selectedInstanceIds.has(contribution.sourceInstanceId)) {
       factor *= Math.max(1, contribution.factor);
@@ -80,9 +94,10 @@ export interface EngulfmentOfferingEvaluation {
 }
 
 /**
- * Authoritative engulfment-contribution-v2 evaluator. Balance behavior is
- * intentionally unchanged: six latest canonical clears, score-weighted
- * inside each Round and equal-weighted between Rounds.
+ * Authoritative realized-score evaluator: three latest canonical clears,
+ * score-weighted inside each Round and equal-weighted between Rounds. Score
+ * packages later removed by a wager and score destroyed by Burn It Down are
+ * excluded because they did not survive into the cleared Round score.
  */
 export function evaluateEngulfmentOffering(
   state: Pick<GameState, 'historyV2' | 'historyV2Coverage'>,
@@ -93,14 +108,26 @@ export function evaluateEngulfmentOffering(
     .slice(-ENGULFMENT_EVIDENCE_ROUNDS);
   const selectedInstanceIds = new Set(assets.map(asset => asset.instanceId));
   const handsByAttempt = new Map<string, HandScoredEvent[]>();
+  const removedPackagesByAttempt = new Map<string, Set<string>>();
+  const lastBurnByAttempt = new Map<string, number>();
   for (const event of canonical) if (event.kind === 'hand_scored') {
     const key = attemptKey(event);
     const hands = handsByAttempt.get(key) ?? [];
     hands.push(event);
     handsByAttempt.set(key, hands);
+  } else if (event.kind === 'score_package_removed') {
+    const key = attemptKey(event);
+    const removed = removedPackagesByAttempt.get(key) ?? new Set<string>();
+    removed.add(event.packageId);
+    removedPackagesByAttempt.set(key, removed);
+  } else if (event.kind === 'flame_action' && event.action.type === 'burn_it_down') {
+    lastBurnByAttempt.set(attemptKey(event), event.seq);
   }
   const evidenceRounds = clears.map(clear => {
-    const hands = handsByAttempt.get(attemptKey(clear)) ?? [];
+    const key = attemptKey(clear);
+    const removed = removedPackagesByAttempt.get(key) ?? new Set<string>();
+    const lastBurn = lastBurnByAttempt.get(key) ?? -1;
+    const hands = (handsByAttempt.get(key) ?? []).filter(hand => hand.seq > lastBurn && !removed.has(hand.scorePackageId));
     const multiplier = scoreWeightedMultiplier(hands.map(hand => offeringHandObservation(hand, selectedInstanceIds)));
     return { round: clear.round, attempt: clear.attempt, timelineId: clear.timelineId,
       handCount: hands.length, multiplier: Number(multiplier.toFixed(12)) };
@@ -138,6 +165,7 @@ function maximumFlameFactorOnHand(flame: Flame, hand: HandId): number {
   if (flame === 'fatCat') return fatCatMultiplier(100, 5);
   if (flame === 'vineyard') return vineyardMultiplier(100, 5);
   if (flame === 'missingPair') return missingPairMultiplier(100);
+  if (flame === 'oneShort') return oneShortMultiplier(100);
   if (flame === 'casual') return casualMultiplier(100);
   if (flame === 'freeRealEstate') return freeRealEstateMultiplier(100);
   if (flame === 'heavyHitters') return heavyHittersMultiplier(100);
@@ -173,24 +201,16 @@ export function maximumPossibleEngulfmentReadiness(
   assets: readonly EngulfmentAssetRef[] = ownedEngulfmentAssets(state),
 ): number {
   if (!assets.length) return 0;
-  const selectedIds = new Set(assets.map(asset => asset.instanceId));
   const chargeAssets = assets.filter(asset => isChargeFlame(asset.flame));
-  const chargeFactor = chargeAssets.length * maxChargeContribution(100);
+  const chargeFactor = calculateMaxChargeForInstances(chargeAssets.map(asset => ({
+    type: asset.flame, investedGold: 100,
+  })));
   const best = HAND_IDS.reduce((maximum, hand) => {
-    const xMultContributions: HandScoredEvent['xMultContributions'] = assets.flatMap(asset => {
-      if (isChargeFlame(asset.flame)) return [];
-      const factor = maximumFlameFactorOnHand(asset.flame, hand);
-      return factor <= 1 ? [] : [{ sourceId: asset.flame, origin: 'bonfire' as const,
-        factor, sourceInstanceId: asset.instanceId }];
-    });
-    if (chargeAssets.length) {
-      const attributed = (chargeFactor - 1) / chargeAssets.length;
-      xMultContributions.push({ sourceId: 'charge', origin: 'charge', factor: chargeFactor,
-        chargeSources: chargeAssets.map(asset => ({ flame: asset.flame, instanceId: asset.instanceId,
-          origin: 'bonfire', attributed, factor: chargeFactor })) });
-    }
-    const factor = selectedOfferingFactor({ xMultContributions }, selectedIds);
-    return Math.max(maximum, factor);
+    const directFactor = assets.reduce((product, asset) => {
+      if (isChargeFlame(asset.flame)) return product;
+      return product * maximumFlameFactorOnHand(asset.flame, hand);
+    }, 1);
+    return Math.max(maximum, directFactor * chargeFactor);
   }, 1);
   return Number(best.toFixed(12));
 }
@@ -317,7 +337,7 @@ export function selectInfernoFeedback(seed: string, evaluationIndex: number, wea
   return { id: selected[0], text: selected[1] };
 }
 
-/** Freezes one authoritative whole-collection evaluation and strongest-first prefix plan. */
+/** Freezes one authoritative whole-collection evaluation for player-directed sacrifice selection. */
 export function createInfernoEvaluation(state: GameState): InfernoEvaluationState | null {
   const assets = ownedEngulfmentAssets(state);
   if (!assets.length) return null;
@@ -338,23 +358,6 @@ export function createInfernoEvaluation(state: GameState): InfernoEvaluationStat
   const success = engulfmentSucceeds(full.offeringMultiplier);
   const maximumPossibleReadiness = maximumPossibleEngulfmentReadiness(state, assets);
   const currentCollectionTheoreticallySufficient = engulfmentSucceeds(maximumPossibleReadiness);
-  const prefixEvaluations: InfernoEvaluationState['prefixEvaluations'] = [];
-  let flamesSnuffed: EngulfmentAssetRef[] = [];
-  let selectedEffectiveValue: number | null = null;
-  if (success) for (let length = 1; length <= strongestFirst.length; length++) {
-    const prefix = strongestFirst.slice(0, length);
-    const prefixEvaluation = evaluateEngulfmentOffering(state, prefix);
-    const prefixSuccess = engulfmentSucceeds(prefixEvaluation.offeringMultiplier);
-    prefixEvaluations.push({ flameInstanceIds: prefix.map(asset => asset.instanceId),
-      effectiveValue: prefixEvaluation.offeringMultiplier, success: prefixSuccess });
-    if (prefixSuccess) {
-      flamesSnuffed = prefix;
-      selectedEffectiveValue = prefixEvaluation.offeringMultiplier;
-      break;
-    }
-  }
-  if (success && !flamesSnuffed.length) throw new Error('A successful Inferno evaluation has no successful strongest-first prefix.');
-  const snuffedIds = new Set(flamesSnuffed.map(asset => asset.instanceId));
   const suspendAfterContinue = !success && !currentCollectionTheoreticallySufficient;
   const feedback = success ? null : suspendAfterContinue
     ? { id: 'inferno-suspended', text: INFERNO_SUSPENSION_MESSAGE }
@@ -368,13 +371,43 @@ export function createInfernoEvaluation(state: GameState): InfernoEvaluationStat
     threshold: ENGULFMENT_REQUIRED_MULTIPLIER, readiness, maximumPossibleReadiness,
     currentCollectionTheoreticallySufficient, suspendAfterContinue, previousReadiness, trend, weakness, recentAction,
     feedbackMessageId: feedback?.id ?? null, feedbackMessage: feedback?.text ?? null, engulfed: false, success,
-    strongestFirst, prefixEvaluations, flamesSnuffed: structuredClone(flamesSnuffed),
-    flamesPreserved: assets.filter(asset => !snuffedIds.has(asset.instanceId)).map(asset => structuredClone(asset)),
-    selectedEffectiveValue, infernoLevelBefore, infernoLevelAfter: infernoLevelBefore + (success ? 1 : 0),
-    infernoMultiplierBefore: infernoMultiplier(infernoLevelBefore),
-    infernoMultiplierAfter: infernoMultiplier(infernoLevelBefore + (success ? 1 : 0)),
+    strongestFirst, prefixEvaluations: [], flamesSnuffed: [],
+    flamesPreserved: assets.map(asset => structuredClone(asset)), selectedFlameInstanceIds: [],
+    selectedEffectiveValue: 1, earnedInfernoFactor: 1,
+    engulfmentCountBefore: infernoLevelBefore, engulfmentCountAfter: infernoLevelBefore,
+    infernoLevelBefore, infernoLevelAfter: infernoLevelBefore,
+    infernoMultiplierBefore: state.infernoMultiplier,
+    infernoMultiplierAfter: state.infernoMultiplier,
     upper: normalization.upper, lower: normalization.lower,
-    consumedFinalFlame: success && flamesSnuffed.length === assets.length,
+    consumedFinalFlame: false,
+  };
+}
+
+/** Recomputes the selected subset jointly. Individual powers are diagnostics only and are never summed. */
+export function withInfernoSelection(state: GameState, evaluation: InfernoEvaluationState,
+  selectedFlameInstanceIds: readonly number[]): InfernoEvaluationState {
+  const selectedIds = new Set(selectedFlameInstanceIds);
+  const allAssets = evaluation.flames.map(item => item.asset);
+  const flamesSnuffed = allAssets.filter(asset => selectedIds.has(asset.instanceId));
+  const flamesPreserved = allAssets.filter(asset => !selectedIds.has(asset.instanceId));
+  const selectedEffectiveValue = flamesSnuffed.length
+    ? evaluateEngulfmentOffering(state, flamesSnuffed).offeringMultiplier : 1;
+  const selectedSuccess = engulfmentSucceeds(selectedEffectiveValue);
+  const earnedInfernoFactor = selectedSuccess ? Math.max(1, Math.floor(selectedEffectiveValue)) : 1;
+  const engulfmentCountAfter = evaluation.engulfmentCountBefore + (selectedSuccess ? 1 : 0);
+  const infernoMultiplierAfter = selectedSuccess
+    ? evaluation.infernoMultiplierBefore * BigInt(earnedInfernoFactor) : evaluation.infernoMultiplierBefore;
+  return {
+    ...evaluation,
+    selectedFlameInstanceIds: flamesSnuffed.map(asset => asset.instanceId),
+    flamesSnuffed: structuredClone(flamesSnuffed),
+    flamesPreserved: structuredClone(flamesPreserved),
+    selectedEffectiveValue,
+    earnedInfernoFactor,
+    engulfmentCountAfter,
+    infernoLevelAfter: engulfmentCountAfter,
+    infernoMultiplierAfter,
+    consumedFinalFlame: selectedSuccess && flamesSnuffed.length === allAssets.length,
   };
 }
 

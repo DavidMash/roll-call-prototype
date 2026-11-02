@@ -3,7 +3,7 @@ import {
   allHandsOnDeckChargeGain, flameInstances, FLAMES, HAND_FAMILY_FLAMES,
   hotPotatoClockChargeGain, isChargeFlame, momentumChargeGain, potentialEnergyChargeGain,
   PROGRESSIVE_FLAME_SEQUENCES, speedDemonMultiplier,
-  briberyFactor,
+  briberyFactor, powerSurgeChargeMultiplier,
 } from './flames';
 import { HANDS, ultimateHands } from './hands';
 import { canonicalPlayPreview, type CanonicalPlayPreview } from './playPreview';
@@ -26,7 +26,6 @@ export interface FlamePresentation {
 }
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
-const atChargeCap = (board: Board) => Math.max(0, board.maxCharge - board.chargeXMult);
 const candidateFactorCache = new WeakMap<Board, { signature: string; flames: Set<Flame> }>();
 
 const candidateSignature = (board: Board) => JSON.stringify({
@@ -127,7 +126,6 @@ export function deriveFlamePresentations(board: Board, preview: CanonicalPlayPre
   const activeFactors = new Map<Flame, number>();
   for (const factor of preview?.xMultFactors ?? []) if (factor.source in FLAMES) activeFactors.set(factor.source as Flame, factor.value);
   const selected = new Set(preview?.diePips.filter(item => item.role === 'selected').map(item => item.dieId) ?? []);
-  const chargeRoom = atChargeCap(board);
   return flameInstances(board).map(flame => {
     let state: FlameVisualState = 'normal';
     let statusText: string | undefined;
@@ -145,8 +143,10 @@ export function deriveFlamePresentations(board: Board, preview: CanonicalPlayPre
     if (isChargeFlame(flame.type) && chargePlayPossible(board, flame.type) && state !== 'active') state = 'possible';
 
     if (preview && isChargeFlame(flame.type)) {
-      let requested = 0;
+      let requested = 1;
       if (flame.type === 'momentum') requested = momentumChargeGain(flame.investedGold);
+      if (flame.type === 'powerSurge' && ultimateHands(board.handLevels).includes(preview.hand))
+        requested = powerSurgeChargeMultiplier(flame.investedGold);
       if (flame.type === 'potentialEnergy') {
         const ultimate = ultimateHands(board.handLevels);
         const ultimatePlayable = ultimate.some(hand => legalHandCombinations(board, hand).length > 0);
@@ -161,8 +161,9 @@ export function deriveFlamePresentations(board: Board, preview: CanonicalPlayPre
         && !selected.has(board.interactiveFlames.hotPotatoDieId)) {
         requested = hotPotatoClockChargeGain(flame.investedGold, board.interactiveFlames.hotPotatoStreak + 1);
       }
-      const gain = Math.min(requested, chargeRoom);
-      if (gain > 0) { state = 'active'; contribution = { kind: 'charge', value: gain }; statusText = `+${formatPlayerNumber(gain)} CHARGE`; }
+      const after = Math.min(board.maxCharge, board.chargeXMult * requested);
+      const applied = after / Math.max(1, board.chargeXMult);
+      if (applied > 1) { state = 'active'; contribution = { kind: 'charge', value: applied }; statusText = `×${formatPlayerNumber(applied)} CHARGE`; }
       else if (flame.type === 'hotPotatoClock' && board.interactiveFlames.hotPotatoStreak > 0) {
         progress = clamp01(board.interactiveFlames.hotPotatoStreak / 6);
         statusText ??= `${board.interactiveFlames.hotPotatoStreak} AVOIDED`;

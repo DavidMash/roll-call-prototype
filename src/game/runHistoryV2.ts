@@ -1,12 +1,12 @@
 import type {
   BossFaceMutation, BossType, ChallengeId, DiceRarity, DiceSlotRef, DieType, EngulfmentAssetRef, Flame, FlameInstanceId, GoldSource, GoldSpendSource, HandId, HandPlaySource,
   FlameSlotIndex, FlameStage, HexerFaceEffect, InfernoEvaluationState, Rarity, Rank, RunNodeType, ShopStage, SpecialOfferType,
-  SpecialDieType, TemperSource, TemperSpendSource,
+  SpecialDieType, TemperSource, TemperSpendSource, ChargeGrowthRecord,
 } from './types';
 import type { RoundGoalBreakdown } from './goals';
 import type { ExactDecimal, ExactScore } from './scoreMath';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 26 as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 27 as const;
 export const RUN_HISTORY_V2_RULESET = 'dice-pips-hand-mult-v1' as const;
 
 export interface RunHistoryV2Coverage {
@@ -74,6 +74,11 @@ export interface XMultContribution {
   /** Counterfactual factors attributing a consumed shared Charge factor to its producing Flames. */
   chargeSources?: { flame: Flame; instanceId?: FlameInstanceId; origin?: Exclude<FlameOrigin, 'charge' | 'boss' | 'special_offer' | 'external'>;
     attributed?: number; factor: number }[];
+  /** Authoritative ordered inputs for counterfactual replay of a consumed Charge factor. */
+  chargeReplay?: {
+    flames: { instanceId: FlameInstanceId; flame: Flame; investedGold: number }[];
+    events: ChargeGrowthRecord[];
+  };
 }
 
 export type HandSideEffect =
@@ -267,9 +272,16 @@ export interface EngulfmentAttemptedEvent extends RunHistoryV2Envelope {
   infernoLevelAfter: number;
   infernoMultiplierBefore: ExactScore;
   infernoMultiplierAfter: ExactScore;
+  engulfmentCountBefore: number;
+  engulfmentCountAfter: number;
   offerings: EngulfmentOfferingTelemetry[];
   evidenceRounds: EngulfmentEvidenceRoundTelemetry[];
   offeringMultiplier: number;
+  fullCollectionEffectivePower: number;
+  individualFlamePowers: { asset: EngulfmentAssetRef; effectivePower: number }[];
+  selectedInstanceIds: FlameInstanceId[];
+  selectedEffectivePower: number;
+  earnedInfernoFactor: number;
   requiredMultiplier: number;
   success: boolean;
   overqualification: number;
@@ -352,9 +364,16 @@ export interface BossStateChangedEvent extends RunHistoryV2Envelope {
 export interface FlameChargeGeneratedEvent extends RunHistoryV2Envelope {
   kind: 'flame_charge_generated';
   flame: Flame;
-  requested: number;
-  gained: number;
-  lostToCap: number;
+  sourceInstanceId: FlameInstanceId;
+  order: number;
+  factorRequested: number;
+  factorApplied: number;
+  maxCharge: number;
+  factorLostToCap: number;
+  /** Derived additive deltas retained for compatibility; never authoritative attribution. */
+  requested?: number;
+  gained?: number;
+  lostToCap?: number;
   before: number;
   after: number;
   diagnostics?: import('./types').FlameActivationDiagnostics;

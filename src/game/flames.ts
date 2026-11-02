@@ -1,7 +1,6 @@
 import { activeFace, wholeDieEffectSuppressed } from './dice';
 import { activeEncounterDice, availablePlayableDice, currentlyPlayableManualHands, lastPlayDanger } from './bosses';
 import { benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, HANDS, LOWER_HAND_IDS, rankedHands, ultimateHands, UPPER_HAND_IDS } from './hands';
-import { infernoMultiplier } from './scoring';
 import type { Board, Flame, FlameActivationDiagnostics, FlameInstance, FlameInstanceId, FlameSlotIndex, FlameSlots, GameState, HandId, Rarity, SpecialDieType, XMultFactor } from './types';
 import { formatPlayerNumber } from './copy';
 import { Decimal, type ExactScore } from './scoreMath';
@@ -27,7 +26,7 @@ const flameDefinition = (id: Flame, name: string, shortName: string, rarity: Rar
 };
 export const FLAMES: Record<Flame, FlameDefinition> = {
   ultimate: flameDefinition('ultimate', 'Ultimate', 'ULT', 'uncommon', 'Your highest level hand gains up to ×5 XMult.'),
-  minigun: flameDefinition('minigun', 'Minigun', 'MINI', 'common', 'Consecutive Upper Hands spin up to ×4 XMult.'),
+  minigun: flameDefinition('minigun', 'Minigun', 'MINI', 'common', 'Consecutive Upper Hands spin up to ×5 XMult.'),
   hailMary: flameDefinition('hailMary', 'Hail Mary', 'HAIL', 'common', 'Hands played with no Rerolls left gain up to ×5 XMult.'),
   fullOfGrace: flameDefinition('fullOfGrace', 'Full of Grace', 'GRACE', 'common', 'Last Play gains up to ×5 XMult.'),
   momentum: flameDefinition('momentum', 'Momentum', 'MOM', 'common', 'Playing a hand builds Charge.'),
@@ -93,37 +92,38 @@ export const PROGRESSIVE_FLAME_SEQUENCES = {
   topDown: { hands: ['fiveKind', 'largeStraight', 'fourKind', 'fullHouse', 'smallStraight', 'threeKind', 'twoPair', 'pair'],
     bonfireFactors: [3, 4, 5, 6, 7, 8, 10, 12] },
   countDown: { hands: ['sixes', 'fives', 'fours', 'threes', 'twos', 'ones'],
-    bonfireFactors: [1.5, 2, 2.5, 3, 3.5, 4.5] },
+    bonfireFactors: [2, 3, 4, 6, 8, 12] },
 } as const satisfies Record<'topDown' | 'countDown', { hands: readonly HandId[]; bonfireFactors: readonly number[] }>;
 export type ProgressiveSequenceFlame = keyof typeof PROGRESSIVE_FLAME_SEQUENCES;
 export const flameProgress = (investedGold: number) => Math.max(0, Math.min(100, investedGold)) / 100;
 export const FLAME_SCALING = {
   speedDemon: { fullBonus: 3, fullThroughMs: 1000, expiresAtMs: 5000 },
   sixPack: { fullBonus: 3, upperDecay: .5, exhaustionSteps: 6 },
-  minigun: { upperStep: .5, cappedStreak: 6 },
+  minigun: { upperStep: 2 / 3, cappedStreak: 6 },
   lowball: { fullBonus: 2.5 },
-  fatCat: { perMatchingDie: .3, maximumPlayedDice: 5 },
-  vineyard: { perMatchingDie: .4, maximumPlayedDice: 5 },
+  fatCat: { perMatchingDie: .4, maximumPlayedDice: 5 },
+  vineyard: { perMatchingDie: .5, maximumPlayedDice: 5 },
   missingPair: { fullBonus: 2 },
-  handFamily: { doubleDown: 5, threesCompany: 8, straightShooter: 8, boxSet: 11 },
-  potentialEnergy: { charge: 1 },
-  allHandsOnDeck: { chargePerDie: .5 },
+  oneShort: { fullBonus: 5 },
+  handFamily: { doubleDown: 6, threesCompany: 8, straightShooter: 8, boxSet: 11 },
+  potentialEnergy: { chargeFactorBonus: 1 },
+  allHandsOnDeck: { chargeFactorBonusPerDie: .2 },
   casual: { fullBonus: 3 },
   freeRealEstate: { fullBonus: 2 },
   heavyHitters: { fullBonus: 2 },
-  frankenstein: { fullBonus: 3 },
+  frankenstein: { fullBonus: 4 },
   highRoller: { fullBonus: 2 },
   cleanSweep: { fullBonus: 11 },
-  benchWarmer: { fullBonus: 4 },
+  benchWarmer: { fullBonus: 5 },
   epinephrine: { fullBonus: 6 },
-  punchCard: { fullBonus: 2 },
-  blackHole: { bonusPerMissingDie: 1 },
-  assemblyLine: { perMatchingDie: .3, maximumPlayedDice: 5 },
-  gymBros: { perMatchingDie: .3, maximumPlayedDice: 5 },
-  burnItDown: { fullCharge: 5 },
-  greaseTheEngine: { baseCost: 5, charge: 1 },
-  lightningStrike: { charge: 3 },
-  hotPotatoClock: { chargePerStreak: .5 },
+  punchCard: { fullBonus: 3 },
+  blackHole: { bonusPerMissingDie: 1.5 },
+  assemblyLine: { perMatchingDie: .5, maximumPlayedDice: 5 },
+  gymBros: { perMatchingDie: .5, maximumPlayedDice: 5 },
+  burnItDown: { factorBonusAtFullSacrifice: 3 },
+  greaseTheEngine: { baseCost: 5, factorBonus: .5 },
+  lightningStrike: { factorBonus: 2 },
+  hotPotatoClock: { factorBonusPerStreak: .2 },
   dareDevil: { bonusPerDare: 2, maximumDares: 4 },
   doubleOrNothing: { fullBonus: 8 },
   allIn: { fullBonus: 11 },
@@ -132,11 +132,12 @@ export const FLAME_SCALING = {
 } as const;
 export const standardFlameMultiplier = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
 export const targetPracticeMultiplier = (investedGold: number) => 1 + 8 * flameProgress(investedGold);
-export const momentumChargeGain = (investedGold: number) => 0.5 * flameProgress(investedGold);
-export const thirdRailChargeGain = (investedGold: number) => 0.5 * flameProgress(investedGold);
-export const jumpStartChargeGain = (investedGold: number) => 2 * flameProgress(investedGold);
+export const momentumChargeGain = (investedGold: number) => 1 + .25 * flameProgress(investedGold);
+export const thirdRailChargeGain = (investedGold: number) => 1 + .25 * flameProgress(investedGold);
+export const jumpStartChargeGain = (investedGold: number) => 1 + .5 * flameProgress(investedGold);
 export const fluxCapacitorChargeMultiplier = (investedGold: number, pulledMagneticFaces: number) =>
-  1 + Math.max(0, pulledMagneticFaces) * flameProgress(investedGold);
+  1 + 1.25 * Math.max(0, pulledMagneticFaces) * flameProgress(investedGold);
+export const powerSurgeChargeMultiplier = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
 export const handFamilyFlameMultiplier = (id: HandFamilyFlame, investedGold: number) =>
   1 + FLAME_SCALING.handFamily[id] * flameProgress(investedGold);
 export const speedDemonMultiplier = (investedGold: number, decisionMs: number) => {
@@ -167,10 +168,12 @@ export const vineyardMultiplier = (investedGold: number, matchingPlayedDice: num
   enhancementDensityMultiplier(investedGold, matchingPlayedDice, FLAME_SCALING.vineyard.perMatchingDie);
 export const missingPairMultiplier = (investedGold: number) =>
   1 + FLAME_SCALING.missingPair.fullBonus * flameProgress(investedGold);
+export const oneShortMultiplier = (investedGold: number) =>
+  1 + FLAME_SCALING.oneShort.fullBonus * flameProgress(investedGold);
 export const potentialEnergyChargeGain = (investedGold: number) =>
-  FLAME_SCALING.potentialEnergy.charge * flameProgress(investedGold);
+  1 + FLAME_SCALING.potentialEnergy.chargeFactorBonus * flameProgress(investedGold);
 export const allHandsOnDeckChargeGain = (investedGold: number, availableDiceCount: number) =>
-  FLAME_SCALING.allHandsOnDeck.chargePerDie * Math.max(0, availableDiceCount) * flameProgress(investedGold);
+  1 + FLAME_SCALING.allHandsOnDeck.chargeFactorBonusPerDie * Math.max(0, availableDiceCount) * flameProgress(investedGold);
 const fixedFlameMultiplier = (investedGold: number, fullBonus: number) => 1 + fullBonus * flameProgress(investedGold);
 export const casualMultiplier = (investedGold: number) => fixedFlameMultiplier(investedGold, FLAME_SCALING.casual.fullBonus);
 export const freeRealEstateMultiplier = (investedGold: number) => fixedFlameMultiplier(investedGold, FLAME_SCALING.freeRealEstate.fullBonus);
@@ -187,13 +190,15 @@ export const assemblyLineMultiplier = (investedGold: number, matchingPlayedDice:
   enhancementDensityMultiplier(investedGold, matchingPlayedDice, FLAME_SCALING.assemblyLine.perMatchingDie);
 export const gymBrosMultiplier = (investedGold: number, matchingPlayedDice: number) =>
   enhancementDensityMultiplier(investedGold, matchingPlayedDice, FLAME_SCALING.gymBros.perMatchingDie);
-export const burnItDownChargeGain = (investedGold: number, targetFraction: number) => Number((FLAME_SCALING.burnItDown.fullCharge
-  * Math.max(0, Math.min(1, targetFraction)) * flameProgress(investedGold)).toFixed(12));
+export const burnItDownChargeGain = (investedGold: number, targetFraction: number) => Number((1
+  + FLAME_SCALING.burnItDown.factorBonusAtFullSacrifice * Math.max(0, Math.min(1, targetFraction))
+  * flameProgress(investedGold)).toFixed(12));
 export const greaseTheEngineCost = (usesThisRound: number) => FLAME_SCALING.greaseTheEngine.baseCost * 2 ** Math.max(0, Math.floor(usesThisRound));
-export const greaseTheEngineChargeGain = (investedGold: number) => FLAME_SCALING.greaseTheEngine.charge * flameProgress(investedGold);
-export const lightningStrikeChargeGain = (investedGold: number) => FLAME_SCALING.lightningStrike.charge * flameProgress(investedGold);
-export const hotPotatoClockChargeGain = (investedGold: number, streak: number) => Number((FLAME_SCALING.hotPotatoClock.chargePerStreak
-  * Math.max(0, Math.floor(streak)) * flameProgress(investedGold)).toFixed(12));
+export const greaseTheEngineChargeGain = (investedGold: number) => 1 + FLAME_SCALING.greaseTheEngine.factorBonus * flameProgress(investedGold);
+export const lightningStrikeChargeGain = (investedGold: number) => 1 + FLAME_SCALING.lightningStrike.factorBonus * flameProgress(investedGold);
+export const hotPotatoClockChargeGain = (investedGold: number, streak: number) => Number((1
+  + FLAME_SCALING.hotPotatoClock.factorBonusPerStreak * Math.max(0, Math.floor(streak))
+  * flameProgress(investedGold)).toFixed(12));
 export const dareDevilMultiplier = (investedGold: number, dareCount: number) => Number((1 + FLAME_SCALING.dareDevil.bonusPerDare
   * Math.min(FLAME_SCALING.dareDevil.maximumDares, Math.max(0, Math.floor(dareCount)))
   * flameProgress(investedGold)).toFixed(12));
@@ -226,11 +231,11 @@ export const progressiveSequenceMultiplier = (id: ProgressiveSequenceFlame, inve
 type FlameDisplayContext = Pick<Board, 'gold' | 'lifetimeNormalShopGoldSpent'>;
 export function flameEffectText(id: Flame, investedGold: number, _board: FlameDisplayContext): string {
   switch (id) {
-    case 'momentum': return `Each Play adds +${formatPlayerNumber(momentumChargeGain(investedGold))} Charge.`;
-    case 'thirdRail': return `Each Rolled 3 adds +${formatPlayerNumber(thirdRailChargeGain(investedGold))} Charge.`;
-    case 'jumpStart': return `Each Manual Reroll adds +${formatPlayerNumber(jumpStartChargeGain(investedGold))} Charge.`;
-    case 'powerSurge': return 'Playing your highest-level Hand triples current Charge.';
-    case 'fluxCapacitor': return `A Magnetic activation multiplies Charge by 1 + (${formatPlayerNumber(flameProgress(investedGold))} × other dice affected).`;
+    case 'momentum': return `Each Play multiplies Charge by ×${formatPlayerNumber(momentumChargeGain(investedGold))}.`;
+    case 'thirdRail': return `Each Rolled 3 multiplies Charge by ×${formatPlayerNumber(thirdRailChargeGain(investedGold))}.`;
+    case 'jumpStart': return `Each rerolled die multiplies Charge by ×${formatPlayerNumber(jumpStartChargeGain(investedGold))}.`;
+    case 'powerSurge': return `Playing your highest-level Hand multiplies Charge by ×${formatPlayerNumber(powerSurgeChargeMultiplier(investedGold))}.`;
+    case 'fluxCapacitor': return `A Magnetic activation multiplies Charge by 1 + (1.25 × ${formatPlayerNumber(flameProgress(investedGold))} × other dice affected).`;
     case 'speedDemon': return `A Play within 1 second reaches ×${formatPlayerNumber(speedDemonMultiplier(investedGold, 0))} XMult; the bonus expires after 5 seconds.`;
     case 'sixPack': return `Each Round starts at ×${formatPlayerNumber(sixPackStartingMultiplier(investedGold))} XMult and loses ×${formatPlayerNumber(FLAME_SCALING.sixPack.upperDecay * flameProgress(investedGold))} after each Upper Hand.`;
     case 'minigun': return `Consecutive Upper Hands spin up from ×${formatPlayerNumber(minigunMultiplier(investedGold, 1))} to ×${formatPlayerNumber(minigunMultiplier(investedGold, 6))} XMult.`;
@@ -245,8 +250,9 @@ export function flameEffectText(id: Flame, investedGold: number, _board: FlameDi
     case 'threesCompany':
     case 'boxSet': return `The payoff reaches ×${formatPlayerNumber(handFamilyFlameMultiplier(id, investedGold))} XMult after its setup hand.`;
     case 'missingPair': return `Pair and Three of a Kind gain ×${formatPlayerNumber(missingPairMultiplier(investedGold))} XMult.`;
-    case 'potentialEnergy': return `Playing a different Hand while Ultimate is playable adds +${formatPlayerNumber(potentialEnergyChargeGain(investedGold))} Charge.`;
-    case 'allHandsOnDeck': return `Playing every available die adds ${formatPlayerNumber(FLAME_SCALING.allHandsOnDeck.chargePerDie * flameProgress(investedGold))} Charge per die.`;
+    case 'oneShort': return `Small Straight and Four of a Kind gain ×${formatPlayerNumber(oneShortMultiplier(investedGold))} XMult.`;
+    case 'potentialEnergy': return `Playing a different Hand while Ultimate is playable multiplies Charge by ×${formatPlayerNumber(potentialEnergyChargeGain(investedGold))}.`;
+    case 'allHandsOnDeck': return `Playing every available die multiplies Charge by ×${formatPlayerNumber(allHandsOnDeckChargeGain(investedGold, 5))} with five available dice.`;
     case 'casual': return `Ultimate gains ×${formatPlayerNumber(casualMultiplier(investedGold))} XMult before any Manual Reroll is used.`;
     case 'freeRealEstate': return `Free Plays gain ×${formatPlayerNumber(freeRealEstateMultiplier(investedGold))} XMult.`;
     case 'heavyHitters': return `Enhanced Played-die Pips grant ×${formatPlayerNumber(heavyHittersMultiplier(investedGold))} XMult.`;
@@ -259,9 +265,9 @@ export function flameEffectText(id: Flame, investedGold: number, _board: FlameDi
     case 'blackHole': return `The first Play gains XMult for each Roster die missing at Round start.`;
     case 'assemblyLine': return `Five Played Clockwork dice reach ×${formatPlayerNumber(assemblyLineMultiplier(investedGold, 5))} XMult.`;
     case 'gymBros': return `Five Played Workout dice reach ×${formatPlayerNumber(gymBrosMultiplier(investedGold, 5))} XMult.`;
-    case 'burnItDown': return `On Command, sacrifice your current Round Score to add up to +${formatPlayerNumber(burnItDownChargeGain(investedGold, 1))} Charge.`;
-    case 'greaseTheEngine': return `On Command, pay escalating Gold for +${formatPlayerNumber(greaseTheEngineChargeGain(investedGold))} Charge.`;
-    case 'lightningStrike': return `Predict one die's Manual Reroll for +${formatPlayerNumber(lightningStrikeChargeGain(investedGold))} Charge on a hit.`;
+    case 'burnItDown': return `On Command, sacrifice your current Round Score to multiply Charge by up to ×${formatPlayerNumber(burnItDownChargeGain(investedGold, 1))}.`;
+    case 'greaseTheEngine': return `On Command, pay escalating Gold to multiply Charge by ×${formatPlayerNumber(greaseTheEngineChargeGain(investedGold))}.`;
+    case 'lightningStrike': return `Predict one die's Manual Reroll to multiply Charge by ×${formatPlayerNumber(lightningStrikeChargeGain(investedGold))} on a hit.`;
     case 'hotPotatoClock': return 'Avoid Playing the Hot Potato die to build increasingly large Charge.';
     case 'dareDevil': return `Each Dare stores more XMult for your next Ultimate Hand, up to ×${formatPlayerNumber(dareDevilMultiplier(investedGold, 4))}.`;
     case 'doubleOrNothing': return `Wager one of your three highest-level Possible Hands, then replay it later for ×${formatPlayerNumber(doubleOrNothingMultiplier(investedGold))} XMult.`;
@@ -283,17 +289,17 @@ export interface FlameDetailsPresentation {
 export function flameDetailsPresentation(id: Flame, investedGold: number, board: Board): FlameDetailsPresentation {
   const investment = Math.max(0, Math.min(100, investedGold));
   if (isChargeFlame(id)) {
-    const currentValue = id === 'momentum' ? `+${formatPlayerNumber(momentumChargeGain(investment))} Charge per Play`
-      : id === 'thirdRail' ? `+${formatPlayerNumber(thirdRailChargeGain(investment))} Charge per Rolled 3`
-        : id === 'jumpStart' ? `+${formatPlayerNumber(jumpStartChargeGain(investment))} Charge per Manual Reroll`
-          : id === 'powerSurge' ? '×3 current Charge on highest-level Hand'
+    const currentValue = id === 'momentum' ? `×${formatPlayerNumber(momentumChargeGain(investment))} Charge per Play`
+      : id === 'thirdRail' ? `×${formatPlayerNumber(thirdRailChargeGain(investment))} Charge per Rolled 3`
+        : id === 'jumpStart' ? `×${formatPlayerNumber(jumpStartChargeGain(investment))} Charge per rerolled die`
+          : id === 'powerSurge' ? `×${formatPlayerNumber(powerSurgeChargeMultiplier(investment))} Charge on highest-level Hand`
             : id === 'fluxCapacitor' ? `×${formatPlayerNumber(fluxCapacitorChargeMultiplier(investment, 1))} Charge when 1 other die is affected`
-              : id === 'potentialEnergy' ? `+${formatPlayerNumber(potentialEnergyChargeGain(investment))} Charge per qualifying Play`
-                : id === 'allHandsOnDeck' ? `+${formatPlayerNumber(allHandsOnDeckChargeGain(investment, 1))} Charge per available die`
-                  : id === 'burnItDown' ? `up to +${formatPlayerNumber(burnItDownChargeGain(investment, 1))} Charge per sacrifice`
-                    : id === 'greaseTheEngine' ? `+${formatPlayerNumber(greaseTheEngineChargeGain(investment))} Charge per bribe`
-                      : id === 'lightningStrike' ? `+${formatPlayerNumber(lightningStrikeChargeGain(investment))} Charge on a correct prediction`
-                        : `+${formatPlayerNumber(hotPotatoClockChargeGain(investment, 1))} Charge per current avoidance streak`;
+              : id === 'potentialEnergy' ? `×${formatPlayerNumber(potentialEnergyChargeGain(investment))} Charge per qualifying Play`
+                : id === 'allHandsOnDeck' ? `×${formatPlayerNumber(allHandsOnDeckChargeGain(investment, 1))} Charge per available die`
+                  : id === 'burnItDown' ? `up to ×${formatPlayerNumber(burnItDownChargeGain(investment, 1))} Charge per sacrifice`
+                    : id === 'greaseTheEngine' ? `×${formatPlayerNumber(greaseTheEngineChargeGain(investment))} Charge per bribe`
+                      : id === 'lightningStrike' ? `×${formatPlayerNumber(lightningStrikeChargeGain(investment))} Charge on a correct prediction`
+                        : `×${formatPlayerNumber(hotPotatoClockChargeGain(investment, 1))} Charge at one avoidance`;
     return { currentLabel: 'Current Effect', currentValue,
       maxChargeContribution: maxChargeContribution(investment) };
   }
@@ -329,6 +335,7 @@ export function flameDetailsPresentation(id: Flame, investedGold: number, board:
           : id === 'fatCat' ? fatCatMultiplier(investment, FLAME_SCALING.fatCat.maximumPlayedDice)
             : id === 'vineyard' ? vineyardMultiplier(investment, FLAME_SCALING.vineyard.maximumPlayedDice)
               : id === 'missingPair' ? missingPairMultiplier(investment)
+                : id === 'oneShort' ? oneShortMultiplier(investment)
                 : id === 'casual' ? casualMultiplier(investment)
                   : id === 'freeRealEstate' ? freeRealEstateMultiplier(investment)
                     : id === 'heavyHitters' ? heavyHittersMultiplier(investment)
@@ -440,9 +447,21 @@ export const hasOwnedFlame = (state: Pick<Board, 'flameSlots'>, id: Flame) => fl
 export const isChargeFlame = (id: Flame | null | undefined): id is ChargeFlame =>
   id !== null && id !== undefined && (CHARGE_FLAME_IDS as readonly Flame[]).includes(id);
 export const hasOwnedChargeFlame = (state: Pick<Board, 'flameSlots'>) => flameInstances(state).some(flame => isChargeFlame(flame.type));
+export function calculateMaxChargeForInstances(instances: readonly Pick<FlameInstance, 'type' | 'investedGold'>[]): number {
+  const progresses = instances
+    .filter(flame => isChargeFlame(flame.type))
+    .map(flame => flameProgress(flame.investedGold));
+  const individual = progresses.reduce((sum, progress) => sum + 4 * progress, 0);
+  let pairSynergy = 0;
+  for (let left = 0; left < progresses.length; left++) {
+    for (let right = left + 1; right < progresses.length; right++) {
+      pairSynergy += 3 * progresses[left] * progresses[right];
+    }
+  }
+  return Number((1 + individual + pairSynergy).toFixed(12));
+}
 export function calculateMaxCharge(state: Pick<Board, 'flameSlots'>): number {
-  return Number(Math.max(1, flameInstances(state).reduce((sum, flame) => isChargeFlame(flame.type)
-    ? sum + maxChargeContribution(flameInvestment(flame)) : sum, 0)).toFixed(12));
+  return calculateMaxChargeForInstances(flameInstances(state));
 }
 export function recalculateMaxCharge(state: Pick<Board, 'flameSlots' | 'chargeXMult' | 'maxCharge' | 'chargeArmed'>): void {
   state.maxCharge = calculateMaxCharge(state);
@@ -497,13 +516,13 @@ export interface HandStartSnapshot {
     activeEffects: SpecialDieType[]; enhancementCount: number }[];
 }
 
-export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'engulfmentLevel' | 'gold' | 'manualRerollsRemaining' | 'manualRerollsUsedThisRound' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'progressiveFlames' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackUpperHandsPlayed' | 'minigunUpperStreak' | 'flameSlots' | 'dice' | 'dieRoundState' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget' | 'roundPlayCount' | 'roundStartLives' | 'roundStartRosterSize' | 'precedingShopDiePurchase' | 'interactiveFlames'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null, playSource: import('./types').HandPlaySource = 'manual', wager: { allIn?: boolean; doubleOrNothingRedemption?: boolean } = {}): HandStartSnapshot {
+export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'infernoMultiplier' | 'gold' | 'manualRerollsRemaining' | 'manualRerollsUsedThisRound' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'progressiveFlames' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackUpperHandsPlayed' | 'minigunUpperStreak' | 'flameSlots' | 'dice' | 'dieRoundState' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget' | 'roundPlayCount' | 'roundStartLives' | 'roundStartRosterSize' | 'precedingShopDiePurchase' | 'interactiveFlames'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null, playSource: import('./types').HandPlaySource = 'manual', wager: { allIn?: boolean; doubleOrNothingRedemption?: boolean } = {}): HandStartSnapshot {
   const ultimate = ultimateHands(state.handLevels);
   const availableDice = availablePlayableDice(state);
   return {
     score: state.score,
     target: state.target,
-    infernoMultiplier: infernoMultiplier(state.engulfmentLevel),
+    infernoMultiplier: state.infernoMultiplier,
     gold: state.gold,
     manualRerollsRemaining: state.manualRerollsRemaining,
     manualRerollsUsed: state.manualRerollsUsedThisRound,
@@ -647,6 +666,7 @@ function factorValue(id: Flame, investedGold: number, snapshot: HandStartSnapsho
     case 'threesCompany':
     case 'boxSet': return handFamilyFlameMultiplier(id, investedGold);
     case 'missingPair': return missingPairMultiplier(investedGold);
+    case 'oneShort': return oneShortMultiplier(investedGold);
     case 'highRoller': return highRollerMultiplier(investedGold);
     case 'casual': return casualMultiplier(investedGold);
     case 'freeRealEstate': return freeRealEstateMultiplier(investedGold);

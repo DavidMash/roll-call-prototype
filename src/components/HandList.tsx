@@ -1,12 +1,13 @@
 import { Badge, Button, Text, Tooltip } from '@mantine/core';
-import { benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, handStats, HANDS, relativeHandStrengthTiers, ultimateHands } from '../game/hands';
-import { doubleOrNothingEligibleHands, flameByType, handFamilyFlameTargets, hasOwnedFlame, PROGRESSIVE_FLAME_SEQUENCES } from '../game/flames';
+import { encounterHandIds, handIsStructurallyImpossible, handStats, HANDS, relativeHandStrengthTiers } from '../game/hands';
+import { doubleOrNothingEligibleHands, flameByType } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
 import { EMPTY_TEXT, formatExactScore, formatPlayerNumber, formatScoreEquation } from '../game/copy';
 import type { ExactScore } from '../game/scoreMath';
 import { boardHandAvailable, legalHandCombinations } from '../game/selection';
 import { activeEncounterDice } from '../game/bosses';
+import { scorecardHandAnnotations } from '../game/scorecardAnnotations';
 
 const MOBILE_HAND_NAMES: Partial<Record<HandId, string>> = {
   twoPair: 'Two Pair',
@@ -37,11 +38,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
   title: string; hands: HandId[]; board: Board; selection: Selection; busy: boolean; canSubmit: boolean; submitPreview: HandSubmitPreview | null;
   onSelect: (hand: HandId) => void; onSubmit: () => void; onAcceptDoubleOrNothing: () => void;
 }) {
-  const ultimate = new Set(ultimateHands(board.handLevels));
-  const ownsUltimate = hasOwnedFlame(board, 'ultimate');
-  const ownsBenchWarmer = hasOwnedFlame(board, 'benchWarmer');
-  const benchWarmer = benchWarmerHand(board.handLevels);
-  const flameTargets = new Set(handFamilyFlameTargets(board));
+  const annotations = scorecardHandAnnotations(board);
   const doubleOrNothing = flameByType(board, 'doubleOrNothing');
   const doubleOrNothingTargets = new Set(doubleOrNothing && doubleOrNothing.investedGold > 0
     && board.scoreWagers.doubleOrNothing === null ? doubleOrNothingEligibleHands(board) : []);
@@ -62,15 +59,14 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
         const impossible = handIsStructurallyImpossible(hand, activeEncounterDice(board).length);
         const playable = boardHandAvailable(board, hand);
         const selected = selection.hand === hand;
-        const targeted = board.targetPracticeHand === hand || flameTargets.has(hand);
-        const hotTarget = board.hotStreakGoal === hand;
-        const topDownTarget = hasOwnedFlame(board, 'topDown')
-          && PROGRESSIVE_FLAME_SEQUENCES.topDown.hands[board.progressiveFlames.topDown] === hand;
-        const countDownTarget = hasOwnedFlame(board, 'countDown')
-          && PROGRESSIVE_FLAME_SEQUENCES.countDown.hands[board.progressiveFlames.countDown] === hand;
-        const isUltimate = ownsUltimate && ultimate.has(hand);
+        const handAnnotations = annotations[hand] ?? [];
+        const targeted = handAnnotations.some(annotation => annotation.kind === 'target');
+        const inlineAnnotations = handAnnotations.filter(annotation =>
+          annotation.kind === 'target' || annotation.kind === 'next'
+          || annotation.kind === 'setup' || annotation.kind === 'payoff');
+        const isUltimate = handAnnotations.some(annotation => annotation.kind === 'ultimate');
         const isDoubleOrNothingTarget = doubleOrNothingTargets.has(hand);
-        const isBenchWarmer = ownsBenchWarmer && benchWarmer === hand;
+        const isBenchWarmer = handAnnotations.some(annotation => annotation.kind === 'benchWarmer');
         const magicianCalled = !board.bossSilenced && board.boss?.type === 'magician' && board.boss.calledHands.includes(hand);
         const magicianCompleted = magicianCalled && board.boss?.type === 'magician' && board.boss.completedHands.includes(hand);
         const score = board.scoreByHand[hand];
@@ -85,14 +81,14 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
           className={`scorecard-row ${state} strength-${strengthTier} ${targeted ? 'targeted' : ''} ${board.boss?.type === 'caller' && board.boss.calledHand === hand ? 'caller-called' : ''} ${board.boss?.type === 'fly' && board.boss.flyHand === hand ? 'fly-row' : ''}`} data-testid={`scorecard-row-${hand}`} data-state={state} data-strength-tier={strengthTier}
           disabled={busy || impossible || !playable} onClick={() => onSelect(hand)} aria-pressed={selected}
           aria-keyshortcuts={selected && canSubmit ? 'Enter' : undefined}
-          aria-label={`${definition.name} · Lv. ${formatPlayerNumber(stats.level)} · ×${formatPlayerNumber(stats.handMultiplier)} Mult${isUltimate ? ' · Ultimate Hand' : ''}${isBenchWarmer ? ' · Bench Warmer Hand' : ''}${topDownTarget ? ' · Top Down next Hand' : ''}${countDownTarget ? ' · Count Down next Hand' : ''}${magicianCalled ? ` · Magician call ${magicianCompleted ? 'completed' : 'pending'}` : ''} · ${scoreLabel}${impossible ? ' · Impossible' : ''}${used ? ' · Used' : ''}${neglected ? ' · Neglected' : ''}`}>
+          aria-label={`${definition.name} · Lv. ${formatPlayerNumber(stats.level)} · ×${formatPlayerNumber(stats.handMultiplier)} Mult${handAnnotations.map(annotation => ` · ${annotation.source} ${annotation.label}`).join('')}${magicianCalled ? ` · Magician call ${magicianCompleted ? 'completed' : 'pending'}` : ''} · ${scoreLabel}${impossible ? ' · Impossible' : ''}${used ? ' · Used' : ''}${neglected ? ' · Neglected' : ''}`}>
           <span className="scorecard-row-copy">
             <span className="scorecard-hand-name" title={definition.name}>
               <span className="scorecard-name-line">
-                {targeted && <span className="target-marker" title={board.targetPracticeHand === hand ? 'Target Practice target' : 'Flame target'}><span className="wide-label">◎ TARGET </span><span className="compact-label">◎ </span></span>}
-                {hotTarget && <span className="target-marker" title="Hot Streak goal"><span className="wide-label">🔥 NEXT </span><span className="compact-label">🔥 </span></span>}
-                {topDownTarget && <span className="target-marker" title="Top Down next Hand"><span className="wide-label">↓ TOP </span><span className="compact-label">↓ </span></span>}
-                {countDownTarget && <span className="target-marker" title="Count Down next Hand"><span className="wide-label">↓ COUNT </span><span className="compact-label">↓ </span></span>}
+                {inlineAnnotations.map(annotation => <span className="target-marker"
+                  key={`${annotation.kind}:${annotation.source}`} title={`${annotation.source}: ${annotation.label}`}>
+                  <span className="wide-label">{annotation.label} </span><span className="compact-label">{annotation.label.slice(0, 1)} </span>
+                </span>)}
                 {board.boss?.type === 'fly' && board.boss.flyHand === hand && <span className="fly-marker" title="The Fly is here"><span className="wide-label">● FLY </span><span className="compact-label">● </span></span>}
                 <span className="hand-name-full">{definition.name}</span><span className="hand-name-compact">{MOBILE_HAND_NAMES[hand] ?? definition.name}</span>
               </span>

@@ -6,7 +6,6 @@ import { RUN_HISTORY_V2_RULESET, RUN_HISTORY_V2_SCHEMA_VERSION } from './runHist
 import { renderGroupedRunHistoryV2 } from './runHistoryV2Renderer';
 import { summarizeRunHistoryV2, type OfferImpressions } from './runHistoryV2Summary';
 import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
-import { infernoMultiplier } from './scoring';
 import type { DiceRarity, GameState } from './types';
 import { toExactJsonValue } from './scoreMath';
 
@@ -134,7 +133,8 @@ export function exportRunHistoryV2(state: GameState) {
     canonicalState: {
       phase: state.phase, round: state.round, attempt: state.roundAttemptNumber, score: state.score,
       target: state.target, gold: state.gold, lives: state.lives, currentNodeId: state.currentNodeId,
-      infernoLevel: state.engulfmentLevel, infernoMultiplier: infernoMultiplier(state.engulfmentLevel),
+      engulfmentCount: state.engulfmentLevel, infernoLevel: state.engulfmentLevel,
+      infernoMultiplier: state.infernoMultiplier,
       shopVisit: state.shop ? { id: state.shop.visitId } : null,
       build: summary.canonical, consumedHands: [...state.consumed], specialOfferEffects: structuredClone(state.specialOfferEffects),
     },

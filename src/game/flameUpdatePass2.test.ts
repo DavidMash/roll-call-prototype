@@ -58,7 +58,7 @@ describe('Pass 2 Charge Flames', () => {
     expect(FLAME_IDS.filter(flame => (PASS_2_FLAMES as readonly string[]).includes(flame))).toEqual(PASS_2_FLAMES);
   });
   it('Potential Energy uses canonical Ultimate playability and manual alternative Plays only', () => {
-    expect(potentialEnergyChargeGain(100)).toBe(1);
+    expect(potentialEnergyChargeGain(100)).toBe(2);
     const qualifying = game([5, 5, 5, 5, 5]);
     own(qualifying, 'potentialEnergy');
     const result = dispatch(qualifying, { type: 'PLAY', hand: 'fives', dieIds: [0] }, constant()).state;
@@ -101,11 +101,11 @@ describe('Pass 2 Charge Flames', () => {
   });
 
   it('All Hands on Deck scales with the canonical currently available dice', () => {
-    expect([1, 2, 3, 4, 5].map(count => allHandsOnDeckChargeGain(100, count))).toEqual([.5, 1, 1.5, 2, 2.5]);
+    expect([1, 2, 3, 4, 5].map(count => allHandsOnDeckChargeGain(100, count))).toEqual([1.2, 1.4, 1.6, 1.8, 2]);
     const full = game([1, 2, 3, 4, 5]);
     own(full, 'allHandsOnDeck');
     new Resolver(full, constant()).play('largeStraight', [0, 1, 2, 3, 4]);
-    expect(full.chargeXMult).toBe(3.5);
+    expect(full.chargeXMult).toBe(2);
 
     const reduced = game([2, 2, 2, 4, 5]);
     reduced.diceInventory.roster[3] = null;
@@ -113,33 +113,33 @@ describe('Pass 2 Charge Flames', () => {
     syncActiveDiceProjection(reduced);
     own(reduced, 'allHandsOnDeck');
     new Resolver(reduced, constant()).play('threeKind', [0, 1, 2]);
-    expect(reduced.chargeXMult).toBe(2.5);
+    expect(reduced.chargeXMult).toBe(1.6);
 
     const warden = game([2, 2, 2, 2, 2]);
     own(warden, 'allHandsOnDeck');
     warden.boss = { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0, 1],
       startingDieId: 0, nextUnlockTarget: null, unlockCosts: [], unlockTargets: [], pendingReinforcements: 0 };
     new Resolver(warden, constant()).play('pair', [0, 1]);
-    expect(warden.chargeXMult).toBe(2);
+    expect(warden.chargeXMult).toBe(1.4);
 
     const magician = game([2, 2, 2, 2, 2]);
     own(magician, 'allHandsOnDeck');
     magician.boss = { type: 'magician', missingDieId: 4, calledHands: [], completedHands: [], returned: false };
     new Resolver(magician, constant()).play('fourKind', [0, 1, 2, 3]);
-    expect(magician.chargeXMult).toBe(3);
+    expect(magician.chargeXMult).toBe(1.8);
 
     const one = game([1, 2, 3, 4, 5]);
     for (let index = 1; index < 5; index++) one.diceInventory.roster[index] = null;
     syncActiveDiceProjection(one);
     own(one, 'allHandsOnDeck');
     new Resolver(one, constant()).play('ones', [0]);
-    expect(one.chargeXMult).toBe(1.5);
+    expect(one.chargeXMult).toBe(1.2);
 
     const free = game([1, 2, 3, 4, 5]);
     for (let index = 1; index < 5; index++) free.diceInventory.roster[index as 1 | 2 | 3 | 4] = null;
     syncActiveDiceProjection(free); own(free, 'allHandsOnDeck');
     new Resolver(free, constant()).play('ones', [0], 'jumpingBean');
-    expect(free.chargeXMult).toBe(1.5);
+    expect(free.chargeXMult).toBe(1.2);
   });
 
   it('does not let an unplayed Hitchhiker satisfy All Hands on Deck', () => {
@@ -250,7 +250,7 @@ describe('resolved Pips and enhancement composition Flames', () => {
   });
 
   it('Frankenstein counts unique scoring-die components, not levels or Score occurrences', () => {
-    expect(frankensteinMultiplier(100)).toBe(4);
+    expect(frankensteinMultiplier(100)).toBe(5);
     const exact = game([1, 2, 3, 4, 5]);
     effects(exact, 0, [['bonus', 9], ['golden', 7]]); own(exact, 'frankenstein');
     new Resolver(exact, constant()).play('ones', [0]);
@@ -259,14 +259,14 @@ describe('resolved Pips and enhancement composition Flames', () => {
     const over = game([1, 2, 3, 4, 5]);
     effects(over, 0, [['basic', 1], ['bonus', 1], ['doubleTime', 8]]); own(over, 'frankenstein');
     new Resolver(over, constant()).play('ones', [0]);
-    expect(flameFactor(over, 'frankenstein')).toBe(4);
+    expect(flameFactor(over, 'frankenstein')).toBe(5);
     expect(over.stats.handScores.at(-1)?.xMultFactors.find(item => item.source === 'frankenstein')?.diagnostics)
       .toMatchObject({ scoringDiceEnhancementCount: 3, playedDiceCount: 1, enhancementThreshold: 2 });
 
     const hitch = game([1, 2, 3, 4, 5]);
     effects(hitch, 1, [['hitchhiker', 1], ['bonus', 1], ['golden', 1]]); own(hitch, 'frankenstein');
     new Resolver(hitch, constant()).play('ones', [0]);
-    expect(flameFactor(hitch, 'frankenstein')).toBe(4);
+    expect(flameFactor(hitch, 'frankenstein')).toBe(5);
   });
 });
 
@@ -320,7 +320,7 @@ describe('Clean Sweep and Bench Warmer', () => {
   });
 
   it('Bench Warmer uses inverse deterministic ranking, updates, activates, and records targets', () => {
-    expect(benchWarmerMultiplier(100)).toBe(5);
+    expect(benchWarmerMultiplier(100)).toBe(6);
     const levels = initialHandLevels();
     expect(benchWarmerHand(levels)).toBe('ones');
     levels.ones = 2;
@@ -330,7 +330,7 @@ describe('Clean Sweep and Bench Warmer', () => {
     const resolver = new Resolver(state, constant());
     resolver.recordBenchWarmerTarget('acquired', true);
     resolver.play('ones', [0]);
-    expect(flameFactor(state, 'benchWarmer')).toBe(5);
+    expect(flameFactor(state, 'benchWarmer')).toBe(6);
     state.handLevels.ones = 2;
     resolver.recordBenchWarmerTarget('training');
     expect(state.historyV2.filter(event => event.kind === 'bench_warmer_target_changed').at(-1))
@@ -363,13 +363,13 @@ describe('Round-start and preceding-Shop snapshots', () => {
   });
 
   it('Punch Card snapshots a binary die purchase and consumes on the first Play', () => {
-    expect(punchCardMultiplier(100)).toBe(3);
+    expect(punchCardMultiplier(100)).toBe(4);
     const state = game(); own(state, 'punchCard');
     state.phase = 'shop'; state.shop = { stage: 'shop', offers: [], offerRerolls: 0, lifeRestores: 0,
       diePurchased: true };
     new Resolver(state, constant()).startRound(); state.target = 1_000_000n; state.dice[0].value = 1;
     new Resolver(state, constant()).play('ones', [0]);
-    expect(flameFactor(state, 'punchCard')).toBe(3);
+    expect(flameFactor(state, 'punchCard')).toBe(4);
     state.dice[1].value = 2;
     new Resolver(state, constant()).play('twos', [1], 'jumpingBean');
     expect(flameFactor(state, 'punchCard')).toBeUndefined();
@@ -394,7 +394,7 @@ describe('Round-start and preceding-Shop snapshots', () => {
     expect(state.precedingShopDiePurchase).toBe(true);
   });
 
-  it.each([[5, 1], [4, 2], [3, 3], [2, 4], [1, 5]] as const)(
+  it.each([[5, 1], [4, 2.5], [3, 4], [2, 5.5], [1, 7]] as const)(
     'Black Hole snapshots roster size %i for factor ×%i', (size, expected) => {
       expect(blackHoleMultiplier(100, 5 - size)).toBe(expected);
       const state = game();
@@ -425,7 +425,7 @@ describe('new density Flames and offer prerequisites', () => {
     ['assemblyLine', 'clockwork', assemblyLineMultiplier],
     ['gymBros', 'workout', gymBrosMultiplier],
   ] as const)('%s scales from one through five matching Played dice', (flame, effect, multiplier) => {
-    expect([1, 2, 3, 4, 5].map(count => multiplier(100, count))).toEqual([1.3, 1.6, 1.9, 2.2, 2.5]);
+    expect([1, 2, 3, 4, 5].map(count => multiplier(100, count))).toEqual([1.5, 2, 2.5, 3, 3.5]);
     for (let count = 1; count <= 5; count++) {
       const state = game([1, 1, 1, 1, 1]); own(state, flame);
       for (let index = 0; index < count; index++) effects(state, index, [[effect, index + 1]]);
@@ -451,7 +451,7 @@ describe('new density Flames and offer prerequisites', () => {
     effects(state, 1, [['clockwork', 1], ['hitchhiker', 1]]);
     own(state, 'assemblyLine');
     new Resolver(state, constant()).play('ones', [0]);
-    expect(flameFactor(state, 'assemblyLine')).toBe(1.3);
+    expect(flameFactor(state, 'assemblyLine')).toBe(1.5);
 
     const suppressed = game([1, 1, 1, 1, 1]);
     effects(suppressed, 0, [['workout', 5]]); own(suppressed, 'gymBros');

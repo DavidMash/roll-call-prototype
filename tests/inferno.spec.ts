@@ -22,8 +22,11 @@ function infernoState(seed: string, success: boolean): GameState {
     evaluation.feedbackMessageId = null;
     evaluation.flamesSnuffed = [structuredClone(evaluation.flames[0].asset)];
     evaluation.flamesPreserved = [];
+    evaluation.selectedFlameInstanceIds = [evaluation.flames[0].asset.instanceId];
     evaluation.selectedEffectiveValue = 25;
+    evaluation.earnedInfernoFactor = 25;
     evaluation.consumedFinalFlame = true;
+    evaluation.engulfmentCountAfter = 1;
     evaluation.infernoLevelAfter = 1;
     evaluation.infernoMultiplierAfter = 25n;
   } else {
@@ -51,7 +54,7 @@ for (const speed of ['normal', 'fast', 'instant'] as const) {
     const duration = infernoEvaluationDuration(state.infernoEvaluation!.effectiveValue);
     await expect(page.getByTestId('inferno-evaluation')).toBeVisible();
     await expect(page.getByTestId('inferno-meter-fill')).toHaveAttribute('data-start-percent', '41');
-    await expect(page.getByTestId('inferno-meter-fill')).toHaveAttribute('data-end-percent', '4');
+    await expect(page.getByTestId('inferno-meter-fill')).toHaveAttribute('data-end-percent', '6.666666666666667');
     await page.clock.runFor(Math.floor(duration / 2));
     await expect(page.getByTestId('inferno-feedback')).toHaveCount(0);
     await page.clock.runFor(Math.ceil(duration / 2) + REVEAL_PAUSE_MS);
@@ -62,7 +65,7 @@ for (const speed of ['normal', 'fast', 'instant'] as const) {
     await expect(feedback).toBeVisible();
     await feedback.getByRole('button', { name: 'CONTINUE', exact: true }).click();
     await expect(feedback).toHaveCount(0);
-    expect((await storedState(page)).infernoProgress.previousReadiness).toBe(.04);
+    expect((await storedState(page)).infernoProgress.previousReadiness).toBeCloseTo(1 / 15);
   });
 
   test(`ready Inferno waits for an explicit decision at ${speed}`, async ({ page }) => {
@@ -81,12 +84,14 @@ for (const speed of ['normal', 'fast', 'instant'] as const) {
     await page.clock.runFor(Math.ceil(duration / 2) + REVEAL_PAUSE_MS);
     const ready = page.getByTestId('inferno-ready');
     await expect(ready).toBeVisible();
-    await expect(ready.getByRole('heading', { name: 'INFERNO I IS READY', exact: true })).toBeVisible();
-    await expect(ready).toContainText('Inferno ×1 → ×25');
-    await expect(ready.getByText('Vineyard', { exact: true })).toBeVisible();
+    await expect(ready.getByRole('heading', { name: 'CHOOSE YOUR OFFERING', exact: true })).toBeVisible();
+    await expect(ready).toContainText('Selected joint power: ×25 / ×15');
+    await expect(ready).toContainText('Earned Inferno factor ×25 · Cumulative ×1 → ×25');
+    await expect(ready.locator('[data-testid^="offered-flame-"]')).toContainText('Vineyard');
     await expect(ready.getByText(/EMBER · SLOT 1 · 0G \/ 100G/)).toBeVisible();
+    await expect(ready.getByText('Individual recent power ×1', { exact: true })).toBeVisible();
     await expect(ready).toContainText('Successful Engulfment: +25T');
-    await expect(ready.getByRole('button', { name: 'ENGULF NOW', exact: true })).toBeVisible();
+    await expect(ready.getByRole('button', { name: 'ENGULF SELECTED FLAMES', exact: true })).toBeVisible();
     await expect(ready.getByRole('button', { name: 'NOT YET', exact: true })).toBeVisible();
     const before = await storedState(page);
     expect(before.engulfmentLevel).toBe(0);
@@ -111,10 +116,12 @@ test('ENGULF NOW resolves the exact displayed offering and resets the persistent
   await enterRun(page);
   await page.clock.runFor(infernoEvaluationDuration(25) + REVEAL_PAUSE_MS);
   const ready = page.getByTestId('inferno-ready');
-  await ready.getByRole('button', { name: 'ENGULF NOW', exact: true }).click();
+  await ready.getByRole('button', { name: 'ENGULF SELECTED FLAMES', exact: true }).click();
   const resolved = page.getByTestId('engulfment-success');
   await expect(resolved).toBeVisible();
   await expect(resolved).toContainText('Vineyard · SNUFFED');
+  await expect(resolved).toContainText('Selected power ×25 became ×25 Inferno');
+  await expect(resolved).toContainText('×25');
   await expect(resolved).toContainText('+25T');
   await expect.poll(async () => (await storedState(page)).engulfmentLevel).toBe(1);
   const stored = await storedState(page);

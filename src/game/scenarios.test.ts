@@ -90,10 +90,14 @@ describe('Scenario progression and completion', () => {
     const state = newRun('scenario-completion', constant, { scenario: scenarioById('short-circuit')! }).state;
     const evaluation = createInfernoEvaluation(state)!;
     evaluation.success = true;
-    evaluation.flamesSnuffed = [];
+    evaluation.flamesSnuffed = evaluation.flames.map(item => item.asset);
     evaluation.flamesPreserved = [];
+    evaluation.selectedFlameInstanceIds = evaluation.flamesSnuffed.map(asset => asset.instanceId);
+    evaluation.selectedEffectiveValue = 15;
+    evaluation.earnedInfernoFactor = 15;
+    evaluation.engulfmentCountAfter = 1;
     evaluation.infernoLevelAfter = 1;
-    evaluation.infernoMultiplierAfter = 25n;
+    evaluation.infernoMultiplierAfter = 15n;
     state.infernoEvaluation = evaluation;
     state.phase = 'inferno';
     const resolver = new Resolver(state, constant);

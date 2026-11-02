@@ -1,4 +1,4 @@
-import { Badge, Button, Group, Paper, Stack, Text, Title } from '@mantine/core';
+import { Badge, Button, Group, Paper, Stack, Text, Title, UnstyledButton } from '@mantine/core';
 import { useEffect, useMemo, useState } from 'react';
 import { engulfmentAnimationProfile, engulfmentAssetKey, infernoEvaluationDuration, infernoMeterTransition, infernoRoman } from '../game/engulfment';
 import { formatExactScore, formatPlayerNumber } from '../game/copy';
@@ -54,19 +54,27 @@ export function InfernoEvaluationScreen({ board, submit }: {
     className="inferno-evaluation-screen inferno-ready" data-testid="inferno-ready">
     <div>
       <Text fw={950} tt="uppercase" lts=".18em" c="orange">ENGULFMENT AVAILABLE</Text>
-      <Title order={1}>INFERNO {infernoRoman(evaluation.infernoLevelAfter)} IS READY</Title>
+      <Title order={1}>CHOOSE YOUR OFFERING</Title>
     </div>
-    <Text className="inferno-ready-transition">
-      Inferno ×{formatExactScore(evaluation.infernoMultiplierBefore)} → ×{formatExactScore(evaluation.infernoMultiplierAfter)}
-    </Text>
     <Paper className="inferno-ready-consequences" p="md" withBorder>
-      <Text size="xs" fw={900} tt="uppercase" c="red">Flames that will be snuffed</Text>
-      <div className="offered-flames" aria-label="Offered Flames">{evaluation.flamesSnuffed.map(asset => <div
-        className="offered-flame" key={engulfmentAssetKey(asset)} data-testid={`offered-flame-${asset.instanceId}`}>
-        <Text fw={900}>{FLAMES[asset.flame].name}</Text>
-        <Text size="xs" c="dimmed">{offeredFlameStatus(board, asset)}</Text>
-      </div>)}</div>
+      <Text size="xs" fw={900} tt="uppercase" c="red">Select Flames to snuff</Text>
+      <Text size="xs" c="dimmed" mb="sm">Individual recent power is diagnostic. Selected power is recalculated jointly and is not the sum of these values.</Text>
+      <div className="offered-flames" aria-label="Selectable Flames">{evaluation.flames.map(item => {
+        const asset = item.asset;
+        const selected = evaluation.selectedFlameInstanceIds.includes(asset.instanceId);
+        return <UnstyledButton className={`offered-flame ${selected ? 'is-selected' : ''}`}
+          key={engulfmentAssetKey(asset)} data-testid={`offered-flame-${asset.instanceId}`}
+          aria-pressed={selected} onClick={() => submit({ type: 'TOGGLE_ENGULFMENT_FLAME', flameInstanceId: asset.instanceId })}>
+          <Text fw={900}>{selected ? '✓ ' : ''}{FLAMES[asset.flame].name}</Text>
+          <Text size="xs" c="dimmed">{offeredFlameStatus(board, asset)}</Text>
+          <Text size="xs" fw={850} c="orange">Individual recent power ×{formatPlayerNumber(item.hiddenStrength)}</Text>
+        </UnstyledButton>;
+      })}</div>
       <Stack gap={3} mt="md">
+        <Text fw={950} data-testid="selected-effective-power">Selected joint power: ×{formatPlayerNumber(evaluation.selectedEffectiveValue)} / ×{formatPlayerNumber(evaluation.threshold)}</Text>
+        <Text className="inferno-reward-preview">
+          Earned Inferno factor ×{formatPlayerNumber(evaluation.earnedInfernoFactor)} · Cumulative ×{formatExactScore(evaluation.infernoMultiplierBefore)} → ×{formatExactScore(evaluation.infernoMultiplierAfter)}
+        </Text>
         <Text fw={800}>Upper hand levels unify → Lv.{formatPlayerNumber(evaluation.upper.unifiedLevel)}</Text>
         <Text fw={800}>Lower hand levels unify → Lv.{formatPlayerNumber(evaluation.lower.unifiedLevel)}</Text>
         <Text size="sm" c="orange" fw={900} mt={5}>Successful Engulfment: <CurrencyAmount currency="temper" value={25} sign="+" /></Text>
@@ -74,7 +82,8 @@ export function InfernoEvaluationScreen({ board, submit }: {
       </Stack>
     </Paper>
     <Group className="inferno-ready-actions" justify="center">
-      <Button size="md" color="red" onClick={() => submit({ type: 'ENGULF_NOW' })}>ENGULF NOW</Button>
+      <Button size="md" color="red" disabled={evaluation.selectedEffectiveValue < evaluation.threshold}
+        onClick={() => submit({ type: 'ENGULF_NOW' })}>ENGULF SELECTED FLAMES</Button>
       <Button size="md" variant="default" onClick={() => submit({ type: 'NOT_YET' })}>NOT YET</Button>
     </Group>
   </Stack>;
@@ -83,6 +92,7 @@ export function InfernoEvaluationScreen({ board, submit }: {
     className="inferno-evaluation-screen engulfment-result-success" data-testid="engulfment-success">
     <Text fw={950} tt="uppercase" lts=".18em">ENGULFMENT</Text>
     <Title order={1}>INFERNO {infernoRoman(evaluation.infernoLevelAfter)}</Title>
+    <Text fw={850}>Selected power ×{formatPlayerNumber(evaluation.selectedEffectiveValue)} became ×{formatPlayerNumber(evaluation.earnedInfernoFactor)} Inferno</Text>
     <Text className="engulfment-new-multiplier">×{formatExactScore(evaluation.infernoMultiplierAfter)}</Text>
     <div className="snuffed-flames" aria-label="Snuffed Flames">{evaluation.flamesSnuffed.map(asset => <Badge
       className="snuffed-flame" key={engulfmentAssetKey(asset)} color="dark" variant="filled">

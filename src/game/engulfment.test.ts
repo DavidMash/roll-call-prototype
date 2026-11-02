@@ -55,8 +55,10 @@ describe('Inferno evaluation and consumption', () => {
     game.chargeAttribution[middle.instanceId] = 2;
     const evaluation = createInfernoEvaluation(game)!;
     evaluation.success = true; evaluation.flamesSnuffed = [ownedEngulfmentAssets(game)[1]];
+    evaluation.selectedFlameInstanceIds = [middle.instanceId];
+    evaluation.selectedEffectiveValue = 15; evaluation.earnedInfernoFactor = 15;
     evaluation.flamesPreserved = [ownedEngulfmentAssets(game)[0], ownedEngulfmentAssets(game)[2]];
-    evaluation.infernoLevelAfter = 1; evaluation.infernoMultiplierAfter = 25n;
+    evaluation.engulfmentCountAfter = 1; evaluation.infernoLevelAfter = 1; evaluation.infernoMultiplierAfter = 15n;
     game.infernoEvaluation = evaluation; game.phase = 'inferno';
     new Resolver(game, constant).engulfNow();
     expect(game.flameSlots.map(flame => flame?.instanceId ?? null)).toEqual([first.instanceId, null, null, null, last.instanceId]);

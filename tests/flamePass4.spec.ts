@@ -17,8 +17,8 @@ test('Top Down and Count Down show compact, readable progression at mobile width
 
   await expect(page.getByTestId('topDown-progress')).toContainText('Next: Full House · 3/8');
   await expect(page.getByTestId('countDown-progress')).toContainText('Next: Threes · 3/6');
-  await expect(page.getByRole('button', { name: /Full House.*Top Down next Hand/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Threes.*Count Down next Hand/ })).toBeVisible();
+  await expect(page.getByTestId('scorecard-row-fullHouse')).toHaveAccessibleName(/Top Down NEXT/);
+  await expect(page.getByTestId('scorecard-row-threes')).toHaveAccessibleName(/Count Down NEXT/);
 
   await page.getByTestId('active-flame-1').click();
   await expect(page.getByTestId('flame-details-modal')).toContainText('Next: Full House · 3/8 · ×6');

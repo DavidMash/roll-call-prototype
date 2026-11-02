@@ -40,7 +40,9 @@ describe('Minigun consecutive Upper streak', () => {
     ownFlame(state, 'minigun');
     const resolver = new Resolver(state, constant());
     for (let count = 0; count < 7; count++) resolver.play('ones', [0], 'jumpingBean');
-    expect(state.stats.handScores.map(score => score.xMult)).toEqual([1.5, 2, 2.5, 3, 3.5, 4, 4]);
+    expect(state.stats.handScores.map(score => score.xMult)).toEqual([
+      1.666666666667, 2.333333333333, 3, 3.666666666667, 4.333333333333, 5, 5,
+    ]);
     expect(state.minigunUpperStreak).toBe(6);
   });
 
@@ -108,8 +110,8 @@ describe('Played-dice Flame predicates', () => {
   });
 
   it.each([
-    ['fatCat', 'golden', [1.3, 1.6, 1.9, 2.2, 2.5]],
-    ['vineyard', 'vintage', [1.4, 1.8, 2.2, 2.6, 3]],
+    ['fatCat', 'golden', [1.4, 1.8, 2.2, 2.6, 3]],
+    ['vineyard', 'vintage', [1.5, 2, 2.5, 3, 3.5]],
   ] as const)('%s scales with 1–5 matching Played dice', (flame, effect, expected) => {
     for (let count = 1; count <= 5; count++) {
       const state = game([1, 1, 1, 1, 1]);
@@ -135,7 +137,7 @@ describe('Played-dice Flame predicates', () => {
     ownFlame(state, 'fatCat');
     snapshot = captureHandStart(state, 'ones', [0]);
     expect(handXMultContributions(snapshot, 'ones', 1, [0, 1])
-      .find(item => item.source === 'fatCat')?.value).toBe(1.3);
+      .find(item => item.source === 'fatCat')?.value).toBe(1.4);
 
     activeFace(rosterDice(state)[0]).bossMutation = { kind: 'infected' };
     snapshot = captureHandStart(state, 'ones', [0]);
@@ -150,7 +152,7 @@ describe('Played-dice Flame predicates', () => {
     ownFlame(state, 'vineyard');
     let snapshot = captureHandStart(state, 'ones', [0]);
     expect(handXMultContributions(snapshot, 'ones', 1, [0, 1])
-      .find(item => item.source === 'vineyard')?.value).toBe(1.4);
+      .find(item => item.source === 'vineyard')?.value).toBe(1.5);
     activeFace(rosterDice(state)[0]).bossMutation = { kind: 'infected' };
     snapshot = captureHandStart(state, 'ones', [0]);
     expect(handXMultContributions(snapshot, 'ones', 1, [0, 1]).some(item => item.source === 'vineyard')).toBe(false);

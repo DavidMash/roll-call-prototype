@@ -9,6 +9,7 @@ import { SPECIAL_DICE, SPECIAL_DIE_TYPES } from '../game/specialDice';
 import { RarityBadge } from './RarityBadge';
 import { DieTypeLabel } from './DieTypeLabel';
 import { RichDescription } from './RichDescription';
+import { ENGULFMENT_EVIDENCE_ROUNDS, ENGULFMENT_REQUIRED_MULTIPLIER } from '../game/engulfment';
 
 const LOWER_HAND_RULES: Partial<Record<HandId, string>> = {
   pair: 'Two matching Faces.',
@@ -57,6 +58,8 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
       </div>)}</SimpleGrid></Stack></Tabs.Panel>
       <Tabs.Panel value="flames" pt="md"><Stack gap="sm">
         <Text size="sm">You can keep up to five Flames. Feed Gold to an Ember in Fire Keeping to strengthen it; at 100 Gold, it becomes a Bonfire.</Text>
+        <Text size="sm"><strong>Charge:</strong> Charge starts at ×1. Charge Flames multiply it in trigger order up to their shared Max Charge. Multiple developed Charge Flames also raise Max Charge through pair synergy. Arm the stored factor for your next manual Play.</Text>
+        <Text size="sm"><strong>Engulfment:</strong> Effective Flame power is measured from realized scoring amplification across your latest {ENGULFMENT_EVIDENCE_ROUNDS} cleared Rounds. At ×{ENGULFMENT_REQUIRED_MULTIPLIER}, choose which Flames to sacrifice. Their joint power—not the sum of individual readouts—must reach the threshold. Your earned Inferno factor is the selected joint power rounded down and multiplies your existing Inferno.</Text>
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{FLAME_IDS.map(id => <div key={id} className="help-item" data-testid={`help-flame-${id}`}>
           <Text size="sm" fw={700}>🔥 {FLAMES[id].name} <RarityBadge rarity={FLAMES[id].rarity} compact /></Text><RichDescription copy={FLAMES[id].verboseDescription} size="xs" />
           {isChargeFlame(id) && <Text size="xs" c="orange">Bonfire: {FLAMES[id].bonfireDescription}</Text>}

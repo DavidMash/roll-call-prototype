@@ -35,8 +35,8 @@ describe('Charge-family generation', () => {
     const state = game([4, 4, 4, 4, 6]);
     flame(state, 4, 'momentum', 50);
     const result = dispatch(state, { type: 'PLAY', hand: 'fourKind', dieIds: [0, 1, 2, 3] }, constant());
-    expect(momentumChargeGain(50)).toBe(.25);
-    expect(result.state.chargeXMult).toBe(1.25);
+    expect(momentumChargeGain(50)).toBe(1.125);
+    expect(result.state.chargeXMult).toBe(1.125);
     expect(result.state.stats.flameTriggers.momentum).toBe(1);
   });
 
@@ -50,7 +50,7 @@ describe('Charge-family generation', () => {
     resolver.rollBatch([0], 'Jumping Bean trigger test', 'gameplay');
     resolver.drain();
     expect(state.stats.jumpingBeanFreePlays).toHaveLength(1);
-    expect(state.chargeXMult).toBe(1.5);
+    expect(state.chargeXMult).toBe(1.25);
   });
 
   it('counts every gameplay die that rolls a 3, including initial rolls', () => {
@@ -58,14 +58,14 @@ describe('Charge-family generation', () => {
     flame(state, 0, 'thirdRail', 100);
     const resolver = new Resolver(state, constant(.4));
     resolver.rollBatch([0, 1], 'Gameplay test', 'gameplay');
-    expect(thirdRailChargeGain(100)).toBe(.5);
-    expect(state.chargeXMult).toBe(2);
+    expect(thirdRailChargeGain(100)).toBe(1.25);
+    expect(state.chargeXMult).toBe(1.5625);
 
     state.phase = 'shop';
     state.shop = { stage: 'flames', offers: [], offerRerolls: 0, lifeRestores: 0 };
     const nextRound = dispatch(state, { type: 'NEXT_ROUND' }, constant(.4)).state;
     expect(nextRound.dice.every(die => die.value === 3)).toBe(true);
-    expect(nextRound.chargeXMult).toBe(3.5);
+    expect(nextRound.chargeXMult).toBe(3.0517578125);
   });
 
   it('excludes Shop and Flame Selection rolls from Third Rail', () => {
@@ -80,13 +80,13 @@ describe('Charge-family generation', () => {
   });
 
   it('scales Jump Start and awards the actual number of Rerolls spent', () => {
-    expect([0, 25, 50, 100].map(jumpStartChargeGain)).toEqual([0, .5, 1, 2]);
+    expect([0, 25, 50, 100].map(jumpStartChargeGain)).toEqual([1, 1.125, 1.25, 1.5]);
     const state = game([1, 2, 3, 4, 5]);
     flame(state, 4, 'jumpStart', 50);
     const result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0, 1] }, constant(.99));
     expect(result.state.manualRerollsRemaining).toBe(1);
     expect(result.state.stats.manualRerolls.at(-1)?.charges).toBe(2);
-    expect(result.state.chargeXMult).toBe(3);
+    expect(result.state.chargeXMult).toBe(1.5625);
     expect(result.state.stats.flameTriggers.jumpStart).toBe(2);
   });
 });
@@ -101,7 +101,7 @@ describe('Power Surge', () => {
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant());
     expect(result.events.filter(event => event.type === 'CHARGE_CHANGED').map(event => event.flame))
       .toEqual(['momentum', 'powerSurge']);
-    expect(result.state.chargeXMult).toBe(7.5);
+    expect(result.state.chargeXMult).toBe(12);
   });
 
   it('uses Ultimate’s single authoritative highest-hand tie-break', () => {
@@ -116,7 +116,7 @@ describe('Power Surge', () => {
     flame(qualified, 0, 'powerSurge', 100);
     qualified.chargeXMult = 1.5;
     const second = dispatch(qualified, { type: 'PLAY', hand: 'fiveKind', dieIds: [0, 1, 2, 3, 4] }, constant());
-    expect(second.state.chargeXMult).toBe(4.5);
+    expect(second.state.chargeXMult).toBe(5);
   });
 
   it('qualifies a Jumping Bean free play against the same highest-hand selection', () => {
@@ -144,9 +144,9 @@ describe('Max Charge and shared spending', () => {
     const state = game();
     flame(state, 0, 'momentum', 100);
     flame(state, 1, 'thirdRail', 0);
-    expect(calculateMaxCharge(state)).toBe(6);
+    expect(calculateMaxCharge(state)).toBe(5);
     flame(state, 1, 'thirdRail', 100);
-    expect(calculateMaxCharge(state)).toBe(10);
+    expect(calculateMaxCharge(state)).toBe(12);
   });
 
   it('acquires a Charge ember at ×1 capacity and clamps when capacity falls', () => {

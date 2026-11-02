@@ -109,6 +109,7 @@ describe('canonical scoring clarity preview', () => {
     state.maxCharge = 2;
     state.chargeArmed = true;
     state.engulfmentLevel = 1;
+    state.infernoMultiplier = 25n;
     state.boss = { type: 'fly', flyHand: 'pair', caught: false, moves: 0 };
     const preview = canonicalPlayPreview(state, 'ones', ids);
     const resolved = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: ids }, constant());
@@ -131,7 +132,7 @@ describe('canonical Flame presentation states', () => {
     state.consumed = [];
     expect(stateOf(state, 'doubleDown').state).toBe('possible');
     const preview = canonicalPlayPreview(state, 'twoPair', ids);
-    expect(stateOf(state, 'doubleDown', preview)).toMatchObject({ state: 'active', contribution: { kind: 'xmult', value: 6 } });
+    expect(stateOf(state, 'doubleDown', preview)).toMatchObject({ state: 'active', contribution: { kind: 'xmult', value: 7 } });
   });
 
   it('derives Count Down progress and selected-step state without mutable UI state', () => {
@@ -173,7 +174,7 @@ describe('canonical Flame presentation states', () => {
     const ids = setFaces(state, [1]);
     expect(stateOf(state, 'fatCat').state).toBe('possible');
     expect(stateOf(state, 'fatCat', canonicalPlayPreview(state, 'ones', ids))).toMatchObject({
-      state: 'active', contribution: { kind: 'xmult', value: 1.3 },
+      state: 'active', contribution: { kind: 'xmult', value: 1.4 },
     });
   });
 

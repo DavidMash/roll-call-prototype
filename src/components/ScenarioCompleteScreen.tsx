@@ -11,10 +11,11 @@ export function ScenarioCompleteScreen({ board, onContinue, onScenarios, onHome 
       <Stack align="center" gap="md"><Text className="landing-kicker">SCENARIO COMPLETE</Text>
         <Title id="scenario-complete-title">CONGRATULATIONS!</Title>
         <Title order={2}>You've completed {scenario.name}.</Title><Text size="lg">You reached Engulfment.</Text>
-        <SimpleGrid cols={{ base: 1, xs: 3 }} className="scenario-complete-stats">
+        <SimpleGrid cols={{ base: 1, xs: 4 }} className="scenario-complete-stats">
           <div><small>SCENARIO ROUNDS PLAYED</small><strong>{formatPlayerNumber(board.round)}</strong></div>
           <div><small>CURRENT GOAL</small><strong>{formatExactScore(board.target)}</strong></div>
-          <div><small>INFERNO LEVEL</small><strong>{formatPlayerNumber(board.engulfmentLevel)}</strong></div>
+          <div><small>ENGULFMENTS</small><strong>{formatPlayerNumber(board.engulfmentLevel)}</strong></div>
+          <div><small>INFERNO MULTIPLIER</small><strong>×{formatExactScore(board.infernoMultiplier)}</strong></div>
         </SimpleGrid>
         <Group justify="center"><Button size="lg" color="orange" onClick={onContinue}>CONTINUE RUN</Button>
           <Button size="lg" variant="default" onClick={onScenarios}>BACK TO SCENARIOS</Button></Group>

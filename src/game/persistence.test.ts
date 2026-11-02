@@ -16,6 +16,7 @@ describe('run persistence', () => {
     const storage = new MemoryStorage();
     const state = newRun('saved-inferno').state;
     state.engulfmentLevel = 2;
+    state.infernoMultiplier = 625n;
     state.infernoProgress = {
       evaluationIndex: 4, previousReadiness: .75,
       recentMessageIds: ['close-01', 'close-02'], recentAction: 'flame_invested',
@@ -41,7 +42,24 @@ describe('run persistence', () => {
     const storage = new MemoryStorage();
     storage.setItem(RUN_STORAGE_KEY, '{not-json');
     expect(loadPersistedRun(storage, null)).toBeNull();
-    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: RUN_STORAGE_VERSION - 1, state: newRun('old').state }));
+    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: RUN_STORAGE_VERSION - 2, state: newRun('old').state }));
     expect(loadPersistedRun(storage, null)).toBeNull();
+  });
+
+  it('migrates v28 Inferno levels deterministically to the authoritative cumulative multiplier', () => {
+    const storage = new MemoryStorage();
+    const legacy = newRun('v28-inferno').state;
+    legacy.engulfmentLevel = 3;
+    delete (legacy as unknown as { infernoMultiplier?: bigint }).infernoMultiplier;
+    delete (legacy as unknown as { chargeEvents?: unknown[] }).chargeEvents;
+    if (legacy.roundCheckpoint) {
+      delete (legacy.roundCheckpoint.board as unknown as { infernoMultiplier?: bigint }).infernoMultiplier;
+      delete (legacy.roundCheckpoint.board as unknown as { chargeEvents?: unknown[] }).chargeEvents;
+      legacy.roundCheckpoint.board.engulfmentLevel = 3;
+    }
+    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: 28, state: legacy }));
+    const loaded = loadPersistedRun(storage, legacy.seed)!;
+    expect(loaded.infernoMultiplier).toBe(15_625n);
+    expect(loaded.chargeEvents).toEqual([]);
   });
 });

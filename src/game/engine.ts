@@ -52,8 +52,10 @@ function normalizeBoardScores(board: Board): void {
     board.roundSummary.target = exact(board.roundSummary.target);
   }
   if (board.infernoEvaluation) {
-    board.infernoEvaluation.infernoMultiplierBefore = exactInferno(board.infernoEvaluation.infernoLevelBefore);
-    board.infernoEvaluation.infernoMultiplierAfter = exactInferno(board.infernoEvaluation.infernoLevelAfter);
+    board.infernoEvaluation.infernoMultiplierBefore = exact(board.infernoEvaluation.infernoMultiplierBefore,
+      board.infernoMultiplier);
+    board.infernoEvaluation.infernoMultiplierAfter = exact(board.infernoEvaluation.infernoMultiplierAfter,
+      board.infernoEvaluation.infernoMultiplierBefore);
   }
   if (board.bust) {
     board.bust.score = exact(board.bust.score);
@@ -125,11 +127,13 @@ function normalizeHistoricalScores(state: GameState): void {
     } else if (event.kind === 'round_attempt_finished' || event.kind === 'run_finished') {
       event.score = exact(event.score); event.target = exact(event.target);
     } else if (event.kind === 'engulfment_attempted') {
-      event.infernoMultiplierBefore = exactInferno(event.infernoLevelBefore);
-      event.infernoMultiplierAfter = exactInferno(event.infernoLevelAfter);
+      event.infernoMultiplierBefore = exact(event.infernoMultiplierBefore, exactInferno(event.infernoLevelBefore));
+      event.infernoMultiplierAfter = exact(event.infernoMultiplierAfter, exactInferno(event.infernoLevelAfter));
     } else if (event.kind === 'inferno_evaluated') {
-      event.evaluation.infernoMultiplierBefore = exactInferno(event.evaluation.infernoLevelBefore);
-      event.evaluation.infernoMultiplierAfter = exactInferno(event.evaluation.infernoLevelAfter);
+      event.evaluation.infernoMultiplierBefore = exact(event.evaluation.infernoMultiplierBefore,
+        exactInferno(event.evaluation.infernoLevelBefore));
+      event.evaluation.infernoMultiplierAfter = exact(event.evaluation.infernoMultiplierAfter,
+        exactInferno(event.evaluation.infernoLevelAfter));
     } else if (event.kind === 'boss_state_changed' && (event.change === 'warden_target' || event.change === 'warden_unlock')
       && event.amount !== undefined) event.amount = exact(event.amount);
     else if (event.kind === 'score_package_completed') event.score = exact(event.score);
@@ -318,9 +322,10 @@ export function normalizeGameState(state: GameState): GameState {
   if (typeof next.target === 'number' && !Number.isSafeInteger(next.target))
     next.target = targetForRound(next.round + next.goalProgressionOffset,
       next.boss?.type ?? next.bossSchedule?.[next.round] ?? null);
+  next.engulfmentLevel = Math.max(0, Math.floor(next.engulfmentLevel ?? 0));
+  next.infernoMultiplier = exact(next.infernoMultiplier, exactInferno(next.engulfmentLevel));
   normalizeBoardScores(next);
   normalizeHistoricalScores(next);
-  next.engulfmentLevel = Math.max(0, Math.floor(next.engulfmentLevel ?? 0));
   next.infernoProgress ??= { evaluationIndex: 0, previousReadiness: null, recentMessageIds: [], recentAction: 'none' };
   next.infernoProgress.evaluationIndex = Math.max(0, Math.floor(next.infernoProgress.evaluationIndex ?? 0));
   next.infernoProgress.previousReadiness = next.infernoProgress.previousReadiness === null ? null
@@ -335,6 +340,11 @@ export function normalizeGameState(state: GameState): GameState {
     next.infernoEvaluation.maximumPossibleReadiness ??= next.infernoEvaluation.threshold;
     next.infernoEvaluation.currentCollectionTheoreticallySufficient ??= true;
     next.infernoEvaluation.suspendAfterContinue ??= false;
+    next.infernoEvaluation.selectedFlameInstanceIds ??= next.infernoEvaluation.flamesSnuffed.map(asset => asset.instanceId);
+    next.infernoEvaluation.selectedEffectiveValue ??= 1;
+    next.infernoEvaluation.earnedInfernoFactor ??= Math.max(1, Math.floor(next.infernoEvaluation.selectedEffectiveValue));
+    next.infernoEvaluation.engulfmentCountBefore ??= next.infernoEvaluation.infernoLevelBefore;
+    next.infernoEvaluation.engulfmentCountAfter ??= next.infernoEvaluation.infernoLevelAfter;
   }
   next.nextShopVisitId = Math.max(1, Math.floor(next.nextShopVisitId ?? 1));
   next.nextFlameInstanceId = Math.max(1, Math.floor(next.nextFlameInstanceId ?? 1));
@@ -367,6 +377,8 @@ export function normalizeGameState(state: GameState): GameState {
       throw new Error('Saved checkpoint does not match the current rollback schema.');
     assertDiceInventory(next.roundCheckpoint.diceInventory, next.roundCheckpoint.encounterDice);
     const checkpoint = next.roundCheckpoint.board;
+    checkpoint.engulfmentLevel = Math.max(0, Math.floor(checkpoint.engulfmentLevel ?? 0));
+    checkpoint.infernoMultiplier = exact(checkpoint.infernoMultiplier, exactInferno(checkpoint.engulfmentLevel));
     if (typeof checkpoint.target === 'number' && !Number.isSafeInteger(checkpoint.target))
       checkpoint.runMode ??= next.runMode;
       checkpoint.scenario ??= structuredClone(next.scenario);
@@ -374,7 +386,6 @@ export function normalizeGameState(state: GameState): GameState {
       checkpoint.target = targetForRound(checkpoint.round + checkpoint.goalProgressionOffset,
         checkpoint.boss?.type ?? checkpoint.bossSchedule?.[checkpoint.round] ?? null);
     normalizeBoardScores(checkpoint);
-    checkpoint.engulfmentLevel = Math.max(0, Math.floor(checkpoint.engulfmentLevel ?? 0));
     checkpoint.infernoProgress ??= structuredClone(next.infernoProgress);
     checkpoint.infernoEvaluation ??= null;
     if (checkpoint.infernoEvaluation) checkpoint.infernoEvaluation.engulfed ??= false;
@@ -382,6 +393,7 @@ export function normalizeGameState(state: GameState): GameState {
     checkpoint.bustPresentationDice ??= null;
     checkpoint.nextShopVisitId = Math.max(1, Math.floor(checkpoint.nextShopVisitId ?? 1));
     checkpoint.nextFlameInstanceId = Math.max(1, Math.floor(checkpoint.nextFlameInstanceId ?? next.nextFlameInstanceId));
+    checkpoint.chargeEvents ??= [];
     normalizeFlameInstanceRuntime(checkpoint);
     normalizeBossRuntime(checkpoint);
     checkpoint.scorecardCycleConsumed ??= checkpoint.consumed.filter(hand =>
@@ -481,6 +493,7 @@ export function normalizeGameState(state: GameState): GameState {
   normalizeScoreWagerRuntime(next);
   normalizeHandFamilyFlameRuntime(next);
   normalizeProgressiveFlameRuntime(next);
+  next.chargeEvents ??= [];
   recalculateMaxCharge(next);
   return next;
 }
@@ -535,8 +548,14 @@ export function validateAction(state: Board | GameState, action: Action): string
   if (action.type === 'CONTINUE_SCENARIO_RUN') return state.phase === 'scenarioComplete'
     && !!state.scenario?.completionPending && !!state.infernoEvaluation?.engulfed
     ? null : 'A completed Scenario is required.';
+  if (action.type === 'TOGGLE_ENGULFMENT_FLAME') return state.phase === 'inferno' && !!state.infernoEvaluation?.success
+    && !state.infernoEvaluation.engulfed
+    && state.infernoEvaluation.flames.some(item => item.asset.instanceId === action.flameInstanceId)
+    ? null : 'Choose a Flame from the current Inferno evaluation.';
   if (action.type === 'ENGULF_NOW') return state.phase === 'inferno' && !!state.infernoEvaluation?.success
-    && !state.infernoEvaluation.engulfed ? null : 'A ready Inferno evaluation is required.';
+    && !state.infernoEvaluation.engulfed
+    && state.infernoEvaluation.selectedEffectiveValue >= state.infernoEvaluation.threshold
+    ? null : 'Select Flames with enough joint effective power.';
   if (action.type === 'NOT_YET') return state.phase === 'inferno' && !!state.infernoEvaluation?.success
     && !state.infernoEvaluation.engulfed ? null : 'A pending ready Inferno evaluation is required.';
   if (action.type === 'MANUAL_REROLL') {
@@ -873,12 +892,12 @@ export function newRun(seed: string, random?: RandomSource, options?: NewRunOpti
     seed, rngState: hashSeed(seed), round: 1, goalProgressionOffset: 0, target: BigInt(CONFIG.baseTarget),
     score: 0n, gold: CONFIG.startingGold, temper: 0, forgeUnlocked: false,
     roundTemper: { overkill: 0, boardRefresh: 0, miniBoss: 0, boss: 0 },
-    lives: CONFIG.maxLives, engulfmentLevel: 0, nextShopVisitId: 1,
+    lives: CONFIG.maxLives, engulfmentLevel: 0, infernoMultiplier: 1n, nextShopVisitId: 1,
     nextFlameInstanceId: 1, roundAttemptNumber: 1,
     bossSchedule: {}, chapterPlans: {}, presentedChapters: [], chapterLifecycle: {}, boss: null, bossSilenced: false, currentNodeId: '',
     bust: null, bustPresentationDice: null, flameTutorial: { pendingFlameInstanceId: null, completed: false },
     diceInventory, encounterDice: [], dice: [], dieRoundState: resetDieRoundState(Object.values(diceInventory.instances)), flameSlots: emptyFlameSlots(),
-    chargeAttribution: {}, infernoProgress: { evaluationIndex: 0, previousReadiness: null, recentMessageIds: [], recentAction: 'none' },
+    chargeAttribution: {}, chargeEvents: [], infernoProgress: { evaluationIndex: 0, previousReadiness: null, recentMessageIds: [], recentAction: 'none' },
     infernoEvaluation: null, infernoEvaluationSuspendedUntilNewFlame: false, chargeXMult: 1, maxCharge: 1,
     chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, minigunUpperStreak: 0,
     roundPlayCount: 0, roundStartLives: CONFIG.maxLives, roundStartRosterSize: CONFIG.diceCount, precedingShopDiePurchase: false,
@@ -1116,6 +1135,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       case 'CONTINUE_ROUND_SUMMARY': resolver.continueRoundSummary(); break;
       case 'CONTINUE_INFERNO_EVALUATION': resolver.continueInfernoEvaluation(); break;
       case 'CONTINUE_SCENARIO_RUN': resolver.continueScenarioRun(); break;
+      case 'TOGGLE_ENGULFMENT_FLAME': resolver.toggleEngulfmentFlame(action.flameInstanceId); break;
       case 'ENGULF_NOW': resolver.engulfNow(); break;
       case 'NOT_YET': resolver.deferEngulfment(); break;
       case 'CONTINUE_FLAME_SELECTION': resolver.openShop(); break;

@@ -1271,6 +1271,9 @@ body, #root { overflow: hidden; }
 .inferno-ready-consequences { width: min(100%, 620px); background: rgba(13, 10, 12, .74); border-color: rgba(255, 94, 54, .3); }
 .offered-flames { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 7px; margin-top: 8px; }
 .offered-flame { padding: 8px 10px; border: 1px solid rgba(255, 94, 54, .22); border-radius: 7px; background: rgba(112, 28, 18, .18); }
+.offered-flame.is-selected { border-color: #ff7043; background: rgba(194, 57, 24, .34); box-shadow: 0 0 0 2px rgba(255, 112, 67, .2); }
+.offered-flame:focus-visible { outline: 2px solid #ffd180; outline-offset: 2px; }
+.inferno-reward-preview { color: #fff1c2; font-size: clamp(.9rem, 4vw, 1.2rem); font-weight: 900; }
 .inferno-ready-actions { width: min(100%, 460px); }
 .inferno-ready-actions .mantine-Button-root { flex: 1 1 180px; }
 .engulfment-result-success { min-height: 430px; justify-content: center; text-align: center; animation: engulfment-red-arrival .55s ease-out both; }

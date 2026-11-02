@@ -69,10 +69,14 @@ test.describe('Scenarios mode', () => {
     const state = newRun('scenario-complete-browser', { next: () => .5 }, { scenario: scenarioById('short-circuit')! }).state;
     const evaluation = createInfernoEvaluation(state)!;
     evaluation.success = true;
-    evaluation.flamesSnuffed = [];
+    evaluation.selectedFlameInstanceIds = evaluation.flames.map(item => item.asset.instanceId);
+    evaluation.flamesSnuffed = evaluation.flames.map(item => structuredClone(item.asset));
     evaluation.flamesPreserved = [];
+    evaluation.selectedEffectiveValue = 15;
+    evaluation.earnedInfernoFactor = 15;
+    evaluation.engulfmentCountAfter = 1;
     evaluation.infernoLevelAfter = 1;
-    evaluation.infernoMultiplierAfter = 25n;
+    evaluation.infernoMultiplierAfter = 15n;
     state.infernoEvaluation = evaluation;
     state.phase = 'inferno';
     const resolver = new Resolver(state, { next: () => .5 });

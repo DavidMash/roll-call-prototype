@@ -10,6 +10,7 @@ test('huge score, Goal, Inferno, progress, and Warden text retain every digit', 
   state.stats.rounds[0].target = goal;
   state.stats.rounds[0].finalScore = goal - 1n;
   state.engulfmentLevel = 12;
+  state.infernoMultiplier = goal;
   state.boss = { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0], startingDieId: 0, nextUnlockTarget: goal,
     unlockCosts: [goal], unlockTargets: [goal], pendingReinforcements: 0 };
 

@@ -1,9 +1,9 @@
 import type { Action, GameState, RunLedgerChunk, RunLedgerRuntime, RunSession } from './types';
 import type { RunHistoryV2Coverage, RunHistoryV2Event } from './runHistoryV2';
+import { ENGULFMENT_EVIDENCE_ROUNDS } from './engulfment';
 
 export const RECENT_HISTORY_LIMIT = 200;
 const RUNTIME_ACTION_LIMIT = 200;
-const ENGULFMENT_EVIDENCE_ROUNDS = 6;
 
 const ledgerByState = new WeakMap<GameState, RunLedgerRuntime>();
 
@@ -97,7 +97,7 @@ export function recentHistory(state: GameState): RunHistoryV2Event[] {
 
 /**
  * Drops archive-only data after it has been durably committed. The retained
- * window contains the six latest canonical clear attempts, the active
+ * window contains the three latest canonical clear attempts, the active
  * rollback timeline, and the latest target-selection records used by Flames.
  */
 export function compactRuntimeLedger(state: GameState): void {

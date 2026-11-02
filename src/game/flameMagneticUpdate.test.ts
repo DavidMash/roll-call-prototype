@@ -155,11 +155,11 @@ describe('Magnetic source use and Flux Capacitor', () => {
     magnetic(state, 4, 2);
     const resolver = new Resolver(state, constant(0));
     resolver.rollBatch([0, 1], 'two pulls', 'gameplay');
-    expect(fluxCapacitorChargeMultiplier(50, 2)).toBe(2);
-    expect(fluxCapacitorChargeMultiplier(100, 1)).toBe(2);
-    expect(fluxCapacitorChargeMultiplier(100, 2)).toBe(3);
-    expect(fluxCapacitorChargeMultiplier(100, 3)).toBe(4);
-    expect(state.chargeXMult).toBe(2);
+    expect(fluxCapacitorChargeMultiplier(50, 2)).toBe(2.25);
+    expect(fluxCapacitorChargeMultiplier(100, 1)).toBe(2.25);
+    expect(fluxCapacitorChargeMultiplier(100, 2)).toBe(3.5);
+    expect(fluxCapacitorChargeMultiplier(100, 3)).toBe(4.75);
+    expect(state.chargeXMult).toBe(2.25);
     expect(state.stats.flameTriggers.fluxCapacitor).toBe(1);
     expect(calculateMaxCharge(state)).toBe(3);
     flame(state, 3, 'fluxCapacitor', 100);

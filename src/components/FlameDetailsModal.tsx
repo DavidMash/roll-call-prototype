@@ -60,7 +60,7 @@ export function FlameDetailsModal({ board, inventory: _inventory, target, busy, 
         <Progress value={invested} color="orange" size="lg" mt={5} aria-label={`${definition.name} investment`} /></div>
       {isEmber && <Text size="sm" fw={850} c="orange">Complete this Bonfire: <CurrencyAmount currency="temper" value={10} sign="+" /></Text>}
       <div className="modal-stat flame-current-effect" data-testid="flame-current-effect">
-        {details.maxChargeContribution !== null && <Text size="sm"><strong>Max Flame Contribution:</strong> +{formatPlayerNumber(details.maxChargeContribution)} Max Charge</Text>}
+        {details.maxChargeContribution !== null && <Text size="sm"><strong>Solo Max Charge:</strong> ×{formatPlayerNumber(details.maxChargeContribution)} <span>(multiple Charge Flames add pair synergy)</span></Text>}
         <Text size="sm"><strong>{details.currentLabel}:</strong> {details.currentValue}</Text>
       </div>
       <RichDescription copy={definition.verboseDescription} />
@@ -78,7 +78,7 @@ export function FlameDetailsModal({ board, inventory: _inventory, target, busy, 
       {stage === 'bonfire' && <Text size="xs" c="dimmed">{definition.bonfireDescription}</Text>}
       {canStoke && <Stack gap="sm" data-testid="stoke-flame-controls" data-tutorial="stoke">
         {amount > 0 && <div className="modal-stat stoke-preview"><Text size="xs" c="teal" tt="uppercase">AFTER STOKE · {formatPlayerNumber(afterInvestment)}/100</Text>
-          {afterDetails.maxChargeContribution !== null && <Text size="sm" fw={700}>+{formatPlayerNumber(afterDetails.maxChargeContribution)} Max Charge</Text>}
+          {afterDetails.maxChargeContribution !== null && <Text size="sm" fw={700}>Solo Max Charge ×{formatPlayerNumber(afterDetails.maxChargeContribution)}</Text>}
           <Text size="sm" fw={700}>{afterInvestment === 100 ? definition.bonfireDescription : flameEffectText(flameId, afterInvestment, board)}</Text></div>}
         <Group gap="xs" wrap="wrap" className="stoke-controls"><div className="stoke-stepper">
           <input className="stoke-stepper-value" type="number" inputMode="numeric" step={1} min={0} max={maxStoke}

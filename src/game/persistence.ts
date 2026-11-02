@@ -7,12 +7,13 @@ import type { BadDreamCheckpoint, GameState } from './types';
 import { cloneGameState } from './ledger';
 
 export const RUN_STORAGE_KEY = 'roll-call:active-run';
-export const RUN_STORAGE_VERSION = 28;
+export const RUN_STORAGE_VERSION = 29;
+const MIGRATABLE_RUN_STORAGE_VERSIONS = new Set([28, RUN_STORAGE_VERSION]);
 
 type RunStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 interface PersistedRun {
-  version: typeof RUN_STORAGE_VERSION;
+  version: number;
   state: GameState;
 }
 
@@ -86,7 +87,8 @@ export function loadPersistedRun(storage: RunStorage | null, requestedSeed: stri
     const raw = storage.getItem(RUN_STORAGE_KEY);
     if (!raw) return null;
     const saved: unknown = JSON.parse(raw);
-    if (!isRecord(saved) || saved.version !== RUN_STORAGE_VERSION) return null;
+    if (!isRecord(saved) || typeof saved.version !== 'number'
+      || !MIGRATABLE_RUN_STORAGE_VERSIONS.has(saved.version)) return null;
     const migrated = normalizeGameState(saved.state as GameState);
     if (!isGameState(migrated)) return null;
     if (requestedSeed !== null && migrated.seed !== requestedSeed) return null;

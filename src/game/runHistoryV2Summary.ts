@@ -44,6 +44,10 @@ export interface FlameBalanceMetric {
   chargeGained: number;
   chargeLostToCap: number;
   chargeBuildConsumptions: number;
+  chargeMultiplicativeEvents: number;
+  chargeCappedEvents: number;
+  chargeFactorRequestedTotal: number;
+  chargeFactorAppliedTotal: number;
   diagnostics: {
     maxUpperDecay: number; maxStreak: number; sequenceAdvances: number; sequenceCompletions: number;
     sequenceResets: number; maxSequenceProgress: number; lightningHits: number; lightningMisses: number;
@@ -92,7 +96,12 @@ export interface ExperiencedRunMetrics {
   flameActivations: Counts<Flame>;
   flames: Partial<Record<Flame, FlameBalanceMetric>>;
   flameLifecycle: { acquired: number; replaced: number; stokedGold: number; bonfires: number; engulfed: number };
-  charge: { gains: number; arms: number; consumes: number; resets: number };
+  charge: { gains: number; arms: number; consumes: number; resets: number;
+    multiplicativeEvents: number; cappedEvents: number; factorRequestedTotal: number; factorAppliedTotal: number;
+    consumptionSamples: number; chargeAtConsumptionTotal: number; maximumChargeAtConsumption: number;
+    capacityUseAtConsumptionTotal: number };
+  engulfments: { fullCollectionEffectivePower: number; individualFlamePowers: { flame: Flame; effectivePower: number }[];
+    selectedInstanceIds: number[]; selectedEffectivePower: number; earnedInfernoFactor: number }[];
   specialOffers: Counts<SpecialOfferType>;
   bossOutcomes: Record<string, number>;
   largestHandShare: LargestHandShareSummary;
@@ -160,7 +169,9 @@ function initialExperienced(): ExperiencedRunMetrics {
     shopRerollSpend: 0, temperEarned: 0, temperSpent: 0, temperBySource: {}, temperSpentBySource: {},
     flameTimeline: [], flameActivations: {}, flames: {},
     flameLifecycle: { acquired: 0, replaced: 0, stokedGold: 0, bonfires: 0, engulfed: 0 },
-    charge: { gains: 0, arms: 0, consumes: 0, resets: 0 }, specialOffers: {},
+    charge: { gains: 0, arms: 0, consumes: 0, resets: 0, multiplicativeEvents: 0, cappedEvents: 0,
+      factorRequestedTotal: 0, factorAppliedTotal: 0, consumptionSamples: 0, chargeAtConsumptionTotal: 0,
+      maximumChargeAtConsumption: 1, capacityUseAtConsumptionTotal: 0 }, engulfments: [], specialOffers: {},
     bossOutcomes: {},
     largestHandShare: { samples: 0, median: null, p90: null, maximum: null, over50Percent: 0, over80Percent: 0 },
   };
@@ -184,6 +195,7 @@ const newFlameMetric = (): FlameBalanceMetric => ({
   averageActivationsPerActiveRound: 0, maximumActivationsInOneRound: 0,
   averageAppliedFactor: null, maximumAppliedFactor: null,
   chargeRequested: 0, chargeGained: 0, chargeLostToCap: 0, chargeBuildConsumptions: 0,
+  chargeMultiplicativeEvents: 0, chargeCappedEvents: 0, chargeFactorRequestedTotal: 0, chargeFactorAppliedTotal: 0,
   diagnostics: { maxUpperDecay: 0, maxStreak: 0, sequenceAdvances: 0, sequenceCompletions: 0,
     sequenceResets: 0, maxSequenceProgress: 0, lightningHits: 0, lightningMisses: 0,
     burnItDownUses: 0, burnItDownSacrificeFractionTotal: 0,
@@ -204,6 +216,8 @@ function canonicalFromState(state: GameState | undefined, events: readonly RunHi
   const finalRound = state?.round ?? finished?.round ?? events.at(-1)?.round ?? 1;
   const cleared = canonical.filter((event): event is Extract<RunHistoryV2Event, { kind: 'round_attempt_finished' }> =>
     event.kind === 'round_attempt_finished' && event.outcome === 'cleared');
+  const latestEngulfment = canonical.filter((event): event is Extract<RunHistoryV2Event, { kind: 'engulfment_attempted' }> =>
+    event.kind === 'engulfment_attempted' && event.success).at(-1);
   const scoreByHand: ScoreCounts<HandId> = {};
   const earned: Record<GoldSource, number> = { golden: 0, jackpot: 0, diceSale: 0, roundBase: 0,
     unusedRerolls: 0, interest: 0, bossReward: 0, specialOffer: 0 };
@@ -232,7 +246,9 @@ function canonicalFromState(state: GameState | undefined, events: readonly RunHi
     finalBoss: state?.boss?.type ?? (finished?.kind === 'run_finished' ? finished.finalBoss : null),
     roundsCleared: cleared.length,
     finalGold: state?.gold ?? 0, finalTemper: state?.temper ?? 0, finalLives: state?.lives ?? 0,
-    infernoLevel: state?.engulfmentLevel ?? 0, infernoMultiplier: infernoMultiplier(state?.engulfmentLevel ?? 0),
+    infernoLevel: state?.engulfmentLevel ?? latestEngulfment?.infernoLevelAfter ?? 0,
+    infernoMultiplier: state?.infernoMultiplier ?? latestEngulfment?.infernoMultiplierAfter
+      ?? infernoMultiplier(latestEngulfment?.infernoLevelAfter ?? 0),
     finalHandLevels: structuredClone(state?.handLevels ?? (finished?.kind === 'run_finished' ? finished.finalHandLevels : {})) as Record<HandId, number>,
     scoreByHand,
     highestClearedRoundScore: cleared.reduce((highest, round) => round.score > highest ? round.score : highest, 0n),
@@ -285,6 +301,14 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
         if (!abandoned && (!experienced.largestCanonicalTimelineHand || candidate.score > experienced.largestCanonicalTimelineHand.score))
           experienced.largestCanonicalTimelineHand = candidate;
         handMaxByAttempt.set(attemptKey, scoreMax(handMaxByAttempt.get(attemptKey) ?? 0n, event.score.awarded));
+        for (const contribution of event.xMultContributions) if (contribution.sourceId === 'charge' && contribution.factor > 1) {
+          const capacity = contribution.chargeReplay?.events.at(-1)?.maxCharge ?? contribution.factor;
+          experienced.charge.consumptionSamples++;
+          experienced.charge.chargeAtConsumptionTotal += contribution.factor;
+          experienced.charge.maximumChargeAtConsumption = Math.max(experienced.charge.maximumChargeAtConsumption,
+            contribution.factor);
+          experienced.charge.capacityUseAtConsumptionTotal += contribution.factor / Math.max(1, capacity);
+        }
         for (const effect of event.sideEffects) {
           if (effect.type === 'gold') add(experienced.goldEarnedBySource, effect.source, effect.amount);
           if (effect.type === 'charge') {
@@ -438,7 +462,18 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
         }
         break;
       case 'engulfment_attempted':
-        if (event.success && !abandoned) experienced.flameLifecycle.engulfed++;
+        if (event.success && !abandoned) {
+          experienced.flameLifecycle.engulfed++;
+          experienced.engulfments.push({
+            fullCollectionEffectivePower: event.fullCollectionEffectivePower ?? event.offeringMultiplier,
+            individualFlamePowers: (event.individualFlamePowers ?? []).map(item => ({
+              flame: item.asset.flame, effectivePower: item.effectivePower,
+            })),
+            selectedInstanceIds: [...(event.selectedInstanceIds ?? event.flamesSnuffed.map(asset => asset.instanceId))],
+            selectedEffectivePower: event.selectedEffectivePower ?? event.offeringMultiplier,
+            earnedInfernoFactor: event.earnedInfernoFactor ?? 25,
+          });
+        }
         break;
       case 'charge_changed':
         if (event.operation === 'gain') experienced.charge.gains += Math.max(0, event.after - event.before);
@@ -448,9 +483,21 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
         break;
       case 'flame_charge_generated': {
         const metric = metricFor(event.flame);
-        metric.chargeRequested += event.requested;
-        metric.chargeGained += event.gained;
-        metric.chargeLostToCap += event.lostToCap;
+        metric.chargeRequested += event.requested ?? 0;
+        metric.chargeGained += event.gained ?? 0;
+        metric.chargeLostToCap += event.lostToCap ?? 0;
+        const factorRequested = event.factorRequested ?? (event.before > 0
+          ? (event.before + (event.requested ?? 0)) / event.before : 1);
+        const factorApplied = event.factorApplied ?? (event.before > 0 ? event.after / event.before : 1);
+        const factorLostToCap = event.factorLostToCap ?? Math.max(0, factorRequested - factorApplied);
+        metric.chargeMultiplicativeEvents++;
+        metric.chargeFactorRequestedTotal += factorRequested;
+        metric.chargeFactorAppliedTotal += factorApplied;
+        if (factorLostToCap > 0) metric.chargeCappedEvents++;
+        experienced.charge.multiplicativeEvents++;
+        experienced.charge.factorRequestedTotal += factorRequested;
+        experienced.charge.factorAppliedTotal += factorApplied;
+        if (factorLostToCap > 0) experienced.charge.cappedEvents++;
         break;
       }
       case 'flame_action': {

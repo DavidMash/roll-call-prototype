@@ -31,7 +31,7 @@ function play(state: GameState, hand: HandId, dieIds: number[]): GameState {
 }
 
 const sequences = [
-  { id: 'doubleDown', setup: 'pair', setupValues: [2, 2, 3, 4, 5], setupIds: [0, 1], payoff: 'twoPair', payoffValues: [2, 2, 3, 3, 5], payoffIds: [0, 1, 2, 3], ember: 3.5, bonfire: 6 },
+  { id: 'doubleDown', setup: 'pair', setupValues: [2, 2, 3, 4, 5], setupIds: [0, 1], payoff: 'twoPair', payoffValues: [2, 2, 3, 3, 5], payoffIds: [0, 1, 2, 3], ember: 4, bonfire: 7 },
   { id: 'threesCompany', setup: 'threeKind', setupValues: [2, 2, 2, 4, 5], setupIds: [0, 1, 2], payoff: 'fullHouse', payoffValues: [2, 2, 2, 3, 3], payoffIds: [0, 1, 2, 3, 4], ember: 5, bonfire: 9 },
   { id: 'straightShooter', setup: 'smallStraight', setupValues: [1, 2, 3, 4, 6], setupIds: [0, 1, 2, 3], payoff: 'largeStraight', payoffValues: [1, 2, 3, 4, 5], payoffIds: [0, 1, 2, 3, 4], ember: 5, bonfire: 9 },
   { id: 'boxSet', setup: 'fourKind', setupValues: [2, 2, 2, 2, 5], setupIds: [0, 1, 2, 3], payoff: 'fiveKind', payoffValues: [2, 2, 2, 2, 2], payoffIds: [0, 1, 2, 3, 4], ember: 6.5, bonfire: 12 },
@@ -78,7 +78,7 @@ describe('hand-family setup and payoff Flames', () => {
     attach(ember, 'doubleDown', 100);
     ember.handFamilyFlameStages.doubleDown = 'payoff';
     ember = play(ember, 'twoPair', [1, 2, 3, 4]);
-    expect(ember.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: 'doubleDown', value: 6 }));
+    expect(ember.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: 'doubleDown', value: 7 }));
     expect(ember.handFamilyFlameStages.doubleDown).toBe('spent');
 
     const bonfire = game([6, 2, 2, 3, 3]);
@@ -86,7 +86,7 @@ describe('hand-family setup and payoff Flames', () => {
     bonfire.handFamilyFlameStages.doubleDown = 'payoff';
     const paid = play(bonfire, 'twoPair', [1, 2, 3, 4]);
     expect(paid.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({
-      source: 'doubleDown', value: 6,
+      source: 'doubleDown', value: 7,
     }));
     expect(paid.handFamilyFlameStages.doubleDown).toBe('spent');
   });
@@ -111,7 +111,7 @@ describe('hand-family setup and payoff Flames', () => {
     expect(state.boss?.type === 'marathon' ? state.boss.cooldowns.twoPair : undefined).toBeUndefined();
     setValues(state, [2, 2, 3, 3, 5]);
     state = play(state, 'twoPair', [0, 1, 2, 3]);
-    expect(state.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: 'doubleDown', value: 6 }));
+    expect(state.stats.handScores.at(-1)!.xMultFactors).toContainEqual(expect.objectContaining({ source: 'doubleDown', value: 7 }));
     expect(state.handFamilyFlameStages.doubleDown).toBe('spent');
   });
 
@@ -176,8 +176,8 @@ describe('Missing Pair and One Short', () => {
   it.each([
     ['missingPair', 'pair', [2, 2, 3, 4, 5], [0, 1], 2],
     ['missingPair', 'threeKind', [2, 2, 2, 4, 5], [0, 1, 2], 2],
-    ['oneShort', 'smallStraight', [1, 2, 3, 4, 6], [0, 1, 2, 3], 3],
-    ['oneShort', 'fourKind', [2, 2, 2, 2, 5], [0, 1, 2, 3], 3],
+    ['oneShort', 'smallStraight', [1, 2, 3, 4, 6], [0, 1, 2, 3], 3.5],
+    ['oneShort', 'fourKind', [2, 2, 2, 2, 5], [0, 1, 2, 3], 3.5],
   ] as const)('%s gives its static global scaling to %s', (id, hand, values, dieIds, factor) => {
     const state = game([...values] as Rank[]);
     attach(state, id, 50);
@@ -199,7 +199,7 @@ describe('Missing Pair and One Short', () => {
     expect(standardFlameMultiplier(0)).toBe(1);
     expect(standardFlameMultiplier(100)).toBe(5);
     expect(handFamilyFlameMultiplier('doubleDown', 0)).toBe(1);
-    expect(handFamilyFlameMultiplier('doubleDown', 100)).toBe(6);
+    expect(handFamilyFlameMultiplier('doubleDown', 100)).toBe(7);
   });
 
   it.each(['missingPair', 'oneShort'] as const)('%s participates in selection uniqueness and Bonfire lifecycle', id => {

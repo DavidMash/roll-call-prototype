@@ -34,7 +34,7 @@ export const GLOSSARY: Record<GlossaryTermId, GlossaryDefinition> = {
   freePlay: { label: 'Free Play', definition: [text('A Free Play lets you '), term('play'), text(' the specified '), term('hand'), text(' without using one of your normal Plays.')] },
   onCommand: { label: 'On Command', definition: [text('An On Command effect does not activate automatically. You choose when to activate it while it is available.')] },
   wild: { label: 'Wild', definition: [text('A Wild die can stand in for a needed face value during '), term('handQualification'), text('. Its actual '), term('exposedFace'), text(' does not change.')] },
-  charge: { label: 'Charge', definition: [text('Charge is power built by certain Flames. Other Flame effects can increase or multiply the Charge you have already built.')] },
+  charge: { label: 'Charge', definition: [text('Charge starts at ×1. Charge Flames multiply it in trigger order, up to their shared Max Charge. Each Flame adds 4 × its investment progress to Max Charge, and every unique pair adds 3 × both progress values. Arm Charge to apply the stored factor to your next manual Play, then reset it to ×1.')] },
   bust: { label: 'Bust', definition: [text('You Bust when a '), term('round'), text(' ends unsuccessfully before you clear its '), term('roundTarget'), text('.')] },
   training: { label: 'Training', definition: [text('Training permanently increases the level of a '), term('hand'), text(' for the rest of the run.')] },
   life: { label: 'Life', definition: [text('A Life lets your run continue after a failed '), term('round'), text('. Your run ends when you fail without any Lives remaining.')] },

@@ -45,15 +45,18 @@ export function FlameActions({ board, busy, submit, onOpenChange }: {
   const burn = flameByType(board, 'burnItDown');
   const burnFraction = board.target > 0n ? Math.max(0, Math.min(1, exactRatioNumber(board.score, board.target))) : 0;
   const burnRequested = burnItDownChargeGain(burn?.investedGold ?? 0, burnFraction);
-  const availableCharge = Math.max(0, board.maxCharge - board.chargeXMult);
-  const burnGain = Math.min(burnRequested, availableCharge);
+  const previewCharge = (factor: number) => Math.min(board.maxCharge, board.chargeXMult * factor);
+  const appliedFactor = (factor: number) => previewCharge(factor) / Math.max(1, board.chargeXMult);
+  const burnAfter = previewCharge(burnRequested);
   const burnAction: Action = { type: 'ACTIVATE_BURN_IT_DOWN' };
   const grease = flameByType(board, 'greaseTheEngine');
   const greaseCost = greaseTheEngineCost(board.interactiveFlames.greaseTheEngineUses);
-  const greaseGain = Math.min(greaseTheEngineChargeGain(grease?.investedGold ?? 0), availableCharge);
+  const greaseFactor = greaseTheEngineChargeGain(grease?.investedGold ?? 0);
+  const greaseAfter = previewCharge(greaseFactor);
   const greaseAction: Action = { type: 'ACTIVATE_GREASE_THE_ENGINE' };
   const lightning = flameByType(board, 'lightningStrike');
-  const lightningGain = Math.min(lightningStrikeChargeGain(lightning?.investedGold ?? 0), availableCharge);
+  const lightningFactor = lightningStrikeChargeGain(lightning?.investedGold ?? 0);
+  const lightningAfter = previewCharge(lightningFactor);
   const rerollsAvailable = usableManualRerolls(board);
   const lightningDice = activeEncounterDice(board);
   const lightningAction: Action | null = lightningDieId === null ? null
@@ -116,7 +119,7 @@ export function FlameActions({ board, busy, submit, onOpenChange }: {
         </div>
         <DieNumberSelector label="Predicted Face" value={predictedFace} onChange={setPredictedFace}
           testId="lightning-prediction-selector" />
-        <Text size="xs" c="dimmed">Correct prediction: +{formatPlayerNumber(lightningGain)} Charge</Text>
+        <Text size="xs" c="dimmed">Correct prediction: ×{formatPlayerNumber(appliedFactor(lightningFactor))} → Charge ×{formatPlayerNumber(lightningAfter)}</Text>
         {lightningAction && validateAction(board, lightningAction) && <Text size="xs" c="dimmed" role="status">
           {validateAction(board, lightningAction)}
         </Text>}
@@ -130,15 +133,15 @@ export function FlameActions({ board, busy, submit, onOpenChange }: {
       </Stack> : <Stack gap="xs" data-testid="flame-actions-list">
         {burn && <ActionCard name={FLAMES.burnItDown.name}
           explanation={`Sacrifice ${formatExactScore(board.score)} Score (${formatPlayerNumber(burnFraction * 100)}% of the Round Target).`}
-          status={`+${formatPlayerNumber(burnGain)} Charge`} actionLabel="SACRIFICE SCORE"
+          status={`×${formatPlayerNumber(appliedFactor(burnRequested))} → CHARGE ×${formatPlayerNumber(burnAfter)}`} actionLabel="SACRIFICE SCORE"
           disabledReason={validateAction(board, burnAction)} onAction={() => dispatchAndClose(burnAction)} testId="flame-action-burn-it-down" />}
         {grease && <ActionCard name={FLAMES.greaseTheEngine.name}
           explanation={`Pay ${greaseCost} Gold now. The next bribe costs ${greaseCost * 2} Gold.`}
-          status={`+${formatPlayerNumber(greaseGain)} Charge`} actionLabel={`PAY ${greaseCost}G`}
+          status={`×${formatPlayerNumber(appliedFactor(greaseFactor))} → CHARGE ×${formatPlayerNumber(greaseAfter)}`} actionLabel={`PAY ${greaseCost}G`}
           disabledReason={validateAction(board, greaseAction)} onAction={() => dispatchAndClose(greaseAction)} testId="flame-action-grease-the-engine" />}
         {lightning && <ActionCard name={FLAMES.lightningStrike.name}
           explanation={`Predict one die's next Manual Reroll. ${rerollsAvailable} Reroll${rerollsAvailable === 1 ? '' : 's'} available.`}
-          status={`HIT: +${formatPlayerNumber(lightningGain)} Charge`} actionLabel="CHOOSE PREDICTION"
+          status={`HIT: ×${formatPlayerNumber(appliedFactor(lightningFactor))} → CHARGE ×${formatPlayerNumber(lightningAfter)}`} actionLabel="CHOOSE PREDICTION"
           disabledReason={lightningReason} onAction={() => setLightningOpen(true)} testId="flame-action-lightning-strike" />}
         {dare && <ActionCard name={FLAMES.dareDevil.name}
           explanation={`Roll every available player die. Current stored payoff: ×${formatPlayerNumber(dareFactor)}.`}

@@ -157,6 +157,10 @@ export interface FlameActivationDiagnostics {
   ultimateHand?: HandId;
   alternativeHand?: HandId;
   chargeGained?: number;
+  chargeFactorRequested?: number;
+  chargeFactorApplied?: number;
+  chargeMaximum?: number;
+  chargeFactorLostToCap?: number;
   availableDiceCount?: number;
   manualRerollsUsed?: number;
   freePlaySource?: HandPlaySource;
@@ -521,7 +525,11 @@ export interface InfernoEvaluationState {
   prefixEvaluations: InfernoPrefixEvaluation[];
   flamesSnuffed: EngulfmentAssetRef[];
   flamesPreserved: EngulfmentAssetRef[];
-  selectedEffectiveValue: number | null;
+  selectedFlameInstanceIds: FlameInstanceId[];
+  selectedEffectiveValue: number;
+  earnedInfernoFactor: number;
+  engulfmentCountBefore: number;
+  engulfmentCountAfter: number;
   infernoLevelBefore: number;
   infernoLevelAfter: number;
   infernoMultiplierBefore: ExactScore;
@@ -565,6 +573,17 @@ export interface RoundSummary {
     total: number;
   };
 }
+export interface ChargeGrowthRecord {
+  order: number;
+  sourceInstanceId: FlameInstanceId;
+  sourceFlame: Flame;
+  factorRequested: number;
+  factorApplied: number;
+  before: number;
+  after: number;
+  maxCharge: number;
+  factorLostToCap: number;
+}
 export interface Board {
   phase: Phase;
   runMode: RunMode;
@@ -581,8 +600,10 @@ export interface Board {
   /** Attempt-local Temper; restored with the Round checkpoint and committed to telemetry only on clear. */
   roundTemper: RoundTemperState;
   lives: number;
-  /** Permanent in-run prestige level. Its multiplier is always derived as 25^level. */
+  /** Permanent in-run Engulfment count. Kept separately from the dynamic multiplier. */
   engulfmentLevel: number;
+  /** Authoritative cumulative Inferno multiplier. */
+  infernoMultiplier: ExactScore;
   /** Allocates semantic Shop visit identities; included in build-state rollback snapshots. */
   nextShopVisitId: number;
   /** Allocates stable identities for individual Flame lifecycles. */
@@ -611,8 +632,10 @@ export interface Board {
   dieRoundState: DieRoundState;
   /** The sole authoritative live Flame inventory. Slots never compact implicitly. */
   flameSlots: FlameSlots;
-  /** Charge gained by each stable Flame instance. */
+  /** Legacy additive attribution retained only to read older saves/history. */
   chargeAttribution: Partial<Record<FlameInstanceId, number>>;
+  /** Ordered multiplicative events that produced the currently stored Charge. */
+  chargeEvents: ChargeGrowthRecord[];
   infernoProgress: InfernoProgressState;
   infernoEvaluation: InfernoEvaluationState | null;
   infernoEvaluationSuspendedUntilNewFlame: boolean;
@@ -1001,6 +1024,7 @@ export type Action =
   | { type: 'CONTINUE_ROUND_SUMMARY' }
   | { type: 'CONTINUE_INFERNO_EVALUATION' }
   | { type: 'CONTINUE_SCENARIO_RUN' }
+  | { type: 'TOGGLE_ENGULFMENT_FLAME'; flameInstanceId: FlameInstanceId }
   | { type: 'ENGULF_NOW' }
   | { type: 'NOT_YET' }
   | { type: 'CONTINUE_FLAME_SELECTION' }
