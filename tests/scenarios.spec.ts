@@ -87,6 +87,8 @@ test.describe('Scenarios mode', () => {
     await page.reload();
     await page.getByRole('button', { name: 'SCENARIOS', exact: true }).click();
     await page.getByRole('button', { name: 'CONTINUE', exact: true }).click();
+    await expect(page.getByTestId('inferno-reward-screen')).toBeVisible();
+    await page.getByTestId('inferno-reward-screen').getByRole('button', { name: 'CHOOSE', exact: true }).first().click();
     await expect(page.getByTestId('scenario-complete-screen')).toContainText("You've completed Short Circuit.");
     const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('roll-call:scenario-progress') ?? '{}'));
     expect(stored.completions['short-circuit']).toMatchObject({ completed: true, scenarioVersion: 1, completionCount: 1 });

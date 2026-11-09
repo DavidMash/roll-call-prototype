@@ -1,5 +1,5 @@
 import { Badge, Button, Group, Text } from '@mantine/core';
-import { handStats, HANDS, LOWER_HAND_IDS, relativeHandStrengthTiers, UPPER_HAND_IDS } from '../game/hands';
+import { availableLowerHandIds, availableUpperHandIds, handStats, HANDS, relativeHandStrengthTiers } from '../game/hands';
 import { createTrainingSession, quoteTraining } from '../game/training';
 import type { HandId, HandLevels, Shop } from '../game/types';
 import { formatPlayerNumber } from '../game/copy';
@@ -57,13 +57,13 @@ function TrainingSection({ title, hands, levels, shop, gold, busy, onTrain }: {
   </section>;
 }
 
-export function TrainingScorecard({ handLevels, shop, gold, busy, onTrain }: {
-  handLevels: HandLevels; shop: Shop; gold: number; busy: boolean; onTrain: (hand: HandId) => void;
+export function TrainingScorecard({ handLevels, unlockedHands, shop, gold, busy, onTrain }: {
+  handLevels: HandLevels; unlockedHands: readonly HandId[]; shop: Shop; gold: number; busy: boolean; onTrain: (hand: HandId) => void;
 }) {
   return <div className="scorecard training-scorecard" data-testid="training-scorecard">
     <div className="scorecard-grid">
-      <TrainingSection title="Upper" hands={UPPER_HAND_IDS} levels={handLevels} {...{ shop, gold, busy, onTrain }} />
-      <TrainingSection title="Lower" hands={LOWER_HAND_IDS} levels={handLevels} {...{ shop, gold, busy, onTrain }} />
+      <TrainingSection title="Upper" hands={availableUpperHandIds({ unlockedHands })} levels={handLevels} {...{ shop, gold, busy, onTrain }} />
+      <TrainingSection title="Lower" hands={availableLowerHandIds({ unlockedHands })} levels={handLevels} {...{ shop, gold, busy, onTrain }} />
     </div>
   </div>;
 }

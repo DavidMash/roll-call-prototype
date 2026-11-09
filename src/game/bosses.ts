@@ -1,6 +1,7 @@
 import { CONFIG } from './config';
 import { hashSeed, SeededRng } from './rng';
-import { encounterHandIds, handIsStructurallyImpossible, handOptions, handStats, HANDS, HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
+import { encounterHandIds, handIsStructurallyImpossible, handOptions, handStats, HANDS, HAND_IDS,
+  lowerHand, LOWER_HAND_IDS, naturalHandPipsBenchmark, upperHand, UPPER_HAND_IDS } from './hands';
 import { finalizeExactScore, roundPositiveRatioToStep, roundScoreToStep, scoreMin, type ExactScore } from './scoreMath';
 import type { BigBossType, Board, BossRuntimeState, BossType, Die, HandId, HandLevels, MiniBossType, Rank } from './types';
 
@@ -190,13 +191,14 @@ export function bossGoalModifier(type: BossType): number {
         : 1;
 }
 
-export function wardenNaturalHands(activeDice: number): HandId[] {
-  return HAND_IDS.filter(hand => HANDS[hand].rank !== undefined || HANDS[hand].size! <= activeDice);
+export function wardenNaturalHands(activeDice: number, hands: readonly HandId[] = HAND_IDS): HandId[] {
+  return hands.filter(hand => HANDS[hand].rank !== undefined || HANDS[hand].size! <= activeDice);
 }
 
 export function wardenIdealNaturalPips(hand: HandId, activeDice: number): number {
   const definition = HANDS[hand];
   if (definition.rank !== undefined) return definition.rank * activeDice;
+  if (['odds', 'evens', 'chance', 'oddStraight', 'evenStraight'].includes(hand)) return naturalHandPipsBenchmark(hand);
   if (hand === 'smallStraight' || hand === 'largeStraight') {
     return Array.from({ length: definition.size! }, (_, index) => 6 - index)
       .reduce((sum, rank) => sum + rank, 0);
@@ -205,9 +207,10 @@ export function wardenIdealNaturalPips(hand: HandId, activeDice: number): number
     .reduce((sum, group, index) => sum + group * (6 - index), 0);
 }
 
-export function wardenBaselineCapacity(handLevels: HandLevels, consumed: HandId[], activeDice: number): ExactScore {
+export function wardenBaselineCapacity(handLevels: HandLevels, consumed: HandId[], activeDice: number,
+  hands: readonly HandId[] = HAND_IDS): ExactScore {
   const used = new Set(consumed);
-  return wardenNaturalHands(activeDice).filter(hand => !used.has(hand)).reduce((capacity, hand) => {
+  return wardenNaturalHands(activeDice, hands).filter(hand => !used.has(hand)).reduce((capacity, hand) => {
     const stats = handStats(hand, handLevels[hand]);
     return capacity + finalizeExactScore(1n, wardenIdealNaturalPips(hand, activeDice), stats.handMultiplier, 1).finalScore;
   }, 0n);
@@ -226,10 +229,11 @@ export function wardenUnlockCost(
   consumed: HandId[],
   activeDice: number,
   previousUnlockCost: ExactScore = 0n,
+  hands: readonly HandId[] = HAND_IDS,
 ): ExactScore {
-  const normalCost = roundPositiveRatioToStep(wardenBaselineCapacity(handLevels, consumed, activeDice), 2n, WARDEN_STEP);
+  const normalCost = roundPositiveRatioToStep(wardenBaselineCapacity(handLevels, consumed, activeDice, hands), 2n, WARDEN_STEP);
   if (activeDice === 1) {
-    const weakestUpperCap = [...UPPER_HAND_IDS]
+    const weakestUpperCap = hands.filter(upperHand)
       .map(hand => wardenBaselineHandScore(handLevels, hand, 1))
       .sort((a, b) => a < b ? -1 : a > b ? 1 : 0)
       .slice(0, 2)
@@ -246,10 +250,10 @@ export function wardenUnlockCost(
 }
 
 export function wardenUnlockCosts(handLevels: HandLevels, consumed: HandId[], goal: ExactScore,
-  equippedDice: number = CONFIG.diceCount): ExactScore[] {
+  equippedDice: number = CONFIG.diceCount, hands: readonly HandId[] = HAND_IDS): ExactScore[] {
   const costs: ExactScore[] = [];
   for (let activeDice = 1; activeDice < equippedDice; activeDice++) {
-    costs.push(wardenUnlockCost(handLevels, consumed, activeDice, costs[0] ?? 0));
+    costs.push(wardenUnlockCost(handLevels, consumed, activeDice, costs[0] ?? 0, hands));
   }
   if (!costs.length) return costs;
   const cumulativeCost = costs.reduce((sum, cost) => sum + cost, 0n);
@@ -298,9 +302,9 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
     case 'juggler': return { type };
     case 'capitalReturn': return { type };
     case 'neglected': {
-      const counts = context.handPlayCounts ?? Object.fromEntries(HAND_IDS.map(hand => [hand, 0])) as Record<HandId, number>;
-      const order = new Map<HandId, number>(HAND_IDS.map((hand, index) => [hand, index]));
       const eligible = context.eligibleHands ?? HAND_IDS;
+      const counts = context.handPlayCounts ?? Object.fromEntries(eligible.map(hand => [hand, 0])) as Record<HandId, number>;
+      const order = new Map<HandId, number>(eligible.map((hand, index) => [hand, index]));
       const restrictionCount = Math.min(2, Math.max(0, eligible.length - 1));
       return {
         type,
@@ -320,13 +324,14 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
       const dieIds = context.playerDieIds?.length ? [...context.playerDieIds]
         : Array.from({ length: CONFIG.diceCount }, (_, index) => index);
       const missingDieId = dieIds.length > 1 ? dieIds.splice(Math.floor(rng.next() * dieIds.length), 1)[0] : null;
-      const upper = [...UPPER_HAND_IDS];
+      const upper = (context.eligibleHands ?? UPPER_HAND_IDS).filter(upperHand);
       const calledHands = Array.from({ length: 3 }, () => upper.splice(Math.floor(rng.next() * upper.length), 1)[0]);
       return { type, missingDieId, calledHands, completedHands: [], returned: missingDieId === null };
     }
     case 'mugger': {
       const rng = encounterRng(seed, round, type);
-      return { type, hiddenHand: LOWER_HAND_IDS[Math.floor(rng.next() * LOWER_HAND_IDS.length)], revealedHand: null, spent: false };
+      const lower = (context.eligibleHands ?? LOWER_HAND_IDS).filter(lowerHand);
+      return { type, hiddenHand: lower[Math.floor(rng.next() * lower.length)], revealedHand: null, spent: false };
     }
     case 'caller': return {
       type,
@@ -352,7 +357,13 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
     case 'hexer': return { type, cursedDieId: CURSED_DIE_ID };
     case 'marathon': return { type, cooldowns: {} };
     case 'quickdraw': return { type, lowerShotUsed: false, playedLowerHand: null };
-    case 'fly': return { type, flyHand: flyHandForRound(seed, round, context.playerDieIds?.length ?? CONFIG.diceCount), caught: false, moves: 0, mercyActive: false };
+    case 'fly': {
+      const rng = encounterRng(seed, round, type);
+      const lower = (context.eligibleHands ?? LOWER_HAND_IDS).filter(hand => lowerHand(hand)
+        && handIsPhysicallyAttainable(hand, context.playerDieIds?.length ?? CONFIG.diceCount));
+      return { type, flyHand: lower.length ? lower[Math.floor(rng.next() * lower.length)] : null,
+        caught: false, moves: 0, mercyActive: false };
+    }
     case 'snakeEyes': return { type, mutatedFaces: [] };
     case 'infected': return { type, infectedFaces: [] };
   }
@@ -389,7 +400,8 @@ export function unavailableEncounterHands(state: Pick<Board, 'boss' | 'consumed'
   const unavailable = new Set(state.consumed);
   if (state.bossSilenced) return [...unavailable];
   if (state.boss?.type === 'marathon') {
-    for (const hand of HAND_IDS) if ((state.boss.cooldowns[hand] ?? 0) > 0) unavailable.add(hand);
+    for (const hand of Object.keys(state.boss.cooldowns) as HandId[])
+      if ((state.boss.cooldowns[hand] ?? 0) > 0) unavailable.add(hand);
   }
   if (state.boss?.type === 'neglected' && !state.boss.restored)
     for (const hand of state.boss.neglectedHands) unavailable.add(hand);

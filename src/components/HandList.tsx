@@ -1,5 +1,5 @@
 import { Badge, Button, Text, Tooltip } from '@mantine/core';
-import { encounterHandIds, handIsStructurallyImpossible, handStats, HANDS, relativeHandStrengthTiers } from '../game/hands';
+import { encounterHandIds, handIsStructurallyImpossible, handStats, HANDS, relativeHandStrengthTiers, upperHand } from '../game/hands';
 import { doubleOrNothingEligibleHands, flameByType } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
@@ -152,8 +152,8 @@ export function HandScorecard({ board, selection, busy, canSubmit, submitPreview
   onSelect: (hand: HandId) => void; onSubmit: () => void; onAcceptDoubleOrNothing: () => void;
 }) {
   const activeHands = encounterHandIds(board);
-  const upperHands = activeHands.filter(hand => HANDS[hand].rank !== undefined);
-  const lowerHands = activeHands.filter(hand => HANDS[hand].rank === undefined);
+  const upperHands = activeHands.filter(upperHand);
+  const lowerHands = activeHands.filter(hand => !upperHand(hand));
   const hasExactHand = activeHands.some(hand => legalHandCombinations(board, hand)
     .some(combination => combination.length === selection.dieIds.length
       && combination.every(id => selection.dieIds.includes(id))));

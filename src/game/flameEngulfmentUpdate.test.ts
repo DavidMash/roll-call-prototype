@@ -102,11 +102,11 @@ describe('Flame and Engulfment systems update', () => {
     expect(selectedOfferingFactor(event, new Set([1, 2]))).toBe(12);
   });
 
-  it('evaluates the latest three clears, then lets the player snuff only a qualifying joint subset', () => {
+  it('evaluates the latest six clears, then lets the player snuff only a qualifying joint subset', () => {
     const { state: played, cleanId, ultimateId, preservedId } = buildReadyOffering();
     played.engulfmentLevel = 2;
     played.infernoMultiplier = 35n;
-    expect(ENGULFMENT_EVIDENCE_ROUNDS).toBe(3);
+    expect(ENGULFMENT_EVIDENCE_ROUNDS).toBe(6);
     expect(ENGULFMENT_REQUIRED_MULTIPLIER).toBe(15);
     const evaluation = createInfernoEvaluation(played)!;
     expect(evaluation.effectiveValue).toBe(60);

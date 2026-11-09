@@ -2,6 +2,7 @@ import type { CollectibleDie, DiceInventory, Die, DieId, EncounterDie, GameState
 import { assertCollectibleDie } from './specialDice';
 
 export const ROSTER_SLOT_COUNT = 5;
+export const MAX_ROSTER_SLOT_COUNT = 7;
 export const STORAGE_SLOT_COUNT = 5;
 
 type DiceCollectionState = Pick<GameState, 'diceInventory' | 'encounterDice' | 'dice'>;
@@ -76,8 +77,8 @@ export function orderDieIdsByEncounter<T extends DieId>(state: Pick<GameState, '
 }
 
 export function assertDiceInventory(inventory: DiceInventory, encounter: readonly EncounterDie[] = []): void {
-  if (!Array.isArray(inventory.roster) || inventory.roster.length !== ROSTER_SLOT_COUNT)
-    throw new Error(`Dice inventory must have exactly ${ROSTER_SLOT_COUNT} Roster slots.`);
+  if (!Array.isArray(inventory.roster) || inventory.roster.length < ROSTER_SLOT_COUNT || inventory.roster.length > MAX_ROSTER_SLOT_COUNT)
+    throw new Error(`Dice inventory must have between ${ROSTER_SLOT_COUNT} and ${MAX_ROSTER_SLOT_COUNT} Roster slots.`);
   if (!Array.isArray(inventory.storage) || inventory.storage.length !== STORAGE_SLOT_COUNT)
     throw new Error(`Dice inventory must have exactly ${STORAGE_SLOT_COUNT} Storage slots.`);
   const instanceIds = Object.keys(inventory.instances).map(Number);
@@ -111,8 +112,9 @@ export function assertDiceInventory(inventory: DiceInventory, encounter: readonl
 }
 
 export function rosterTuple(ids: Array<DieId | null>): RosterSlots {
-  if (ids.length !== ROSTER_SLOT_COUNT) throw new Error(`Expected ${ROSTER_SLOT_COUNT} Roster slots.`);
-  return ids as RosterSlots;
+  if (ids.length < ROSTER_SLOT_COUNT || ids.length > MAX_ROSTER_SLOT_COUNT)
+    throw new Error(`Expected between ${ROSTER_SLOT_COUNT} and ${MAX_ROSTER_SLOT_COUNT} Roster slots.`);
+  return ids;
 }
 
 export function storageTuple(ids: Array<DieId | null>): StorageSlots {

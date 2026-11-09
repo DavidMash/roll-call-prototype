@@ -30,6 +30,8 @@ export const bossRewardForEncounter = (miniBoss: boolean) =>
   miniBoss ? MINI_BOSS_REWARD_GOLD : BOSS_REWARD_GOLD;
 export const interestForGold = (heldGold: number) => Math.min(CONFIG.interestCap,
   Math.floor(Math.max(0, heldGold) / CONFIG.interestInterval));
+export const interestForGoldAtCap = (heldGold: number, cap: number) => Math.min(cap,
+  Math.floor(Math.max(0, heldGold) / CONFIG.interestInterval));
 export const offerRerollCost = (count: number) => CONFIG.offerRerollBase * CONFIG.rerollCostGrowth ** count;
 export function lifeRestoreCost(purchases: number): number {
   if (!Number.isInteger(purchases) || purchases < 0) throw new Error('Life restore count must be a non-negative integer.');

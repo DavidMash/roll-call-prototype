@@ -1,7 +1,6 @@
 import { ActionIcon, Badge, Box, Button, Divider, Drawer, Group, Progress, SegmentedControl, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
-import { CONFIG } from '../game/config';
 import type { Board, GameEvent } from '../game/types';
 import { flameInstances, FLAMES, FLAME_SLOT_COUNT } from '../game/flames';
 import type { PlaybackSpeed } from '../useGame';
@@ -39,7 +38,8 @@ export function TopHud({ board, event, flamePresentation = [], speed, setSpeed, 
   onMenuOpenChange?: (opened: boolean) => void;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const hearts = Array.from({ length: CONFIG.maxLives }, (_, index) => index < board.lives ? '♥' : '♡').join(' ');
+  const maxLives = board.infernoRewards.upgrades.maxLives;
+  const hearts = Array.from({ length: maxLives }, (_, index) => index < board.lives ? '♥' : '♡').join(' ');
   const specialOfferStatuses = activeSpecialOfferStatusItems(board.specialOfferEffects);
   const chapter = chapterPosition(board.round);
   const presentationByInstance = new Map(flamePresentation.map(item => [item.instanceId, item]));
@@ -81,8 +81,8 @@ export function TopHud({ board, event, flamePresentation = [], speed, setSpeed, 
         {board.phase === 'shop'
           ? <Tooltip label="Restore lost lives" withArrow><UnstyledButton className="hud-lives interactive" data-testid="stat-lives"
             data-tutorial="lives"
-            aria-label={`${board.lives} of ${CONFIG.maxLives} lives; restore lives`} onClick={openRestoreLives}>{hearts}</UnstyledButton></Tooltip>
-          : <div className="hud-lives" data-testid="stat-lives" data-tutorial="lives" aria-label={`${board.lives} of ${CONFIG.maxLives} lives`}>{hearts}</div>}
+            aria-label={`${board.lives} of ${maxLives} lives; restore lives`} onClick={openRestoreLives}>{hearts}</UnstyledButton></Tooltip>
+          : <div className="hud-lives" data-testid="stat-lives" data-tutorial="lives" aria-label={`${board.lives} of ${maxLives} lives`}>{hearts}</div>}
       </Group>
       <ActionIcon className="menu-trigger" variant="subtle" color="gray" size="lg" aria-label="Open menu" onClick={() => setMenu(true)}>
         <span aria-hidden="true" className="hamburger-icon"><i /><i /><i /></span>

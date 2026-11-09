@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { newRun } from './engine';
-import { compactGameStateForPersistence, isResumableRun, loadPersistedRun, RUN_STORAGE_KEY, RUN_STORAGE_VERSION, savePersistedRun } from './persistence';
+import { compactGameStateForPersistence, isResumableRun, loadPersistedRun, RUN_STORAGE_KEY, savePersistedRun } from './persistence';
 import { stringifyExactJson } from './scoreMath';
 import { createInfernoEvaluation, infernoMeterTransition } from './engulfment';
 import { placeFlameInstance } from './flames';
@@ -42,7 +42,7 @@ describe('run persistence', () => {
     const storage = new MemoryStorage();
     storage.setItem(RUN_STORAGE_KEY, '{not-json');
     expect(loadPersistedRun(storage, null)).toBeNull();
-    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: RUN_STORAGE_VERSION - 2, state: newRun('old').state }));
+    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: 27, state: newRun('old').state }));
     expect(loadPersistedRun(storage, null)).toBeNull();
   });
 

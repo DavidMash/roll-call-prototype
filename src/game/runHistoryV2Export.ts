@@ -1,5 +1,5 @@
 import { FLAMES } from './flames';
-import { HANDS, HAND_IDS } from './hands';
+import { availableHandIds, HANDS } from './hands';
 import { SPECIAL_DICE } from './specialDice';
 import { formatExactScore, formatPlayerNumber } from './copy';
 import { RUN_HISTORY_V2_RULESET, RUN_HISTORY_V2_SCHEMA_VERSION } from './runHistoryV2';
@@ -8,6 +8,7 @@ import { summarizeRunHistoryV2, type OfferImpressions } from './runHistoryV2Summ
 import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
 import type { DiceRarity, GameState } from './types';
 import { toExactJsonValue } from './scoreMath';
+import { INFERNO_REWARD_OFFERS } from './infernoRewards';
 
 const number = (value: number | bigint) => typeof value === 'bigint' ? formatExactScore(value) : formatPlayerNumber(value);
 const entries = (record: Record<string, number | bigint> | Partial<Record<string, number | bigint>>) => Object.entries(record)
@@ -63,6 +64,12 @@ export function renderRunSummaryV2(state: GameState): string {
   }).join(' · ') || 'None';
   const bribery = experienced.flames.bribery?.diagnostics;
   const shares = experienced.largestHandShare;
+  const infernoRewards = canonical.infernoRewards;
+  const claimedInfernoRewards = infernoRewards.claimed
+    .map(id => INFERNO_REWARD_OFFERS[id]?.name ?? id).join(' · ') || 'None';
+  const unlockedBonusHands = infernoRewards.unlockedBonusHands
+    .map(hand => HANDS[hand].name).join(' · ') || 'None';
+  const permanentInfernoUpgrades = infernoRewards.finalPermanentUpgrades;
   return [
     'ROLL CALL · RUN HISTORY V2',
     ...incomplete,
@@ -79,7 +86,7 @@ export function renderRunSummaryV2(state: GameState): string {
     '',
     'FINAL CANONICAL BUILD',
     `Inferno: Level ${number(canonical.infernoLevel)} · ×${number(canonical.infernoMultiplier)}`,
-    `Hand levels: ${HAND_IDS.map(hand => `${HANDS[hand].name} ${number(canonical.finalHandLevels[hand] ?? 1)}`).join(' · ')}`,
+    `Hand levels: ${availableHandIds(state).map(hand => `${HANDS[hand].name} ${number(canonical.finalHandLevels[hand] ?? 1)}`).join(' · ')}`,
     `Active Roster: ${roster}`,
     `Storage: ${storage}`,
     `Flame slots: ${flames}`,
@@ -107,6 +114,9 @@ export function renderRunSummaryV2(state: GameState): string {
     `Flame balance: ${flameBalance}`,
     ...(bribery ? [`Bribery: ${number(bribery.briberyPurchases)} purchased · ${number(bribery.briberyGoldSpent)}G spent · ${number(bribery.briberyPayoffHands)} payoff Hands · max ${number(bribery.briberyMaxStack)} stacked / ×${number(bribery.briberyMaxFactor)}`] : []),
     `Flame lifecycle: acquired ${number(experienced.flameLifecycle.acquired)} · replaced ${number(experienced.flameLifecycle.replaced)} · invested ${number(experienced.flameLifecycle.stokedGold)}G · Bonfires ${number(experienced.flameLifecycle.bonfires)} · Engulfed ${number(experienced.flameLifecycle.engulfed)}`,
+    `Inferno Rewards: ${number(infernoRewards.screens)} screens · claimed ${claimedInfernoRewards} · categories ${entries(infernoRewards.categoryCounts)} · rarities ${entries(infernoRewards.rarityCounts)} · recycled shown ${number(infernoRewards.recycledOffersShown)} / claimed ${number(infernoRewards.recycledOffersClaimed)}`,
+    `Inferno permanent upgrades: ${permanentInfernoUpgrades ? `roster ${number(permanentInfernoUpgrades.rosterCap)} · rerolls ${number(permanentInfernoUpgrades.manualRerolls)} · Hearts ${number(permanentInfernoUpgrades.maxLives)} · Interest ${number(permanentInfernoUpgrades.interestCap)}G · free Shop rerolls ${number(permanentInfernoUpgrades.freeShopRerolls)} · Overkill cap ${number(permanentInfernoUpgrades.overkillTemperCap)}T` : 'None'}`,
+    `Unlocked bonus Hands: ${unlockedBonusHands}`,
     `Special dice: ${specialDice}`,
     `Charge: armed ${number(experienced.charge.arms)} · consumed ${number(experienced.charge.consumes)} · resets ${number(experienced.charge.resets)}`,
     `Boss outcomes: ${entries(experienced.bossOutcomes)} · Special Offers: ${entries(experienced.specialOffers)}`,

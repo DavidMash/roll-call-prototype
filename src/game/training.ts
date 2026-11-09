@@ -1,4 +1,4 @@
-import { HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
+import { ALL_HAND_IDS, availableLowerHandIds, availableUpperHandIds, FINAL_UPPER_HAND_ORDER } from './hands';
 import type {
   FrozenTrainingSession, HandId, HandLevels, LowerHandId, UpperHandId,
 } from './types';
@@ -15,21 +15,24 @@ export function roundedTrainingBaseline(levels: Readonly<Record<string, number>>
   return Math.round(values.reduce((sum, level) => sum + level, 0) / values.length);
 }
 
-export function createTrainingSession(levels: HandLevels, freeTrainingAvailable = false): FrozenTrainingSession {
-  const upperLevelsAtEntry = familySnapshot(levels, UPPER_HAND_IDS as readonly UpperHandId[]);
-  const lowerLevelsAtEntry = familySnapshot(levels, LOWER_HAND_IDS as readonly LowerHandId[]);
+export function createTrainingSession(levels: HandLevels, freeTrainingAvailable = false,
+  unlockedHands: readonly HandId[] = []): FrozenTrainingSession {
+  const upper = availableUpperHandIds({ unlockedHands });
+  const lower = availableLowerHandIds({ unlockedHands });
+  const upperLevelsAtEntry = familySnapshot(levels, upper as readonly UpperHandId[]);
+  const lowerLevelsAtEntry = familySnapshot(levels, lower as readonly LowerHandId[]);
   return {
     upperLevelsAtEntry,
     lowerLevelsAtEntry,
     upperBaseline: roundedTrainingBaseline(upperLevelsAtEntry),
     lowerBaseline: roundedTrainingBaseline(lowerLevelsAtEntry),
-    purchasesByHand: Object.fromEntries(HAND_IDS.map(hand => [hand, 0])) as Record<HandId, number>,
+    purchasesByHand: Object.fromEntries(ALL_HAND_IDS.map(hand => [hand, 0])) as Record<HandId, number>,
     freeTrainingAvailable,
   };
 }
 
 export function trainingFamily(hand: HandId): TrainingFamily {
-  return UPPER_HAND_IDS.includes(hand) ? 'upper' : 'lower';
+  return FINAL_UPPER_HAND_ORDER.includes(hand) ? 'upper' : 'lower';
 }
 
 export function trainingBaseline(session: FrozenTrainingSession, hand: HandId): number {

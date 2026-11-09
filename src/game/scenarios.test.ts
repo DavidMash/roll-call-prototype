@@ -104,6 +104,8 @@ describe('Scenario progression and completion', () => {
     resolver.engulfNow();
     expect(state.scenario?.completionPending).toBe(true);
     resolver.continueInfernoEvaluation();
+    expect(state.phase).toBe('infernoReward');
+    resolver.chooseInfernoReward(state.infernoRewards.pending!.offers[0]);
     expect(state.phase).toBe('scenarioComplete');
     const continued = dispatch(state, { type: 'CONTINUE_SCENARIO_RUN' }, constant).state;
     expect(continued.scenario).toMatchObject({ completionPending: false, completionAcknowledged: true });

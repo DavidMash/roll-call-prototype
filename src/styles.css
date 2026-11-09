@@ -1285,6 +1285,16 @@ body, #root { overflow: hidden; }
 @keyframes engulfment-red-arrival { from { opacity: 0; transform: scale(.97); filter: brightness(2); } to { opacity: 1; transform: none; filter: none; } }
 @keyframes snuff-out { from { opacity: 1; filter: brightness(2); } to { opacity: .5; filter: grayscale(1); } }
 .rich-description { line-height: 1.55; }
+.inferno-reward-screen { min-height: min(70vh, 650px); }
+.inferno-reward-heading { border: 1px solid rgba(255, 112, 67, .35); background: radial-gradient(circle at 15% 50%, rgba(150, 38, 18, .35), rgba(20, 15, 17, .96) 55%); }
+.inferno-reward-card { border-width: 2px; background: linear-gradient(150deg, rgba(70, 24, 18, .55), rgba(18, 16, 20, .97)); }
+.inferno-reward-card.rarity-common { border-color: rgba(180, 190, 200, .45); }
+.inferno-reward-card.rarity-uncommon { border-color: rgba(60, 210, 130, .55); }
+.inferno-reward-card.rarity-rare { border-color: rgba(80, 145, 255, .65); }
+.inferno-reward-card.rarity-legendary { border-color: rgba(255, 170, 45, .8); box-shadow: 0 0 24px rgba(255, 105, 25, .13); }
+.inferno-die-build { background: rgba(255,255,255,.04); }
+.inferno-make-room-die { min-width: 0; }
+.roster-grid { grid-template-columns: repeat(auto-fit, minmax(68px, 1fr)); }
 .glossary-term {
   display: inline;
   padding: 1px 5px;

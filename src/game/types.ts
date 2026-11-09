@@ -51,10 +51,14 @@ export type DieEffectInstanceId = string;
 export type DiceRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
 export type HandId =
   | 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes' | 'sevens'
-  | 'pair' | 'twoPair' | 'threeKind' | 'fullHouse' | 'fourKind' | 'fiveKind' | 'smallStraight' | 'largeStraight';
-export type UpperHandId = 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes' | 'sevens';
+  | 'odds' | 'evens' | 'chance'
+  | 'pair' | 'twoPair' | 'miniStraight' | 'threeKind' | 'oddStraight' | 'evenStraight'
+  | 'smallStraight' | 'threePair' | 'fullHouse' | 'fourKind' | 'wideStraight'
+  | 'doubleTriple' | 'largeStraight' | 'fullerHouse' | 'fiveKind' | 'xlStraight' | 'sixKind';
+export type UpperHandId = 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes' | 'sevens'
+  | 'odds' | 'evens' | 'chance';
 export type LowerHandId = Exclude<HandId, UpperHandId>;
-export type Phase = 'round' | 'roundSummary' | 'inferno' | 'scenarioComplete' | 'bust' | 'flameSelection' | 'specialOffer' | 'shop' | 'lost' | 'error';
+export type Phase = 'round' | 'roundSummary' | 'inferno' | 'infernoReward' | 'scenarioComplete' | 'bust' | 'flameSelection' | 'specialOffer' | 'shop' | 'lost' | 'error';
 export type ScoreSource = 'hand' | 'curtainCall' | 'jumpingBean' | 'hitchhiker' | 'boss';
 export type HandPlaySource = 'manual' | 'jumpingBean' | 'freePlay';
 export type RunMode = 'normal' | 'tutorial' | 'scenario';
@@ -66,12 +70,13 @@ export interface ScenarioRunState {
   completionPending: boolean;
   completionAcknowledged: boolean;
 }
-export type GoldSource = 'golden' | 'jackpot' | 'diceSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward' | 'specialOffer';
+export type GoldSource = 'golden' | 'jackpot' | 'diceSale' | 'roundBase' | 'unusedRerolls' | 'interest' | 'bossReward' | 'specialOffer' | 'infernoReward';
 export type GoldSpendSource = 'dicePurchase' | 'diceOfferReroll' | 'handTraining' | 'flameInvestment' | 'lifeRestore' | 'furnace' | 'greaseTheEngine' | 'bribery';
-export type TemperSource = 'overkill' | 'boardRefresh' | 'miniBoss' | 'boss' | 'bonfire' | 'engulfment';
+export type TemperSource = 'overkill' | 'boardRefresh' | 'miniBoss' | 'boss' | 'bonfire' | 'engulfment' | 'infernoReward';
 export type TemperSpendSource = 'fusion' | 'forge';
 export type RoundTemperState = { overkill: number; boardRefresh: number; miniBoss: number; boss: number };
-export type HandLevels = Record<HandId, number>;
+/** Persisted scorecard levels. Bonus Hands are added lazily by old-save migration. */
+export type HandLevels = Record<string, number>;
 export type HandFamilyFlameStage = 'setup' | 'payoff' | 'spent';
 export interface ProgressiveFlameRuntime {
   topDown: number;
@@ -384,7 +389,7 @@ export interface EncounterDie {
   encounterId: string;
 }
 export type Die = CollectibleDie | EncounterDie;
-export type RosterSlots = [DieId | null, DieId | null, DieId | null, DieId | null, DieId | null];
+export type RosterSlots = Array<DieId | null>;
 export type StorageSlots = [DieId | null, DieId | null, DieId | null, DieId | null, DieId | null];
 export interface DiceInventory {
   instances: Record<DieId, CollectibleDie>;
@@ -443,6 +448,8 @@ export interface Shop {
   /** Frozen when this semantic Shop visit is created and retained through navigation/Bust restoration. */
   trainingSession?: FrozenTrainingSession;
   offerRerolls: number;
+  /** Inferno Reward free rerolls spent in this semantic Shop visit. */
+  freeOfferRerollsUsed?: number;
   lifeRestores: number;
   /** On The House: the first collectible-die purchase in this visit costs no Gold. */
   freeDicePurchaseAvailable?: boolean;
@@ -477,6 +484,52 @@ export type ChallengeId = 'fiveAlive' | 'theLongWay' | 'upperClass' | 'lowerClas
   | 'jackpot' | 'getYourRepsIn' | 'fullyLoaded';
 export interface BadDreamCheckpoint {
   chapter: number;
+}
+
+export type InfernoRewardRarity = 'common' | 'uncommon' | 'rare' | 'legendary';
+export type InfernoRewardCategory = 'upgrade' | 'hand' | 'resource' | 'die';
+export type InfernoRewardOfferId =
+  | 'expandedRoster' | 'expandedRoster2' | 'extraReroll' | 'extraReroll2'
+  | 'maxHeart' | 'maxHeart2' | 'higherInterest' | 'higherInterest2'
+  | 'freeShopReroll' | 'freeShopReroll2' | 'temperCapacity' | 'temperCapacity2'
+  | 'goldWindfall' | 'temperWindfall'
+  | 'handOdds' | 'handEvens' | 'handChance' | 'handMiniStraight' | 'handOddStraight'
+  | 'handEvenStraight' | 'handThreePair' | 'handWideStraight' | 'handDoubleTriple'
+  | 'handFullerHouse' | 'handXlStraight' | 'handSixKind'
+  | 'dieInvestor' | 'dieMagicMirror' | 'dieGroundAssault' | 'dieSustainableIndustry'
+  | 'dieGymRat' | 'diePopcornMachine';
+export interface InfernoRewardOffer {
+  id: InfernoRewardOfferId;
+  name: string;
+  category: InfernoRewardCategory;
+  rarity: InfernoRewardRarity;
+  description: string;
+}
+export interface InfernoPermanentUpgrades {
+  rosterCap: number;
+  manualRerolls: number;
+  maxLives: number;
+  interestCap: number;
+  freeShopRerolls: number;
+  overkillTemperCap: number;
+}
+export interface DeferredInfernoReward {
+  deferredAtScreen: number;
+}
+export interface InfernoRewardSelection {
+  screenNumber: number;
+  offers: InfernoRewardOfferId[];
+  recycledOfferIds: InfernoRewardOfferId[];
+  /** Set only while a full collection is choosing a no-sale replacement destination. */
+  makeRoomOfferId: InfernoRewardOfferId | null;
+}
+export interface InfernoRewardState {
+  claimedOfferIds: InfernoRewardOfferId[];
+  deferredOffers: Partial<Record<InfernoRewardOfferId, DeferredInfernoReward>>;
+  screenCount: number;
+  pending: InfernoRewardSelection | null;
+  upgrades: InfernoPermanentUpgrades;
+  unlockedHands: HandId[];
 }
 export type InfernoTrend = 'first' | 'improving' | 'worsening' | 'stable';
 export type InfernoWeakness = 'quantity' | 'investment' | 'utilization' | 'close';
@@ -623,6 +676,7 @@ export interface Board {
   manualRerollsRemaining: number;
   manualRerollsUsedThisRound: number;
   specialOfferEffects: SpecialOfferEffects;
+  infernoRewards: InfernoRewardState;
   /**
    * Active encounter reference projection in Roster order. Player entries alias the
    * authoritative inventory instances; array membership and order never establish ownership.
@@ -877,7 +931,8 @@ export type EventType =
   | 'CALLER_CALLED' | 'CALLER_CHANGED' | 'WARDEN_UNLOCK_TARGET' | 'WARDEN_REINFORCEMENT' | 'CURSED_DIE_ROLLED'
   | 'BOSS_HAND_CHANGED' | 'BOSS_FACE_CHANGED'
   | 'RUN_LOST' | 'RESOLUTION_ERROR' | 'MANUAL_REROLL_STARTED' | 'DEAD_BOARD' | 'DEAD_BOARD_RESCUED'
-  | 'TUTORIAL_SAFEGUARD' | 'INFERNO_EVALUATED' | 'SPECIAL_DIE_EFFECT' | 'TEMPER_CHANGED' | 'DICE_FORGED';
+  | 'TUTORIAL_SAFEGUARD' | 'INFERNO_EVALUATED' | 'INFERNO_REWARD_OFFERED' | 'INFERNO_REWARD_CLAIMED'
+  | 'SPECIAL_DIE_EFFECT' | 'TEMPER_CHANGED' | 'DICE_FORGED';
 export interface EventRecord {
   id: number;
   round: number;
@@ -1027,6 +1082,9 @@ export type Action =
   | { type: 'TOGGLE_ENGULFMENT_FLAME'; flameInstanceId: FlameInstanceId }
   | { type: 'ENGULF_NOW' }
   | { type: 'NOT_YET' }
+  | { type: 'CHOOSE_INFERNO_REWARD'; offerId: InfernoRewardOfferId }
+  | { type: 'PLACE_INFERNO_DIE'; destination: DiceSlotRef; expectedDieId: DieId }
+  | { type: 'CANCEL_INFERNO_MAKE_ROOM' }
   | { type: 'CONTINUE_FLAME_SELECTION' }
   | { type: 'SKIP_FLAME_SELECTION' }
   | { type: 'CHOOSE_SPECIAL_OFFER'; offerId: number }

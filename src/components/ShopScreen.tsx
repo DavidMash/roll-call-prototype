@@ -2,7 +2,7 @@ import { ActionIcon, Badge, Button, Card, Group, Modal, Paper, Progress, Stack, 
 import { useEffect, useRef, useState } from 'react';
 import { BOSSES } from '../game/bosses';
 import { chapterLabel, chapterRoundForRound } from '../game/chapters';
-import { CONFIG, offerRerollCost } from '../game/config';
+import { offerRerollCost } from '../game/config';
 import { formatPlayerNumber } from '../game/copy';
 import { firstPurchaseSlot, slotValue } from '../game/diceEconomy';
 import { availableShopStages } from '../game/engine';
@@ -23,7 +23,7 @@ import { ScoreResolution } from './ScoreResolution';
 import { TrainingScorecard } from './TrainingScorecard';
 import { CurrencyAmount } from './CurrencyAmount';
 
-const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
+const hearts = (lives: number, maximum: number) => Array.from({ length: maximum }, (_, index) => index < lives ? '♥' : '♡').join(' ');
 const slotKey = (slot: DiceSlotRef) => `${slot.area}:${slot.index}`;
 const slotName = (slot: DiceSlotRef) => `${slot.area === 'roster' ? 'Roster' : 'Storage'} ${slot.index + 1}`;
 
@@ -94,6 +94,9 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
   const exitLockStartedAt = useRef(Date.now());
   const knownDieIds = useRef(new Set(Object.keys(inventory.instances).map(Number)));
   const rosterCount = inventory.roster.filter(id => id !== null).length;
+  const maxLives = board.infernoRewards.upgrades.maxLives;
+  const freeOfferReroll = (shop.freeOfferRerollsUsed ?? 0) < board.infernoRewards.upgrades.freeShopRerolls;
+  const rerollCost = freeOfferReroll ? 0 : offerRerollCost(shop.offerRerolls);
   const ownedFlames = flameInstances(board);
   const collectionFull = firstPurchaseSlot(inventory) === null;
   const stages = availableShopStages(board);
@@ -220,7 +223,7 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
   return <Stack gap="xs" className="shop-screen">
     <div className="shop-summary phase-sticky-header">{returnedFromBust ? <Paper px="sm" py={6} className="bust-shop-banner" data-testid="bust-shop-banner">
       <Group justify="space-between" gap="xs" wrap="wrap"><div><Text size="sm" fw={850} c="red">{chapterLabel(returnedFromBust.round)} BUST</Text><Text size="xs" c="dimmed">1 Life Lost</Text></div>
-        <Text fw={800} c="red" aria-label={`${board.lives} of ${CONFIG.maxLives} lives`}>{hearts(board.lives)}</Text></Group></Paper>
+        <Text fw={800} c="red" aria-label={`${board.lives} of ${maxLives} lives`}>{hearts(board.lives, maxLives)}</Text></Group></Paper>
       : <Group justify="space-between"><Text fw={800}>SHOP</Text><Text size="xs" c="dimmed">{upcomingBoss ? `Prepare for ${BOSSES[upcomingBoss].name}` : `Prepare for ${chapterLabel(board.round + 1)}`}</Text></Group>}</div>
     {busy && <ScoreResolution event={event} busy={busy} onSkip={skip} />}
     <BossPreview board={board} />
@@ -232,8 +235,9 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
 
     {stage === 'shop' && <Paper p="xs" className="shop-section dice-shop-section" data-testid="dice-shop">
       <Group justify="space-between" className="section-heading"><Text fw={700} size="sm" tt="uppercase" lts=".08em">Dice</Text>
-        <Button size="compact-xs" variant="default" disabled={busy || board.gold < offerRerollCost(shop.offerRerolls)}
-          aria-label={`Reroll offers for ${offerRerollCost(shop.offerRerolls)} Gold`} onClick={() => submit({ type: 'REROLL_OFFERS' })}><span className="button-currency-label">REROLL OFFERS <CurrencyAmount currency="gold" value={offerRerollCost(shop.offerRerolls)} accessible={false} /></span></Button></Group>
+        <Button size="compact-xs" variant="default" disabled={busy || board.gold < rerollCost}
+          aria-label={freeOfferReroll ? 'Reroll offers for free' : `Reroll offers for ${rerollCost} Gold`}
+          onClick={() => submit({ type: 'REROLL_OFFERS' })}><span className="button-currency-label">REROLL OFFERS {freeOfferReroll ? 'FREE' : <CurrencyAmount currency="gold" value={rerollCost} accessible={false} />}</span></Button></Group>
       <div className="dice-offer-grid">{shop.offers.map(offer => {
         const effect = createDieEffect(-offer.id - 1, offer.dieType); const effects = [effect]; const free = dicePurchaseIsFree(shop);
         const affordable = free || board.gold >= offer.price; const available = !offer.purchased;
@@ -248,9 +252,9 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
             onClick={() => submit({ type: 'BUY_DIE', offerId: offer.id })}>{offer.purchased ? 'PURCHASED' : collectionFull ? 'COLLECTION FULL' : free ? 'FREE' : <span className="button-currency-label">BUY <CurrencyAmount currency="gold" value={offer.price} accessible={false} /></span>}</Button>
         </Card>;
       })}</div>
-      <Stack gap={5} mt="xs" className="dice-collection"><Group justify="space-between"><Text size="xs" fw={850} tt="uppercase">Storage</Text><Text size="xs" c="dimmed">{inventory.storage.filter(Boolean).length} / 5</Text></Group>
+      <Stack gap={5} mt="xs" className="dice-collection"><Group justify="space-between"><Text size="xs" fw={850} tt="uppercase">Storage</Text><Text size="xs" c="dimmed">{inventory.storage.filter(Boolean).length} / {inventory.storage.length}</Text></Group>
         <div className="collection-grid storage-grid" data-testid="storage-strip">{slots('storage', inventory.storage)}</div>
-        <div className="roster-collection-dock" data-testid="shop-roster-dock"><Group justify="space-between" className="collection-heading"><Text size="xs" fw={850} tt="uppercase">Roster</Text><Text size="xs" c="dimmed">{rosterCount} / 5 equipped</Text></Group>
+        <div className="roster-collection-dock" data-testid="shop-roster-dock"><Group justify="space-between" className="collection-heading"><Text size="xs" fw={850} tt="uppercase">Roster</Text><Text size="xs" c="dimmed">{rosterCount} / {inventory.roster.length} equipped</Text></Group>
           <div className="collection-grid roster-grid">{slots('roster', inventory.roster)}</div></div></Stack>
     </Paper>}
 
@@ -296,7 +300,8 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
 
     {stage === 'train' && <Paper p="xs" className="shop-section training-shop-section" data-testid="training-shop" data-tutorial="hand-training">
       <Group justify="space-between" className="section-heading"><div><Text fw={700} size="sm" tt="uppercase" lts=".08em">Train</Text><Text size="xs" c="dimmed">Training costs more as a hand rises above the rest of its section.</Text></div></Group>
-      <TrainingScorecard handLevels={board.handLevels} shop={shop} gold={board.gold} busy={busy} onTrain={hand => submit({ type: 'TRAIN_HAND', hand })} />
+      <TrainingScorecard handLevels={board.handLevels} unlockedHands={board.infernoRewards.unlockedHands}
+        shop={shop} gold={board.gold} busy={busy} onTrain={hand => submit({ type: 'TRAIN_HAND', hand })} />
     </Paper>}
 
     {stage === 'flames' && <Paper p="xs" className="shop-section fire-keeping-section" data-testid="fire-keeping-shop"><Group justify="space-between" className="section-heading"><div><Text fw={700} size="sm" tt="uppercase" lts=".08em">Flames</Text>

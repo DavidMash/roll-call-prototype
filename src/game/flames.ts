@@ -1,6 +1,7 @@
 import { activeFace, wholeDieEffectSuppressed } from './dice';
 import { activeEncounterDice, availablePlayableDice, currentlyPlayableManualHands, lastPlayDanger } from './bosses';
-import { benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, HANDS, LOWER_HAND_IDS, rankedHands, ultimateHands, UPPER_HAND_IDS } from './hands';
+import { availableHandIds, benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, HANDS,
+  lowerHand as isLowerHand, rankedHands, ultimateHands, upperHand } from './hands';
 import type { Board, Flame, FlameActivationDiagnostics, FlameInstance, FlameInstanceId, FlameSlotIndex, FlameSlots, GameState, HandId, Rarity, SpecialDieType, XMultFactor } from './types';
 import { formatPlayerNumber } from './copy';
 import { Decimal, type ExactScore } from './scoreMath';
@@ -516,8 +517,9 @@ export interface HandStartSnapshot {
     activeEffects: SpecialDieType[]; enhancementCount: number }[];
 }
 
-export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'infernoMultiplier' | 'gold' | 'manualRerollsRemaining' | 'manualRerollsUsedThisRound' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'progressiveFlames' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackUpperHandsPlayed' | 'minigunUpperStreak' | 'flameSlots' | 'dice' | 'dieRoundState' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget' | 'roundPlayCount' | 'roundStartLives' | 'roundStartRosterSize' | 'precedingShopDiePurchase' | 'interactiveFlames'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null, playSource: import('./types').HandPlaySource = 'manual', wager: { allIn?: boolean; doubleOrNothingRedemption?: boolean } = {}): HandStartSnapshot {
-  const ultimate = ultimateHands(state.handLevels);
+export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'infernoMultiplier' | 'gold' | 'manualRerollsRemaining' | 'manualRerollsUsedThisRound' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'progressiveFlames' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackUpperHandsPlayed' | 'minigunUpperStreak' | 'flameSlots' | 'dice' | 'dieRoundState' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget' | 'roundPlayCount' | 'roundStartLives' | 'roundStartRosterSize' | 'precedingShopDiePurchase' | 'interactiveFlames' | 'infernoRewards'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null, playSource: import('./types').HandPlaySource = 'manual', wager: { allIn?: boolean; doubleOrNothingRedemption?: boolean } = {}): HandStartSnapshot {
+  const hands = availableHandIds(state);
+  const ultimate = ultimateHands(state.handLevels, hands);
   const availableDice = availablePlayableDice(state);
   return {
     score: state.score,
@@ -538,7 +540,7 @@ export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'in
     previousPlays: state.handPlayCounts[hand],
     ultimateHands: ultimate,
     ultimatePlayable: ultimate.some(target => currentlyPlayableManualHands(state).includes(target)),
-    benchWarmerHand: benchWarmerHand(state.handLevels),
+    benchWarmerHand: benchWarmerHand(state.handLevels, hands),
     targetPracticeHand: state.targetPracticeHand,
     hotStreakGoal: state.hotStreakGoal,
     hotStreakCharges: state.hotStreakCharges,
@@ -609,7 +611,7 @@ export function countScoringDiceEnhancementComponents(snapshot: HandStartSnapsho
 const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId, scoringDieIds: number[]) => {
   switch (id) {
     case 'ultimate': return snapshot.ultimateHands.includes(hand);
-    case 'minigun': return UPPER_HAND_IDS.includes(hand);
+    case 'minigun': return upperHand(hand);
     case 'hailMary': return snapshot.manualRerollsRemaining === 0;
     case 'fullOfGrace': return snapshot.lastPlayDanger !== 'none';
     case 'lowball': return lowballPlayedDiceCounts(snapshot).qualifies;
@@ -811,4 +813,4 @@ export function handFamilyFlameTargets(state: Pick<Board, 'flameSlots' | 'handFa
     return stage === 'setup' ? [HAND_FAMILY_FLAMES[id].setup] : stage === 'payoff' ? [HAND_FAMILY_FLAMES[id].payoff] : [];
   });
 }
-export const lowerHand = (hand: HandId) => LOWER_HAND_IDS.includes(hand);
+export const lowerHand = (hand: HandId) => isLowerHand(hand);

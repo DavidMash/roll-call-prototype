@@ -9,7 +9,7 @@ import {
   greaseTheEngineCost, FLAME_SCALING,
   briberyNextCost,
 } from './flames';
-import { HANDS, HAND_IDS, initialHandLevels, initialHandPlayCounts, planQualification, ultimateHands } from './hands';
+import { ALL_HAND_IDS, availableHandIds, HANDS, initialHandLevels, initialHandPlayCounts, planQualification, ultimateHands } from './hands';
 import { hashSeed, SeededRng } from './rng';
 import { boardSnapshot, createStats } from './telemetry';
 import { activeEncounterDice, bossSchedule, currentlyPlayableManualHands, isBigBossRound, unavailableEncounterHands } from './bosses';
@@ -28,7 +28,8 @@ import { Decimal, exactInferno, scoreFromUnknown, type ExactScore } from './scor
 import { attachLedger, chunkForResolution, cloneGameState, createRunLedger, sessionForState } from './ledger';
 import { getEncounterGoalBreakdown, targetForRound } from './goals';
 import { applyScenarioStart, type ScenarioDefinition } from './scenarios';
-import type { Action, Board, FlameSlotIndex, GameState, RandomSource, Resolution, Shop, ShopStage } from './types';
+import { initialInfernoRewardState, INFERNO_REWARD_IDS, infernoRewardEligible } from './infernoRewards';
+import type { Action, Board, DiceInventory, FlameSlotIndex, GameState, RandomSource, Resolution, Shop, ShopStage } from './types';
 
 const exact = (value: unknown, fallback: ExactScore = 0n): ExactScore => value === undefined || value === null
   ? fallback : scoreFromUnknown(value);
@@ -171,17 +172,18 @@ function normalizeHistoricalScores(state: GameState): void {
 
 const attemptSeed = (seed: string, round: number, attempt: number) => hashSeed(`${seed}:round:${round}:attempt:${attempt}`);
 
-function normalizeShop(shop: Shop, state: Pick<Board, 'nextShopVisitId' | 'handLevels' | 'flameSlots' | 'forgeUnlocked'>): void {
+function normalizeShop(shop: Shop, state: Pick<Board, 'nextShopVisitId' | 'handLevels' | 'flameSlots' | 'forgeUnlocked' | 'infernoRewards'>): void {
   if (!shop.stage || !['shop', 'forge', 'train', 'flames'].includes(shop.stage)) shop.stage = 'shop';
   if (shop.stage === 'flames' && !state.flameSlots.some(Boolean)) shop.stage = 'train';
   if (shop.stage === 'forge' && !state.forgeUnlocked) shop.stage = 'shop';
   shop.forgeSelection ??= { dieAId: null, dieBId: null };
   if (shop.trainingSession) {
-    for (const hand of HAND_IDS) shop.trainingSession.purchasesByHand[hand] = Math.max(0,
+    for (const hand of availableHandIds(state)) shop.trainingSession.purchasesByHand[hand] = Math.max(0,
       Math.floor(shop.trainingSession.purchasesByHand[hand] ?? 0));
     shop.trainingSession.freeTrainingAvailable = shop.trainingSession.freeTrainingAvailable === true;
   }
   shop.lifeRestores = Math.max(0, Math.floor(shop.lifeRestores ?? 0));
+  shop.freeOfferRerollsUsed = Math.max(0, Math.floor(shop.freeOfferRerollsUsed ?? 0));
   shop.diePurchased = shop.diePurchased === true;
   if (!Number.isInteger(shop.visitId) || (shop.visitId ?? 0) < 1) shop.visitId = state.nextShopVisitId++;
   else state.nextShopVisitId = Math.max(state.nextShopVisitId, shop.visitId! + 1);
@@ -195,6 +197,40 @@ function normalizeSpecialRuntime(state: Board): void {
     state.specialOfferEffects[key] = Math.max(0, Math.floor(state.specialOfferEffects[key]));
   state.bossSilenced ??= false;
   state.specialOffer ??= null;
+}
+
+function normalizeInfernoRewards(state: Board, inventory?: DiceInventory): void {
+  const defaults = initialInfernoRewardState();
+  state.infernoRewards = { ...defaults, ...(state.infernoRewards ?? {}),
+    upgrades: { ...defaults.upgrades, ...(state.infernoRewards?.upgrades ?? {}) },
+    claimedOfferIds: [...new Set(state.infernoRewards?.claimedOfferIds ?? [])].filter(id => INFERNO_REWARD_IDS.includes(id)),
+    deferredOffers: state.infernoRewards?.deferredOffers ?? {},
+    unlockedHands: [...new Set(state.infernoRewards?.unlockedHands ?? [])].filter(hand => ALL_HAND_IDS.includes(hand)),
+    pending: state.infernoRewards?.pending ?? null,
+  };
+  const upgrades = state.infernoRewards.upgrades;
+  upgrades.rosterCap = Math.max(5, Math.min(7, Math.floor(upgrades.rosterCap ?? 5)));
+  upgrades.manualRerolls = Math.max(3, Math.min(5, Math.floor(upgrades.manualRerolls ?? 3)));
+  upgrades.maxLives = Math.max(3, Math.min(5, Math.floor(upgrades.maxLives ?? 3)));
+  upgrades.interestCap = Math.max(10, Math.min(25, Math.floor(upgrades.interestCap ?? 10)));
+  upgrades.freeShopRerolls = Math.max(0, Math.min(2, Math.floor(upgrades.freeShopRerolls ?? 0)));
+  upgrades.overkillTemperCap = Math.max(5, Math.min(20, Math.floor(upgrades.overkillTemperCap ?? 5)));
+  state.infernoRewards.screenCount = Math.max(0, Math.floor(state.infernoRewards.screenCount ?? 0));
+  if (inventory) {
+    while (inventory.roster.length < upgrades.rosterCap) inventory.roster.push(null);
+    if (inventory.roster.length > upgrades.rosterCap && inventory.roster.slice(upgrades.rosterCap).every(id => id === null))
+      inventory.roster.length = upgrades.rosterCap;
+  }
+  for (const hand of ALL_HAND_IDS) {
+    state.handLevels[hand] = Math.max(1, Math.floor(state.handLevels[hand] ?? 1));
+    state.handPlayCounts[hand] = Math.max(0, Math.floor(state.handPlayCounts[hand] ?? 0));
+  }
+  if (state.infernoRewards.pending) {
+    state.infernoRewards.pending.offers = state.infernoRewards.pending.offers.filter(id => INFERNO_REWARD_IDS.includes(id)
+      && !state.infernoRewards.claimedOfferIds.includes(id));
+    state.infernoRewards.pending.recycledOfferIds ??= [];
+    state.infernoRewards.pending.makeRoomOfferId ??= null;
+  }
 }
 
 function normalizeBossRuntime(state: Board): void {
@@ -317,6 +353,7 @@ export function normalizeGameState(state: GameState): GameState {
   assertDiceInventory(next.diceInventory, next.encounterDice);
   syncActiveDiceProjection(next);
   next.dieRoundState ??= {};
+  normalizeInfernoRewards(next, next.diceInventory);
   next.dieRoundState = Object.fromEntries(ownedDice(next).filter(die => next.diceInventory.roster.includes(die.id))
     .map(die => [die.id, normalizeDieRoundRuntime(die, next.dieRoundState[die.id])]));
   if (typeof next.target === 'number' && !Number.isSafeInteger(next.target))
@@ -405,6 +442,7 @@ export function normalizeGameState(state: GameState): GameState {
     );
     ensureChapterPlan({ ...checkpoint, seed: next.seed }, chapterNumberForRound(checkpoint.round));
     normalizeSpecialRuntime(checkpoint);
+    normalizeInfernoRewards(checkpoint, next.roundCheckpoint.diceInventory);
     if (checkpoint.specialOfferEffects.silence && checkpoint.bossSchedule[checkpoint.round])
       checkpoint.target = targetForRound(checkpoint.round + (checkpoint.goalProgressionOffset ?? next.goalProgressionOffset));
     normalizeChapterLifecycle(checkpoint);
@@ -442,7 +480,7 @@ export function normalizeGameState(state: GameState): GameState {
   }
   if (next.roundCheckpoint?.board.boss?.type === 'warden') next.roundCheckpoint.board.boss.unlockCosts ??= [];
   next.currentNodeId ??= '';
-  next.lives = Math.max(0, Math.min(CONFIG.maxLives, Math.floor(next.lives ?? CONFIG.maxLives)));
+  next.lives = Math.max(0, Math.min(next.infernoRewards.upgrades.maxLives, Math.floor(next.lives ?? CONFIG.maxLives)));
   next.roundAttemptNumber = Math.max(1, Math.floor(next.roundAttemptNumber ?? 1));
   next.bust ??= null;
   next.flameTutorial ??= { pendingFlameInstanceId: null, completed: false };
@@ -468,6 +506,7 @@ export function normalizeGameState(state: GameState): GameState {
     source: stoke.source ?? 'flame_selection' }));
   next.stats.goldBySource.diceSale ??= 0;
   next.stats.goldBySource.specialOffer ??= 0;
+  next.stats.goldBySource.infernoReward ??= 0;
   next.stats.goldSpentBySource.lifeRestore ??= 0;
   next.stats.goldSpentBySource.dicePurchase ??= 0;
   next.stats.goldSpentBySource.diceOfferReroll ??= 0;
@@ -476,7 +515,8 @@ export function normalizeGameState(state: GameState): GameState {
   next.stats.diceOfferRerolls ??= 0;
   next.stats.temperEarned ??= 0;
   next.stats.temperSpent ??= 0;
-  next.stats.temperBySource ??= { overkill: 0, boardRefresh: 0, miniBoss: 0, boss: 0, bonfire: 0, engulfment: 0 };
+  next.stats.temperBySource ??= { overkill: 0, boardRefresh: 0, miniBoss: 0, boss: 0, bonfire: 0, engulfment: 0, infernoReward: 0 };
+  next.stats.temperBySource.infernoReward ??= 0;
   next.stats.temperSpentBySource ??= { fusion: 0, forge: 0 };
   next.stats.temperTransactions ??= [];
   next.stats.fusions ??= 0; next.stats.forges ??= 0;
@@ -546,7 +586,7 @@ export function validateAction(state: Board | GameState, action: Action): string
     && (!state.infernoEvaluation.success || state.infernoEvaluation.engulfed)
     ? null : 'A completed or insufficient Inferno evaluation is required.';
   if (action.type === 'CONTINUE_SCENARIO_RUN') return state.phase === 'scenarioComplete'
-    && !!state.scenario?.completionPending && !!state.infernoEvaluation?.engulfed
+    && !!state.scenario?.completionPending
     ? null : 'A completed Scenario is required.';
   if (action.type === 'TOGGLE_ENGULFMENT_FLAME') return state.phase === 'inferno' && !!state.infernoEvaluation?.success
     && !state.infernoEvaluation.engulfed
@@ -558,6 +598,21 @@ export function validateAction(state: Board | GameState, action: Action): string
     ? null : 'Select Flames with enough joint effective power.';
   if (action.type === 'NOT_YET') return state.phase === 'inferno' && !!state.infernoEvaluation?.success
     && !state.infernoEvaluation.engulfed ? null : 'A pending ready Inferno evaluation is required.';
+  if (action.type === 'CHOOSE_INFERNO_REWARD') {
+    if (state.phase !== 'infernoReward' || !state.infernoRewards.pending) return 'An Inferno Reward screen is required.';
+    if (!state.infernoRewards.pending.offers.includes(action.offerId)) return 'Choose an offered Inferno Reward.';
+    if (!infernoRewardEligible(state as GameState, action.offerId)) return 'That Inferno Reward is no longer eligible.';
+    return null;
+  }
+  if (action.type === 'PLACE_INFERNO_DIE') {
+    if (state.phase !== 'infernoReward' || !state.infernoRewards.pending?.makeRoomOfferId)
+      return 'A curated Inferno die must be waiting for placement.';
+    if (!('diceInventory' in state) || !slotExists(state.diceInventory, action.destination)) return 'Choose a valid occupied slot.';
+    if (slotValue(state.diceInventory, action.destination) !== action.expectedDieId) return 'The selected replacement die changed.';
+    return null;
+  }
+  if (action.type === 'CANCEL_INFERNO_MAKE_ROOM') return state.phase === 'infernoReward'
+    && !!state.infernoRewards.pending?.makeRoomOfferId ? null : 'Make Room is not active.';
   if (action.type === 'MANUAL_REROLL') {
     return validateManualReroll(state, action.dieIds);
   }
@@ -597,7 +652,7 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (invalid) return invalid;
     if (state.interactiveFlames.dareDevilCount >= FLAME_SCALING.dareDevil.maximumDares)
       return 'Dare Devil is at its stored payoff cap.';
-    if (!ultimateHands(state.handLevels).some(hand => currentlyPlayableManualHands(state).includes(hand)))
+    if (!ultimateHands(state.handLevels, availableHandIds(state)).some(hand => currentlyPlayableManualHands(state).includes(hand)))
       return 'Your Ultimate Hand is not currently playable.';
     if (!activeEncounterDice(state).some(die => die.owner === 'player')) return 'No player die is currently available to Roll.';
     return null;
@@ -816,18 +871,21 @@ export function validateAction(state: Board | GameState, action: Action): string
     return null;
   }
   if (action.type === 'RESTORE_LIFE') {
-    if (state.lives >= CONFIG.maxLives) return 'All lives are already restored.';
+    if (state.lives >= state.infernoRewards.upgrades.maxLives) return 'All lives are already restored.';
     if (state.gold < lifeRestoreCost(state.shop.lifeRestores)) return 'Not enough Gold to restore a Life.';
   }
   if (action.type === 'TRAIN_HAND') {
     if (state.shop.stage !== 'train') return 'Hands can only be trained during Train.';
-    const quote = quoteTraining(state.shop.trainingSession ?? createTrainingSession(state.handLevels), state.handLevels, action.hand);
+    if (!availableHandIds(state).includes(action.hand)) return 'That Hand is not unlocked.';
+    const quote = quoteTraining(state.shop.trainingSession ?? createTrainingSession(state.handLevels, false,
+      state.infernoRewards.unlockedHands), state.handLevels, action.hand);
     if (quote.actualPrice === null) return 'This hand is too specialized to train safely.';
     if (state.gold < quote.actualPrice) return 'Not enough Gold to train this hand.';
   }
   if (action.type === 'REROLL_OFFERS') {
     if (state.shop.stage !== 'shop') return 'Dice offers can only be rerolled during Shop.';
-    if (state.gold < offerRerollCost(state.shop.offerRerolls)) return 'Not enough Gold to reroll offers.';
+    const free = (state.shop.freeOfferRerollsUsed ?? 0) < state.infernoRewards.upgrades.freeShopRerolls;
+    if (!free && state.gold < offerRerollCost(state.shop.offerRerolls)) return 'Not enough Gold to reroll offers.';
   }
   return null;
 }
@@ -911,6 +969,7 @@ export function newRun(seed: string, random?: RandomSource, options?: NewRunOpti
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
     scoreByHand: {}, effectScore: 0n, lastRoundPayout: null, roundSummary: null, flameSelection: null, specialOffer: null,
     manualRerollsRemaining: CONFIG.manualRerollsPerRound, manualRerollsUsedThisRound: 0, specialOfferEffects: initialSpecialOfferEffects(),
+    infernoRewards: initialInfernoRewardState(),
     nextOfferId: 0, nextPlaybackEventId: 0, nextActionId: 0, nextHistorySeq: 0,
     stats: createStats(seed), actionJournal: [], history: [], historyV2: [], historyV2TimelineId: 0,
     historyV2Coverage: { complete: true, firstRound: 1, firstActionId: 0, firstSeq: 0 },
@@ -1138,6 +1197,9 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       case 'TOGGLE_ENGULFMENT_FLAME': resolver.toggleEngulfmentFlame(action.flameInstanceId); break;
       case 'ENGULF_NOW': resolver.engulfNow(); break;
       case 'NOT_YET': resolver.deferEngulfment(); break;
+      case 'CHOOSE_INFERNO_REWARD': resolver.chooseInfernoReward(action.offerId); break;
+      case 'PLACE_INFERNO_DIE': resolver.placeInfernoRewardDie(action.destination, action.expectedDieId); break;
+      case 'CANCEL_INFERNO_MAKE_ROOM': resolver.cancelInfernoMakeRoom(); break;
       case 'CONTINUE_FLAME_SELECTION': resolver.openShop(); break;
       case 'SKIP_FLAME_SELECTION':
         resolver.emit({ type: 'FLAME_SKIPPED', message: `Skipped Flame acquisition for round ${formatPlayerNumber(next.round)}` });
@@ -1156,10 +1218,11 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         break;
       }
       case 'REROLL_OFFERS': {
-        const cost = offerRerollCost(next.shop!.offerRerolls);
+        const free = (next.shop!.freeOfferRerollsUsed ?? 0) < next.infernoRewards.upgrades.freeShopRerolls;
+        const cost = free ? 0 : offerRerollCost(next.shop!.offerRerolls);
         const oldOfferIds = next.shop!.offers.map(offer => offer.id);
-        resolver.spendGold(cost, 'Paid for Dice offer reroll', 'diceOfferReroll');
-        next.shop!.offerRerolls++;
+        if (cost) { resolver.spendGold(cost, 'Paid for Dice offer reroll', 'diceOfferReroll'); next.shop!.offerRerolls++; }
+        else next.shop!.freeOfferRerollsUsed = (next.shop!.freeOfferRerollsUsed ?? 0) + 1;
         next.stats.diceOfferRerolls++;
         resolver.freshOffers('reroll');
         resolver.emitV2({ kind: 'shop_transaction', transaction: { type: 'dice_offers_rerolled', cost,
@@ -1177,7 +1240,8 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       }
       case 'UNLOCK_SHOP_EXIT': next.shop!.exitUnlocked = true; break;
       case 'TRAIN_HAND': {
-        const session = next.shop!.trainingSession ??= createTrainingSession(next.handLevels);
+        const session = next.shop!.trainingSession ??= createTrainingSession(next.handLevels, false,
+          next.infernoRewards.unlockedHands);
         const fromLevel = next.handLevels[action.hand];
         const toLevel = fromLevel + 1;
         const quote = quoteTraining(session, next.handLevels, action.hand);

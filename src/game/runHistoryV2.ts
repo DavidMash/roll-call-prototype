@@ -1,6 +1,7 @@
 import type {
-  BossFaceMutation, BossType, ChallengeId, DiceRarity, DiceSlotRef, DieType, EngulfmentAssetRef, Flame, FlameInstanceId, GoldSource, GoldSpendSource, HandId, HandPlaySource,
-  FlameSlotIndex, FlameStage, HexerFaceEffect, InfernoEvaluationState, Rarity, Rank, RunNodeType, ShopStage, SpecialOfferType,
+  BossFaceMutation, BossType, ChallengeId, DiceRarity, DiceSlotRef, DieType, EngulfmentAssetRef, Flame, FlameInstanceId, GoldSource, GoldSpendSource, HandId, HandLevels, HandPlaySource,
+  FlameSlotIndex, FlameStage, HexerFaceEffect, InfernoEvaluationState, InfernoRewardCategory, InfernoRewardOfferId,
+  InfernoRewardRarity, Rarity, Rank, RunNodeType, ShopStage, SpecialOfferType,
   SpecialDieType, TemperSource, TemperSpendSource, ChargeGrowthRecord,
 } from './types';
 import type { RoundGoalBreakdown } from './goals';
@@ -101,7 +102,7 @@ export interface RunStartedEvent extends RunHistoryV2Envelope {
   seed: string;
   initialLives: number;
   initialGold: number;
-  initialHandLevels: Record<HandId, number>;
+  initialHandLevels: HandLevels;
   runMode?: 'scenario';
   scenarioId?: string;
   scenarioVersion?: number;
@@ -241,8 +242,8 @@ export interface TrainingSessionStartedEvent extends RunHistoryV2Envelope {
 export interface TeamTrainingAppliedEvent extends RunHistoryV2Envelope {
   kind: 'team_training_applied';
   offerId: number;
-  levelsBefore: Record<HandId, number>;
-  levelsAfter: Record<HandId, number>;
+  levelsBefore: HandLevels;
+  levelsAfter: HandLevels;
 }
 
 export interface ShopVisitCompletedEvent extends RunHistoryV2Envelope {
@@ -508,6 +509,25 @@ export interface InfernoSuspensionChangedEvent extends RunHistoryV2Envelope {
   instanceId?: FlameInstanceId;
 }
 
+export interface InfernoRewardOfferedEvent extends RunHistoryV2Envelope {
+  kind: 'inferno_reward_offered';
+  screenNumber: number;
+  offers: { id: InfernoRewardOfferId; name: string; category: InfernoRewardCategory;
+    rarity: InfernoRewardRarity; recycled: boolean }[];
+}
+
+export interface InfernoRewardClaimedEvent extends RunHistoryV2Envelope {
+  kind: 'inferno_reward_claimed';
+  screenNumber: number;
+  offerId: InfernoRewardOfferId;
+  name: string;
+  category: InfernoRewardCategory;
+  rarity: InfernoRewardRarity;
+  effect: string;
+  recycled: boolean;
+  deferredOfferIds: InfernoRewardOfferId[];
+}
+
 export interface ScorecardRefreshedEvent extends RunHistoryV2Envelope {
   kind: 'scorecard_refreshed';
   refreshedHands: HandId[];
@@ -551,7 +571,7 @@ export interface RunFinishedEvent extends RunHistoryV2Envelope {
   finalBoss: BossType | null;
   score: ExactScore;
   target: ExactScore;
-  finalHandLevels: Record<HandId, number>;
+  finalHandLevels: HandLevels;
 }
 
 export interface ErrorEvent extends RunHistoryV2Envelope {
@@ -572,6 +592,7 @@ export type RunHistoryV2Event = RunStartedEvent | ChapterStartedEvent | RoundAtt
   | HandScoredEvent | SpecialDieActivatedEvent | ShopVisitStartedEvent | ShopStageChangedEvent | TrainingSessionStartedEvent | TeamTrainingAppliedEvent | ShopVisitCompletedEvent
   | ShopOffersPresentedEvent | ShopTransactionEvent | TemperChangedEvent | FlameChangedEvent | ChargeChangedEvent | FlameChargeGeneratedEvent
   | EngulfmentAttemptedEvent | InfernoEvaluatedEvent | InfernoSuspensionChangedEvent
+  | InfernoRewardOfferedEvent | InfernoRewardClaimedEvent
   | BossStateChangedEvent | UltimateTargetsChangedEvent | BenchWarmerTargetChangedEvent | FlameRuntimeChangedEvent | FlameSequenceEvent | ScorecardRefreshedEvent | RoundAttemptFinishedEvent
   | FlameActionEvent
   | ScorePackageCompletedEvent | ScorePackageRemovedEvent | DoubleOrNothingEvent | AllInEvent

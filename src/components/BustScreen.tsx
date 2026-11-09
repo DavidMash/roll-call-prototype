@@ -1,17 +1,17 @@
 import { Button, Group, Paper, Stack, Text, Title } from '@mantine/core';
-import { CONFIG } from '../game/config';
 import type { Board } from '../game/types';
 import { formatExactScore, formatScoreProgress } from '../game/copy';
 import { fullChapterLabels } from '../game/chapters';
 import { RunActionPortal } from './RunActionRow';
 
-const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
+const hearts = (lives: number, maximum: number) => Array.from({ length: maximum }, (_, index) => index < lives ? '♥' : '♡').join(' ');
 
 export function BustScreen({ board, onContinue, restartSame, newRun, scenarioFailure = false, backToScenarios }: {
   board: Board; onContinue?: () => void; restartSame?: () => void; newRun?: () => void;
   scenarioFailure?: boolean; backToScenarios?: () => void;
 }) {
   const bust = board.bust!;
+  const maximum = board.infernoRewards.upgrades.maxLives;
   const labels = fullChapterLabels(board.round);
   const displayLabels = board.runMode === 'scenario' ? { chapter: 'SCENARIO', round: `ROUND ${board.round}` } : labels;
   return <Stack gap="sm">
@@ -20,7 +20,7 @@ export function BustScreen({ board, onContinue, restartSame, newRun, scenarioFai
       <Title order={2}>{displayLabels.round} BUST</Title>
       <Text fw={800} mt="sm">{formatScoreProgress(bust.score, bust.target)}</Text>
       <Text c="red" fw={800}>{formatExactScore(bust.shortfall)} SHORT</Text>
-      <Group justify="center" gap="xs" mt="md"><Text size="xl" c="red">{hearts(bust.livesBefore)}</Text><Text>→</Text><Text size="xl" c="red">{hearts(bust.livesAfter)}</Text></Group>
+      <Group justify="center" gap="xs" mt="md"><Text size="xl" c="red">{hearts(bust.livesBefore, maximum)}</Text><Text>→</Text><Text size="xl" c="red">{hearts(bust.livesAfter, maximum)}</Text></Group>
       {bust.livesAfter > 0 ? <>
         <Text fw={800} mt="xs">1 Life Lost</Text>
         {onContinue && <RunActionPortal><div className="run-action-primary"><Button aria-label="Continue" onClick={onContinue}>CONTINUE</Button></div></RunActionPortal>}

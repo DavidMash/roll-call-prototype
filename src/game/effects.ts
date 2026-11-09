@@ -1,4 +1,4 @@
-import { bossRewardForEncounter, CONFIG, interestForGold, roundReward } from './config';
+import { bossRewardForEncounter, CONFIG, interestForGoldAtCap, roundReward } from './config';
 import { activeFace, rollPhysicalDie, scoringPips, weightedSelectedFaceWeight, wholeDieEffectSuppressed } from './dice';
 import {
   captureHandStart, currentFlameInstanceId, eligibleFlameIds, flameByType, flameInstances, flameSlotOf, FLAMES, handXMultContributions,
@@ -13,10 +13,10 @@ import {
   powerSurgeChargeMultiplier,
   isChargeFlame,
 } from './flames';
-import { benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, handOptions, hasPlayableHand, HANDS, HAND_IDS, LOWER_HAND_IDS, planQualification, ultimateHands, upperBaselineLevel, UPPER_HAND_IDS } from './hands';
+import { availableHandIds, availableLowerHandIds, availableUpperHandIds, benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, handOptions, hasPlayableHand, HANDS, lowerHand, planQualification, ultimateHands, upperBaselineLevel, upperHand } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
 import { OFFER_RARITY_WEIGHTS, rarityFirstSelection, rarityLabel } from './rarity';
-import { createDiceOffers } from './diceEconomy';
+import { createDiceOffers, firstPurchaseSlot, setSlotValue } from './diceEconomy';
 import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, resolvedDiePipsContributions, type HandScoreContribution, type ScoringParticipant } from './scoring';
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie, currentlyPlayableManualHands, handIsPhysicallyAttainable,
@@ -43,7 +43,7 @@ import {
 import { createTrainingSession } from './training';
 import { forgeRevealEligible } from './forge';
 import type { ChargeFlame, HandStartSnapshot } from './flames';
-import type { CollectibleDie, DieEffectInstance, EventRecord, Face, Flame, FlameInstanceId, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, RandomSource, Rank, ResolvedDiePips, RunNode, ScorePackage, ScoreSource, SpecialDieType, SpecialOffer, TemperSource, TemperSpendSource } from './types';
+import type { CollectibleDie, DiceSlotRef, DieEffectInstance, EventRecord, Face, Flame, FlameInstanceId, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, InfernoRewardOfferId, RandomSource, Rank, ResolvedDiePips, RunNode, ScorePackage, ScoreSource, SpecialDieType, SpecialOffer, TemperSource, TemperSpendSource } from './types';
 import type {
   FlameOrigin, HandSideEffect, HistoryDieState, MultContribution, PipsContribution,
   RollEffect, RollReason, RunHistoryV2Event, RunHistoryV2EventInput, XMultContribution,
@@ -53,6 +53,10 @@ import { createPlayIntent, createRollBatchIntent, createRollIntent } from './res
 import { activeDieLabel, orderDieIdsByEncounter, rosterDice, rosterSlotOf, syncActiveDiceProjection } from './inventory';
 import type { PlayIntent, QualificationPlan, RollBatchIntent, RollContext, RollIntent, RollResolution, ScoreOccurrence } from './resolution';
 import { effectOf, effectRuntime, hasEffect, requireEffect, resetDieRoundState, runtimeFor, SPECIAL_DICE } from './specialDice';
+import {
+  createCuratedRewardDie, CURATED_DIE_BUILDS, generateInfernoRewardSelection, INFERNO_HAND_BY_OFFER,
+  INFERNO_REWARD_OFFERS, placeCuratedRewardDie, unlockInfernoHand,
+} from './infernoRewards';
 
 type RollTrigger = { dieId: number; face: Face; kind: 'jumpingBean'; rerollEventId: string; selectedNumber: Exclude<Rank, 7> };
 type CurtainCallContext = { dieId: number; multiplier: number; manualRerollEventId: string };
@@ -389,7 +393,7 @@ export class Resolver {
           state: record.bossState });
         break;
       case 'SCORECARD_REFRESHED':
-        this.emitV2({ kind: 'scorecard_refreshed', refreshedHands: [...HAND_IDS] });
+        this.emitV2({ kind: 'scorecard_refreshed', refreshedHands: availableHandIds(this.state) });
         break;
       case 'ROUND_CLEARED':
         this.emitV2({ kind: 'round_attempt_finished', outcome: 'cleared', score: this.state.score,
@@ -444,7 +448,7 @@ export class Resolver {
   }
   recordUltimateTargets(reason: Extract<RunHistoryV2EventInput, { kind: 'ultimate_targets_changed' }>['reason'], force = false): void {
     if (!flameByType(this.state, 'ultimate')) return;
-    const targets = ultimateHands(this.state.handLevels);
+    const targets = ultimateHands(this.state.handLevels, availableHandIds(this.state));
     const prior = [...this.state.historyV2].reverse().find(event => event.kind === 'ultimate_targets_changed');
     if (!force && prior?.kind === 'ultimate_targets_changed'
       && prior.targets.length === targets.length && prior.targets.every((hand, index) => hand === targets[index])) return;
@@ -452,7 +456,7 @@ export class Resolver {
   }
   recordBenchWarmerTarget(reason: Extract<RunHistoryV2EventInput, { kind: 'bench_warmer_target_changed' }>['reason'], force = false): void {
     if (!flameByType(this.state, 'benchWarmer')) return;
-    const target = benchWarmerHand(this.state.handLevels);
+    const target = benchWarmerHand(this.state.handLevels, availableHandIds(this.state));
     const prior = [...this.state.historyV2].reverse().find(event => event.kind === 'bench_warmer_target_changed');
     if (!force && prior?.kind === 'bench_warmer_target_changed' && prior.target === target) return;
     this.emitV2({ kind: 'bench_warmer_target_changed', target, reason });
@@ -865,7 +869,7 @@ export class Resolver {
   }
   private advanceMinigun(hand: HandId): void {
     if (!ownedFlameIds(this.state).has('minigun')) return;
-    if (UPPER_HAND_IDS.includes(hand)) {
+    if (upperHand(hand)) {
       this.state.minigunUpperStreak = Math.min(6, this.state.minigunUpperStreak + 1);
       return;
     }
@@ -1206,7 +1210,7 @@ export class Resolver {
     const boss = this.state.boss;
     if (boss?.type !== 'marathon' || source !== 'manual') return;
     const reusedHands: HandId[] = [];
-    for (const id of HAND_IDS) {
+    for (const id of availableHandIds(this.state)) {
       const remaining = boss.cooldowns[id];
       if (!remaining) continue;
       if (remaining <= 1) { delete boss.cooldowns[id]; reusedHands.push(id); }
@@ -1238,7 +1242,7 @@ export class Resolver {
   private resolveQuickdraw(hand: HandId, _source: HandPlaySource): void {
     if (this.state.bossSilenced) return;
     const boss = this.state.boss;
-    if (boss?.type !== 'quickdraw' || !LOWER_HAND_IDS.includes(hand)) return;
+    if (boss?.type !== 'quickdraw' || !lowerHand(hand)) return;
     const first = !boss.lowerShotUsed;
     boss.lowerShotUsed = true;
     boss.playedLowerHand = hand;
@@ -1288,7 +1292,7 @@ export class Resolver {
 
   private resolvePendulum(hand: HandId): void {
     if (this.state.bossSilenced || this.state.boss?.type !== 'pendulum') return;
-    const section = HANDS[hand].rank ? 'upper' : 'lower';
+    const section = upperHand(hand) ? 'upper' : 'lower';
     if (section !== this.state.boss.requestedSection) {
       this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'pendulum', hand, amount: .5,
         bossState: `remained_${this.state.boss.requestedSection}`,
@@ -1323,12 +1327,13 @@ export class Resolver {
     const previous = boss.flyHand;
     const activeDice = activeEncounterDice(this.state);
     boss.mercyActive ||= this.state.manualRerollsRemaining === 0
-      || UPPER_HAND_IDS.filter(hand => this.state.consumed.includes(hand)).length >= 4;
-    let candidates = LOWER_HAND_IDS.filter(hand => !unavailableEncounterHands(this.state).includes(hand)
+      || availableUpperHandIds(this.state).filter(hand => this.state.consumed.includes(hand)).length >= 4;
+    const lowerHands = availableLowerHandIds(this.state);
+    let candidates = lowerHands.filter(hand => !unavailableEncounterHands(this.state).includes(hand)
       && handIsPhysicallyAttainable(hand, activeDice.length));
     if (boss.mercyActive) {
       const qualified = handOptions(activeDice, unavailableEncounterHands(this.state), [], this.state.dieRoundState)
-        .filter(option => LOWER_HAND_IDS.includes(option.id) && !option.consumed && candidates.includes(option.id))
+        .filter(option => lowerHands.includes(option.id) && !option.consumed && candidates.includes(option.id))
         .map(option => option.id);
       if (qualified.length) candidates = qualified;
     }
@@ -1344,7 +1349,7 @@ export class Resolver {
     if (this.state.bossSilenced) return false;
     const boss = this.state.boss;
     if (!boss) return false;
-    if (boss.type === 'capitalReturn' && LOWER_HAND_IDS.includes(hand)) {
+    if (boss.type === 'capitalReturn' && lowerHand(hand)) {
       const lost = Math.min(1, this.state.gold);
       this.state.gold -= lost;
       this.emit({ type: 'BOSS_HAND_CHANGED', boss: boss.type, hand, amount: lost,
@@ -1380,7 +1385,7 @@ export class Resolver {
   }
 
   private jugglerExtraReroll(hand: HandId, alreadyRolling: ReadonlySet<number>): number | null {
-    if (this.state.bossSilenced || this.state.boss?.type !== 'juggler' || !UPPER_HAND_IDS.includes(hand)) return null;
+    if (this.state.bossSilenced || this.state.boss?.type !== 'juggler' || !upperHand(hand)) return null;
     const eligible = rosterDice(this.state).map(die => die.id).filter(id => !alreadyRolling.has(id));
     if (!eligible.length) return null;
     const dieId = eligible[randomIndex(this.rng, eligible.length)];
@@ -1433,9 +1438,9 @@ export class Resolver {
     this.advanceHandFamilyFlames(hand, xMultFactors);
     const bossFactor = this.flyFactor(hand, playSource)
       * (!this.state.bossSilenced && this.state.boss?.type === 'quickdraw'
-        && LOWER_HAND_IDS.includes(hand) && this.state.boss.lowerShotUsed ? .25 : 1)
+        && lowerHand(hand) && this.state.boss.lowerShotUsed ? .25 : 1)
       * (!this.state.bossSilenced && this.state.boss?.type === 'pendulum'
-        && (HANDS[hand].rank ? 'upper' : 'lower') !== this.state.boss.requestedSection ? .5 : 1);
+        && (upperHand(hand) ? 'upper' : 'lower') !== this.state.boss.requestedSection ? .5 : 1);
     return { ...finalizeHandScore(resolution.accumulator, bossFactor), bossFactor };
   }
 
@@ -1462,7 +1467,7 @@ export class Resolver {
     const hasPlay = (locks: HandId[]) => handOptions(dice, locks, [], this.state.dieRoundState)
       .some(option => !option.consumed && !handIsStructurallyImpossible(option.id, dice.length));
     if (hasPlay(boss.neglectedHands)) return;
-    const eligible = HAND_IDS.filter(hand => !handIsStructurallyImpossible(hand, dice.length));
+    const eligible = availableHandIds(this.state).filter(hand => !handIsStructurallyImpossible(hand, dice.length));
     for (let first = 0; first < eligible.length; first++) for (let second = first + 1; second < eligible.length; second++) {
       const locks = [eligible[first], eligible[second]];
       if (!hasPlay(locks)) continue;
@@ -1556,7 +1561,8 @@ export class Resolver {
     if (starting) boss.startingDieId = dieId;
     boss.pendingReinforcements--;
     if (!boss.unlockCosts.length) {
-      boss.unlockCosts = wardenUnlockCosts(this.state.handLevels, this.state.consumed, this.state.target, boss.encounterDieIds.length);
+      boss.unlockCosts = wardenUnlockCosts(this.state.handLevels, this.state.consumed, this.state.target,
+        boss.encounterDieIds.length, availableHandIds(this.state));
     }
     boss.nextUnlockTarget = boss.activeDieIds.length < boss.encounterDieIds.length
       ? boss.unlockCosts.slice(0, boss.activeDieIds.length).reduce((sum, cost) => sum + cost, 0n)
@@ -1876,7 +1882,7 @@ export class Resolver {
     this.addPotentialEnergyCharge(handStart, hand, playSource);
     this.addAllHandsOnDeckCharge(handStart);
     this.advanceMinigun(hand);
-    if (UPPER_HAND_IDS.includes(hand) && ownedFlameIds(this.state).has('sixPack')) {
+    if (upperHand(hand) && ownedFlameIds(this.state).has('sixPack')) {
       const before = this.state.sixPackXMult;
       const startingFactor = sixPackStartingMultiplier(flameByType(this.state, 'sixPack')?.investedGold ?? 0);
       this.state.sixPackUpperHandsPlayed = Math.min(6, this.state.sixPackUpperHandsPlayed + 1);
@@ -2199,7 +2205,7 @@ export class Resolver {
     base.phase = 'shop';
     base.shop ??= { visitId: base.nextShopVisitId++, stage: 'shop',
       offers: [], offerRerolls: 0, lifeRestores: 0,
-      freeDicePurchaseAvailable: false, trainingSession: createTrainingSession(base.handLevels) };
+      freeDicePurchaseAvailable: false, trainingSession: createTrainingSession(base.handLevels, false, base.infernoRewards.unlockedHands) };
     // Once the next Chapter has started, a Bust restores this as that Round's
     // retry Shop even when its contents originated in the prior post-Boss Shop.
     if (base.shop.kind) base.shop.kind = 'between_rounds';
@@ -2256,7 +2262,8 @@ export class Resolver {
       return;
     }
     if (failure.livesAfter === 0 && this.options.tutorialFinalLifeSafeguard) {
-      this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound;
+      const safeguardRerolls = this.state.infernoRewards.upgrades.manualRerolls;
+      this.state.manualRerollsRemaining = safeguardRerolls;
       this.state.consumed = [];
       this.state.scorecardCycleConsumed = [];
       if (this.state.boss) {
@@ -2268,10 +2275,10 @@ export class Resolver {
           this.state.boss.nextUnlockTarget = null;
         }
       }
-      current.manualRerollsGranted += CONFIG.manualRerollsPerRound;
-      this.emit({ type: 'TUTORIAL_SAFEGUARD', amount: CONFIG.manualRerollsPerRound,
+      current.manualRerollsGranted += safeguardRerolls;
+      this.emit({ type: 'TUTORIAL_SAFEGUARD', amount: safeguardRerolls,
         boss: this.state.boss?.type,
-        message: `Tutorial safety refill: ${this.format(CONFIG.manualRerollsPerRound)} Rerolls; Used hands refreshed${this.state.boss ? `; ${this.state.boss.type.toUpperCase()} suppressed` : ''}` });
+        message: `Tutorial safety refill: ${this.format(safeguardRerolls)} Rerolls; Used hands refreshed${this.state.boss ? `; ${this.state.boss.type.toUpperCase()} suppressed` : ''}` });
       this.state.decisionId++;
       return;
     }
@@ -2288,7 +2295,7 @@ export class Resolver {
       persistentSpecialOfferState,
     );
     this.state.shop ??= { stage: 'shop', offers: [], offerRerolls: 0, lifeRestores: 0,
-      freeDicePurchaseAvailable: false, trainingSession: createTrainingSession(this.state.handLevels) };
+      freeDicePurchaseAvailable: false, trainingSession: createTrainingSession(this.state.handLevels, false, this.state.infernoRewards.unlockedHands) };
     this.state.shop.lifeRestores ??= 0;
     this.nextTimeline('bust', this.state.round, failure.livesAfter > 0 ? failure.attempt + 1 : failure.attempt);
     this.state.lives = failure.livesAfter;
@@ -2364,7 +2371,7 @@ export class Resolver {
     this.state.phase = 'round'; this.state.score = 0n; this.state.scoreByHand = {}; this.state.effectScore = 0n;
     this.state.roundTemper = { overkill: 0, boardRefresh: 0, miniBoss: 0, boss: 0 };
     if (!retry) this.state.specialOfferEffects.bottledFairyTriggeredThisRound = false;
-    this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound;
+    this.state.manualRerollsRemaining = this.state.infernoRewards.upgrades.manualRerolls;
     this.state.manualRerollsUsedThisRound = 0;
     this.state.consumed = []; this.state.scorecardCycleConsumed = []; this.state.targetPracticeHand = null; this.state.lastRoundPayout = null; this.state.roundSummary = null;
     this.state.chargeXMult = 1; this.state.chargeArmed = false; this.state.chargeAttribution = {}; this.state.chargeEvents = []; this.state.hotStreakCharges = 0;
@@ -2410,7 +2417,7 @@ export class Resolver {
     this.state.boss = bossType ? createBossRuntime(this.state.seed, this.state.round, bossType, {
       handPlayCounts: this.state.handPlayCounts,
       playerDieIds: rosterDice(this.state).map(die => die.id),
-      eligibleHands: HAND_IDS.filter(hand => HANDS[hand].rank !== undefined || HANDS[hand].size! <= rosterDice(this.state).length),
+      eligibleHands: availableHandIds(this.state).filter(hand => HANDS[hand].rank !== undefined || HANDS[hand].size! <= rosterDice(this.state).length),
     }) : null;
     this.state.bossSilenced = bossSilenced;
     if (this.state.bossSilenced) this.state.specialOfferEffects.silence = false;
@@ -2428,7 +2435,7 @@ export class Resolver {
     }
     if (!this.state.bossSilenced && this.state.boss?.type === 'warden') {
       this.state.boss.unlockCosts = wardenUnlockCosts(this.state.handLevels, [], this.state.target,
-        this.state.boss.encounterDieIds.length);
+        this.state.boss.encounterDieIds.length, availableHandIds(this.state));
     }
     const sixPackInvestment = flameByType(this.state, 'sixPack')?.investedGold ?? 0;
     this.state.sixPackXMult = sixPackStartingMultiplier(sixPackInvestment);
@@ -2478,7 +2485,7 @@ export class Resolver {
       message: `Round ${this.format(this.state.round)} — Attempt ${this.format(this.state.roundAttemptNumber)} — goal ${this.format(this.state.target)}; Charge reset to ×1` });
     this.selectTargetPractice();
     if (!this.state.bossSilenced && this.state.boss?.type === 'hexer') {
-      this.state.handLevels.sevens = upperBaselineLevel(this.state.handLevels);
+      this.state.handLevels.sevens = upperBaselineLevel(this.state.handLevels, this.state.infernoRewards.unlockedHands);
       this.state.encounterDice.push(createCursedDie());
       syncActiveDiceProjection(this.state);
     }
@@ -2523,7 +2530,10 @@ export class Resolver {
       OFFER_RARITY_WEIGHTS.specialOffer, this.rng);
     this.state.specialOffer!.offers = selected.map(type => {
       const offer: SpecialOffer = { id: this.state.nextOfferId++, type };
-      if (type === 'focus') offer.hand = HAND_IDS[randomIndex(this.rng, HAND_IDS.length)];
+      if (type === 'focus') {
+        const hands = availableHandIds(this.state);
+        offer.hand = hands[randomIndex(this.rng, hands.length)];
+      }
       return offer;
     });
     const offerSet = this.state.specialOffer!.offers.map(offer => ({ name: specialOfferName(offer), rarity: SPECIAL_OFFERS[offer.type].rarity }));
@@ -2536,9 +2546,10 @@ export class Resolver {
   selectTargetPractice(): void {
     if (!ownedFlameIds(this.state).has('targetPractice')) return;
     const candidates: HandId[] = [];
-    const counts = [...new Set(LOWER_HAND_IDS.map(hand => this.state.handPlayCounts[hand]))].sort((a, b) => a - b);
+    const lowerHands = availableLowerHandIds(this.state);
+    const counts = [...new Set(lowerHands.map(hand => this.state.handPlayCounts[hand]))].sort((a, b) => a - b);
     for (const count of counts) {
-      const tied = LOWER_HAND_IDS.filter(hand => this.state.handPlayCounts[hand] === count);
+      const tied = lowerHands.filter(hand => this.state.handPlayCounts[hand] === count);
       while (tied.length && candidates.length < 3) candidates.push(tied.splice(randomIndex(this.rng, tied.length), 1)[0]);
       if (candidates.length === 3) break;
     }
@@ -2620,6 +2631,106 @@ export class Resolver {
     this.emit({ type: 'INFERNO_EVALUATED',
       message: `Engulfment accepted: Inferno ${this.format(evaluation.infernoMultiplierBefore)} to ${this.format(evaluation.infernoMultiplierAfter)}; ${this.format(evaluation.flamesSnuffed.length)} Flame${evaluation.flamesSnuffed.length === 1 ? '' : 's'} snuffed` });
   }
+  openInfernoReward(): void {
+    if (!this.state.infernoEvaluation?.engulfed) throw new Error('A successful Engulfment is required.');
+    if (!this.state.infernoRewards.pending) {
+      const selection = generateInfernoRewardSelection(this.state, this.rng);
+      this.state.infernoRewards.pending = selection;
+      this.state.infernoRewards.screenCount = selection.screenNumber;
+      const offers = selection.offers.map(id => ({ ...INFERNO_REWARD_OFFERS[id],
+        recycled: selection.recycledOfferIds.includes(id) }));
+      this.emitV2({ kind: 'inferno_reward_offered', screenNumber: selection.screenNumber, offers });
+      this.emit({ type: 'INFERNO_REWARD_OFFERED',
+        message: `INFERNO REWARD · OFFERED · ${offers.map(item => `${item.id} / ${item.name} / ${item.category} / ${item.rarity}${item.recycled ? ' / recycled' : ''}`).join('; ') || 'no valid offers'}` });
+    }
+    this.state.phase = 'infernoReward';
+    if (!this.state.infernoRewards.pending.offers.length) this.finishInfernoReward();
+  }
+  private applyInfernoReward(offerId: InfernoRewardOfferId): string {
+    const upgrades = this.state.infernoRewards.upgrades;
+    switch (offerId) {
+      case 'expandedRoster': upgrades.rosterCap = 6; this.state.diceInventory.roster.push(null); return 'Roster capacity increased to 6.';
+      case 'expandedRoster2': upgrades.rosterCap = 7; this.state.diceInventory.roster.push(null); return 'Roster capacity increased to 7.';
+      case 'extraReroll': upgrades.manualRerolls = 4; return 'Permanent Manual Rerolls increased to 4.';
+      case 'extraReroll2': upgrades.manualRerolls = 5; return 'Permanent Manual Rerolls increased to 5.';
+      case 'maxHeart': case 'maxHeart2':
+        upgrades.maxLives++; this.state.lives = Math.min(upgrades.maxLives, this.state.lives + 1);
+        return `Maximum Hearts increased to ${upgrades.maxLives}; current Hearts increased to ${this.state.lives}.`;
+      case 'higherInterest': upgrades.interestCap += 5; return `Maximum Interest payout increased to ${upgrades.interestCap} Gold.`;
+      case 'higherInterest2': upgrades.interestCap += 10; return `Maximum Interest payout increased to ${upgrades.interestCap} Gold.`;
+      case 'freeShopReroll': upgrades.freeShopRerolls = 1; return 'The first dice-offer reroll in each Shop is free.';
+      case 'freeShopReroll2': upgrades.freeShopRerolls = 2; return 'The first 2 dice-offer rerolls in each Shop are free.';
+      case 'temperCapacity': upgrades.overkillTemperCap += 5; return `Maximum Overkill Temper increased to ${upgrades.overkillTemperCap}.`;
+      case 'temperCapacity2': upgrades.overkillTemperCap += 10; return `Maximum Overkill Temper increased to ${upgrades.overkillTemperCap}.`;
+      case 'goldWindfall': this.addGold(100, 'Inferno Reward · Gold Windfall: +100 Gold', 'infernoReward'); return 'Immediately gained 100 Gold.';
+      case 'temperWindfall': this.addTemper(100, 'infernoReward', 'Inferno Reward · Temper Windfall'); return 'Immediately gained 100 Temper.';
+      default: {
+        const hand = INFERNO_HAND_BY_OFFER[offerId];
+        if (hand) {
+          const baseline = unlockInfernoHand(this.state, hand);
+          return `${HANDS[hand].name} unlocked at the current ${upperHand(hand) ? 'Upper' : 'Lower'} baseline, Level ${baseline}.`;
+        }
+        const build = CURATED_DIE_BUILDS[offerId];
+        if (build) {
+          const die = createCuratedRewardDie(this.state, offerId);
+          if (!placeCuratedRewardDie(this.state, die)) throw new Error('Make Room before claiming this die.');
+          syncActiveDiceProjection(this.state);
+          return `Received die ${die.id}: ${build.map(([type, level]) => `${SPECIAL_DICE[type].name} ${level}`).join(' + ')}.`;
+        }
+        throw new Error(`Unknown Inferno Reward ${offerId}.`);
+      }
+    }
+  }
+  chooseInfernoReward(offerId: InfernoRewardOfferId): void {
+    const selection = this.state.infernoRewards.pending;
+    if (!selection?.offers.includes(offerId)) throw new Error('Choose an offered Inferno Reward.');
+    if (CURATED_DIE_BUILDS[offerId] && !firstPurchaseSlot(this.state.diceInventory)) {
+      selection.makeRoomOfferId = offerId;
+      return;
+    }
+    const effect = this.applyInfernoReward(offerId);
+    this.finalizeInfernoReward(offerId, effect);
+  }
+  placeInfernoRewardDie(destination: DiceSlotRef, expectedDieId: number): void {
+    const selection = this.state.infernoRewards.pending;
+    const offerId = selection?.makeRoomOfferId;
+    if (!selection || !offerId || !CURATED_DIE_BUILDS[offerId]) throw new Error('No curated die is waiting for placement.');
+    const current = destination.area === 'roster' ? this.state.diceInventory.roster[destination.index]
+      : this.state.diceInventory.storage[destination.index];
+    if (current !== expectedDieId || current == null) throw new Error('The selected replacement die changed.');
+    const die = createCuratedRewardDie(this.state, offerId);
+    delete this.state.diceInventory.instances[current];
+    this.state.diceInventory.instances[die.id] = die;
+    setSlotValue(this.state.diceInventory, destination, die.id);
+    syncActiveDiceProjection(this.state);
+    const build = CURATED_DIE_BUILDS[offerId]!;
+    this.finalizeInfernoReward(offerId,
+      `Replaced die ${current} with rewarded die ${die.id}: ${build.map(([type, level]) => `${SPECIAL_DICE[type].name} ${level}`).join(' + ')}; no sale Gold awarded.`);
+  }
+  cancelInfernoMakeRoom(): void {
+    if (!this.state.infernoRewards.pending?.makeRoomOfferId) throw new Error('Make Room is not active.');
+    this.state.infernoRewards.pending.makeRoomOfferId = null;
+  }
+  private finalizeInfernoReward(offerId: InfernoRewardOfferId, effect: string): void {
+    const selection = this.state.infernoRewards.pending!;
+    const definition = INFERNO_REWARD_OFFERS[offerId];
+    const deferredOfferIds = selection.offers.filter(id => id !== offerId);
+    this.state.infernoRewards.claimedOfferIds.push(offerId);
+    delete this.state.infernoRewards.deferredOffers[offerId];
+    for (const id of deferredOfferIds) this.state.infernoRewards.deferredOffers[id] = { deferredAtScreen: selection.screenNumber };
+    const recycled = selection.recycledOfferIds.includes(offerId);
+    this.emitV2({ kind: 'inferno_reward_claimed', screenNumber: selection.screenNumber, offerId,
+      name: definition.name, category: definition.category, rarity: definition.rarity, effect, recycled, deferredOfferIds });
+    this.emit({ type: 'INFERNO_REWARD_CLAIMED', rarity: definition.rarity,
+      message: `INFERNO REWARD · CLAIMED · ${offerId} / ${definition.name} · ${effect} · deferred: ${deferredOfferIds.join(', ') || 'none'}` });
+    this.state.infernoRewards.pending = null;
+    this.finishInfernoReward();
+  }
+  private finishInfernoReward(): void {
+    this.state.infernoEvaluation = null;
+    if (this.state.runMode === 'scenario' && this.state.scenario?.completionPending) this.state.phase = 'scenarioComplete';
+    else this.continuePostRoundFlow();
+  }
   deferEngulfment(): void {
     const evaluation = this.state.infernoEvaluation;
     if (!evaluation?.success || evaluation.engulfed) throw new Error('A pending ready Inferno evaluation is required.');
@@ -2641,10 +2752,10 @@ export class Resolver {
     const visitId = this.state.nextShopVisitId++;
     const onTheHouse = this.state.specialOfferEffects.onTheHouse;
     this.state.shop = { visitId, stage: 'shop', kind: postBoss ? 'post_boss' : 'between_rounds', exitUnlocked: false,
-      offers: [], offerRerolls: 0, lifeRestores: 0,
+      offers: [], offerRerolls: 0, freeOfferRerollsUsed: 0, lifeRestores: 0,
       freeDicePurchaseAvailable: onTheHouse,
       diePurchased: false,
-      trainingSession: createTrainingSession(this.state.handLevels, onTheHouse),
+      trainingSession: createTrainingSession(this.state.handLevels, onTheHouse, this.state.infernoRewards.unlockedHands),
       forgeSelection: { dieAId: null, dieBId: null } };
     const upcomingRound = this.state.round + 1;
     const upcomingBoss = this.state.bossSchedule[upcomingRound];
@@ -2702,8 +2813,8 @@ export class Resolver {
     switch (offer.type) {
       case 'onTheHouse': this.state.specialOfferEffects.onTheHouse = true; break;
       case 'greatFairy':
-        if (this.state.lives >= CONFIG.maxLives) this.addGold(15, 'Great Fairy: +15 Gold', 'specialOffer');
-        else this.state.lives = CONFIG.maxLives;
+        if (this.state.lives >= this.state.infernoRewards.upgrades.maxLives) this.addGold(15, 'Great Fairy: +15 Gold', 'specialOffer');
+        else this.state.lives = this.state.infernoRewards.upgrades.maxLives;
         break;
       case 'focus':
         if (!offer.hand) throw new Error('Focus offer is missing its fixed hand.');
@@ -2742,7 +2853,7 @@ export class Resolver {
         break;
       case 'teamTraining': {
         const levelsBefore = structuredClone(this.state.handLevels);
-        for (const hand of HAND_IDS) this.state.handLevels[hand]++;
+        for (const hand of availableHandIds(this.state)) this.state.handLevels[hand]++;
         this.emitV2({ kind: 'team_training_applied', offerId: offer.id, levelsBefore,
           levelsAfter: structuredClone(this.state.handLevels) });
         this.recordUltimateTargets('team_training');
@@ -2779,6 +2890,10 @@ export class Resolver {
     if (!this.state.infernoEvaluation) throw new Error('Inferno evaluation is not available.');
     if (this.state.infernoEvaluation.success && !this.state.infernoEvaluation.engulfed)
       throw new Error('Choose whether to Engulf now or not yet.');
+    if (this.state.infernoEvaluation.engulfed) {
+      this.openInfernoReward();
+      return;
+    }
     if (this.state.runMode === 'scenario' && this.state.scenario?.completionPending) {
       this.state.phase = 'scenarioComplete';
       return;
@@ -2791,12 +2906,14 @@ export class Resolver {
     this.continuePostRoundFlow();
   }
   continueScenarioRun(): void {
-    if (this.state.phase !== 'scenarioComplete' || !this.state.scenario?.completionPending || !this.state.infernoEvaluation?.engulfed)
+    if (this.state.phase !== 'scenarioComplete' || !this.state.scenario?.completionPending)
       throw new Error('Scenario completion is not awaiting continuation.');
     this.state.scenario.completionPending = false;
     this.state.scenario.completionAcknowledged = true;
-    this.state.phase = 'inferno';
-    this.continueInfernoEvaluation();
+    if (this.state.infernoEvaluation?.engulfed) {
+      this.state.phase = 'inferno';
+      this.continueInfernoEvaluation();
+    } else this.continuePostRoundFlow();
   }
   private completeSpecialOfferRound(): void {
     const effects = this.state.specialOfferEffects;
@@ -2832,7 +2949,8 @@ export class Resolver {
       const bossRewardLabel = bossType && isMiniBossType(bossType) ? 'Mini-Boss Reward' : 'Boss Reward';
       const heldGoldSnapshot = this.state.gold;
       const payout = { baseGold: roundReward(), unusedRerollGold: Math.max(0, this.state.manualRerollsRemaining - Math.max(0, this.options.nonPayingManualRerolls ?? 0)),
-        interestGold: interestForGold(heldGoldSnapshot) * (this.state.specialOfferEffects.taxEvasionRounds > 0 ? 2 : 1),
+        interestGold: interestForGoldAtCap(heldGoldSnapshot, this.state.infernoRewards.upgrades.interestCap)
+          * (this.state.specialOfferEffects.taxEvasionRounds > 0 ? 2 : 1),
         bossRewardGold: bossType ? bossRewardForEncounter(isMiniBossType(bossType)) : 0,
         heldGoldSnapshot, totalRoundRewardGold: 0 };
       payout.totalRoundRewardGold = payout.baseGold + payout.unusedRerollGold + payout.interestGold + payout.bossRewardGold;
@@ -2843,7 +2961,7 @@ export class Resolver {
       if (payout.bossRewardGold) this.addGold(payout.bossRewardGold, `${bossRewardLabel}: +${this.format(payout.bossRewardGold)} gold`, 'bossReward');
       const overkill = this.state.target > 0n
         ? Number(((this.state.score - this.state.target) * 5n) / this.state.target) : 0;
-      this.addTemper(Math.max(0, Math.min(5, overkill)), 'overkill', 'Overkill');
+      this.addTemper(Math.max(0, Math.min(this.state.infernoRewards.upgrades.overkillTemperCap, overkill)), 'overkill', 'Overkill');
       if (bossType) this.addTemper(isMiniBossType(bossType) ? 2 : 3,
         isMiniBossType(bossType) ? 'miniBoss' : 'boss', isMiniBossType(bossType) ? 'Mini-Boss defeated' : 'Boss defeated');
       this.commitRoundTemper();
@@ -2879,10 +2997,10 @@ export class Resolver {
       if (rerolls > 0) { this.emit({ type: 'DEAD_BOARD', message: `No playable hands — ${this.format(rerolls)} rerolls remain` }); return; }
       if (this.state.scoreWagers.pendingDoubleOrNothing) return;
       if (this.state.specialOfferEffects.bottledFairyRounds > 0 && !this.state.specialOfferEffects.bottledFairyTriggeredThisRound) {
-        this.state.manualRerollsRemaining = CONFIG.manualRerollsPerRound;
+        this.state.manualRerollsRemaining = this.state.infernoRewards.upgrades.manualRerolls;
         this.state.specialOfferEffects.bottledFairyTriggeredThisRound = true;
-        this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', amount: CONFIG.manualRerollsPerRound,
-          message: `Bottled Fairy refilled ${this.format(CONFIG.manualRerollsPerRound)} Manual Rerolls` });
+        this.emit({ type: 'SPECIAL_EFFECT_TRIGGERED', amount: this.state.infernoRewards.upgrades.manualRerolls,
+          message: `Bottled Fairy refilled ${this.format(this.state.infernoRewards.upgrades.manualRerolls)} Manual Rerolls` });
         return;
       }
       this.resolveBust();

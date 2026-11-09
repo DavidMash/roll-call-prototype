@@ -20,20 +20,51 @@ export const HANDS: Record<HandId, HandDefinition> = {
   fives: { name: 'Fives', rank: 5, startingMultiplier: 1 },
   sixes: { name: 'Sixes', rank: 6, startingMultiplier: 1 },
   sevens: { name: 'Sevens', rank: 7, startingMultiplier: 1 },
+  odds: { name: 'Odds', size: 3, startingMultiplier: 2 },
+  evens: { name: 'Evens', size: 3, startingMultiplier: 2 },
+  chance: { name: 'Chance', size: 1, startingMultiplier: 1.5 },
   pair: { name: 'Pair', size: 2, groups: [2], startingMultiplier: 2 },
   twoPair: { name: 'Two Pair', size: 4, groups: [2, 2], startingMultiplier: 2 },
+  miniStraight: { name: 'Mini Straight', size: 3, startingMultiplier: 2.5 },
   threeKind: { name: 'Three of a Kind', size: 3, groups: [3], startingMultiplier: 3 },
+  oddStraight: { name: 'Odd Straight', size: 3, startingMultiplier: 3 },
+  evenStraight: { name: 'Even Straight', size: 3, startingMultiplier: 3 },
   smallStraight: { name: 'Small Straight', size: 4, startingMultiplier: 4 },
+  threePair: { name: 'Three Pair', size: 6, groups: [2, 2, 2], startingMultiplier: 5 },
   fullHouse: { name: 'Full House', size: 5, groups: [3, 2], startingMultiplier: 5 },
   fourKind: { name: 'Four of a Kind', size: 4, groups: [4], startingMultiplier: 6 },
+  wideStraight: { name: 'Wide Straight', size: 6, groups: [2, 2, 2], startingMultiplier: 7 },
+  doubleTriple: { name: 'Double Triple', size: 6, groups: [3, 3], startingMultiplier: 7 },
   largeStraight: { name: 'Large Straight', size: 5, startingMultiplier: 7 },
+  fullerHouse: { name: 'Fuller House', size: 6, groups: [4, 2], startingMultiplier: 8 },
   fiveKind: { name: 'Five of a Kind', size: 5, groups: [5], startingMultiplier: 8 },
+  xlStraight: { name: 'XL Straight', size: 6, startingMultiplier: 10 },
+  sixKind: { name: 'Six of a Kind', size: 6, groups: [6], startingMultiplier: 12 },
 };
 /** Normal scorecard hands. Sevens is encounter-scoped and never leaks into Shops or other Rounds. */
-export const HAND_IDS = (Object.keys(HANDS) as HandId[]).filter(id => id !== 'sevens');
+export const HAND_IDS: HandId[] = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes',
+  'pair', 'twoPair', 'threeKind', 'smallStraight', 'fullHouse', 'fourKind', 'largeStraight', 'fiveKind'];
 export const UPPER_HAND_IDS = HAND_IDS.filter(id => HANDS[id].rank) as HandId[];
 export const HEXER_HAND_IDS: HandId[] = [...HAND_IDS.slice(0, UPPER_HAND_IDS.length), 'sevens', ...HAND_IDS.slice(UPPER_HAND_IDS.length)];
 export const LOWER_HAND_IDS = HAND_IDS.filter(id => !HANDS[id].rank) as HandId[];
+export const BONUS_UPPER_HAND_IDS: HandId[] = ['odds', 'evens', 'chance'];
+export const BONUS_LOWER_HAND_IDS: HandId[] = ['miniStraight', 'oddStraight', 'evenStraight', 'threePair',
+  'wideStraight', 'doubleTriple', 'fullerHouse', 'xlStraight', 'sixKind'];
+export const ALL_HAND_IDS: HandId[] = [...HAND_IDS, ...BONUS_UPPER_HAND_IDS, ...BONUS_LOWER_HAND_IDS];
+export const FINAL_UPPER_HAND_ORDER: HandId[] = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes', 'odds', 'evens', 'chance'];
+export const FINAL_LOWER_HAND_ORDER: HandId[] = ['pair', 'twoPair', 'miniStraight', 'threeKind', 'oddStraight',
+  'evenStraight', 'smallStraight', 'threePair', 'fullHouse', 'fourKind', 'wideStraight', 'doubleTriple',
+  'largeStraight', 'fullerHouse', 'fiveKind', 'xlStraight', 'sixKind'];
+export const availableHandIds = (state: { unlockedHands?: readonly HandId[]; infernoRewards?: { unlockedHands: readonly HandId[] } }): HandId[] => {
+  const unlocked = new Set(state.unlockedHands ?? state.infernoRewards?.unlockedHands ?? []);
+  return [...FINAL_UPPER_HAND_ORDER, ...FINAL_LOWER_HAND_ORDER].filter(hand => HAND_IDS.includes(hand) || unlocked.has(hand));
+};
+export const availableUpperHandIds = (state: Parameters<typeof availableHandIds>[0]) =>
+  availableHandIds(state).filter(hand => FINAL_UPPER_HAND_ORDER.includes(hand));
+export const availableLowerHandIds = (state: Parameters<typeof availableHandIds>[0]) =>
+  availableHandIds(state).filter(hand => FINAL_LOWER_HAND_ORDER.includes(hand));
+export const upperHand = (hand: HandId) => FINAL_UPPER_HAND_ORDER.includes(hand) || hand === 'sevens';
+export const lowerHand = (hand: HandId) => FINAL_LOWER_HAND_ORDER.includes(hand);
 export const ULTIMATE_HAND_COUNT = 1;
 
 export interface HandStats {
@@ -79,12 +110,17 @@ export function naturalHandPipsBenchmark(hand: HandId): number {
   switch (hand) {
     case 'pair': return 12;
     case 'twoPair': return 22;
+    case 'odds': case 'evens': return 18;
+    case 'chance': return 20;
+    case 'miniStraight': case 'oddStraight': case 'evenStraight': return 12;
     case 'threeKind': return 18;
     case 'smallStraight': return 18;
     case 'fullHouse': return 28;
     case 'fourKind': return 24;
     case 'largeStraight': return 20;
     case 'fiveKind': return 30;
+    case 'threePair': case 'wideStraight': return 30;
+    case 'doubleTriple': case 'fullerHouse': case 'xlStraight': case 'sixKind': return 36;
     default: return 0;
   }
 }
@@ -121,10 +157,10 @@ export function rankedHands(handLevels: HandLevels, hands: readonly HandId[] = H
     return hands.indexOf(a) - hands.indexOf(b);
   });
 }
-export const ultimateHands = (handLevels: HandLevels): HandId[] =>
-  rankedHands(handLevels).slice(0, ULTIMATE_HAND_COUNT);
-export function rankedBenchWarmerHands(handLevels: HandLevels): HandId[] {
-  return [...HAND_IDS].sort((a, b) => {
+export const ultimateHands = (handLevels: HandLevels, hands: readonly HandId[] = HAND_IDS): HandId[] =>
+  rankedHands(handLevels, hands).slice(0, ULTIMATE_HAND_COUNT);
+export function rankedBenchWarmerHands(handLevels: HandLevels, hands: readonly HandId[] = HAND_IDS): HandId[] {
+  return [...hands].sort((a, b) => {
     const levelDifference = handLevels[a] - handLevels[b];
     if (levelDifference) return levelDifference;
     const strengthDifference = trainedHandStrength(a, handLevels[a]) - trainedHandStrength(b, handLevels[b]);
@@ -132,20 +168,31 @@ export function rankedBenchWarmerHands(handLevels: HandLevels): HandId[] {
     const aRank = HANDS[a].rank;
     const bRank = HANDS[b].rank;
     if (aRank && bRank && aRank !== bRank) return aRank - bRank;
-    return HAND_IDS.indexOf(a) - HAND_IDS.indexOf(b);
+    return hands.indexOf(a) - hands.indexOf(b);
   });
 }
-export const benchWarmerHand = (handLevels: HandLevels): HandId => rankedBenchWarmerHands(handLevels)[0];
+export const benchWarmerHand = (handLevels: HandLevels, hands: readonly HandId[] = HAND_IDS): HandId =>
+  rankedBenchWarmerHands(handLevels, hands)[0];
 export const initialHandLevels = (): Record<HandId, number> =>
-  Object.fromEntries([...HAND_IDS, 'sevens'].map(hand => [hand, 1])) as Record<HandId, number>;
+  Object.fromEntries([...ALL_HAND_IDS, 'sevens'].map(hand => [hand, 1])) as Record<HandId, number>;
 export const initialHandPlayCounts = (): Record<HandId, number> =>
-  Object.fromEntries([...HAND_IDS, 'sevens'].map(hand => [hand, 0])) as Record<HandId, number>;
+  Object.fromEntries([...ALL_HAND_IDS, 'sevens'].map(hand => [hand, 0])) as Record<HandId, number>;
 
-export const upperBaselineLevel = (levels: HandLevels): number =>
-  Math.max(1, Math.round(UPPER_HAND_IDS.reduce((sum, hand) => sum + levels[hand], 0) / UPPER_HAND_IDS.length));
+export const upperBaselineLevel = (levels: HandLevels, unlockedHands: readonly HandId[] = []): number => {
+  const hands = availableUpperHandIds({ unlockedHands });
+  return Math.max(1, Math.round(hands.reduce((sum, hand) => sum + levels[hand], 0) / hands.length));
+};
+export const lowerBaselineLevel = (levels: HandLevels, unlockedHands: readonly HandId[] = []): number => {
+  const hands = availableLowerHandIds({ unlockedHands });
+  return Math.max(1, Math.round(hands.reduce((sum, hand) => sum + levels[hand], 0) / hands.length));
+};
 
-export const encounterHandIds = (state: { boss?: { type: string } | null; bossSilenced?: boolean }): HandId[] =>
-  !state.bossSilenced && state.boss?.type === 'hexer' ? HEXER_HAND_IDS : HAND_IDS;
+export const encounterHandIds = (state: { boss?: { type: string } | null; bossSilenced?: boolean;
+  infernoRewards?: { unlockedHands: readonly HandId[] } }): HandId[] => {
+  const hands = availableHandIds(state);
+  return !state.bossSilenced && state.boss?.type === 'hexer'
+    ? [...hands.slice(0, availableUpperHandIds(state).length), 'sevens', ...hands.slice(availableUpperHandIds(state).length)] : hands;
+};
 
 export const handIsStructurallyImpossible = (hand: HandId, activeDieCount: number): boolean => {
   const rule = HANDS[hand];
@@ -208,7 +255,17 @@ export function combinationsForHand(dice: Die[], hand: HandId, roundState?: DieR
     // Largest first preserves the all-matching hand-first default.
     return Array.from({ length: matching.length }, (_, index) => subsets(matching, matching.length - index)).flat();
   }
-  const candidateSets = (hand === 'smallStraight' || hand === 'largeStraight')
+  if (hand === 'chance') {
+    const roster = dice.filter(die => die.owner === 'player').map(die => die.id);
+    return roster.length ? [roster] : [];
+  }
+  if (hand === 'odds' || hand === 'evens') {
+    const parity = hand === 'odds' ? 1 : 0;
+    const matching = dice.filter(die => activeFace(die).rank % 2 === parity).map(die => die.id);
+    return matching.length >= 3 ? [matching] : [];
+  }
+  const straightHand = ['miniStraight', 'smallStraight', 'largeStraight', 'xlStraight'].includes(hand);
+  const candidateSets = straightHand || ['oddStraight', 'evenStraight', 'wideStraight'].includes(hand)
     ? subsets(dice, rule.size!)
     : Array.from({ length: Math.min(rule.size!, dice.length) }, (_, index) => subsets(dice, index + 1)).flat();
   return candidateSets.filter(set => planQualification(set, hand, set.map(die => die.id), { roundState }).legal)
@@ -262,7 +319,7 @@ export function planQualification(dice: Die[], hand: HandId, selected: readonly 
     const missing = effectOf(die, 'missingLink');
     const mirror = effectOf(die, 'mirror');
     const conjoined = effectOf(die, 'conjoined');
-    if ((hand === 'smallStraight' || hand === 'largeStraight') && available(missing))
+    if (['miniStraight', 'smallStraight', 'largeStraight', 'xlStraight'].includes(hand) && available(missing))
       claims.push({ dieId: die.id, effect: 'missingLink', effectInstanceId: missing!.id });
     if (rule.groups && available(mirror)) claims.push({ dieId: die.id, effect: 'mirror', effectInstanceId: mirror!.id });
     if ((rule.groups || rule.rank) && available(conjoined))
@@ -272,7 +329,27 @@ export function planQualification(dice: Die[], hand: HandId, selected: readonly 
   const validWith = (claims: QualificationClaim[]) => {
     if (!validShape) return false;
     if (rule.rank) return selectedDice.length > 0 && selectedDice.every(die => activeFace(die).rank === rule.rank);
-    if (hand === 'smallStraight' || hand === 'largeStraight') return straightValid(selectedDice, rule.size!, claims);
+    if (hand === 'chance') return selectedDice.length > 0 && selectedDice.every(die => die.owner === 'player')
+      && selectedDice.length === dice.filter(die => die.owner === 'player').length;
+    if (hand === 'odds' || hand === 'evens') {
+      const parity = hand === 'odds' ? 1 : 0;
+      const allMatching = dice.filter(die => activeFace(die).rank % 2 === parity);
+      return allMatching.length >= 3 && selectedDice.length === allMatching.length
+        && selectedDice.every(die => activeFace(die).rank % 2 === parity);
+    }
+    if (['miniStraight', 'smallStraight', 'largeStraight', 'xlStraight'].includes(hand))
+      return straightValid(selectedDice, rule.size!, claims);
+    if (hand === 'oddStraight' || hand === 'evenStraight') {
+      const expected = hand === 'oddStraight' ? [1, 3, 5] : [2, 4, 6];
+      return selectedDice.length === 3 && expected.every(rank => selectedDice.some(die => activeFace(die).rank === rank));
+    }
+    if (hand === 'wideStraight') {
+      const counts = new Map<number, number>();
+      for (const die of selectedDice) counts.set(activeFace(die).rank, (counts.get(activeFace(die).rank) ?? 0) + 1);
+      const ranks = [...counts.keys()].sort((a, b) => a - b);
+      return selectedDice.length === 6 && ranks.length === 3 && ranks[2] - ranks[0] === 2
+        && ranks.every((rank, index) => rank === ranks[0] + index && counts.get(rank) === 2);
+    }
     return !!rule.groups && matchingGroupsValid(selectedDice, rule.groups, claims);
   };
   const validSets = claimSets(candidates).filter(validWith);

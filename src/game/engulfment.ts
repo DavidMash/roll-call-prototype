@@ -10,7 +10,7 @@ import {
   punchCardMultiplier, standardFlameMultiplier, targetPracticeMultiplier, vineyardMultiplier, oneShortMultiplier,
   calculateMaxChargeForInstances,
 } from './flames';
-import { HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from './hands';
+import { availableHandIds, availableLowerHandIds, availableUpperHandIds, upperHand } from './hands';
 import { canonicalRunHistoryV2Events } from './runHistoryV2Timeline';
 import { finalizeScore, infernoMultiplier, INFERNO_BASE, scoreWeightedMultiplier } from './scoring';
 import { exactRatioNumber, type ExactScore } from './scoreMath';
@@ -20,7 +20,7 @@ import type {
   InfernoTrend, InfernoWeakness,
 } from './types';
 
-export const ENGULFMENT_EVIDENCE_ROUNDS = 3;
+export const ENGULFMENT_EVIDENCE_ROUNDS = 6;
 export const ENGULFMENT_REQUIRED_MULTIPLIER = 15;
 export const INFERNO_TREND_DEAD_ZONE = 0.05;
 export const INFERNO_CLOSE_READINESS = 0.8;
@@ -151,7 +151,7 @@ const HAND_FAMILY_PAYOFFS: Partial<Record<Flame, HandId>> = {
  */
 function maximumFlameFactorOnHand(flame: Flame, hand: HandId): number {
   if (isChargeFlame(flame)) return 1;
-  if (flame === 'minigun' && !UPPER_HAND_IDS.includes(hand)) return 1;
+  if (flame === 'minigun' && !upperHand(hand)) return 1;
   if (flame === 'hotStreak' && !HOT_STREAK_SEQUENCE.includes(hand)) return 1;
   if (flame === 'missingPair' && hand !== 'pair' && hand !== 'threeKind') return 1;
   if (flame === 'oneShort' && hand !== 'smallStraight' && hand !== 'fourKind') return 1;
@@ -197,7 +197,7 @@ function maximumFlameFactorOnHand(flame: Flame, hand: HandId): number {
  * attribution rule. The best legal hand is the collection's ceiling.
  */
 export function maximumPossibleEngulfmentReadiness(
-  state: Pick<Board, 'flameSlots'>,
+  state: Pick<Board, 'flameSlots'> & Partial<Pick<Board, 'infernoRewards'>>,
   assets: readonly EngulfmentAssetRef[] = ownedEngulfmentAssets(state),
 ): number {
   if (!assets.length) return 0;
@@ -205,7 +205,7 @@ export function maximumPossibleEngulfmentReadiness(
   const chargeFactor = calculateMaxChargeForInstances(chargeAssets.map(asset => ({
     type: asset.flame, investedGold: 100,
   })));
-  const best = HAND_IDS.reduce((maximum, hand) => {
+  const best = availableHandIds(state).reduce((maximum, hand) => {
     const directFactor = assets.reduce((product, asset) => {
       if (isChargeFlame(asset.flame)) return product;
       return product * maximumFlameFactorOnHand(asset.flame, hand);
@@ -227,8 +227,9 @@ export function handLevelNormalization(levels: HandLevels, hands: readonly HandI
   return { levelsBefore, average, unifiedLevel: Math.max(1, Math.round(average)) };
 }
 
-export function engulfmentTrainingNormalization(levels: HandLevels) {
-  return { upper: handLevelNormalization(levels, UPPER_HAND_IDS), lower: handLevelNormalization(levels, LOWER_HAND_IDS) };
+export function engulfmentTrainingNormalization(levels: HandLevels, unlockedHands: readonly HandId[] = []) {
+  return { upper: handLevelNormalization(levels, availableUpperHandIds({ unlockedHands })),
+    lower: handLevelNormalization(levels, availableLowerHandIds({ unlockedHands })) };
 }
 
 export const INFERNO_MESSAGE_POOLS = {
@@ -363,7 +364,7 @@ export function createInfernoEvaluation(state: GameState): InfernoEvaluationStat
     ? { id: 'inferno-suspended', text: INFERNO_SUSPENSION_MESSAGE }
     : selectInfernoFeedback(state.seed, evaluationIndex, weakness, trend, recentAction,
       state.infernoProgress.recentMessageIds);
-  const normalization = engulfmentTrainingNormalization(state.handLevels);
+  const normalization = engulfmentTrainingNormalization(state.handLevels, state.infernoRewards.unlockedHands);
   const infernoLevelBefore = state.engulfmentLevel;
   return {
     evaluationIndex, round: state.round, chapter: chapterNumberForRound(state.round), flames: diagnostics,

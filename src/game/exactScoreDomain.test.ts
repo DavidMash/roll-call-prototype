@@ -55,7 +55,7 @@ describe('exact score gameplay boundaries', () => {
     const state = scoringBoundary(HUGE_GOAL - 2n);
     state.manualRerollsRemaining = 0;
     state.specialOfferEffects.carePackageRerolls = 0;
-    state.consumed = Object.keys(state.handLevels).filter(hand => hand !== 'ones') as (keyof typeof state.handLevels)[];
+    state.consumed = Object.keys(state.handLevels).filter(hand => hand !== 'ones') as import('./types').HandId[];
     state.scorecardCycleConsumed = [];
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant).state;
     expect(result.bust).toMatchObject({ score: HUGE_GOAL - 1n, target: HUGE_GOAL, shortfall: 1n });

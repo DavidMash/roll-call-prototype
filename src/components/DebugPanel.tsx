@@ -4,7 +4,7 @@ import { chapterNumberForRound, chapterRoundForRound } from '../game/chapters';
 import { formatExactScore, formatPlayerNumber, formatScoreProgress } from '../game/copy';
 import { scoringPips } from '../game/dice';
 import { flameInstances, FLAMES } from '../game/flames';
-import { HANDS, HAND_IDS } from '../game/hands';
+import { availableHandIds, HANDS } from '../game/hands';
 import { createRunHistoryTextV2, exportDebugTrace, exportRunHistoryV2 } from '../game/runHistoryV2Export';
 import { renderRunHistoryV2Event } from '../game/runHistoryV2Renderer';
 import { classifyRunHistoryV2Timelines } from '../game/runHistoryV2Timeline';
@@ -70,7 +70,7 @@ export function RunInfoModal({ state, repository, runId, busy, opened, onClose, 
         <Tabs.Panel value="overview" pt="md">
           <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="xs">
             <OverviewStat label="Seed" value={state.seed} /><OverviewStat label="Round" value={state.round} />
-            <OverviewStat label="Attempt" value={state.roundAttemptNumber} /><OverviewStat label="Lives" value={`${formatPlayerNumber(state.lives)} / 3`} />
+            <OverviewStat label="Attempt" value={state.roundAttemptNumber} /><OverviewStat label="Lives" value={`${formatPlayerNumber(state.lives)} / ${formatPlayerNumber(state.infernoRewards.upgrades.maxLives)}`} />
             <OverviewStat label="Score / goal" value={formatScoreProgress(state.score, state.target)} /><OverviewStat label="Gold" value={state.gold} />
             <OverviewStat label="Shop spend" value={state.lifetimeNormalShopGoldSpent} /><OverviewStat label="Flame investment" value={state.stats.totalFlameInvestment} />
             <OverviewStat label="Charge" value={`×${formatPlayerNumber(state.chargeXMult)} / ×${formatPlayerNumber(state.maxCharge)}${state.chargeArmed ? ' armed' : ''}`} />
@@ -79,7 +79,7 @@ export function RunInfoModal({ state, repository, runId, busy, opened, onClose, 
             <OverviewStat label="Busts" value={state.stats.busts.length} /><OverviewStat label="Life restores" value={state.stats.lifeRestores.length} />
             <OverviewStat label="Dice owned" value={Object.keys(state.diceInventory.instances).length} /><OverviewStat label="Roster dice" value={state.diceInventory.roster.filter(Boolean).length} />
           </SimpleGrid>
-          <Text size="sm" mt="md"><strong>Hand levels:</strong> {HAND_IDS.map(hand => `${HANDS[hand].name} ${formatPlayerNumber(state.handLevels[hand])}`).join(' · ')}</Text>
+          <Text size="sm" mt="md"><strong>Hand levels:</strong> {availableHandIds(state).map(hand => `${HANDS[hand].name} ${formatPlayerNumber(state.handLevels[hand])}`).join(' · ')}</Text>
           <Text size="sm" mt="sm"><strong>Active Flames:</strong> {state.flameSlots.flatMap((flame, slot) => flame ? [`Slot ${slot + 1} ${FLAMES[flame.type].name} ${formatPlayerNumber(flame.investedGold)}/100 ${flame.stage}`] : []).join(' · ') || 'None'}</Text>
           <Text size="sm" mt="sm"><strong>Special Offers:</strong> {activeSpecialOfferStatuses(state.specialOfferEffects).join(' · ') || 'None active'}</Text>
           <Text size="sm" mt="sm"><strong>Gold:</strong> base {formatPlayerNumber(state.stats.goldBySource.roundBase)} · rerolls {formatPlayerNumber(state.stats.goldBySource.unusedRerolls)} · interest {formatPlayerNumber(state.stats.goldBySource.interest)} · Boss Reward {formatPlayerNumber(state.stats.goldBySource.bossReward)} · Golden {formatPlayerNumber(state.stats.goldBySource.golden)} · Jackpot {formatPlayerNumber(state.stats.goldBySource.jackpot)}</Text>

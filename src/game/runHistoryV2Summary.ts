@@ -2,9 +2,11 @@ import { chapterNumberForRound, chapterRoundForRound } from './chapters';
 import { classifyRunHistoryV2Timelines } from './runHistoryV2Timeline';
 import { infernoMultiplier } from './scoring';
 import { ownedDice } from './inventory';
-import { HAND_IDS } from './hands';
+import { availableHandIds } from './hands';
 import type {
-  DiceRarity, DieEffectInstance, Flame, FlameInstance, GoldSource, GoldSpendSource, HandId, SpecialDieType, SpecialOfferType,
+  DiceRarity, DieEffectInstance, Flame, FlameInstance, GoldSource, GoldSpendSource, HandId,
+  InfernoPermanentUpgrades, InfernoRewardCategory, InfernoRewardOfferId, InfernoRewardRarity,
+  SpecialDieType, SpecialOfferType,
   TemperSource, TemperSpendSource, GameState,
 } from './types';
 import type { RunHistoryV2Coverage, RunHistoryV2Event } from './runHistoryV2';
@@ -131,6 +133,16 @@ export interface CanonicalRunMetrics {
   retainedTrainingPurchases: number;
   trainingGoldSpent: number;
   retainedOffers: { dice: { dieType: SpecialDieType; rarity: DiceRarity; price: number }[]; trainableHands: number };
+  infernoRewards: {
+    screens: number;
+    claimed: InfernoRewardOfferId[];
+    categoryCounts: Counts<InfernoRewardCategory>;
+    rarityCounts: Counts<InfernoRewardRarity>;
+    recycledOffersShown: number;
+    recycledOffersClaimed: number;
+    finalPermanentUpgrades: InfernoPermanentUpgrades | null;
+    unlockedBonusHands: HandId[];
+  };
 }
 
 export interface RunHistoryV2Summary {
@@ -220,12 +232,19 @@ function canonicalFromState(state: GameState | undefined, events: readonly RunHi
     event.kind === 'engulfment_attempted' && event.success).at(-1);
   const scoreByHand: ScoreCounts<HandId> = {};
   const earned: Record<GoldSource, number> = { golden: 0, jackpot: 0, diceSale: 0, roundBase: 0,
-    unusedRerolls: 0, interest: 0, bossReward: 0, specialOffer: 0 };
+    unusedRerolls: 0, interest: 0, bossReward: 0, specialOffer: 0, infernoReward: 0 };
   const spent: Record<GoldSpendSource, number> = { dicePurchase: 0, diceOfferReroll: 0,
     handTraining: 0, flameInvestment: 0, lifeRestore: 0, furnace: 0, greaseTheEngine: 0, bribery: 0 };
   let retainedPurchases = 0;
   let retainedTrainingPurchases = 0;
   let individualTraining = 0;
+  const rewardOffered = canonical.filter((event): event is Extract<RunHistoryV2Event, { kind: 'inferno_reward_offered' }> =>
+    event.kind === 'inferno_reward_offered');
+  const rewardClaimed = canonical.filter((event): event is Extract<RunHistoryV2Event, { kind: 'inferno_reward_claimed' }> =>
+    event.kind === 'inferno_reward_claimed');
+  const rewardCategoryCounts: Counts<InfernoRewardCategory> = {};
+  const rewardRarityCounts: Counts<InfernoRewardRarity> = {};
+  for (const event of rewardClaimed) { add(rewardCategoryCounts, event.category, 1); add(rewardRarityCounts, event.rarity, 1); }
   for (const event of canonical) {
     if (event.kind === 'hand_scored') addScore(scoreByHand, event.hand, event.score.awarded);
     if (event.kind !== 'shop_transaction') continue;
@@ -263,7 +282,17 @@ function canonicalFromState(state: GameState | undefined, events: readonly RunHi
     retainedOffers: {
       dice: state?.shop?.offers.filter(offer => !offer.purchased).map(offer => ({ dieType: offer.dieType,
         rarity: offer.rarity, price: offer.price })) ?? [],
-      trainableHands: state?.shop ? HAND_IDS.length : 0,
+      trainableHands: state?.shop ? availableHandIds(state).length : 0,
+    },
+    infernoRewards: {
+      screens: rewardOffered.length,
+      claimed: rewardClaimed.map(event => event.offerId),
+      categoryCounts: rewardCategoryCounts,
+      rarityCounts: rewardRarityCounts,
+      recycledOffersShown: rewardOffered.reduce((sum, event) => sum + event.offers.filter(offer => offer.recycled).length, 0),
+      recycledOffersClaimed: rewardClaimed.filter(event => event.recycled).length,
+      finalPermanentUpgrades: state ? structuredClone(state.infernoRewards.upgrades) : null,
+      unlockedBonusHands: state ? [...state.infernoRewards.unlockedHands] : [],
     },
   };
 }

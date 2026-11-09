@@ -12,7 +12,6 @@ import { ScoreResolution } from './ScoreResolution';
 import { CurrencyAmount } from './CurrencyAmount';
 import { activeEncounterDice, currentlyPlayableManualHands, lastPlayDanger, requiredEncounterDieIds, unavailableEncounterHands } from '../game/bosses';
 import { BossPanel } from './BossPanel';
-import { CONFIG } from '../game/config';
 import { formatPlayerNumber, formatScoreEquation, formatScoreProgress, playActionLabel } from '../game/copy';
 import { DecisionTimer } from '../game/decisionTimer';
 import { usableManualRerolls } from '../game/specialOffers';
@@ -92,7 +91,8 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const rerollResourceText = `${board.manualRerollsRemaining} REROLL${board.manualRerollsRemaining === 1 ? '' : 'S'} LEFT${carePackageRerolls
     ? `, PLUS ${carePackageRerolls} CARE PACKAGE REROLL${carePackageRerolls === 1 ? '' : 'S'}` : ''}`;
   const rerollVisualResourceText = `${board.manualRerollsRemaining} LEFT${carePackageRerolls ? ` + ${carePackageRerolls}` : ''}`;
-  const normalRerollFill = Math.max(0, Math.min(1, board.manualRerollsRemaining / CONFIG.manualRerollsPerRound));
+  const normalRerollFill = Math.max(0, Math.min(1,
+    board.manualRerollsRemaining / board.infernoRewards.upgrades.manualRerolls));
   const deadBoard = currentlyPlayableManualHands(board).length === 0;
   const scorecardRefreshing = event?.type === 'SCORECARD_REFRESHED';
   const speedEquation = event?.flame === 'speedDemon' && event.handScore && event.type !== 'SPEED_DEMON_REVEALED'

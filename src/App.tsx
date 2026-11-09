@@ -35,6 +35,7 @@ import type { OnboardingMetadata, TutorialBeat } from './tutorial/types';
 import { isChapterMapTransition } from './game/playback';
 import { RunActionRow, RunActionRowContext } from './components/RunActionRow';
 import { InfernoEvaluationScreen } from './components/InfernoEvaluationScreen';
+import { InfernoRewardScreen } from './components/InfernoRewardScreen';
 import type { FlamePresentation } from './game/flamePresentation';
 import { ScenarioBrowser } from './components/ScenarioBrowser';
 import { ScenarioDetails } from './components/ScenarioDetails';
@@ -275,6 +276,8 @@ export default function App() {
         : showingMap ? <RunMapTransition key={event!.id} seed={state.seed} event={event!} onContinue={game.continuePlayback} />
         : board.phase === 'roundSummary' && board.roundSummary ? <RoundSummaryScreen board={board} busy={busy} submit={submit} />
         : board.phase === 'inferno' && board.infernoEvaluation ? <InfernoEvaluationScreen board={board} submit={submit} />
+        : board.phase === 'infernoReward' && board.infernoRewards.pending ? <InfernoRewardScreen board={board}
+          inventory={state.diceInventory} busy={busy} submit={submit} />
         : board.phase === 'scenarioComplete' && board.scenario ? <ScenarioCompleteScreen board={board}
           onContinue={() => continueScenarioCompletion('run')} onScenarios={() => continueScenarioCompletion('scenarios')}
           onHome={() => continueScenarioCompletion('home')} />
@@ -307,7 +310,7 @@ export default function App() {
       display={diceDisplay} selection={selection} setSelection={setSelection}
       selectedFlameOffer={selectedFlameOffer}
       submit={submit} openFaceDetails={setFaceDetails} openFlameDetails={openFlameDetails} />}
-    {board.phase !== 'inferno' && <RunActionRow setTarget={setActionRowTarget} />}
+    {board.phase !== 'inferno' && board.phase !== 'infernoReward' && <RunActionRow setTarget={setActionRowTarget} />}
     {runInfoOpen && <RunInfoModal state={state} repository={game.repository} runId={game.runSession.ledger.runId}
       busy={busy} opened onClose={() => setRunInfoOpen(false)}
       seedInput={seedInput} setSeedInput={setSeedInput} startSeed={() => restart(seedInput.trim())}

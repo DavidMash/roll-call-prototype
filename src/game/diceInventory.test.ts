@@ -77,7 +77,7 @@ describe('collectible dice inventory', () => {
     expect(() => assertDiceInventory(unlocated)).toThrow(/does not occupy/);
     const malformed = structuredClone(state.diceInventory);
     malformed.roster.pop();
-    expect(() => assertDiceInventory(malformed)).toThrow(/exactly 5/);
+    expect(() => assertDiceInventory(malformed)).toThrow(/between 5 and 7/);
     const malformedStorage = structuredClone(state.diceInventory);
     malformedStorage.storage.pop();
     expect(() => assertDiceInventory(malformedStorage)).toThrow(/exactly 5 Storage/);

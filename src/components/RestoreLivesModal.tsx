@@ -1,9 +1,9 @@
 import { Button, Group, Modal, Stack, Text } from '@mantine/core';
-import { CONFIG, lifeRestoreCost } from '../game/config';
+import { lifeRestoreCost } from '../game/config';
 import type { Action, Board } from '../game/types';
 import { CurrencyAmount } from './CurrencyAmount';
 
-const hearts = (lives: number) => Array.from({ length: CONFIG.maxLives }, (_, index) => index < lives ? '♥' : '♡').join(' ');
+const hearts = (lives: number, maximum: number) => Array.from({ length: maximum }, (_, index) => index < lives ? '♥' : '♡').join(' ');
 
 export function RestoreLivesModal({ board, opened, busy, onClose, submit }: {
   board: Board; opened: boolean; busy: boolean; onClose: () => void; submit: (action: Action) => void;
@@ -11,10 +11,11 @@ export function RestoreLivesModal({ board, opened, busy, onClose, submit }: {
   const restoresAtThisShop = board.shop?.lifeRestores ?? 0;
   const cost = lifeRestoreCost(restoresAtThisShop);
   const nextCost = lifeRestoreCost(restoresAtThisShop + 1);
-  const full = board.lives >= CONFIG.maxLives;
+  const maximum = board.infernoRewards.upgrades.maxLives;
+  const full = board.lives >= maximum;
   return <Modal opened={opened} onClose={onClose} title="RESTORE LIVES" centered transitionProps={{ duration: 0 }}>
     <Stack gap="sm">
-      <Text size="xl" fw={800} c="red" aria-label={`${board.lives} of ${CONFIG.maxLives} lives`}>{hearts(board.lives)}</Text>
+      <Text size="xl" fw={800} c="red" aria-label={`${board.lives} of ${maximum} lives`}>{hearts(board.lives, maximum)}</Text>
       {full ? <Text>All lives restored.</Text> : <>
         <Text>Restore one lost life.</Text>
       </>}

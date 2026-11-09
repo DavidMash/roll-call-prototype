@@ -105,6 +105,8 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     }
     case 'hand_scored': return renderHandScoredV2(event);
     case 'special_die_activated': return `SPECIAL DIE · ${specialDieLabel(event.dieType)} Lv${number(event.level)} · ${die(event.dieId)} · ${event.detail}`;
+    case 'inferno_reward_offered': return `INFERNO REWARD · OFFERED · ${event.offers.map(offer => `${offer.id} / ${offer.name} / ${offer.category} / ${offer.rarity}${offer.recycled ? ' / recycled' : ''}`).join('; ')}`;
+    case 'inferno_reward_claimed': return `INFERNO REWARD · CLAIMED · ${event.offerId} / ${event.name} / ${event.category} / ${event.rarity} · ${event.effect}${event.recycled ? ' · recycled' : ''}`;
     case 'roll_batch': return `ROLL · ${event.reason} · ${event.results.map(result => `${die(result.dieId)} ${number(result.beforeFace)}→${number(result.afterFace)}`).join(' · ')}`;
     case 'shop_visit_started': return `SHOP VISIT ${number(event.shopVisitId)} · ${event.reason} · ${label(event.initialStage)}`;
     case 'shop_stage_changed': return `SHOP ${number(event.shopVisitId)} · ${label(event.from)} → ${label(event.to)}`;
@@ -161,7 +163,9 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
         : `ALL IN FAILED · ${event.hand ? HANDS[event.hand].name : 'manual Play'} · −${number(event.scoreRemoved ?? 0n)} Score`;
     case 'charge_changed': return `CHARGE · ${event.operation} · ×${number(event.before)}→×${number(event.after)}`;
     case 'flame_charge_generated': return '';
-    case 'engulfment_attempted': return `ENGULFMENT · Shop ${number(event.shopVisitId)} · ${event.success ? 'SUCCESS' : 'OFFERING REJECTED'}`;
+    case 'engulfment_attempted': return `ENGULFMENT · Shop ${number(event.shopVisitId)} · ${event.success ? 'SUCCESS' : 'OFFERING REJECTED'}`
+      + ` · selected Flames ${event.selectedInstanceIds.join(', ') || 'none'} · joint power ×${number(event.selectedEffectivePower)}`
+      + ` · earned factor ×${number(event.earnedInfernoFactor)} · Inferno ×${number(event.infernoMultiplierBefore)} → ×${number(event.infernoMultiplierAfter)}`;
     case 'inferno_evaluated': return `INFERNO EVALUATION · ${event.evaluation.success ? 'READY' : 'NOT YET'} · effective ×${number(event.evaluation.effectiveValue)} / ×${number(event.evaluation.threshold)} · meter ${number((event.evaluation.previousReadiness ?? 0) * 100)}% → ${number(event.evaluation.readiness * 100)}% · ${event.evaluation.flames.length} Flame${event.evaluation.flames.length === 1 ? '' : 's'}`;
     case 'inferno_suspension_changed': return `INFERNO · ${event.suspended ? 'SUSPENDED' : 'REACTIVATED'} · ${event.reason}`;
     case 'boss_state_changed': {

@@ -5,7 +5,7 @@ import {
   PROGRESSIVE_FLAME_SEQUENCES, speedDemonMultiplier,
   briberyFactor, powerSurgeChargeMultiplier,
 } from './flames';
-import { HANDS, ultimateHands } from './hands';
+import { availableHandIds, HANDS, ultimateHands } from './hands';
 import { canonicalPlayPreview, type CanonicalPlayPreview } from './playPreview';
 import { legalHandCombinations } from './selection';
 import type { Board, Flame, FlameInstance, HandId } from './types';
@@ -80,7 +80,7 @@ function sequenceState(board: Board, flame: FlameInstance): Partial<FlamePresent
     targetHand: board.scoreWagers.doubleOrNothing.hand,
     statusText: `REPLAY ${HANDS[board.scoreWagers.doubleOrNothing.hand].name.toUpperCase()} · ×${board.scoreWagers.doubleOrNothing.factor}` };
   if (flame.type === 'dareDevil' && board.interactiveFlames.dareDevilCount > 0) return { state: 'setup',
-    targetHand: ultimateHands(board.handLevels)[0], progress: board.interactiveFlames.dareDevilCount / 4,
+    targetHand: ultimateHands(board.handLevels, availableHandIds(board))[0], progress: board.interactiveFlames.dareDevilCount / 4,
     statusText: `${board.interactiveFlames.dareDevilCount} DARE${board.interactiveFlames.dareDevilCount === 1 ? '' : 'S'} STORED` };
   if (flame.type === 'allIn' && board.scoreWagers.allInArmed) return { state: 'setup', statusText: 'ARMED · NEXT MANUAL PLAY' };
   if (flame.type === 'bribery' && board.interactiveFlames.briberyPendingCount > 0) return { state: 'setup',
@@ -105,9 +105,9 @@ function chargePlayPossible(board: Board, flame: Flame): boolean {
   const playableHands = (Object.keys(board.handLevels) as HandId[]).filter(hand => legalHandCombinations(board, hand).length > 0);
   if (!playableHands.length) return false;
   if (flame === 'momentum') return true;
-  if (flame === 'powerSurge') return ultimateHands(board.handLevels).some(hand => playableHands.includes(hand));
+  if (flame === 'powerSurge') return ultimateHands(board.handLevels, availableHandIds(board)).some(hand => playableHands.includes(hand));
   if (flame === 'potentialEnergy') {
-    const ultimate = ultimateHands(board.handLevels);
+    const ultimate = ultimateHands(board.handLevels, availableHandIds(board));
     return ultimate.some(hand => playableHands.includes(hand)) && playableHands.some(hand => !ultimate.includes(hand));
   }
   if (flame === 'allHandsOnDeck') {
@@ -145,10 +145,10 @@ export function deriveFlamePresentations(board: Board, preview: CanonicalPlayPre
     if (preview && isChargeFlame(flame.type)) {
       let requested = 1;
       if (flame.type === 'momentum') requested = momentumChargeGain(flame.investedGold);
-      if (flame.type === 'powerSurge' && ultimateHands(board.handLevels).includes(preview.hand))
+      if (flame.type === 'powerSurge' && ultimateHands(board.handLevels, availableHandIds(board)).includes(preview.hand))
         requested = powerSurgeChargeMultiplier(flame.investedGold);
       if (flame.type === 'potentialEnergy') {
-        const ultimate = ultimateHands(board.handLevels);
+        const ultimate = ultimateHands(board.handLevels, availableHandIds(board));
         const ultimatePlayable = ultimate.some(hand => legalHandCombinations(board, hand).length > 0);
         if (ultimatePlayable && !ultimate.includes(preview.hand)) requested = potentialEnergyChargeGain(flame.investedGold);
       }

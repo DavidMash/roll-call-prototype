@@ -15,6 +15,8 @@ const expectedLevelOne: Record<HandId, number> = {
   ones: 1, twos: 1, threes: 1, fours: 1, fives: 1, sixes: 1, sevens: 1,
   pair: 2, twoPair: 2, threeKind: 3, smallStraight: 4,
   fullHouse: 5, fourKind: 6, largeStraight: 7, fiveKind: 8,
+  odds: 2, evens: 2, chance: 1.5, miniStraight: 2.5, oddStraight: 3, evenStraight: 3,
+  threePair: 5, wideStraight: 7, doubleTriple: 7, fullerHouse: 8, xlStraight: 10, sixKind: 12,
 };
 
 function shopState(gold = 200, levels?: Partial<HandLevels>): GameState {
