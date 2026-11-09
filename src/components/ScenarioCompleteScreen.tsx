@@ -2,8 +2,8 @@ import { Button, Group, Paper, SimpleGrid, Stack, Text, Title } from '@mantine/c
 import type { Board } from '../game/types';
 import { formatExactScore, formatPlayerNumber } from '../game/copy';
 
-export function ScenarioCompleteScreen({ board, onContinue, onScenarios, onHome }: {
-  board: Board; onContinue: () => void; onScenarios: () => void; onHome: () => void;
+export function ScenarioCompleteScreen({ board, onScenarios, onHome }: {
+  board: Board; onScenarios: () => void; onHome: () => void;
 }) {
   const scenario = board.scenario!;
   return <main className="scenario-complete-screen" aria-labelledby="scenario-complete-title" data-testid="scenario-complete-screen">
@@ -17,8 +17,7 @@ export function ScenarioCompleteScreen({ board, onContinue, onScenarios, onHome 
           <div><small>ENGULFMENTS</small><strong>{formatPlayerNumber(board.engulfmentLevel)}</strong></div>
           <div><small>INFERNO MULTIPLIER</small><strong>×{formatExactScore(board.infernoMultiplier)}</strong></div>
         </SimpleGrid>
-        <Group justify="center"><Button size="lg" color="orange" onClick={onContinue}>CONTINUE RUN</Button>
-          <Button size="lg" variant="default" onClick={onScenarios}>BACK TO SCENARIOS</Button></Group>
+        <Group justify="center"><Button size="lg" color="orange" onClick={onScenarios}>BACK TO SCENARIOS</Button></Group>
         <Button variant="subtle" color="gray" onClick={onHome}>HOME</Button>
       </Stack>
     </Paper>

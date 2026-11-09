@@ -54,8 +54,8 @@ import { activeDieLabel, orderDieIdsByEncounter, rosterDice, rosterSlotOf, syncA
 import type { PlayIntent, QualificationPlan, RollBatchIntent, RollContext, RollIntent, RollResolution, ScoreOccurrence } from './resolution';
 import { effectOf, effectRuntime, hasEffect, requireEffect, resetDieRoundState, runtimeFor, SPECIAL_DICE } from './specialDice';
 import {
-  createCuratedRewardDie, CURATED_DIE_BUILDS, generateInfernoRewardSelection, INFERNO_HAND_BY_OFFER,
-  INFERNO_REWARD_OFFERS, placeCuratedRewardDie, unlockInfernoHand,
+  applyStructuralInfernoReward, createCuratedRewardDie, CURATED_DIE_BUILDS, generateInfernoRewardSelection,
+  INFERNO_HAND_BY_OFFER, INFERNO_REWARD_OFFERS, placeCuratedRewardDie,
 } from './infernoRewards';
 
 type RollTrigger = { dieId: number; face: Face; kind: 'jumpingBean'; rerollEventId: string; selectedNumber: Exclude<Rank, 7> };
@@ -2647,10 +2647,14 @@ export class Resolver {
     if (!this.state.infernoRewards.pending.offers.length) this.finishInfernoReward();
   }
   private applyInfernoReward(offerId: InfernoRewardOfferId): string {
+    const structuralEffect = applyStructuralInfernoReward(this.state, offerId);
+    if (structuralEffect) {
+      const hand = INFERNO_HAND_BY_OFFER[offerId];
+      return hand ? `${HANDS[hand].name} unlocked at the current ${upperHand(hand) ? 'Upper' : 'Lower'} baseline, Level ${this.state.handLevels[hand]}.`
+        : structuralEffect;
+    }
     const upgrades = this.state.infernoRewards.upgrades;
     switch (offerId) {
-      case 'expandedRoster': upgrades.rosterCap = 6; this.state.diceInventory.roster.push(null); return 'Roster capacity increased to 6.';
-      case 'expandedRoster2': upgrades.rosterCap = 7; this.state.diceInventory.roster.push(null); return 'Roster capacity increased to 7.';
       case 'extraReroll': upgrades.manualRerolls = 4; return 'Permanent Manual Rerolls increased to 4.';
       case 'extraReroll2': upgrades.manualRerolls = 5; return 'Permanent Manual Rerolls increased to 5.';
       case 'maxHeart': case 'maxHeart2':
@@ -2665,11 +2669,6 @@ export class Resolver {
       case 'goldWindfall': this.addGold(100, 'Inferno Reward · Gold Windfall: +100 Gold', 'infernoReward'); return 'Immediately gained 100 Gold.';
       case 'temperWindfall': this.addTemper(100, 'infernoReward', 'Inferno Reward · Temper Windfall'); return 'Immediately gained 100 Temper.';
       default: {
-        const hand = INFERNO_HAND_BY_OFFER[offerId];
-        if (hand) {
-          const baseline = unlockInfernoHand(this.state, hand);
-          return `${HANDS[hand].name} unlocked at the current ${upperHand(hand) ? 'Upper' : 'Lower'} baseline, Level ${baseline}.`;
-        }
         const build = CURATED_DIE_BUILDS[offerId];
         if (build) {
           const die = createCuratedRewardDie(this.state, offerId);
@@ -2891,6 +2890,10 @@ export class Resolver {
     if (this.state.infernoEvaluation.success && !this.state.infernoEvaluation.engulfed)
       throw new Error('Choose whether to Engulf now or not yet.');
     if (this.state.infernoEvaluation.engulfed) {
+      if (this.state.runMode === 'scenario' && this.state.scenario?.completionPending) {
+        this.state.phase = 'scenarioComplete';
+        return;
+      }
       this.openInfernoReward();
       return;
     }
@@ -2910,10 +2913,8 @@ export class Resolver {
       throw new Error('Scenario completion is not awaiting continuation.');
     this.state.scenario.completionPending = false;
     this.state.scenario.completionAcknowledged = true;
-    if (this.state.infernoEvaluation?.engulfed) {
-      this.state.phase = 'inferno';
-      this.continueInfernoEvaluation();
-    } else this.continuePostRoundFlow();
+    this.state.infernoEvaluation = null;
+    this.state.infernoRewards.pending = null;
   }
   private completeSpecialOfferRound(): void {
     const effects = this.state.specialOfferEffects;

@@ -2,8 +2,8 @@ import { Badge, Button, Group, Paper, Progress, SimpleGrid, Stack, Text, Title }
 import { useMemo, useState } from 'react';
 import { newRun } from '../game/engine';
 import { flameInstances, FLAMES } from '../game/flames';
-import { handStats, HANDS, HAND_IDS } from '../game/hands';
-import { handLevelsForScenario, type ScenarioDefinition } from '../game/scenarios';
+import { availableHandIds, handStats, HANDS } from '../game/hands';
+import type { ScenarioDefinition } from '../game/scenarios';
 import { formatExactScore, formatPlayerNumber } from '../game/copy';
 import type { FaceDetailsTarget } from './FaceDetailsModal';
 import { FaceDetailsModal } from './FaceDetailsModal';
@@ -18,11 +18,11 @@ export function ScenarioDetails({ scenario, completed, onBack, onStart }: {
   scenario: ScenarioDefinition; completed: boolean; onBack: () => void; onStart: () => void;
 }) {
   const preview = useMemo(() => newRun(`scenario-preview-${scenario.id}`, { next: () => .314159 }, { scenario }).state, [scenario]);
-  const levels = handLevelsForScenario(scenario);
+  const levels = preview.handLevels;
   const [dieTarget, setDieTarget] = useState<FaceDetailsTarget | null>(null);
   const [flameTarget, setFlameTarget] = useState<FlameDetailsTarget | null>(null);
   const featured = scenario.featuredHands ?? [];
-  const remaining = HAND_IDS.filter(hand => !featured.includes(hand));
+  const remaining = availableHandIds(preview).filter(hand => !featured.includes(hand));
   const HandRows = ({ hands }: { hands: readonly HandId[] }) => <div className="scenario-hand-list">
     {hands.map(hand => { const stats = handStats(hand, levels[hand]); return <div key={hand}
       className={`scenario-hand-row${featured.includes(hand) ? ' featured' : ''}`} data-featured={featured.includes(hand) || undefined}>
@@ -64,7 +64,7 @@ export function ScenarioDetails({ scenario, completed, onBack, onStart }: {
           <div><small>GOLD</small><strong><CurrencyAmount currency="gold" value={scenario.startingGold} /></strong></div>
           <div><small>TEMPER</small><strong><CurrencyAmount currency="temper" value={scenario.startingTemper} /></strong></div>
           <div><small>LIVES</small><strong>{scenario.startingLives}</strong></div>
-          <div><small>ROSTER</small><strong>{scenario.roster.length} / 5</strong></div>
+          <div><small>ROSTER</small><strong>{scenario.roster.length} / {preview.infernoRewards.upgrades.rosterCap}</strong></div>
           <div><small>START</small><strong>SCENARIO ROUND 1</strong></div>
         </SimpleGrid>
       </Paper>

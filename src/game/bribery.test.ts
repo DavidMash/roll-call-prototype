@@ -129,11 +129,12 @@ describe('Bribery scoring and lifecycle', () => {
 });
 
 describe('Money Bags Bribery integration', () => {
-  it('starts at version 2 with 40/100 Bribery, 15G, and unfed Furnaces', () => {
+  it('starts at version 3 with Bribery, Fat Cat, 15G, and unfed Furnaces', () => {
     const definition = scenarioById('money-bags')!;
     let state = newRun('money-bags-bribery', constant, { scenario: definition }).state;
-    expect(definition.version).toBe(2);
+    expect(definition.version).toBe(3);
     expect(flameByType(state, 'bribery')).toMatchObject({ investedGold: 40, stage: 'ember' });
+    expect(flameByType(state, 'fatCat')).toMatchObject({ investedGold: 40, stage: 'ember' });
     expect(state.gold).toBe(15);
     expect(Object.values(state.dieRoundState).flatMap(runtime => Object.values(runtime.effects))
       .filter(effect => effect.type === 'furnace').every(effect => effect.furnaceGoldFed === 0)).toBe(true);

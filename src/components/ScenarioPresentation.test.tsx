@@ -14,7 +14,10 @@ describe('Scenario presentation', () => {
     const html = renderToStaticMarkup(<MantineProvider><ScenarioBrowser progress={progress} onOpen={() => {}} onBack={() => {}} /></MantineProvider>);
     expect((html.match(/data-testid="scenario-card-/g) ?? [])).toHaveLength(6);
     expect(html).toContain('✓ COMPLETED');
-    expect(html).toContain('One die. Six numbers. Count it down.');
+    expect(html).toContain('Start with six dice and new six-die Hands.');
+    expect(html).toContain('expanded scorecard full of new ways to score');
+    expect(html).not.toContain('Loneliest Number');
+    expect(html).not.toContain('Chicken Salesman');
   });
 
   it('keeps a multi-effect starting die as one inspectable die and shows authoritative loadout data', () => {
@@ -27,5 +30,18 @@ describe('Scenario presentation', () => {
     expect(html).toContain('Reach Engulfment');
     expect(html).toContain('×');
     expect(html).toContain('MULT');
+  });
+
+  it('shows Scenario-unlocked Hands and expanded roster capacity from the authoritative preview', () => {
+    const extra = renderToStaticMarkup(<MantineProvider><ScenarioDetails scenario={scenarioById('extra-die')!}
+      completed={false} onBack={() => {}} onStart={() => {}} /></MantineProvider>);
+    expect(extra).toContain('Three Pair');
+    expect(extra).toContain('Wide Straight');
+    expect(extra).toContain('6 / 6');
+    const house = renderToStaticMarkup(<MantineProvider><ScenarioDetails scenario={scenarioById('house-rules')!}
+      completed={false} onBack={() => {}} onStart={() => {}} /></MantineProvider>);
+    for (const hand of ['Odds', 'Evens', 'Chance', 'Mini Straight', 'Odd Straight', 'Even Straight'])
+      expect(house).toContain(hand);
+    expect(house).toContain('5 / 5');
   });
 });

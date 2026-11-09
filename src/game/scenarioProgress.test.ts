@@ -25,4 +25,16 @@ describe('Scenario completion progress', () => {
     storage.setItem('roll-call:run', '{"version":999}');
     expect(loadScenarioProgress(storage).completions).toEqual({});
   });
+
+  it('preserves historical completion records for retired Scenario IDs', () => {
+    const storage = new StorageMock();
+    storage.setItem(SCENARIO_PROGRESS_STORAGE_KEY, JSON.stringify({ version: SCENARIO_PROGRESS_VERSION, completions: {
+      'loneliest-number': { scenarioId: 'loneliest-number', scenarioVersion: 1, completed: true,
+        firstCompletedAt: '2026-01-01T00:00:00.000Z', completionCount: 1, completedRunIds: ['old-run'] },
+      'chicken-salesman': { scenarioId: 'chicken-salesman', scenarioVersion: 1, completed: true,
+        firstCompletedAt: '2026-01-02T00:00:00.000Z', completionCount: 2, completedRunIds: ['old-run-2'] },
+    } }));
+    expect(Object.keys(loadScenarioProgress(storage).completions))
+      .toEqual(['loneliest-number', 'chicken-salesman']);
+  });
 });

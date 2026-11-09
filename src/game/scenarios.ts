@@ -2,16 +2,17 @@ import { createCollectibleDie } from './dice';
 import { createFlameInstance, emptyFlameSlots, FLAMES, recalculateMaxCharge } from './flames';
 import { HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS, initialHandLevels } from './hands';
 import { rosterTuple, storageTuple, STORAGE_SLOT_COUNT } from './inventory';
+import { applyStructuralInfernoReward, infernoRewardEligible, INFERNO_REWARD_OFFERS } from './infernoRewards';
 import { createDieEffect, SPECIAL_DICE } from './specialDice';
 import { targetForRound } from './goals';
-import type { DiceInventory, Flame, GameState, HandId, HandLevels, SpecialDieType } from './types';
+import type { DiceInventory, Flame, GameState, HandId, HandLevels, InfernoRewardOfferId, SpecialDieType } from './types';
 
-export type ScenarioId = 'loneliest-number' | 'scared-straight' | 'chicken-salesman'
-  | 'short-circuit' | 'popcorn' | 'money-bags';
+export type ScenarioId = 'scared-straight' | 'short-circuit' | 'popcorn' | 'money-bags'
+  | 'extra-die' | 'house-rules';
 
 export interface ScenarioDieEffectDefinition { key: SpecialDieType; level: number }
 export interface ScenarioDieDefinition {
-  rosterSlot: 0 | 1 | 2 | 3 | 4;
+  rosterSlot: number;
   effects: readonly ScenarioDieEffectDefinition[];
 }
 export interface ScenarioFlameDefinition { key: Flame; investedGold: number }
@@ -34,6 +35,8 @@ export interface ScenarioDefinition {
   startingLives: number;
   roster: readonly ScenarioDieDefinition[];
   flames: readonly ScenarioFlameDefinition[];
+  /** Structural Inferno Rewards owned before Round 1, applied through the canonical reward state model. */
+  startingInfernoRewards?: readonly InfernoRewardOfferId[];
   /** Requested design assets that are not present in the current canonical registry. Never applied to gameplay. */
   unavailableStartingFlames?: readonly { name: string; investedGold: number; reason: string }[];
   handTraining: ScenarioHandTrainingDefinition;
@@ -43,34 +46,22 @@ export interface ScenarioDefinition {
 }
 
 const repeatedDice = (count: number, effects: readonly ScenarioDieEffectDefinition[]): ScenarioDieDefinition[] =>
-  Array.from({ length: count }, (_, rosterSlot) => ({ rosterSlot: rosterSlot as 0 | 1 | 2 | 3 | 4, effects }));
+  Array.from({ length: count }, (_, rosterSlot) => ({ rosterSlot, effects }));
 
 export const SCENARIOS: readonly ScenarioDefinition[] = [
   {
-    id: 'loneliest-number', version: 1, name: 'Loneliest Number', tagline: 'One die. Six numbers. Count it down.',
-    startingGoal: 4_000n, goalProgressionRound: 15, startingGold: 10, startingTemper: 0, startingLives: 3,
-    roster: repeatedDice(1, [{ key: 'loneWolf', level: 1 }, { key: 'clockwork', level: 1 }, { key: 'flywheel', level: 3 }]),
-    flames: [{ key: 'minigun', investedGold: 40 }, { key: 'countDown', investedGold: 40 }],
-    handTraining: { lower: 3, overrides: { ones: 12, twos: 9, threes: 8, fours: 7, fives: 6, sixes: 5 } },
-    featuredHands: ['sixes', 'fives', 'fours', 'threes', 'twos', 'ones'],
-  },
-  {
-    id: 'scared-straight', version: 1, name: 'Scared Straight', tagline: 'Line them up before the pressure gets to you.',
+    id: 'scared-straight', version: 2, name: 'Scared Straight',
+    tagline: 'Build a straight-focused engine and prove it can survive all the way to Engulfment.',
     startingGoal: 6_000n, goalProgressionRound: 17, startingGold: 10, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'tank', level: 3 }, { key: 'clockwork', level: 1 }]),
-    flames: [{ key: 'straightShooter', investedGold: 40 }, { key: 'oneShort', investedGold: 40 }],
+    flames: [{ key: 'straightShooter', investedGold: 40 }, { key: 'oneShort', investedGold: 40 },
+      { key: 'hailMary', investedGold: 40 }],
     handTraining: { all: 4, overrides: { largeStraight: 10, smallStraight: 8 } },
     featuredHands: ['smallStraight', 'largeStraight'],
   },
   {
-    id: 'chicken-salesman', version: 1, name: 'Chicken Salesman', tagline: 'How long can you hold before you cash out?',
-    startingGoal: 2_000n, goalProgressionRound: 13, startingGold: 0, startingTemper: 0, startingLives: 3,
-    roster: repeatedDice(5, [{ key: 'vintage', level: 3 }]),
-    flames: [{ key: 'vineyard', investedGold: 40 }],
-    handTraining: { upper: 4, lower: 5 },
-  },
-  {
-    id: 'short-circuit', version: 1, name: 'Short Circuit', tagline: 'Five magnets. One enormous payoff.',
+    id: 'short-circuit', version: 1, name: 'Short Circuit',
+    tagline: 'Turn precision and Charge into an engine powerful enough to Engulf.',
     startingGoal: 6_000n, goalProgressionRound: 17, startingGold: 10, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'magnetic', level: 1 }]),
     flames: [{ key: 'fluxCapacitor', investedGold: 40 }, { key: 'dareDevil', investedGold: 40 }],
@@ -78,7 +69,8 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     featuredHands: ['fiveKind'],
   },
   {
-    id: 'popcorn', version: 1, name: 'Popcorn', tagline: 'Once they start popping, try to keep up.',
+    id: 'popcorn', version: 1, name: 'Popcorn',
+    tagline: 'Ride a chaotic chain of jumping dice and rerolls all the way to Engulfment.',
     startingGoal: 9_000n, goalProgressionRound: 19, startingGold: 5, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'jumpingBean', level: 5 }, { key: 'chameleon', level: 1 }, { key: 'weighted', level: 1 }]),
     flames: [{ key: 'minigun', investedGold: 40 }, { key: 'hailMary', investedGold: 40 }],
@@ -86,11 +78,32 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     featuredHands: ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'],
   },
   {
-    id: 'money-bags', version: 2, name: 'Money Bags', tagline: 'It takes money to make money.',
+    id: 'money-bags', version: 3, name: 'Money Bags',
+    tagline: 'Make money, spend money, and turn an economy engine into real scoring power.',
     startingGoal: 4_000n, goalProgressionRound: 15, startingGold: 15, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'golden', level: 1 }, { key: 'jackpot', level: 1 }, { key: 'furnace', level: 3 }]),
-    flames: [{ key: 'bribery', investedGold: 40 }],
+    flames: [{ key: 'bribery', investedGold: 40 }, { key: 'fatCat', investedGold: 40 }],
     handTraining: { upper: 4, lower: 5 },
+  },
+  {
+    id: 'extra-die', version: 1, name: 'Extra Die!',
+    tagline: 'Start with six dice and new six-die Hands. Find out what an expanded roster can really do.',
+    startingGoal: 6_000n, goalProgressionRound: 17, startingGold: 40, startingTemper: 0, startingLives: 3,
+    roster: repeatedDice(6, [{ key: 'clockwork', level: 1 }, { key: 'bonus', level: 1 }]),
+    flames: [{ key: 'heavyHitters', investedGold: 40 }, { key: 'hailMary', investedGold: 40 }],
+    startingInfernoRewards: ['expandedRoster', 'handThreePair', 'handWideStraight'],
+    handTraining: { upper: 4, lower: 5 },
+    featuredHands: ['threePair', 'wideStraight'],
+  },
+  {
+    id: 'house-rules', version: 1, name: 'House Rules',
+    tagline: 'Start with an expanded scorecard full of new ways to score and build an engine around the extra options.',
+    startingGoal: 6_000n, goalProgressionRound: 17, startingGold: 40, startingTemper: 0, startingLives: 3,
+    roster: repeatedDice(5, [{ key: 'bonus', level: 1 }]),
+    flames: [{ key: 'heavyHitters', investedGold: 40 }, { key: 'hailMary', investedGold: 40 }],
+    startingInfernoRewards: ['handOdds', 'handEvens', 'handChance', 'handMiniStraight', 'handOddStraight', 'handEvenStraight'],
+    handTraining: { upper: 5, lower: 5 },
+    featuredHands: ['odds', 'evens', 'chance', 'miniStraight', 'oddStraight', 'evenStraight'],
   },
 ] as const;
 
@@ -108,7 +121,7 @@ export function handLevelsForScenario(definition: ScenarioDefinition): HandLevel
 
 export function inventoryForScenario(definition: ScenarioDefinition): DiceInventory {
   const instances: DiceInventory['instances'] = {};
-  const roster = Array.from({ length: 5 }, () => null) as Array<number | null>;
+  const roster = Array.from({ length: scenarioRosterCapacity(definition) }, () => null) as Array<number | null>;
   for (const item of definition.roster) {
     const die = createCollectibleDie(item.rosterSlot);
     die.effects = item.effects.map(effect => createDieEffect(die.id, effect.key, effect.level));
@@ -117,6 +130,12 @@ export function inventoryForScenario(definition: ScenarioDefinition): DiceInvent
   }
   return { instances, roster: rosterTuple(roster), storage: storageTuple(Array.from({ length: STORAGE_SLOT_COUNT }, () => null)),
     nextDieId: Math.max(...Object.keys(instances).map(Number), -1) + 1 };
+}
+
+export function scenarioRosterCapacity(definition: ScenarioDefinition): number {
+  if (definition.startingInfernoRewards?.includes('expandedRoster2')) return 7;
+  if (definition.startingInfernoRewards?.includes('expandedRoster')) return 6;
+  return 5;
 }
 
 export function canonicalRoundForScenarioGoal(goal: bigint, limit = 300): number | null {
@@ -138,6 +157,12 @@ export function applyScenarioStart(state: GameState, definition: ScenarioDefinit
   state.dieRoundState = {};
   state.dice = [];
   state.handLevels = handLevelsForScenario(definition);
+  for (const offerId of definition.startingInfernoRewards ?? []) {
+    if (!infernoRewardEligible(state, offerId)) throw new Error(`${definition.name} cannot claim starting reward ${offerId}.`);
+    if (!applyStructuralInfernoReward(state, offerId))
+      throw new Error(`${definition.name} starting reward ${offerId} is not a structural Scenario reward.`);
+    state.infernoRewards.claimedOfferIds.push(offerId);
+  }
   state.flameSlots = emptyFlameSlots();
   definition.flames.forEach((item, slot) => {
     const instance = createFlameInstance(state, item.key);
@@ -156,8 +181,20 @@ export function validateScenarioDefinition(definition: ScenarioDefinition): stri
   if (definition.startingGoal <= 0n) errors.push('Starting Goal must be positive.');
   if (!Number.isSafeInteger(definition.goalProgressionRound) || definition.goalProgressionRound < 1)
     errors.push('Goal progression Round must be a positive safe integer.');
-  if (definition.roster.length < 1 || definition.roster.length > 5) errors.push('Roster must contain 1–5 dice.');
+  const rosterCapacity = scenarioRosterCapacity(definition);
+  if (definition.roster.length < 1 || definition.roster.length > rosterCapacity)
+    errors.push(`Roster must contain 1-${rosterCapacity} dice.`);
   if (new Set(definition.roster.map(die => die.rosterSlot)).size !== definition.roster.length) errors.push('Roster slots must be unique.');
+  if (definition.roster.some(die => !Number.isSafeInteger(die.rosterSlot) || die.rosterSlot < 0 || die.rosterSlot >= rosterCapacity))
+    errors.push('Roster slots must fit the starting Roster capacity.');
+  const startingRewards = definition.startingInfernoRewards ?? [];
+  if (new Set(startingRewards).size !== startingRewards.length) errors.push('Starting Inferno Rewards must be unique.');
+  for (const id of startingRewards) {
+    const reward = INFERNO_REWARD_OFFERS[id];
+    if (!reward) errors.push(`Unknown Inferno Reward ${String(id)}.`);
+    else if (reward.category !== 'hand' && id !== 'expandedRoster' && id !== 'expandedRoster2')
+      errors.push(`${id} is not a structural Scenario reward.`);
+  }
   for (const die of definition.roster) for (const effect of die.effects) {
     if (!Object.hasOwn(SPECIAL_DICE, effect.key)) errors.push(`Unknown die effect ${String(effect.key)}.`);
     if (!Number.isSafeInteger(effect.level) || effect.level < 1) errors.push(`Invalid ${effect.key} level.`);

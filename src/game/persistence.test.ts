@@ -35,6 +35,9 @@ describe('run persistence', () => {
     expect(isResumableRun(state)).toBe(true);
     expect(isResumableRun({ ...state, phase: 'inferno' })).toBe(true);
     expect(isResumableRun({ ...state, phase: 'lost' })).toBe(false);
+    expect(isResumableRun({ ...state, phase: 'scenarioComplete', runMode: 'scenario',
+      scenario: { id: 'short-circuit', version: 1, name: 'Short Circuit',
+        completionPending: false, completionAcknowledged: true } })).toBe(false);
     expect(isResumableRun(null)).toBe(false);
   });
 

@@ -99,7 +99,8 @@ export function loadPersistedRun(storage: RunStorage | null, requestedSeed: stri
 }
 
 export function isResumableRun(state: GameState | null): state is GameState {
-  return state !== null && state.phase !== 'lost' && state.phase !== 'error';
+  return state !== null && state.phase !== 'lost' && state.phase !== 'error'
+    && !(state.runMode === 'scenario' && state.scenario?.completionAcknowledged);
 }
 
 export function savePersistedRun(storage: RunStorage | null, state: GameState): boolean {

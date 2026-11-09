@@ -182,3 +182,20 @@ export function unlockInfernoHand(state: Pick<GameState, 'infernoRewards' | 'han
   if (!state.infernoRewards.unlockedHands.includes(hand)) state.infernoRewards.unlockedHands.push(hand);
   return baseline;
 }
+
+/** Applies structural reward state shared by normal claims and data-driven Scenario starts. */
+export function applyStructuralInfernoReward(state: Pick<GameState,
+  'infernoRewards' | 'handLevels' | 'handPlayCounts' | 'diceInventory'>,
+offerId: InfernoRewardOfferId): string | null {
+  const upgrades = state.infernoRewards.upgrades;
+  if (offerId === 'expandedRoster' || offerId === 'expandedRoster2') {
+    const capacity = offerId === 'expandedRoster' ? 6 : 7;
+    upgrades.rosterCap = capacity;
+    while (state.diceInventory.roster.length < capacity) state.diceInventory.roster.push(null);
+    return `Roster capacity increased to ${capacity}.`;
+  }
+  const hand = INFERNO_HAND_BY_OFFER[offerId];
+  if (!hand) return null;
+  const baseline = unlockInfernoHand(state, hand);
+  return `${hand} unlocked at the current ${['odds', 'evens', 'chance'].includes(hand) ? 'Upper' : 'Lower'} baseline, Level ${baseline}.`;
+}

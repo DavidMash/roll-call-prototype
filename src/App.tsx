@@ -192,7 +192,7 @@ export default function App() {
     setSelection(emptySelection()); setSelectedOffer(null); setSelectedFlameOffer(null);
     setRunInfoOpen(false); setRestoreLivesOpen(false); setFaceDetails(null); setFlameDetails(null);
   }
-  function continueScenarioCompletion(destination: 'run' | 'scenarios' | 'home') {
+  function continueScenarioCompletion(destination: 'scenarios' | 'home') {
     submit({ type: 'CONTINUE_SCENARIO_RUN' });
     if (destination === 'scenarios') setScenarioView('browser');
     if (destination === 'home') setRunMode(null);
@@ -279,7 +279,7 @@ export default function App() {
         : board.phase === 'infernoReward' && board.infernoRewards.pending ? <InfernoRewardScreen board={board}
           inventory={state.diceInventory} busy={busy} submit={submit} />
         : board.phase === 'scenarioComplete' && board.scenario ? <ScenarioCompleteScreen board={board}
-          onContinue={() => continueScenarioCompletion('run')} onScenarios={() => continueScenarioCompletion('scenarios')}
+          onScenarios={() => continueScenarioCompletion('scenarios')}
           onHome={() => continueScenarioCompletion('home')} />
         : board.phase === 'flameSelection' && board.flameSelection ? <FlameSelectionScreen board={board} event={event} busy={busy}
         selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} openFlameDetails={openFlameDetails} />
