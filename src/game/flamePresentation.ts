@@ -25,26 +25,27 @@ export interface FlamePresentation {
   accessibleLabel: string;
 }
 
-const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
-const candidateFactorCache = new WeakMap<Board, { signature: string; flames: Set<Flame> }>();
+/** Retains decision-support presentation without evaluating playback-only Board snapshots. */
+export class CandidateFlamePresentationPlaybackGate {
+  private latestInteractive: FlamePresentation[] = [];
 
-const candidateSignature = (board: Board) => JSON.stringify({
-  decisionId: board.decisionId,
-  consumed: board.consumed,
-  levels: board.handLevels,
-  family: board.handFamilyFlameStages,
-  progressive: board.progressiveFlames,
-  wagers: [board.scoreWagers.doubleOrNothing?.hand, board.scoreWagers.doubleOrNothing?.factor, board.scoreWagers.allInArmed],
-  dare: board.interactiveFlames.dareDevilCount,
-  bribery: [board.interactiveFlames.briberyPurchasedThisRound, board.interactiveFlames.briberyPendingCount],
-  dice: board.dice.map(die => [die.id, die.value, die.faces[die.value - 1], die.owner === 'player'
-    ? die.effects.map(effect => [effect.type, effect.level]) : []]),
-});
+  resolve(busy: boolean, deriveInteractive: () => FlamePresentation[]): FlamePresentation[] {
+    if (!busy) this.latestInteractive = deriveInteractive();
+    return this.latestInteractive;
+  }
+}
+
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+/** Semantic inputs for interactive candidate analysis; intentionally excludes playback object identity. */
+export const flameCandidatePresentationKey = (board: Board) => JSON.stringify(board,
+  (_key, value) => typeof value === 'bigint' ? `${value}n` : value);
+
+let candidateFactorCache: { signature: string; flames: Set<Flame> } | null = null;
 
 function possibleXMultFlames(board: Board): Set<Flame> {
-  const signature = candidateSignature(board);
-  const cached = candidateFactorCache.get(board);
-  if (cached?.signature === signature) return cached.flames;
+  const signature = flameCandidatePresentationKey(board);
+  if (candidateFactorCache?.signature === signature) return candidateFactorCache.flames;
   const result = new Set<Flame>();
   if (board.phase === 'round') for (const hand of Object.keys(board.handLevels) as HandId[]) {
     for (const combination of legalHandCombinations(board, hand)) {
@@ -53,7 +54,7 @@ function possibleXMultFlames(board: Board): Set<Flame> {
       }
     }
   }
-  candidateFactorCache.set(board, { signature, flames: result });
+  candidateFactorCache = { signature, flames: result };
   return result;
 }
 
@@ -122,11 +123,14 @@ function chargePlayPossible(board: Board, flame: Flame): boolean {
 
 export function deriveFlamePresentations(board: Board, preview: CanonicalPlayPreview | null,
   decisionMs = 0): FlamePresentation[] {
+  const flames = flameInstances(board);
+  // Most runs have no Flames. Never enumerate Hands or build previews for an empty strip.
+  if (!flames.length) return [];
   const candidateFactors = possibleXMultFlames(board);
   const activeFactors = new Map<Flame, number>();
   for (const factor of preview?.xMultFactors ?? []) if (factor.source in FLAMES) activeFactors.set(factor.source as Flame, factor.value);
   const selected = new Set(preview?.diePips.filter(item => item.role === 'selected').map(item => item.dieId) ?? []);
-  return flameInstances(board).map(flame => {
+  return flames.map(flame => {
     let state: FlameVisualState = 'normal';
     let statusText: string | undefined;
     let progress: number | undefined;

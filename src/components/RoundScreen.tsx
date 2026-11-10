@@ -20,7 +20,10 @@ import { effectRuntime } from '../game/specialDice';
 import { DieTypeLabel } from './DieTypeLabel';
 import { FlameActions } from './FlameActions';
 import { canonicalPlayPreview } from '../game/playPreview';
-import { deriveFlamePresentations, type FlamePresentation } from '../game/flamePresentation';
+import {
+  CandidateFlamePresentationPlaybackGate, deriveFlamePresentations, flameCandidatePresentationKey,
+  type FlamePresentation,
+} from '../game/flamePresentation';
 import { resolveManualRerollCost } from '../game/manualRerolls';
 
 export function RoundScreen({ board, event, busy, inputBlocked, selection, setSelection, submit, skip, onFlamePresentationChange }: {
@@ -42,6 +45,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const roundBusy = busy;
   const speedDemonOwned = hasOwnedFlame(board, 'speedDemon');
   const decisionTimer = useRef(new DecisionTimer());
+  const flameCandidateGate = useRef(new CandidateFlamePresentationPlaybackGate());
   const [decisionMs, setDecisionMs] = useState(0);
   const [qualificationChoiceOpen, setQualificationChoiceOpen] = useState(false);
   const [flameActionsOpen, setFlameActionsOpen] = useState(false);
@@ -79,8 +83,13 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     return { ...canonical, hasXMult: canonical.effectiveXMult !== 1,
       danger: lastPlayDanger(board, hand), guaranteedWin: board.score + canonical.score >= board.target };
   })() : null;
-  const flamePresentation = useMemo(() => deriveFlamePresentations(board, preview, decisionMs),
-    [board, preview?.hand, preview?.score, preview?.effectiveXMult, effectiveSelection.dieIds.join(','), decisionMs]);
+  const flameCandidateKey = roundBusy ? null : flameCandidatePresentationKey(board);
+  const candidateFlamePresentation = useMemo(() => flameCandidateGate.current.resolve(roundBusy,
+    () => deriveFlamePresentations(board, null, decisionMs)), [roundBusy, flameCandidateKey, decisionMs]);
+  const flamePresentation = useMemo(() => roundBusy || !preview ? candidateFlamePresentation
+    : deriveFlamePresentations(board, preview, decisionMs),
+  [roundBusy, candidateFlamePresentation, board, preview?.hand, preview?.score, preview?.effectiveXMult,
+    effectiveSelection.dieIds.join(','), decisionMs]);
   useEffect(() => onFlamePresentationChange?.(flamePresentation), [flamePresentation, onFlamePresentationChange]);
   const manualAction: Action = { type: 'MANUAL_REROLL', dieIds: effectiveSelection.dieIds };
   const canReroll = validateAction(board, manualAction) === null;

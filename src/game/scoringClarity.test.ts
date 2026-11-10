@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { dispatch, newRun } from './engine';
-import { deriveFlamePresentations } from './flamePresentation';
+import {
+  CandidateFlamePresentationPlaybackGate, deriveFlamePresentations, flameCandidatePresentationKey,
+  type FlamePresentation,
+} from './flamePresentation';
 import { placeFlameInstance } from './flames';
 import { ultimateHands } from './hands';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
@@ -122,6 +125,14 @@ describe('canonical scoring clarity preview', () => {
 });
 
 describe('canonical Flame presentation states', () => {
+  it('returns before Hand enumeration when there are no Flames', () => {
+    const state = stateWith();
+    state.handLevels = new Proxy(state.handLevels, {
+      ownKeys: () => { throw new Error('Hand enumeration must not run without Flames.'); },
+    });
+    expect(deriveFlamePresentations(state, null)).toEqual([]);
+  });
+
   it('prioritizes Active over Possible over Setup for Double Down', () => {
     const state = stateWith('doubleDown');
     const ids = setFaces(state, [2, 2, 1, 1]);
@@ -186,5 +197,60 @@ describe('canonical Flame presentation states', () => {
     expect(deriveFlamePresentations(state, null, 5000).find(item => item.flame === 'speedDemon')).toMatchObject({
       state: 'normal', statusText: undefined, progress: 0,
     });
+  });
+
+  it('refreshes semantic candidate presentation after an interactive board change', () => {
+    const state = stateWith('fatCat');
+    const die = rosterDice(state)[0];
+    setFaces(state, [1]);
+    const beforeKey = flameCandidatePresentationKey(state);
+    expect(stateOf(state, 'fatCat').state).toBe('normal');
+    die.effects = [createDieEffect(die.id, 'golden', 1)];
+    state.dieRoundState = resetDieRoundState(rosterDice(state));
+    syncActiveDiceProjection(state);
+    expect(flameCandidatePresentationKey(state)).not.toBe(beforeKey);
+    expect(stateOf(state, 'fatCat').state).toBe('possible');
+  });
+});
+
+describe('Flame candidate playback gate', () => {
+  const presentation = (statusText: string): FlamePresentation[] => [{
+    instanceId: 1, flame: 'missingPair', state: 'possible', statusText,
+    accessibleLabel: `Missing Pair: possible. ${statusText}`,
+  }];
+
+  it('does not rerun candidate analysis for Pair or Five-of-a-Kind playback beats', () => {
+    const gate = new CandidateFlamePresentationPlaybackGate();
+    const derive = vi.fn(() => presentation('interactive'));
+    const interactive = gate.resolve(false, derive);
+    const playbackByHand = { pair: 8, fiveKind: 19 } as const;
+    const callsByHand = Object.fromEntries(Object.entries(playbackByHand).map(([hand, beats]) => {
+      const before = derive.mock.calls.length;
+      for (let beat = 0; beat < beats; beat++) expect(gate.resolve(true, derive)).toBe(interactive);
+      return [hand, derive.mock.calls.length - before];
+    }));
+    expect(callsByHand).toEqual({ pair: 0, fiveKind: 0 });
+    expect(derive).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes candidates when playback ends and for later interactive board changes', () => {
+    const gate = new CandidateFlamePresentationPlaybackGate();
+    const derive = vi.fn()
+      .mockReturnValueOnce(presentation('before playback'))
+      .mockReturnValueOnce(presentation('after playback'))
+      .mockReturnValueOnce(presentation('after board change'));
+    expect(gate.resolve(false, derive)[0].statusText).toBe('before playback');
+    expect(gate.resolve(true, derive)[0].statusText).toBe('before playback');
+    expect(gate.resolve(false, derive)[0].statusText).toBe('after playback');
+    expect(gate.resolve(false, derive)[0].statusText).toBe('after board change');
+    expect(derive).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not repeat candidate analysis while Instant advances a full resolution', () => {
+    const gate = new CandidateFlamePresentationPlaybackGate();
+    const derive = vi.fn(() => presentation('interactive'));
+    gate.resolve(false, derive);
+    for (let beat = 0; beat < 64; beat++) gate.resolve(true, derive);
+    expect(derive).toHaveBeenCalledTimes(1);
   });
 });
