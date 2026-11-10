@@ -21,6 +21,7 @@ import { DieTypeLabel } from './DieTypeLabel';
 import { FlameActions } from './FlameActions';
 import { canonicalPlayPreview } from '../game/playPreview';
 import { deriveFlamePresentations, type FlamePresentation } from '../game/flamePresentation';
+import { resolveManualRerollCost } from '../game/manualRerolls';
 
 export function RoundScreen({ board, event, busy, inputBlocked, selection, setSelection, submit, skip, onFlamePresentationChange }: {
   board: Board; event: GameEvent | null; busy: boolean; inputBlocked: boolean;
@@ -84,9 +85,10 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const manualAction: Action = { type: 'MANUAL_REROLL', dieIds: effectiveSelection.dieIds };
   const canReroll = validateAction(board, manualAction) === null;
   const selectedRerollDice = effectiveSelection.dieIds.length;
+  const rerollCost = resolveManualRerollCost(board, effectiveSelection.dieIds);
   const carePackageRerolls = board.specialOfferEffects.carePackageRerolls;
   const manualRerolls = usableManualRerolls(board);
-  const rerollMainText = selectedRerollDice === 0 ? 'REROLL'
+  const rerollMainText = rerollCost.fullyCoveredByFlywheel ? 'FLYWHEEL' : selectedRerollDice === 0 ? 'REROLL'
     : `REROLL ${selectedRerollDice} ${selectedRerollDice === 1 ? 'DIE' : 'DICE'}`;
   const rerollResourceText = `${board.manualRerollsRemaining} REROLL${board.manualRerollsRemaining === 1 ? '' : 'S'} LEFT${carePackageRerolls
     ? `, PLUS ${carePackageRerolls} CARE PACKAGE REROLL${carePackageRerolls === 1 ? '' : 'S'}` : ''}`;
@@ -194,7 +196,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
                 data-normal-fill-percent={Math.round(normalRerollFill * 100)} onClick={() => submit(manualAction)}>
                 <span className="reroll-resource-fill" style={{ transform: `scaleX(${normalRerollFill})` }} aria-hidden="true" />
                 <span className="reroll-action-copy">
-                  <span className="reroll-action-main">REROLL</span>
+                  <span className="reroll-action-main">{rerollCost.fullyCoveredByFlywheel ? 'FLYWHEEL' : 'REROLL'}</span>
                   <span className="reroll-action-resource">{selectedRerollDice > 0
                     ? `${selectedRerollDice} ${selectedRerollDice === 1 ? 'DIE' : 'DICE'} · ${rerollVisualResourceText}`
                     : rerollVisualResourceText}</span>

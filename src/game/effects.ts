@@ -57,6 +57,8 @@ import {
   applyStructuralInfernoReward, createCuratedRewardDie, CURATED_DIE_BUILDS, generateInfernoRewardSelection,
   INFERNO_HAND_BY_OFFER, INFERNO_REWARD_OFFERS, placeCuratedRewardDie,
 } from './infernoRewards';
+import { resolveManualRerollCost } from './manualRerolls';
+import { eligibleFetchTargets, fetchTargetIsEligible, type FetchRetargetReason } from './fetchTarget';
 
 type RollTrigger = { dieId: number; face: Face; kind: 'jumpingBean'; rerollEventId: string; selectedNumber: Exclude<Rank, 7> };
 type CurtainCallContext = { dieId: number; multiplier: number; manualRerollEventId: string };
@@ -114,6 +116,7 @@ export class Resolver {
   private curtainCallContext: CurtainCallContext | null = null;
   private activeScorePackage: ScorePackage | null = null;
   private playStack: string[] = [];
+  private resolutionEventCount = 0;
   constructor(readonly state: GameState, readonly rng: RandomSource, readonly options: ResolverOptions = {}) {
     state.historyV2 ??= [];
     state.historyV2TimelineId = Math.max(0, Math.floor(state.historyV2TimelineId ?? 0));
@@ -412,11 +415,15 @@ export class Resolver {
       : typeof value === 'string' ? formatExactDecimal(value) : formatPlayerNumber(value);
   }
   emit(event: Omit<EventRecord, 'id' | 'round'>): void {
-    if (this.events.length >= CONFIG.resolutionEventCap) throw new Error(`Resolution exceeded ${CONFIG.resolutionEventCap} events. Check for an infinite ability chain.`);
+    if (++this.resolutionEventCount > CONFIG.resolutionEventCap) throw new Error(`Resolution exceeded ${CONFIG.resolutionEventCap} events. Check for an infinite ability chain.`);
     const record = { ...event, ...(this.handAccumulator ? { handScore: structuredClone(this.handAccumulator) } : {}),
       id: this.state.nextPlaybackEventId++, round: this.state.round };
-    this.events.push({ ...record, board: boardSnapshot(this.state) });
     this.recordV2FromPlaybackEvent(record);
+    const structuralPresentation = record.type === 'MAP_TRANSITION' || record.type === 'CHAPTER_STARTED';
+    const immediatePhase = this.state.phase === 'shop' || this.state.phase === 'infernoReward'
+      || this.state.phase === 'specialOffer' || this.state.phase === 'flameSelection';
+    if (!immediatePhase || structuralPresentation)
+      this.events.push({ ...record, board: boardSnapshot(this.state) });
   }
   mapTransition(node: RunNode, direction: 'forward' | 'backward' = 'forward'): void {
     const fromNode = this.state.currentNodeId || null;
@@ -461,14 +468,21 @@ export class Resolver {
     if (!force && prior?.kind === 'bench_warmer_target_changed' && prior.target === target) return;
     this.emitV2({ kind: 'bench_warmer_target_changed', target, reason });
   }
-  setFetchTarget(previous = this.state.fetchTarget): void {
-    const dice = flameByType(this.state, 'fetch') ? rosterDice(this.state) : [];
-    const targets = dice.flatMap(die => die.faces.slice(0, 6).map((_, index) => ({ dieId: die.id, physicalFace: (index + 1) as import('./types').Rank })))
+  setFetchTarget(previous = this.state.fetchTarget, reason: FetchRetargetReason = 'flame_acquired'): void {
+    const targets = flameByType(this.state, 'fetch') ? eligibleFetchTargets(this.state) : [];
+    const candidates = targets
       .filter(target => !previous || target.dieId !== previous.dieId || target.physicalFace !== previous.physicalFace);
-    if (!targets.length) { this.state.fetchTarget = null; return; }
-    this.state.fetchTarget = targets[randomIndex(this.rng, targets.length)];
-    this.emit({ type: 'FETCH_TARGET_CHANGED', flame: 'fetch', dieIds: [this.state.fetchTarget.dieId], face: this.state.fetchTarget.physicalFace,
+    this.state.fetchTarget = candidates.length ? candidates[randomIndex(this.rng, candidates.length)] : null;
+    this.emitV2({ kind: 'fetch_target_changed', reason, previous: previous ? { ...previous } : null,
+      target: this.state.fetchTarget ? { ...this.state.fetchTarget } : null });
+    if (this.state.fetchTarget) this.emit({ type: 'FETCH_TARGET_CHANGED', flame: 'fetch',
+      dieIds: [this.state.fetchTarget.dieId], face: this.state.fetchTarget.physicalFace,
       message: `Fetch target: ${this.dieLabel(this.state.fetchTarget.dieId)} face ${this.state.fetchTarget.physicalFace}` });
+  }
+  revalidateFetchTarget(reason: FetchRetargetReason): void {
+    if (!flameByType(this.state, 'fetch')) { this.state.fetchTarget = null; return; }
+    if (fetchTargetIsEligible(this.state, this.state.fetchTarget)) return;
+    this.setFetchTarget(this.state.fetchTarget, reason);
   }
   addGold(amount: number, message: string, goldSource: GoldSource, dieId?: number): void {
     this.state.gold += amount;
@@ -1430,7 +1444,7 @@ export class Resolver {
     }
     if (xMultFactors.some(factor => factor.source === 'fetch')) {
       const completed = this.state.fetchTarget;
-      this.setFetchTarget(completed);
+      this.setFetchTarget(completed, 'target_scored');
       if (completed && this.state.fetchTarget) this.log({ type: 'ABILITY_EVALUATED', flame: 'fetch',
         dieIds: [completed.dieId, this.state.fetchTarget.dieId], face: completed.physicalFace,
         message: `Fetch hit on ${this.dieLabel(completed.dieId)} face ${completed.physicalFace} · new target ${this.dieLabel(this.state.fetchTarget.dieId)} face ${this.state.fetchTarget.physicalFace}` });
@@ -2159,33 +2173,46 @@ export class Resolver {
 
   manualReroll(dieIds: number[]): void {
     const ids = orderDieIdsByEncounter(this.state, [...dieIds]);
+    const reroll = resolveManualRerollCost(this.state, ids);
     const requiredDieIds = requiredEncounterDieIds(this.state);
     const startedDeadBoard = !hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state), requiredDieIds,
       this.state.dieRoundState);
-    const paidDice = ids.length;
-    const normalSpent = Math.min(this.state.manualRerollsRemaining, paidDice);
-    const carePackageSpent = paidDice - normalSpent;
+    const normalSpent = Math.min(this.state.manualRerollsRemaining, reroll.resourceCost);
+    const carePackageSpent = reroll.resourceCost - normalSpent;
     this.state.manualRerollsRemaining -= normalSpent;
     this.state.specialOfferEffects.carePackageRerolls -= carePackageSpent;
     const round = this.state.stats.rounds.at(-1)!;
-    round.lastAction = 'MANUAL_REROLL'; round.manualRerollChargesSpent += paidDice; round.manualRerollActions++;
+    round.lastAction = 'MANUAL_REROLL'; round.manualRerollChargesSpent += reroll.resourceCost; round.manualRerollActions++;
     this.state.manualRerollsUsedThisRound++;
     this.state.stats.manualRerollActions++; this.state.stats.manualDiceRerolled += ids.length;
-    const record = { round: this.state.round, dieIds: ids, charges: paidDice, remaining: this.state.manualRerollsRemaining, startedDeadBoard, rescuedDeadBoard: false };
+    const record = { round: this.state.round, dieIds: ids, charges: reroll.resourceCost,
+      flywheelDieIds: [...reroll.flywheelDieIds], remaining: this.state.manualRerollsRemaining,
+      startedDeadBoard, rescuedDeadBoard: false };
     this.state.stats.manualRerolls.push(record);
+    for (const dieId of reroll.flywheelDieIds) {
+      const die = this.collectible(dieId)!;
+      this.spendInvocation(die, requireEffect(die, 'flywheel'), 'Flywheel automatically covered Manual Reroll',
+        'automatic_manual_reroll');
+    }
     const normalRemaining = this.state.manualRerollsRemaining;
     const carePackageRemaining = this.state.specialOfferEffects.carePackageRerolls;
-    const message = carePackageSpent > 0
+    const message = reroll.fullyCoveredByFlywheel
+      ? `Flywheel Manual Reroll · ${this.format(normalRemaining)} Rerolls left · Care Package ${this.format(carePackageRemaining)}`
+      : carePackageSpent > 0
       ? carePackageRemaining > 0
         ? `Care Package Manual Reroll${carePackageSpent === 1 ? '' : 's'} used · ${this.format(carePackageRemaining)} remaining · ${this.format(normalRemaining)} normal Rerolls left`
         : `Care Package depleted · ${this.format(normalRemaining)} normal Rerolls left`
       : `Manual reroll · ${this.format(normalRemaining)} Rerolls left · Care Package ${this.format(carePackageRemaining)}`;
     this.emit({ type: 'MANUAL_REROLL_STARTED', dieIds: ids, amount: ids.length, message });
     const jumpStart = this.chargeFlameSource('jumpStart');
-    if (jumpStart) for (const dieId of ids) this.growCharge('jumpStart', jumpStartChargeGain(jumpStart.investment),
-      `1 Reroll spent on ${this.dieLabel(dieId)}`, [dieId]);
+    const uncoveredIds = ids.filter(id => !reroll.flywheelDieIds.includes(id));
+    const paidAttributionIds = reroll.flywheelDieIds.length ? uncoveredIds.slice(0, reroll.resourceCost)
+      : ids.slice(0, reroll.resourceCost);
+    if (jumpStart) for (const dieId of paidAttributionIds)
+      this.growCharge('jumpStart', jumpStartChargeGain(jumpStart.investment),
+        `1 Reroll spent on ${this.dieLabel(dieId)}`, [dieId]);
     this.v2ManualSpend = { normalCharges: normalSpent, carePackageCharges: carePackageSpent,
-      remaining: this.state.manualRerollsRemaining };
+      remaining: this.state.manualRerollsRemaining, flywheelDieIds: [...reroll.flywheelDieIds] };
     this.rollBatch(ids, 'Manual gameplay reroll', 'gameplay', true, 'manual');
     this.drain();
     if (startedDeadBoard && (this.state.score >= this.state.target || hasPlayableHand(activeEncounterDice(this.state),
@@ -2203,7 +2230,7 @@ export class Resolver {
     // session that launched it. Bust restoration reopens this Shop without
     // generating offers, reroll allowances, exposed faces, or rewards.
     base.phase = 'shop';
-    base.shop ??= { visitId: base.nextShopVisitId++, stage: 'shop',
+    base.shop ??= { visitId: base.nextShopVisitId++, stage: 'shop', navigationHistory: ['shop'],
       offers: [], offerRerolls: 0, lifeRestores: 0,
       freeDicePurchaseAvailable: false, trainingSession: createTrainingSession(base.handLevels, false, base.infernoRewards.unlockedHands) };
     // Once the next Chapter has started, a Bust restores this as that Round's
@@ -2314,6 +2341,7 @@ export class Resolver {
       this.state.phase = 'shop';
       const priorStage = this.state.shop!.stage ?? 'shop';
       this.state.shop!.stage = 'shop';
+      this.state.shop!.navigationHistory = ['shop'];
       this.state.currentNodeId = failedNodeId;
       this.mapTransition(shopNodeBefore(failure.round), 'backward');
       if (priorStage !== 'shop') this.emitV2({ kind: 'shop_stage_changed', shopVisitId: this.state.shop!.visitId!,
@@ -2489,6 +2517,7 @@ export class Resolver {
       this.state.encounterDice.push(createCursedDie());
       syncActiveDiceProjection(this.state);
     }
+    this.revalidateFetchTarget('round_start_repair');
     this.ensureHotPotatoTarget();
     this.v2ParentSeq = v2RoundStarted.seq;
     if (!this.state.bossSilenced && this.state.boss?.type === 'warden') {
@@ -2567,10 +2596,6 @@ export class Resolver {
     this.state.infernoProgress.evaluationIndex = evaluation.evaluationIndex;
     this.state.infernoProgress.previousReadiness = evaluation.readiness;
     this.state.infernoProgress.recentAction = 'none';
-    if (evaluation.feedbackMessageId && !evaluation.suspendAfterContinue) this.state.infernoProgress.recentMessageIds = [
-      ...this.state.infernoProgress.recentMessageIds.filter(id => id !== evaluation.feedbackMessageId),
-      evaluation.feedbackMessageId,
-    ].slice(-3);
     this.state.infernoEvaluation = evaluation;
     this.emitV2({ kind: 'inferno_evaluated', evaluation: structuredClone(evaluation) });
   }
@@ -2702,6 +2727,7 @@ export class Resolver {
     this.state.diceInventory.instances[die.id] = die;
     setSlotValue(this.state.diceInventory, destination, die.id);
     syncActiveDiceProjection(this.state);
+    this.revalidateFetchTarget('reward_replaced');
     const build = CURATED_DIE_BUILDS[offerId]!;
     this.finalizeInfernoReward(offerId,
       `Replaced die ${current} with rewarded die ${die.id}: ${build.map(([type, level]) => `${SPECIAL_DICE[type].name} ${level}`).join(' + ')}; no sale Gold awarded.`);
@@ -2750,7 +2776,8 @@ export class Resolver {
     const postBoss = isBigBossRound(this.state.round);
     const visitId = this.state.nextShopVisitId++;
     const onTheHouse = this.state.specialOfferEffects.onTheHouse;
-    this.state.shop = { visitId, stage: 'shop', kind: postBoss ? 'post_boss' : 'between_rounds', exitUnlocked: false,
+    this.state.shop = { visitId, stage: 'shop', navigationHistory: ['shop'],
+      kind: postBoss ? 'post_boss' : 'between_rounds', exitUnlocked: false,
       offers: [], offerRerolls: 0, freeOfferRerollsUsed: 0, lifeRestores: 0,
       freeDicePurchaseAvailable: onTheHouse,
       diePurchased: false,

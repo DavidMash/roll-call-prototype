@@ -4,7 +4,6 @@ import { Resolver } from './effects';
 import {
   classifyInfernoTrend, classifyInfernoWeakness, createInfernoEvaluation, engulfmentAssetKey,
   engulfmentTrainingNormalization, maximumPossibleEngulfmentReadiness, ownedEngulfmentAssets,
-  selectInfernoFeedback,
 } from './engulfment';
 import { placeFlameInstance } from './flames';
 import { summarizeRunHistoryV2 } from './runHistoryV2Summary';
@@ -86,9 +85,5 @@ describe('Inferno diagnostics', () => {
   it('classifies investment from Flame instances', () => {
     const game = state(); placeFlameInstance(game, 'ultimate', 20); placeFlameInstance(game, 'minigun', 30, 1);
     expect(classifyInfernoWeakness(ownedEngulfmentAssets(game), .2, game)).toBe('investment');
-  });
-  it('selects feedback deterministically', () => {
-    expect(selectInfernoFeedback('seed', 2, 'quantity', 'stable', 'none', []))
-      .toEqual(selectInfernoFeedback('seed', 2, 'quantity', 'stable', 'none', []));
   });
 });

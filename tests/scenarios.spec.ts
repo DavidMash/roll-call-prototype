@@ -37,6 +37,7 @@ test.describe('Scenarios mode', () => {
     await expect(page.getByTestId('stat-round')).toHaveAttribute('aria-label', 'Scenario Round 1');
     await expect(page.getByTestId('dice-dock').locator('.dice-row')).toHaveAttribute('data-dice-count', '6');
     await expect(page.getByTestId('stat-gold')).toHaveAttribute('aria-label', 'Gold 40');
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByTestId('scorecard-row-threePair')).toBeVisible();
     await expect(page.getByTestId('scorecard-row-wideStraight')).toBeVisible();
   });

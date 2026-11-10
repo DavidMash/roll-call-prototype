@@ -46,7 +46,9 @@ export function InfernoEvaluationScreen({ board, submit }: {
   if (!evaluation.success) return <Stack gap="md" align="center" justify="center"
     className="inferno-evaluation-screen inferno-failure" data-testid="inferno-feedback">
     <Title order={2}>THE INFERNO WAITS</Title>
-    <Text fw={850} ta="center">{evaluation.feedbackMessage}</Text>
+    <Stack gap={4} align="center">{(evaluation.feedbackMessages?.length ? evaluation.feedbackMessages
+      : evaluation.feedbackMessage ? [evaluation.feedbackMessage] : []).map(message =>
+      <Text key={message} fw={850} ta="center">{message}</Text>)}</Stack>
     <Button size="md" color="orange" onClick={() => submit({ type: 'CONTINUE_INFERNO_EVALUATION' })}>CONTINUE</Button>
   </Stack>;
 
@@ -101,7 +103,8 @@ export function InfernoEvaluationScreen({ board, submit }: {
     <Text>Upper hands unified → Lv.{formatPlayerNumber(evaluation.upper.unifiedLevel)}</Text>
     <Text>Lower hands unified → Lv.{formatPlayerNumber(evaluation.lower.unifiedLevel)}</Text>
     <Text c="orange" fw={900}><CurrencyAmount currency="temper" value={25} sign="+" /></Text>
-    {evaluation.consumedFinalFlame && <Text c="orange">The Inferno craves more Flames.</Text>}
+    <Paper withBorder p="sm" maw={620}><Stack gap={4}>{(evaluation.feedbackMessages ?? []).map(message =>
+      <Text key={message} size="sm" ta="center">{message}</Text>)}</Stack></Paper>
     <Button color="red" variant="white" onClick={() => submit({ type: 'CONTINUE_INFERNO_EVALUATION' })}>CONTINUE</Button>
   </Stack>;
 }

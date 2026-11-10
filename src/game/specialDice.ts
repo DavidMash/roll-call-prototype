@@ -51,7 +51,7 @@ export const SPECIAL_DICE: Record<SpecialDieType, SpecialDieDefinition> = {
   magnetic: definition('magnetic', 'Magnetic', 'uncommon', IconMagnet, '#22b8cf', economy(20, 10, 3), 'level'),
   jackpot: definition('jackpot', 'Jackpot', 'uncommon', IconClover, '#69db7c', economy(15, 10, 3)),
   chameleon: definition('chameleon', 'Chameleon', 'rare', IconPalette, '#e599f7', economy(30, 10, 3), 'level', 'onCommand'),
-  flywheel: definition('flywheel', 'Flywheel', 'uncommon', IconRefresh, '#4dabf7', economy(10, 5, 3), 'level', 'onCommand'),
+  flywheel: definition('flywheel', 'Flywheel', 'uncommon', IconRefresh, '#4dabf7', economy(10, 5, 3), 'level'),
   teamPlayer: definition('teamPlayer', 'Team Player', 'rare', IconUsersGroup, '#63e6be', economy(30, 15, 5)),
   loneWolf: definition('loneWolf', 'Lone Wolf', 'rare', IconUser, '#ffa8a8', economy(30, 15, 5)),
   // Keep the stable `freePlay` key so existing dice and saves become Curtain Call without migration.

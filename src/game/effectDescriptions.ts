@@ -33,7 +33,7 @@ export function specialDieVerboseDescription(type: SpecialDieType, level: number
       term('upperHand'), text(' matching its current '), term('exposedFace'), text('. During that Free Play, this die\'s '),
       term('pips'), text(' are multiplied by its Curtain Call level.')],
     chameleon: sentenceWithUses([term('onCommand'), text(', permanently change this die\'s '), term('exposedFace'), text(' to match the face currently shown by most of your other dice.')], count),
-    flywheel: sentenceWithUses([term('onCommand'), text(', '), term('roll'), text(' this die again without spending a '), term('manualReroll'), text('.')], count),
+    flywheel: sentenceWithUses([text('When selected for a '), term('manualReroll'), text(', automatically cover this die\'s participation without spending a Manual Reroll. If every selected die is covered, the whole action is free.')], count),
     tank: [text('After this die\'s first '), term('roll'), text(' of the '), term('round'), text(', its '), term('exposedFace'), text(` becomes locked and will no longer change. Each time the die `), term('score', 'Scores'), text(`, or each time an action or effect attempts to Reroll it, it gains +${CONFIG.tankPipsPerTrigger * count} `), term('pips'), text('.')],
     mirror: sentenceWithUses([text('During '), term('handQualification'), text(' for a matching '), term('hand'), text(', this die can act as any face value you need. Its actual '), term('exposedFace'), text(' does not change.')], count),
     missingLink: sentenceWithUses([text('During '), term('handQualification'), text(' for a Straight, this die can act as any face value you need. Its actual '), term('exposedFace'), text(' does not change.')], count),

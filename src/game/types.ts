@@ -440,6 +440,8 @@ export interface Shop {
   visitId?: number;
   /** The authoritative section of this persistent Shop visit currently being viewed. */
   stage?: ShopStage;
+  /** Browser-like local history for this semantic Shop visit. */
+  navigationHistory?: ShopStage[];
   /** Lifecycle ownership; post-Boss Shops remain in the completed Chapter until NEXT_CHAPTER. */
   kind?: 'between_rounds' | 'post_boss';
   /** False only during the one-second progression lock for this concrete Shop entry. */
@@ -571,6 +573,7 @@ export interface InfernoEvaluationState {
   recentAction: InfernoRecentAction;
   feedbackMessageId: string | null;
   feedbackMessage: string | null;
+  feedbackMessages: string[];
   /** True only after the player accepts this frozen ready evaluation. */
   engulfed: boolean;
   success: boolean;
@@ -752,6 +755,7 @@ export interface ManualRerollStats {
   round: number;
   dieIds: number[];
   charges: number;
+  flywheelDieIds?: number[];
   remaining: number;
   startedDeadBoard: boolean;
   rescuedDeadBoard: boolean;
@@ -1096,6 +1100,7 @@ export type Action =
   | { type: 'RETREAT' }
   | { type: 'REROLL_OFFERS' }
   | { type: 'SET_SHOP_STAGE'; stage: ShopStage }
+  | { type: 'SHOP_BACK' }
   | { type: 'UNLOCK_SHOP_EXIT' }
   | { type: 'NEXT_CHAPTER' }
   | { type: 'NEXT_ROUND' };

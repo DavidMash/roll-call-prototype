@@ -9,14 +9,16 @@ import {
   minigunMultiplier, missingPairMultiplier, sixPackStartingMultiplier, speedDemonMultiplier,
   punchCardMultiplier, standardFlameMultiplier, targetPracticeMultiplier, vineyardMultiplier, oneShortMultiplier,
   calculateMaxChargeForInstances,
+  FLAMES,
 } from './flames';
 import { availableHandIds, availableLowerHandIds, availableUpperHandIds, upperHand } from './hands';
 import { canonicalRunHistoryV2Events } from './runHistoryV2Timeline';
 import { finalizeScore, infernoMultiplier, INFERNO_BASE, scoreWeightedMultiplier } from './scoring';
 import { exactRatioNumber, type ExactScore } from './scoreMath';
-import type { EngulfmentEvidenceRoundTelemetry, EngulfmentOfferingTelemetry, HandScoredEvent } from './runHistoryV2';
+import { formatPlayerNumber } from './copy';
+import type { EngulfmentEvidenceRoundTelemetry, EngulfmentOfferingTelemetry, HandScoredEvent, RoundAttemptFinishedEvent } from './runHistoryV2';
 import type {
-  Board, EngulfmentAssetRef, Flame, GameState, HandId, HandLevels, InfernoEvaluationState, InfernoRecentAction,
+  Board, EngulfmentAssetRef, Flame, GameState, HandId, HandLevels, InfernoEvaluationState,
   InfernoTrend, InfernoWeakness,
 } from './types';
 
@@ -24,7 +26,9 @@ export const ENGULFMENT_EVIDENCE_ROUNDS = 6;
 export const ENGULFMENT_REQUIRED_MULTIPLIER = 15;
 export const INFERNO_TREND_DEAD_ZONE = 0.05;
 export const INFERNO_CLOSE_READINESS = 0.8;
-export const INFERNO_SUSPENSION_MESSAGE = 'The Inferno will return when you have more Flames to offer.';
+export const INFERNO_INSIGHT_UTILIZATION_DELTA = 2;
+export const INFERNO_INSIGHT_POWER_RELATIVE_DELTA = .25;
+export const INFERNO_INSIGHT_LIMIT = 3;
 export { infernoMultiplier, INFERNO_BASE };
 
 export const engulfmentAssetKey = (asset: EngulfmentAssetRef): string =>
@@ -93,8 +97,111 @@ export interface EngulfmentOfferingEvaluation {
   offeringMultiplier: number;
 }
 
+interface FlameWindowMetrics {
+  asset: EngulfmentAssetRef;
+  clears: number;
+  utilized: number;
+  power: number;
+}
+
+function flameWindowMetrics(
+  clearEvents: RoundAttemptFinishedEvent[],
+  handsByAttempt: Map<string, HandScoredEvent[]>,
+  removedPackagesByAttempt: Map<string, Set<string>>,
+  lastBurnByAttempt: Map<string, number>,
+  asset: EngulfmentAssetRef,
+): FlameWindowMetrics {
+  const selected = new Set([asset.instanceId]);
+  let utilized = 0;
+  const powers = clearEvents.map(clear => {
+    const key = attemptKey(clear);
+    const removed = removedPackagesByAttempt.get(key) ?? new Set<string>();
+    const lastBurn = lastBurnByAttempt.get(key) ?? -1;
+    const hands = (handsByAttempt.get(key) ?? []).filter(hand => hand.seq > lastBurn && !removed.has(hand.scorePackageId));
+    if (hands.some(hand => selectedOfferingFactor(hand, selected) > 1 + 1e-9)) utilized++;
+    return scoreWeightedMultiplier(hands.map(hand => offeringHandObservation(hand, selected)));
+  });
+  const power = powers.length ? powers.reduce((sum, value) => sum + value, 0) / powers.length : 1;
+  return { asset, clears: clearEvents.length, utilized, power: Number(power.toFixed(12)) };
+}
+
+/** Deterministic, factual observations about the Flames that remain relevant to the player. */
+export function infernoEvidenceInsights(
+  state: Pick<GameState, 'historyV2' | 'historyV2Coverage'>,
+  assets: readonly EngulfmentAssetRef[],
+): string[] {
+  if (!assets.length) return ['No Flames remain after this Engulfment.'];
+  const canonical = canonicalRunHistoryV2Events(state.historyV2, state.historyV2Coverage);
+  const clears = canonical.filter((event): event is RoundAttemptFinishedEvent =>
+    event.kind === 'round_attempt_finished' && event.outcome === 'cleared');
+  const latestClears = clears.slice(-ENGULFMENT_EVIDENCE_ROUNDS);
+  const previousClears = clears.length >= ENGULFMENT_EVIDENCE_ROUNDS * 2
+    ? clears.slice(-ENGULFMENT_EVIDENCE_ROUNDS * 2, -ENGULFMENT_EVIDENCE_ROUNDS) : [];
+  const handsByAttempt = new Map<string, HandScoredEvent[]>();
+  const removedPackagesByAttempt = new Map<string, Set<string>>();
+  const lastBurnByAttempt = new Map<string, number>();
+  for (const event of canonical) if (event.kind === 'hand_scored') {
+    const key = attemptKey(event);
+    const hands = handsByAttempt.get(key) ?? [];
+    hands.push(event); handsByAttempt.set(key, hands);
+  } else if (event.kind === 'score_package_removed') {
+    const key = attemptKey(event);
+    const removed = removedPackagesByAttempt.get(key) ?? new Set<string>();
+    removed.add(event.packageId); removedPackagesByAttempt.set(key, removed);
+  } else if (event.kind === 'flame_action' && event.action.type === 'burn_it_down') {
+    lastBurnByAttempt.set(attemptKey(event), event.seq);
+  }
+  const recent = assets.map(asset => flameWindowMetrics(latestClears, handsByAttempt,
+    removedPackagesByAttempt, lastBurnByAttempt, asset));
+  const previous = new Map(previousClears.length ? assets.map(asset => {
+    const metrics = flameWindowMetrics(previousClears, handsByAttempt, removedPackagesByAttempt, lastBurnByAttempt, asset);
+    return [asset.instanceId, metrics] as const;
+  }) : []);
+  const insights: { priority: number; magnitude: number; instanceId: number; text: string }[] = [];
+  for (const current of recent) {
+    const name = FLAMES[current.asset.flame].name;
+    const before = previous.get(current.asset.instanceId);
+    if (before) {
+      const utilizationDelta = current.utilized - before.utilized;
+      if (Math.abs(utilizationDelta) >= INFERNO_INSIGHT_UTILIZATION_DELTA) insights.push({
+        priority: 1, magnitude: Math.abs(utilizationDelta), instanceId: current.asset.instanceId,
+        text: `${name} was used in ${current.utilized}/${current.clears} recent clears, ${utilizationDelta > 0 ? 'up from' : 'down from'} ${before.utilized}/${before.clears}.`,
+      });
+      const relativePowerDelta = (current.power - before.power) / Math.max(1, before.power);
+      if (Math.abs(relativePowerDelta) >= INFERNO_INSIGHT_POWER_RELATIVE_DELTA) insights.push({
+        priority: 2, magnitude: Math.abs(relativePowerDelta), instanceId: current.asset.instanceId,
+        text: `${name} contributed ${relativePowerDelta > 0 ? 'more' : 'less'} effective power than in the previous six clears.`,
+      });
+    }
+  }
+  const strongest = recent.slice().sort((left, right) => right.power - left.power
+    || right.utilized - left.utilized || left.asset.instanceId - right.asset.instanceId)[0];
+  if (strongest && strongest.power > 1 + 1e-9) insights.push({ priority: 0, magnitude: strongest.power,
+    instanceId: strongest.asset.instanceId,
+    text: `${FLAMES[strongest.asset.flame].name} is your strongest remaining Flame at Recent Power ×${formatPlayerNumber(strongest.power)}.` });
+  for (const current of recent.filter(item => item.utilized > 0)) insights.push({
+    priority: 3, magnitude: current.utilized, instanceId: current.asset.instanceId,
+    text: `${FLAMES[current.asset.flame].name} contributed in ${current.utilized} of your last ${current.clears} clears.`,
+  });
+  const selected: string[] = [];
+  const perFlame = new Map<number, number>();
+  for (const insight of insights.sort((left, right) => left.priority - right.priority
+    || right.magnitude - left.magnitude || left.instanceId - right.instanceId || left.text.localeCompare(right.text))) {
+    if (selected.includes(insight.text) || (perFlame.get(insight.instanceId) ?? 0) >= 2) continue;
+    selected.push(insight.text);
+    perFlame.set(insight.instanceId, (perFlame.get(insight.instanceId) ?? 0) + 1);
+    if (selected.length === INFERNO_INSIGHT_LIMIT) break;
+  }
+  if (!selected.length) selected.push(latestClears.length
+    ? `Your ${assets.length} remaining Flame${assets.length === 1 ? '' : 's'} recorded no effective-power contribution in the last ${latestClears.length} canonical clears.`
+    : `No canonical cleared-Round Flame evidence is available yet for your ${assets.length} remaining Flame${assets.length === 1 ? '' : 's'}.`);
+  if (selected.length === 1 && latestClears.length > 0 && latestClears.length < ENGULFMENT_EVIDENCE_ROUNDS)
+    selected.push(`Recent evidence currently covers ${latestClears.length} canonical clear${latestClears.length === 1 ? '' : 's'}.`);
+  return selected.slice(0, INFERNO_INSIGHT_LIMIT);
+}
+
 /**
- * Authoritative realized-score evaluator: three latest canonical clears,
+ * Authoritative realized-score evaluator: six latest canonical clears,
  * score-weighted inside each Round and equal-weighted between Rounds. Score
  * packages later removed by a wager and score destroyed by Burn It Down are
  * excluded because they did not survive into the cleared Round score.
@@ -232,63 +339,6 @@ export function engulfmentTrainingNormalization(levels: HandLevels, unlockedHand
     lower: handLevelNormalization(levels, availableLowerHandIds({ unlockedHands })) };
 }
 
-export const INFERNO_MESSAGE_POOLS = {
-  quantity: [
-    ['quantity-01', 'The Inferno craves more Flames.'], ['quantity-02', 'Gather more Flames.'],
-    ['quantity-03', 'More fire is needed.'], ['quantity-04', 'Build a greater fire.'],
-    ['quantity-05', 'The Inferno hungers for more.'], ['quantity-06', 'Your offering lacks enough Flame.'],
-    ['quantity-07', 'There is not yet enough fire.'], ['quantity-08', 'Gather strength before the Inferno calls again.'],
-  ],
-  investment: [
-    ['investment-01', 'Grow your Flames to unleash their power.'], ['investment-02', 'Stoke your Flames further.'],
-    ['investment-03', 'Your Flames have more power to unlock.'], ['investment-04', 'Feed your Flames before feeding the Inferno.'],
-    ['investment-05', 'Let your Flames mature.'], ['investment-06', 'There is more power waiting in your Flames.'],
-    ['investment-07', 'Your fire needs tending.'], ['investment-08', 'Strengthen what you already possess.'],
-  ],
-  utilization: [
-    ['utilization-01', 'Utilize your Flames as much as possible.'], ['utilization-02', 'Make your Flames prove their worth.'],
-    ['utilization-03', 'Power unused will not satisfy the Inferno.'], ['utilization-04', 'Put your Flames to work.'],
-    ['utilization-05', 'Your Flames must burn brighter in battle.'], ['utilization-06', 'The Inferno wants power it has witnessed.'],
-    ['utilization-07', 'Possessing power is not enough.'], ['utilization-08', 'Show the Inferno what your Flames can do.'],
-  ],
-  close: [
-    ['close-01', 'You are on the right track. Keep up your efforts.'], ['close-02', 'The Inferno is beginning to stir.'],
-    ['close-03', 'The heat is rising.'], ['close-04', 'Your Flames are nearly enough.'],
-    ['close-05', 'The Inferno is close to awakening.'], ['close-06', 'Just a little more.'],
-    ['close-07', 'The fire is almost ready.'], ['close-08', 'Engulfment draws near.'],
-  ],
-  improving: [
-    ['improving-01', 'Your Flames grow stronger.'], ['improving-02', 'The Inferno has noticed your progress.'],
-    ['improving-03', 'You are drawing closer.'], ['improving-04', 'The fire burns brighter than before.'],
-    ['improving-05', 'Your efforts are feeding the Inferno.'], ['improving-06', 'Keep this momentum.'],
-    ['improving-07', 'This is progress.'], ['improving-08', 'The Inferno approves of your direction.'],
-  ],
-  worsening: [
-    ['worsening-01', 'You are losing ground.'], ['worsening-02', 'The fire has weakened.'],
-    ['worsening-03', 'The Inferno was more impressed before.'], ['worsening-04', 'Your Flames have lost some of their edge.'],
-    ['worsening-05', 'You stray farther from Engulfment.'], ['worsening-06', 'Reclaim the power you had.'],
-    ['worsening-07', 'You were closer before.'], ['worsening-08', 'The Inferno recedes.'],
-  ],
-  stagnant: [
-    ['stagnant-01', 'The Inferno waits.'], ['stagnant-02', 'Little has changed.'],
-    ['stagnant-03', 'The fire remains unmoved.'], ['stagnant-04', 'The Inferno is still unconvinced.'],
-    ['stagnant-05', 'You must do more.'], ['stagnant-06', 'Your progress has stalled.'],
-    ['stagnant-07', 'The flames burn, but no brighter.'], ['stagnant-08', 'The Inferno remains unsatisfied.'],
-  ],
-  acquired: [
-    ['acquired-01', 'A new Flame joins the fire. Make it count.'], ['acquired-02', 'Your fire has grown. Now prove its strength.'],
-    ['acquired-03', 'A new Flame brings new potential.'], ['acquired-04', 'More fire. Now make it burn.'],
-  ],
-  invested: [
-    ['invested-01', 'Your investment has been noticed.'], ['invested-02', 'The Flames are growing.'],
-    ['invested-03', 'Stoking them brings you closer.'], ['invested-04', 'Their power is taking shape.'],
-  ],
-  contribution: [
-    ['contribution-01', 'At last, your Flames are proving themselves.'], ['contribution-02', 'The Inferno sees what your Flames can do.'],
-    ['contribution-03', 'That power did not go unnoticed.'], ['contribution-04', 'Your Flames burned brighter this round.'],
-  ],
-} as const;
-
 export function classifyInfernoTrend(readiness: number, previousReadiness: number | null): InfernoTrend {
   if (previousReadiness === null) return 'first';
   const delta = readiness - previousReadiness;
@@ -304,38 +354,6 @@ export function classifyInfernoWeakness(
   const averageInvestment = assets.reduce((sum, asset) => sum
     + (state.flameSlots[asset.slot]?.instanceId === asset.instanceId ? state.flameSlots[asset.slot]!.investedGold : 0), 0) / assets.length;
   return averageInvestment < 60 ? 'investment' : 'utilization';
-}
-
-type MessagePool = keyof typeof INFERNO_MESSAGE_POOLS;
-function feedbackPool(weakness: InfernoWeakness, trend: InfernoTrend, recentAction: InfernoRecentAction): MessagePool {
-  if (weakness === 'close') return trend === 'worsening' ? 'worsening' : 'close';
-  if (trend === 'worsening') return 'worsening';
-  if (trend === 'improving') {
-    if (recentAction === 'flame_acquired') return 'acquired';
-    if (recentAction === 'flame_invested' || recentAction === 'bonfire_created') return 'invested';
-    return 'contribution';
-  }
-  if (trend === 'stable' && recentAction === 'flame_acquired' && weakness === 'quantity') return 'acquired';
-  return trend === 'stable' && recentAction === 'none' ? weakness : weakness;
-}
-
-function deterministicHash(value: string): number {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index++) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-export function selectInfernoFeedback(seed: string, evaluationIndex: number, weakness: InfernoWeakness,
-  trend: InfernoTrend, recentAction: InfernoRecentAction, recentMessageIds: readonly string[]): { id: string; text: string } {
-  const category = feedbackPool(weakness, trend, recentAction);
-  const pool = INFERNO_MESSAGE_POOLS[category];
-  const eligible = pool.filter(([id]) => !recentMessageIds.includes(id));
-  const candidates = eligible.length ? eligible : pool;
-  const selected = candidates[deterministicHash(`${seed}:${evaluationIndex}:${category}`) % candidates.length];
-  return { id: selected[0], text: selected[1] };
 }
 
 /** Freezes one authoritative whole-collection evaluation for player-directed sacrifice selection. */
@@ -360,10 +378,7 @@ export function createInfernoEvaluation(state: GameState): InfernoEvaluationStat
   const maximumPossibleReadiness = maximumPossibleEngulfmentReadiness(state, assets);
   const currentCollectionTheoreticallySufficient = engulfmentSucceeds(maximumPossibleReadiness);
   const suspendAfterContinue = !success && !currentCollectionTheoreticallySufficient;
-  const feedback = success ? null : suspendAfterContinue
-    ? { id: 'inferno-suspended', text: INFERNO_SUSPENSION_MESSAGE }
-    : selectInfernoFeedback(state.seed, evaluationIndex, weakness, trend, recentAction,
-      state.infernoProgress.recentMessageIds);
+  const feedbackMessages = infernoEvidenceInsights(state, assets);
   const normalization = engulfmentTrainingNormalization(state.handLevels, state.infernoRewards.unlockedHands);
   const infernoLevelBefore = state.engulfmentLevel;
   return {
@@ -371,7 +386,8 @@ export function createInfernoEvaluation(state: GameState): InfernoEvaluationStat
     evidenceRounds: full.evidenceRounds, effectiveValue: full.offeringMultiplier,
     threshold: ENGULFMENT_REQUIRED_MULTIPLIER, readiness, maximumPossibleReadiness,
     currentCollectionTheoreticallySufficient, suspendAfterContinue, previousReadiness, trend, weakness, recentAction,
-    feedbackMessageId: feedback?.id ?? null, feedbackMessage: feedback?.text ?? null, engulfed: false, success,
+    feedbackMessageId: 'inferno-evidence', feedbackMessage: feedbackMessages[0] ?? null,
+    feedbackMessages, engulfed: false, success,
     strongestFirst, prefixEvaluations: [], flamesSnuffed: [],
     flamesPreserved: assets.map(asset => structuredClone(asset)), selectedFlameInstanceIds: [],
     selectedEffectiveValue: 1, earnedInfernoFactor: 1,
@@ -398,8 +414,12 @@ export function withInfernoSelection(state: GameState, evaluation: InfernoEvalua
   const engulfmentCountAfter = evaluation.engulfmentCountBefore + (selectedSuccess ? 1 : 0);
   const infernoMultiplierAfter = selectedSuccess
     ? evaluation.infernoMultiplierBefore * BigInt(earnedInfernoFactor) : evaluation.infernoMultiplierBefore;
+  const feedbackMessages = infernoEvidenceInsights(state, flamesPreserved);
   return {
     ...evaluation,
+    feedbackMessageId: 'inferno-evidence',
+    feedbackMessage: feedbackMessages[0] ?? null,
+    feedbackMessages,
     selectedFlameInstanceIds: flamesSnuffed.map(asset => asset.instanceId),
     flamesSnuffed: structuredClone(flamesSnuffed),
     flamesPreserved: structuredClone(flamesPreserved),

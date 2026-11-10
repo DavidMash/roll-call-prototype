@@ -19,7 +19,6 @@ import type { FlameDetailsTarget } from './FlameDetailsModal';
 import { RarityBadge } from './RarityBadge';
 import { RichDescription } from './RichDescription';
 import { RunActionLayout, RunActionPortal } from './RunActionRow';
-import { ScoreResolution } from './ScoreResolution';
 import { TrainingScorecard } from './TrainingScorecard';
 import { CurrencyAmount } from './CurrencyAmount';
 
@@ -71,9 +70,9 @@ function EffectDetails({ effects }: { effects: CollectibleDie['effects'] }) {
   </Paper>)}</Stack>;
 }
 
-export function ShopScreen({ board, inventory, event, busy, submit, skip, openFlameDetails, tutorialProgressNudgeEligible = false }: {
+export function ShopScreen({ board, inventory, event, busy, submit, openFlameDetails, tutorialProgressNudgeEligible = false }: {
   board: Board; inventory: DiceInventory; event: GameEvent | null; busy: boolean; submit: (action: Action) => void;
-  skip: () => void; tutorialProgressNudgeEligible?: boolean; openFlameDetails: (target: FlameDetailsTarget) => void;
+  tutorialProgressNudgeEligible?: boolean; openFlameDetails: (target: FlameDetailsTarget) => void;
 }) {
   const shop = board.shop!;
   const stage = shop.stage ?? 'shop';
@@ -100,6 +99,9 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
   const ownedFlames = flameInstances(board);
   const collectionFull = firstPurchaseSlot(inventory) === null;
   const stages = availableShopStages(board);
+  const storedNavigationHistory = shop.navigationHistory?.length ? shop.navigationHistory : ['shop'];
+  const navigationHistory = storedNavigationHistory.at(-1) === stage
+    ? storedNavigationHistory : [...storedNavigationHistory, stage];
 
   useEffect(() => {
     if (shop.exitUnlocked !== false || busy) return;
@@ -225,7 +227,6 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
       <Group justify="space-between" gap="xs" wrap="wrap"><div><Text size="sm" fw={850} c="red">{chapterLabel(returnedFromBust.round)} BUST</Text><Text size="xs" c="dimmed">1 Life Lost</Text></div>
         <Text fw={800} c="red" aria-label={`${board.lives} of ${maxLives} lives`}>{hearts(board.lives, maxLives)}</Text></Group></Paper>
       : <Group justify="space-between"><Text fw={800}>SHOP</Text><Text size="xs" c="dimmed">{upcomingBoss ? `Prepare for ${BOSSES[upcomingBoss].name}` : `Prepare for ${chapterLabel(board.round + 1)}`}</Text></Group>}</div>
-    {busy && <ScoreResolution event={event} busy={busy} onSkip={skip} />}
     <BossPreview board={board} />
     <Paper p="xs" className="shop-stage-shell" data-testid="shop-stage-indicator"><Group justify="space-between" gap="xs" wrap="nowrap">
       <Tabs className="shop-stage-tabs" value={stage} onChange={value => { if (value && value !== stage) submit({ type: 'SET_SHOP_STAGE', stage: value as typeof stage }); }}>
@@ -315,8 +316,8 @@ export function ShopScreen({ board, inventory, event, busy, submit, skip, openFl
     </Paper>}
 
     <RunActionPortal><RunActionLayout className="shop-action-dock"
-      left={stage !== 'shop' ? <Button size="sm" variant="default" disabled={busy} data-testid="shop-back"
-        onClick={() => submit({ type: 'SET_SHOP_STAGE', stage: 'shop' })}>← BACK TO SHOP</Button> : undefined}
+      left={navigationHistory.length > 1 ? <Button size="sm" variant="default" disabled={busy} data-testid="shop-back"
+        onClick={() => submit({ type: 'SHOP_BACK' })}>BACK</Button> : undefined}
       right={forwardStage && forwardLabel
       ? <Button size="sm" disabled={busy} data-testid="shop-stage-continue" onClick={() => submit({ type: 'SET_SHOP_STAGE', stage: forwardStage })}>{forwardLabel}</Button>
       : <Button size="sm" disabled={busy || shop.exitUnlocked === false || rosterCount === 0}

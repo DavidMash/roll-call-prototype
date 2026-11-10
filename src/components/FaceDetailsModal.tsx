@@ -23,8 +23,7 @@ function EffectCommands({ board, die, effect, busy, actionsEnabled, submit, clos
 }) {
   if (board.phase !== 'round') return null;
   const runtime = runtimeFor(die, board.dieRoundState[die.id], effect.type);
-  const invoke: Action | null = effect.type === 'chameleon' ? { type: 'INVOKE_CHAMELEON', dieId: die.id }
-      : effect.type === 'flywheel' ? { type: 'INVOKE_FLYWHEEL', dieId: die.id } : null;
+  const invoke: Action | null = effect.type === 'chameleon' ? { type: 'INVOKE_CHAMELEON', dieId: die.id } : null;
   return <Stack gap={6} className="die-details-actions" data-testid={`die-details-actions-${effect.id}`}>
     {invoke && <Button size="sm" disabled={busy || !actionsEnabled || validateAction(board, invoke) !== null}
       onClick={() => { submit(invoke); closeAfter(); }}>USE {SPECIAL_DICE[effect.type].name.toUpperCase()}</Button>}

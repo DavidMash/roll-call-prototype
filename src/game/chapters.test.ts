@@ -87,7 +87,7 @@ describe('Chapter encounter planning', () => {
     state.flameSelection = { offers: [], acquired: true };
     const resolver = new Resolver(state, constant());
     resolver.openShop();
-    expect(resolver.events.slice(0, 2).map(event => event.type)).toEqual(['MAP_TRANSITION', 'SHOP_OPENED']);
+    expect(resolver.events.map(event => event.type)).toEqual(['MAP_TRANSITION']);
     expect(resolver.events.some(event => event.type === 'CHAPTER_STARTED')).toBe(false);
     expect(state.presentedChapters).toEqual([1]);
     expect(state.chapterPlans[2]).toBeUndefined();

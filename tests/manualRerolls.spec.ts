@@ -4,8 +4,10 @@ import { CONFIG } from '../src/game/config';
 import { dispatch, newRun } from '../src/game/engine';
 import { hasPlayableHand, handOptions, HANDS, HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
+import { createDieEffect, effectOf, effectRuntime, resetDieRoundState } from '../src/game/specialDice';
+import { rosterDice, syncActiveDiceProjection } from '../src/game/inventory';
 import type { Action, GameState } from '../src/game/types';
-import { enterRun, goToShopStage, seedRunSession, setPlaybackSpeed } from './uiHelpers';
+import { enterRun, goToShopStage, readRunState, seedRunSession, setPlaybackSpeed } from './uiHelpers';
 
 async function ready(page: Page) {
   await page.locator('main').waitFor();
@@ -44,6 +46,30 @@ async function reroll(page: Page, game: GameState, dieIds: number[]) {
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
   return next;
 }
+
+test('Flywheel makes a fully covered Manual Reroll visibly free and has no command button', async ({ page }) => {
+  const game = newRun('flywheel-ui', { next: () => .2 }).state;
+  game.target = 1_000_000n; game.stats.rounds.at(-1)!.target = game.target;
+  game.manualRerollsRemaining = 0;
+  game.diceInventory.instances[0].effects = [createDieEffect(0, 'flywheel')];
+  syncActiveDiceProjection(game); game.dieRoundState = resetDieRoundState(rosterDice(game));
+  await page.goto('/?seed=flywheel-ui&speed=instant');
+  await installRun(page, game);
+  await page.getByRole('button', { name: /^Die 1,/ }).click();
+  await expect(page.getByTestId('manual-reroll').locator('.reroll-action-main')).toHaveText('FLYWHEEL');
+  await expect(page.getByTestId('manual-reroll')).toBeEnabled();
+  await page.getByRole('button', { name: 'View details for Flywheel' }).click();
+  await expect(page.getByRole('button', { name: 'USE FLYWHEEL' })).toHaveCount(0);
+  await expect(page.getByTestId('die-details-modal')).toContainText('automatically cover');
+  await page.getByTestId('die-details-modal').getByRole('button', { name: 'CLOSE' }).click();
+  await page.getByTestId('manual-reroll').click();
+  await expect.poll(async () => (await readRunState(page))?.manualRerollsRemaining).toBe(0);
+  await expect.poll(async () => {
+    const saved = await readRunState(page);
+    const die = saved?.diceInventory.instances[0];
+    return die && saved ? effectRuntime(saved.dieRoundState[0], effectOf(die, 'flywheel'))?.invocationsRemaining : undefined;
+  }).toBe(0);
+});
 function deadBoardRun(rescue: boolean) {
   for (let i = 0; i < 1000; i++) {
     let game = newRun(`dead-manual-${i}`).state;

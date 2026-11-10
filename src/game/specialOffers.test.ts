@@ -251,8 +251,8 @@ describe('temporary Special Offers', () => {
     expect(state.roundCheckpoint?.board.specialOfferEffects.carePackageRerolls).toBe(0);
     expect(result.events.find(event => event.type === 'MANUAL_REROLL_STARTED')?.message)
       .toBe('Care Package depleted · 0 normal Rerolls left');
-    expect(result.events.find(event => event.type === 'SHOP_REOPENED_AFTER_BUST')?.message)
-      .toContain('3 Rerolls left · Care Package 0');
+    expect(result.events.some(event => event.type === 'SHOP_REOPENED_AFTER_BUST')).toBe(false);
+    expect(state.shop?.navigationHistory).toEqual(['shop']);
 
     state = dispatch(unlockShop(state), { type: 'RETRY_ROUND' }, constant(.4)).state;
     expect(state).toMatchObject({

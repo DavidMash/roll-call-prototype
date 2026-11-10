@@ -34,7 +34,7 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
         <RuleSection title="PLAY HANDS">Choose a hand, select the dice that score, and Play.</RuleSection>
         <RuleSection title="PLAY, FREE PLAY, SCORE">A Play commits a hand and rerolls its selected dice afterward. A Free Play does neither. Each die contribution is a Score and may activate its effect.</RuleSection>
         <RuleSection title="CLEAR THE ROUND TARGET">Reach the Round Target before you run out of playable Hands and Manual Rerolls.</RuleSection>
-        <RuleSection title="MANUAL REROLLS">You get {CONFIG.manualRerollsPerRound} Manual Rerolls each Round. Each die Rerolled consumes one.</RuleSection>
+        <RuleSection title="MANUAL REROLLS">You get {CONFIG.manualRerollsPerRound} Manual Rerolls each Round. A Manual Reroll can reroll any selected dice. Available Flywheel uses apply automatically.</RuleSection>
         <RuleSection title="LIVES">Busting costs a Life and sends you back to the Shop. Fail without any of your {CONFIG.maxLives} Lives remaining and the run ends.</RuleSection>
       </Stack></Tabs.Panel>
       <Tabs.Panel value="offers" pt="md"><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{SPECIAL_OFFER_IDS.map(id => <div key={id} className="help-item">

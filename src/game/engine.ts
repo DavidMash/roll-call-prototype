@@ -29,6 +29,9 @@ import { attachLedger, chunkForResolution, cloneGameState, createRunLedger, sess
 import { getEncounterGoalBreakdown, targetForRound } from './goals';
 import { applyScenarioStart, type ScenarioDefinition } from './scenarios';
 import { initialInfernoRewardState, INFERNO_REWARD_IDS, infernoRewardEligible } from './infernoRewards';
+import { resolveManualRerollCost } from './manualRerolls';
+import { eligibleFetchTargets, fetchTargetIsEligible } from './fetchTarget';
+import { infernoEvidenceInsights } from './engulfment';
 import type { Action, Board, DiceInventory, FlameSlotIndex, GameState, RandomSource, Resolution, Shop, ShopStage } from './types';
 
 const exact = (value: unknown, fallback: ExactScore = 0n): ExactScore => value === undefined || value === null
@@ -176,6 +179,11 @@ function normalizeShop(shop: Shop, state: Pick<Board, 'nextShopVisitId' | 'handL
   if (!shop.stage || !['shop', 'forge', 'train', 'flames'].includes(shop.stage)) shop.stage = 'shop';
   if (shop.stage === 'flames' && !state.flameSlots.some(Boolean)) shop.stage = 'train';
   if (shop.stage === 'forge' && !state.forgeUnlocked) shop.stage = 'shop';
+  const allowedStages = new Set(availableShopStages(state));
+  const history = (shop.navigationHistory ?? []).filter((stage): stage is ShopStage => allowedStages.has(stage));
+  shop.navigationHistory = history.length ? history : shop.stage === 'shop' ? ['shop'] : ['shop', shop.stage];
+  if (shop.navigationHistory.at(-1) !== shop.stage) shop.navigationHistory.push(shop.stage);
+  shop.navigationHistory = shop.navigationHistory.filter((stage, index, entries) => index === 0 || stage !== entries[index - 1]);
   shop.forgeSelection ??= { dieAId: null, dieBId: null };
   if (shop.trainingSession) {
     for (const hand of availableHandIds(state)) shop.trainingSession.purchasesByHand[hand] = Math.max(0,
@@ -328,6 +336,20 @@ function normalizeSilencedBossGoal(state: GameState): void {
   }
 }
 
+function repairFetchTargetOnLoad(state: GameState): void {
+  state.fetchTarget ??= null;
+  if (!flameByType(state, 'fetch')) { state.fetchTarget = null; return; }
+  if (fetchTargetIsEligible(state, state.fetchTarget)) return;
+  const previous = state.fetchTarget ? { ...state.fetchTarget } : null;
+  const targets = eligibleFetchTargets(state);
+  const repairRng = new SeededRng(hashSeed(`${state.seed}:fetch:load:${state.nextActionId}:${previous?.dieId ?? 'none'}:${previous?.physicalFace ?? 'none'}`));
+  state.fetchTarget = targets.length ? targets[Math.floor(repairRng.next() * targets.length)] : null;
+  if (previous || state.fetchTarget) state.historyV2.push({ kind: 'fetch_target_changed', reason: 'load_repair', previous,
+    target: state.fetchTarget ? { ...state.fetchTarget } : null,
+    seq: state.nextHistorySeq++, round: state.round, attempt: state.roundAttemptNumber,
+    actionId: state.nextActionId, timelineId: state.historyV2TimelineId });
+}
+
 export function normalizeGameState(state: GameState): GameState {
   const next = cloneGameState(state);
   next.runMode ??= 'normal';
@@ -382,6 +404,13 @@ export function normalizeGameState(state: GameState): GameState {
     next.infernoEvaluation.earnedInfernoFactor ??= Math.max(1, Math.floor(next.infernoEvaluation.selectedEffectiveValue));
     next.infernoEvaluation.engulfmentCountBefore ??= next.infernoEvaluation.infernoLevelBefore;
     next.infernoEvaluation.engulfmentCountAfter ??= next.infernoEvaluation.infernoLevelAfter;
+    if (!Array.isArray(next.infernoEvaluation.feedbackMessages)) {
+      next.infernoEvaluation.feedbackMessages = infernoEvidenceInsights(next,
+        next.infernoEvaluation.engulfed ? next.infernoEvaluation.flamesPreserved
+          : next.infernoEvaluation.flames.map(item => item.asset));
+      next.infernoEvaluation.feedbackMessageId = 'inferno-evidence';
+      next.infernoEvaluation.feedbackMessage = next.infernoEvaluation.feedbackMessages[0] ?? null;
+    }
   }
   next.nextShopVisitId = Math.max(1, Math.floor(next.nextShopVisitId ?? 1));
   next.nextFlameInstanceId = Math.max(1, Math.floor(next.nextFlameInstanceId ?? 1));
@@ -414,6 +443,7 @@ export function normalizeGameState(state: GameState): GameState {
       throw new Error('Saved checkpoint does not match the current rollback schema.');
     assertDiceInventory(next.roundCheckpoint.diceInventory, next.roundCheckpoint.encounterDice);
     const checkpoint = next.roundCheckpoint.board;
+    checkpoint.dice = [...rosterDice({ diceInventory: next.roundCheckpoint.diceInventory }), ...next.roundCheckpoint.encounterDice];
     checkpoint.engulfmentLevel = Math.max(0, Math.floor(checkpoint.engulfmentLevel ?? 0));
     checkpoint.infernoMultiplier = exact(checkpoint.infernoMultiplier, exactInferno(checkpoint.engulfmentLevel));
     if (typeof checkpoint.target === 'number' && !Number.isSafeInteger(checkpoint.target))
@@ -461,6 +491,13 @@ export function normalizeGameState(state: GameState): GameState {
     normalizeScoreWagerRuntime(checkpoint);
     normalizeHandFamilyFlameRuntime(checkpoint);
     normalizeProgressiveFlameRuntime(checkpoint);
+    checkpoint.fetchTarget ??= null;
+    if (!flameByType(checkpoint, 'fetch')) checkpoint.fetchTarget = null;
+    else if (!fetchTargetIsEligible({ ...checkpoint, diceInventory: next.roundCheckpoint.diceInventory }, checkpoint.fetchTarget)) {
+      const targets = eligibleFetchTargets({ ...checkpoint, diceInventory: next.roundCheckpoint.diceInventory });
+      const repairRng = new SeededRng(hashSeed(`${next.seed}:fetch:checkpoint:${next.nextActionId}`));
+      checkpoint.fetchTarget = targets.length ? targets[Math.floor(repairRng.next() * targets.length)] : null;
+    }
   }
   if (next.flameSelection) next.flameSelection.offers = next.flameSelection.offers
     .map(offer => ({ ...offer, flame: (offer.flame as string) === 'charge' ? 'momentum' as const : offer.flame }))
@@ -535,6 +572,7 @@ export function normalizeGameState(state: GameState): GameState {
   normalizeProgressiveFlameRuntime(next);
   next.chargeEvents ??= [];
   recalculateMaxCharge(next);
+  repairFetchTargetOnLoad(next);
   return next;
 }
 
@@ -551,7 +589,8 @@ function validateManualReroll(state: Board | GameState, dieIds: readonly number[
   if (new Set(dieIds).size !== dieIds.length
     || dieIds.some(id => !Number.isInteger(id) || !activeEncounterDice(state).some(die => die.id === id)))
     return 'Select distinct unlocked dice that are on the board.';
-  if (dieIds.length > usableManualRerolls(state)) return 'Not enough manual rerolls for these dice.';
+  if (resolveManualRerollCost(state, dieIds).resourceCost > usableManualRerolls(state))
+    return 'Not enough manual rerolls for these dice.';
   return null;
 }
 
@@ -670,9 +709,9 @@ export function validateAction(state: Board | GameState, action: Action): string
     const die = 'diceInventory' in state ? collectibleDieById(state, action.dieId)
       : state.dice.find(item => item.id === action.dieId && item.owner === 'player');
     if (!die || die.owner !== 'player') return 'Choose an equipped collectible die.';
+    if (action.type === 'INVOKE_FLYWHEEL') return 'Flywheel activates automatically during Manual Rerolls.';
     const expected = action.type === 'INVOKE_CHAMELEON' ? 'chameleon'
-        : action.type === 'INVOKE_FLYWHEEL' ? 'flywheel'
-          : action.type === 'ARM_MAGIC' || action.type === 'DISARM_MAGIC' ? 'magic' : 'furnace';
+      : action.type === 'ARM_MAGIC' || action.type === 'DISARM_MAGIC' ? 'magic' : 'furnace';
     const effect = effectOf(die, expected);
     if (!effect) return `That die cannot perform ${action.type}.`;
     const runtime = effectRuntime(state.dieRoundState[die.id], effect);
@@ -777,6 +816,10 @@ export function validateAction(state: Board | GameState, action: Action): string
   if (action.type === 'SET_SHOP_STAGE') {
     if (action.stage === state.shop.stage) return 'That Shop stage is already open.';
     if (!availableShopStages(state).includes(action.stage)) return 'That Shop section is not available.';
+    return null;
+  }
+  if (action.type === 'SHOP_BACK') {
+    if ((state.shop.navigationHistory?.length ?? 1) <= 1) return 'There is no previous Shop page.';
     return null;
   }
   if (action.type === 'UNLOCK_SHOP_EXIT') {
@@ -916,12 +959,29 @@ function execute(state: GameState, run: (resolver: Resolver) => void, random?: R
       actionId: next.nextActionId }, { kind: 'error', detail: message });
   }
   next.rngState = resolver.rngStateAfterResolution ?? seeded.state;
+  const events = action && usesImmediateMutationPresentation(action)
+    ? resolver.events.filter(event => event.type === 'MAP_TRANSITION' || event.type === 'CHAPTER_STARTED')
+    : resolver.events;
   appendDebugTrace(next.debugTrace, { round: next.round, attempt: next.roundAttemptNumber,
     actionId: next.nextActionId }, { kind: 'resolution', rngBefore, rngAfter: next.rngState,
-    playbackEvents: resolver.events.length });
+    playbackEvents: events.length });
   const actionId = action ? next.nextActionId : null;
   const ledgerChunk = chunkForResolution(next, action, actionId, eventStartSeq);
-  return { state: next, session: sessionForState(next), events: resolver.events, ledgerChunk };
+  return { state: next, session: sessionForState(next), events, ledgerChunk };
+}
+
+const IMMEDIATE_MUTATION_ACTIONS = new Set<Action['type']>([
+  'BUY_DIE', 'MOVE_DIE', 'SET_FORGE_INGREDIENT', 'CONFIRM_FORGE', 'SELL_DIE',
+  'TRAIN_HAND', 'STOKE_FLAME', 'REROLL_OFFERS', 'SET_SHOP_STAGE', 'SHOP_BACK',
+  'RESTORE_LIFE', 'UNLOCK_SHOP_EXIT', 'DISMISS_FLAME_TUTORIAL',
+  'CHOOSE_INFERNO_REWARD', 'PLACE_INFERNO_DIE', 'CANCEL_INFERNO_MAKE_ROOM',
+  'CHOOSE_SPECIAL_OFFER', 'CONTINUE_SPECIAL_OFFER', 'SKIP_SPECIAL_OFFER',
+  'CHOOSE_FLAME', 'CONTINUE_FLAME_SELECTION', 'SKIP_FLAME_SELECTION',
+]);
+
+/** Shop/reward mutations update state immediately; only structural map transitions may be presented. */
+export function usesImmediateMutationPresentation(action: Action): boolean {
+  return IMMEDIATE_MUTATION_ACTIONS.has(action.type);
 }
 
 function rejectedActionHasLegacyMigration(state: GameState, normalized: GameState): boolean {
@@ -929,8 +989,10 @@ function rejectedActionHasLegacyMigration(state: GameState, normalized: GameStat
   if (state.shop && comparable.shop) {
     const allocatedVisit = !Object.hasOwn(state.shop, 'visitId');
     const allocatedStage = !Object.hasOwn(state.shop, 'stage');
+    const allocatedNavigationHistory = !Object.hasOwn(state.shop, 'navigationHistory');
     if (allocatedVisit) delete comparable.shop.visitId;
     if (allocatedStage) delete comparable.shop.stage;
+    if (allocatedNavigationHistory) delete comparable.shop.navigationHistory;
     // Hand-built current-state fixtures and pre-feature callers may omit only
     // the new Shop lifecycle fields. Those additions are not a reason for a
     // rejected action to return a different object.
@@ -1070,6 +1132,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         setSlotValue(next.diceInventory, action.source, destinationId);
         setSlotValue(next.diceInventory, action.destination, sourceId);
         syncActiveDiceProjection(next);
+        resolver.revalidateFetchTarget('roster_changed');
         resolver.emitV2({ kind: 'shop_transaction', transaction: { type: 'dice_moved', source: action.source,
           destination: action.destination, sourceDieId: sourceId, destinationDieId: destinationId } });
         break;
@@ -1110,6 +1173,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         if (rating > BigInt(next.stats.highestForgeRating)) next.stats.highestForgeRating = rating.toString();
         selection.dieAId = null; selection.dieBId = null;
         syncActiveDiceProjection(next);
+        resolver.revalidateFetchTarget('forge_consumed');
         resolver.emit({ type: 'DICE_FORGED', dieIds: [ingredientA.id, ingredientB.id, result.id], amount: cost,
           message: `Forge completed for ${formatForgeValue(preview.cost)} Temper` });
         resolver.emitV2({ kind: 'shop_transaction', transaction: { type: 'dice_fused',
@@ -1125,6 +1189,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         delete next.diceInventory.instances[die.id];
         delete next.dieRoundState[die.id];
         syncActiveDiceProjection(next);
+        resolver.revalidateFetchTarget('die_removed');
         const label = die.effects.length ? die.effects.map(effect => `${SPECIAL_DICE[effect.type].name}${effect.level > 1 ? ` ${formatEffectLevel(effect.level)}` : ''}`).join(' + ') : 'Normal';
         resolver.addGold(sale.total, `Sold ${label}: +${sale.total} Gold`, 'diceSale', die.id);
         next.stats.mostValuableDieSold = Math.max(next.stats.mostValuableDieSold, sale.total);
@@ -1235,7 +1300,19 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         if (from === 'forge' && action.stage !== 'forge')
           next.shop!.forgeSelection = { dieAId: null, dieBId: null };
         next.shop!.stage = action.stage;
+        next.shop!.navigationHistory ??= from === 'shop' ? ['shop'] : ['shop', from];
+        if (next.shop!.navigationHistory.at(-1) !== action.stage) next.shop!.navigationHistory.push(action.stage);
         resolver.emitV2({ kind: 'shop_stage_changed', shopVisitId: next.shop!.visitId!, from, to: action.stage });
+        break;
+      }
+      case 'SHOP_BACK': {
+        const history = next.shop!.navigationHistory!;
+        const from = next.shop!.stage ?? history.at(-1)!;
+        if (from === 'forge') next.shop!.forgeSelection = { dieAId: null, dieBId: null };
+        history.pop();
+        const to = history.at(-1) ?? 'shop';
+        next.shop!.stage = to;
+        resolver.emitV2({ kind: 'shop_stage_changed', shopVisitId: next.shop!.visitId!, from, to });
         break;
       }
       case 'UNLOCK_SHOP_EXIT': next.shop!.exitUnlocked = true; break;

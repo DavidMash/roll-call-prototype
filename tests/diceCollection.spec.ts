@@ -64,7 +64,7 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 900 }, { name: '
   });
 }
 
-test('Shop uses clickable Mantine tabs, global Gold/Temper, Back-to-Shop copy, and no duplicate dice tray', async ({ page }) => {
+test('Shop uses clickable tabs, local Back history, global currency, and no duplicate dice tray', async ({ page }) => {
   const state = shopState('shop-tabs-ui');
   state.temper = 12; state.forgeUnlocked = true;
   placeFlameInstance(state, 'ultimate', 0);
@@ -82,14 +82,16 @@ test('Shop uses clickable Mantine tabs, global Gold/Temper, Back-to-Shop copy, a
   await expect(page.getByTestId('shop-stage-temper')).toHaveCount(0);
   await expect(page.getByTestId('dice-dock')).toHaveCount(0);
   await goToShopStage(page, 'forge'); await expect(page.getByTestId('forge-shop')).toBeVisible();
-  await expect(page.getByTestId('shop-back')).toContainText('BACK TO SHOP');
+  await expect(page.getByTestId('shop-back')).toHaveText('BACK');
   await expect(page.getByTestId('dice-dock')).toHaveCount(0);
+  await goToShopStage(page, 'train'); await expect(page.getByTestId('shop-back')).toHaveText('BACK');
+  await expect(page.getByTestId('dice-dock')).toHaveCount(0);
+  await goToShopStage(page, 'flames'); await expect(page.getByTestId('shop-back')).toHaveText('BACK');
+  await expect(page.getByTestId('dice-dock')).toHaveCount(0);
+  await page.getByTestId('shop-back').click(); await expect(page.getByTestId('training-shop')).toBeVisible();
+  await page.getByTestId('shop-back').click(); await expect(page.getByTestId('forge-shop')).toBeVisible();
   await page.getByTestId('shop-back').click(); await expect(page.getByTestId('dice-shop')).toBeVisible();
-  await goToShopStage(page, 'train'); await expect(page.getByTestId('shop-back')).toContainText('BACK TO SHOP');
-  await expect(page.getByTestId('dice-dock')).toHaveCount(0);
-  await page.getByTestId('shop-back').click(); await expect(page.getByTestId('dice-shop')).toBeVisible();
-  await goToShopStage(page, 'flames'); await expect(page.getByTestId('shop-back')).toContainText('BACK TO SHOP');
-  await expect(page.getByTestId('dice-dock')).toHaveCount(0);
+  await goToShopStage(page, 'flames');
   await page.getByTestId('shop-back').click(); await expect(page.getByTestId('dice-shop')).toBeVisible();
 });
 

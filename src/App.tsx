@@ -285,7 +285,7 @@ export default function App() {
         selectedOffer={selectedFlameOffer} setSelectedOffer={setSelectedFlameOffer} submit={submit} skip={game.skip} openFlameDetails={openFlameDetails} />
         : board.phase === 'specialOffer' && board.specialOffer ? <SpecialOfferScreen board={board} busy={busy} submit={submit} />
         : board.phase === 'shop' && board.shop ? <ShopScreen board={board} inventory={state.diceInventory} event={event} busy={busy}
-        submit={submit} skip={game.skip} openFlameDetails={openFlameDetails}
+        submit={submit} openFlameDetails={openFlameDetails}
         tutorialProgressNudgeEligible={tutorialProgressNudgeEligible} />
       : (board.phase === 'bust' || (board.phase === 'lost' && board.bust)) ? <BustScreen board={board}
           onContinue={event?.type === 'ROUND_BUST' && (board.bust?.livesAfter ?? 0) > 0 ? game.continuePlayback : undefined}

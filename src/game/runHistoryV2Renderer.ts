@@ -105,6 +105,11 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     }
     case 'hand_scored': return renderHandScoredV2(event);
     case 'special_die_activated': return `SPECIAL DIE · ${specialDieLabel(event.dieType)} Lv${number(event.level)} · ${die(event.dieId)} · ${event.detail}`;
+    case 'fetch_target_changed': {
+      const target = event.target ? `Die #${number(event.target.dieId)} · face ${number(event.target.physicalFace)}` : 'no target';
+      if (!event.previous) return `FETCH TARGET · ${target}`;
+      return `FETCH RETARGET · ${event.reason} · Die #${number(event.previous.dieId)} face ${number(event.previous.physicalFace)} → ${target}`;
+    }
     case 'inferno_reward_offered': return `INFERNO REWARD · OFFERED · ${event.offers.map(offer => `${offer.id} / ${offer.name} / ${offer.category} / ${offer.rarity}${offer.recycled ? ' / recycled' : ''}`).join('; ')}`;
     case 'inferno_reward_claimed': return `INFERNO REWARD · CLAIMED · ${event.offerId} / ${event.name} / ${event.category} / ${event.rarity} · ${event.effect}${event.recycled ? ' · recycled' : ''}`;
     case 'roll_batch': return `ROLL · ${event.reason} · ${event.results.map(result => `${die(result.dieId)} ${number(result.beforeFace)}→${number(result.afterFace)}`).join(' · ')}`;

@@ -25,7 +25,7 @@ function openShop(seed: string): GameState {
 
 function shopMarkup(state: GameState): string {
   return wrap(<ShopScreen board={state} inventory={state.diceInventory} event={null} busy={false}
-    submit={() => {}} skip={() => {}} openFlameDetails={() => {}} />);
+    submit={() => {}} openFlameDetails={() => {}} />);
 }
 
 describe('collectible Dice presentation', () => {
@@ -113,7 +113,7 @@ describe('collectible Dice presentation', () => {
 });
 
 describe('responsive Shop-stage presentation', () => {
-  it('uses the compact unordered Forge equation and consistent Back-to-Shop copy', () => {
+  it('uses the compact unordered Forge equation and history-based Back copy', () => {
     const state = openShop('forge-presentation');
     state.temper = 10; state.forgeUnlocked = true; state.shop!.stage = 'forge';
     state.diceInventory.instances[0].effects = [createDieEffect(0, 'bonus')];
@@ -126,7 +126,7 @@ describe('responsive Shop-stage presentation', () => {
     expect(html).not.toContain('FUSION');
     expect(html).toContain('data-testid="forge-result-preview"');
     expect(html).toContain('FORGE <span');
-    expect(html).toContain('BACK TO SHOP');
+    expect(html).toContain('>BACK<');
     expect(html).not.toContain('shop-stage-gold');
     expect(html).not.toContain('shop-stage-temper');
   });

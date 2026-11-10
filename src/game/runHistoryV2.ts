@@ -7,7 +7,7 @@ import type {
 import type { RoundGoalBreakdown } from './goals';
 import type { ExactDecimal, ExactScore } from './scoreMath';
 
-export const RUN_HISTORY_V2_SCHEMA_VERSION = 27 as const;
+export const RUN_HISTORY_V2_SCHEMA_VERSION = 28 as const;
 export const RUN_HISTORY_V2_RULESET = 'dice-pips-hand-mult-v1' as const;
 
 export interface RunHistoryV2Coverage {
@@ -158,7 +158,7 @@ export interface RollBatchEvent extends RunHistoryV2Envelope {
   dieIds: number[];
   heldDieIds: number[];
   results: RollResult[];
-  spend: null | { normalCharges: number; carePackageCharges: number; remaining: number };
+  spend: null | { normalCharges: number; carePackageCharges: number; remaining: number; flywheelDieIds?: number[] };
   effects: RollEffect[];
 }
 
@@ -209,7 +209,7 @@ export interface ShopVisitStartedEvent extends RunHistoryV2Envelope {
   initialStage: ShopStage;
 }
 
-/** One whole-die activation, including On Command uses that occur outside a Play or Roll batch. */
+/** One whole-die activation, including automatic and On Command uses outside a Play or Roll batch. */
 export interface SpecialDieActivatedEvent extends RunHistoryV2Envelope {
   kind: 'special_die_activated';
   dieId: number;
@@ -221,6 +221,13 @@ export interface SpecialDieActivatedEvent extends RunHistoryV2Envelope {
   detail: string;
   invocationBefore?: number;
   invocationAfter?: number;
+}
+
+export interface FetchTargetChangedEvent extends RunHistoryV2Envelope {
+  kind: 'fetch_target_changed';
+  reason: import('./fetchTarget').FetchRetargetReason;
+  previous: { dieId: number; physicalFace: Rank } | null;
+  target: { dieId: number; physicalFace: Rank } | null;
 }
 
 export interface ShopStageChangedEvent extends RunHistoryV2Envelope {
@@ -589,7 +596,7 @@ export interface MapTransitionV2Event extends RunHistoryV2Envelope {
 }
 
 export type RunHistoryV2Event = RunStartedEvent | ChapterStartedEvent | RoundAttemptStartedEvent | RollBatchEvent
-  | HandScoredEvent | SpecialDieActivatedEvent | ShopVisitStartedEvent | ShopStageChangedEvent | TrainingSessionStartedEvent | TeamTrainingAppliedEvent | ShopVisitCompletedEvent
+  | HandScoredEvent | SpecialDieActivatedEvent | FetchTargetChangedEvent | ShopVisitStartedEvent | ShopStageChangedEvent | TrainingSessionStartedEvent | TeamTrainingAppliedEvent | ShopVisitCompletedEvent
   | ShopOffersPresentedEvent | ShopTransactionEvent | TemperChangedEvent | FlameChangedEvent | ChargeChangedEvent | FlameChargeGeneratedEvent
   | EngulfmentAttemptedEvent | InfernoEvaluatedEvent | InfernoSuspensionChangedEvent
   | InfernoRewardOfferedEvent | InfernoRewardClaimedEvent
