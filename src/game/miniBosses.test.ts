@@ -9,6 +9,9 @@ import { postBossRewardForRound, routeThrough } from './progression';
 import { flameByType, placeFlameInstance } from './flames';
 import type { BossType, GameState, HandId, RandomSource, Rank } from './types';
 import { cloneGameState } from './ledger';
+import { createDieEffect, resetDieRoundState } from './specialDice';
+import { rosterDice, syncActiveDiceProjection } from './inventory';
+import { CONFIG } from './config';
 
 const constant = (value = 0): RandomSource => ({ next: () => value });
 
@@ -145,6 +148,67 @@ describe('Mini-Boss mechanics', () => {
     expect(a.state.dice.map(die => die.value)).toEqual(b.state.dice.map(die => die.value));
     expect([...a.state.historyV2].reverse().find(event => event.kind === 'roll_batch' && event.reason === 'juggler'))
       .toEqual([...b.state.historyV2].reverse().find(event => event.kind === 'roll_batch' && event.reason === 'juggler'));
+  });
+
+  it('The Juggler ignores generated Upper Free Plays while preserving their scoring', () => {
+    for (const source of ['freePlay', 'jumpingBean'] as const) {
+      const state = miniBossRound('juggler');
+      state.target = 1_000_000n;
+      expose(state, [1, 2, 3, 4, 5]);
+      const playbackBefore = state.nextPlaybackEventId;
+      new Resolver(state, constant(.4)).play('ones', [0], source);
+      expect(state.stats.handScores.at(-1)).toMatchObject({ hand: 'ones', playSource: source });
+      expect(state.historyV2.some(event => event.kind === 'boss_state_changed'
+        && event.boss === 'juggler' && event.state === 'triggered')).toBe(false);
+      expect(state.historyV2.some(event => event.kind === 'roll_batch' && event.reason === 'juggler')).toBe(false);
+      expect(state.nextPlaybackEventId - playbackBefore).toBeLessThan(25);
+    }
+  });
+
+  it('Free Real Estate and Jumping Bean Free Plays cannot recursively re-trigger The Juggler', () => {
+    const state = miniBossRound('juggler');
+    state.target = 1_000_000n;
+    expose(state, [1, 2, 3, 4, 5]);
+    placeFlameInstance(state, 'freeRealEstate', 100);
+    const bean = rosterDice(state)[2];
+    bean.effects = [createDieEffect(bean.id, 'jumpingBean', 5)];
+    bean.effects[0].persistent.jumpingBeanNumber = 2;
+    bean.faces.forEach(face => { face.rank = 2; });
+    state.dieRoundState = resetDieRoundState(rosterDice(state));
+    syncActiveDiceProjection(state);
+    const playbackBefore = state.nextPlaybackEventId;
+    const resolver = new Resolver(state, constant(.4));
+    expect(() => resolver.play('ones', [0], 'manual')).not.toThrow();
+    const generatedScores = state.stats.handScores.filter(score => score.playSource === 'jumpingBean');
+    expect(state.historyV2.filter(event => event.kind === 'roll_batch' && event.reason === 'juggler'))
+      .toEqual([expect.objectContaining({ dieIds: [0, 2], results: expect.arrayContaining([
+        expect.objectContaining({ dieId: 2, afterFace: 2 }),
+      ]) })]);
+    expect(generatedScores).toHaveLength(15);
+    expect(generatedScores.every(score => score.xMultFactors
+      .some(factor => factor.source === 'freeRealEstate' && factor.value === 3))).toBe(true);
+    expect(state.historyV2.filter(event => event.kind === 'roll_batch'
+      && event.reason === 'jumping_bean_followup')).toHaveLength(15);
+    expect(state.nextPlaybackEventId - playbackBefore).toBeLessThan(CONFIG.resolutionEventCap / 2);
+  });
+
+  it('keeps Jumping Bean generated Free Plays and follow-up Rolls functional against The Juggler', () => {
+    const state = miniBossRound('juggler');
+    state.target = 1_000_000n;
+    const die = rosterDice(state)[0];
+    die.effects = [createDieEffect(die.id, 'jumpingBean', 1)];
+    die.effects[0].persistent.jumpingBeanNumber = 1;
+    die.faces.forEach(face => { face.rank = 1; });
+    state.dieRoundState = resetDieRoundState(rosterDice(state));
+    syncActiveDiceProjection(state);
+    const resolver = new Resolver(state, constant(0));
+    resolver.rollBatch([die.id], 'Jumping Bean regression Roll', 'gameplay', false, 'other');
+    resolver.drain();
+    expect(state.stats.jumpingBeanFreePlays).toHaveLength(3);
+    expect(state.stats.handScores.filter(score => score.playSource === 'jumpingBean')).toHaveLength(3);
+    expect(state.historyV2.filter(event => event.kind === 'roll_batch'
+      && event.reason === 'jumping_bean_followup')).toHaveLength(3);
+    expect(state.historyV2.some(event => event.kind === 'roll_batch' && event.reason === 'juggler')).toBe(false);
   });
 
   it('Capital Return charges once per Lower hand without taking Gold below zero', () => {

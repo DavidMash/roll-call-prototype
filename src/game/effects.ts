@@ -1398,8 +1398,10 @@ export class Resolver {
     boss.returned = true;
   }
 
-  private jugglerExtraReroll(hand: HandId, alreadyRolling: ReadonlySet<number>): number | null {
-    if (this.state.bossSilenced || this.state.boss?.type !== 'juggler' || !upperHand(hand)) return null;
+  private jugglerExtraReroll(hand: HandId, source: HandPlaySource,
+    alreadyRolling: ReadonlySet<number>): number | null {
+    if (source !== 'manual' || this.state.bossSilenced
+      || this.state.boss?.type !== 'juggler' || !upperHand(hand)) return null;
     const eligible = rosterDice(this.state).map(die => die.id).filter(id => !alreadyRolling.has(id));
     if (!eligible.length) return null;
     const dieId = eligible[randomIndex(this.rng, eligible.length)];
@@ -1506,7 +1508,7 @@ export class Resolver {
     beanRecordIndex: number | null): { winning: boolean; beanRecordIndex: number | null } {
     const freePlay = resolution.intent.source !== 'manual';
     const baseRerolls = freePlay ? new Set<number>() : this.postHandRerolls(resolution.selectedParticipants);
-    const jugglerExtra = this.jugglerExtraReroll(resolution.intent.hand, baseRerolls);
+    const jugglerExtra = this.jugglerExtraReroll(resolution.intent.hand, resolution.intent.source, baseRerolls);
     if (jugglerExtra !== null) baseRerolls.add(jugglerExtra);
     const rerolls = [...baseRerolls];
     const reason = jugglerExtra !== null ? 'The Juggler post-hand roll' : 'Post-hand reroll';
