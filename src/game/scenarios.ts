@@ -88,9 +88,9 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     handTraining: { upper: 4, lower: 5 },
   },
   {
-    id: 'extra-die', version: 2, name: 'Extra Die!',
+    id: 'extra-die', version: 3, name: 'Extra Die!',
     tagline: 'Start with six Basic dice and new six-die Hands. Build from scratch and prove the expanded roster can reach Engulfment.',
-    startingGoal: 4_000n, targetOverrides: { 1: 4_000n, 2: 5_000n },
+    startingGoal: 2_000n,
     goalProgressionRound: 17, startingGold: 0, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(6, [{ key: 'basic', level: 1 }]),
     flames: [],
@@ -99,9 +99,9 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     featuredHands: ['threePair', 'wideStraight'],
   },
   {
-    id: 'house-rules', version: 2, name: 'House Rules',
+    id: 'house-rules', version: 3, name: 'House Rules',
     tagline: 'Start with a normal Basic roster but an expanded scorecard. Use the extra scoring options to build toward Engulfment.',
-    startingGoal: 4_000n, targetOverrides: { 1: 4_000n, 2: 5_000n },
+    startingGoal: 2_000n,
     goalProgressionRound: 17, startingGold: 0, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'basic', level: 1 }]),
     flames: [],

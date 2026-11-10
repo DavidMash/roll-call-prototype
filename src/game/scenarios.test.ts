@@ -95,7 +95,7 @@ describe('Scenario definitions', () => {
       .toEqual(['threePair', 'wideStraight']);
     expect(flameInstances(state)).toEqual([]);
     expect(state.gold).toBe(0);
-    expect(state.target).toBe(4_000n);
+    expect(state.target).toBe(2_000n);
   });
 
   it('initializes House Rules through real Hand claims at section baselines without expanding its roster', () => {
@@ -118,7 +118,7 @@ describe('Scenario definitions', () => {
     ]);
     expect(flameInstances(state)).toEqual([]);
     expect(state.gold).toBe(0);
-    expect(state.target).toBe(4_000n);
+    expect(state.target).toBe(2_000n);
   });
 
   it('preserves the retained Scenarios mature overlapping Flame routes of at least x15', () => {
@@ -153,22 +153,32 @@ describe('Scenario definitions', () => {
 });
 
 describe('Scenario progression and completion', () => {
-  it('uses only the two early target overrides, then returns to normal Scenario progression', () => {
+  it('halves only the starting target, then uses normal Scenario progression without a multiplier', () => {
     for (const id of ['extra-die', 'house-rules'] as const) {
-      const state = newRun(`scenario-targets-${id}`, constant, { scenario: scenarioById(id)! }).state;
-      expect(state.target).toBe(4_000n);
-      expect(state.scenario?.targetOverrides).toEqual({ 1: 4_000n, 2: 5_000n });
+      const definition = scenarioById(id)!;
+      expect(definition.startingGoal).toBe(4_000n / 2n);
+      expect(definition.targetOverrides).toBeUndefined();
+      const state = newRun(`scenario-targets-${id}`, constant, { scenario: definition }).state;
+      expect(state.target).toBe(2_000n);
+      expect(state.scenario?.targetOverrides).toEqual({ 1: 2_000n });
       state.round = 2;
       new Resolver(state, constant).startRound();
-      expect(state.target).toBe(5_000n);
+      const offset = state.goalProgressionOffset;
+      const bossForGoalRound = (candidateGoalRound: number) => state.bossSchedule[candidateGoalRound - offset] ?? null;
+      expect(state.target).toBe(targetForRound(2 + offset, null, bossForGoalRound));
       state.round = 3;
       state.bossSchedule[3] = 'neglected';
       new Resolver(state, constant).startRound();
-      expect(state.target).toBe(targetForRound(19, 'neglected', round => round === 19 ? 'neglected' : null));
+      expect(state.target).toBe(targetForRound(3 + offset, 'neglected', bossForGoalRound));
     }
     const normal = newRun('normal-target-regression', constant).state;
     expect(normal.target).toBe(targetForRound(1));
     expect(normal.scenario).toBeNull();
+    expect(SCENARIOS.slice(0, 4).map(scenario => [scenario.id, scenario.startingGoal, scenario.goalProgressionRound]))
+      .toEqual([
+        ['scared-straight', 6_000n, 17], ['short-circuit', 6_000n, 17],
+        ['popcorn', 9_000n, 19], ['money-bags', 4_000n, 15],
+      ]);
   });
 
   it('advances from the configured Goal while keeping Scenario cadence fresh', () => {
