@@ -27,16 +27,18 @@ test.describe('Scenarios mode', () => {
     await scenarioPage.evaluate(element => { element.scrollTop = element.scrollHeight; });
     await expect(page.getByRole('button', { name: 'Start Extra Die!' })).toBeVisible();
     await expect(page.locator('.scenario-loadout-die')).toHaveCount(6);
+    await expect(page.getByText('No starting Flames.')).toBeVisible();
     await page.getByRole('button', { name: /Inspect starting die 1/ }).click();
     const details = page.getByTestId('die-details-modal');
-    await expect(details).toContainText('Clockwork');
-    await expect(details).toContainText('Bonus');
+    await expect(details).toContainText('Basic');
+    await expect(details).not.toContainText('Clockwork');
+    await expect(details).not.toContainText('Bonus');
     await details.getByRole('button', { name: 'Close', exact: true }).click();
 
     await page.getByRole('button', { name: 'Start Extra Die!' }).click();
     await expect(page.getByTestId('stat-round')).toHaveAttribute('aria-label', 'Scenario Round 1');
     await expect(page.getByTestId('dice-dock').locator('.dice-row')).toHaveAttribute('data-dice-count', '6');
-    await expect(page.getByTestId('stat-gold')).toHaveAttribute('aria-label', 'Gold 40');
+    await expect(page.getByTestId('stat-gold')).toHaveAttribute('aria-label', 'Gold 0');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByTestId('scorecard-row-threePair')).toBeVisible();
     await expect(page.getByTestId('scorecard-row-wideStraight')).toBeVisible();
@@ -109,10 +111,16 @@ test.describe('Scenarios mode', () => {
     await page.goto('/?speed=instant');
     await page.getByRole('button', { name: 'SCENARIOS', exact: true }).click();
     await page.getByRole('button', { name: 'View House Rules Scenario' }).click();
+    await expect(page.locator('.scenario-loadout-die')).toHaveCount(5);
+    await expect(page.getByText('No starting Flames.')).toBeVisible();
+    await page.getByRole('button', { name: /Inspect starting die 1/ }).click();
+    await expect(page.getByTestId('die-details-modal')).toContainText('Basic');
+    await page.getByTestId('die-details-modal').getByRole('button', { name: 'Close', exact: true }).click();
     await page.getByRole('button', { name: 'Start House Rules' }).click();
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByTestId('scorecard-row-odds')).toBeVisible();
     await expect(page.getByTestId('dice-dock').locator('.dice-row')).toHaveAttribute('data-dice-count', '5');
+    await expect(page.getByTestId('stat-gold')).toHaveAttribute('aria-label', 'Gold 0');
     const upper = await page.locator('#scorecard-upper').locator('..').locator('[data-testid^="scorecard-row-"]')
       .evaluateAll(rows => rows.map(row => row.getAttribute('data-testid')));
     expect(upper).toEqual(['scorecard-row-ones', 'scorecard-row-twos', 'scorecard-row-threes', 'scorecard-row-fours',

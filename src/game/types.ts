@@ -67,6 +67,8 @@ export interface ScenarioRunState {
   version: number;
   name: string;
   startingGoal?: ExactScore;
+  /** Scenario-local explicit targets. Missing Rounds use the normal Goal progression. */
+  targetOverrides?: Record<number, ExactScore>;
   completionPending: boolean;
   completionAcknowledged: boolean;
 }

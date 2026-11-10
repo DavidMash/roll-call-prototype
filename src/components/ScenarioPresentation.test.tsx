@@ -14,8 +14,8 @@ describe('Scenario presentation', () => {
     const html = renderToStaticMarkup(<MantineProvider><ScenarioBrowser progress={progress} onOpen={() => {}} onBack={() => {}} /></MantineProvider>);
     expect((html.match(/data-testid="scenario-card-/g) ?? [])).toHaveLength(6);
     expect(html).toContain('✓ COMPLETED');
-    expect(html).toContain('Start with six dice and new six-die Hands.');
-    expect(html).toContain('expanded scorecard full of new ways to score');
+    expect(html).toContain('Start with six Basic dice and new six-die Hands.');
+    expect(html).toContain('normal Basic roster but an expanded scorecard');
     expect(html).not.toContain('Loneliest Number');
     expect(html).not.toContain('Chicken Salesman');
   });

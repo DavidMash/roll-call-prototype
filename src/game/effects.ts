@@ -59,6 +59,7 @@ import {
 } from './infernoRewards';
 import { resolveManualRerollCost } from './manualRerolls';
 import { eligibleFetchTargets, fetchTargetIsEligible, type FetchRetargetReason } from './fetchTarget';
+import { scenarioTargetOverride } from './scenarios';
 
 type RollTrigger = { dieId: number; face: Face; kind: 'jumpingBean'; rerollEventId: string; selectedNumber: Exclude<Rank, 7> };
 type CurtainCallContext = { dieId: number; multiplier: number; manualRerollEventId: string };
@@ -2435,13 +2436,13 @@ export class Resolver {
     const targetBreakdown = getEncounterGoalBreakdown(
       goalRound, bossType ?? null, bossSilenced, bossForGoalRound,
     );
-    const scenarioOpeningGoal = this.state.runMode === 'scenario' && this.state.round === 1
-      ? this.state.scenario?.startingGoal : undefined;
+    const scenarioRoundTarget = this.state.runMode === 'scenario'
+      ? scenarioTargetOverride(this.state.scenario, this.state.round) : undefined;
     const { chapter: _targetChapter, localRound: _targetLocalRound, ...computedHistoryTargetBreakdown } = targetBreakdown;
-    const historyTargetBreakdown = scenarioOpeningGoal === undefined ? computedHistoryTargetBreakdown
-      : { ...computedHistoryTargetBreakdown, finalGoal: scenarioOpeningGoal };
+    const historyTargetBreakdown = scenarioRoundTarget === undefined ? computedHistoryTargetBreakdown
+      : { ...computedHistoryTargetBreakdown, finalGoal: scenarioRoundTarget };
     const { chapterNumber: scenarioChapter, chapterRound: scenarioChapterRound } = chapterPosition(this.state.round);
-    this.state.target = scenarioOpeningGoal ?? targetBreakdown.finalGoal;
+    this.state.target = scenarioRoundTarget ?? targetBreakdown.finalGoal;
     this.state.boss = bossType ? createBossRuntime(this.state.seed, this.state.round, bossType, {
       handPlayCounts: this.state.handPlayCounts,
       playerDieIds: rosterDice(this.state).map(die => die.id),

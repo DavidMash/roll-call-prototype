@@ -27,7 +27,7 @@ import { formatEffectLevel } from './effectLevel';
 import { Decimal, exactInferno, scoreFromUnknown, type ExactScore } from './scoreMath';
 import { attachLedger, chunkForResolution, cloneGameState, createRunLedger, sessionForState } from './ledger';
 import { getEncounterGoalBreakdown, targetForRound } from './goals';
-import { applyScenarioStart, type ScenarioDefinition } from './scenarios';
+import { applyScenarioStart, scenarioTargetOverride, type ScenarioDefinition } from './scenarios';
 import { initialInfernoRewardState, INFERNO_REWARD_IDS, infernoRewardEligible } from './infernoRewards';
 import { resolveManualRerollCost } from './manualRerolls';
 import { eligibleFetchTargets, fetchTargetIsEligible } from './fetchTarget';
@@ -355,6 +355,12 @@ export function normalizeGameState(state: GameState): GameState {
   next.runMode ??= 'normal';
   next.scenario ??= null;
   if (next.scenario?.startingGoal !== undefined) next.scenario.startingGoal = exact(next.scenario.startingGoal);
+  if (next.scenario) {
+    next.scenario.targetOverrides = Object.fromEntries(Object.entries(next.scenario.targetOverrides
+      ?? (next.scenario.startingGoal === undefined ? {} : { 1: next.scenario.startingGoal }))
+      .filter(([round]) => Number.isSafeInteger(Number(round)) && Number(round) >= 1)
+      .map(([round, target]) => [Number(round), exact(target)]));
+  }
   next.goalProgressionOffset = Math.max(0, Math.floor(next.goalProgressionOffset ?? 0));
   next.nextActionId = Math.max(0, Math.floor(next.nextActionId ?? next.actionJournal.length));
   next.nextHistorySeq = Math.max(0, Math.floor(next.nextHistorySeq
@@ -379,7 +385,7 @@ export function normalizeGameState(state: GameState): GameState {
   next.dieRoundState = Object.fromEntries(ownedDice(next).filter(die => next.diceInventory.roster.includes(die.id))
     .map(die => [die.id, normalizeDieRoundRuntime(die, next.dieRoundState[die.id])]));
   if (typeof next.target === 'number' && !Number.isSafeInteger(next.target))
-    next.target = targetForRound(next.round + next.goalProgressionOffset,
+    next.target = scenarioTargetOverride(next.scenario, next.round) ?? targetForRound(next.round + next.goalProgressionOffset,
       next.boss?.type ?? next.bossSchedule?.[next.round] ?? null);
   next.engulfmentLevel = Math.max(0, Math.floor(next.engulfmentLevel ?? 0));
   next.infernoMultiplier = exact(next.infernoMultiplier, exactInferno(next.engulfmentLevel));
@@ -450,8 +456,9 @@ export function normalizeGameState(state: GameState): GameState {
       checkpoint.runMode ??= next.runMode;
       checkpoint.scenario ??= structuredClone(next.scenario);
       checkpoint.goalProgressionOffset = Math.max(0, Math.floor(checkpoint.goalProgressionOffset ?? next.goalProgressionOffset));
-      checkpoint.target = targetForRound(checkpoint.round + checkpoint.goalProgressionOffset,
-        checkpoint.boss?.type ?? checkpoint.bossSchedule?.[checkpoint.round] ?? null);
+      checkpoint.target = scenarioTargetOverride(checkpoint.scenario, checkpoint.round)
+        ?? targetForRound(checkpoint.round + checkpoint.goalProgressionOffset,
+          checkpoint.boss?.type ?? checkpoint.bossSchedule?.[checkpoint.round] ?? null);
     normalizeBoardScores(checkpoint);
     checkpoint.infernoProgress ??= structuredClone(next.infernoProgress);
     checkpoint.infernoEvaluation ??= null;
@@ -474,7 +481,8 @@ export function normalizeGameState(state: GameState): GameState {
     normalizeSpecialRuntime(checkpoint);
     normalizeInfernoRewards(checkpoint, next.roundCheckpoint.diceInventory);
     if (checkpoint.specialOfferEffects.silence && checkpoint.bossSchedule[checkpoint.round])
-      checkpoint.target = targetForRound(checkpoint.round + (checkpoint.goalProgressionOffset ?? next.goalProgressionOffset));
+      checkpoint.target = scenarioTargetOverride(checkpoint.scenario, checkpoint.round)
+        ?? targetForRound(checkpoint.round + (checkpoint.goalProgressionOffset ?? next.goalProgressionOffset));
     normalizeChapterLifecycle(checkpoint);
     if (checkpoint.shop) normalizeShop(checkpoint.shop, checkpoint);
     recalculateMaxCharge(checkpoint);

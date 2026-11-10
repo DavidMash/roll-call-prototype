@@ -3,12 +3,13 @@ import { dispatch, newRun } from './engine';
 import { Resolver } from './effects';
 import { createInfernoEvaluation, maximumPossibleEngulfmentReadiness } from './engulfment';
 import { flameInstances, FLAMES, recalculateMaxCharge } from './flames';
-import { availableHandIds, FINAL_LOWER_HAND_ORDER, FINAL_UPPER_HAND_ORDER } from './hands';
+import { availableHandIds, FINAL_LOWER_HAND_ORDER, FINAL_UPPER_HAND_ORDER, trainedHandStrength } from './hands';
 import { rosterDice } from './inventory';
 import { SCENARIOS, canonicalRoundForScenarioGoal, handLevelsForScenario, scenarioById,
   validateScenarioDefinition, validateScenarioDefinitions } from './scenarios';
 import type { HandId, RandomSource } from './types';
 import { SPECIAL_DICE } from './specialDice';
+import { targetForRound } from './goals';
 
 const constant: RandomSource = { next: () => .25 };
 
@@ -26,17 +27,18 @@ describe('Scenario definitions', () => {
   });
 
   it('uses canonical keys for every retained and new setup', () => {
-    expect(['clockwork', 'bonus', 'tank', 'magnetic', 'jumpingBean', 'chameleon', 'weighted', 'golden', 'jackpot', 'furnace']
+    expect(['basic', 'clockwork', 'bonus', 'tank', 'magnetic', 'jumpingBean', 'chameleon', 'weighted', 'golden', 'jackpot', 'furnace']
       .map(key => SPECIAL_DICE[key as keyof typeof SPECIAL_DICE].name))
-      .toEqual(['Clockwork', 'Bonus', 'Tank', 'Magnetic', 'Jumping Bean', 'Chameleon', 'Weighted', 'Golden', 'Jackpot', 'Furnace']);
-    expect(['straightShooter', 'oneShort', 'fluxCapacitor', 'dareDevil', 'minigun', 'hailMary', 'bribery', 'fatCat', 'heavyHitters']
+      .toEqual(['Basic', 'Clockwork', 'Bonus', 'Tank', 'Magnetic', 'Jumping Bean', 'Chameleon', 'Weighted', 'Golden', 'Jackpot', 'Furnace']);
+    expect(['straightShooter', 'oneShort', 'fluxCapacitor', 'dareDevil', 'minigun', 'hailMary', 'bribery', 'fatCat']
       .map(key => FLAMES[key as keyof typeof FLAMES].name))
-      .toEqual(['Straight Shooter', 'One Short', 'Flux Capacitor', 'Dare Devil', 'Minigun', 'Hail Mary', 'Bribery', 'Fat Cat', 'Heavy Hitters']);
+      .toEqual(['Straight Shooter', 'One Short', 'Flux Capacitor', 'Dare Devil', 'Minigun', 'Hail Mary', 'Bribery', 'Fat Cat']);
   });
 
   it('preserves retained launch Goals, economy, and progression anchors', () => {
     expect(SCENARIOS.slice(0, 4).map(scenario => [scenario.startingGoal, scenario.goalProgressionRound, scenario.startingGold]))
       .toEqual([[6_000n, 17, 10], [6_000n, 17, 10], [9_000n, 19, 5], [4_000n, 15, 15]]);
+    expect(SCENARIOS.slice(0, 4).every(scenario => !('targetOverrides' in scenario))).toBe(true);
     expect(canonicalRoundForScenarioGoal(4_000n)).toBe(16);
   });
 
@@ -84,11 +86,16 @@ describe('Scenario definitions', () => {
     expect(state.infernoRewards.upgrades.rosterCap).toBe(6);
     expect(state.diceInventory.roster).toHaveLength(6);
     expect(rosterDice(state)).toHaveLength(6);
+    expect(rosterDice(state).every(die => die.effects.length === 1
+      && die.effects[0].type === 'basic' && die.effects[0].level === 1)).toBe(true);
     expect(state.infernoRewards.claimedOfferIds).toEqual(['expandedRoster', 'handThreePair', 'handWideStraight']);
     expect(state.infernoRewards.unlockedHands).toEqual(['threePair', 'wideStraight']);
     expect([state.handLevels.threePair, state.handLevels.wideStraight]).toEqual([5, 5]);
     expect(availableHandIds(state).filter(hand => ['threePair', 'wideStraight'].includes(hand)))
       .toEqual(['threePair', 'wideStraight']);
+    expect(flameInstances(state)).toEqual([]);
+    expect(state.gold).toBe(0);
+    expect(state.target).toBe(4_000n);
   });
 
   it('initializes House Rules through real Hand claims at section baselines without expanding its roster', () => {
@@ -96,6 +103,8 @@ describe('Scenario definitions', () => {
     const unlocked = ['odds', 'evens', 'chance', 'miniStraight', 'oddStraight', 'evenStraight'];
     expect(state.infernoRewards.upgrades.rosterCap).toBe(5);
     expect(rosterDice(state)).toHaveLength(5);
+    expect(rosterDice(state).every(die => die.effects.length === 1
+      && die.effects[0].type === 'basic' && die.effects[0].level === 1)).toBe(true);
     expect(state.infernoRewards.unlockedHands).toEqual(unlocked);
     expect(state.infernoRewards.claimedOfferIds).toEqual([
       'handOdds', 'handEvens', 'handChance', 'handMiniStraight', 'handOddStraight', 'handEvenStraight',
@@ -107,19 +116,61 @@ describe('Scenario definitions', () => {
       'pair', 'twoPair', 'miniStraight', 'threeKind', 'oddStraight', 'evenStraight',
       'smallStraight', 'fullHouse', 'fourKind', 'largeStraight', 'fiveKind',
     ]);
+    expect(flameInstances(state)).toEqual([]);
+    expect(state.gold).toBe(0);
+    expect(state.target).toBe(4_000n);
   });
 
-  it('gives every Scenario a mature overlapping Flame route of at least x15 without changing global formulas', () => {
-    for (const scenario of SCENARIOS) {
+  it('preserves the retained Scenarios mature overlapping Flame routes of at least x15', () => {
+    for (const scenario of SCENARIOS.slice(0, 4)) {
       const state = newRun(`scenario-feasibility-${scenario.id}`, constant, { scenario }).state;
       for (const flame of flameInstances(state)) { flame.investedGold = 100; flame.stage = 'bonfire'; }
       recalculateMaxCharge(state);
       expect(maximumPossibleEngulfmentReadiness(state), scenario.name).toBeGreaterThanOrEqual(15);
     }
   });
+
+  it('leaves the two reward-mechanic Scenarios on normal Flame and dice acquisition paths', () => {
+    for (const id of ['extra-die', 'house-rules'] as const) {
+      const definition = scenarioById(id)!;
+      const flameState = newRun(`scenario-feasibility-flame-${id}`, constant, { scenario: definition }).state;
+      expect(flameInstances(flameState)).toEqual([]);
+      const scorecardBenchmark = availableHandIds(flameState)
+        .reduce((total, hand) => total + trainedHandStrength(hand, flameState.handLevels[hand]), 0);
+      expect(scorecardBenchmark, `${definition.name} starting scorecard runway`).toBeGreaterThanOrEqual(5_000);
+      const flameResolver = new Resolver(flameState, constant);
+      flameResolver.openFlameSelection();
+      expect(flameState.flameSelection?.offers).toHaveLength(3);
+      const acquired = dispatch(flameState, { type: 'CHOOSE_FLAME', offerId: flameState.flameSelection!.offers[0].id }, constant).state;
+      expect(flameInstances(acquired)).toHaveLength(1);
+
+      const shopState = newRun(`scenario-feasibility-shop-${id}`, constant, { scenario: definition }).state;
+      new Resolver(shopState, constant).openShop();
+      expect(shopState.shop?.offers).toHaveLength(3);
+      expect(shopState.shop?.trainingSession).toBeTruthy();
+    }
+  });
 });
 
 describe('Scenario progression and completion', () => {
+  it('uses only the two early target overrides, then returns to normal Scenario progression', () => {
+    for (const id of ['extra-die', 'house-rules'] as const) {
+      const state = newRun(`scenario-targets-${id}`, constant, { scenario: scenarioById(id)! }).state;
+      expect(state.target).toBe(4_000n);
+      expect(state.scenario?.targetOverrides).toEqual({ 1: 4_000n, 2: 5_000n });
+      state.round = 2;
+      new Resolver(state, constant).startRound();
+      expect(state.target).toBe(5_000n);
+      state.round = 3;
+      state.bossSchedule[3] = 'neglected';
+      new Resolver(state, constant).startRound();
+      expect(state.target).toBe(targetForRound(19, 'neglected', round => round === 19 ? 'neglected' : null));
+    }
+    const normal = newRun('normal-target-regression', constant).state;
+    expect(normal.target).toBe(targetForRound(1));
+    expect(normal.scenario).toBeNull();
+  });
+
   it('advances from the configured Goal while keeping Scenario cadence fresh', () => {
     const scenario = scenarioById('scared-straight')!;
     const state = newRun('scenario-goal-track', constant, { scenario }).state;
