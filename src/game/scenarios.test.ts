@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { dispatch, newRun } from './engine';
+import { dispatch, newRun, normalizeGameState } from './engine';
 import { Resolver } from './effects';
 import { createInfernoEvaluation, maximumPossibleEngulfmentReadiness } from './engulfment';
 import { flameInstances, FLAMES, recalculateMaxCharge } from './flames';
 import { availableHandIds, FINAL_LOWER_HAND_ORDER, FINAL_UPPER_HAND_ORDER, trainedHandStrength } from './hands';
 import { rosterDice } from './inventory';
-import { SCENARIOS, canonicalRoundForScenarioGoal, handLevelsForScenario, scenarioById,
+import { SCENARIOS, handLevelsForScenario, scenarioById,
   validateScenarioDefinition, validateScenarioDefinitions } from './scenarios';
 import type { HandId, RandomSource } from './types';
 import { SPECIAL_DICE } from './specialDice';
-import { targetForRound } from './goals';
+import { getChapterBaseGoal, getRawRoundGoal, LOCAL_ROUND_GOAL_MULTIPLIERS, targetForRound } from './goals';
+import { encounterNode, encounterTarget } from './progression';
 
 const constant: RandomSource = { next: () => .25 };
 
@@ -35,11 +36,15 @@ describe('Scenario definitions', () => {
       .toEqual(['Straight Shooter', 'One Short', 'Flux Capacitor', 'Dare Devil', 'Minigun', 'Hail Mary', 'Bribery', 'Fat Cat']);
   });
 
-  it('preserves retained launch Goals, economy, and progression anchors', () => {
-    expect(SCENARIOS.slice(0, 4).map(scenario => [scenario.startingGoal, scenario.goalProgressionRound, scenario.startingGold]))
-      .toEqual([[6_000n, 17, 10], [6_000n, 17, 10], [9_000n, 19, 5], [4_000n, 15, 15]]);
-    expect(SCENARIOS.slice(0, 4).every(scenario => !('targetOverrides' in scenario))).toBe(true);
-    expect(canonicalRoundForScenarioGoal(4_000n)).toBe(16);
+  it('preserves every intended Scenario starting Target and economy', () => {
+    expect(SCENARIOS.map(scenario => [scenario.id, scenario.startingTarget, scenario.startingGold]))
+      .toEqual([
+        ['scared-straight', 6_000n, 10], ['short-circuit', 6_000n, 10],
+        ['popcorn', 9_000n, 5], ['money-bags', 4_000n, 15],
+        ['extra-die', 2_000n, 0], ['house-rules', 2_000n, 0],
+      ]);
+    expect(SCENARIOS.every(scenario => !('targetOverrides' in scenario)
+      && !('goalProgressionRound' in scenario) && !('startingGoal' in scenario))).toBe(true);
   });
 
   it('applies configured dice, levels, and real Flame investment', () => {
@@ -60,7 +65,7 @@ describe('Scenario definitions', () => {
       expect(state.temper).toBe(scenario.startingTemper);
       expect(state.lives).toBe(scenario.startingLives);
       expect(state.round).toBe(1);
-      expect(state.target).toBe(scenario.startingGoal);
+      expect(state.target).toBe(scenario.startingTarget);
     }
   });
 
@@ -153,45 +158,63 @@ describe('Scenario definitions', () => {
 });
 
 describe('Scenario progression and completion', () => {
-  it('halves only the starting target, then uses normal Scenario progression without a multiplier', () => {
-    for (const id of ['extra-die', 'house-rules'] as const) {
-      const definition = scenarioById(id)!;
-      expect(definition.startingGoal).toBe(4_000n / 2n);
-      expect(definition.targetOverrides).toBeUndefined();
-      const state = newRun(`scenario-targets-${id}`, constant, { scenario: definition }).state;
-      expect(state.target).toBe(2_000n);
-      expect(state.scenario?.targetOverrides).toEqual({ 1: 2_000n });
-      state.round = 2;
-      new Resolver(state, constant).startRound();
-      const offset = state.goalProgressionOffset;
-      const bossForGoalRound = (candidateGoalRound: number) => state.bossSchedule[candidateGoalRound - offset] ?? null;
-      expect(state.target).toBe(targetForRound(2 + offset, null, bossForGoalRound));
-      state.round = 3;
-      state.bossSchedule[3] = 'neglected';
-      new Resolver(state, constant).startRound();
-      expect(state.target).toBe(targetForRound(3 + offset, 'neglected', bossForGoalRound));
+  it('uses the normal local multipliers and Chapter scaling from each configured starting Target', () => {
+    const expectedFirstChapter = new Map<bigint, readonly bigint[]>([
+      [2_000n, [2_000n, 3_000n, 4_000n, 5_000n, 6_000n, 8_000n]],
+      [4_000n, [4_000n, 6_000n, 8_000n, 10_000n, 12_000n, 16_000n]],
+      [6_000n, [6_000n, 9_000n, 12_000n, 15_000n, 18_000n, 24_000n]],
+      [9_000n, [9_000n, 14_000n, 18_000n, 23_000n, 27_000n, 36_000n]],
+    ]);
+    for (const definition of SCENARIOS) {
+      expect(Array.from({ length: 6 }, (_, index) => targetForRound(index + 1, null, undefined, definition.startingTarget)),
+        definition.name).toEqual(expectedFirstChapter.get(definition.startingTarget));
+      expect(Array.from({ length: 6 }, (_, index) => getRawRoundGoal(index + 1, definition.startingTarget)), definition.name)
+        .toEqual(LOCAL_ROUND_GOAL_MULTIPLIERS.map(multiplier => (Number(definition.startingTarget) * multiplier).toString()));
+      expect(Number(getChapterBaseGoal(2, definition.startingTarget))
+        / Number(definition.startingTarget)).toBeCloseTo(1.26 ** 6, 12);
     }
     const normal = newRun('normal-target-regression', constant).state;
     expect(normal.target).toBe(targetForRound(1));
+    expect(normal.target).toBe(100n);
     expect(normal.scenario).toBeNull();
-    expect(SCENARIOS.slice(0, 4).map(scenario => [scenario.id, scenario.startingGoal, scenario.goalProgressionRound]))
-      .toEqual([
-        ['scared-straight', 6_000n, 17], ['short-circuit', 6_000n, 17],
-        ['popcorn', 9_000n, 19], ['money-bags', 4_000n, 15],
-      ]);
   });
 
-  it('advances from the configured Goal while keeping Scenario cadence fresh', () => {
-    const scenario = scenarioById('scared-straight')!;
-    const state = newRun('scenario-goal-track', constant, { scenario }).state;
+  it('keeps Map previews, Round initialization, Boss modifiers, and history on one authoritative calculation', () => {
+    for (const definition of SCENARIOS) {
+      const state = newRun(`scenario-goal-track-${definition.id}`, constant, { scenario: definition }).state;
+      for (let round = 1; round <= 6; round++) {
+        state.round = round;
+        if (round === 3) state.bossSchedule[round] = 'tightrope';
+        if (round === 6) state.bossSchedule[round] = 'marathon';
+        new Resolver(state, constant).startRound();
+        const bossForRound = (candidate: number) => state.bossSchedule[candidate] ?? null;
+        const mapTarget = encounterTarget(encounterNode(round, state.boss?.type ?? null), bossForRound,
+          definition.startingTarget, state.bossSilenced);
+        const expected = targetForRound(round, state.boss?.type ?? null, bossForRound, definition.startingTarget);
+        expect(state.target, `${definition.name} runtime R${round}`).toBe(expected);
+        expect(mapTarget, `${definition.name} map R${round}`).toBe(state.target);
+        const history = [...state.historyV2].reverse().find(event => event.kind === 'round_attempt_started'
+          && event.round === round);
+        expect(history?.kind === 'round_attempt_started' ? history.target.finalGoal : null,
+          `${definition.name} history R${round}`).toBe(state.target);
+      }
+    }
+  });
+
+  it('migrates legacy Scenario targets and removes their override and offset state', () => {
+    const state = newRun('legacy-scenario-target', constant, { scenario: scenarioById('extra-die')! }).state;
+    const legacyScenario = state.scenario as unknown as Record<string, unknown>;
+    delete legacyScenario.startingTarget;
+    legacyScenario.startingGoal = 2_000n;
+    legacyScenario.targetOverrides = { 1: 2_000n, 2: 6_000n };
+    (state as unknown as Record<string, unknown>).goalProgressionOffset = 16;
     state.round = 2;
-    new Resolver(state, constant).startRound();
-    expect(state.target).toBe(6_000n);
-    expect(state.boss).toBeNull();
-    state.round = 3;
-    new Resolver(state, constant).startRound();
-    expect(state.boss).not.toBeNull();
-    expect(state.bossSchedule[3]).toBeTruthy();
+    const normalized = normalizeGameState(state);
+    expect(normalized.scenario).toMatchObject({ startingTarget: 2_000n });
+    expect(normalized.scenario).not.toHaveProperty('startingGoal');
+    expect(normalized.scenario).not.toHaveProperty('targetOverrides');
+    expect(normalized).not.toHaveProperty('goalProgressionOffset');
+    expect(normalized.target).toBe(3_000n);
   });
 
   it('ends on the first Engulfment without generating an Inferno Reward', () => {
@@ -263,7 +286,7 @@ describe('Scenario progression and completion', () => {
     expect({ round: retry.round, goal: retry.target, gold: retry.gold, temper: retry.temper, lives: retry.lives,
       roster: rosterDice(retry).map(die => die.effects.map(effect => [effect.type, effect.level])),
       hands: retry.handLevels, flames: flameInstances(retry).map(flame => [flame.type, flame.investedGold]) })
-      .toEqual({ round: 1, goal: definition.startingGoal, gold: 15, temper: 0, lives: 3,
+      .toEqual({ round: 1, goal: definition.startingTarget, gold: 15, temper: 0, lives: 3,
         roster: definition.roster.map(die => die.effects.map(effect => [effect.key, effect.level])),
         hands: handLevelsForScenario(definition), flames: [['bribery', 40], ['fatCat', 40]] });
     expect(definition.version).toBe(3);

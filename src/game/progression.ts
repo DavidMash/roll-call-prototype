@@ -1,7 +1,7 @@
 import { BOSSES, bossTypeForRound, isBigBossRound, isBossRound, isMiniBossRound } from './bosses';
 import { formatPlayerNumber } from './copy';
 import { chapterEncounterRounds, chapterNumberForRound, chapterRoundForRound, firstRoundOfChapter } from './chapters';
-import { targetForRound, type BossForRound } from './goals';
+import { getEncounterGoalBreakdown, NORMAL_STARTING_TARGET, type BossForRound } from './goals';
 import type { BossType, ChapterPlan, RunNode } from './types';
 import type { ExactScore } from './scoreMath';
 
@@ -65,9 +65,11 @@ export function nodeLabel(node: RunNode): string {
   return 'SHOP';
 }
 
-export function encounterTarget(node: RunNode, bossForRound?: BossForRound): ExactScore | null {
+export function encounterTarget(node: RunNode, bossForRound?: BossForRound,
+  startingTarget: ExactScore = NORMAL_STARTING_TARGET, bossSilenced = false): ExactScore | null {
   if (node.type !== 'normal_round' && node.type !== 'mini_boss_round' && node.type !== 'boss_round') return null;
-  return targetForRound(node.round, node.boss ?? null, bossForRound);
+  return getEncounterGoalBreakdown(node.round, node.boss ?? null, bossSilenced, bossForRound,
+    startingTarget).finalGoal;
 }
 
 export const nodeDescription = (node: RunNode) => node.boss ? BOSSES[node.boss].name : nodeLabel(node);

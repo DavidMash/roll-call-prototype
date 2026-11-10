@@ -2,7 +2,7 @@ import { bossGoalModifier } from './bosses';
 import { chapterPosition, ROUNDS_PER_CHAPTER } from './chapters';
 import { CONFIG } from './config';
 import { Decimal, decimalConstructorForDigits, type ExactDecimal, type ExactScore } from './scoreMath';
-import type { BossType } from './types';
+import type { BossType, ScenarioRunState } from './types';
 
 export const LOCAL_ROUND_GOAL_MULTIPLIERS = [1, 1.5, 2, 2.5, 3, 4] as const;
 export const MAX_COARSE_GOAL_DEVIATION = 0.075;
@@ -31,9 +31,12 @@ type GoalDecimalInput = Decimal.Value;
 
 const positiveInteger = (value: number): number => Math.max(1, Math.floor(value));
 
-function goalContext(chapter: number): typeof Decimal {
+export const NORMAL_STARTING_TARGET = BigInt(CONFIG.baseTarget);
+
+function goalContext(chapter: number, startingTarget: ExactScore = NORMAL_STARTING_TARGET): typeof Decimal {
   const exponent = ROUNDS_PER_CHAPTER * (positiveInteger(chapter) - 1);
-  const estimatedDigits = Math.max(3, Math.floor(2 + exponent * Math.log10(CONFIG.targetGrowth)) + 3);
+  const startingDigits = Math.max(1, startingTarget.toString().replace('-', '').length);
+  const estimatedDigits = Math.max(3, Math.floor(startingDigits + exponent * Math.log10(CONFIG.targetGrowth)) + 3);
   return decimalConstructorForDigits(estimatedDigits);
 }
 
@@ -51,16 +54,18 @@ function exactBossGoal(D: typeof Decimal, type: BossType | null | undefined, raw
   return raw;
 }
 
-export function getChapterBaseGoal(chapter: number): ExactDecimal {
+export function getChapterBaseGoal(chapter: number, startingTarget: ExactScore = NORMAL_STARTING_TARGET): ExactDecimal {
   const normalized = positiveInteger(chapter);
-  const D = goalContext(normalized);
-  return new D('100').times(new D(String(CONFIG.targetGrowth)).pow(ROUNDS_PER_CHAPTER * (normalized - 1))).toFixed();
+  const D = goalContext(normalized, startingTarget);
+  return new D(startingTarget.toString())
+    .times(new D(String(CONFIG.targetGrowth)).pow(ROUNDS_PER_CHAPTER * (normalized - 1))).toFixed();
 }
 
-export function getRawRoundGoal(globalRound: number): ExactDecimal {
+export function getRawRoundGoal(globalRound: number, startingTarget: ExactScore = NORMAL_STARTING_TARGET): ExactDecimal {
   const { chapterNumber, chapterRound } = chapterPosition(globalRound);
-  const D = goalContext(chapterNumber);
-  return new D(getChapterBaseGoal(chapterNumber)).times(String(LOCAL_ROUND_GOAL_MULTIPLIERS[chapterRound - 1])).toFixed();
+  const D = goalContext(chapterNumber, startingTarget);
+  return new D(getChapterBaseGoal(chapterNumber, startingTarget))
+    .times(String(LOCAL_ROUND_GOAL_MULTIPLIERS[chapterRound - 1])).toFixed();
 }
 
 function magnitudeOf(raw: InstanceType<typeof Decimal>): number {
@@ -123,24 +128,26 @@ export function beautifyGoal(rawGoal: GoalDecimalInput, adjacentRawGoals: readon
   };
 }
 
-function postBossRawGoal(round: number, boss: BossType | null | undefined): ExactDecimal {
+function postBossRawGoal(round: number, boss: BossType | null | undefined,
+  startingTarget: ExactScore): ExactDecimal {
   const { chapterNumber } = chapterPosition(round);
-  const D = goalContext(chapterNumber);
-  return exactBossGoal(D, boss, new D(getRawRoundGoal(round))).toFixed();
+  const D = goalContext(chapterNumber, startingTarget);
+  return exactBossGoal(D, boss, new D(getRawRoundGoal(round, startingTarget))).toFixed();
 }
 
 export function getRoundGoalBreakdown(globalRound: number, boss: BossType | null = null,
-  bossForRound: BossForRound = () => null): RoundGoalBreakdown {
+  bossForRound: BossForRound = () => null,
+  startingTarget: ExactScore = NORMAL_STARTING_TARGET): RoundGoalBreakdown {
   const round = positiveInteger(globalRound);
   const { chapterNumber, chapterRound } = chapterPosition(round);
-  const D = goalContext(chapterNumber);
-  const chapterBase = getChapterBaseGoal(chapterNumber);
+  const D = goalContext(chapterNumber, startingTarget);
+  const chapterBase = getChapterBaseGoal(chapterNumber, startingTarget);
   const localMultiplier = LOCAL_ROUND_GOAL_MULTIPLIERS[chapterRound - 1];
   const neutralRawGoal = new D(chapterBase).times(String(localMultiplier)).toFixed();
   const postBossRawGoalValue = exactBossGoal(D, boss, new D(neutralRawGoal)).toFixed();
   const adjacentRawGoals = [
-    ...(round > 1 ? [postBossRawGoal(round - 1, bossForRound(round - 1))] : []),
-    postBossRawGoal(round + 1, bossForRound(round + 1)),
+    ...(round > 1 ? [postBossRawGoal(round - 1, bossForRound(round - 1), startingTarget)] : []),
+    postBossRawGoal(round + 1, bossForRound(round + 1), startingTarget),
   ];
   return {
     chapter: chapterNumber,
@@ -161,17 +168,17 @@ export function getRoundGoalBreakdown(globalRound: number, boss: BossType | null
  * used when no Boss is present.
  */
 export function getEncounterGoalBreakdown(globalRound: number, boss: BossType | null,
-  bossSilenced: boolean, bossForRound: BossForRound = () => null): RoundGoalBreakdown {
+  bossSilenced: boolean, bossForRound: BossForRound = () => null,
+  startingTarget: ExactScore = NORMAL_STARTING_TARGET): RoundGoalBreakdown {
   return bossSilenced
-    ? getRoundGoalBreakdown(globalRound)
-    : getRoundGoalBreakdown(globalRound, boss, bossForRound);
+    ? getRoundGoalBreakdown(globalRound, null, () => null, startingTarget)
+    : getRoundGoalBreakdown(globalRound, boss, bossForRound, startingTarget);
 }
 
 export function targetForRound(globalRound: number, boss: BossType | null = null,
-  bossForRound?: BossForRound): ExactScore {
-  return getRoundGoalBreakdown(globalRound, boss, bossForRound).finalGoal;
+  bossForRound?: BossForRound, startingTarget: ExactScore = NORMAL_STARTING_TARGET): ExactScore {
+  return getRoundGoalBreakdown(globalRound, boss, bossForRound, startingTarget).finalGoal;
 }
 
-/** Maps the displayed run Round onto the canonical Goal track. Normal runs use offset 0. */
-export const goalProgressionRound = (round: number, offset = 0): number =>
-  Math.max(1, Math.floor(round) + Math.max(0, Math.floor(offset)));
+export const startingTargetForScenario = (scenario: ScenarioRunState | null | undefined): ExactScore =>
+  scenario?.startingTarget ?? NORMAL_STARTING_TARGET;

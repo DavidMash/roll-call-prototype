@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { BOSSES } from '../game/bosses';
 import { chapterNumberForRound, chapterRoundForRound } from '../game/chapters';
 import { formatExactScore, formatPlayerNumber } from '../game/copy';
+import { startingTargetForScenario } from '../game/goals';
 import type { ExactScore } from '../game/scoreMath';
 import { encounterTarget, nodeLabel, routeWindow } from '../game/progression';
 import { SCREEN_THEMES } from '../game/screenThemes';
@@ -189,8 +190,8 @@ export function RunMapTransition({ seed, event, onContinue }: { seed: string; ev
           if (!point) return null;
           const state = chapterMapNodeState(index, currentIndex);
           const displayNode = state === 'current' && event.boss ? { ...node, boss: event.boss } : node;
-          const target = displayNode.type === 'normal_round' ? encounterTarget(displayNode, round =>
-            event.board.bossSchedule[round] ?? null) : null;
+          const target = encounterTarget(displayNode, round => event.board.bossSchedule[round] ?? null,
+            startingTargetForScenario(event.board.scenario), state === 'current' && event.board.bossSilenced);
           const formattedTarget = target === null ? null : formatExactScore(target);
           const progress = index / Math.max(1, nodes.length - 1);
           const miniWeight = Math.round((1 - Math.min(1, progress)) * 100);

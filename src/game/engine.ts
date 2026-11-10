@@ -26,13 +26,13 @@ import { dieForgeRating, dieSellBreakdown, forgeRevealEligible, formatForgeValue
 import { formatEffectLevel } from './effectLevel';
 import { Decimal, exactInferno, scoreFromUnknown, type ExactScore } from './scoreMath';
 import { attachLedger, chunkForResolution, cloneGameState, createRunLedger, sessionForState } from './ledger';
-import { getEncounterGoalBreakdown, targetForRound } from './goals';
-import { applyScenarioStart, scenarioTargetOverride, type ScenarioDefinition } from './scenarios';
+import { getEncounterGoalBreakdown, NORMAL_STARTING_TARGET, startingTargetForScenario, targetForRound } from './goals';
+import { applyScenarioStart, scenarioById, type ScenarioDefinition } from './scenarios';
 import { initialInfernoRewardState, INFERNO_REWARD_IDS, infernoRewardEligible } from './infernoRewards';
 import { resolveManualRerollCost } from './manualRerolls';
 import { eligibleFetchTargets, fetchTargetIsEligible } from './fetchTarget';
 import { infernoEvidenceInsights } from './engulfment';
-import type { Action, Board, DiceInventory, FlameSlotIndex, GameState, RandomSource, Resolution, Shop, ShopStage } from './types';
+import type { Action, Board, DiceInventory, FlameSlotIndex, GameState, RandomSource, Resolution, ScenarioRunState, Shop, ShopStage } from './types';
 
 const exact = (value: unknown, fallback: ExactScore = 0n): ExactScore => value === undefined || value === null
   ? fallback : scoreFromUnknown(value);
@@ -322,7 +322,8 @@ function normalizeScoreWagerRuntime(state: Pick<Board, 'scoreWagers'>): void {
 
 function normalizeSilencedBossGoal(state: GameState): void {
   if (state.phase !== 'round' || !state.bossSilenced || !state.boss) return;
-  const breakdown = getEncounterGoalBreakdown(state.round + (state.goalProgressionOffset ?? 0), state.boss.type, true);
+  const breakdown = getEncounterGoalBreakdown(state.round, state.boss.type, true, () => null,
+    startingTargetForScenario(state.scenario));
   state.target = breakdown.finalGoal;
   const currentRound = [...state.stats.rounds].reverse().find(round =>
     round.round === state.round && round.attempt === state.roundAttemptNumber && !round.cleared);
@@ -334,6 +335,29 @@ function normalizeSilencedBossGoal(state: GameState): void {
     const { chapter: _chapter, localRound: _localRound, ...target } = breakdown;
     started.target = target;
   }
+}
+
+type LegacyScenarioTargetState = ScenarioRunState & {
+  startingGoal?: unknown;
+  targetOverrides?: Record<number, unknown>;
+};
+
+function normalizeScenarioTargetState(board: Pick<Board, 'scenario'>): void {
+  if (!board.scenario) return;
+  const legacy = board.scenario as LegacyScenarioTargetState;
+  const configured = scenarioById(legacy.id)?.startingTarget;
+  const candidate = legacy.startingTarget ?? legacy.startingGoal ?? legacy.targetOverrides?.[1] ?? configured;
+  const normalized = exact(candidate, NORMAL_STARTING_TARGET);
+  legacy.startingTarget = normalized > 0n ? normalized : configured ?? NORMAL_STARTING_TARGET;
+  delete legacy.startingGoal;
+  delete legacy.targetOverrides;
+}
+
+function authoritativeTargetForState(state: Pick<Board, 'scenario' | 'round' | 'bossSchedule' | 'boss' | 'bossSilenced'>): ExactScore {
+  const boss = state.boss?.type ?? state.bossSchedule?.[state.round] ?? null;
+  const bossForRound = (round: number) => state.bossSchedule?.[round] ?? null;
+  return getEncounterGoalBreakdown(state.round, boss, state.bossSilenced, bossForRound,
+    startingTargetForScenario(state.scenario)).finalGoal;
 }
 
 function repairFetchTargetOnLoad(state: GameState): void {
@@ -354,14 +378,8 @@ export function normalizeGameState(state: GameState): GameState {
   const next = cloneGameState(state);
   next.runMode ??= 'normal';
   next.scenario ??= null;
-  if (next.scenario?.startingGoal !== undefined) next.scenario.startingGoal = exact(next.scenario.startingGoal);
-  if (next.scenario) {
-    next.scenario.targetOverrides = Object.fromEntries(Object.entries(next.scenario.targetOverrides
-      ?? (next.scenario.startingGoal === undefined ? {} : { 1: next.scenario.startingGoal }))
-      .filter(([round]) => Number.isSafeInteger(Number(round)) && Number(round) >= 1)
-      .map(([round, target]) => [Number(round), exact(target)]));
-  }
-  next.goalProgressionOffset = Math.max(0, Math.floor(next.goalProgressionOffset ?? 0));
+  normalizeScenarioTargetState(next);
+  delete (next as GameState & { goalProgressionOffset?: unknown }).goalProgressionOffset;
   next.nextActionId = Math.max(0, Math.floor(next.nextActionId ?? next.actionJournal.length));
   next.nextHistorySeq = Math.max(0, Math.floor(next.nextHistorySeq
     ?? next.historyV2.reduce((maximum, event) => Math.max(maximum, event.seq + 1), 0)));
@@ -384,9 +402,9 @@ export function normalizeGameState(state: GameState): GameState {
   normalizeInfernoRewards(next, next.diceInventory);
   next.dieRoundState = Object.fromEntries(ownedDice(next).filter(die => next.diceInventory.roster.includes(die.id))
     .map(die => [die.id, normalizeDieRoundRuntime(die, next.dieRoundState[die.id])]));
-  if (typeof next.target === 'number' && !Number.isSafeInteger(next.target))
-    next.target = scenarioTargetOverride(next.scenario, next.round) ?? targetForRound(next.round + next.goalProgressionOffset,
-      next.boss?.type ?? next.bossSchedule?.[next.round] ?? null);
+  if (next.scenario && next.phase === 'round') next.target = authoritativeTargetForState(next);
+  else if (typeof next.target === 'number' && !Number.isSafeInteger(next.target))
+    next.target = targetForRound(next.round, next.boss?.type ?? next.bossSchedule?.[next.round] ?? null);
   next.engulfmentLevel = Math.max(0, Math.floor(next.engulfmentLevel ?? 0));
   next.infernoMultiplier = exact(next.infernoMultiplier, exactInferno(next.engulfmentLevel));
   normalizeBoardScores(next);
@@ -449,16 +467,16 @@ export function normalizeGameState(state: GameState): GameState {
       throw new Error('Saved checkpoint does not match the current rollback schema.');
     assertDiceInventory(next.roundCheckpoint.diceInventory, next.roundCheckpoint.encounterDice);
     const checkpoint = next.roundCheckpoint.board;
+    normalizeScenarioTargetState(checkpoint);
+    delete (checkpoint as Board & { goalProgressionOffset?: unknown }).goalProgressionOffset;
     checkpoint.dice = [...rosterDice({ diceInventory: next.roundCheckpoint.diceInventory }), ...next.roundCheckpoint.encounterDice];
     checkpoint.engulfmentLevel = Math.max(0, Math.floor(checkpoint.engulfmentLevel ?? 0));
     checkpoint.infernoMultiplier = exact(checkpoint.infernoMultiplier, exactInferno(checkpoint.engulfmentLevel));
-    if (typeof checkpoint.target === 'number' && !Number.isSafeInteger(checkpoint.target))
-      checkpoint.runMode ??= next.runMode;
-      checkpoint.scenario ??= structuredClone(next.scenario);
-      checkpoint.goalProgressionOffset = Math.max(0, Math.floor(checkpoint.goalProgressionOffset ?? next.goalProgressionOffset));
-      checkpoint.target = scenarioTargetOverride(checkpoint.scenario, checkpoint.round)
-        ?? targetForRound(checkpoint.round + checkpoint.goalProgressionOffset,
-          checkpoint.boss?.type ?? checkpoint.bossSchedule?.[checkpoint.round] ?? null);
+    checkpoint.runMode ??= next.runMode;
+    checkpoint.scenario ??= structuredClone(next.scenario);
+    normalizeScenarioTargetState(checkpoint);
+    if (checkpoint.scenario || (typeof checkpoint.target === 'number' && !Number.isSafeInteger(checkpoint.target)))
+      checkpoint.target = authoritativeTargetForState(checkpoint);
     normalizeBoardScores(checkpoint);
     checkpoint.infernoProgress ??= structuredClone(next.infernoProgress);
     checkpoint.infernoEvaluation ??= null;
@@ -481,8 +499,8 @@ export function normalizeGameState(state: GameState): GameState {
     normalizeSpecialRuntime(checkpoint);
     normalizeInfernoRewards(checkpoint, next.roundCheckpoint.diceInventory);
     if (checkpoint.specialOfferEffects.silence && checkpoint.bossSchedule[checkpoint.round])
-      checkpoint.target = scenarioTargetOverride(checkpoint.scenario, checkpoint.round)
-        ?? targetForRound(checkpoint.round + (checkpoint.goalProgressionOffset ?? next.goalProgressionOffset));
+      checkpoint.target = getEncounterGoalBreakdown(checkpoint.round, checkpoint.bossSchedule[checkpoint.round] ?? null, true,
+        () => null, startingTargetForScenario(checkpoint.scenario)).finalGoal;
     normalizeChapterLifecycle(checkpoint);
     if (checkpoint.shop) normalizeShop(checkpoint.shop, checkpoint);
     recalculateMaxCharge(checkpoint);
@@ -1017,7 +1035,7 @@ export function newRun(seed: string, random?: RandomSource, options?: NewRunOpti
   const diceInventory = createDiceInventory();
   const state: GameState = {
     phase: 'round', runMode: options?.runMode ?? 'normal', scenario: null,
-    seed, rngState: hashSeed(seed), round: 1, goalProgressionOffset: 0, target: BigInt(CONFIG.baseTarget),
+    seed, rngState: hashSeed(seed), round: 1, target: BigInt(CONFIG.baseTarget),
     score: 0n, gold: CONFIG.startingGold, temper: 0, forgeUnlocked: false,
     roundTemper: { overkill: 0, boardRefresh: 0, miniBoss: 0, boss: 0 },
     lives: CONFIG.maxLives, engulfmentLevel: 0, infernoMultiplier: 1n, nextShopVisitId: 1,

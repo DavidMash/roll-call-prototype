@@ -4,8 +4,7 @@ import { HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS, initialHandLevels } from './h
 import { rosterTuple, storageTuple, STORAGE_SLOT_COUNT } from './inventory';
 import { applyStructuralInfernoReward, infernoRewardEligible, INFERNO_REWARD_OFFERS } from './infernoRewards';
 import { createDieEffect, SPECIAL_DICE } from './specialDice';
-import { targetForRound } from './goals';
-import type { DiceInventory, Flame, GameState, HandId, HandLevels, InfernoRewardOfferId, ScenarioRunState, SpecialDieType } from './types';
+import type { DiceInventory, Flame, GameState, HandId, HandLevels, InfernoRewardOfferId, SpecialDieType } from './types';
 
 export type ScenarioId = 'scared-straight' | 'short-circuit' | 'popcorn' | 'money-bags'
   | 'extra-die' | 'house-rules';
@@ -27,11 +26,8 @@ export interface ScenarioDefinition {
   version: number;
   name: string;
   tagline: string;
-  startingGoal: bigint;
-  /** Explicit Scenario-only early targets; omitted Rounds use the normal progression. */
-  targetOverrides?: Readonly<Record<number, bigint>>;
-  /** Existing canonical Goal-track anchor; the fixed opening Goal overrides this track on Scenario Round 1. */
-  goalProgressionRound: number;
+  /** Chapter 1 base for the shared authoritative Round-target calculation. */
+  startingTarget: bigint;
   startingGold: number;
   startingTemper: number;
   startingLives: number;
@@ -54,7 +50,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   {
     id: 'scared-straight', version: 2, name: 'Scared Straight',
     tagline: 'Build a straight-focused engine and prove it can survive all the way to Engulfment.',
-    startingGoal: 6_000n, goalProgressionRound: 17, startingGold: 10, startingTemper: 0, startingLives: 3,
+    startingTarget: 6_000n, startingGold: 10, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'tank', level: 3 }, { key: 'clockwork', level: 1 }]),
     flames: [{ key: 'straightShooter', investedGold: 40 }, { key: 'oneShort', investedGold: 40 },
       { key: 'hailMary', investedGold: 40 }],
@@ -64,7 +60,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   {
     id: 'short-circuit', version: 1, name: 'Short Circuit',
     tagline: 'Turn precision and Charge into an engine powerful enough to Engulf.',
-    startingGoal: 6_000n, goalProgressionRound: 17, startingGold: 10, startingTemper: 0, startingLives: 3,
+    startingTarget: 6_000n, startingGold: 10, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'magnetic', level: 1 }]),
     flames: [{ key: 'fluxCapacitor', investedGold: 40 }, { key: 'dareDevil', investedGold: 40 }],
     handTraining: { all: 4, overrides: { fiveKind: 9 } },
@@ -73,7 +69,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   {
     id: 'popcorn', version: 1, name: 'Popcorn',
     tagline: 'Ride a chaotic chain of jumping dice and rerolls all the way to Engulfment.',
-    startingGoal: 9_000n, goalProgressionRound: 19, startingGold: 5, startingTemper: 0, startingLives: 3,
+    startingTarget: 9_000n, startingGold: 5, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'jumpingBean', level: 5 }, { key: 'chameleon', level: 1 }, { key: 'weighted', level: 1 }]),
     flames: [{ key: 'minigun', investedGold: 40 }, { key: 'hailMary', investedGold: 40 }],
     handTraining: { upper: 6, lower: 4 },
@@ -82,7 +78,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   {
     id: 'money-bags', version: 3, name: 'Money Bags',
     tagline: 'Make money, spend money, and turn an economy engine into real scoring power.',
-    startingGoal: 4_000n, goalProgressionRound: 15, startingGold: 15, startingTemper: 0, startingLives: 3,
+    startingTarget: 4_000n, startingGold: 15, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'golden', level: 1 }, { key: 'jackpot', level: 1 }, { key: 'furnace', level: 3 }]),
     flames: [{ key: 'bribery', investedGold: 40 }, { key: 'fatCat', investedGold: 40 }],
     handTraining: { upper: 4, lower: 5 },
@@ -90,8 +86,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   {
     id: 'extra-die', version: 3, name: 'Extra Die!',
     tagline: 'Start with six Basic dice and new six-die Hands. Build from scratch and prove the expanded roster can reach Engulfment.',
-    startingGoal: 2_000n,
-    goalProgressionRound: 17, startingGold: 0, startingTemper: 0, startingLives: 3,
+    startingTarget: 2_000n, startingGold: 0, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(6, [{ key: 'basic', level: 1 }]),
     flames: [],
     startingInfernoRewards: ['expandedRoster', 'handThreePair', 'handWideStraight'],
@@ -101,8 +96,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   {
     id: 'house-rules', version: 3, name: 'House Rules',
     tagline: 'Start with a normal Basic roster but an expanded scorecard. Use the extra scoring options to build toward Engulfment.',
-    startingGoal: 2_000n,
-    goalProgressionRound: 17, startingGold: 0, startingTemper: 0, startingLives: 3,
+    startingTarget: 2_000n, startingGold: 0, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'basic', level: 1 }]),
     flames: [],
     startingInfernoRewards: ['handOdds', 'handEvens', 'handChance', 'handMiniStraight', 'handOddStraight', 'handEvenStraight'],
@@ -142,23 +136,11 @@ export function scenarioRosterCapacity(definition: ScenarioDefinition): number {
   return 5;
 }
 
-export function canonicalRoundForScenarioGoal(goal: bigint, limit = 300): number | null {
-  for (let round = 1; round <= limit; round++) if (targetForRound(round) === goal) return round;
-  return null;
-}
-
-export function scenarioTargetOverride(scenario: ScenarioRunState | null | undefined, round: number): bigint | undefined {
-  return scenario?.targetOverrides?.[round] ?? (round === 1 ? scenario?.startingGoal : undefined);
-}
-
 export function applyScenarioStart(state: GameState, definition: ScenarioDefinition): void {
   state.runMode = 'scenario';
   state.scenario = { id: definition.id, version: definition.version, name: definition.name,
-    startingGoal: definition.startingGoal,
-    targetOverrides: Object.fromEntries(Object.entries(definition.targetOverrides ?? { 1: definition.startingGoal })
-      .map(([round, target]) => [Number(round), target])),
+    startingTarget: definition.startingTarget,
     completionPending: false, completionAcknowledged: false };
-  state.goalProgressionOffset = definition.goalProgressionRound - 1;
   state.gold = definition.startingGold;
   state.temper = definition.startingTemper;
   state.forgeUnlocked = definition.startingTemper > 0;
@@ -189,15 +171,7 @@ export function applyScenarioStart(state: GameState, definition: ScenarioDefinit
 export function validateScenarioDefinition(definition: ScenarioDefinition): string[] {
   const errors: string[] = [];
   if (!definition.id || !Number.isSafeInteger(definition.version) || definition.version < 1) errors.push('Scenario identity is invalid.');
-  if (definition.startingGoal <= 0n) errors.push('Starting Goal must be positive.');
-  for (const [round, target] of Object.entries(definition.targetOverrides ?? {})) {
-    if (!Number.isSafeInteger(Number(round)) || Number(round) < 1 || target <= 0n)
-      errors.push('Scenario target overrides require positive integer Rounds and positive targets.');
-  }
-  if (definition.targetOverrides?.[1] !== undefined && definition.targetOverrides[1] !== definition.startingGoal)
-    errors.push('Round 1 target override must match the displayed Starting Goal.');
-  if (!Number.isSafeInteger(definition.goalProgressionRound) || definition.goalProgressionRound < 1)
-    errors.push('Goal progression Round must be a positive safe integer.');
+  if (definition.startingTarget <= 0n) errors.push('Starting Target must be positive.');
   const rosterCapacity = scenarioRosterCapacity(definition);
   if (definition.roster.length < 1 || definition.roster.length > rosterCapacity)
     errors.push(`Roster must contain 1-${rosterCapacity} dice.`);

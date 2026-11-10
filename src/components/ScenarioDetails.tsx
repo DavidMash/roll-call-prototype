@@ -60,7 +60,7 @@ export function ScenarioDetails({ scenario, completed, onBack, onStart }: {
       </Paper>
       <Paper withBorder p="md"><Title order={3}>Starting Conditions</Title>
         <SimpleGrid cols={2} spacing="xs" mt="sm" className="scenario-condition-grid">
-          <div><small>GOAL</small><strong>{formatExactScore(scenario.startingGoal)}</strong></div>
+          <div><small>GOAL</small><strong>{formatExactScore(scenario.startingTarget)}</strong></div>
           <div><small>GOLD</small><strong><CurrencyAmount currency="gold" value={scenario.startingGold} /></strong></div>
           <div><small>TEMPER</small><strong><CurrencyAmount currency="temper" value={scenario.startingTemper} /></strong></div>
           <div><small>LIVES</small><strong>{scenario.startingLives}</strong></div>

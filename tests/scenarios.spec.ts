@@ -37,6 +37,9 @@ test.describe('Scenarios mode', () => {
 
     await page.getByRole('button', { name: 'Start Extra Die!' }).click();
     await expect(page.getByTestId('stat-round')).toHaveAttribute('aria-label', 'Scenario Round 1');
+    await expect(page.getByTestId('current-round-target')).toHaveText('TARGET2,000');
+    await expect(page.getByTestId('round-goal-progress'))
+      .toHaveAttribute('aria-valuetext', /2,000 points toward the Goal/);
     await expect(page.getByTestId('dice-dock').locator('.dice-row')).toHaveAttribute('data-dice-count', '6');
     await expect(page.getByTestId('stat-gold')).toHaveAttribute('aria-label', 'Gold 0');
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
@@ -117,6 +120,9 @@ test.describe('Scenarios mode', () => {
     await expect(page.getByTestId('die-details-modal')).toContainText('Basic');
     await page.getByTestId('die-details-modal').getByRole('button', { name: 'Close', exact: true }).click();
     await page.getByRole('button', { name: 'Start House Rules' }).click();
+    await expect(page.getByTestId('current-round-target')).toHaveText('TARGET2,000');
+    await expect(page.getByTestId('round-goal-progress'))
+      .toHaveAttribute('aria-valuetext', /2,000 points toward the Goal/);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByTestId('scorecard-row-odds')).toBeVisible();
     await expect(page.getByTestId('dice-dock').locator('.dice-row')).toHaveAttribute('data-dice-count', '5');

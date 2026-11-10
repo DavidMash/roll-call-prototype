@@ -66,9 +66,8 @@ export interface ScenarioRunState {
   id: string;
   version: number;
   name: string;
-  startingGoal?: ExactScore;
-  /** Scenario-local explicit targets. Missing Rounds use the normal Goal progression. */
-  targetOverrides?: Record<number, ExactScore>;
+  /** Authoritative Chapter 1 base used by the shared normal target calculation. */
+  startingTarget: ExactScore;
   completionPending: boolean;
   completionAcknowledged: boolean;
 }
@@ -647,8 +646,6 @@ export interface Board {
   runMode: RunMode;
   scenario: ScenarioRunState | null;
   round: number;
-  /** Canonical Goal-track offset. Scenario Round N uses normal Goal Round N + this value. */
-  goalProgressionOffset: number;
   target: ExactScore;
   score: ExactScore;
   gold: number;

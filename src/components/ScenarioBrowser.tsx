@@ -28,7 +28,7 @@ function ScenarioCard({ scenario, completed, onOpen }: { scenario: ScenarioDefin
         {!scenario.flames.length && !scenario.unavailableStartingFlames?.length && <Text size="xs" c="dimmed">No starting Flames</Text>}
       </Group>
       <Group gap="md" mt="auto" className="scenario-card-stats">
-        <Text size="sm"><strong>GOAL</strong> {formatExactScore(scenario.startingGoal)}</Text>
+        <Text size="sm"><strong>GOAL</strong> {formatExactScore(scenario.startingTarget)}</Text>
         <Text size="sm"><strong><CurrencyAmount currency="gold" value={scenario.startingGold} /></strong></Text>
         <Text size="sm"><strong>{formatPlayerNumber(scenario.roster.length)}</strong> {scenario.roster.length === 1 ? 'DIE' : 'DICE'}</Text>
       </Group>

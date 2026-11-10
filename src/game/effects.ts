@@ -22,7 +22,7 @@ import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie, currentlyPlayableManualHands, handIsPhysicallyAttainable,
   isBigBossRound, isCursedDie, isMiniBossType, requiredEncounterDieIds, scorecardCycleRelevantHands, unavailableEncounterHands, wardenUnlockCosts,
   wouldCompleteScorecardCycle } from './bosses';
-import { getEncounterGoalBreakdown } from './goals';
+import { getEncounterGoalBreakdown, startingTargetForScenario } from './goals';
 import { encounterNode, flameNodeAfter, postBossShopNodeAfter, shopNodeBefore, specialOfferNodeAfter, timeTravelDestinationRound } from './progression';
 import { formatExactDecimal, formatExactScore, formatPlayerNumber } from './copy';
 import { chapterEncounterRounds, chapterNumberForRound, chapterPosition, ensureChapterPlan } from './chapters';
@@ -59,7 +59,6 @@ import {
 } from './infernoRewards';
 import { resolveManualRerollCost } from './manualRerolls';
 import { eligibleFetchTargets, fetchTargetIsEligible, type FetchRetargetReason } from './fetchTarget';
-import { scenarioTargetOverride } from './scenarios';
 
 type RollTrigger = { dieId: number; face: Face; kind: 'jumpingBean'; rerollEventId: string; selectedNumber: Exclude<Rank, 7> };
 type CurtainCallContext = { dieId: number; multiplier: number; manualRerollEventId: string };
@@ -2427,22 +2426,17 @@ export class Resolver {
       ?? (this.state.round > 60 ? bossTypeForRound(this.state.seed, this.state.round) : null);
     if (bossType) this.state.bossSchedule[this.state.round] = bossType;
     const bossSilenced = !!bossType && this.state.specialOfferEffects.silence;
-    const goalRound = this.state.round + this.state.goalProgressionOffset;
-    const bossForGoalRound = (candidateGoalRound: number) => {
-      const scenarioRound = candidateGoalRound - this.state.goalProgressionOffset;
-      return this.state.bossSchedule[scenarioRound]
-        ?? (scenarioRound > 60 ? bossTypeForRound(this.state.seed, scenarioRound) : null);
+    const bossForGoalRound = (candidateRound: number) => {
+      return this.state.bossSchedule[candidateRound]
+        ?? (candidateRound > 60 ? bossTypeForRound(this.state.seed, candidateRound) : null);
     };
     const targetBreakdown = getEncounterGoalBreakdown(
-      goalRound, bossType ?? null, bossSilenced, bossForGoalRound,
+      this.state.round, bossType ?? null, bossSilenced, bossForGoalRound,
+      startingTargetForScenario(this.state.scenario),
     );
-    const scenarioRoundTarget = this.state.runMode === 'scenario'
-      ? scenarioTargetOverride(this.state.scenario, this.state.round) : undefined;
     const { chapter: _targetChapter, localRound: _targetLocalRound, ...computedHistoryTargetBreakdown } = targetBreakdown;
-    const historyTargetBreakdown = scenarioRoundTarget === undefined ? computedHistoryTargetBreakdown
-      : { ...computedHistoryTargetBreakdown, finalGoal: scenarioRoundTarget };
     const { chapterNumber: scenarioChapter, chapterRound: scenarioChapterRound } = chapterPosition(this.state.round);
-    this.state.target = scenarioRoundTarget ?? targetBreakdown.finalGoal;
+    this.state.target = targetBreakdown.finalGoal;
     this.state.boss = bossType ? createBossRuntime(this.state.seed, this.state.round, bossType, {
       handPlayCounts: this.state.handPlayCounts,
       playerDieIds: rosterDice(this.state).map(die => die.id),
@@ -2481,7 +2475,7 @@ export class Resolver {
       manualRerollsRemainingAtClear: null, manualRerollActions: 0, deadBoardRescues: 0, scoreByHand: {}, effectScore: 0n,
       goldBefore: this.state.gold, goldBySourceBefore: structuredClone(this.state.stats.goldBySource), payout: null });
     const v2RoundStarted = this.emitV2({ kind: 'round_attempt_started', chapter: scenarioChapter,
-      chapterRound: scenarioChapterRound, retry, target: historyTargetBreakdown,
+      chapterRound: scenarioChapterRound, retry, target: computedHistoryTargetBreakdown,
       boss: this.state.boss?.type ?? null, lives: this.state.lives,
       dice: activeEncounterDice(this.state).map(die => this.historyDie(die.id)),
       flames: structuredClone(flameInstances(this.state)) });

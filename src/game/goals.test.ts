@@ -149,6 +149,22 @@ describe('Boss Goal modifiers', () => {
     expect(getRoundGoalBreakdown(6, 'quickdraw').postBossRawGoal).toBe('133.33333333333333333333333333333333333333333333333333333333333333333333333333333');
   });
 
+  it('uses a supplied starting Target without changing the normal curve machinery', () => {
+    const startingTarget = 2_000n;
+    expect(getChapterBaseGoal(1, startingTarget)).toBe('2000');
+    expect(Array.from({ length: 6 }, (_, index) => getRawRoundGoal(index + 1, startingTarget)))
+      .toEqual(['2000', '3000', '4000', '5000', '6000', '8000']);
+    expect(Number(getChapterBaseGoal(2, startingTarget)) / Number(startingTarget))
+      .toBeCloseTo(CONFIG.targetGrowth ** 6, 12);
+    expect(getRoundGoalBreakdown(6, 'marathon', () => null, startingTarget)).toMatchObject({
+      chapterBase: '2000', localMultiplier: 4, neutralRawGoal: '8000',
+      postBossRawGoal: '24000', finalGoal: 24_000n,
+    });
+    expect(getRoundGoalBreakdown(3, 'tightrope', () => null, startingTarget)).toMatchObject({
+      neutralRawGoal: '4000', postBossRawGoal: '2000', finalGoal: 2_000n,
+    });
+  });
+
   it('routes silenced Bosses through the authoritative neutral Goal calculation', () => {
     const round = 6;
     const neutral = getRoundGoalBreakdown(round);
