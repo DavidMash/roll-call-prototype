@@ -5,7 +5,8 @@ export type GlossaryTermId =
   | 'score' | 'pips' | 'mult' | 'xMult' | 'round' | 'roundTarget' | 'upperHand'
   | 'lowerSectionHand' | 'lastPlay' | 'freePlay' | 'onCommand' | 'wild' | 'charge'
   | 'bust' | 'training' | 'life' | 'interest' | 'ember' | 'bonfire' | 'stoke'
-  | 'build' | 'targetHand' | 'weightedFace' | 'sellValue' | 'bossEffect' | 'possibleHand';
+  | 'build' | 'targetHand' | 'weightedFace' | 'sellValue' | 'bossEffect' | 'possibleHand'
+  | 'engulfment';
 
 export type EffectReference =
   | { kind: 'die'; id: SpecialDieType }

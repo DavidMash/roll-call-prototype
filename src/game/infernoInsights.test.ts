@@ -41,7 +41,7 @@ describe('factual Inferno evidence insights', () => {
   it('counts utilization in the latest six canonical clears', () => {
     const state = evidenceState([{ 1: 2 }, {}, { 1: 2 }, { 1: 2 }, {}, { 1: 2 }]);
     expect(infernoEvidenceInsights(state, [asset(1, 'momentum')]))
-      .toContain('Momentum contributed in 4 of your last 6 clears.');
+      .toContain('Momentum helped in 4 of your last 6 rounds.');
   });
 
   it('compares the previous six only for meaningful utilization changes', () => {
@@ -49,7 +49,8 @@ describe('factual Inferno evidence insights', () => {
       { 1: 2 }, { 1: 2 }, {}, {}, {}, {},
       { 1: 2 }, { 1: 2 }, { 1: 2 }, { 1: 2 }, { 1: 2 }, {},
     ]);
-    expect(infernoEvidenceInsights(increased, [asset(1, 'momentum')]).join(' ')).toContain('up from 2/6');
+    expect(infernoEvidenceInsights(increased, [asset(1, 'momentum')]).join(' '))
+      .toContain('Momentum helped in 5 of your last 6 rounds. Keep it up.');
 
     const noise = evidenceState([
       { 1: 2 }, { 1: 2 }, { 1: 2 }, {}, {}, {},
@@ -63,13 +64,13 @@ describe('factual Inferno evidence insights', () => {
       ...Array.from({ length: 6 }, () => ({ 1: 2 })),
       ...Array.from({ length: 6 }, () => ({ 1: 2.4 })),
     ]);
-    expect(infernoEvidenceInsights(quiet, [asset(1, 'momentum')]).join(' ')).not.toContain('more effective power');
+    expect(infernoEvidenceInsights(quiet, [asset(1, 'momentum')]).join(' ')).not.toContain('providing more power');
 
     const meaningful = evidenceState([
       ...Array.from({ length: 6 }, () => ({ 1: 2 })),
       ...Array.from({ length: 6 }, () => ({ 1: 3 })),
     ]);
-    expect(infernoEvidenceInsights(meaningful, [asset(1, 'momentum')]).join(' ')).toContain('more effective power');
+    expect(infernoEvidenceInsights(meaningful, [asset(1, 'momentum')]).join(' ')).toContain('providing more power');
   });
 
   it('excludes rolled-back clears from the recent window', () => {
@@ -81,13 +82,13 @@ describe('factual Inferno evidence insights', () => {
       round: 6, attempt: 1, actionId: 8, timelineId: 1, reason: 'time_travel',
       fromTimelineId: 0, toTimelineId: 1, abandonedFromSeq: abandonedStart,
       abandonedThroughSeq: abandonedStart + extra.length - 1, canonicalRound: 6, canonicalAttempt: 1 });
-    expect(infernoEvidenceInsights(state, [asset(1, 'momentum')]).join(' ')).toContain('no effective-power contribution');
+    expect(infernoEvidenceInsights(state, [asset(1, 'momentum')]).join(' ')).toContain('provided no power');
   });
 
   it('falls back factually with insufficient history and is deterministic', () => {
     const state = evidenceState([]);
     const first = infernoEvidenceInsights(state, [asset(1, 'momentum')]);
-    expect(first[0]).toContain('No canonical cleared-Round');
+    expect(first).toEqual([]);
     expect(infernoEvidenceInsights(state, [asset(1, 'momentum')])).toEqual(first);
     expect(first.length).toBeLessThanOrEqual(3);
   });

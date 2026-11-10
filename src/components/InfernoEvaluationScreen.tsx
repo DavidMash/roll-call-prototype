@@ -5,6 +5,8 @@ import { formatExactScore, formatPlayerNumber } from '../game/copy';
 import { FLAMES } from '../game/flames';
 import type { Action, Board, EngulfmentAssetRef } from '../game/types';
 import { CurrencyAmount } from './CurrencyAmount';
+import { RichDescription } from './RichDescription';
+import { term, text } from '../game/richText';
 
 export const INFERNO_RESULT_REVEAL_PAUSE_MS = 180;
 
@@ -45,7 +47,14 @@ export function InfernoEvaluationScreen({ board, submit }: {
 
   if (!evaluation.success) return <Stack gap="md" align="center" justify="center"
     className="inferno-evaluation-screen inferno-failure" data-testid="inferno-feedback">
-    <Title order={2}>THE INFERNO WAITS</Title>
+    <Title order={2}>THE INFERNO IS WATCHING</Title>
+    <RichDescription size="md" className="inferno-explanation" copy={[
+      text('It measures how much power you get from your Flames. Reach at least ×'),
+      text(formatPlayerNumber(evaluation.threshold)),
+      text(' total Flame power and you will be offered '),
+      term('engulfment'),
+      text('.'),
+    ]} />
     <Stack gap={4} align="center">{(evaluation.feedbackMessages?.length ? evaluation.feedbackMessages
       : evaluation.feedbackMessage ? [evaluation.feedbackMessage] : []).map(message =>
       <Text key={message} fw={850} ta="center">{message}</Text>)}</Stack>
@@ -60,7 +69,7 @@ export function InfernoEvaluationScreen({ board, submit }: {
     </div>
     <Paper className="inferno-ready-consequences" p="md" withBorder>
       <Text size="xs" fw={900} tt="uppercase" c="red">Select Flames to snuff</Text>
-      <Text size="xs" c="dimmed" mb="sm">Individual recent power is diagnostic. Selected power is recalculated jointly and is not the sum of these values.</Text>
+      <Text size="xs" c="dimmed" mb="sm">Individual power is diagnostic. Selected power is recalculated jointly and is not the sum of these values.</Text>
       <div className="offered-flames" aria-label="Selectable Flames">{evaluation.flames.map(item => {
         const asset = item.asset;
         const selected = evaluation.selectedFlameInstanceIds.includes(asset.instanceId);
@@ -69,7 +78,7 @@ export function InfernoEvaluationScreen({ board, submit }: {
           aria-pressed={selected} onClick={() => submit({ type: 'TOGGLE_ENGULFMENT_FLAME', flameInstanceId: asset.instanceId })}>
           <Text fw={900}>{selected ? '✓ ' : ''}{FLAMES[asset.flame].name}</Text>
           <Text size="xs" c="dimmed">{offeredFlameStatus(board, asset)}</Text>
-          <Text size="xs" fw={850} c="orange">Individual recent power ×{formatPlayerNumber(item.hiddenStrength)}</Text>
+          <Text size="xs" fw={850} c="orange">Individual power ×{formatPlayerNumber(item.hiddenStrength)}</Text>
         </UnstyledButton>;
       })}</div>
       <Stack gap={3} mt="md">

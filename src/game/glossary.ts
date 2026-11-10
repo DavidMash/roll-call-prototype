@@ -51,6 +51,7 @@ export const GLOSSARY: Record<GlossaryTermId, GlossaryDefinition> = {
   possibleHand: { label: 'Possible Hand', definition: [text('A Possible Hand is any '), term('hand'),
     text(' that is not currently marked IMPOSSIBLE on the scorecard. It may still be unavailable because it was used, is on cooldown, or does not match the '),
     term('exposedFace', 'Exposed Faces'), text('.')] },
+  engulfment: { label: 'Engulfment', definition: [text('Engulfment provides a permanent multiplier that applies to every Hand. When your current Flame power reaches ×15, you can choose Flames to sacrifice and trigger Engulfment.')] },
 };
 
 export const GLOSSARY_TERM_IDS = Object.keys(GLOSSARY) as GlossaryTermId[];

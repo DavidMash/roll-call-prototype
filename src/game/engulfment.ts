@@ -130,7 +130,7 @@ export function infernoEvidenceInsights(
   state: Pick<GameState, 'historyV2' | 'historyV2Coverage'>,
   assets: readonly EngulfmentAssetRef[],
 ): string[] {
-  if (!assets.length) return ['No Flames remain after this Engulfment.'];
+  if (!assets.length) return ['You sacrificed all your Flames.'];
   const canonical = canonicalRunHistoryV2Events(state.historyV2, state.historyV2Coverage);
   const clears = canonical.filter((event): event is RoundAttemptFinishedEvent =>
     event.kind === 'round_attempt_finished' && event.outcome === 'cleared');
@@ -165,12 +165,12 @@ export function infernoEvidenceInsights(
       const utilizationDelta = current.utilized - before.utilized;
       if (Math.abs(utilizationDelta) >= INFERNO_INSIGHT_UTILIZATION_DELTA) insights.push({
         priority: 1, magnitude: Math.abs(utilizationDelta), instanceId: current.asset.instanceId,
-        text: `${name} was used in ${current.utilized}/${current.clears} recent clears, ${utilizationDelta > 0 ? 'up from' : 'down from'} ${before.utilized}/${before.clears}.`,
+        text: `${name} helped in ${current.utilized} of your last ${current.clears} rounds. ${utilizationDelta > 0 ? 'Keep it up.' : 'Use it more often.'}`,
       });
       const relativePowerDelta = (current.power - before.power) / Math.max(1, before.power);
       if (Math.abs(relativePowerDelta) >= INFERNO_INSIGHT_POWER_RELATIVE_DELTA) insights.push({
         priority: 2, magnitude: Math.abs(relativePowerDelta), instanceId: current.asset.instanceId,
-        text: `${name} contributed ${relativePowerDelta > 0 ? 'more' : 'less'} effective power than in the previous six clears.`,
+        text: `${name} is providing ${relativePowerDelta > 0 ? 'more' : 'less'} power. ${relativePowerDelta > 0 ? 'Keep it up.' : 'Try to get more from it.'}`,
       });
     }
   }
@@ -178,10 +178,10 @@ export function infernoEvidenceInsights(
     || right.utilized - left.utilized || left.asset.instanceId - right.asset.instanceId)[0];
   if (strongest && strongest.power > 1 + 1e-9) insights.push({ priority: 0, magnitude: strongest.power,
     instanceId: strongest.asset.instanceId,
-    text: `${FLAMES[strongest.asset.flame].name} is your strongest remaining Flame at Recent Power ×${formatPlayerNumber(strongest.power)}.` });
+    text: `${FLAMES[strongest.asset.flame].name} is your strongest Flame at ×${formatPlayerNumber(strongest.power)} power.` });
   for (const current of recent.filter(item => item.utilized > 0)) insights.push({
     priority: 3, magnitude: current.utilized, instanceId: current.asset.instanceId,
-    text: `${FLAMES[current.asset.flame].name} contributed in ${current.utilized} of your last ${current.clears} clears.`,
+    text: `${FLAMES[current.asset.flame].name} helped in ${current.utilized} of your last ${current.clears} rounds.`,
   });
   const selected: string[] = [];
   const perFlame = new Map<number, number>();
@@ -192,11 +192,8 @@ export function infernoEvidenceInsights(
     perFlame.set(insight.instanceId, (perFlame.get(insight.instanceId) ?? 0) + 1);
     if (selected.length === INFERNO_INSIGHT_LIMIT) break;
   }
-  if (!selected.length) selected.push(latestClears.length
-    ? `Your ${assets.length} remaining Flame${assets.length === 1 ? '' : 's'} recorded no effective-power contribution in the last ${latestClears.length} canonical clears.`
-    : `No canonical cleared-Round Flame evidence is available yet for your ${assets.length} remaining Flame${assets.length === 1 ? '' : 's'}.`);
-  if (selected.length === 1 && latestClears.length > 0 && latestClears.length < ENGULFMENT_EVIDENCE_ROUNDS)
-    selected.push(`Recent evidence currently covers ${latestClears.length} canonical clear${latestClears.length === 1 ? '' : 's'}.`);
+  if (!selected.length && latestClears.length) selected.push(
+    `Your Flames provided no power in the last ${latestClears.length} round${latestClears.length === 1 ? '' : 's'}.`);
   return selected.slice(0, INFERNO_INSIGHT_LIMIT);
 }
 

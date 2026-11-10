@@ -60,6 +60,9 @@ for (const speed of ['normal', 'fast', 'instant'] as const) {
     await page.clock.runFor(Math.ceil(duration / 2) + REVEAL_PAUSE_MS);
     const feedback = page.getByTestId('inferno-feedback');
     await expect(feedback).toBeVisible();
+    await expect(feedback.getByRole('heading', { name: 'THE INFERNO IS WATCHING', exact: true })).toBeVisible();
+    await expect(feedback).toContainText('It measures how much power you get from your Flames.');
+    await expect(feedback).toContainText('Reach at least ×15 total Flame power');
     await expect(feedback.getByRole('button', { name: 'CONTINUE', exact: true })).toBeVisible();
     await page.clock.runFor(60_000);
     await expect(feedback).toBeVisible();
@@ -89,7 +92,7 @@ for (const speed of ['normal', 'fast', 'instant'] as const) {
     await expect(ready).toContainText('Earned Inferno factor ×25 · Cumulative ×1 → ×25');
     await expect(ready.locator('[data-testid^="offered-flame-"]')).toContainText('Vineyard');
     await expect(ready.getByText(/EMBER · SLOT 1 · 0G \/ 100G/)).toBeVisible();
-    await expect(ready.getByText('Individual recent power ×1', { exact: true })).toBeVisible();
+    await expect(ready.getByText('Individual power ×1', { exact: true })).toBeVisible();
     await expect(ready).toContainText('Successful Engulfment: +25T');
     await expect(ready.getByRole('button', { name: 'ENGULF SELECTED FLAMES', exact: true })).toBeVisible();
     await expect(ready.getByRole('button', { name: 'NOT YET', exact: true })).toBeVisible();
@@ -105,6 +108,23 @@ for (const speed of ['normal', 'fast', 'instant'] as const) {
     expect(deferred.infernoProgress.previousReadiness).toBe(1);
   });
 }
+
+test('failed Inferno explains Engulfment from the result screen', async ({ page }) => {
+  const state = infernoState('inferno-engulfment-explanation', false);
+  await installRunState(page, state, 'instant');
+  const now = new Date('2026-10-14T12:00:00Z');
+  await page.clock.install({ time: now });
+  await page.clock.pauseAt(now);
+  await enterRun(page);
+  await page.clock.runFor(infernoEvaluationDuration(state.infernoEvaluation!.effectiveValue) + REVEAL_PAUSE_MS);
+
+  await page.getByRole('button', { name: 'Explain Engulfment', exact: true }).click();
+  await page.clock.runFor(500);
+  const definition = page.getByRole('dialog', { name: 'Engulfment definition', exact: true });
+  await expect(definition).toBeVisible();
+  await expect(definition).toContainText('Engulfment provides a permanent multiplier that applies to every Hand.');
+  await expect(definition).toContainText('When your current Flame power reaches ×15, you can choose Flames to sacrifice and trigger Engulfment.');
+});
 
 test('ENGULF NOW resolves the exact displayed offering and resets the persistent meter', async ({ page }) => {
   const state = infernoState('inferno-engulf-now', true);
