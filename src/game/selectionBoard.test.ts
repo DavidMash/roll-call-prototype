@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { createCursedDie } from './bosses';
 import { newRun } from './engine';
 import {
-  boardHandAvailable, emptySelection, legalHandCombinations, selectBoardHand, toggleBoardDie,
+  boardHandAvailable, emptySelection, hasLegalCombination, legalHandCombinations, selectBoardHand, toggleBoardDie,
 } from './selection';
 import type { Selection } from './selection';
 import type { GameState, Rank } from './types';
 import { createDieEffect, resetDieRoundState } from './specialDice';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
+import { encounterHandIds } from './hands';
 
 function game(values: Rank[]): GameState {
   const state = newRun('board-selection', { next: () => 0 }).state;
@@ -18,6 +19,48 @@ function game(values: Rank[]): GameState {
 }
 
 describe('board-based hand availability and scorecard cycling', () => {
+  it('answers boolean availability without score previews or score-based sorting', () => {
+    const state = game([4, 4, 4, 4, 4]);
+    Object.defineProperty(state, 'score', { configurable: true,
+      get: () => { throw new Error('canonical preview reached'); } });
+    expect(boardHandAvailable(state, 'pair')).toBe(true);
+    expect(hasLegalCombination(state, 'fiveKind')).toBe(true);
+    expect(() => legalHandCombinations(state, 'pair')).toThrow('canonical preview reached');
+  });
+
+  it('keeps Pair and Five-of-a-Kind boolean qualification exact', () => {
+    const pair = game([2, 2, 3, 4, 5]);
+    expect(boardHandAvailable(pair, 'pair')).toBe(true);
+    expect(boardHandAvailable(pair, 'threeKind')).toBe(false);
+    expect(boardHandAvailable(pair, 'fiveKind')).toBe(false);
+    expect(hasLegalCombination(pair, 'pair', [0, 1])).toBe(true);
+    expect(hasLegalCombination(pair, 'pair', [0, 1, 2])).toBe(false);
+
+    const five = game([6, 6, 6, 6, 6]);
+    expect(boardHandAvailable(five, 'pair')).toBe(true);
+    expect(boardHandAvailable(five, 'threeKind')).toBe(true);
+    expect(boardHandAvailable(five, 'fourKind')).toBe(true);
+    expect(boardHandAvailable(five, 'fiveKind')).toBe(true);
+    expect(hasLegalCombination(five, 'fiveKind', [0, 1, 2, 3, 4])).toBe(true);
+  });
+
+  it('matches full combination availability across representative hand patterns', () => {
+    const patterns: Rank[][] = [
+      [2, 2, 3, 4, 5],
+      [3, 3, 3, 4, 4],
+      [4, 4, 4, 4, 2],
+      [5, 5, 5, 5, 5],
+      [1, 2, 3, 4, 6],
+    ];
+    for (const values of patterns) {
+      const state = game(values);
+      for (const hand of encounterHandIds(state)) {
+        expect(boardHandAvailable(state, hand), `${values.join(',')} / ${hand}`)
+          .toBe(legalHandCombinations(state, hand).length > 0);
+      }
+    }
+  });
+
   it('keeps every board-playable hand available while another combination is selected', () => {
     const state = game([1, 2, 3, 4, 4]);
     const straight = selectBoardHand(state, emptySelection(), 'smallStraight');
@@ -103,6 +146,9 @@ describe('encounter-aware combinations', () => {
     state.dice.push(cursed);
     state.boss = { type: 'hexer', cursedDieId: cursed.id };
     expect(legalHandCombinations(state, 'pair').every(ids => ids.includes(cursed.id))).toBe(true);
+    expect(boardHandAvailable(state, 'pair')).toBe(true);
+    expect(hasLegalCombination(state, 'pair', [0, 1])).toBe(false);
+    expect(hasLegalCombination(state, 'pair', [0, cursed.id])).toBe(true);
   });
 
   it('excludes Warden-locked dice and preserves Neglected, Marathon, and Quickdraw restrictions', () => {
@@ -110,10 +156,13 @@ describe('encounter-aware combinations', () => {
     warden.boss = { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0, 1], startingDieId: 0, nextUnlockTarget: null,
       unlockCosts: [], unlockTargets: [], pendingReinforcements: 0 };
     expect(legalHandCombinations(warden, 'pair')).toEqual([[0, 1]]);
+    expect(boardHandAvailable(warden, 'pair')).toBe(true);
+    expect(boardHandAvailable(warden, 'threeKind')).toBe(false);
 
     const neglected = game([4, 4, 1, 2, 3]);
     neglected.boss = { type: 'neglected', neglectedHands: ['pair', 'ones'], handsPlayed: 0, restored: false };
     expect(boardHandAvailable(neglected, 'pair')).toBe(false);
+    expect(hasLegalCombination(neglected, 'pair', [0, 1])).toBe(false);
 
     const marathon = game([4, 4, 1, 2, 3]);
     marathon.boss = { type: 'marathon', cooldowns: { pair: 2 } };

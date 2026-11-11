@@ -1,13 +1,16 @@
 import { Badge, Button, Text, Tooltip } from '@mantine/core';
+import { useMemo, useRef } from 'react';
 import { encounterHandIds, handIsStructurallyImpossible, handStats, HANDS, relativeHandStrengthTiers, upperHand } from '../game/hands';
 import { doubleOrNothingEligibleHands, flameByType } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
 import { EMPTY_TEXT, formatExactScore, formatPlayerNumber, formatScoreEquation } from '../game/copy';
 import type { ExactScore } from '../game/scoreMath';
-import { boardHandAvailable, legalHandCombinations } from '../game/selection';
-import { activeEncounterDice } from '../game/bosses';
+import { activeEncounterDice, unavailableEncounterHands } from '../game/bosses';
 import { scorecardHandAnnotations } from '../game/scorecardAnnotations';
+import {
+  deriveScorecardAvailability, ScorecardAvailabilityPlaybackGate, type ScorecardAvailability,
+} from '../game/scorecardAvailability';
 
 const MOBILE_HAND_NAMES: Partial<Record<HandId, string>> = {
   twoPair: 'Two Pair',
@@ -34,8 +37,9 @@ function SendIcon() {
   </svg>;
 }
 
-function ScorecardSection({ title, hands, board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }: {
+function ScorecardSection({ title, hands, board, selection, availability, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }: {
   title: string; hands: HandId[]; board: Board; selection: Selection; busy: boolean; canSubmit: boolean; submitPreview: HandSubmitPreview | null;
+  availability: ScorecardAvailability;
   onSelect: (hand: HandId) => void; onSubmit: () => void; onAcceptDoubleOrNothing: () => void;
 }) {
   const annotations = scorecardHandAnnotations(board);
@@ -43,6 +47,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
   const doubleOrNothingTargets = new Set(doubleOrNothing && doubleOrNothing.investedGold > 0
     && board.scoreWagers.doubleOrNothing === null ? doubleOrNothingEligibleHands(board) : []);
   const strengthTiers = relativeHandStrengthTiers(board.handLevels, hands);
+  const currentlyUnavailable = new Set(unavailableEncounterHands(board));
   const pendulumRequested = !board.bossSilenced && board.boss?.type === 'pendulum'
     && board.boss.requestedSection === title.toLowerCase();
   return <section className={`scorecard-section${pendulumRequested ? ' pendulum-requested' : ''}`}
@@ -57,7 +62,7 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
         const neglected = !board.bossSilenced && board.boss?.type === 'neglected' && !board.boss.restored
           && board.boss.neglectedHands.includes(hand);
         const impossible = handIsStructurallyImpossible(hand, activeEncounterDice(board).length);
-        const playable = boardHandAvailable(board, hand);
+        const playable = availability.playableHands.has(hand) && !currentlyUnavailable.has(hand);
         const selected = selection.hand === hand;
         const handAnnotations = annotations[hand] ?? [];
         const targeted = handAnnotations.some(annotation => annotation.kind === 'target');
@@ -147,23 +152,36 @@ function ScorecardSection({ title, hands, board, selection, busy, canSubmit, sub
   </section>;
 }
 
-export function HandScorecard({ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }: {
+export interface HandScorecardProps {
   board: Board; selection: Selection; busy: boolean; canSubmit: boolean; submitPreview: HandSubmitPreview | null;
   onSelect: (hand: HandId) => void; onSubmit: () => void; onAcceptDoubleOrNothing: () => void;
-}) {
+  freezeAvailability?: boolean;
+}
+
+export function HandScorecardView({ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit,
+  onAcceptDoubleOrNothing, availability }: Omit<HandScorecardProps, 'freezeAvailability'> & {
+    availability: ScorecardAvailability;
+  }) {
   const activeHands = encounterHandIds(board);
   const upperHands = activeHands.filter(upperHand);
   const lowerHands = activeHands.filter(hand => !upperHand(hand));
-  const hasExactHand = activeHands.some(hand => legalHandCombinations(board, hand)
-    .some(combination => combination.length === selection.dieIds.length
-      && combination.every(id => selection.dieIds.includes(id))));
   return <div className="scorecard" data-tutorial="scorecard">
     <div className="scorecard-grid">
-      <ScorecardSection title="Upper" hands={upperHands} {...{ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }} />
-      <ScorecardSection title="Lower" hands={lowerHands} {...{ board, selection, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }} />
+      <ScorecardSection title="Upper" hands={upperHands} {...{ board, selection, availability, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }} />
+      <ScorecardSection title="Lower" hands={lowerHands} {...{ board, selection, availability, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }} />
     </div>
-    {selection.intent === 'manual' && selection.dieIds.length > 0 && !hasExactHand && <Text size="xs" c="orange" className="scorecard-hint">
+    {selection.intent === 'manual' && selection.dieIds.length > 0 && !availability.hasExactHand && <Text size="xs" c="orange" className="scorecard-hint">
       {board.boss?.type === 'hexer' ? 'This selection does not form a hand with the Cursed Die.' : 'Selected dice do not form one complete available hand.'}
     </Text>}
   </div>;
+}
+
+export function HandScorecard({ freezeAvailability = false, ...props }: HandScorecardProps) {
+  const gate = useRef(new ScorecardAvailabilityPlaybackGate());
+  const interactiveBoard = freezeAvailability ? null : props.board;
+  const selectionKey = `${props.selection.hand ?? ''}:${props.selection.intent ?? ''}:${props.selection.dieIds.join(',')}`;
+  const availability = useMemo(() => gate.current.resolve(freezeAvailability,
+    () => deriveScorecardAvailability(props.board, props.selection)),
+  [freezeAvailability, interactiveBoard, selectionKey]);
+  return <HandScorecardView {...props} availability={availability} />;
 }

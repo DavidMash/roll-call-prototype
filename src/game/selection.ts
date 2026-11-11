@@ -1,5 +1,5 @@
 import { activeEncounterDice, requiredEncounterDieIds, unavailableEncounterHands } from './bosses';
-import { encounterHandIds, handIsStructurallyImpossible, handOptions, isValidSelection, sameDice } from './hands';
+import { encounterHandIds, handIsStructurallyImpossible, handOptions, hasCombinationForHand, isValidSelection, sameDice } from './hands';
 import { canonicalPlayPreview } from './playPreview';
 import type { Board, Die, HandId } from './types';
 import { scoreCompare, type ExactScore } from './scoreMath';
@@ -56,7 +56,19 @@ export function legalHandCombinations(
   });
 }
 
-export const boardHandAvailable = (board: Board, hand: HandId) => legalHandCombinations(board, hand).length > 0;
+/** Cheap authoritative existence check. This deliberately skips combination ranking and score previews. */
+export function hasLegalCombination(board: Board, hand: HandId, exactDieIds?: readonly number[]): boolean {
+  if (board.phase !== 'round' || unavailableEncounterHands(board).includes(hand)) return false;
+  const dice = activeEncounterDice(board);
+  if (!encounterHandIds(board).includes(hand) || handIsStructurallyImpossible(hand, dice.length)) return false;
+  return hasCombinationForHand(dice, hand, {
+    requiredDieIds: requiredSelectionDieIds(board),
+    exactDieIds,
+    roundState: board.dieRoundState,
+  });
+}
+
+export const boardHandAvailable = (board: Board, hand: HandId) => hasLegalCombination(board, hand);
 
 export function normalizeBoardSelection(board: Board, selection: Selection): Selection {
   const dice = activeEncounterDice(board);

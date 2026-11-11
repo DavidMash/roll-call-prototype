@@ -206,6 +206,18 @@ function subsets<T>(items: T[], size: number): T[][] {
   return [...subsets(tail, size - 1).map(rest => [head, ...rest]), ...subsets(tail, size)];
 }
 
+function someSubset<T>(items: readonly T[], size: number, predicate: (subset: T[]) => boolean,
+  start = 0, selected: T[] = []): boolean {
+  if (selected.length === size) return predicate(selected);
+  const remaining = size - selected.length;
+  for (let index = start; index <= items.length - remaining; index++) {
+    selected.push(items[index]);
+    if (someSubset(items, size, predicate, index + 1, selected)) return true;
+    selected.pop();
+  }
+  return false;
+}
+
 type QualificationClaim = { dieId: number; effect: Exclude<QualificationEffect, 'hexerWild'>; effectInstanceId: string };
 const claimed = (claims: readonly QualificationClaim[], dieId: number, effect: QualificationEffect) =>
   claims.some(claim => claim.dieId === dieId && claim.effect === effect);
@@ -270,6 +282,59 @@ export function combinationsForHand(dice: Die[], hand: HandId, roundState?: DieR
     : Array.from({ length: Math.min(rule.size!, dice.length) }, (_, index) => subsets(dice, index + 1)).flat();
   return candidateSets.filter(set => planQualification(set, hand, set.map(die => die.id), { roundState }).legal)
     .map(set => set.map(die => die.id));
+}
+
+export interface HandCombinationExistenceOptions {
+  requiredDieIds?: readonly number[];
+  exactDieIds?: readonly number[];
+  roundState?: DieRoundState;
+}
+
+/**
+ * Tests whether one qualifying combination exists without constructing or ranking every option.
+ * Keep this predicate aligned with combinationsForHand; callers needing ordered choices must use
+ * combinationsForHand/legalHandCombinations instead.
+ */
+export function hasCombinationForHand(dice: Die[], hand: HandId,
+  options: HandCombinationExistenceOptions = {}): boolean {
+  const required = options.requiredDieIds ?? [];
+  const exact = options.exactDieIds;
+  const includesRequired = (ids: readonly number[]) => required.every(id => ids.includes(id));
+  const exactMatches = (ids: readonly number[]) => exact === undefined || sameDice([...ids], [...exact]);
+  const acceptsIds = (ids: readonly number[]) => includesRequired(ids) && exactMatches(ids);
+  const rule = HANDS[hand];
+
+  if (rule.rank) {
+    const matching = dice.filter(die => activeFace(die).rank === rule.rank).map(die => die.id);
+    if (exact) return exact.length > 0 && exact.every(id => matching.includes(id)) && acceptsIds(exact);
+    return matching.length > 0 && required.every(id => matching.includes(id));
+  }
+  if (hand === 'chance') {
+    const roster = dice.filter(die => die.owner === 'player').map(die => die.id);
+    return roster.length > 0 && acceptsIds(roster);
+  }
+  if (hand === 'odds' || hand === 'evens') {
+    const parity = hand === 'odds' ? 1 : 0;
+    const matching = dice.filter(die => activeFace(die).rank % 2 === parity).map(die => die.id);
+    return matching.length >= 3 && acceptsIds(matching);
+  }
+
+  const qualifies = (candidate: Die[]) => {
+    const ids = candidate.map(die => die.id);
+    return acceptsIds(ids) && planQualification(candidate, hand, ids, { roundState: options.roundState }).legal;
+  };
+  if (exact) {
+    const exactSet = new Set(exact);
+    const candidate = dice.filter(die => exactSet.has(die.id));
+    return candidate.length === exact.length && qualifies(candidate);
+  }
+  const fixedSize = ['miniStraight', 'smallStraight', 'largeStraight', 'xlStraight',
+    'oddStraight', 'evenStraight', 'wideStraight'].includes(hand);
+  if (fixedSize) return someSubset(dice, rule.size!, qualifies);
+  for (let size = 1; size <= Math.min(rule.size!, dice.length); size++) {
+    if (someSubset(dice, size, qualifies)) return true;
+  }
+  return false;
 }
 
 export const sameDice = (a: number[], b: number[]) => a.length === b.length && a.every(id => b.includes(id));

@@ -187,7 +187,8 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     <div className="flame-actions-entry"><FlameActions board={board} busy={roundBusy || inputBlocked || awaitingWardenChoice}
       submit={submit} onOpenChange={setFlameActionsOpen} /></div>
     <Paper className={`scorecard-panel${scorecardRefreshing ? ' is-refreshing' : ''}`} p="xs">
-      <HandScorecard board={board} selection={effectiveSelection} busy={roundBusy || awaitingWardenChoice} canSubmit={valid && !roundBusy && !awaitingWardenChoice}
+      <HandScorecard board={board} selection={effectiveSelection} busy={roundBusy || awaitingWardenChoice} freezeAvailability={roundBusy}
+        canSubmit={valid && !roundBusy && !awaitingWardenChoice}
         submitPreview={preview}
         onSelect={hand => changeSelection(selectBoardHand(board, effectiveSelection, hand, decisionMs))}
         onSubmit={submitPlay} onAcceptDoubleOrNothing={() => submit({ type: 'ACCEPT_DOUBLE_OR_NOTHING' })} />
