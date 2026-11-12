@@ -275,7 +275,7 @@ export default function App() {
       {event?.type === 'CHAPTER_STARTED' ? <ChapterSplash key={event.id} event={event} onComplete={game.continuePlayback} />
         : showingMap ? <RunMapTransition key={event!.id} seed={state.seed} event={event!} onContinue={game.continuePlayback} />
         : board.phase === 'roundSummary' && board.roundSummary ? <RoundSummaryScreen board={board} busy={busy} submit={submit} />
-        : board.phase === 'inferno' && board.infernoEvaluation ? <InfernoEvaluationScreen board={board} submit={submit} />
+        : board.phase === 'inferno' && board.infernoEvaluation ? <InfernoEvaluationScreen board={board} inventory={state.diceInventory} submit={submit} />
         : board.phase === 'infernoReward' && board.infernoRewards.pending ? <InfernoRewardScreen board={board}
           inventory={state.diceInventory} busy={busy} submit={submit} />
         : board.phase === 'scenarioComplete' && board.scenario ? <ScenarioCompleteScreen board={board}

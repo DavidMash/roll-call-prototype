@@ -1,42 +1,31 @@
 import { expect, test } from '@playwright/test';
 import { createCollectibleDie } from '../src/game/dice';
-import { createInfernoEvaluation } from '../src/game/engulfment';
 import { newRun } from '../src/game/engine';
-import { placeFlameInstance } from '../src/game/flames';
 import { INFERNO_REWARD_OFFERS } from '../src/game/infernoRewards';
 import { resetDieRoundState } from '../src/game/specialDice';
 import { syncActiveDiceProjection } from '../src/game/inventory';
 import type { GameState, HandId, InfernoRewardOfferId } from '../src/game/types';
 import { enterRun, installRunState, readRunState } from './uiHelpers';
+import { readyInfernoDeal } from './infernoFixtures';
 
 function readyInferno(seed: string): GameState {
-  const state = newRun(seed).state;
-  placeFlameInstance(state, 'vineyard');
-  const evaluation = createInfernoEvaluation(state)!;
-  evaluation.success = true; evaluation.effectiveValue = 25; evaluation.readiness = 1;
-  evaluation.suspendAfterContinue = false; evaluation.currentCollectionTheoreticallySufficient = true;
-  evaluation.feedbackMessage = null; evaluation.feedbackMessageId = null;
-  evaluation.flamesSnuffed = [structuredClone(evaluation.flames[0].asset)]; evaluation.flamesPreserved = [];
-  evaluation.selectedFlameInstanceIds = [evaluation.flames[0].asset.instanceId];
-  evaluation.selectedEffectiveValue = 25; evaluation.earnedInfernoFactor = 25; evaluation.consumedFinalFlame = true;
-  evaluation.engulfmentCountAfter = 1; evaluation.infernoLevelAfter = 1; evaluation.infernoMultiplierAfter = 25n;
-  state.phase = 'inferno'; state.infernoEvaluation = evaluation;
-  return state;
+  return readyInfernoDeal(seed);
 }
 
 function pendingReward(seed: string, offers: InfernoRewardOfferId[]): GameState {
   const state = newRun(seed).state;
   state.phase = 'infernoReward';
   state.infernoRewards.screenCount = 1;
-  state.infernoRewards.pending = { screenNumber: 1, offers, recycledOfferIds: [], makeRoomOfferId: null };
+  state.infernoRewards.pending = { screenNumber: 1, offers, recycledOfferIds: [], makeRoomOfferId: null,
+    claimCount: 1, claimedOnScreen: [] };
   return state;
 }
 
 test('Engulfment opens one persisted Inferno Reward screen, then claims and continues', async ({ page }) => {
   await installRunState(page, readyInferno('inferno-reward-flow'));
   await enterRun(page);
-  await expect(page.getByTestId('inferno-ready')).toBeVisible();
-  await page.getByRole('button', { name: 'ENGULF SELECTED FLAMES', exact: true }).click();
+  await expect(page.getByTestId('inferno-deal')).toBeVisible();
+  await page.getByRole('button', { name: 'TAKE THE DEAL', exact: true }).click();
   await expect(page.getByTestId('engulfment-success')).toBeVisible();
   await page.getByRole('button', { name: 'CONTINUE', exact: true }).click();
   await expect(page.getByTestId('inferno-reward-screen')).toBeVisible();
@@ -49,7 +38,7 @@ test('Engulfment opens one persisted Inferno Reward screen, then claims and cont
   expect((await readRunState(page))!.infernoRewards.pending!.offers).toEqual(offered);
   const chosen = offered.find(id => INFERNO_REWARD_OFFERS[id].category !== 'die')!;
   await page.getByRole('heading', { name: INFERNO_REWARD_OFFERS[chosen].name, exact: true })
-    .locator('..').locator('..').getByRole('button', { name: 'CHOOSE', exact: true }).click();
+    .locator('..').locator('..').getByRole('button', { name: 'CLAIM', exact: true }).click();
   await expect(page.getByTestId('dice-shop')).toBeVisible();
   const claimed = (await readRunState(page))!;
   expect(claimed.infernoRewards.claimedOfferIds).toContain(chosen);
@@ -67,11 +56,11 @@ test('full collection curated die Make Room can cancel or replace without sale G
   const replaced = state.diceInventory.storage[0]!;
   await installRunState(page, state); await enterRun(page);
   const investor = page.getByRole('heading', { name: 'New Die: The Investor', exact: true }).locator('..').locator('..');
-  await investor.getByRole('button', { name: 'CHOOSE', exact: true }).click();
+  await investor.getByRole('button', { name: 'CLAIM', exact: true }).click();
   await expect(page.getByTestId('inferno-make-room')).toBeVisible();
   await page.getByRole('button', { name: 'CANCEL · BACK TO REWARDS', exact: true }).click();
   await expect(page.getByTestId('inferno-reward-screen')).toBeVisible();
-  await investor.getByRole('button', { name: 'CHOOSE', exact: true }).click();
+  await investor.getByRole('button', { name: 'CLAIM', exact: true }).click();
   const goldBefore = ((await readRunState(page))!).gold;
   await page.getByText(`Storage 1 · Die ${replaced}`, { exact: true }).locator('..')
     .getByRole('button', { name: 'REPLACE WITH REWARD', exact: true }).click();

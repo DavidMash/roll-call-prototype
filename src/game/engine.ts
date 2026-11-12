@@ -31,7 +31,7 @@ import { applyScenarioStart, scenarioById, type ScenarioDefinition } from './sce
 import { initialInfernoRewardState, INFERNO_REWARD_IDS, infernoRewardEligible } from './infernoRewards';
 import { resolveManualRerollCost } from './manualRerolls';
 import { eligibleFetchTargets, fetchTargetIsEligible } from './fetchTarget';
-import { infernoEvidenceInsights } from './engulfment';
+import { createInfernoEvaluation, evaluateEngulfmentOffering, infernoDieInterest, infernoEvidenceInsights, ownedEngulfmentAssets } from './engulfment';
 import type { Action, Board, DiceInventory, FlameSlotIndex, GameState, RandomSource, Resolution, ScenarioRunState, Shop, ShopStage } from './types';
 
 const exact = (value: unknown, fallback: ExactScore = 0n): ExactScore => value === undefined || value === null
@@ -234,10 +234,15 @@ function normalizeInfernoRewards(state: Board, inventory?: DiceInventory): void 
     state.handPlayCounts[hand] = Math.max(0, Math.floor(state.handPlayCounts[hand] ?? 0));
   }
   if (state.infernoRewards.pending) {
+    state.infernoRewards.pending.claimedOnScreen = (state.infernoRewards.pending.claimedOnScreen ?? [])
+      .filter(id => INFERNO_REWARD_IDS.includes(id));
     state.infernoRewards.pending.offers = state.infernoRewards.pending.offers.filter(id => INFERNO_REWARD_IDS.includes(id)
-      && !state.infernoRewards.claimedOfferIds.includes(id));
+      && (!state.infernoRewards.claimedOfferIds.includes(id)
+        || state.infernoRewards.pending!.claimedOnScreen.includes(id)));
     state.infernoRewards.pending.recycledOfferIds ??= [];
     state.infernoRewards.pending.makeRoomOfferId ??= null;
+    state.infernoRewards.pending.claimCount = Math.max(1, Math.min(3,
+      Math.floor(state.infernoRewards.pending.claimCount ?? 1)));
   }
 }
 
@@ -388,13 +393,16 @@ export function normalizeGameState(state: GameState): GameState {
   if (!next.diceInventory || !Array.isArray(next.encounterDice))
     throw new Error('Saved run does not match the current collectible-dice schema.');
   next.forgeUnlocked = next.forgeUnlocked === true || forgeRevealEligible(next.diceInventory, next.temper);
-  for (const die of Object.values(next.diceInventory.instances)) for (const effect of die.effects) {
-    effect.persistent ??= { vintageAppreciation: 0, weightedFace: 6, jumpingBeanNumber: 1 };
-    effect.persistent.vintageAppreciation ??= 0;
-    effect.persistent.weightedFace = [1, 2, 3, 4, 5, 6].includes(effect.persistent.weightedFace as number)
-      ? effect.persistent.weightedFace : 6;
-    effect.persistent.jumpingBeanNumber = [1, 2, 3, 4, 5, 6].includes(effect.persistent.jumpingBeanNumber as number)
-      ? effect.persistent.jumpingBeanNumber : 1;
+  for (const die of Object.values(next.diceInventory.instances)) {
+    die.lineage = [...new Set((die.lineage?.length ? die.lineage : [die.id]).filter(Number.isSafeInteger))];
+    for (const effect of die.effects) {
+      effect.persistent ??= { vintageAppreciation: 0, weightedFace: 6, jumpingBeanNumber: 1 };
+      effect.persistent.vintageAppreciation ??= 0;
+      effect.persistent.weightedFace = [1, 2, 3, 4, 5, 6].includes(effect.persistent.weightedFace as number)
+        ? effect.persistent.weightedFace : 6;
+      effect.persistent.jumpingBeanNumber = [1, 2, 3, 4, 5, 6].includes(effect.persistent.jumpingBeanNumber as number)
+        ? effect.persistent.jumpingBeanNumber : 1;
+    }
   }
   assertDiceInventory(next.diceInventory, next.encounterDice);
   syncActiveDiceProjection(next);
@@ -409,15 +417,21 @@ export function normalizeGameState(state: GameState): GameState {
   next.infernoMultiplier = exact(next.infernoMultiplier, exactInferno(next.engulfmentLevel));
   normalizeBoardScores(next);
   normalizeHistoricalScores(next);
-  next.infernoProgress ??= { evaluationIndex: 0, previousReadiness: null, recentMessageIds: [], recentAction: 'none' };
+  next.infernoProgress ??= { evaluationIndex: 0, previousReadiness: null, recentMessageIds: [], recentAction: 'none', declinedAtEvidenceRoundId: null };
   next.infernoProgress.evaluationIndex = Math.max(0, Math.floor(next.infernoProgress.evaluationIndex ?? 0));
   next.infernoProgress.previousReadiness = next.infernoProgress.previousReadiness === null ? null
     : Math.max(0, Math.min(1, next.infernoProgress.previousReadiness));
   next.infernoProgress.recentMessageIds = (next.infernoProgress.recentMessageIds ?? []).slice(-3);
   next.infernoProgress.recentAction ??= 'none';
+  next.infernoProgress.declinedAtEvidenceRoundId ??= null;
   next.infernoEvaluation ??= null;
   next.infernoEvaluationSuspendedUntilNewFlame = !!next.infernoEvaluationSuspendedUntilNewFlame;
   next.bustPresentationDice ??= null;
+  if (next.infernoEvaluation?.dealVersion !== 1 && next.infernoEvaluation) {
+    next.infernoEvaluation = createInfernoEvaluation(next);
+    if (!next.infernoEvaluation && next.phase === 'inferno')
+      next.phase = next.roundSummary ? 'roundSummary' : 'round';
+  }
   if (next.infernoEvaluation) {
     next.infernoEvaluation.engulfed ??= false;
     next.infernoEvaluation.maximumPossibleReadiness ??= next.infernoEvaluation.threshold;
@@ -481,6 +495,10 @@ export function normalizeGameState(state: GameState): GameState {
     checkpoint.infernoProgress ??= structuredClone(next.infernoProgress);
     checkpoint.infernoEvaluation ??= null;
     if (checkpoint.infernoEvaluation) checkpoint.infernoEvaluation.engulfed ??= false;
+    checkpoint.infernoProgress.declinedAtEvidenceRoundId ??= null;
+    for (const die of Object.values(next.roundCheckpoint.diceInventory.instances)) {
+      die.lineage = [...new Set((die.lineage?.length ? die.lineage : [die.id]).filter(Number.isSafeInteger))];
+    }
     checkpoint.infernoEvaluationSuspendedUntilNewFlame = !!checkpoint.infernoEvaluationSuspendedUntilNewFlame;
     checkpoint.bustPresentationDice ??= null;
     checkpoint.nextShopVisitId = Math.max(1, Math.floor(checkpoint.nextShopVisitId ?? 1));
@@ -653,10 +671,6 @@ export function validateAction(state: Board | GameState, action: Action): string
   if (action.type === 'CONTINUE_SCENARIO_RUN') return state.phase === 'scenarioComplete'
     && !!state.scenario?.completionPending
     ? null : 'A completed Scenario is required.';
-  if (action.type === 'TOGGLE_ENGULFMENT_FLAME') return state.phase === 'inferno' && !!state.infernoEvaluation?.success
-    && !state.infernoEvaluation.engulfed
-    && state.infernoEvaluation.flames.some(item => item.asset.instanceId === action.flameInstanceId)
-    ? null : 'Choose a Flame from the current Inferno evaluation.';
   if (action.type === 'ENGULF_NOW') return state.phase === 'inferno' && !!state.infernoEvaluation?.success
     && !state.infernoEvaluation.engulfed
     && state.infernoEvaluation.selectedEffectiveValue >= state.infernoEvaluation.threshold
@@ -666,6 +680,7 @@ export function validateAction(state: Board | GameState, action: Action): string
   if (action.type === 'CHOOSE_INFERNO_REWARD') {
     if (state.phase !== 'infernoReward' || !state.infernoRewards.pending) return 'An Inferno Reward screen is required.';
     if (!state.infernoRewards.pending.offers.includes(action.offerId)) return 'Choose an offered Inferno Reward.';
+    if (state.infernoRewards.pending.claimedOnScreen.includes(action.offerId)) return 'That Inferno Reward was already claimed.';
     if (!infernoRewardEligible(state as GameState, action.offerId)) return 'That Inferno Reward is no longer eligible.';
     return null;
   }
@@ -1043,7 +1058,7 @@ export function newRun(seed: string, random?: RandomSource, options?: NewRunOpti
     bossSchedule: {}, chapterPlans: {}, presentedChapters: [], chapterLifecycle: {}, boss: null, bossSilenced: false, currentNodeId: '',
     bust: null, bustPresentationDice: null, flameTutorial: { pendingFlameInstanceId: null, completed: false },
     diceInventory, encounterDice: [], dice: [], dieRoundState: resetDieRoundState(Object.values(diceInventory.instances)), flameSlots: emptyFlameSlots(),
-    chargeAttribution: {}, chargeEvents: [], infernoProgress: { evaluationIndex: 0, previousReadiness: null, recentMessageIds: [], recentAction: 'none' },
+    chargeAttribution: {}, chargeEvents: [], infernoProgress: { evaluationIndex: 0, previousReadiness: null, recentMessageIds: [], recentAction: 'none', declinedAtEvidenceRoundId: null },
     infernoEvaluation: null, infernoEvaluationSuspendedUntilNewFlame: false, chargeXMult: 1, maxCharge: 1,
     chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, minigunUpperStreak: 0,
     roundPlayCount: 0, roundStartLives: CONFIG.maxLives, roundStartRosterSize: CONFIG.diceCount, precedingShopDiePurchase: false,
@@ -1175,12 +1190,19 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         const ingredients = [ingredientA, ingredientB].sort((a, b) => a.id - b.id) as [typeof ingredientA, typeof ingredientB];
         const preview = previewForge(ingredientA, ingredientB);
         const cost = Number(preview.cost);
+        const evidenceRounds = evaluateEngulfmentOffering(next, ownedEngulfmentAssets(next)).evidenceRounds;
+        const interestA = infernoDieInterest(next, ingredientA, evidenceRounds);
+        const interestB = infernoDieInterest(next, ingredientB, evidenceRounds);
+        const parent = [interestA, interestB].sort((left, right) => right.interest - left.interest
+          || right.intrinsicPower - left.intrinsicPower || left.dieId - right.dieId)[0].dieId === ingredientA.id
+          ? ingredientA : ingredientB;
         resolver.spendTemper(cost, preview.kind);
         const resultId = next.diceInventory.nextDieId++;
         const result = structuredClone(ingredients[0]);
         result.id = resultId;
         result.effects = mergedEffects(ingredientA, ingredientB).map(effect => ({ ...effect,
           id: effectInstanceId(resultId, effect.type) }));
+        result.lineage = [...(parent.lineage?.length ? parent.lineage : [parent.id]), resultId];
         for (const ingredient of ingredients) {
           const rosterIndex = next.diceInventory.roster.indexOf(ingredient.id);
           const slot = rosterIndex >= 0 ? { area: 'roster' as const, index: rosterIndex }
@@ -1285,7 +1307,6 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       case 'CONTINUE_ROUND_SUMMARY': resolver.continueRoundSummary(); break;
       case 'CONTINUE_INFERNO_EVALUATION': resolver.continueInfernoEvaluation(); break;
       case 'CONTINUE_SCENARIO_RUN': resolver.continueScenarioRun(); break;
-      case 'TOGGLE_ENGULFMENT_FLAME': resolver.toggleEngulfmentFlame(action.flameInstanceId); break;
       case 'ENGULF_NOW': resolver.engulfNow(); break;
       case 'NOT_YET': resolver.deferEngulfment(); break;
       case 'CHOOSE_INFERNO_REWARD': resolver.chooseInfernoReward(action.offerId); break;

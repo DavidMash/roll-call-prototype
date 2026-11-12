@@ -16,14 +16,18 @@ import { canonicalRunHistoryV2Events } from './runHistoryV2Timeline';
 import { finalizeScore, infernoMultiplier, INFERNO_BASE, scoreWeightedMultiplier } from './scoring';
 import { exactRatioNumber, type ExactScore } from './scoreMath';
 import { formatPlayerNumber } from './copy';
-import type { EngulfmentEvidenceRoundTelemetry, EngulfmentOfferingTelemetry, HandScoredEvent, RoundAttemptFinishedEvent } from './runHistoryV2';
+import { SPECIAL_DICE } from './specialDice';
+import type { EngulfmentEvidenceRoundTelemetry, EngulfmentOfferingTelemetry, HandScoredEvent, RoundAttemptFinishedEvent, RunHistoryV2Event } from './runHistoryV2';
 import type {
-  Board, EngulfmentAssetRef, Flame, GameState, HandId, HandLevels, InfernoEvaluationState,
+  Board, CollectibleDie, DiceSlotRef, EngulfmentAssetRef, Flame, GameState, HandId, HandLevels, InfernoEvaluationState,
   InfernoTrend, InfernoWeakness,
 } from './types';
 
+export const ENGULFMENT_MIN_EVIDENCE_ROUNDS = 3;
 export const ENGULFMENT_EVIDENCE_ROUNDS = 6;
 export const ENGULFMENT_REQUIRED_MULTIPLIER = 15;
+export const INFERNO_TIER_FACTORS = [15, 20, 25, 32, 40, 50] as const;
+export const INFERNO_TIER_REWARD_CLAIMS = [1, 1, 1, 2, 2, 3] as const;
 export const INFERNO_TREND_DEAD_ZONE = 0.05;
 export const INFERNO_CLOSE_READINESS = 0.8;
 export const INFERNO_INSIGHT_UTILIZATION_DELTA = 2;
@@ -96,6 +100,28 @@ export interface EngulfmentOfferingEvaluation {
   evidenceRounds: EngulfmentEvidenceRoundTelemetry[];
   offeringMultiplier: number;
 }
+
+export const infernoEvidenceRoundId = (round: Pick<EngulfmentEvidenceRoundTelemetry,
+  'timelineId' | 'round' | 'attempt'>): string => `${round.timelineId}:${round.round}:${round.attempt}`;
+
+/** Equal-weighted geometric mean of factual per-Round joint Flame power. */
+export function perceivedFlamePower(roundPowers: readonly number[]): number {
+  if (!roundPowers.length) return 1;
+  const meanLog = roundPowers.reduce((sum, power) => sum + Math.log(Math.max(1, power)), 0) / roundPowers.length;
+  return Math.exp(meanLog);
+}
+
+export function flameInterest(power: number): number {
+  if (power < ENGULFMENT_REQUIRED_MULTIPLIER) throw new Error('Flame Interest is only defined at perceived power 15 or higher.');
+  return 30 * Math.log(power / ENGULFMENT_REQUIRED_MULTIPLIER);
+}
+
+export function infernoTier(interest: number): number {
+  return Math.max(1, Math.min(6, 1 + Math.floor(interest / 15)));
+}
+
+export const infernoTierFactor = (tier: number): number => INFERNO_TIER_FACTORS[Math.max(1, Math.min(6, tier)) - 1];
+export const infernoTierRewardClaims = (tier: number): number => INFERNO_TIER_REWARD_CLAIMS[Math.max(1, Math.min(6, tier)) - 1];
 
 interface FlameWindowMetrics {
   asset: EngulfmentAssetRef;
@@ -236,13 +262,113 @@ export function evaluateEngulfmentOffering(
     return { round: clear.round, attempt: clear.attempt, timelineId: clear.timelineId,
       handCount: hands.length, multiplier: Number(multiplier.toFixed(12)) };
   });
-  const offeringMultiplier = evidenceRounds.length
-    ? evidenceRounds.reduce((sum, round) => sum + round.multiplier, 0) / evidenceRounds.length : 1;
+  const offeringMultiplier = perceivedFlamePower(evidenceRounds.map(round => round.multiplier));
   return {
     offerings: assets.map(asset => ({ asset: structuredClone(asset) })),
     evidenceRounds,
-    offeringMultiplier: Number(offeringMultiplier.toFixed(12)),
+    offeringMultiplier,
   };
+}
+
+const DIE_RARITY_POWER = { common: 1, uncommon: 2, rare: 3, legendary: 4 } as const;
+
+/** Persistent effect value only; an untouched Normal die is its implicit Basic I. */
+export function intrinsicDiePower(die: Pick<CollectibleDie, 'effects'>): number {
+  if (!die.effects.length) return 1;
+  return die.effects.reduce((sum, effect) => sum + DIE_RARITY_POWER[SPECIAL_DICE[effect.type].rarity] * effect.level, 0);
+}
+
+export const infernoDieEligible = (die: Pick<CollectibleDie, 'effects'>): boolean =>
+  intrinsicDiePower(die) > 1 || die.effects.some(effect => effect.type !== 'basic');
+
+export interface DieRelevance {
+  activityRate: number;
+  keyHandRate: number;
+  recentRelevance: number;
+  meaningfulRoundIds: string[];
+  keyHandRoundIds: string[];
+}
+
+function dieEventIsMaterial(event: RunHistoryV2Event, lineage: ReadonlySet<number>): boolean {
+  if (event.kind === 'special_die_activated' && lineage.has(event.dieId)) {
+    if (event.dieType === 'vintage') return false;
+    if (event.effectCause === 'on_command' && event.dieType === 'magic') return false;
+    if (event.effectCause === 'on_command' && event.dieType === 'furnace') return false;
+    return !/failed|no[- ]?op|no effect/i.test(event.detail);
+  }
+  if (event.kind === 'roll_batch') return event.effects.some(effect => effect.type === 'special_die' && lineage.has(effect.dieId))
+    || event.results.some(result => (result.controllerDieId !== undefined && lineage.has(result.controllerDieId))
+      || result.magneticAnchorIds.some(id => lineage.has(id)));
+  if (event.kind !== 'hand_scored') return false;
+  return event.scoreOccurrences.some(score => lineage.has(score.dieId))
+    || event.pipsContributions.some(contribution => contribution.dieId !== undefined
+      && lineage.has(contribution.dieId) && contribution.amount !== 0)
+    || event.sideEffects.some(effect => ('dieId' in effect && effect.dieId !== undefined && lineage.has(effect.dieId))
+      && (effect.type === 'gold' ? effect.amount !== 0 : effect.type !== 'special_die'
+        || !/failed|no[- ]?op/i.test(effect.detail)));
+}
+
+export function recentDieRelevance(
+  state: Pick<GameState, 'historyV2' | 'historyV2Coverage'>,
+  die: Pick<CollectibleDie, 'id' | 'lineage'>,
+  evidenceRounds?: readonly EngulfmentEvidenceRoundTelemetry[],
+): DieRelevance {
+  const canonical = canonicalRunHistoryV2Events(state.historyV2, state.historyV2Coverage);
+  const rounds = evidenceRounds ?? canonical.filter((event): event is RoundAttemptFinishedEvent =>
+    event.kind === 'round_attempt_finished' && event.outcome === 'cleared').slice(-ENGULFMENT_EVIDENCE_ROUNDS)
+    .map(event => ({ round: event.round, attempt: event.attempt, timelineId: event.timelineId, handCount: 0, multiplier: 1 }));
+  const lineage = new Set([...(die.lineage?.length ? die.lineage : []), die.id]);
+  const meaningfulRoundIds: string[] = [];
+  const keyHandRoundIds: string[] = [];
+  for (const round of rounds) {
+    const id = infernoEvidenceRoundId(round);
+    const events = canonical.filter(event => attemptKey(event) === id);
+    if (events.some(event => dieEventIsMaterial(event, lineage))) meaningfulRoundIds.push(id);
+    const hands = events.filter((event): event is HandScoredEvent => event.kind === 'hand_scored');
+    if (hands.length) {
+      const maximum = hands.reduce((score, hand) => hand.score.awarded > score ? hand.score.awarded : score, 0n);
+      if (hands.some(hand => hand.score.awarded === maximum
+        && hand.scoreOccurrences.some(score => lineage.has(score.dieId)))) keyHandRoundIds.push(id);
+    }
+  }
+  const count = rounds.length;
+  const activityRate = count ? meaningfulRoundIds.length / count : 0;
+  const keyHandRate = count ? keyHandRoundIds.length / count : 0;
+  return { activityRate, keyHandRate, recentRelevance: .7 * activityRate + .3 * keyHandRate,
+    meaningfulRoundIds, keyHandRoundIds };
+}
+
+export interface RankedInfernoDie {
+  dieId: number;
+  slot: DiceSlotRef;
+  intrinsicPower: number;
+  relevance: DieRelevance;
+  interest: number;
+}
+
+export function infernoDieInterest(state: GameState, die: CollectibleDie,
+  evidenceRounds: readonly EngulfmentEvidenceRoundTelemetry[]): RankedInfernoDie {
+  const rosterIndex = state.diceInventory.roster.indexOf(die.id);
+  const slot = rosterIndex >= 0 ? { area: 'roster' as const, index: rosterIndex }
+    : { area: 'storage' as const, index: state.diceInventory.storage.indexOf(die.id) };
+  const relevance = recentDieRelevance(state, die, evidenceRounds);
+  const intrinsicPower = intrinsicDiePower(die);
+  return { dieId: die.id, slot, intrinsicPower, relevance,
+    interest: intrinsicPower * (.75 + .75 * relevance.recentRelevance) };
+}
+
+export function rankInfernoDice(state: GameState,
+  evidenceRounds: readonly EngulfmentEvidenceRoundTelemetry[]): RankedInfernoDie[] {
+  const located = (['roster', 'storage'] as const).flatMap(area => state.diceInventory[area].flatMap((dieId, index) => {
+    if (dieId == null) return [];
+    const die = state.diceInventory.instances[dieId];
+    if (!die || !infernoDieEligible(die)) return [];
+    return [{ ...infernoDieInterest(state, die, evidenceRounds), slot: { area, index } }];
+  }));
+  return located.sort((left, right) => right.interest - left.interest
+    || right.intrinsicPower - left.intrinsicPower
+    || (left.slot.area === right.slot.area ? 0 : left.slot.area === 'roster' ? -1 : 1)
+    || left.slot.index - right.slot.index || left.dieId - right.dieId);
 }
 
 const HAND_FAMILY_PAYOFFS: Partial<Record<Flame, HandId>> = {
@@ -353,12 +479,53 @@ export function classifyInfernoWeakness(
   return averageInvestment < 60 ? 'investment' : 'utilization';
 }
 
-/** Freezes one authoritative whole-collection evaluation for player-directed sacrifice selection. */
+function compareAssetBundles(left: readonly EngulfmentAssetRef[], right: readonly EngulfmentAssetRef[]): number {
+  for (let index = 0; index < Math.min(left.length, right.length); index++) {
+    const slot = left[index].slot - right[index].slot;
+    if (slot) return slot;
+    const id = left[index].instanceId - right[index].instanceId;
+    if (id) return id;
+  }
+  return left.length - right.length;
+}
+
+interface FlameSubsetDeal {
+  assets: EngulfmentAssetRef[];
+  perceivedPower: number;
+  interest: number;
+}
+
+/** Exhaustively chooses the smallest stable Flame bundle that preserves the all-Flame tier. */
+export function selectRequestedFlameSubset(state: GameState, assets: readonly EngulfmentAssetRef[]): FlameSubsetDeal | null {
+  const ordered = [...assets].sort((left, right) => left.slot - right.slot || left.instanceId - right.instanceId);
+  const all = evaluateEngulfmentOffering(state, ordered);
+  if (all.evidenceRounds.length < ENGULFMENT_MIN_EVIDENCE_ROUNDS || all.offeringMultiplier < ENGULFMENT_REQUIRED_MULTIPLIER)
+    return null;
+  const maxTier = infernoTier(flameInterest(all.offeringMultiplier));
+  const candidates: FlameSubsetDeal[] = [];
+  for (let mask = 1; mask < 1 << ordered.length; mask++) {
+    const subset = ordered.filter((_, index) => (mask & (1 << index)) !== 0);
+    const perceivedPower = evaluateEngulfmentOffering(state, subset).offeringMultiplier;
+    if (perceivedPower < ENGULFMENT_REQUIRED_MULTIPLIER) continue;
+    const interest = flameInterest(perceivedPower);
+    if (infernoTier(interest) === maxTier) candidates.push({ assets: subset, perceivedPower, interest });
+  }
+  return candidates.sort((left, right) => left.assets.length - right.assets.length
+    || right.interest - left.interest || compareAssetBundles(left.assets, right.assets))[0] ?? null;
+}
+
+/** Freezes one complete deterministic Inferno Deal. */
 export function createInfernoEvaluation(state: GameState): InfernoEvaluationState | null {
   const assets = ownedEngulfmentAssets(state);
   if (!assets.length) return null;
-  const evaluationIndex = state.infernoProgress.evaluationIndex + 1;
   const full = evaluateEngulfmentOffering(state, assets);
+  if (full.evidenceRounds.length < ENGULFMENT_MIN_EVIDENCE_ROUNDS) return null;
+  const latestEvidenceId = infernoEvidenceRoundId(full.evidenceRounds.at(-1)!);
+  if (state.infernoProgress.declinedAtEvidenceRoundId === latestEvidenceId) return null;
+  if (full.offeringMultiplier < ENGULFMENT_REQUIRED_MULTIPLIER) return null;
+  const requested = selectRequestedFlameSubset(state, assets);
+  if (!requested) return null;
+  const evaluationIndex = state.infernoProgress.evaluationIndex + 1;
   const readiness = Math.max(0, Math.min(1, full.offeringMultiplier / ENGULFMENT_REQUIRED_MULTIPLIER));
   const previousReadiness = state.infernoProgress.previousReadiness;
   const trend = classifyInfernoTrend(readiness, previousReadiness);
@@ -371,13 +538,23 @@ export function createInfernoEvaluation(state: GameState): InfernoEvaluationStat
     hiddenStrength: evaluateEngulfmentOffering(state, [asset]).offeringMultiplier }));
   const strongestFirst = diagnostics.slice().sort((left, right) =>
     right.hiddenStrength - left.hiddenStrength || left.asset.instanceId - right.asset.instanceId).map(item => item.asset);
-  const success = engulfmentSucceeds(full.offeringMultiplier);
+  const success = true;
   const maximumPossibleReadiness = maximumPossibleEngulfmentReadiness(state, assets);
   const currentCollectionTheoreticallySufficient = engulfmentSucceeds(maximumPossibleReadiness);
-  const suspendAfterContinue = !success && !currentCollectionTheoreticallySufficient;
+  const suspendAfterContinue = false;
   const feedbackMessages = infernoEvidenceInsights(state, assets);
   const normalization = engulfmentTrainingNormalization(state.handLevels, state.infernoRewards.unlockedHands);
   const infernoLevelBefore = state.engulfmentLevel;
+  const baseTier = infernoTier(requested.interest);
+  const bestDie = baseTier < 6 ? rankInfernoDice(state, full.evidenceRounds)[0] : undefined;
+  const withDieTier = bestDie ? infernoTier(requested.interest + bestDie.interest) : baseTier;
+  const requestedDie = bestDie && withDieTier > baseTier ? bestDie : null;
+  const finalInterest = requested.interest + (requestedDie?.interest ?? 0);
+  const tier = infernoTier(finalInterest);
+  const earnedInfernoFactor = infernoTierFactor(tier);
+  const flamesSnuffed = requested.assets.map(asset => structuredClone(asset));
+  const selectedIds = new Set(flamesSnuffed.map(asset => asset.instanceId));
+  const flamesPreserved = assets.filter(asset => !selectedIds.has(asset.instanceId)).map(asset => structuredClone(asset));
   return {
     evaluationIndex, round: state.round, chapter: chapterNumberForRound(state.round), flames: diagnostics,
     evidenceRounds: full.evidenceRounds, effectiveValue: full.offeringMultiplier,
@@ -385,47 +562,18 @@ export function createInfernoEvaluation(state: GameState): InfernoEvaluationStat
     currentCollectionTheoreticallySufficient, suspendAfterContinue, previousReadiness, trend, weakness, recentAction,
     feedbackMessageId: 'inferno-evidence', feedbackMessage: feedbackMessages[0] ?? null,
     feedbackMessages, engulfed: false, success,
-    strongestFirst, prefixEvaluations: [], flamesSnuffed: [],
-    flamesPreserved: assets.map(asset => structuredClone(asset)), selectedFlameInstanceIds: [],
-    selectedEffectiveValue: 1, earnedInfernoFactor: 1,
-    engulfmentCountBefore: infernoLevelBefore, engulfmentCountAfter: infernoLevelBefore,
-    infernoLevelBefore, infernoLevelAfter: infernoLevelBefore,
+    strongestFirst, prefixEvaluations: [], flamesSnuffed,
+    flamesPreserved, selectedFlameInstanceIds: flamesSnuffed.map(asset => asset.instanceId),
+    selectedEffectiveValue: requested.perceivedPower, earnedInfernoFactor,
+    engulfmentCountBefore: infernoLevelBefore, engulfmentCountAfter: infernoLevelBefore + 1,
+    infernoLevelBefore, infernoLevelAfter: infernoLevelBefore + 1,
     infernoMultiplierBefore: state.infernoMultiplier,
-    infernoMultiplierAfter: state.infernoMultiplier,
+    infernoMultiplierAfter: state.infernoMultiplier * BigInt(earnedInfernoFactor),
     upper: normalization.upper, lower: normalization.lower,
-    consumedFinalFlame: false,
-  };
-}
-
-/** Recomputes the selected subset jointly. Individual powers are diagnostics only and are never summed. */
-export function withInfernoSelection(state: GameState, evaluation: InfernoEvaluationState,
-  selectedFlameInstanceIds: readonly number[]): InfernoEvaluationState {
-  const selectedIds = new Set(selectedFlameInstanceIds);
-  const allAssets = evaluation.flames.map(item => item.asset);
-  const flamesSnuffed = allAssets.filter(asset => selectedIds.has(asset.instanceId));
-  const flamesPreserved = allAssets.filter(asset => !selectedIds.has(asset.instanceId));
-  const selectedEffectiveValue = flamesSnuffed.length
-    ? evaluateEngulfmentOffering(state, flamesSnuffed).offeringMultiplier : 1;
-  const selectedSuccess = engulfmentSucceeds(selectedEffectiveValue);
-  const earnedInfernoFactor = selectedSuccess ? Math.max(1, Math.floor(selectedEffectiveValue)) : 1;
-  const engulfmentCountAfter = evaluation.engulfmentCountBefore + (selectedSuccess ? 1 : 0);
-  const infernoMultiplierAfter = selectedSuccess
-    ? evaluation.infernoMultiplierBefore * BigInt(earnedInfernoFactor) : evaluation.infernoMultiplierBefore;
-  const feedbackMessages = infernoEvidenceInsights(state, flamesPreserved);
-  return {
-    ...evaluation,
-    feedbackMessageId: 'inferno-evidence',
-    feedbackMessage: feedbackMessages[0] ?? null,
-    feedbackMessages,
-    selectedFlameInstanceIds: flamesSnuffed.map(asset => asset.instanceId),
-    flamesSnuffed: structuredClone(flamesSnuffed),
-    flamesPreserved: structuredClone(flamesPreserved),
-    selectedEffectiveValue,
-    earnedInfernoFactor,
-    engulfmentCountAfter,
-    infernoLevelAfter: engulfmentCountAfter,
-    infernoMultiplierAfter,
-    consumedFinalFlame: selectedSuccess && flamesSnuffed.length === allAssets.length,
+    consumedFinalFlame: flamesSnuffed.length === assets.length,
+    dealVersion: 1, perceivedFlamePower: full.offeringMultiplier, flameInterest: requested.interest,
+    requestedDieId: requestedDie?.dieId ?? null, requestedDieInterest: requestedDie?.interest ?? 0,
+    finalInterest, tier, rewardClaimCount: infernoTierRewardClaims(tier),
   };
 }
 

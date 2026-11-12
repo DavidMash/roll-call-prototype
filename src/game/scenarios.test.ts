@@ -7,12 +7,34 @@ import { availableHandIds, FINAL_LOWER_HAND_ORDER, FINAL_UPPER_HAND_ORDER, train
 import { rosterDice } from './inventory';
 import { SCENARIOS, handLevelsForScenario, scenarioById,
   validateScenarioDefinition, validateScenarioDefinitions } from './scenarios';
-import type { HandId, RandomSource } from './types';
+import type { GameState, HandId, RandomSource } from './types';
+import type { RunHistoryV2Event } from './runHistoryV2';
 import { SPECIAL_DICE } from './specialDice';
 import { getChapterBaseGoal, getRawRoundGoal, LOCAL_ROUND_GOAL_MULTIPLIERS, targetForRound } from './goals';
 import { encounterNode, encounterTarget } from './progression';
 
 const constant: RandomSource = { next: () => .25 };
+
+function scenarioDeal(state: GameState) {
+  const flame = flameInstances(state)[0];
+  if (!flame) throw new Error('Scenario deal test requires a Flame.');
+  for (let round = 1; round <= 3; round++) {
+    state.historyV2.push({ kind: 'hand_scored', seq: state.nextHistorySeq++, round, attempt: 1,
+      actionId: state.nextActionId++, timelineId: state.historyV2TimelineId, scorePackageId: `scenario:${round}`,
+      rootPlayId: `scenario:${round}`, parentPlayId: null, hand: 'ones', level: 1, playSource: 'manual',
+      selectedDice: [0], scoringDice: [], scoreOccurrences: [{ id: `score:${round}`, rootId: `score:${round}`,
+        dieId: 0, cause: 'play_selection', originallySelected: true, playerSelected: true, additional: false,
+        suppressedEffects: [] }], consumed: true, score: { infernoMultiplier: 1n, finalPips: 100, handMult: 1,
+        finalMult: 1, finalXMult: 15, bossFactor: 1, raw: '1500', awarded: 1500n,
+        rounding: { mode: 'nearest_integer', delta: '0' } }, roundScore: { before: 0n, afterAward: 1500n, after: 1500n },
+      pipsContributions: [], resolvedDicePips: [], multContributions: [], xMultContributions: [{ sourceId: flame.type,
+        origin: flame.stage, factor: 15, sourceInstanceId: flame.instanceId }], sideEffects: [] } as unknown as RunHistoryV2Event);
+    state.historyV2.push({ kind: 'round_attempt_finished', seq: state.nextHistorySeq++, round, attempt: 1,
+      actionId: state.nextActionId++, timelineId: state.historyV2TimelineId, outcome: 'cleared', score: 1500n,
+      target: 1n, boss: null, livesBefore: 3, livesAfter: 3 } as RunHistoryV2Event);
+  }
+  return createInfernoEvaluation(state)!;
+}
 
 describe('Scenario definitions', () => {
   it('contains exactly the six intended stable IDs and excludes retired Scenarios', () => {
@@ -219,16 +241,7 @@ describe('Scenario progression and completion', () => {
 
   it('ends on the first Engulfment without generating an Inferno Reward', () => {
     const state = newRun('scenario-completion', constant, { scenario: scenarioById('short-circuit')! }).state;
-    const evaluation = createInfernoEvaluation(state)!;
-    evaluation.success = true;
-    evaluation.flamesSnuffed = evaluation.flames.map(item => item.asset);
-    evaluation.flamesPreserved = [];
-    evaluation.selectedFlameInstanceIds = evaluation.flamesSnuffed.map(asset => asset.instanceId);
-    evaluation.selectedEffectiveValue = 15;
-    evaluation.earnedInfernoFactor = 15;
-    evaluation.engulfmentCountAfter = 1;
-    evaluation.infernoLevelAfter = 1;
-    evaluation.infernoMultiplierAfter = 15n;
+    const evaluation = scenarioDeal(state);
     state.infernoEvaluation = evaluation;
     state.phase = 'inferno';
     const resolver = new Resolver(state, constant);
@@ -249,16 +262,7 @@ describe('Scenario progression and completion', () => {
     const state = newRun('normal-inferno-reward', constant, { scenario: scenarioById('short-circuit')! }).state;
     state.runMode = 'normal';
     state.scenario = null;
-    const evaluation = createInfernoEvaluation(state)!;
-    evaluation.success = true;
-    evaluation.flamesSnuffed = [];
-    evaluation.flamesPreserved = [];
-    evaluation.selectedFlameInstanceIds = [];
-    evaluation.selectedEffectiveValue = 15;
-    evaluation.earnedInfernoFactor = 15;
-    evaluation.engulfmentCountAfter = 1;
-    evaluation.infernoLevelAfter = 1;
-    evaluation.infernoMultiplierAfter = 15n;
+    const evaluation = scenarioDeal(state);
     state.infernoEvaluation = evaluation;
     state.phase = 'inferno';
     const resolver = new Resolver(state, constant);

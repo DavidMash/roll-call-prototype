@@ -362,6 +362,8 @@ export interface StandaloneScoreRecord {
 }
 export interface CollectibleDie {
   id: DieId;
+  /** Stable die IDs in this die's single inherited Forge lineage, oldest first. */
+  lineage: DieId[];
   value: Rank;
   faces: PhysicalFace[];
   owner: 'player';
@@ -525,6 +527,10 @@ export interface InfernoRewardSelection {
   recycledOfferIds: InfernoRewardOfferId[];
   /** Set only while a full collection is choosing a no-sale replacement destination. */
   makeRoomOfferId: InfernoRewardOfferId | null;
+  /** Frozen number of successful claims allowed from this original offer set. */
+  claimCount: number;
+  /** Offers whose transactional claim has completed on this screen. */
+  claimedOnScreen: InfernoRewardOfferId[];
 }
 export interface InfernoRewardState {
   claimedOfferIds: InfernoRewardOfferId[];
@@ -543,6 +549,8 @@ export interface InfernoProgressState {
   previousReadiness: number | null;
   recentMessageIds: string[];
   recentAction: InfernoRecentAction;
+  /** Evidence clear identity at which a deal was declined; a newer clear is required. */
+  declinedAtEvidenceRoundId: string | null;
 }
 export interface InfernoFlameDiagnostic {
   asset: EngulfmentAssetRef;
@@ -594,6 +602,15 @@ export interface InfernoEvaluationState {
   upper: { levelsBefore: { hand: HandId; level: number }[]; average: number; unifiedLevel: number };
   lower: { levelsBefore: { hand: HandId; level: number }[]; average: number; unifiedLevel: number };
   consumedFinalFlame: boolean;
+  /** Deterministic Inferno Deal v1 fields, frozen when this object is created. */
+  dealVersion: 1;
+  perceivedFlamePower: number;
+  flameInterest: number;
+  requestedDieId: DieId | null;
+  requestedDieInterest: number;
+  finalInterest: number;
+  tier: number;
+  rewardClaimCount: number;
 }
 export interface RoundPayout {
   baseGold: number;
@@ -1082,7 +1099,6 @@ export type Action =
   | { type: 'CONTINUE_ROUND_SUMMARY' }
   | { type: 'CONTINUE_INFERNO_EVALUATION' }
   | { type: 'CONTINUE_SCENARIO_RUN' }
-  | { type: 'TOGGLE_ENGULFMENT_FLAME'; flameInstanceId: FlameInstanceId }
   | { type: 'ENGULF_NOW' }
   | { type: 'NOT_YET' }
   | { type: 'CHOOSE_INFERNO_REWARD'; offerId: InfernoRewardOfferId }

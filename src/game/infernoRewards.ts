@@ -124,7 +124,7 @@ function fallbackRarities(rolled: InfernoRewardRarity): InfernoRewardRarity[] {
 }
 
 export function generateInfernoRewardSelection(state: Pick<GameState, 'infernoRewards'>,
-  rng: RandomSource): InfernoRewardSelection {
+  rng: RandomSource, claimCount = 1): InfernoRewardSelection {
   const screenNumber = state.infernoRewards.screenCount + 1;
   const unseen = INFERNO_REWARD_IDS.filter(id => infernoRewardEligible(state, id) && !state.infernoRewards.deferredOffers[id]);
   const recyclable = unseen.length < 6 ? INFERNO_REWARD_IDS.filter(id => {
@@ -153,7 +153,8 @@ export function generateInfernoRewardSelection(state: Pick<GameState, 'infernoRe
     categoryCounts.set(definition.category, (categoryCounts.get(definition.category) ?? 0) + 1);
     if (definition.rarity === 'legendary') legendarySelected = true;
   }
-  return { screenNumber, offers: selected, recycledOfferIds: selected.filter(id => recyclable.includes(id)), makeRoomOfferId: null };
+  return { screenNumber, offers: selected, recycledOfferIds: selected.filter(id => recyclable.includes(id)),
+    makeRoomOfferId: null, claimCount: Math.max(1, Math.min(3, Math.floor(claimCount))), claimedOnScreen: [] };
 }
 
 export function createCuratedRewardDie(state: Pick<GameState, 'diceInventory'>, offerId: InfernoRewardOfferId): CollectibleDie {

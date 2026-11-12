@@ -4,6 +4,28 @@ import { scenarioById } from '../src/game/scenarios';
 import { createInfernoEvaluation } from '../src/game/engulfment';
 import { Resolver } from '../src/game/effects';
 import { seedRunSession } from './uiHelpers';
+import type { GameState } from '../src/game/types';
+import type { RunHistoryV2Event } from '../src/game/runHistoryV2';
+
+function scenarioDeal(state: GameState) {
+  const flame = state.flameSlots.find(item => item !== null)!;
+  for (let round = 1; round <= 3; round++) {
+    state.historyV2.push({ kind: 'hand_scored', seq: state.nextHistorySeq++, round, attempt: 1,
+      actionId: state.nextActionId++, timelineId: state.historyV2TimelineId, scorePackageId: `scenario:${round}`,
+      rootPlayId: `scenario:${round}`, parentPlayId: null, hand: 'ones', level: 1, playSource: 'manual',
+      selectedDice: [0], scoringDice: [], scoreOccurrences: [{ id: `score:${round}`, rootId: `score:${round}`,
+        dieId: 0, cause: 'play_selection', originallySelected: true, playerSelected: true, additional: false,
+        suppressedEffects: [] }], consumed: true, score: { infernoMultiplier: 1n, finalPips: 100, handMult: 1,
+        finalMult: 1, finalXMult: 15, bossFactor: 1, raw: '1500', awarded: 1500n,
+        rounding: { mode: 'nearest_integer', delta: '0' } }, roundScore: { before: 0n, afterAward: 1500n, after: 1500n },
+      pipsContributions: [], resolvedDicePips: [], multContributions: [], xMultContributions: [{ sourceId: flame.type,
+        origin: flame.stage, factor: 15, sourceInstanceId: flame.instanceId }], sideEffects: [] } as unknown as RunHistoryV2Event);
+    state.historyV2.push({ kind: 'round_attempt_finished', seq: state.nextHistorySeq++, round, attempt: 1,
+      actionId: state.nextActionId++, timelineId: state.historyV2TimelineId, outcome: 'cleared', score: 1500n,
+      target: 1n, boss: null, livesBefore: 3, livesAfter: 3 } as RunHistoryV2Event);
+  }
+  return createInfernoEvaluation(state)!;
+}
 
 test.describe('Scenarios mode', () => {
   test('browses the revised catalog and launches Extra Die with six authoritative roster dice', async ({ page }) => {
@@ -76,16 +98,7 @@ test.describe('Scenarios mode', () => {
 
   test('persists terminal completion immediately without opening an Inferno Reward', async ({ page }) => {
     const state = newRun('scenario-complete-browser', { next: () => .5 }, { scenario: scenarioById('short-circuit')! }).state;
-    const evaluation = createInfernoEvaluation(state)!;
-    evaluation.success = true;
-    evaluation.selectedFlameInstanceIds = evaluation.flames.map(item => item.asset.instanceId);
-    evaluation.flamesSnuffed = evaluation.flames.map(item => structuredClone(item.asset));
-    evaluation.flamesPreserved = [];
-    evaluation.selectedEffectiveValue = 15;
-    evaluation.earnedInfernoFactor = 15;
-    evaluation.engulfmentCountAfter = 1;
-    evaluation.infernoLevelAfter = 1;
-    evaluation.infernoMultiplierAfter = 15n;
+    const evaluation = scenarioDeal(state);
     state.infernoEvaluation = evaluation;
     state.phase = 'inferno';
     const resolver = new Resolver(state, { next: () => .5 });

@@ -20,7 +20,7 @@ export function createCollectibleDie(id: number, type: DieType = 'normal', level
   if (!Number.isSafeInteger(level) || level < 1 || (type === 'normal' && level !== 1))
     throw new Error('Collectible die level must be a positive integer; Normal dice remain level 1.');
   return {
-    id, value: 1, owner: 'player', effects: type === 'normal' ? [] : [createDieEffect(id, type, level)],
+    id, lineage: [id], value: 1, owner: 'player', effects: type === 'normal' ? [] : [createDieEffect(id, type, level)],
     faces: RANKS.map(rank => ({ rank } satisfies PhysicalFace)),
   };
 }

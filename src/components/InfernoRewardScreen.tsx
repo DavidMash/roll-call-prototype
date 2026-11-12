@@ -13,6 +13,9 @@ export function InfernoRewardScreen({ board, inventory, busy, submit }: {
   submit: (action: Action) => void;
 }) {
   const selection = board.infernoRewards.pending!;
+  const targetClaims = Math.min(selection.claimCount, selection.offers.length);
+  const claimsRemaining = Math.max(0, targetClaims - selection.claimedOnScreen.length);
+  const claimHeading = selection.claimCount >= 3 ? 'CLAIM ALL 3' : `CHOOSE ${selection.claimCount}`;
   const makeRoom = selection.makeRoomOfferId;
   if (makeRoom) {
     const reward = INFERNO_REWARD_OFFERS[makeRoom];
@@ -47,7 +50,7 @@ export function InfernoRewardScreen({ board, inventory, busy, submit }: {
       <Group justify="space-between" align="flex-start">
         <div><Text size="xs" fw={850} tt="uppercase" lts=".14em" c="orange">Engulfment Reward</Text>
           <Title order={2}>INFERNO REWARD</Title></div>
-        <Badge color="orange" variant="light">CHOOSE 1</Badge>
+        <Badge color="orange" variant="light">{claimHeading} · {claimsRemaining} LEFT</Badge>
       </Group>
     </Paper>
     <SimpleGrid cols={{ base: 1, sm: Math.max(1, Math.min(3, selection.offers.length)) }} spacing="md">
@@ -55,6 +58,7 @@ export function InfernoRewardScreen({ board, inventory, busy, submit }: {
         const definition = INFERNO_REWARD_OFFERS[id];
         const build = CURATED_DIE_BUILDS[id];
         const recycled = selection.recycledOfferIds.includes(id);
+        const claimed = selection.claimedOnScreen.includes(id);
         return <Paper key={id} withBorder p="lg" className={`inferno-reward-card rarity-${definition.rarity}`}
           aria-label={`${definition.name}, ${definition.rarity} Inferno Reward`}>
           <Stack gap="sm" h="100%">
@@ -64,7 +68,9 @@ export function InfernoRewardScreen({ board, inventory, busy, submit }: {
             <Text style={{ flex: 1 }}>{definition.description}</Text>
             {build && <Paper p="xs" className="inferno-die-build"><Text size="xs" fw={850} tt="uppercase">Component build</Text>
               <Text size="sm">{build.map(([type, level]) => `${SPECIAL_DICE[type].name} ${level}`).join(' + ')}</Text></Paper>}
-            <Button color="orange" disabled={busy} onClick={() => submit({ type: 'CHOOSE_INFERNO_REWARD', offerId: id })}>CHOOSE</Button>
+            <Button color="orange" disabled={busy || claimed} onClick={() => submit({ type: 'CHOOSE_INFERNO_REWARD', offerId: id })}>
+              {claimed ? 'CLAIMED' : 'CLAIM'}
+            </Button>
           </Stack>
         </Paper>;
       })}

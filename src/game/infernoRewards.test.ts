@@ -13,10 +13,11 @@ import type { RunHistoryV2Event } from './runHistoryV2';
 
 const constant = (value = .2) => ({ next: () => value });
 
-function offer(state: GameState, id: InfernoRewardOfferId, also: InfernoRewardOfferId[] = []): GameState {
+function offer(state: GameState, id: InfernoRewardOfferId, also: InfernoRewardOfferId[] = [], claimCount = 1): GameState {
   state.phase = 'infernoReward';
   const screenNumber = ++state.infernoRewards.screenCount;
-  state.infernoRewards.pending = { screenNumber, offers: [id, ...also], recycledOfferIds: [], makeRoomOfferId: null };
+  state.infernoRewards.pending = { screenNumber, offers: [id, ...also], recycledOfferIds: [], makeRoomOfferId: null,
+    claimCount, claimedOnScreen: [] };
   return state;
 }
 
@@ -78,6 +79,22 @@ describe('Inferno Reward generation', () => {
 });
 
 describe('Inferno Reward effects and persistence', () => {
+  it.each([1, 2, 3])('claims %i rewards from one frozen three-offer set', claimCount => {
+    let state = newRun(`inferno-multi-${claimCount}`, constant()).state;
+    const offers: InfernoRewardOfferId[] = ['goldWindfall', 'temperWindfall', 'handOdds'];
+    state = offer(state, offers[0], offers.slice(1), claimCount);
+    const frozen = [...state.infernoRewards.pending!.offers];
+    for (let index = 0; index < claimCount; index++) {
+      state = dispatch(state, { type: 'CHOOSE_INFERNO_REWARD', offerId: offers[index] }, constant()).state;
+      if (index + 1 < claimCount) {
+        expect(state.infernoRewards.pending?.offers).toEqual(frozen);
+        expect(state.infernoRewards.pending?.claimedOnScreen).toEqual(offers.slice(0, index + 1));
+      }
+    }
+    expect(state.infernoRewards.pending).toBeNull();
+    expect(state.infernoRewards.claimedOfferIds).toEqual(offers.slice(0, claimCount));
+  });
+
   it('applies roster, reroll, Heart, Interest, Shop reroll, Temper, and windfall upgrades', () => {
     let state = newRun('inferno-upgrades', constant()).state;
     state = claim(state, 'expandedRoster');
@@ -169,7 +186,7 @@ describe('Inferno Reward effects and persistence', () => {
   it('includes claimed rewards, recycled counts, upgrades, and bonus Hands in the text summary', () => {
     let state = newRun('inferno-summary', constant()).state;
     state.infernoRewards.pending = { screenNumber: 1, offers: ['handOdds'],
-      recycledOfferIds: ['handOdds'], makeRoomOfferId: null };
+      recycledOfferIds: ['handOdds'], makeRoomOfferId: null, claimCount: 1, claimedOnScreen: [] };
     state.infernoRewards.screenCount = 1;
     state.phase = 'infernoReward';
     const envelope = state.historyV2.at(-1)!;

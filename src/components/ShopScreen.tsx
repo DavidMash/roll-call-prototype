@@ -244,7 +244,7 @@ export function ShopScreen({ board, inventory, event, busy, submit, openFlameDet
         const affordable = free || board.gold >= offer.price; const available = !offer.purchased;
         return <Card key={offer.id} withBorder p="xs" className={`dice-offer ${offer.purchased ? 'purchased' : ''}`} style={diePresentationStyle({ effects })}
           data-die-type={offer.dieType} data-testid={`dice-offer-${offer.id}`}><ActionIcon className="dice-offer-info" variant="subtle" color="gray" size="sm"
-            aria-label={`View ${SPECIAL_DICE[offer.dieType].name} details`} onClick={() => setDetailDie({ id: effect.id.length * -1, owner: 'player', value: 1, faces: [], effects })}>ⓘ</ActionIcon>
+            aria-label={`View ${SPECIAL_DICE[offer.dieType].name} details`} onClick={() => setDetailDie({ id: effect.id.length * -1, lineage: [], owner: 'player', value: 1, faces: [], effects })}>ⓘ</ActionIcon>
           <CollectibleDieVisual effects={effects} face={((offer.id % 6) + 1) as 1 | 2 | 3 | 4 | 5 | 6} />
           <Text className="dice-offer-name" fw={850}><DieTypeLabel type={offer.dieType} /></Text><RarityBadge rarity={offer.rarity} compact />
           <Button className="dice-offer-buy" size="compact-xs" fullWidth disabled={busy || !available || !affordable || collectionFull}

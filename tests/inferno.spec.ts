@@ -1,152 +1,71 @@
 import { expect, test } from '@playwright/test';
-import { createInfernoEvaluation, infernoEvaluationDuration } from '../src/game/engulfment';
-import { newRun } from '../src/game/engine';
-import type { GameState } from '../src/game/types';
+import { createDieEffect } from '../src/game/specialDice';
+import { createInfernoEvaluation } from '../src/game/engulfment';
 import { enterRun, installRunState, readRunState } from './uiHelpers';
-import { placeFlameInstance } from '../src/game/flames';
-
-const REVEAL_PAUSE_MS = 180;
-
-function infernoState(seed: string, success: boolean): GameState {
-  const state = newRun(seed).state;
-  placeFlameInstance(state, 'vineyard');
-  const evaluation = createInfernoEvaluation(state)!;
-  if (success) {
-    evaluation.success = true;
-    evaluation.effectiveValue = 25;
-    evaluation.readiness = 1;
-    evaluation.previousReadiness = .62;
-    evaluation.suspendAfterContinue = false;
-    evaluation.currentCollectionTheoreticallySufficient = true;
-    evaluation.feedbackMessage = null;
-    evaluation.feedbackMessageId = null;
-    evaluation.flamesSnuffed = [structuredClone(evaluation.flames[0].asset)];
-    evaluation.flamesPreserved = [];
-    evaluation.selectedFlameInstanceIds = [evaluation.flames[0].asset.instanceId];
-    evaluation.selectedEffectiveValue = 25;
-    evaluation.earnedInfernoFactor = 25;
-    evaluation.consumedFinalFlame = true;
-    evaluation.engulfmentCountAfter = 1;
-    evaluation.infernoLevelAfter = 1;
-    evaluation.infernoMultiplierAfter = 25n;
-  } else {
-    evaluation.previousReadiness = .41;
-  }
-  state.phase = 'inferno';
-  state.infernoEvaluation = evaluation;
-  state.infernoProgress.previousReadiness = evaluation.readiness;
-  return state;
-}
+import { readyInfernoDeal } from './infernoFixtures';
 
 async function storedState(page: import('@playwright/test').Page) {
   return (await readRunState(page))!;
 }
 
 for (const speed of ['normal', 'fast', 'instant'] as const) {
-  test(`failed Inferno uses fixed timing and waits for CONTINUE at ${speed}`, async ({ page }) => {
-    const state = infernoState(`inferno-failure-${speed}`, false);
+  test(`frozen Inferno Deal waits for TAKE THE DEAL or NOT YET at ${speed}`, async ({ page }) => {
+    const state = readyInfernoDeal(`inferno-deal-${speed}`);
+    const frozen = structuredClone(state.infernoEvaluation!);
     await installRunState(page, state, speed);
-    const now = new Date('2026-10-14T12:00:00Z');
-    await page.clock.install({ time: now });
-    await page.clock.pauseAt(now);
     await enterRun(page);
-
-    const duration = infernoEvaluationDuration(state.infernoEvaluation!.effectiveValue);
-    await expect(page.getByTestId('inferno-evaluation')).toBeVisible();
-    await expect(page.getByTestId('inferno-meter-fill')).toHaveAttribute('data-start-percent', '41');
-    await expect(page.getByTestId('inferno-meter-fill')).toHaveAttribute('data-end-percent', '6.666666666666667');
-    await page.clock.runFor(Math.floor(duration / 2));
-    await expect(page.getByTestId('inferno-feedback')).toHaveCount(0);
-    await page.clock.runFor(Math.ceil(duration / 2) + REVEAL_PAUSE_MS);
-    const feedback = page.getByTestId('inferno-feedback');
-    await expect(feedback).toBeVisible();
-    await expect(feedback.getByRole('heading', { name: 'THE INFERNO IS WATCHING', exact: true })).toBeVisible();
-    await expect(feedback).toContainText('It measures how much power you get from your Flames.');
-    await expect(feedback).toContainText('Reach at least ×15 total Flame power');
-    await expect(feedback.getByRole('button', { name: 'CONTINUE', exact: true })).toBeVisible();
-    await page.clock.runFor(60_000);
-    await expect(feedback).toBeVisible();
-    await feedback.getByRole('button', { name: 'CONTINUE', exact: true }).click();
-    await expect(feedback).toHaveCount(0);
-    expect((await storedState(page)).infernoProgress.previousReadiness).toBeCloseTo(1 / 15);
-  });
-
-  test(`ready Inferno waits for an explicit decision at ${speed}`, async ({ page }) => {
-    const state = infernoState(`inferno-success-${speed}`, true);
-    await installRunState(page, state, speed);
-    const now = new Date('2026-10-14T12:00:00Z');
-    await page.clock.install({ time: now });
-    await page.clock.pauseAt(now);
+    const deal = page.getByTestId('inferno-deal');
+    await expect(deal).toBeVisible();
+    await expect(deal.getByRole('heading', { name: 'TAKE THE DEAL?', exact: true })).toBeVisible();
+    await expect(deal).toContainText('Vineyard');
+    await expect(deal).toContainText('Inferno ×1 → ×20');
+    await expect(deal).toContainText('CHOOSE 1 INFERNO REWARDS');
+    await expect(deal.getByRole('button', { name: 'TAKE THE DEAL', exact: true })).toBeVisible();
+    await expect(deal.getByRole('button', { name: 'NOT YET', exact: true })).toBeVisible();
+    await expect(deal).not.toContainText('Interest');
+    await expect(deal).not.toContainText('Tier');
+    await expect(deal).not.toContainText('Power Rating');
+    await page.reload();
     await enterRun(page);
-
-    const duration = infernoEvaluationDuration(state.infernoEvaluation!.effectiveValue);
-    await expect(page.getByTestId('inferno-meter-fill')).toHaveAttribute('data-start-percent', '62');
-    await expect(page.getByTestId('inferno-meter-fill')).toHaveAttribute('data-end-percent', '100');
-    await page.clock.runFor(Math.floor(duration / 2));
-    await expect(page.getByTestId('inferno-ready')).toHaveCount(0);
-    await page.clock.runFor(Math.ceil(duration / 2) + REVEAL_PAUSE_MS);
-    const ready = page.getByTestId('inferno-ready');
-    await expect(ready).toBeVisible();
-    await expect(ready.getByRole('heading', { name: 'CHOOSE YOUR OFFERING', exact: true })).toBeVisible();
-    await expect(ready).toContainText('Selected joint power: ×25 / ×15');
-    await expect(ready).toContainText('Earned Inferno factor ×25 · Cumulative ×1 → ×25');
-    await expect(ready.locator('[data-testid^="offered-flame-"]')).toContainText('Vineyard');
-    await expect(ready.getByText(/EMBER · SLOT 1 · 0G \/ 100G/)).toBeVisible();
-    await expect(ready.getByText('Individual power ×1', { exact: true })).toBeVisible();
-    await expect(ready).toContainText('Successful Engulfment: +25T');
-    await expect(ready.getByRole('button', { name: 'ENGULF SELECTED FLAMES', exact: true })).toBeVisible();
-    await expect(ready.getByRole('button', { name: 'NOT YET', exact: true })).toBeVisible();
-    const before = await storedState(page);
-    expect(before.engulfmentLevel).toBe(0);
-    expect(before.flameSlots[0]!.type).toBe('vineyard');
-    await ready.getByRole('button', { name: 'NOT YET', exact: true }).click();
-    await page.clock.runFor(10_000);
-    await expect(ready).toHaveCount(0);
+    expect((await storedState(page)).infernoEvaluation).toEqual(frozen);
+    await page.getByRole('button', { name: 'NOT YET', exact: true }).click();
     const deferred = await storedState(page);
-    expect(deferred.engulfmentLevel).toBe(0);
-    expect(deferred.flameSlots[0]!.type).toBe('vineyard');
-    expect(deferred.infernoProgress.previousReadiness).toBe(1);
+    expect(deferred.flameSlots[0]?.type).toBe('vineyard');
+    expect(deferred.infernoEvaluation).toBeNull();
+    expect(createInfernoEvaluation(deferred)).toBeNull();
   });
 }
 
-test('failed Inferno explains Engulfment from the result screen', async ({ page }) => {
-  const state = infernoState('inferno-engulfment-explanation', false);
+test('TAKE THE DEAL resolves the exact frozen Flame and die request', async ({ page }) => {
+  const state = readyInfernoDeal('inferno-take-deal', 24);
+  const die = state.diceInventory.instances[1];
+  die.effects = [createDieEffect(die.id, 'magnetic', 2)];
+  state.infernoEvaluation = createInfernoEvaluation(state)!;
+  const requestedDieId = state.infernoEvaluation.requestedDieId!;
+  const requestedSlot = state.diceInventory.roster.indexOf(requestedDieId);
   await installRunState(page, state, 'instant');
-  const now = new Date('2026-10-14T12:00:00Z');
-  await page.clock.install({ time: now });
-  await page.clock.pauseAt(now);
   await enterRun(page);
-  await page.clock.runFor(infernoEvaluationDuration(state.infernoEvaluation!.effectiveValue) + REVEAL_PAUSE_MS);
-
-  await page.getByRole('button', { name: 'Explain Engulfment', exact: true }).click();
-  await page.clock.runFor(500);
-  const definition = page.getByRole('dialog', { name: 'Engulfment definition', exact: true });
-  await expect(definition).toBeVisible();
-  await expect(definition).toContainText('Engulfment provides a permanent multiplier that applies to every Hand.');
-  await expect(definition).toContainText('When your current Flame power reaches ×15, you can choose Flames to sacrifice and trigger Engulfment.');
-});
-
-test('ENGULF NOW resolves the exact displayed offering and resets the persistent meter', async ({ page }) => {
-  const state = infernoState('inferno-engulf-now', true);
-  state.handLevels.ones = 7;
-  await installRunState(page, state, 'instant');
-  const now = new Date('2026-10-14T12:00:00Z');
-  await page.clock.install({ time: now });
-  await page.clock.pauseAt(now);
-  await enterRun(page);
-  await page.clock.runFor(infernoEvaluationDuration(25) + REVEAL_PAUSE_MS);
-  const ready = page.getByTestId('inferno-ready');
-  await ready.getByRole('button', { name: 'ENGULF SELECTED FLAMES', exact: true }).click();
+  const deal = page.getByTestId('inferno-deal');
+  await expect(deal.getByTestId(`requested-die-${requestedDieId}`)).toContainText('Magnetic II');
+  await deal.getByRole('button', { name: 'TAKE THE DEAL', exact: true }).click();
   const resolved = page.getByTestId('engulfment-success');
   await expect(resolved).toBeVisible();
-  await expect(resolved).toContainText('Vineyard · SNUFFED');
-  await expect(resolved).toContainText('Selected power ×25 became ×25 Inferno');
-  await expect(resolved).toContainText('×25');
-  await expect(resolved).toContainText('+25T');
-  await expect.poll(async () => (await storedState(page)).engulfmentLevel).toBe(1);
+  await expect(resolved).toContainText('Vineyard · GIVEN');
   const stored = await storedState(page);
-  expect(stored.engulfmentLevel).toBe(1);
   expect(stored.flameSlots[0]).toBeNull();
-  expect(stored.infernoProgress.previousReadiness).toBe(0);
-  expect(stored.infernoEvaluation!.engulfed).toBe(true);
+  expect(stored.diceInventory.instances[requestedDieId]).toBeUndefined();
+  const replacementId = stored.diceInventory.roster[requestedSlot]!;
+  expect(stored.diceInventory.instances[replacementId].effects.map(effect => [effect.type, effect.level]))
+    .toEqual([['basic', 1]]);
+});
+
+test('Inferno Deal remains usable on a small screen', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await installRunState(page, readyInfernoDeal('inferno-mobile'), 'instant');
+  await enterRun(page);
+  const deal = page.getByTestId('inferno-deal');
+  await expect(deal).toBeVisible();
+  await expect(deal.getByRole('button', { name: 'TAKE THE DEAL' })).toBeVisible();
+  await expect(deal.getByRole('button', { name: 'NOT YET' })).toBeVisible();
+  await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
 });

@@ -1,5 +1,5 @@
 import { bossRewardForEncounter, CONFIG, interestForGoldAtCap, roundReward } from './config';
-import { activeFace, rollPhysicalDie, scoringPips, weightedSelectedFaceWeight, wholeDieEffectSuppressed } from './dice';
+import { activeFace, createCollectibleDie, rollPhysicalDie, scoringPips, weightedSelectedFaceWeight, wholeDieEffectSuppressed } from './dice';
 import {
   captureHandStart, currentFlameInstanceId, eligibleFlameIds, flameByType, flameInstances, flameSlotOf, FLAMES, handXMultContributions,
   allHandsOnDeckChargeGain, countScoringDiceEnhancementComponents, fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, HOT_STREAK_SEQUENCE,
@@ -31,8 +31,8 @@ import { RUN_HISTORY_V2_RULESET, RUN_HISTORY_V2_SCHEMA_VERSION } from './runHist
 import {
   createInfernoEvaluation,
   engulfmentAssetKey,
+  infernoEvidenceRoundId,
   ownedEngulfmentAssets,
-  withInfernoSelection,
 } from './engulfment';
 import { appendCriticalDiagnostic, appendDebugTrace } from './debugTrace';
 import { captureRollbackState, restoreRollbackState } from './rollback';
@@ -52,7 +52,7 @@ import { Decimal, exactRatioNumber, roundPositiveScoreHalf, type ExactScore } fr
 import { createPlayIntent, createRollBatchIntent, createRollIntent } from './resolution';
 import { activeDieLabel, orderDieIdsByEncounter, rosterDice, rosterSlotOf, syncActiveDiceProjection } from './inventory';
 import type { PlayIntent, QualificationPlan, RollBatchIntent, RollContext, RollIntent, RollResolution, ScoreOccurrence } from './resolution';
-import { effectOf, effectRuntime, hasEffect, requireEffect, resetDieRoundState, runtimeFor, SPECIAL_DICE } from './specialDice';
+import { createDieEffect, effectOf, effectRuntime, hasEffect, requireEffect, resetDieRoundState, runtimeFor, SPECIAL_DICE } from './specialDice';
 import {
   applyStructuralInfernoReward, createCuratedRewardDie, CURATED_DIE_BUILDS, generateInfernoRewardSelection,
   INFERNO_HAND_BY_OFFER, INFERNO_REWARD_OFFERS, placeCuratedRewardDie,
@@ -2584,26 +2584,14 @@ export class Resolver {
       message: `Target Practice: ${HANDS[this.state.targetPracticeHand].name}` });
   }
   private performInfernoEvaluation(): void {
-    if (this.state.infernoEvaluationSuspendedUntilNewFlame) {
-      this.state.infernoEvaluation = null;
-      return;
-    }
     const evaluation = createInfernoEvaluation(this.state);
     if (!evaluation) { this.state.infernoEvaluation = null; return; }
     this.state.infernoProgress.evaluationIndex = evaluation.evaluationIndex;
     this.state.infernoProgress.previousReadiness = evaluation.readiness;
     this.state.infernoProgress.recentAction = 'none';
+    this.state.infernoProgress.declinedAtEvidenceRoundId = null;
     this.state.infernoEvaluation = evaluation;
     this.emitV2({ kind: 'inferno_evaluated', evaluation: structuredClone(evaluation) });
-  }
-  toggleEngulfmentFlame(instanceId: FlameInstanceId): void {
-    const evaluation = this.state.infernoEvaluation;
-    if (!evaluation?.success || evaluation.engulfed) throw new Error('A ready Inferno evaluation is required.');
-    if (!evaluation.flames.some(item => item.asset.instanceId === instanceId))
-      throw new Error('Choose a Flame from the current Inferno evaluation.');
-    const selected = new Set(evaluation.selectedFlameInstanceIds);
-    if (selected.has(instanceId)) selected.delete(instanceId); else selected.add(instanceId);
-    this.state.infernoEvaluation = withInfernoSelection(this.state, evaluation, [...selected]);
   }
   engulfNow(): void {
     const evaluation = this.state.infernoEvaluation;
@@ -2613,15 +2601,35 @@ export class Resolver {
     const ownedKeys = new Set(ownedEngulfmentAssets(this.state).map(engulfmentAssetKey));
     if (evaluation.flamesSnuffed.some(asset => !ownedKeys.has(engulfmentAssetKey(asset))))
       throw new Error('The frozen Inferno offering no longer matches the current build.');
+    const requestedDie = evaluation.requestedDieId === null ? null
+      : this.state.diceInventory.instances[evaluation.requestedDieId];
+    if (evaluation.requestedDieId !== null && !requestedDie)
+      throw new Error('The frozen Inferno die request no longer matches the current build.');
+    const requestedRosterIndex = evaluation.requestedDieId === null ? -1
+      : this.state.diceInventory.roster.indexOf(evaluation.requestedDieId);
+    const requestedStorageIndex = evaluation.requestedDieId === null ? -1
+      : this.state.diceInventory.storage.indexOf(evaluation.requestedDieId);
+    if (evaluation.requestedDieId !== null && requestedRosterIndex < 0 && requestedStorageIndex < 0)
+      throw new Error('The frozen Inferno die request is no longer owned.');
 
     for (const asset of evaluation.flamesSnuffed) {
       delete this.state.chargeAttribution[asset.instanceId];
       removeFlameInstance(this.state, asset.instanceId);
     }
+    if (requestedDie) {
+      delete this.state.diceInventory.instances[requestedDie.id];
+      delete this.state.dieRoundState[requestedDie.id];
+      if (requestedRosterIndex >= 0) {
+        const replacement = createCollectibleDie(this.state.diceInventory.nextDieId++, 'basic');
+        replacement.effects = [createDieEffect(replacement.id, 'basic', 1)];
+        this.state.diceInventory.instances[replacement.id] = replacement;
+        this.state.diceInventory.roster[requestedRosterIndex] = replacement.id;
+      } else this.state.diceInventory.storage[requestedStorageIndex] = null;
+      syncActiveDiceProjection(this.state);
+      this.revalidateFetchTarget('die_removed');
+    }
     this.state.engulfmentLevel = evaluation.infernoLevelAfter;
     this.state.infernoMultiplier = evaluation.infernoMultiplierAfter;
-    for (const item of evaluation.upper.levelsBefore) this.state.handLevels[item.hand] = evaluation.upper.unifiedLevel;
-    for (const item of evaluation.lower.levelsBefore) this.state.handLevels[item.hand] = evaluation.lower.unifiedLevel;
     if (!ownedFlameIds(this.state).has('fetch')) this.state.fetchTarget = null;
     if (!ownedFlameIds(this.state).has('targetPractice')) this.state.targetPracticeHand = null;
     this.state.handFamilyFlameStages = Object.fromEntries(Object.entries(this.state.handFamilyFlameStages)
@@ -2648,7 +2656,6 @@ export class Resolver {
       flamesSnuffed: structuredClone(evaluation.flamesSnuffed), questForfeited: false, returnedToShop: true });
     this.recordUltimateTargets('engulfment');
     this.recordBenchWarmerTarget('engulfment');
-    this.addTemper(25, 'engulfment', 'Successful Engulfment');
     this.state.infernoProgress.previousReadiness = 0;
     this.emit({ type: 'INFERNO_EVALUATED',
       message: `Engulfment accepted: Inferno ${this.format(evaluation.infernoMultiplierBefore)} to ${this.format(evaluation.infernoMultiplierAfter)}; ${this.format(evaluation.flamesSnuffed.length)} Flame${evaluation.flamesSnuffed.length === 1 ? '' : 's'} snuffed` });
@@ -2656,7 +2663,8 @@ export class Resolver {
   openInfernoReward(): void {
     if (!this.state.infernoEvaluation?.engulfed) throw new Error('A successful Engulfment is required.');
     if (!this.state.infernoRewards.pending) {
-      const selection = generateInfernoRewardSelection(this.state, this.rng);
+      const selection = generateInfernoRewardSelection(this.state, this.rng,
+        this.state.infernoEvaluation.rewardClaimCount);
       this.state.infernoRewards.pending = selection;
       this.state.infernoRewards.screenCount = selection.screenNumber;
       const offers = selection.offers.map(id => ({ ...INFERNO_REWARD_OFFERS[id],
@@ -2736,7 +2744,10 @@ export class Resolver {
   private finalizeInfernoReward(offerId: InfernoRewardOfferId, effect: string): void {
     const selection = this.state.infernoRewards.pending!;
     const definition = INFERNO_REWARD_OFFERS[offerId];
-    const deferredOfferIds = selection.offers.filter(id => id !== offerId);
+    selection.claimedOnScreen.push(offerId);
+    const targetClaims = Math.min(selection.claimCount, selection.offers.length);
+    const complete = selection.claimedOnScreen.length >= targetClaims;
+    const deferredOfferIds = complete ? selection.offers.filter(id => !selection.claimedOnScreen.includes(id)) : [];
     this.state.infernoRewards.claimedOfferIds.push(offerId);
     delete this.state.infernoRewards.deferredOffers[offerId];
     for (const id of deferredOfferIds) this.state.infernoRewards.deferredOffers[id] = { deferredAtScreen: selection.screenNumber };
@@ -2745,8 +2756,11 @@ export class Resolver {
       name: definition.name, category: definition.category, rarity: definition.rarity, effect, recycled, deferredOfferIds });
     this.emit({ type: 'INFERNO_REWARD_CLAIMED', rarity: definition.rarity,
       message: `INFERNO REWARD · CLAIMED · ${offerId} / ${definition.name} · ${effect} · deferred: ${deferredOfferIds.join(', ') || 'none'}` });
-    this.state.infernoRewards.pending = null;
-    this.finishInfernoReward();
+    selection.makeRoomOfferId = null;
+    if (complete) {
+      this.state.infernoRewards.pending = null;
+      this.finishInfernoReward();
+    }
   }
   private finishInfernoReward(): void {
     this.state.infernoEvaluation = null;
@@ -2757,6 +2771,8 @@ export class Resolver {
     const evaluation = this.state.infernoEvaluation;
     if (!evaluation?.success || evaluation.engulfed) throw new Error('A pending ready Inferno evaluation is required.');
     this.emit({ type: 'INFERNO_EVALUATED', message: 'Engulfment postponed; the current build was preserved' });
+    const latest = evaluation.evidenceRounds.at(-1);
+    this.state.infernoProgress.declinedAtEvidenceRoundId = latest ? infernoEvidenceRoundId(latest) : null;
     this.state.infernoEvaluation = null;
     this.continuePostRoundFlow();
   }

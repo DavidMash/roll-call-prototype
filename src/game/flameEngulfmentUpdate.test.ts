@@ -102,35 +102,32 @@ describe('Flame and Engulfment systems update', () => {
     expect(selectedOfferingFactor(event, new Set([1, 2]))).toBe(12);
   });
 
-  it('evaluates the latest six clears, then lets the player snuff only a qualifying joint subset', () => {
+  it('evaluates three clears and freezes the smallest qualifying Flame bundle', () => {
     const { state: played, cleanId, ultimateId, preservedId } = buildReadyOffering();
+    const factual = played.historyV2.filter(event => event.kind === 'hand_scored' || event.kind === 'round_attempt_finished');
+    for (const round of [2, 3]) for (const event of factual) played.historyV2.push({ ...structuredClone(event),
+      seq: played.nextHistorySeq++, actionId: played.nextActionId++, round });
     played.engulfmentLevel = 2;
     played.infernoMultiplier = 35n;
     expect(ENGULFMENT_EVIDENCE_ROUNDS).toBe(6);
     expect(ENGULFMENT_REQUIRED_MULTIPLIER).toBe(15);
     const evaluation = createInfernoEvaluation(played)!;
-    expect(evaluation.effectiveValue).toBe(60);
+    expect(evaluation.effectiveValue).toBeCloseTo(60, 12);
     expect(evaluation.flames.find(item => item.asset.instanceId === cleanId)?.hiddenStrength).toBe(12);
     expect(evaluation.flames.find(item => item.asset.instanceId === ultimateId)?.hiddenStrength).toBe(5);
-    expect(evaluation.selectedFlameInstanceIds).toEqual([]);
+    expect(evaluation.selectedFlameInstanceIds).toEqual([cleanId, ultimateId]);
+    expect(evaluation.earnedInfernoFactor).toBe(25);
 
     played.infernoEvaluation = evaluation;
     played.phase = 'inferno';
-    let state = dispatch(played, { type: 'TOGGLE_ENGULFMENT_FLAME', flameInstanceId: cleanId }).state;
-    expect(state.infernoEvaluation?.selectedEffectiveValue).toBe(12);
-    const rejected = dispatch(state, { type: 'ENGULF_NOW' });
-    expect(rejected.error).toContain('enough joint effective power');
-    expect(rejected.state).toBe(state);
-    state = dispatch(state, { type: 'TOGGLE_ENGULFMENT_FLAME', flameInstanceId: ultimateId }).state;
-    expect(state.infernoEvaluation).toMatchObject({ selectedEffectiveValue: 60, earnedInfernoFactor: 60,
-      engulfmentCountAfter: 3, infernoMultiplierAfter: 2_100n });
-    state = dispatch(state, { type: 'ENGULF_NOW' }).state;
+    const state = dispatch(played, { type: 'ENGULF_NOW' }).state;
     expect(state.engulfmentLevel).toBe(3);
-    expect(state.infernoMultiplier).toBe(2_100n);
+    expect(state.infernoMultiplier).toBe(875n);
     expect(state.flameSlots.some(flame => flame?.instanceId === preservedId)).toBe(true);
     expect(state.flameSlots.some(flame => flame?.instanceId === cleanId || flame?.instanceId === ultimateId)).toBe(false);
     expect([...state.historyV2].reverse().find(event => event.kind === 'engulfment_attempted')).toMatchObject({ kind: 'engulfment_attempted',
-      fullCollectionEffectivePower: 60, selectedEffectivePower: 60, earnedInfernoFactor: 60,
+      fullCollectionEffectivePower: evaluation.effectiveValue, selectedEffectivePower: evaluation.selectedEffectiveValue,
+      earnedInfernoFactor: 25,
       selectedInstanceIds: [cleanId, ultimateId] });
   });
 
