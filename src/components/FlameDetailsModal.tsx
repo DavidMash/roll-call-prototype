@@ -1,6 +1,6 @@
 import { Badge, Button, Group, Modal, Progress, Stack, Text } from '@mantine/core';
 import { useEffect, useState } from 'react';
-import { briberyFactor, briberyNextCost, briberyXMultIncrement, flameDetailsPresentation, flameEffectText, flameInstanceById, flameStokeLimits, fluxCapacitorChargeMultiplier, FLAMES } from '../game/flames';
+import { BRIBERY_ROUND_GOLD_CAP, briberyFactor, briberyXMultPerGold, flameDetailsPresentation, flameEffectText, flameInstanceById, flameStokeLimits, fluxCapacitorChargeMultiplier, FLAMES } from '../game/flames';
 import type { Action, Board, DiceInventory, Flame, FlameInstanceId, FlameStage } from '../game/types';
 import { formatPlayerNumber } from '../game/copy';
 import { RarityBadge } from './RarityBadge';
@@ -68,10 +68,10 @@ export function FlameDetailsModal({ board, inventory: _inventory, target, busy, 
       {flameId === 'fetch' && <Text size="sm" fw={700} c="orange">FETCH Face: {board.fetchTarget ? `${activeDieLabel(board, board.fetchTarget.dieId)} face ${board.fetchTarget.physicalFace}` : 'Not set'}</Text>}
       {flameId === 'targetPractice' && <Text size="sm" fw={700} c="orange">Target Hand: {board.targetPracticeHand ? HANDS[board.targetPracticeHand].name : 'Not set'}</Text>}
       {flameId === 'bribery' && <div className="modal-stat" data-testid="bribery-runtime-details">
-        <Text size="sm"><strong>Added per Bribe:</strong> +{formatPlayerNumber(briberyXMultIncrement(invested))} XMult</Text>
-        <Text size="sm"><strong>Next Bribe:</strong> <CurrencyAmount currency="gold" value={briberyNextCost(board.interactiveFlames.briberyPurchasedThisRound)} /></Text>
-        <Text size="sm"><strong>Pending:</strong> {board.interactiveFlames.briberyPendingCount > 0
-          ? `×${formatPlayerNumber(briberyFactor(invested, board.interactiveFlames.briberyPendingCount))} armed (${board.interactiveFlames.briberyPendingCount} Bribe${board.interactiveFlames.briberyPendingCount === 1 ? '' : 's'})`
+        <Text size="sm"><strong>Added per Gold:</strong> +{formatPlayerNumber(briberyXMultPerGold(invested))} XMult</Text>
+        <Text size="sm"><strong>Round cap:</strong> <CurrencyAmount currency="gold" value={BRIBERY_ROUND_GOLD_CAP} /></Text>
+        <Text size="sm"><strong>Pending:</strong> {board.interactiveFlames.briberyPendingGold > 0
+          ? `×${formatPlayerNumber(briberyFactor(invested, board.interactiveFlames.briberyPendingGold))} armed (${board.interactiveFlames.briberyPendingGold} Gold)`
           : '×1 · not armed'}</Text>
         {invested <= 0 && <Text size="xs" c="dimmed">Stoke this Ember before Bribery can add XMult.</Text>}
       </div>}

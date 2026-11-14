@@ -128,7 +128,7 @@ export const FLAME_SCALING = {
   dareDevil: { bonusPerDare: 2, maximumDares: 4 },
   doubleOrNothing: { fullBonus: 8 },
   allIn: { fullBonus: 11 },
-  bribery: { baseCost: 5, fullIncrement: 4 },
+  bribery: { goldPerAction: 1, fullXMultPerGold: .5, roundGoldCap: 20 },
   progressiveSequences: PROGRESSIVE_FLAME_SEQUENCES,
 } as const;
 export const standardFlameMultiplier = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
@@ -216,14 +216,13 @@ export function doubleOrNothingEligibleHands(
 }
 export const allInMultiplier = (investedGold: number) =>
   fixedFlameMultiplier(investedGold, FLAME_SCALING.allIn.fullBonus);
-export const briberyXMultIncrement = (investedGold: number) => Number(new Decimal(
+export const BRIBERY_ROUND_GOLD_CAP = FLAME_SCALING.bribery.roundGoldCap;
+export const briberyXMultPerGold = (investedGold: number) => Number(new Decimal(
   Math.max(0, Math.min(100, investedGold)),
-).times(FLAME_SCALING.bribery.fullIncrement).div(100).toFixed(12));
-export const briberyFactor = (investedGold: number, pendingCount: number) => Number(new Decimal(1)
-  .plus(new Decimal(briberyXMultIncrement(investedGold)).times(Math.max(0, Math.floor(pendingCount))))
+).times(FLAME_SCALING.bribery.fullXMultPerGold).div(100).toFixed(12));
+export const briberyFactor = (investedGold: number, pendingGold: number) => Number(new Decimal(1)
+  .plus(new Decimal(briberyXMultPerGold(investedGold)).times(Math.max(0, Math.floor(pendingGold))))
   .toFixed(12));
-export const briberyNextCost = (purchasedThisRound: number) => FLAME_SCALING.bribery.baseCost
-  * (Math.max(0, Math.floor(purchasedThisRound)) + 1);
 export const progressiveSequenceMultiplier = (id: ProgressiveSequenceFlame, investedGold: number, stepIndex: number) => {
   const rewards = PROGRESSIVE_FLAME_SEQUENCES[id].bonfireFactors;
   const bonfireFactor = rewards[Math.max(0, Math.min(rewards.length - 1, Math.floor(stepIndex)))] ?? 1;
@@ -268,12 +267,12 @@ export function flameEffectText(id: Flame, investedGold: number, _board: FlameDi
     case 'gymBros': return `Five Played Workout dice reach ×${formatPlayerNumber(gymBrosMultiplier(investedGold, 5))} XMult.`;
     case 'burnItDown': return `On Command, sacrifice your current Round Score to multiply Charge by up to ×${formatPlayerNumber(burnItDownChargeGain(investedGold, 1))}.`;
     case 'greaseTheEngine': return `On Command, pay escalating Gold to multiply Charge by ×${formatPlayerNumber(greaseTheEngineChargeGain(investedGold))}.`;
-    case 'lightningStrike': return `Predict one die's Manual Reroll to multiply Charge by ×${formatPlayerNumber(lightningStrikeChargeGain(investedGold))} on a hit.`;
+    case 'lightningStrike': return `Each correct die prediction in a Manual Reroll independently multiplies Charge by ×${formatPlayerNumber(lightningStrikeChargeGain(investedGold))}.`;
     case 'hotPotatoClock': return 'Avoid Playing the Hot Potato die to build increasingly large Charge.';
     case 'dareDevil': return `Each Dare stores more XMult for your next Ultimate Hand, up to ×${formatPlayerNumber(dareDevilMultiplier(investedGold, 4))}.`;
     case 'doubleOrNothing': return `Wager one of your three highest-level Possible Hands, then replay it later for ×${formatPlayerNumber(doubleOrNothingMultiplier(investedGold))} XMult.`;
     case 'allIn': return `Arm your next manual Play for ×${formatPlayerNumber(allInMultiplier(investedGold))} XMult; if it does not clear the Round, that Play's Score is removed.`;
-    case 'bribery': return `Pay escalating Gold to add +${formatPlayerNumber(briberyXMultIncrement(investedGold))} XMult per Bribe to your next manual Play.`;
+    case 'bribery': return `Invest 1 Gold at a time to add +${formatPlayerNumber(briberyXMultPerGold(investedGold))} XMult per Gold to your next manual Play, up to ${BRIBERY_ROUND_GOLD_CAP} Gold per Round.`;
     case 'topDown': return `Play Lower Section Hands from Five of a Kind down to Pair; the final step reaches ×${formatPlayerNumber(progressiveSequenceMultiplier('topDown', investedGold, 7))} XMult.`;
     case 'countDown': return `Play Upper Hands from Sixes down to Ones; the final step reaches ×${formatPlayerNumber(progressiveSequenceMultiplier('countDown', investedGold, 5))} XMult.`;
     default: return `The condition grants ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult.`;
@@ -319,12 +318,12 @@ export function flameDetailsPresentation(id: Flame, investedGold: number, board:
       maxChargeContribution: null };
   }
   if (id === 'bribery') {
-    const pending = board.interactiveFlames.briberyPendingCount;
+    const pending = board.interactiveFlames.briberyPendingGold;
     const factor = briberyFactor(investment, pending);
     return { currentLabel: 'Current XMult',
       currentValue: pending > 0
-        ? `×${formatPlayerNumber(factor)} armed · +${formatPlayerNumber(briberyXMultIncrement(investment))} per Bribe`
-        : `+${formatPlayerNumber(briberyXMultIncrement(investment))} per Bribe`,
+        ? `×${formatPlayerNumber(factor)} armed · ${pending} Gold pending`
+        : `+${formatPlayerNumber(briberyXMultPerGold(investment))} per Gold · ${BRIBERY_ROUND_GOLD_CAP} Gold Round cap`,
       maxChargeContribution: null };
   }
   const multiplier = id === 'targetPractice' ? targetPracticeMultiplier(investment)
@@ -485,7 +484,7 @@ export interface HandStartSnapshot {
   roundStartRosterSize: number;
   precedingShopDiePurchase: boolean;
   dareDevilCount: number;
-  briberyPendingCount: number;
+  briberyPendingGold: number;
   allIn: boolean;
   doubleOrNothingRedemption: boolean;
   previousPlays: number;
@@ -534,7 +533,7 @@ export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'in
     roundStartRosterSize: state.roundStartRosterSize,
     precedingShopDiePurchase: state.precedingShopDiePurchase,
     dareDevilCount: state.interactiveFlames.dareDevilCount,
-    briberyPendingCount: state.interactiveFlames.briberyPendingCount,
+    briberyPendingGold: state.interactiveFlames.briberyPendingGold,
     allIn: wager.allIn === true,
     doubleOrNothingRedemption: wager.doubleOrNothingRedemption === true,
     previousPlays: state.handPlayCounts[hand],
@@ -642,7 +641,7 @@ const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId, scoring
     case 'dareDevil': return snapshot.dareDevilCount > 0 && snapshot.ultimateHands.includes(hand);
     case 'doubleOrNothing': return snapshot.playSource === 'manual' && snapshot.doubleOrNothingRedemption;
     case 'allIn': return snapshot.playSource === 'manual' && snapshot.allIn;
-    case 'bribery': return snapshot.playSource === 'manual' && snapshot.briberyPendingCount > 0;
+    case 'bribery': return snapshot.playSource === 'manual' && snapshot.briberyPendingGold > 0;
     case 'topDown':
     case 'countDown': {
       const sequence = PROGRESSIVE_FLAME_SEQUENCES[id];
@@ -684,7 +683,7 @@ function factorValue(id: Flame, investedGold: number, snapshot: HandStartSnapsho
     case 'dareDevil': return dareDevilMultiplier(investedGold, snapshot.dareDevilCount);
     case 'doubleOrNothing': return doubleOrNothingMultiplier(investedGold);
     case 'allIn': return allInMultiplier(investedGold);
-    case 'bribery': return briberyFactor(investedGold, snapshot.briberyPendingCount);
+    case 'bribery': return briberyFactor(investedGold, snapshot.briberyPendingGold);
     case 'topDown':
     case 'countDown': return progressiveSequenceMultiplier(id, investedGold, snapshot.progressiveFlames[id]);
     default: return standardFlameMultiplier(investedGold);
@@ -740,8 +739,8 @@ function factorInput(id: Flame, snapshot: HandStartSnapshot, _scoringDieIds: num
     dareCount: snapshot.dareDevilCount, storedUltimateFactor: dareDevilMultiplier(
       snapshot.flames.find(flame => flame.type === 'dareDevil')?.investedGold ?? 0, snapshot.dareDevilCount),
     ultimateHand: snapshot.ultimateHands[0] } };
-  if (id === 'bribery') return { input: snapshot.briberyPendingCount,
-    detail: `${snapshot.briberyPendingCount} Bribe${snapshot.briberyPendingCount === 1 ? '' : 's'} stacked` };
+  if (id === 'bribery') return { input: snapshot.briberyPendingGold,
+    detail: `${snapshot.briberyPendingGold} Gold pending` };
   if (id === 'sixPack') return { input: snapshot.sixPackUpperHandsPlayed, diagnostics: {
     currentFactor: snapshot.sixPackXMult, upperDecayStep: snapshot.sixPackUpperHandsPlayed } };
   if (id === 'minigun') return { input: snapshot.minigunUpperStreak + 1, diagnostics: {

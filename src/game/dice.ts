@@ -1,11 +1,24 @@
 import { CONFIG } from './config';
-import type { CollectibleDie, DiceInventory, Die, DieType, Face, PhysicalFace, RandomSource, Rank } from './types';
+import type { CollectibleDie, DiceInventory, Die, DieOutcomeIdentity, DieType, Face, PhysicalFace, RandomSource, Rank } from './types';
 import { rosterTuple, storageTuple, STORAGE_SLOT_COUNT } from './inventory';
 import { createDieEffect } from './specialDice';
 
 export const RANKS: Rank[] = [1, 2, 3, 4, 5, 6];
 export const HAND_RANKS: Rank[] = [1, 2, 3, 4, 5, 6, 7];
 export const activeFace = (die: Die): Face => die.faces[die.value - 1];
+export const faceOutcomeIdentity = (face: Face): DieOutcomeIdentity => ({ kind: 'rank', rank: face.rank });
+export const outcomeIdentityKey = (outcome: DieOutcomeIdentity): string => `${outcome.kind}:${outcome.rank}`;
+export const sameOutcomeIdentity = (left: DieOutcomeIdentity, right: DieOutcomeIdentity): boolean =>
+  outcomeIdentityKey(left) === outcomeIdentityKey(right);
+/** One prediction choice per distinct resolved outcome, independent of duplicate physical faces. */
+export function distinctDieOutcomes(die: Die): DieOutcomeIdentity[] {
+  const outcomes = new Map<string, DieOutcomeIdentity>();
+  for (const face of die.faces) {
+    const outcome = faceOutcomeIdentity(face);
+    outcomes.set(outcomeIdentityKey(outcome), outcome);
+  }
+  return [...outcomes.values()];
+}
 export const isInfectedFace = (face: Face): boolean => face.bossMutation?.kind === 'infected';
 export const isSnakeEyesFace = (face: Face): boolean => face.bossMutation?.kind === 'snakeEyes';
 /** Infected suppresses the whole-die effect only while that physical face is exposed. */

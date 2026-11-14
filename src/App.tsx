@@ -136,7 +136,8 @@ export default function App() {
     if (!game.submit(action)) return;
     if (!['BUY_DIE', 'MOVE_DIE', 'SELL_DIE', 'STOKE_FLAME', 'RESTORE_LIFE', 'DISMISS_FLAME_TUTORIAL', 'UNLOCK_SHOP_EXIT'].includes(action.type)) setSelectedOffer(null);
     setSelectedFlameOffer(null);
-    if (action.type !== 'TOGGLE_CHARGE') setSelection(emptySelection());
+    if (!['TOGGLE_CHARGE', 'TOGGLE_ALL_IN', 'ACTIVATE_BRIBERY', 'ACTIVATE_BURN_IT_DOWN',
+      'ACTIVATE_GREASE_THE_ENGINE'].includes(action.type)) setSelection(emptySelection());
   }
   function restart(seed: string) {
     if (runMode === 'tutorial') {
@@ -303,7 +304,7 @@ export default function App() {
           </Paper>
         </Stack>
         : <RoundScreen board={board} event={event} busy={busy} inputBlocked={busy || gameMenuOpen || runInfoOpen || helpOpen || restoreLivesOpen || faceDetails !== null || flameDetails !== null}
-          selection={selection} setSelection={setSelection} submit={submit} skip={game.skip}
+          selection={selection} setSelection={setSelection} submit={submit} skip={game.skip} diceDisplay={diceDisplay}
           onFlamePresentationChange={updateFlamePresentation} />}
     </main>
     {(board.phase === 'round' || board.phase === 'flameSelection') && <DiceDock board={diceBoard} event={event} busy={busy} actionsEnabled={dockActionsEnabled} cinematic={showingChapterSplash}

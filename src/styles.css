@@ -786,7 +786,7 @@ button { font: inherit; }
   .active-gameplay .charge-guidance { font-size: clamp(.46rem, 2vw, .625rem); }
   .active-gameplay .selection-preview { display: none; }
   .active-gameplay .round-action-layout { width: 100%; min-width: 0; }
-  .active-gameplay .round-action-layout .mantine-Button-root { min-height: 40px; padding-inline: 9px; }
+  .active-gameplay .round-action-layout .mantine-Button-root { min-height: 44px; padding-inline: 9px; }
   .active-gameplay .round-action-layout .run-action-left,
   .active-gameplay .round-action-layout .run-action-left .mantine-Button-root { width: 100%; }
   .active-gameplay .reroll-action { min-width: 0; }
@@ -1116,6 +1116,7 @@ body, #root { overflow: hidden; }
 .run-action-right { grid-column: 2; justify-self: end; justify-content: flex-end; }
 .round-action-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
 .round-action-layout .run-action-right, .round-action-layout .play-action { width: 100%; }
+.round-action-layout .reroll-action, .round-action-layout .play-action { min-height: 44px; }
 .run-action-row .gameplay-actions-panel { width: 100%; min-width: 0; padding: 0 !important; background: transparent; box-shadow: none; }
 .run-action-row .gameplay-actions {
   width: 100%; max-width: none; display: grid; grid-template-columns: minmax(0, 1fr);
@@ -1176,16 +1177,67 @@ body, #root { overflow: hidden; }
 .dice-dock-context.flame { color: var(--mantine-color-orange-3); }
 .gameplay-actions-panel { flex: none; background: var(--mantine-color-dark-7); box-shadow: inset 0 0 0 1px rgba(255,255,255,.035); }
 .gameplay-actions-panel .gameplay-actions { max-width: 560px; margin-left: auto; padding: 0; }
-.flame-actions-entry { min-height: 0; display: flex; justify-content: flex-end; }
-.flame-actions-entry:empty { display: none; }
-.flame-action-card { min-width: 0; overflow-wrap: anywhere; background: color-mix(in srgb, var(--mantine-color-dark-7) 88%, transparent); }
-.flame-action-card .mantine-Button-root { align-self: flex-end; max-width: 100%; }
-.lightning-die-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(82px, 1fr)); gap: 6px; min-width: 0; }
-.lightning-die-options .mantine-Button-root { min-width: 0; padding-inline: 5px; }
-@media (max-width: 360px) {
-  .flame-actions-modal .mantine-Modal-content { max-width: calc(100vw - 12px); }
-  .flame-action-card { padding: 8px !important; }
-  .lightning-die-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.burn-it-down-bar { border-color: rgba(249,115,22,.36); background: rgba(124,45,18,.12); }
+.burn-it-down-copy { min-width: 0; display: flex; align-items: baseline; gap: 8px; overflow: hidden; }
+.burn-it-down-copy > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.burn-it-down-copy .burn-it-down-reason { color: var(--mantine-color-gray-5); }
+.burn-it-down-bar .mantine-Button-root, .grease-action { min-height: 44px; }
+.compact-action-with-reason, .play-flame-control { min-width: 0; display: flex; align-items: stretch; gap: 2px; }
+.compact-action-with-reason > .mantine-Button-root, .play-flame-control > .mantine-Button-root { flex: 1 1 auto; }
+.disabled-action-reason { flex: 0 0 44px; min-width: 44px; min-height: 44px; }
+.play-action-cluster { width: 100%; min-width: 0; display: flex; align-items: stretch; justify-content: flex-end; gap: 5px; }
+.play-action-cluster .play-action { flex: 1 1 150px; min-width: 84px; }
+.play-flame-controls { flex: 0 1 auto; display: flex; align-items: stretch; gap: 3px; }
+.play-flame-controls .mantine-Button-root { min-width: 0; max-width: 152px; height: auto; min-height: 44px; padding-inline: 7px; font-size: .61rem; line-height: 1.05; }
+.lightning-prediction-scroll { position: relative; min-width: 0; }
+.lightning-prediction-scroll::before, .lightning-prediction-scroll::after {
+  position: absolute; top: 0; bottom: 8px; z-index: 4; width: 34px; pointer-events: none; opacity: 0; content: '';
+  transition: opacity 120ms ease;
+}
+.lightning-prediction-scroll::before { left: 0; background: linear-gradient(90deg, var(--mantine-color-body), transparent); }
+.lightning-prediction-scroll::after { right: 0; background: linear-gradient(270deg, var(--mantine-color-body), transparent); }
+.lightning-prediction-scroll.has-more-before::before, .lightning-prediction-scroll.has-more-after::after { opacity: .92; }
+.lightning-prediction-row {
+  min-width: 0; display: flex; align-items: flex-start; gap: 10px; padding: 4px 2px 8px; overflow-x: auto;
+  scroll-snap-type: x proximity; scroll-padding-inline: 2px; overscroll-behavior-inline: contain;
+}
+.lightning-prediction-die { flex: 0 0 min(112px, 27vw); display: grid; justify-items: center; gap: 2px; }
+.lightning-prediction-die { scroll-snap-align: start; scroll-snap-stop: normal; }
+.lightning-prediction-arrow { min-width: 44px; min-height: 44px; }
+.lightning-prediction-die .die-slot { width: 100%; }
+.lightning-prediction-die .die:disabled { opacity: 1; }
+.lightning-prediction-die .die-face-details:disabled { opacity: 1; }
+.lightning-scroll-guidance { min-height: 18px; }
+@media (max-width: 520px) {
+  .active-gameplay .bonfire-strip { overflow-x: auto; scrollbar-width: none; }
+  .active-gameplay .bonfire-strip::-webkit-scrollbar { display: none; }
+  .active-gameplay .bonfire-strip > * { min-width: max-content; flex-shrink: 0; }
+  .active-gameplay .bonfire-strip .mantine-Badge-root { width: auto; max-width: none; }
+  .active-gameplay .flame-badge-status { display: none; }
+  .burn-it-down-copy { display: grid; gap: 1px; line-height: 1.1; }
+  .burn-it-down-copy > span { white-space: normal; }
+  .burn-it-down-copy .burn-it-down-reason { display: block; font-size: .58rem; }
+  .run-action-row:has(.round-action-layout.has-play-modifiers) { height: 102px; min-height: 102px; }
+  .active-gameplay .round-action-layout.has-play-modifiers {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    grid-template-rows: 44px 44px; grid-template-areas: 'modifiers modifiers' 'reroll play';
+    gap: 4px 6px;
+  }
+  .active-gameplay .round-action-layout.has-play-modifiers > .run-action-left {
+    grid-area: reroll; grid-column: auto; width: 100%; align-self: stretch;
+  }
+  .active-gameplay .round-action-layout.has-play-modifiers > .run-action-right,
+  .active-gameplay .round-action-layout.has-play-modifiers .play-action-cluster { display: contents; }
+  .active-gameplay .round-action-layout.has-play-modifiers .play-flame-controls {
+    grid-area: modifiers; width: 100%; display: grid; grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr); gap: 6px;
+  }
+  .active-gameplay .round-action-layout.has-play-modifiers .play-action { grid-area: play; align-self: stretch; }
+  .play-flame-control { min-width: 0; }
+  .play-flame-controls .mantine-Button-root { width: 100%; max-width: none; min-height: 44px; padding-inline: 5px; font-size: .57rem; }
+  .active-gameplay .round-action-layout .mantine-Button-root { min-height: 44px; }
+  .lightning-prediction-die { flex-basis: 106px; }
+  .lightning-scroll-guidance .mantine-Text-root { font-size: .58rem; }
 }
 .flame-detail-trigger { cursor: pointer; text-transform: none; }
 @media (prefers-reduced-motion: reduce) {

@@ -62,19 +62,21 @@ for (const speed of ['normal', 'fast', 'instant'] as const) {
   });
 }
 
-test('All In uses shared Flame Actions and clearly marks the armed next manual Play', async ({ page }) => {
+test('All In is an adjacent Play toggle with inactive, armed, and disarmed states', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 720 });
   await installRunState(page, allInState());
   await enterRun(page);
 
-  await page.getByTestId('flame-actions-trigger').click();
-  const action = page.getByTestId('flame-action-all-in');
-  await expect(action).toContainText("Failure removes that Play's Score and directly caused Free Play Score");
-  await expect(action).toContainText('NEXT MANUAL PLAY ×12');
-  await action.getByRole('button', { name: 'ARM ALL IN' }).click();
-  await expect(page.getByTestId('score-wager-status')).toContainText('ALL IN ARMED · NEXT MANUAL PLAY ×12');
-
-  await page.getByTestId('flame-actions-trigger').click();
-  await expect(page.getByTestId('flame-action-all-in').getByRole('button', { name: 'ALL IN ARMED' })).toBeDisabled();
+  await expect(page.getByTestId('flame-actions-trigger')).toHaveCount(0);
+  const toggle = page.getByTestId('all-in-toggle');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(toggle).toHaveAccessibleName(/Arm All In ×12.*must clear the Round/i);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(toggle).toContainText('ALL IN ARMED · ×12');
+  await expect(toggle).toHaveAccessibleName(/must clear the Round/i);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByTestId('score-wager-status')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

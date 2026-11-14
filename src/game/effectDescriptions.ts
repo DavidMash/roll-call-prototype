@@ -93,7 +93,7 @@ export function flameVerboseDescription(id: Flame): RichText {
     gymBros: [text('Playing more dice with an active '), effect({ kind: 'die', id: 'workout' }, 'Workout'), text(' effect increases that Hand’s '), term('xMult'), text(', up to ×3.5.')],
     burnItDown: [term('onCommand'), text(', sacrifice your current Round Score to multiply your current '), term('charge'), text(' based on how much of the Round Target you gave up, up to ×4.')],
     greaseTheEngine: [term('onCommand'), text(', pay Gold to multiply your current '), term('charge'), text(', up to ×1.5. Each use costs more Gold until the Round ends.')],
-    lightningStrike: [text("Predict one die's next "), term('manualReroll'), text('. If the final face matches your prediction, multiply your current '), term('charge'), text(', up to ×3.')],
+    lightningStrike: [text('Predict every die in your next '), term('manualReroll'), text('. If at least one final outcome matches, multiply your current '), term('charge'), text(', up to ×3.')],
     hotPotatoClock: [text('One die is the Hot Potato. Avoid Playing it to apply an increasingly large multiplier to your current '), term('charge'), text('. The Hot Potato moves after every Play.')],
     dareDevil: [text('When your Ultimate Hand is playable, use Dare Devil to Roll all available player dice. Each Dare makes your next Ultimate Hand worth more '), term('xMult'), text(', up to ×9.')],
     doubleOrNothing: [text('After manually Playing one of your three highest-level '), term('possibleHand', 'Possible Hands'),
@@ -101,7 +101,7 @@ export function flameVerboseDescription(id: Flame): RichText {
     allIn: [term('onCommand'), text(", arm your next manual Play for up to ×12 "), term('xMult'), text(". If that Play and its resulting Free Plays do not clear the Round, their Score is removed.")],
     topDown: [text('Play '), term('lowerSectionHand', 'Lower Section Hands'), text(' from Five of a Kind down to Pair. Each correct step gains increasingly large '), term('xMult'), text(', up to ×12. Unrelated Plays do not break the sequence.')],
     countDown: [text('Play '), term('upperHand', 'Upper Hands'), text(' in order from Sixes down to Ones. Each correct step gains increasingly large '), term('xMult'), text(', up to ×12. Unrelated Plays do not break the sequence.')],
-    bribery: [term('onCommand'), text(', pay Gold to add '), term('xMult'), text(' to your next manual Play. Each Bribe adds more XMult as this Flame grows stronger. The first Bribe each Round costs 5 Gold, and each additional Bribe costs 5 Gold more. You can Bribe multiple times before the same Play; their bonuses add together inside one Bribery factor.')],
+    bribery: [text('Beside Play, invest Gold one at a time to add '), term('xMult'), text(' to your next manual Play. Each Gold adds more XMult as this Flame grows stronger. You can invest up to 20 Gold per Round; pending investment is spent by the next manual Play and cannot be refunded.')],
   };
   return descriptions[id];
 }

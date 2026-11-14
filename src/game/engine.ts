@@ -1,13 +1,12 @@
 import { CONFIG, lifeRestoreCost, offerRerollCost } from './config';
-import { createDiceInventory, wholeDieEffectSuppressed } from './dice';
+import { createDiceInventory, distinctDieOutcomes, sameOutcomeIdentity, wholeDieEffectSuppressed } from './dice';
 import { Resolver } from './effects';
 import type { ResolverOptions } from './effects';
 import {
   createFlameInstance, emptyFlameSlots, flameByType, flameEffectText, flameInstances, flameStokeLimits, FLAMES, hasOwnedChargeFlame,
   HAND_FAMILY_FLAME_IDS, hasOwnedFlame, isFlame, ownedFlameIds, recalculateMaxCharge,
   normalizeFlameInstanceRuntime, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier,
-  greaseTheEngineCost, FLAME_SCALING,
-  briberyNextCost,
+  greaseTheEngineCost, FLAME_SCALING, BRIBERY_ROUND_GOLD_CAP,
 } from './flames';
 import { ALL_HAND_IDS, availableHandIds, HANDS, initialHandLevels, initialHandPlayCounts, planQualification, ultimateHands } from './hands';
 import { hashSeed, SeededRng } from './rng';
@@ -301,9 +300,13 @@ function normalizeProgressiveFlameRuntime(state: Pick<Board, 'progressiveFlames'
 }
 
 function normalizeInteractiveFlameRuntime(state: Pick<Board, 'interactiveFlames'>): void {
+  const legacy = state.interactiveFlames as unknown as {
+    briberyPurchasedThisRound?: number; briberyPendingCount?: number;
+    briberyGoldSpentThisRound?: number; briberyPendingGold?: number;
+  } | undefined;
   state.interactiveFlames ??= { burnItDownUses: 0, greaseTheEngineUses: 0,
     hotPotatoDieId: null, hotPotatoStreak: 0, dareDevilCount: 0,
-    briberyPurchasedThisRound: 0, briberyPendingCount: 0 };
+    briberyGoldSpentThisRound: 0, briberyPendingGold: 0 };
   state.interactiveFlames.burnItDownUses = Math.max(0, Math.floor(state.interactiveFlames.burnItDownUses ?? 0));
   state.interactiveFlames.greaseTheEngineUses = Math.max(0, Math.floor(state.interactiveFlames.greaseTheEngineUses ?? 0));
   state.interactiveFlames.hotPotatoDieId = Number.isInteger(state.interactiveFlames.hotPotatoDieId)
@@ -311,15 +314,18 @@ function normalizeInteractiveFlameRuntime(state: Pick<Board, 'interactiveFlames'
   state.interactiveFlames.hotPotatoStreak = Math.max(0, Math.floor(state.interactiveFlames.hotPotatoStreak ?? 0));
   state.interactiveFlames.dareDevilCount = Math.max(0, Math.min(FLAME_SCALING.dareDevil.maximumDares,
     Math.floor(state.interactiveFlames.dareDevilCount ?? 0)));
-  state.interactiveFlames.briberyPurchasedThisRound = Math.max(0,
-    Math.floor(state.interactiveFlames.briberyPurchasedThisRound ?? 0));
-  state.interactiveFlames.briberyPendingCount = Math.max(0,
-    Math.floor(state.interactiveFlames.briberyPendingCount ?? 0));
+  const legacyPurchased = Math.max(0, Math.floor(legacy?.briberyPurchasedThisRound ?? 0));
+  const legacyPending = Math.max(0, Math.floor(legacy?.briberyPendingCount ?? 0));
+  state.interactiveFlames.briberyGoldSpentThisRound = Math.max(0, Math.min(BRIBERY_ROUND_GOLD_CAP,
+    Math.floor(legacy?.briberyGoldSpentThisRound ?? (5 * legacyPurchased * (legacyPurchased + 1) / 2))));
+  state.interactiveFlames.briberyPendingGold = Math.max(0, Math.min(
+    state.interactiveFlames.briberyGoldSpentThisRound,
+    Math.floor(legacy?.briberyPendingGold ?? Math.min(BRIBERY_ROUND_GOLD_CAP, legacyPending * 5))));
 }
 
 function normalizeScoreWagerRuntime(state: Pick<Board, 'scoreWagers'>): void {
   state.scoreWagers ??= { nextPackageId: 1, packages: [], pendingDoubleOrNothing: null,
-    doubleOrNothing: null, allInArmed: false };
+    doubleOrNothing: null, allInArmed: false, allInUsedThisRound: false };
   state.scoreWagers.nextPackageId = Math.max(1, Math.floor(state.scoreWagers.nextPackageId ?? 1));
   state.scoreWagers.packages = (state.scoreWagers.packages ?? []).map(scorePackage => ({
     ...scorePackage,
@@ -338,6 +344,7 @@ function normalizeScoreWagerRuntime(state: Pick<Board, 'scoreWagers'>): void {
   if (pending) state.scoreWagers.pendingDoubleOrNothing = { ...pending,
     packageScore: exact(pending.packageScore), roundScore: exact(pending.roundScore), target: exact(pending.target) };
   state.scoreWagers.allInArmed = state.scoreWagers.allInArmed === true;
+  state.scoreWagers.allInUsedThisRound = state.scoreWagers.allInUsedThisRound === true;
 }
 
 function normalizeSilencedBossGoal(state: GameState): void {
@@ -729,16 +736,24 @@ export function validateAction(state: Board | GameState, action: Action): string
     const invalid = validateInteractiveFlame(state, 'bribery');
     if (invalid) return invalid;
     if (currentlyPlayableManualHands(state).length === 0) return 'No manual Hand is currently playable.';
-    const cost = briberyNextCost(state.interactiveFlames.briberyPurchasedThisRound);
-    if (state.gold < cost) return `Not enough Gold; ${cost} required.`;
+    if (state.interactiveFlames.briberyGoldSpentThisRound >= BRIBERY_ROUND_GOLD_CAP)
+      return `Bribery's ${BRIBERY_ROUND_GOLD_CAP} Gold Round cap has been reached.`;
+    if (state.gold < 1) return 'Not enough Gold; 1 required.';
     return null;
   }
   if (action.type === 'ACTIVATE_LIGHTNING_STRIKE') {
     const invalid = validateInteractiveFlame(state, 'lightningStrike');
     if (invalid) return invalid;
     if (state.chargeXMult >= state.maxCharge - 1e-9) return 'Charge is already full.';
-    if (![1, 2, 3, 4, 5, 6].includes(action.predictedFace)) return 'Predict a face from 1 through 6.';
-    return validateManualReroll(state, [action.dieId]);
+    if (!action.predictions.length) return 'Select at least one die to predict.';
+    const dieIds = action.predictions.map(prediction => prediction.dieId);
+    if (new Set(dieIds).size !== dieIds.length) return 'Submit exactly one prediction for each selected die.';
+    for (const prediction of action.predictions) {
+      const die = activeEncounterDice(state).find(candidate => candidate.id === prediction.dieId);
+      if (!die || !distinctDieOutcomes(die).some(outcome => sameOutcomeIdentity(outcome, prediction.outcome)))
+        return 'Choose an outcome defined by each selected die.';
+    }
+    return validateManualReroll(state, dieIds);
   }
   if (action.type === 'ACTIVATE_DARE_DEVIL') {
     const invalid = validateInteractiveFlame(state, 'dareDevil');
@@ -750,10 +765,11 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (!activeEncounterDice(state).some(die => die.owner === 'player')) return 'No player die is currently available to Roll.';
     return null;
   }
-  if (action.type === 'ARM_ALL_IN') {
+  if (action.type === 'TOGGLE_ALL_IN') {
     const invalid = validateInteractiveFlame(state, 'allIn');
     if (invalid) return invalid;
-    if (state.scoreWagers.allInArmed) return 'All In is already armed for the next manual Play.';
+    if (state.scoreWagers.allInArmed) return null;
+    if (state.scoreWagers.allInUsedThisRound) return 'All In has already been used this Round.';
     if (currentlyPlayableManualHands(state).length === 0) return 'No manual Hand is currently playable.';
     return null;
   }
@@ -1079,9 +1095,9 @@ export function newRun(seed: string, random?: RandomSource, options?: NewRunOpti
     roundPlayCount: 0, roundStartLives: CONFIG.maxLives, roundStartRosterSize: CONFIG.diceCount, precedingShopDiePurchase: false,
     interactiveFlames: { burnItDownUses: 0, greaseTheEngineUses: 0,
       hotPotatoDieId: null, hotPotatoStreak: 0, dareDevilCount: 0,
-      briberyPurchasedThisRound: 0, briberyPendingCount: 0 },
+      briberyGoldSpentThisRound: 0, briberyPendingGold: 0 },
     scoreWagers: { nextPackageId: 1, packages: [], pendingDoubleOrNothing: null,
-      doubleOrNothing: null, allInArmed: false },
+      doubleOrNothing: null, allInArmed: false, allInUsedThisRound: false },
     hotStreakGoal: null, hotStreakCharges: 0, handFamilyFlameStages: {}, progressiveFlames: { topDown: 0, countDown: 0 }, lifetimeNormalShopGoldSpent: 0, consumed: [], scorecardCycleConsumed: [], shop: null,
     fetchTarget: null,
     handLevels: initialHandLevels(), handPlayCounts: initialHandPlayCounts(), targetPracticeHand: null,
@@ -1129,12 +1145,12 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       case 'MANUAL_REROLL': resolver.manualReroll(action.dieIds); break;
       case 'ACTIVATE_BURN_IT_DOWN': resolver.burnItDown(); break;
       case 'ACTIVATE_GREASE_THE_ENGINE': resolver.greaseTheEngine(); break;
-      case 'ACTIVATE_BRIBERY': resolver.bribe(); break;
-      case 'ACTIVATE_LIGHTNING_STRIKE': resolver.lightningStrike(action.dieId, action.predictedFace); break;
+      case 'ACTIVATE_BRIBERY': resolver.investBriberyGold(); break;
+      case 'ACTIVATE_LIGHTNING_STRIKE': resolver.lightningStrike(action.predictions); break;
       case 'ACTIVATE_DARE_DEVIL': resolver.dareDevil(); break;
       case 'ACCEPT_DOUBLE_OR_NOTHING': resolver.acceptDoubleOrNothing(); break;
       case 'DECLINE_DOUBLE_OR_NOTHING': resolver.declineDoubleOrNothing(action.reason); break;
-      case 'ARM_ALL_IN': resolver.armAllIn(); break;
+      case 'TOGGLE_ALL_IN': resolver.toggleAllIn(); break;
       case 'RETREAT': resolver.retreat(); break;
       case 'INVOKE_CHAMELEON': resolver.invokeChameleon(action.dieId); break;
       case 'INVOKE_FLYWHEEL': resolver.invokeFlywheel(action.dieId); break;

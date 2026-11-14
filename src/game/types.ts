@@ -185,11 +185,14 @@ export interface FlameActivationDiagnostics {
   goldCost?: number;
   goldBefore?: number;
   goldAfter?: number;
-  predictedDieId?: DieId;
-  predictedFace?: Rank;
-  actualFace?: Rank;
+  predictedDieIds?: DieId[];
   predictionHit?: boolean;
-  manualRerollSource?: 'normal' | 'carePackage';
+  predictionCount?: number;
+  successfulPredictions?: number;
+  normalRerollsSpent?: number;
+  carePackageRerollsSpent?: number;
+  chargeAfter?: number;
+  combinedChargeFactorRequested?: number;
   hotPotatoBefore?: DieId | null;
   hotPotatoPlayed?: boolean;
   hotPotatoStreak?: number;
@@ -208,8 +211,8 @@ export interface InteractiveFlameRuntime {
   hotPotatoDieId: DieId | null;
   hotPotatoStreak: number;
   dareDevilCount: number;
-  briberyPurchasedThisRound: number;
-  briberyPendingCount: number;
+  briberyGoldSpentThisRound: number;
+  briberyPendingGold: number;
 }
 
 export interface ScorePackagePlay {
@@ -265,6 +268,7 @@ export interface ScoreWagerRuntime {
   pendingDoubleOrNothing: PendingDoubleOrNothingOffer | null;
   doubleOrNothing: DoubleOrNothingWager | null;
   allInArmed: boolean;
+  allInUsedThisRound: boolean;
 }
 export interface HandScoreAccumulator {
   hand: HandId;
@@ -330,6 +334,13 @@ export type BossFaceMutation =
 export interface PhysicalFace {
   rank: Rank;
   bossMutation?: BossFaceMutation;
+}
+
+/** Canonical prediction identity for a resolved die outcome. Extend this union when faces gain non-rank outcomes. */
+export type DieOutcomeIdentity = { kind: 'rank'; rank: Rank };
+export interface LightningStrikePrediction {
+  dieId: DieId;
+  outcome: DieOutcomeIdentity;
 }
 
 /** Hexer-only authored face rules, separate from collectible whole-die effects. */
@@ -1080,11 +1091,11 @@ export type Action =
   | { type: 'ACTIVATE_BURN_IT_DOWN' }
   | { type: 'ACTIVATE_GREASE_THE_ENGINE' }
   | { type: 'ACTIVATE_BRIBERY' }
-  | { type: 'ACTIVATE_LIGHTNING_STRIKE'; dieId: DieId; predictedFace: Exclude<Rank, 7> }
+  | { type: 'ACTIVATE_LIGHTNING_STRIKE'; predictions: LightningStrikePrediction[] }
   | { type: 'ACTIVATE_DARE_DEVIL' }
   | { type: 'ACCEPT_DOUBLE_OR_NOTHING' }
   | { type: 'DECLINE_DOUBLE_OR_NOTHING'; reason: 'expired' | 'ignored' }
-  | { type: 'ARM_ALL_IN' }
+  | { type: 'TOGGLE_ALL_IN' }
   | { type: 'BUY_DIE'; offerId: number }
   | { type: 'MOVE_DIE'; source: DiceSlotRef; destination: DiceSlotRef;
       expectedSourceDieId: DieId; expectedDestinationDieId: DieId | null }

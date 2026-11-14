@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { activeFace } from './dice';
+import { activeFace, distinctDieOutcomes } from './dice';
+import { createCursedDie } from './bosses';
 import { Resolver } from './effects';
 import { dispatch, newRun, validateAction } from './engine';
 import {
@@ -12,6 +13,7 @@ import type { Flame, GameState, HandId, RandomSource, Rank, SpecialDieType } fro
 
 const constant = (value = 0): RandomSource => ({ next: () => value });
 const PASS_3A_FLAMES = ['burnItDown', 'greaseTheEngine', 'lightningStrike', 'hotPotatoClock', 'dareDevil'] as const;
+const prediction = (dieId: number, rank: Rank) => [{ dieId, outcome: { kind: 'rank' as const, rank } }];
 
 function game(values: Rank[] = [1, 2, 3, 4, 5]): GameState {
   const state = newRun('flame-update-pass-3a', constant(.8)).state;
@@ -145,26 +147,28 @@ describe('Lightning Strike', () => {
       let state = game(); own(state, 'lightningStrike'); state.dice[0].value = 1;
       if (reserve) { state.manualRerollsRemaining = 0; state.specialOfferEffects.carePackageRerolls = 1; }
       const beforeNormal = state.manualRerollsRemaining;
-      state = dispatch(state, { type: 'ACTIVATE_LIGHTNING_STRIKE', dieId: 0, predictedFace: 2 }, constant()).state;
+      state = dispatch(state, { type: 'ACTIVATE_LIGHTNING_STRIKE', predictions: prediction(0, 2) }, constant()).state;
       expect(activeFace(state.dice[0]).rank).toBe(2);
       expect(state.chargeXMult).toBe(3);
       expect(state.manualRerollsUsedThisRound).toBe(1);
       expect(reserve ? state.specialOfferEffects.carePackageRerolls : state.manualRerollsRemaining)
         .toBe(reserve ? 0 : beforeNormal - 1);
       expect(state.historyV2.find(event => event.kind === 'flame_action' && event.flame === 'lightningStrike'))
-        .toMatchObject({ action: { type: 'lightning_strike', predictedFace: 2, actualFace: 2, hit: true,
-          manualRerollSource: reserve ? 'carePackage' : 'normal', chargeGained: 2 } });
+        .toMatchObject({ action: { type: 'lightning_strike', hit: true,
+          normalRerollsSpent: reserve ? 0 : 1, carePackageRerollsSpent: reserve ? 1 : 0, chargeGained: 2,
+          predictions: [{ dieId: 0, predictedOutcome: { kind: 'rank', rank: 2 },
+            actualOutcome: { kind: 'rank', rank: 2 }, hit: true }] } });
     }
   });
 
   it('awards nothing on a miss and is disabled without a reroll resource', () => {
     let state = game(); own(state, 'lightningStrike'); state.dice[0].value = 1;
-    state = dispatch(state, { type: 'ACTIVATE_LIGHTNING_STRIKE', dieId: 0, predictedFace: 6 }, constant()).state;
+    state = dispatch(state, { type: 'ACTIVATE_LIGHTNING_STRIKE', predictions: prediction(0, 6) }, constant()).state;
     expect(state.chargeXMult).toBe(1);
     expect(state.historyV2.find(event => event.kind === 'flame_action' && event.flame === 'lightningStrike'))
       .toMatchObject({ action: { type: 'lightning_strike', hit: false, chargeGained: 0 } });
     state.manualRerollsRemaining = 0; state.specialOfferEffects.carePackageRerolls = 0;
-    expect(validateAction(state, { type: 'ACTIVATE_LIGHTNING_STRIKE', dieId: 0, predictedFace: 1 }))
+    expect(validateAction(state, { type: 'ACTIVATE_LIGHTNING_STRIKE', predictions: prediction(0, 1) }))
       .toContain('Not enough manual rerolls');
   });
 
@@ -172,7 +176,7 @@ describe('Lightning Strike', () => {
     let state = game([1, 1, 1, 1, 1]);
     own(state, 'lightningStrike'); own(state, 'jumpStart'); own(state, 'casual');
     state.manualRerollsRemaining = 1;
-    state = dispatch(state, { type: 'ACTIVATE_LIGHTNING_STRIKE', dieId: 0, predictedFace: 2 }, constant()).state;
+    state = dispatch(state, { type: 'ACTIVATE_LIGHTNING_STRIKE', predictions: prediction(0, 2) }, constant()).state;
     expect(state.chargeXMult).toBe(4.5);
     state.dice.forEach(die => { die.value = 1; });
     new Resolver(state, constant()).play('fiveKind', [0, 1, 2, 3, 4]);
@@ -180,21 +184,81 @@ describe('Lightning Strike', () => {
 
     const hail = game([1, 1, 1, 1, 1]); own(hail, 'lightningStrike'); own(hail, 'hailMary');
     hail.manualRerollsRemaining = 1;
-    new Resolver(hail, constant()).lightningStrike(0, 2);
+    new Resolver(hail, constant()).lightningStrike(prediction(0, 2));
     hail.dice.forEach(die => { die.value = 1; });
     new Resolver(hail, constant()).play('fiveKind', [0, 1, 2, 3, 4]);
     expect(factor(hail, 'hailMary')).toBe(5);
 
     const curtain = game(); effects(curtain, 0, [['freePlay', 1]]); own(curtain, 'lightningStrike');
-    new Resolver(curtain, constant()).lightningStrike(0, 2);
+    new Resolver(curtain, constant()).lightningStrike(prediction(0, 2));
     expect(curtain.stats.handScores.some(score => score.playSource === 'freePlay')).toBe(true);
 
     const magic = game(); effects(magic, 0, [['magic', 1]]); own(magic, 'lightningStrike');
     effectRuntime(magic.dieRoundState[0], effectOf(rosterDice(magic)[0], 'magic'))!.magicArmedFace = 6;
-    new Resolver(magic, constant()).lightningStrike(0, 6);
+    new Resolver(magic, constant()).lightningStrike(prediction(0, 6));
     expect(activeFace(magic.dice[0]).rank).toBe(6);
     expect(magic.chargeXMult).toBe(3);
   });
+
+  it('evaluates a mixed batch independently, compounds every hit, and consumes one split-cost Manual Reroll', () => {
+    let state = game([1, 2, 3, 4, 5]); own(state, 'lightningStrike'); own(state, 'momentum');
+    state.manualRerollsRemaining = 1; state.specialOfferEffects.carePackageRerolls = 2;
+    const resolved = dispatch(state, { type: 'ACTIVATE_LIGHTNING_STRIKE', predictions: [
+      ...prediction(0, 2), ...prediction(1, 1), ...prediction(2, 6),
+    ] }, constant());
+    state = resolved.state;
+    expect(state.chargeXMult).toBe(9);
+    expect(state.manualRerollsUsedThisRound).toBe(1);
+    expect(state.manualRerollsRemaining).toBe(0);
+    expect(state.specialOfferEffects.carePackageRerolls).toBe(0);
+    expect(state.historyV2.find(event => event.kind === 'flame_action' && event.flame === 'lightningStrike'))
+      .toMatchObject({ action: { type: 'lightning_strike', hitDieIds: [0, 1],
+        normalRerollsSpent: 1, carePackageRerollsSpent: 2, perPredictionFactor: 3,
+        combinedFactorRequested: 9, combinedFactorApplied: 9, chargeBefore: 1, chargeAfter: 9,
+        chargeGained: 8, predictions: [{ hit: true }, { hit: true }, { hit: false }] } });
+    expect(state.chargeEvents.filter(event => event.sourceFlame === 'lightningStrike')).toHaveLength(2);
+    expect(resolved.events.at(-1)).toMatchObject({ type: 'ABILITY_EVALUATED', flame: 'lightningStrike',
+      message: 'Lightning Strike: 2/3 correct · Charge ×1 → ×9 · requested ×9',
+      flameDiagnostics: { predictionCount: 3, successfulPredictions: 2, chargeBefore: 1, chargeAfter: 9,
+        combinedChargeFactorRequested: 9 } });
+  });
+
+  it('applies each successful multiplier in order while respecting the Charge cap', () => {
+    let state = game([1, 2, 3, 4, 5]); own(state, 'lightningStrike');
+    state.manualRerollsRemaining = 2;
+    state = dispatch(state, { type: 'ACTIVATE_LIGHTNING_STRIKE', predictions: [
+      ...prediction(0, 2), ...prediction(1, 1),
+    ] }, constant()).state;
+    expect(state.maxCharge).toBe(5);
+    expect(state.chargeXMult).toBe(5);
+    const events = state.chargeEvents.filter(event => event.sourceFlame === 'lightningStrike');
+    expect(events).toHaveLength(2);
+    expect(events.map(event => event.factorRequested)).toEqual([3, 3]);
+    expect(events[1]).toMatchObject({ before: 3, after: 5 });
+    expect(events[1]!.factorApplied).toBeCloseTo(5 / 3, 12);
+    expect(state.historyV2.find(event => event.kind === 'flame_action' && event.flame === 'lightningStrike'))
+      .toMatchObject({ action: { hitDieIds: [0, 1], combinedFactorRequested: 9,
+        combinedFactorApplied: 5, chargeBefore: 1, chargeAfter: 5, chargeGained: 4 } });
+  });
+
+  it('derives distinct outcomes from duplicate Chameleon faces and supports the Hexer seven', () => {
+    const chameleon = game(); own(chameleon, 'lightningStrike'); effects(chameleon, 0, [['chameleon', 1]]);
+    rosterDice(chameleon)[0].faces.forEach((face, index) => { face.rank = ([2, 2, 3, 3, 4, 4] as Rank[])[index]; });
+    syncActiveDiceProjection(chameleon);
+    expect(distinctDieOutcomes(chameleon.dice[0]).map(outcome => outcome.rank)).toEqual([2, 3, 4]);
+    new Resolver(chameleon, constant()).lightningStrike(prediction(0, 2));
+    expect(chameleon.chargeXMult).toBe(3);
+
+    const hexer = game(); own(hexer, 'lightningStrike');
+    const cursed = createCursedDie(); cursed.value = 1;
+    hexer.encounterDice = [cursed]; syncActiveDiceProjection(hexer);
+    hexer.boss = { type: 'hexer', cursedDieId: cursed.id };
+    expect(distinctDieOutcomes(cursed).map(outcome => outcome.rank)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    new Resolver(hexer, constant(.99)).lightningStrike(prediction(cursed.id, 7));
+    expect(activeFace(hexer.dice.find(die => die.id === cursed.id)!).rank).toBe(7);
+    expect(hexer.chargeXMult).toBe(3);
+  });
+
 });
 
 describe('Hot Potato Clock', () => {

@@ -81,19 +81,17 @@ test.describe('Scenarios mode', () => {
     await page.getByRole('button', { name: 'View Money Bags Scenario' }).click();
     await expect(page.getByText('Bribery', { exact: true }).first()).toBeVisible();
     await page.getByRole('button', { name: /Inspect Bribery/ }).click();
-    await expect(page.getByTestId('flame-details-modal')).toContainText('The first Bribe each Round costs 5 Gold');
-    await expect(page.getByTestId('flame-details-modal')).toContainText('Added per Bribe: +1.6 XMult');
+    await expect(page.getByTestId('flame-details-modal')).toContainText('invest up to 20 Gold per Round');
+    await expect(page.getByTestId('flame-details-modal')).toContainText('Added per Gold: +0.2 XMult');
     await page.getByTestId('flame-details-modal').getByRole('button', { name: 'Close', exact: true }).click();
     await page.getByRole('button', { name: 'Start Money Bags' }).click();
-    const bribe = page.getByTestId('flame-action-bribery-direct');
-    await expect(bribe).toHaveText('BRIBE 5G');
+    const bribe = page.getByTestId('bribery-invest');
+    await expect(bribe).toContainText('BRIBE +1G');
     await bribe.click();
-    await expect(bribe).toHaveText('BRIBE 10G');
+    await expect(page.getByTestId('stat-gold')).toHaveAttribute('aria-label', 'Gold 14');
     await bribe.click();
-    await expect(page.getByTestId('stat-gold')).toHaveAttribute('aria-label', 'Gold 0');
-    await expect(bribe).toHaveText('BRIBE 15G');
-    await expect(bribe).toBeDisabled();
-    await expect(page.getByText('×4.2 ARMED · NEXT MANUAL PLAY')).toBeVisible();
+    await expect(page.getByTestId('stat-gold')).toHaveAttribute('aria-label', 'Gold 13');
+    await expect(page.getByTestId('bribery-invest')).toContainText('BRIBE +1G · ×1.4');
   });
 
   test('persists terminal completion immediately without opening an Inferno Reward', async ({ page }) => {

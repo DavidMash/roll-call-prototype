@@ -50,6 +50,11 @@ export function ScoreResolution({ event, busy, onSkip, idleText, scoreText }: {
     const scoreAmount = typeof event.amount === 'bigint' ? event.amount : BigInt(event.amount ?? 0);
     heading = scoreAmount < 0n ? `−${formatExactScore(-scoreAmount)}` : `+${formatExactScore(scoreAmount)}`;
   }
+  else if (event?.type === 'ABILITY_EVALUATED' && event.flame === 'lightningStrike'
+    && event.flameDiagnostics?.successfulPredictions !== undefined) {
+    const diagnostics = event.flameDiagnostics;
+    heading = `LIGHTNING STRIKE · ${formatPlayerNumber(diagnostics.successfulPredictions ?? 0)}/${formatPlayerNumber(diagnostics.predictionCount ?? 0)} CORRECT · CHARGE ×${formatPlayerNumber(diagnostics.chargeBefore ?? 1)} → ×${formatPlayerNumber(diagnostics.chargeAfter ?? diagnostics.chargeBefore ?? 1)}`;
+  }
   else if (event?.flame) heading = FLAMES[event.flame].name.toUpperCase();
   else if (isSpecialDieType(event?.dieType)) heading = <DieTypeLabel type={event.dieType} />;
   else if (event?.type === 'TRAINING_PURCHASED' && event.hand) heading = `${HANDS[event.hand].name} · Lv. ${formatPlayerNumber(event.board.handLevels[event.hand])}`;

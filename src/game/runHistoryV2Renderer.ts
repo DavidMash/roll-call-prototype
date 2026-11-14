@@ -145,13 +145,13 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
       const action = event.action;
       if (action.type === 'burn_it_down') return `FLAME ACTION · Burn It Down · sacrificed ${number(action.scoreSacrificed)} / ${number(action.target)} · Charge ×${number(action.chargeRequested)}`;
       if (action.type === 'grease_the_engine') return `FLAME ACTION · Grease the Engine · ${number(action.cost)}G · Charge ×${number(action.chargeRequested)}`;
-      if (action.type === 'lightning_strike') return `FLAME ACTION · Lightning Strike · ${die(action.dieId)} predicted ${number(action.predictedFace)}, rolled ${number(action.actualFace)} · ${action.hit ? 'HIT · multiplicative Charge event recorded' : 'MISS'}`;
+      if (action.type === 'lightning_strike') return `FLAME ACTION · Lightning Strike · ${number(action.hitDieIds.length)}/${number(action.predictions.length)} correct · ${action.hit ? `Charge ×${number(action.chargeBefore)} → ×${number(action.chargeAfter)} · requested ×${number(action.combinedFactorRequested)}` : 'MISS · no Charge'}`;
       if (action.type === 'hot_potato_play') return `FLAME · Hot Potato Clock · ${die(action.targetBefore)} ${action.played ? 'Played; streak reset' : `avoided; streak ${number(action.streak)}`} · Charge ×${number(action.chargeRequested)}${action.targetAfter === null ? '' : ` · moved to ${die(action.targetAfter)}`}`;
       if (action.type === 'dare_activated') return `FLAME ACTION · Dare Devil · Dare ${number(action.dareCount)} · next Ultimate ×${number(action.storedFactor)} · Rolled ${action.dieIds.map(die).join(', ')}`;
       if (action.type === 'dare_payoff') return `FLAME · Dare Devil payoff · ${HANDS[action.hand].name} ×${number(action.factor)} · ${number(action.dareCount)} Dare${action.dareCount === 1 ? '' : 's'} consumed`;
-      if (action.type === 'bribe_purchased') return `FLAME ACTION · Bribery · Bribe ${number(action.ordinal)} cost ${number(action.cost)}G · +${number(action.increment)} XMult · ${number(action.pendingCount)} stacked at ×${number(action.pendingFactor)}`;
-      if (action.type === 'bribery_consumed') return `FLAME · Bribery payoff · ${HANDS[action.hand].name} ×${number(action.factor)} · ${number(action.pendingCount)} Bribe${action.pendingCount === 1 ? '' : 's'} consumed`;
-      return `FLAME · Bribery reset · ${number(action.purchasedCount)} purchased · ${number(action.pendingCount)} pending`;
+      if (action.type === 'bribery_invested') return `FLAME ACTION · Bribery · 1G invested · ${number(action.pendingGold)}G pending at ×${number(action.pendingFactor)}`;
+      if (action.type === 'bribery_consumed') return `FLAME · Bribery payoff · ${HANDS[action.hand].name} ×${number(action.factor)} · ${number(action.pendingGold)}G consumed`;
+      return `FLAME · Bribery reset · ${number(action.spentGold)}G invested · ${number(action.pendingGold)}G pending`;
     }
     case 'score_package_completed': return `SCORE PACKAGE · ${HANDS[event.hand].name} · ${number(event.score)} Score`;
     case 'score_package_removed': return `${event.reason === 'double_or_nothing' ? 'DOUBLE OR NOTHING' : 'ALL IN FAILED'} · −${number(event.amount)} Score`;
@@ -163,6 +163,7 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     }
     case 'all_in': return event.phase === 'armed'
       ? `ALL IN · armed at ×${number(event.factor)}`
+      : event.phase === 'disarmed' ? 'ALL IN · disarmed'
       : event.success
         ? `ALL IN · ${event.hand ? HANDS[event.hand].name : 'manual Play'} · ×${number(event.factor)} · Round cleared`
         : `ALL IN FAILED · ${event.hand ? HANDS[event.hand].name : 'manual Play'} · −${number(event.scoreRemoved ?? 0n)} Score`;

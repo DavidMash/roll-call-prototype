@@ -1,6 +1,6 @@
 import { Button, Group, Paper, Text } from '@mantine/core';
 import { validateAction } from '../game/engine';
-import { hasOwnedChargeFlame } from '../game/flames';
+import { flameByType, greaseTheEngineCost, hasOwnedChargeFlame } from '../game/flames';
 import { activeEncounterDice } from '../game/bosses';
 import { normalizeBoardSelection, toggleBoardDie } from '../game/selection';
 import type { Selection } from '../game/selection';
@@ -10,6 +10,7 @@ import { DiceRow } from './DiceRow';
 import type { FaceDetailsTarget } from './FaceDetailsModal';
 import type { FlameDetailsTarget } from './FlameDetailsModal';
 import { formatPlayerNumber } from '../game/copy';
+import { DisabledActionReason } from './DisabledActionReason';
 
 export function DiceDock({ board, event, busy, actionsEnabled, cinematic, display, selection, setSelection,
   selectedFlameOffer: _selectedFlameOffer, submit, openFaceDetails, openFlameDetails: _openFlameDetails }: {
@@ -43,6 +44,10 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
   const chargeAction: Action = { type: 'TOGGLE_CHARGE', hand: effectiveSelection.hand, dieIds: effectiveSelection.dieIds };
   const canToggleCharge = validateAction(board, chargeAction) === null;
   const chargeAtMax = board.chargeXMult >= board.maxCharge - 1e-9;
+  const grease = flameByType(board, 'greaseTheEngine');
+  const greaseAction: Action = { type: 'ACTIVATE_GREASE_THE_ENGINE' };
+  const greaseReason = grease ? validateAction(board, greaseAction) : null;
+  const greaseCost = greaseTheEngineCost(board.interactiveFlames.greaseTheEngineUses);
 
   function changeRoundSelection(next: Selection) {
     setSelection(next);
@@ -78,11 +83,24 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
             : chargeAtMax ? `⚡ MAX CHARGE ×${formatPlayerNumber(board.maxCharge)}`
               : `CHARGE ×${formatPlayerNumber(board.chargeXMult)} / ×${formatPlayerNumber(board.maxCharge)}`}</span>
         </Text>
-        <Button className={`charge-action${chargeAtMax ? ' is-max' : ''}`} size="compact-xs"
-          color={board.chargeArmed ? 'orange' : 'yellow'} variant={board.chargeArmed || chargeAtMax ? 'filled' : 'light'}
-          disabled={busy || !actionsEnabled || !canToggleCharge} onClick={() => submit(chargeAction)}>
-          {board.chargeArmed ? 'DISARM' : 'ARM CHARGE'}
-        </Button>
+        <Group gap={4} wrap="nowrap">
+          {grease && <div className="compact-action-with-reason">
+            <Button className="grease-action" size="compact-xs" color="orange" variant="light"
+              disabled={busy || !actionsEnabled || greaseReason !== null}
+              title={greaseReason ?? `Pay ${greaseCost} Gold to multiply Charge`}
+              aria-label={`Grease the Engine, ${greaseCost} Gold${greaseReason ? `. Unavailable: ${greaseReason}` : ''}`}
+              data-testid="grease-the-engine-action" onClick={() => submit(greaseAction)}>
+              GREASE {greaseCost}G
+            </Button>
+            {greaseReason && <DisabledActionReason action="Grease the Engine" reason={greaseReason}
+              testId="grease-unavailable-reason" />}
+          </div>}
+          <Button className={`charge-action${chargeAtMax ? ' is-max' : ''}`} size="compact-xs"
+            color={board.chargeArmed ? 'orange' : 'yellow'} variant={board.chargeArmed || chargeAtMax ? 'filled' : 'light'}
+            disabled={busy || !actionsEnabled || !canToggleCharge} onClick={() => submit(chargeAction)}>
+            {board.chargeArmed ? 'DISARM' : 'ARM CHARGE'}
+          </Button>
+        </Group>
       </Group>}
       <DiceRow dice={dice} display={display} event={event} disabled={busy || !actionsEnabled}
         rosterSlotById={rosterSlotById}

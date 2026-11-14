@@ -531,23 +531,25 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
       }
       case 'flame_action': {
         const metric = metricFor(event.flame);
-        if (event.action.type === 'lightning_strike') event.action.hit
-          ? metric.diagnostics.lightningHits++ : metric.diagnostics.lightningMisses++;
+        if (event.action.type === 'lightning_strike') {
+          metric.diagnostics.lightningHits += event.action.hitDieIds.length;
+          metric.diagnostics.lightningMisses += event.action.predictions.length - event.action.hitDieIds.length;
+        }
         if (event.action.type === 'burn_it_down') {
           metric.diagnostics.burnItDownUses++;
           metric.diagnostics.burnItDownSacrificeFractionTotal += event.action.fraction;
         }
         if (event.action.type === 'hot_potato_play') metric.diagnostics.maxStreak = Math.max(
           metric.diagnostics.maxStreak, event.action.streak);
-        if (event.action.type === 'bribe_purchased') {
+        if (event.action.type === 'bribery_invested') {
           metric.diagnostics.briberyPurchases++;
-          metric.diagnostics.briberyGoldSpent += event.action.cost;
-          metric.diagnostics.briberyMaxStack = Math.max(metric.diagnostics.briberyMaxStack, event.action.pendingCount);
+          metric.diagnostics.briberyGoldSpent += event.action.amount;
+          metric.diagnostics.briberyMaxStack = Math.max(metric.diagnostics.briberyMaxStack, event.action.pendingGold);
           metric.diagnostics.briberyMaxFactor = Math.max(metric.diagnostics.briberyMaxFactor, event.action.pendingFactor);
         }
         if (event.action.type === 'bribery_consumed') {
           metric.diagnostics.briberyPayoffHands++;
-          metric.diagnostics.briberyMaxStack = Math.max(metric.diagnostics.briberyMaxStack, event.action.pendingCount);
+          metric.diagnostics.briberyMaxStack = Math.max(metric.diagnostics.briberyMaxStack, event.action.pendingGold);
           metric.diagnostics.briberyMaxFactor = Math.max(metric.diagnostics.briberyMaxFactor, event.action.factor);
         }
         break;
@@ -575,6 +577,7 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
       case 'all_in': {
         const d = metricFor('allIn').diagnostics;
         if (event.phase === 'armed') d.allInArmed++;
+        else if (event.phase === 'disarmed') break;
         else if (event.success) {
           d.allInSuccesses++;
           d.allInScoreRetained += event.packageScore ?? 0n;

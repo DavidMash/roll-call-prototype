@@ -11,6 +11,7 @@ import { legalHandCombinations } from './selection';
 import type { Board, Flame, FlameInstance, HandId } from './types';
 import { availablePlayableDice } from './bosses';
 import { formatPlayerNumber } from './copy';
+import { distinctDieOutcomes } from './dice';
 
 export type FlameVisualState = 'normal' | 'setup' | 'possible' | 'active';
 export interface FlameContributionView { kind: 'xmult' | 'charge'; value: number }
@@ -84,8 +85,8 @@ function sequenceState(board: Board, flame: FlameInstance): Partial<FlamePresent
     targetHand: ultimateHands(board.handLevels, availableHandIds(board))[0], progress: board.interactiveFlames.dareDevilCount / 4,
     statusText: `${board.interactiveFlames.dareDevilCount} DARE${board.interactiveFlames.dareDevilCount === 1 ? '' : 'S'} STORED` };
   if (flame.type === 'allIn' && board.scoreWagers.allInArmed) return { state: 'setup', statusText: 'ARMED · NEXT MANUAL PLAY' };
-  if (flame.type === 'bribery' && board.interactiveFlames.briberyPendingCount > 0) return { state: 'setup',
-    statusText: `×${formatPlayerNumber(briberyFactor(flame.investedGold, board.interactiveFlames.briberyPendingCount))} ARMED · NEXT MANUAL PLAY` };
+  if (flame.type === 'bribery' && board.interactiveFlames.briberyPendingGold > 0) return { state: 'setup',
+    statusText: `×${formatPlayerNumber(briberyFactor(flame.investedGold, board.interactiveFlames.briberyPendingGold))} ARMED · NEXT MANUAL PLAY` };
   return {};
 }
 
@@ -93,11 +94,14 @@ function actionPossible(board: Board, flame: Flame): boolean {
   if (flame === 'burnItDown') return validateAction(board, { type: 'ACTIVATE_BURN_IT_DOWN' }) === null;
   if (flame === 'greaseTheEngine') return validateAction(board, { type: 'ACTIVATE_GREASE_THE_ENGINE' }) === null;
   if (flame === 'dareDevil') return validateAction(board, { type: 'ACTIVATE_DARE_DEVIL' }) === null;
-  if (flame === 'allIn') return validateAction(board, { type: 'ARM_ALL_IN' }) === null;
+  if (flame === 'allIn') return validateAction(board, { type: 'TOGGLE_ALL_IN' }) === null;
   if (flame === 'bribery') return validateAction(board, { type: 'ACTIVATE_BRIBERY' }) === null;
   if (flame === 'lightningStrike') {
-    return availablePlayableDice(board).some(die =>
-      validateAction(board, { type: 'ACTIVATE_LIGHTNING_STRIKE', dieId: die.id, predictedFace: 1 }) === null);
+    return availablePlayableDice(board).some(die => {
+      const outcome = distinctDieOutcomes(die)[0];
+      return !!outcome && validateAction(board, { type: 'ACTIVATE_LIGHTNING_STRIKE',
+        predictions: [{ dieId: die.id, outcome }] }) === null;
+    });
   }
   return false;
 }

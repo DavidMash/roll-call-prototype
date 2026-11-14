@@ -1,5 +1,5 @@
 import { bossRewardForEncounter, CONFIG, interestForGoldAtCap, roundReward } from './config';
-import { activeFace, createCollectibleDie, rollPhysicalDie, scoringPips, weightedSelectedFaceWeight, wholeDieEffectSuppressed } from './dice';
+import { activeFace, createCollectibleDie, faceOutcomeIdentity, rollPhysicalDie, sameOutcomeIdentity, scoringPips, weightedSelectedFaceWeight, wholeDieEffectSuppressed } from './dice';
 import {
   captureHandStart, currentFlameInstanceId, eligibleFlameIds, flameByType, flameInstances, flameSlotOf, FLAMES, handXMultContributions,
   allHandsOnDeckChargeGain, countScoringDiceEnhancementComponents, fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, HOT_STREAK_SEQUENCE,
@@ -9,7 +9,7 @@ import {
   burnItDownChargeGain, dareDevilMultiplier, FLAME_SCALING, greaseTheEngineChargeGain, greaseTheEngineCost,
   hotPotatoClockChargeGain, lightningStrikeChargeGain, allInMultiplier, doubleOrNothingMultiplier, hotStreakMultiplier,
   doubleOrNothingEligibleHands, PROGRESSIVE_FLAME_SEQUENCES, progressiveSequenceMultiplier, type ProgressiveSequenceFlame,
-  briberyFactor, briberyNextCost, briberyXMultIncrement,
+  briberyFactor, briberyXMultPerGold,
   powerSurgeChargeMultiplier,
   isChargeFlame,
 } from './flames';
@@ -43,7 +43,7 @@ import {
 import { createTrainingSession } from './training';
 import { forgeRevealEligible } from './forge';
 import type { ChargeFlame, HandStartSnapshot } from './flames';
-import type { CollectibleDie, DiceSlotRef, DieEffectInstance, EventRecord, Face, Flame, FlameInstanceId, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, InfernoRewardOfferId, RandomSource, Rank, ResolvedDiePips, RunNode, ScorePackage, ScoreSource, SpecialDieType, SpecialOffer, TemperSource, TemperSpendSource } from './types';
+import type { CollectibleDie, DiceSlotRef, DieEffectInstance, EventRecord, Face, Flame, FlameInstanceId, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, InfernoRewardOfferId, LightningStrikePrediction, RandomSource, Rank, ResolvedDiePips, RunNode, ScorePackage, ScoreSource, SpecialDieType, SpecialOffer, TemperSource, TemperSpendSource } from './types';
 import type {
   FlameOrigin, HandSideEffect, HistoryDieState, MultContribution, PipsContribution,
   RollEffect, RollReason, RunHistoryV2Event, RunHistoryV2EventInput, XMultContribution,
@@ -1595,7 +1595,10 @@ export class Resolver {
   private beginScorePackage(playId: string, hand: HandId, source: HandPlaySource): ScorePackage {
     const allIn = source === 'manual' && this.state.scoreWagers.allInArmed;
     const doubleOrNothingRedemption = source === 'manual' && this.state.scoreWagers.doubleOrNothing?.hand === hand;
-    if (allIn) this.state.scoreWagers.allInArmed = false;
+    if (allIn) {
+      this.state.scoreWagers.allInArmed = false;
+      this.state.scoreWagers.allInUsedThisRound = true;
+    }
     const scorePackage: ScorePackage = {
       id: `score-package:${this.state.historyV2TimelineId}:${this.state.round}:${this.state.roundAttemptNumber}:${this.state.scoreWagers.nextPackageId++}`,
       rootPlayId: playId,
@@ -1866,12 +1869,12 @@ export class Resolver {
       source: scoreSource, playSource, handConsumed: resolution.consumesHand, message: `Final awarded hand score: ${this.format(score)}` });
     this.addScore(score, scoreSource, `${freePlay ? 'Free play: ' : ''}${HANDS[hand].name}: round score +${this.format(score)}`, scoringIds, hand);
     const roundScoreAfterAward = this.state.score;
-    if (playSource === 'manual' && handStart.briberyPendingCount > 0) {
+    if (playSource === 'manual' && handStart.briberyPendingGold > 0) {
       const flame = flameByType(this.state, 'bribery');
-      const factor = briberyFactor(flame?.investedGold ?? 0, handStart.briberyPendingCount);
-      this.state.interactiveFlames.briberyPendingCount = 0;
+      const factor = briberyFactor(flame?.investedGold ?? 0, handStart.briberyPendingGold);
+      this.state.interactiveFlames.briberyPendingGold = 0;
       this.emitV2({ kind: 'flame_action', flame: 'bribery', action: { type: 'bribery_consumed',
-        hand, pendingCount: handStart.briberyPendingCount, factor } });
+        hand, pendingGold: handStart.briberyPendingGold, factor } });
     }
     if (handStart.dareDevilCount > 0 && handStart.ultimateHands.includes(hand)) {
       const flame = flameByType(this.state, 'dareDevil');
@@ -2063,44 +2066,67 @@ export class Resolver {
     this.state.decisionId++;
   }
 
-  bribe(): void {
+  investBriberyGold(): void {
     const flame = flameByType(this.state, 'bribery');
     if (!flame) throw new Error('Bribery requires its active Flame.');
-    const ordinal = this.state.interactiveFlames.briberyPurchasedThisRound + 1;
-    const cost = briberyNextCost(this.state.interactiveFlames.briberyPurchasedThisRound);
+    const cost = 1;
     const goldBefore = this.state.gold;
-    const pendingCount = this.state.interactiveFlames.briberyPendingCount + 1;
-    const increment = briberyXMultIncrement(flame.investedGold);
-    const pendingFactor = briberyFactor(flame.investedGold, pendingCount);
-    this.spendRoundGold(cost, `Bribery payment #${this.format(ordinal)}: -${this.format(cost)} Gold`, 'bribery');
-    this.state.interactiveFlames.briberyPurchasedThisRound = ordinal;
-    this.state.interactiveFlames.briberyPendingCount = pendingCount;
-    this.emitV2({ kind: 'flame_action', flame: 'bribery', action: { type: 'bribe_purchased', cost, ordinal,
-      increment, pendingCount, pendingFactor, goldBefore, goldAfter: this.state.gold } });
+    const goldSpentThisRound = this.state.interactiveFlames.briberyGoldSpentThisRound + cost;
+    const pendingGold = this.state.interactiveFlames.briberyPendingGold + cost;
+    const xMultPerGold = briberyXMultPerGold(flame.investedGold);
+    const pendingFactor = briberyFactor(flame.investedGold, pendingGold);
+    this.spendRoundGold(cost, 'Bribery investment: -1 Gold', 'bribery');
+    this.state.interactiveFlames.briberyGoldSpentThisRound = goldSpentThisRound;
+    this.state.interactiveFlames.briberyPendingGold = pendingGold;
+    this.emitV2({ kind: 'flame_action', flame: 'bribery', action: { type: 'bribery_invested', amount: cost,
+      xMultPerGold, goldSpentThisRound, pendingGold, pendingFactor, goldBefore, goldAfter: this.state.gold } });
     this.state.decisionId++;
   }
 
-  lightningStrike(dieId: number, predictedFace: Exclude<Rank, 7>): void {
+  lightningStrike(predictions: LightningStrikePrediction[]): void {
     const flame = this.chargeFlameSource('lightningStrike');
     if (!flame) throw new Error('Lightning Strike requires its active Flame.');
-    const source = this.state.manualRerollsRemaining > 0 ? 'normal' as const : 'carePackage' as const;
+    const dieIds = predictions.map(prediction => prediction.dieId);
+    const cost = resolveManualRerollCost(this.state, dieIds).resourceCost;
+    const normalSpent = Math.min(this.state.manualRerollsRemaining, cost);
+    const carePackageSpent = cost - normalSpent;
     const requested = lightningStrikeChargeGain(flame.investment);
-    this.manualReroll([dieId]);
-    const die = this.state.dice.find(item => item.id === dieId);
-    if (!die) throw new Error('Lightning Strike die disappeared during its Manual Reroll.');
-    const actualFace = activeFace(die).rank;
-    const hit = actualFace === predictedFace;
+    this.manualReroll(dieIds);
+    const results = predictions.map(prediction => {
+      const die = this.state.dice.find(item => item.id === prediction.dieId);
+      if (!die) throw new Error('A Lightning Strike die disappeared during its Manual Reroll.');
+      const actualOutcome = faceOutcomeIdentity(activeFace(die));
+      return { dieId: prediction.dieId, predictedOutcome: prediction.outcome, actualOutcome,
+        hit: sameOutcomeIdentity(prediction.outcome, actualOutcome) };
+    });
+    const hitDieIds = results.filter(result => result.hit).map(result => result.dieId);
+    const hit = hitDieIds.length > 0;
     const chargeBefore = this.state.chargeXMult;
-    const gained = hit ? this.growCharge('lightningStrike', requested,
-      `predicted ${predictedFace}; ${this.dieLabel(dieId)} landed on ${actualFace}`, [dieId],
-      { predictedDieId: dieId, predictedFace, actualFace, predictionHit: true,
-        manualRerollSource: source, chargeBefore, chargeRequested: requested }) : 0;
+    let gained = 0;
+    hitDieIds.forEach((dieId, index) => {
+      gained = Number((gained + this.growCharge('lightningStrike', requested,
+        `prediction ${this.format(index + 1)} of ${this.format(hitDieIds.length)} correct`, [dieId],
+        { predictedDieIds: dieIds, predictionHit: true, normalRerollsSpent: normalSpent,
+          carePackageRerollsSpent: carePackageSpent, chargeBefore, chargeRequested: requested })).toFixed(12));
+    });
+    const combinedFactorRequested = Number((requested ** hitDieIds.length).toFixed(12));
+    const chargeAfter = this.state.chargeXMult;
+    const combinedFactorApplied = Number((chargeAfter / Math.max(1, chargeBefore)).toFixed(12));
     if (!hit) this.triggerFlame('lightningStrike',
-      `predicted ${predictedFace}; ${this.dieLabel(dieId)} landed on ${actualFace}; no Charge`, undefined, undefined,
-      { predictedDieId: dieId, predictedFace, actualFace, predictionHit: false, manualRerollSource: source,
-        chargeBefore, chargeRequested: requested, chargeGained: 0 });
+      `${this.format(results.length)} predictions missed; no Charge`, undefined, undefined,
+      { predictedDieIds: dieIds, predictionHit: false, normalRerollsSpent: normalSpent,
+        carePackageRerollsSpent: carePackageSpent, chargeBefore, chargeRequested: requested, chargeGained: 0 });
+    this.emit({ type: 'ABILITY_EVALUATED', flame: 'lightningStrike', dieIds: hitDieIds,
+      flameDiagnostics: { predictedDieIds: dieIds, predictionHit: hit, predictionCount: results.length,
+        successfulPredictions: hitDieIds.length, normalRerollsSpent: normalSpent,
+        carePackageRerollsSpent: carePackageSpent, chargeBefore, chargeAfter,
+        chargeRequested: requested, combinedChargeFactorRequested: combinedFactorRequested,
+        chargeFactorApplied: combinedFactorApplied, chargeGained: gained },
+      message: `Lightning Strike: ${this.format(hitDieIds.length)}/${this.format(results.length)} correct · Charge ×${this.format(chargeBefore)} → ×${this.format(chargeAfter)}${hit ? ` · requested ×${this.format(combinedFactorRequested)}` : ''}` });
     this.emitV2({ kind: 'flame_action', flame: 'lightningStrike', action: { type: 'lightning_strike',
-      dieId, predictedFace, actualFace, hit, manualRerollSource: source, chargeGained: gained } });
+      predictions: results, hit, hitDieIds, normalRerollsSpent: normalSpent, carePackageRerollsSpent: carePackageSpent,
+      perPredictionFactor: requested, combinedFactorRequested, combinedFactorApplied,
+      chargeBefore, chargeAfter, chargeGained: gained } });
   }
 
   dareDevil(): void {
@@ -2157,14 +2183,16 @@ export class Resolver {
     if (this.state.phase === 'round') this.evaluate();
   }
 
-  armAllIn(): void {
+  toggleAllIn(): void {
     const flame = flameByType(this.state, 'allIn');
     if (!flame) throw new Error('All In requires its active Flame.');
-    this.state.scoreWagers.allInArmed = true;
     const factor = allInMultiplier(flame.investedGold);
-    this.emitV2({ kind: 'all_in', phase: 'armed', factor });
-    this.log({ type: 'ABILITY_EVALUATED', flame: 'allIn', xMult: factor,
-      message: `All In armed · next manual Play ×${this.format(factor)} · failed package Score will be removed` });
+    this.state.scoreWagers.allInArmed = !this.state.scoreWagers.allInArmed;
+    this.emitV2({ kind: 'all_in', phase: this.state.scoreWagers.allInArmed ? 'armed' : 'disarmed', factor });
+    this.log({ type: 'ABILITY_EVALUATED', flame: 'allIn', xMult: this.state.scoreWagers.allInArmed ? factor : 1,
+      message: this.state.scoreWagers.allInArmed
+        ? `All In armed · next manual Play ×${this.format(factor)} · failed package Score will be removed`
+        : 'All In disarmed' });
     this.state.decisionId++;
   }
 
@@ -2387,8 +2415,8 @@ export class Resolver {
     this.enterChapterIfNeeded(this.state.round);
     const chargeBeforeRoundReset = this.state.chargeXMult;
     const chargeWasArmed = this.state.chargeArmed;
-    const priorBribery = { purchasedCount: this.state.interactiveFlames.briberyPurchasedThisRound ?? 0,
-      pendingCount: this.state.interactiveFlames.briberyPendingCount ?? 0 };
+    const priorBribery = { spentGold: this.state.interactiveFlames.briberyGoldSpentThisRound ?? 0,
+      pendingGold: this.state.interactiveFlames.briberyPendingGold ?? 0 };
     if (this.state.chargeXMult !== 1 || this.state.chargeArmed) this.state.stats.chargeResets++;
     this.state.phase = 'round'; this.state.score = 0n; this.state.scoreByHand = {}; this.state.effectScore = 0n;
     this.state.roundTemper = { overkill: 0, boardRefresh: 0, miniBoss: 0, boss: 0 };
@@ -2404,12 +2432,12 @@ export class Resolver {
     this.state.precedingShopDiePurchase = precedingShopDiePurchase;
     this.state.interactiveFlames = { burnItDownUses: 0, greaseTheEngineUses: 0,
       hotPotatoDieId: null, hotPotatoStreak: 0, dareDevilCount: 0,
-      briberyPurchasedThisRound: 0, briberyPendingCount: 0 };
+      briberyGoldSpentThisRound: 0, briberyPendingGold: 0 };
     this.state.scoreWagers = { nextPackageId: 1, packages: [], pendingDoubleOrNothing: null,
-      doubleOrNothing: null, allInArmed: false };
+      doubleOrNothing: null, allInArmed: false, allInUsedThisRound: false };
     if (chargeBeforeRoundReset !== 1 || chargeWasArmed) this.emitV2({ kind: 'charge_changed', operation: 'round_reset',
       before: chargeBeforeRoundReset, after: 1, dieIds: [] });
-    if (priorBribery.purchasedCount > 0 || priorBribery.pendingCount > 0)
+    if (priorBribery.spentGold > 0 || priorBribery.pendingGold > 0)
       this.emitV2({ kind: 'flame_action', flame: 'bribery', action: { type: 'bribery_round_reset', ...priorBribery } });
     this.v2LastCharge = 1;
     this.state.flameSelection = null; this.state.specialOffer = null; this.state.bust = null; this.state.stats.roundReached = this.state.round;

@@ -416,16 +416,19 @@ export type FlameActionDetail =
       chargeBefore: number; chargeRequested: number; chargeGained: number; useCount: number }
   | { type: 'grease_the_engine'; cost: number; goldBefore: number; goldAfter: number; useCount: number;
       chargeRequested: number; chargeGained: number }
-  | { type: 'lightning_strike'; dieId: number; predictedFace: Rank; actualFace: Rank; hit: boolean;
-      manualRerollSource: 'normal' | 'carePackage'; chargeGained: number }
+  | { type: 'lightning_strike'; predictions: { dieId: number; predictedOutcome: import('./types').DieOutcomeIdentity;
+      actualOutcome: import('./types').DieOutcomeIdentity; hit: boolean }[]; hit: boolean; hitDieIds: number[];
+      normalRerollsSpent: number; carePackageRerollsSpent: number; perPredictionFactor: number;
+      combinedFactorRequested: number; combinedFactorApplied: number; chargeBefore: number; chargeAfter: number;
+      chargeGained: number }
   | { type: 'hot_potato_play'; targetBefore: number; played: boolean; streak: number;
       chargeRequested: number; chargeGained: number; targetAfter: number | null }
   | { type: 'dare_activated'; dareCount: number; dieIds: number[]; storedFactor: number }
   | { type: 'dare_payoff'; dareCount: number; hand: HandId; factor: number }
-  | { type: 'bribe_purchased'; cost: number; ordinal: number; increment: number; pendingCount: number; pendingFactor: number;
-      goldBefore: number; goldAfter: number }
-  | { type: 'bribery_consumed'; hand: HandId; pendingCount: number; factor: number }
-  | { type: 'bribery_round_reset'; purchasedCount: number; pendingCount: number };
+  | { type: 'bribery_invested'; amount: number; xMultPerGold: number; goldSpentThisRound: number; pendingGold: number;
+      pendingFactor: number; goldBefore: number; goldAfter: number }
+  | { type: 'bribery_consumed'; hand: HandId; pendingGold: number; factor: number }
+  | { type: 'bribery_round_reset'; spentGold: number; pendingGold: number };
 
 export interface FlameActionEvent extends RunHistoryV2Envelope {
   kind: 'flame_action';
@@ -471,7 +474,7 @@ export interface DoubleOrNothingEvent extends RunHistoryV2Envelope {
 
 export interface AllInEvent extends RunHistoryV2Envelope {
   kind: 'all_in';
-  phase: 'armed' | 'resolved';
+  phase: 'armed' | 'disarmed' | 'resolved';
   hand?: HandId;
   packageId?: string;
   factor: number;

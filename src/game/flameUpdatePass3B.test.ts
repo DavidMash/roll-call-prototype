@@ -241,7 +241,7 @@ describe('Double or Nothing', () => {
     expect(pending.scoreWagers.pendingDoubleOrNothing).toEqual(state.scoreWagers.pendingDoubleOrNothing);
     new Resolver(state, constant()).acceptDoubleOrNothing();
     own(state, 'allIn');
-    new Resolver(state, constant()).armAllIn();
+    new Resolver(state, constant()).toggleAllIn();
     const accepted = compactGameStateForPersistence(state);
     expect(accepted.scoreWagers.doubleOrNothing).toEqual(state.scoreWagers.doubleOrNothing);
     expect(accepted.scoreWagers.allInArmed).toBe(true);
@@ -277,7 +277,7 @@ describe('Double or Nothing', () => {
     prioritize(state, 'ones');
     new Resolver(state, constant()).play('ones', [0]);
     new Resolver(state, constant()).acceptDoubleOrNothing();
-    new Resolver(state, constant()).armAllIn();
+    new Resolver(state, constant()).toggleAllIn();
     state.phase = 'shop';
     state.shop = { stage: 'shop', offers: [], offerRerolls: 0, lifeRestores: 0 };
     new Resolver(state, constant()).startRound(true);
@@ -287,10 +287,22 @@ describe('Double or Nothing', () => {
 });
 
 describe('All In', () => {
+  it('can disarm before Play and cannot be used twice in one Round', () => {
+    let state = game(); own(state, 'allIn');
+    state = dispatch(state, { type: 'TOGGLE_ALL_IN' }, constant()).state;
+    expect(state.scoreWagers.allInArmed).toBe(true);
+    state = dispatch(state, { type: 'TOGGLE_ALL_IN' }, constant()).state;
+    expect(state.scoreWagers.allInArmed).toBe(false);
+    state = dispatch(state, { type: 'TOGGLE_ALL_IN' }, constant()).state;
+    new Resolver(state, constant()).play('ones', [0]);
+    expect(state.scoreWagers.allInUsedThisRound).toBe(true);
+    expect(validateAction(state, { type: 'TOGGLE_ALL_IN' })).toContain('already been used');
+  });
+
   it('arms through the shared action path, ignores Free Plays, and gives the next manual Play ×12', () => {
     let state = game(); own(state, 'allIn');
-    expect(validateAction(state, { type: 'ARM_ALL_IN' })).toBeNull();
-    state = dispatch(state, { type: 'ARM_ALL_IN' }, constant()).state;
+    expect(validateAction(state, { type: 'TOGGLE_ALL_IN' })).toBeNull();
+    state = dispatch(state, { type: 'TOGGLE_ALL_IN' }, constant()).state;
     expect(state.scoreWagers.allInArmed).toBe(true);
     new Resolver(state, constant()).play('ones', [0], 'freePlay');
     expect(state.scoreWagers.allInArmed).toBe(true);
@@ -302,7 +314,7 @@ describe('All In', () => {
 
   it('keeps a successful full package and removes a failed package without reopening or rewinding other state', () => {
     const success = game(); own(success, 'allIn'); success.target = 1n; success.stats.rounds.at(-1)!.target = 1n;
-    new Resolver(success, constant()).armAllIn();
+    new Resolver(success, constant()).toggleAllIn();
     new Resolver(success, constant()).play('ones', [0]);
     expect(success.phase).toBe('roundSummary');
     expect(success.score).toBeGreaterThanOrEqual(1n);
@@ -312,7 +324,7 @@ describe('All In', () => {
     failure.score = 400n; failure.stats.rounds.at(-1)!.finalScore = 400n;
     failure.gold = 37; failure.chargeXMult = 2;
     const dieFace = failure.dice[0].value;
-    new Resolver(failure, constant()).armAllIn();
+    new Resolver(failure, constant()).toggleAllIn();
     new Resolver(failure, constant(.3)).play('ones', [0]);
     const scorePackage = lastPackage(failure);
     expect(stateScore(failure)).toBe(400n);
@@ -332,7 +344,7 @@ describe('All In', () => {
     die.faces.forEach(face => { face.rank = 1; });
     die.effects.find(effect => effect.type === 'jumpingBean')!.persistent.jumpingBeanNumber = 1;
     syncActiveDiceProjection(state);
-    new Resolver(state, constant()).armAllIn();
+    new Resolver(state, constant()).toggleAllIn();
     new Resolver(state, constant()).play('pair', [die.id, 1]);
     const scorePackage = lastPackage(state);
     expect(scorePackage.plays.some(play => play.source === 'jumpingBean')).toBe(true);
@@ -349,7 +361,7 @@ describe('Double or Nothing and All In interaction', () => {
       const state = game(); own(state, 'doubleOrNothing'); own(state, 'allIn');
       prioritize(state, 'ones');
       state.target = target; state.stats.rounds.at(-1)!.target = target;
-      new Resolver(state, constant()).armAllIn();
+      new Resolver(state, constant()).toggleAllIn();
       new Resolver(state, constant()).play('ones', [0]);
       expect(state.scoreWagers.pendingDoubleOrNothing).toBeNull();
     }
@@ -362,7 +374,7 @@ describe('Double or Nothing and All In interaction', () => {
     new Resolver(state, constant()).play('ones', [0]);
     new Resolver(state, constant()).acceptDoubleOrNothing();
     const priorScore = state.score;
-    new Resolver(state, constant()).armAllIn();
+    new Resolver(state, constant()).toggleAllIn();
     setFace(state, 0, 1);
     new Resolver(state, constant()).play('ones', [0]);
     const score = state.stats.handScores.at(-1)!;

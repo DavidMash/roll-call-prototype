@@ -14,6 +14,10 @@ import { exactRatioNumber } from '../game/scoreMath';
 import { CurrencyAmount, type Currency } from './CurrencyAmount';
 import type { FlamePresentation } from '../game/flamePresentation';
 
+const CONTEXTUAL_FLAME_TYPES = new Set<string>([
+  'burnItDown', 'greaseTheEngine', 'lightningStrike', 'dareDevil', 'allIn', 'bribery',
+]);
+
 function HudStat({ testId, currency, label, value }: { testId: string; currency: Currency; label: string; value: number }) {
   const formatted = formatPlayerNumber(value);
   return <div className="hud-stat" data-testid={testId} aria-label={`${label} ${formatted}`}>
@@ -107,7 +111,8 @@ export function TopHud({ board, event, flamePresentation = [], speed, setSpeed, 
             aria-label={`View ${FLAMES[flame.type].name} ${flame.stage} details. ${presentation?.accessibleLabel ?? 'Normal'}`}
             onClick={() => openFlameDetails({ flameInstanceId: flame.instanceId, kind: flame.stage })}>
             <span>🔥 {FLAMES[flame.type].shortName}</span>
-            {presentation?.statusText && <span className="flame-badge-status">{presentation.statusText}</span>}
+            {presentation?.statusText && !CONTEXTUAL_FLAME_TYPES.has(flame.type)
+              && <span className="flame-badge-status">{presentation.statusText}</span>}
           </Badge>
           {resolved && <span key={`${resolved.eventId}:${flame.instanceId}`} className="resolution-pop flame-resolution-pop"
             role="status" aria-live="polite">{resolved.text}</span>}
