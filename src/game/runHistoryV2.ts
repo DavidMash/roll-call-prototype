@@ -360,7 +360,7 @@ export interface ChargeChangedEvent extends RunHistoryV2Envelope {
 export interface BossStateChangedEvent extends RunHistoryV2Envelope {
   kind: 'boss_state_changed';
   boss: BossType;
-  change: 'started' | 'cleared' | 'state' | 'warden_target' | 'warden_unlock' | 'face'
+  change: 'started' | 'cleared' | 'state' | 'warden_target' | 'warden_unlock' | 'warden_release' | 'face'
     | 'called' | 'target' | 'requested' | 'remained' | 'caught';
   hand?: HandId;
   hands?: HandId[];

@@ -66,11 +66,6 @@ function normalizeBoardScores(board: Board): void {
     board.bust.target = exact(board.bust.target);
     board.bust.shortfall = exact(board.bust.shortfall);
   }
-  if (board.boss?.type === 'warden') {
-    board.boss.nextUnlockTarget = board.boss.nextUnlockTarget === null ? null : exact(board.boss.nextUnlockTarget);
-    board.boss.unlockCosts = (board.boss.unlockCosts ?? []).map(value => exact(value));
-    board.boss.unlockTargets = (board.boss.unlockTargets ?? []).map(value => exact(value));
-  }
 }
 
 function normalizeHistoricalScores(state: GameState): void {
@@ -247,6 +242,26 @@ function normalizeInfernoRewards(state: Board, inventory?: DiceInventory): void 
 }
 
 function normalizeBossRuntime(state: Board): void {
+  if (state.boss?.type === 'warden') {
+    const legacyBoss = state.boss as typeof state.boss & Record<string, unknown>;
+    const rosterIds = state.dice.filter(die => die.owner === 'player').map(die => die.id);
+    const recordedIds = Array.isArray(legacyBoss.encounterDieIds)
+      ? legacyBoss.encounterDieIds.filter((id): id is number => Number.isInteger(id) && rosterIds.includes(id as number))
+      : [];
+    const encounterIds = rosterIds.length ? rosterIds : [...new Set(recordedIds)];
+    const activeIds = Array.isArray(legacyBoss.activeDieIds)
+      ? legacyBoss.activeDieIds.filter((id): id is number => Number.isInteger(id) && encounterIds.includes(id as number)) : [];
+    state.boss.encounterDieIds = encounterIds;
+    state.boss.activeDieIds = [...new Set(activeIds)];
+    state.boss.startingDieId = typeof legacyBoss.startingDieId === 'number'
+      && state.boss.activeDieIds.includes(legacyBoss.startingDieId)
+      ? legacyBoss.startingDieId : state.boss.activeDieIds[0] ?? null;
+    delete legacyBoss.pendingReinforcements;
+    delete legacyBoss.nextUnlockTarget;
+    delete legacyBoss.unlockCosts;
+    delete legacyBoss.unlockTargets;
+    return;
+  }
   if (state.boss?.type !== 'neglected') return;
   state.boss.handsPlayed = Math.max(0, Math.min(6,
     Math.floor(typeof state.boss.handsPlayed === 'number' && Number.isFinite(state.boss.handsPlayed) ? state.boss.handsPlayed : 0)));
@@ -554,12 +569,10 @@ export function normalizeGameState(state: GameState): GameState {
   next.presentedChapters ??= Array.from({ length: chapterNumberForRound(next.round) }, (_, index) => index + 1);
   ensureChapterPlan(next, chapterNumberForRound(next.round));
   next.boss ??= null;
-  if (next.boss?.type === 'warden') next.boss.unlockCosts ??= [];
   if (next.boss?.type === 'caller') {
     next.boss.manualHandsPlayed ??= Math.max(0, 3 - next.boss.playsRemaining);
     next.boss.callDeadline ??= next.boss.manualHandsPlayed + next.boss.playsRemaining;
   }
-  if (next.roundCheckpoint?.board.boss?.type === 'warden') next.roundCheckpoint.board.boss.unlockCosts ??= [];
   next.currentNodeId ??= '';
   next.lives = Math.max(0, Math.min(next.infernoRewards.upgrades.maxLives, Math.floor(next.lives ?? CONFIG.maxLives)));
   next.roundAttemptNumber = Math.max(1, Math.floor(next.roundAttemptNumber ?? 1));
@@ -627,8 +640,8 @@ export function availableShopStages(state: Pick<Board, 'forgeUnlocked' | 'flameS
 
 function validateManualReroll(state: Board | GameState, dieIds: readonly number[]): string | null {
   if (state.phase !== 'round') return 'Manual rerolls can only be used during a gameplay round.';
-  if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0)
-    return 'Unlock a Warden die before taking another action.';
+  if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.startingDieId === null)
+    return "Choose The Warden's initial active die before taking another action.";
   if (!dieIds.length) return 'Select at least one die to reroll.';
   if (new Set(dieIds).size !== dieIds.length
     || dieIds.some(id => !Number.isInteger(id) || !activeEncounterDice(state).some(die => die.id === id)))
@@ -640,8 +653,8 @@ function validateManualReroll(state: Board | GameState, dieIds: readonly number[
 
 function validateInteractiveFlame(state: Board | GameState, flame: import('./types').Flame): string | null {
   if (state.phase !== 'round') return 'Flame actions can only be used during an active Round.';
-  if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0)
-    return 'Unlock a Warden die before taking another action.';
+  if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.startingDieId === null)
+    return "Choose The Warden's initial active die before taking another action.";
   const instance = flameByType(state, flame);
   if (!instance) return `This run does not own ${FLAMES[flame].name}.`;
   if (instance.investedGold <= 0) return `${FLAMES[flame].name} needs investment before it can be used.`;
@@ -787,7 +800,8 @@ export function validateAction(state: Board | GameState, action: Action): string
   }
   if (action.type === 'PLAY') {
     if (state.phase !== 'round') return 'Hands can only be played during a round.';
-    if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.pendingReinforcements > 0) return 'Unlock a Warden die before committing another hand.';
+    if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.startingDieId === null)
+      return "Choose The Warden's initial active die before committing a Hand.";
     if (action.decisionMs !== undefined && (!Number.isFinite(action.decisionMs) || action.decisionMs < 0)) return 'Decision time must be a nonnegative number.';
     if (unavailableEncounterHands(state).includes(action.hand)) return state.boss?.type === 'marathon'
       ? 'That hand is still cooling down.' : 'That hand has already been consumed or is unavailable.';
@@ -800,9 +814,10 @@ export function validateAction(state: Board | GameState, action: Action): string
   }
   if (action.type === 'UNLOCK_WARDEN_DIE') {
     if (state.phase !== 'round' || state.bossSilenced || state.boss?.type !== 'warden') return 'Dice can only be unlocked during The Warden encounter.';
-    if (state.boss.pendingReinforcements <= 0) return 'No Warden reinforcement is ready.';
+    if (state.boss.startingDieId !== null) return "The Warden's initial active die has already been chosen.";
     const die = state.dice.find(item => item.id === action.dieId && item.owner === 'player');
-    if (!die || state.boss.activeDieIds.includes(die.id)) return 'Choose a locked player die.';
+    if (!die || !state.boss.encounterDieIds.includes(die.id) || state.boss.activeDieIds.includes(die.id))
+      return 'Choose a locked Roster die.';
     return null;
   }
   if (action.type === 'TOGGLE_CHARGE') {

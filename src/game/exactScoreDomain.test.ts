@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { wardenUnlockCosts, wardenUnlockTarget } from './bosses';
 import { dispatch, newRun, normalizeGameState } from './engine';
-import { initialHandLevels } from './hands';
 import { RUN_STORAGE_KEY, RUN_STORAGE_VERSION, loadPersistedRun, savePersistedRun } from './persistence';
 import { captureRollbackState, restoreRollbackState } from './rollback';
 import { exportRunHistoryV2 } from './runHistoryV2Export';
 import { summarizeRunHistoryV2 } from './runHistoryV2Summary';
 import { infernoMultiplier } from './scoring';
-import { roundScoreToStep, stringifyExactJson, toExactJsonValue } from './scoreMath';
+import { stringifyExactJson, toExactJsonValue } from './scoreMath';
 import type { GameState, RandomSource } from './types';
 import type { HandScoredEvent, RunHistoryV2Event } from './runHistoryV2';
 
@@ -74,14 +72,7 @@ describe('exact score gameplay boundaries', () => {
 
 });
 
-describe('exact score state, Warden, and attribution', () => {
-  it('keeps Warden target addition and nearest-five behavior exact at huge scores', () => {
-    const levels = initialHandLevels();
-    const current = HUGE_GOAL + 3n;
-    const cost = wardenUnlockCosts(levels, [], 10n ** 40n)[0];
-    expect(wardenUnlockTarget(current, levels, [], 1)).toBe(roundScoreToStep(current + cost, 5n));
-    expect(wardenUnlockCosts(levels, [], 10n ** 40n)).toEqual([5n, 20n, 55n, 170n]);
-  });
+describe('exact score state and attribution', () => {
 
   it('round-trips exact rollback state without number coercion', () => {
     const state = scoringBoundary(HUGE_GOAL - 1n);
@@ -122,8 +113,7 @@ describe('exact score persistence and structured history', () => {
     state.engulfmentLevel = 12;
     state.scoreByHand.ones = HUGE_GOAL - 2n;
     state.stats.scoreBySource.hand = HUGE_GOAL - 1n;
-    state.boss = { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0], startingDieId: 0, nextUnlockTarget: HUGE_GOAL,
-      unlockCosts: [HUGE_GOAL], unlockTargets: [HUGE_GOAL], pendingReinforcements: 0 };
+    state.boss = { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0], startingDieId: 0 };
     const store = storage();
     expect(savePersistedRun(store, state)).toBe(true);
     const raw = store.values.get(RUN_STORAGE_KEY)!;
@@ -133,7 +123,7 @@ describe('exact score persistence and structured history', () => {
     const loaded = loadPersistedRun(store, state.seed)!;
     expect(loaded.score).toBe(HUGE_GOAL - 1n);
     expect(loaded.target).toBe(HUGE_GOAL);
-    expect(loaded.boss?.type === 'warden' ? loaded.boss.nextUnlockTarget : null).toBe(HUGE_GOAL);
+    expect(loaded.boss).toMatchObject({ type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0], startingDieId: 0 });
     expect(infernoMultiplier(loaded.engulfmentLevel)).toBe(HUGE_GOAL);
   });
 

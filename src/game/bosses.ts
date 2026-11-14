@@ -1,9 +1,8 @@
 import { CONFIG } from './config';
 import { hashSeed, SeededRng } from './rng';
-import { encounterHandIds, handIsStructurallyImpossible, handOptions, handStats, HANDS, HAND_IDS,
-  lowerHand, LOWER_HAND_IDS, naturalHandPipsBenchmark, upperHand, UPPER_HAND_IDS } from './hands';
-import { finalizeExactScore, roundPositiveRatioToStep, roundScoreToStep, scoreMin, type ExactScore } from './scoreMath';
-import type { BigBossType, Board, BossRuntimeState, BossType, Die, HandId, HandLevels, MiniBossType, Rank } from './types';
+import { encounterHandIds, handIsStructurallyImpossible, handOptions, HAND_IDS,
+  lowerHand, LOWER_HAND_IDS, upperHand, UPPER_HAND_IDS } from './hands';
+import type { BigBossType, Board, BossRuntimeState, BossType, Die, HandId, MiniBossType, Rank } from './types';
 
 export interface BossDefinition {
   name: string;
@@ -63,7 +62,7 @@ export const BOSSES: Record<BossType, BossDefinition> = {
   },
   warden: {
     name: 'THE WARDEN',
-    shortRule: 'Choose one die to start. Score enough to unlock the rest.',
+    shortRule: 'The Warden locks away all but one of your dice. Each Hand you play sets another free.',
     primary: '#06B6D4',
     secondary: '#14B8A6',
   },
@@ -191,102 +190,6 @@ export function bossGoalModifier(type: BossType): number {
         : 1;
 }
 
-export function wardenNaturalHands(activeDice: number, hands: readonly HandId[] = HAND_IDS): HandId[] {
-  return hands.filter(hand => HANDS[hand].rank !== undefined || HANDS[hand].size! <= activeDice);
-}
-
-export function wardenIdealNaturalPips(hand: HandId, activeDice: number): number {
-  const definition = HANDS[hand];
-  if (definition.rank !== undefined) return definition.rank * activeDice;
-  if (['odds', 'evens', 'chance', 'oddStraight', 'evenStraight'].includes(hand)) return naturalHandPipsBenchmark(hand);
-  if (hand === 'smallStraight' || hand === 'largeStraight') {
-    return Array.from({ length: definition.size! }, (_, index) => 6 - index)
-      .reduce((sum, rank) => sum + rank, 0);
-  }
-  return [...definition.groups!].sort((a, b) => b - a)
-    .reduce((sum, group, index) => sum + group * (6 - index), 0);
-}
-
-export function wardenBaselineCapacity(handLevels: HandLevels, consumed: HandId[], activeDice: number,
-  hands: readonly HandId[] = HAND_IDS): ExactScore {
-  const used = new Set(consumed);
-  return wardenNaturalHands(activeDice, hands).filter(hand => !used.has(hand)).reduce((capacity, hand) => {
-    const stats = handStats(hand, handLevels[hand]);
-    return capacity + finalizeExactScore(1n, wardenIdealNaturalPips(hand, activeDice), stats.handMultiplier, 1).finalScore;
-  }, 0n);
-}
-
-const WARDEN_STEP = BigInt(CONFIG.targetRounding);
-const roundWardenCost = (score: ExactScore) => roundScoreToStep(score < 0n ? 0n : score, WARDEN_STEP);
-
-export function wardenBaselineHandScore(handLevels: HandLevels, hand: HandId, activeDice: number): ExactScore {
-  const stats = handStats(hand, handLevels[hand]);
-  return finalizeExactScore(1n, wardenIdealNaturalPips(hand, activeDice), stats.handMultiplier, 1).finalScore;
-}
-
-export function wardenUnlockCost(
-  handLevels: HandLevels,
-  consumed: HandId[],
-  activeDice: number,
-  previousUnlockCost: ExactScore = 0n,
-  hands: readonly HandId[] = HAND_IDS,
-): ExactScore {
-  const normalCost = roundPositiveRatioToStep(wardenBaselineCapacity(handLevels, consumed, activeDice, hands), 2n, WARDEN_STEP);
-  if (activeDice === 1) {
-    const weakestUpperCap = hands.filter(upperHand)
-      .map(hand => wardenBaselineHandScore(handLevels, hand, 1))
-      .sort((a, b) => a < b ? -1 : a > b ? 1 : 0)
-      .slice(0, 2)
-      .reduce((sum, score) => sum + score, 0n);
-    const pairCap = roundPositiveRatioToStep(wardenBaselineHandScore(handLevels, 'pair', 2), 2n, WARDEN_STEP);
-    return scoreMin(normalCost, roundWardenCost(weakestUpperCap), pairCap);
-  }
-  if (activeDice === 2) {
-    const pairMaximum = roundWardenCost(wardenBaselineHandScore(handLevels, 'pair', 2));
-    const constrained = normalCost > previousUnlockCost * 2n ? normalCost : previousUnlockCost * 2n;
-    return pairMaximum < constrained ? pairMaximum : constrained;
-  }
-  return normalCost;
-}
-
-export function wardenUnlockCosts(handLevels: HandLevels, consumed: HandId[], goal: ExactScore,
-  equippedDice: number = CONFIG.diceCount, hands: readonly HandId[] = HAND_IDS): ExactScore[] {
-  const costs: ExactScore[] = [];
-  for (let activeDice = 1; activeDice < equippedDice; activeDice++) {
-    costs.push(wardenUnlockCost(handLevels, consumed, activeDice, costs[0] ?? 0, hands));
-  }
-  if (!costs.length) return costs;
-  const cumulativeCost = costs.reduce((sum, cost) => sum + cost, 0n);
-  const halfwayGoal = roundPositiveRatioToStep(goal, 2n, WARDEN_STEP);
-  if (cumulativeCost <= halfwayGoal) return nerfWardenCosts(costs);
-
-  const scaled = costs.map(cost => roundPositiveRatioToStep(cost * halfwayGoal, cumulativeCost, WARDEN_STEP));
-  scaled[0] = scaled[0] < WARDEN_STEP ? WARDEN_STEP : scaled[0];
-  if (scaled.length === 4) {
-    scaled[1] = scaled[1] < scaled[0] * 2n ? scaled[0] * 2n : scaled[1];
-    scaled[2] = scaled[2] < scaled[1] ? scaled[1] : scaled[2];
-    scaled[3] = halfwayGoal - scaled[0] - scaled[1] - scaled[2];
-  } else {
-    const prior = scaled.slice(0, -1).reduce((sum, cost) => sum + cost, 0n);
-    scaled[scaled.length - 1] = halfwayGoal > prior ? halfwayGoal - prior : WARDEN_STEP;
-  }
-  return nerfWardenCosts(scaled);
-}
-
-function nerfWardenCosts(costs: ExactScore[]): ExactScore[] {
-  return costs.map(cost => {
-    const reduced = roundPositiveRatioToStep(cost * 4n, 5n, WARDEN_STEP);
-    if (reduced < cost) return reduced < WARDEN_STEP ? WARDEN_STEP : reduced;
-    return cost > WARDEN_STEP ? cost - WARDEN_STEP : cost;
-  });
-}
-
-export function wardenUnlockTarget(currentScore: ExactScore, handLevels: HandLevels, consumed: HandId[], activeDice: number): ExactScore {
-  const cost = nerfWardenCosts([wardenUnlockCost(handLevels, consumed, activeDice)])[0];
-  const rounded = roundScoreToStep(currentScore + cost, WARDEN_STEP);
-  return currentScore > rounded ? currentScore : rounded;
-}
-
 export interface BossRuntimeContext {
   handPlayCounts?: Record<HandId, number>;
   playerDieIds?: number[];
@@ -349,10 +252,6 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
       encounterDieIds: [...(context.playerDieIds ?? Array.from({ length: CONFIG.diceCount }, (_, index) => index))],
       activeDieIds: [],
       startingDieId: null,
-      nextUnlockTarget: null,
-      unlockCosts: [],
-      unlockTargets: [],
-      pendingReinforcements: 1,
     };
     case 'hexer': return { type, cursedDieId: CURSED_DIE_ID };
     case 'marathon': return { type, cooldowns: {} };

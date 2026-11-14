@@ -76,7 +76,7 @@ A Flame's written condition is its complete activation condition. Investment sca
 Boss selection is deterministic and stored in the Chapter plan. Every current Boss is safe with one to five equipped dice and ignores Storage.
 
 - Caller selects only physically attainable calls.
-- Warden derives its lock/reinforcement schedule from the encounter's equipped Roster.
+- Warden starts with one player-chosen active die, then releases one locked die in stable Roster order after each manual Hand Play.
 - Hexer adds a tagged negative-ID Cursed Die with seven authored boss faces. Its face rules are dedicated encounter mechanics, not collectible effects.
 - Marathon applies hand cooldowns; Quickdraw permits one Lower shot; Fly targets attainable Lower hands.
 - Snake Eyes changes a scored physical face to 1 for the attempt.

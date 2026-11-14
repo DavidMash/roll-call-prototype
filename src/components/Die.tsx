@@ -3,8 +3,7 @@ import { activeFace, scoringPips } from '../game/dice';
 import type { Die as PhysicalDie, DieType, Flame, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
 import { PipFace } from './PipFace';
-import { formatExactScore, formatPlayerNumber } from '../game/copy';
-import type { ExactScore } from '../game/scoreMath';
+import { formatPlayerNumber } from '../game/copy';
 import { DieEffectsLabel, diePresentationStyle } from './DieTypeLabel';
 import { SPECIAL_DICE } from '../game/specialDice';
 
@@ -22,7 +21,6 @@ interface Props {
   detailsDisabled?: boolean;
   wardenLocked?: boolean;
   wardenSelectable?: boolean;
-  unlockAt?: ExactScore;
   eligible?: boolean;
   ineligibleReason?: string;
   lockedReason?: string;
@@ -36,7 +34,7 @@ interface Props {
 }
 
 export function Die({ die, rosterSlot, display, selected, highlighted, rolling, resolving = false, ability, flameAbility, disabled,
-  detailsDisabled = false, eligible, wardenLocked = false, wardenSelectable = false, unlockAt, ineligibleReason,
+  detailsDisabled = false, eligible, wardenLocked = false, wardenSelectable = false, ineligibleReason,
   lockedReason, allowIneligibleClick = false, onClick, onDetails, onDropOffer, fetchTarget, hotPotato = false, pipsPop }: Props) {
   const face = activeFace(die);
   const pips = scoringPips(face);
@@ -55,7 +53,7 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
   const dieDetails = `${dieLabel}, face ${formatPlayerNumber(face.rank)}, ${formatPlayerNumber(pips)} Pips`
     + `${temporaryState ? `, ${temporaryState}` : ''}${isFetchTarget ? ', Fetch target' : ''}`;
   const accessibilityLabel = wardenLocked
-    ? `${dieDetails}, locked${unlockAt === undefined ? '' : ` until ${formatExactScore(unlockAt)} points`}${wardenSelectable ? ', selectable to unlock' : ''}`
+    ? `${dieDetails}, locked${wardenSelectable ? ', selectable as the initial active die' : '; the next manual Hand Play releases one locked die'}`
     : `${dieDetails}${hotPotato ? ', Hot Potato' : ''}${lockedReason ? `, required: ${lockedReason}` : ineligibleReason ? `, unavailable: ${ineligibleReason}` : ''}`;
   const triggered = ability || flameAbility;
 
@@ -68,8 +66,8 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
       className={`die die-selection-target ${die.owner === 'boss' ? 'cursed-die' : ''}${specialName ? ' special-die' : ''} ${mutation?.kind === 'snakeEyes' ? 'snake-eyed-face' : ''} ${mutation?.kind === 'infected' ? 'infected-face' : ''}${selected ? ' selected is-die-selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${resolving ? 'resolving' : ''} ${triggered ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''} ${wardenLocked ? 'warden-locked' : ''}`}
       style={collectible ? diePresentationStyle(collectible) : undefined} data-effect-count={collectible?.effects.length ?? undefined}
       disabled={interactionDisabled} aria-disabled={interactionDisabled} aria-pressed={selected}
-      title={wardenLocked ? `${dieLabel} locked${unlockAt === undefined ? '' : ` until ${formatExactScore(unlockAt)} points`}${wardenSelectable ? ' · choose to unlock' : ''}` : lockedReason ?? ineligibleReason}
-      aria-label={accessibilityLabel} data-locked-until={unlockAt?.toString()} data-resolving={resolving || undefined}
+      title={wardenLocked ? `${dieLabel} locked${wardenSelectable ? ' · choose as initial active die' : ' · next manual Hand Play releases one'}` : lockedReason ?? ineligibleReason}
+      aria-label={accessibilityLabel} data-resolving={resolving || undefined}
       onClick={() => { if (!interactionDisabled) onClick(); }}
       onDragOver={event => { if (!interactionDisabled && onDropOffer) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } }}
       onDrop={event => {
@@ -79,7 +77,7 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
         if (raw !== '' && Number.isInteger(Number(raw))) onDropOffer(Number(raw));
       }}>
       <Text size="xs" c="dimmed" className="die-id">{die.owner === 'boss' ? 'CURSED' : playerLabel}</Text>
-      {wardenLocked && <div className="die-lock-overlay" aria-hidden="true"><span>🔒</span><span>{unlockAt === undefined ? 'SELECT' : `${formatExactScore(unlockAt)} PTS`}</span></div>}
+      {wardenLocked && <div className="die-lock-overlay" aria-hidden="true"><span>🔒</span><span>{wardenSelectable ? 'SELECT' : 'LOCKED'}</span></div>}
       {mutation?.kind === 'snakeEyes' && <span className="boss-face-badge" aria-hidden="true" title="Snake Eyes">S</span>}
       {mutation?.kind === 'infected' && <span className="boss-face-badge infected" aria-hidden="true" title="Infected">!</span>}
       {isFetchTarget && <span className="fetch-face-badge" aria-hidden="true" title="Fetch target">FETCH</span>}

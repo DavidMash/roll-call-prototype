@@ -20,7 +20,7 @@ import { createDiceOffers, firstPurchaseSlot, setSlotValue } from './diceEconomy
 import { applyHandContribution, applyXMult, createHandAccumulator, finalizeHandScore, resolvedDiePipsContributions, type HandScoreContribution, type ScoringParticipant } from './scoring';
 import { boardSnapshot } from './telemetry';
 import { activeEncounterDice, bossTypeForRound, CALLER_HAND_POOL, cleanupTemporaryBossFaces, createBossRuntime, createCursedDie, currentlyPlayableManualHands, handIsPhysicallyAttainable,
-  isBigBossRound, isCursedDie, isMiniBossType, requiredEncounterDieIds, scorecardCycleRelevantHands, unavailableEncounterHands, wardenUnlockCosts,
+  isBigBossRound, isCursedDie, isMiniBossType, requiredEncounterDieIds, scorecardCycleRelevantHands, unavailableEncounterHands,
   wouldCompleteScorecardCycle } from './bosses';
 import { getEncounterGoalBreakdown, startingTargetForScenario } from './goals';
 import { encounterNode, flameNodeAfter, postBossShopNodeAfter, shopNodeBefore, specialOfferNodeAfter, timeTravelDestinationRound } from './progression';
@@ -384,9 +384,11 @@ export class Resolver {
       case 'CALLER_CHANGED':
       case 'WARDEN_UNLOCK_TARGET':
       case 'WARDEN_REINFORCEMENT':
+      case 'WARDEN_DIE_RELEASED':
         if (record.boss) this.emitV2({ kind: 'boss_state_changed', boss: record.boss,
           change: record.type === 'BOSS_STARTED' ? 'started' : record.type === 'BOSS_CLEARED' ? 'cleared'
             : record.type === 'WARDEN_UNLOCK_TARGET' ? 'warden_target' : record.type === 'WARDEN_REINFORCEMENT' ? 'warden_unlock'
+              : record.type === 'WARDEN_DIE_RELEASED' ? 'warden_release'
               : record.type === 'BOSS_FACE_CHANGED' ? 'face' : record.type === 'CALLER_CALLED' ? 'called'
                 : record.boss === 'fly' && record.bossState === 'target' ? 'target'
                   : record.boss === 'fly' && record.bossState === 'caught' ? 'caught'
@@ -571,18 +573,6 @@ export class Resolver {
     if (round.firstCrossedScore === null && this.state.score >= this.state.target) round.firstCrossedScore = this.state.score;
     round.finalScore = this.state.score;
     this.emit({ type: 'SCORE_ADDED', amount, source, hand, dieIds, message });
-    this.updateWardenUnlockTarget();
-  }
-  private updateWardenUnlockTarget(): void {
-    if (this.state.bossSilenced) return;
-    const boss = this.state.boss;
-    if (boss?.type !== 'warden' || boss.nextUnlockTarget === null || boss.pendingReinforcements > 0
-      || boss.activeDieIds.length >= boss.encounterDieIds.length || this.state.score < boss.nextUnlockTarget) return;
-    boss.pendingReinforcements++;
-    this.state.stats.wardenEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
-      kind: 'target', threshold: boss.nextUnlockTarget, activeDice: boss.activeDieIds.length });
-    this.emit({ type: 'WARDEN_UNLOCK_TARGET', boss: 'warden', amount: boss.nextUnlockTarget,
-      message: `Warden unlock target ${this.format(boss.nextUnlockTarget)} reached · next reinforcement released` });
   }
   whenScored(dieId: number, snapshot: Face, hand: HandId, playSource: HandPlaySource, participation: 'selected' | 'hitchhiker'): void {
     if (!this.state.bossSilenced && this.state.boss?.type === 'hexer' && dieId === this.state.boss.cursedDieId) {
@@ -1570,32 +1560,36 @@ export class Resolver {
   }
   unlockWardenDie(dieId: number): void {
     const boss = this.state.boss;
-    if (boss?.type !== 'warden' || boss.pendingReinforcements <= 0) throw new Error('Warden unlock attempted without a pending choice.');
-    const starting = boss.startingDieId === null;
+    if (boss?.type !== 'warden' || boss.startingDieId !== null)
+      throw new Error('Warden initial die selection attempted after the encounter had already started.');
     boss.activeDieIds.push(dieId);
-    this.ensureHotPotatoTarget();
-    if (starting) boss.startingDieId = dieId;
-    boss.pendingReinforcements--;
-    if (!boss.unlockCosts.length) {
-      boss.unlockCosts = wardenUnlockCosts(this.state.handLevels, this.state.consumed, this.state.target,
-        boss.encounterDieIds.length, availableHandIds(this.state));
-    }
-    boss.nextUnlockTarget = boss.activeDieIds.length < boss.encounterDieIds.length
-      ? boss.unlockCosts.slice(0, boss.activeDieIds.length).reduce((sum, cost) => sum + cost, 0n)
-      : null;
-    if (boss.nextUnlockTarget !== null) boss.unlockTargets.push(boss.nextUnlockTarget);
+    boss.startingDieId = dieId;
     this.state.stats.wardenEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
-      kind: starting ? 'starting_die' : 'reinforcement', dieId, activeDice: boss.activeDieIds.length });
+      kind: 'starting_die', dieId, activeDice: boss.activeDieIds.length });
     const encounter = this.state.stats.bossEncounters.at(-1);
-    if (encounter?.boss === 'warden') {
-      if (starting) encounter.wardenStartingDieId = dieId;
-      encounter.wardenUnlockTargets = [...boss.unlockTargets];
-    }
-    this.emit({ type: 'WARDEN_REINFORCEMENT', boss: 'warden', dieIds: [dieId],
-      message: `${starting ? 'Starting die' : 'Reinforcement'} ${this.dieLabel(dieId)} unlocked · face ${this.state.dice.find(die => die.id === dieId)!.value} retained` });
-    this.updateWardenUnlockTarget();
+    if (encounter?.boss === 'warden') encounter.wardenStartingDieId = dieId;
+    this.emit({ type: 'WARDEN_DIE_RELEASED', boss: 'warden', dieIds: [dieId], amount: 1,
+      bossState: 'initial', message: `${this.dieLabel(dieId)} chosen as The Warden's initial active die` });
+    this.ensureHotPotatoTarget();
     this.evaluate();
-    if (this.state.phase === 'round' && boss.pendingReinforcements === 0) this.state.decisionId++;
+    if (this.state.phase === 'round') this.state.decisionId++;
+  }
+
+  private releaseWardenDieAfterManualPlay(scorePackage: ScorePackage): void {
+    if (scorePackage.initiatingSource !== 'manual' || this.state.bossSilenced) return;
+    const boss = this.state.boss;
+    if (boss?.type !== 'warden' || boss.startingDieId === null) return;
+    const dieId = boss.encounterDieIds.find(id => !boss.activeDieIds.includes(id));
+    if (dieId === undefined) return;
+    boss.activeDieIds.push(dieId);
+    this.state.stats.wardenEvents.push({ round: this.state.round, attempt: this.state.roundAttemptNumber,
+      kind: 'release', dieId, activeDice: boss.activeDieIds.length,
+      hand: scorePackage.initiatingHand, playId: scorePackage.rootPlayId });
+    this.emit({ type: 'WARDEN_DIE_RELEASED', boss: 'warden', dieIds: [dieId],
+      hand: scorePackage.initiatingHand, playSource: 'manual', amount: boss.activeDieIds.length,
+      bossState: 'manual_play',
+      message: `${HANDS[scorePackage.initiatingHand].name} set ${this.dieLabel(dieId)} free · ${boss.activeDieIds.length} of ${boss.encounterDieIds.length} dice active` });
+    this.ensureHotPotatoTarget();
   }
 
   private beginScorePackage(playId: string, hand: HandId, source: HandPlaySource): ScorePackage {
@@ -1692,6 +1686,7 @@ export class Resolver {
         roundScore: this.state.score, target: this.state.target });
     }
 
+    this.releaseWardenDieAfterManualPlay(scorePackage);
     if (scorePackage.initiatingSource === 'manual' && !this.state.scoreWagers.pendingDoubleOrNothing
       && this.state.phase === 'round') this.evaluate();
   }
@@ -2300,8 +2295,6 @@ export class Resolver {
         if (this.state.boss.type === 'warden') {
           this.state.boss.activeDieIds = this.state.dice.filter(die => die.owner === 'player').map(die => die.id);
           this.state.boss.startingDieId ??= this.state.boss.activeDieIds[0] ?? null;
-          this.state.boss.pendingReinforcements = 0;
-          this.state.boss.nextUnlockTarget = null;
         }
       }
       current.manualRerollsGranted += safeguardRerolls;
@@ -2365,7 +2358,6 @@ export class Resolver {
         encounter.callerManualPlays = failedBoss.type === 'caller' ? failedBoss.manualHandsPlayed ?? Math.max(0, 3 - failedBoss.playsRemaining) : undefined;
         encounter.callerSatisfied = failedBoss.type === 'caller' ? failedBoss.satisfied : undefined;
         encounter.callerSatisfyingSource = failedBoss.type === 'caller' ? failedBoss.satisfyingSource : undefined;
-        encounter.wardenUnlockTargets = failedBoss.type === 'warden' ? failedBoss.unlockTargets : undefined;
         encounter.wardenStartingDieId = failedBoss.type === 'warden' ? failedBoss.startingDieId : undefined;
         encounter.wardenActiveDiceAtEnd = failedBoss.type === 'warden' ? failedBoss.activeDieIds.length : undefined;
       }
@@ -2458,10 +2450,6 @@ export class Resolver {
         if (!missingDie) throw new Error('The Magician requires an equipped player die to disappear.');
       }
     }
-    if (!this.state.bossSilenced && this.state.boss?.type === 'warden') {
-      this.state.boss.unlockCosts = wardenUnlockCosts(this.state.handLevels, [], this.state.target,
-        this.state.boss.encounterDieIds.length, availableHandIds(this.state));
-    }
     const sixPackInvestment = flameByType(this.state, 'sixPack')?.investedGold ?? 0;
     this.state.sixPackXMult = sixPackStartingMultiplier(sixPackInvestment);
     this.state.sixPackUpperHandsPlayed = 0;
@@ -2488,7 +2476,6 @@ export class Resolver {
       this.state.stats.bossEncounters.push({ boss: boss.type, round: this.state.round, attempt: this.state.roundAttemptNumber,
         started: true, cleared: false, busted: false,
         calledHand: boss.type === 'caller' ? boss.calledHand : undefined,
-        wardenUnlockTargets: boss.type === 'warden' ? boss.unlockTargets : undefined,
         wardenStartingDieId: boss.type === 'warden' ? boss.startingDieId : undefined });
       this.emit({ type: 'BOSS_STARTED', boss: boss.type,
         message: `${boss.type.toUpperCase()} · Round ${this.format(this.state.round)} · Attempt ${this.format(this.state.roundAttemptNumber)} · goal ${this.format(this.state.target)}` });
@@ -3031,7 +3018,7 @@ export class Resolver {
         interestGold: payout.interestGold, bossRewardGold: payout.bossRewardGold, goldenGold, jackpotGold,
         message: `${bossType ? `${isMiniBossType(bossType) ? 'Mini-Boss' : 'Boss'} defeated` : `Round ${this.format(this.state.round)} cleared`} · Gold ${this.format(summary.goldBefore)} → ${this.format(summary.goldAfter)} (+${this.format(totalGoldEarned)})` });
       this.performInfernoEvaluation();
-    } else if (this.state.bossSilenced || this.state.boss?.type !== 'warden' || (this.state.boss.startingDieId !== null && this.state.boss.pendingReinforcements === 0)) {
+    } else if (this.state.bossSilenced || this.state.boss?.type !== 'warden' || this.state.boss.startingDieId !== null) {
       if (hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state),
         requiredEncounterDieIds(this.state), this.state.dieRoundState)) return;
       const rerolls = usableManualRerolls(this.state);

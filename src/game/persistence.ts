@@ -7,8 +7,8 @@ import type { BadDreamCheckpoint, GameState } from './types';
 import { cloneGameState } from './ledger';
 
 export const RUN_STORAGE_KEY = 'roll-call:active-run';
-export const RUN_STORAGE_VERSION = 30;
-const MIGRATABLE_RUN_STORAGE_VERSIONS = new Set([28, 29, RUN_STORAGE_VERSION]);
+export const RUN_STORAGE_VERSION = 31;
+const MIGRATABLE_RUN_STORAGE_VERSIONS = new Set([28, 29, 30, RUN_STORAGE_VERSION]);
 
 type RunStorage = Pick<Storage, 'getItem' | 'setItem'>;
 

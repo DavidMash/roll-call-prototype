@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createCollectibleDie } from './dice';
 import { combinationsForHand, handStats } from './hands';
 import type { Die, HandId, Rank } from './types';
-import { createBossRuntime, wardenNaturalHands } from './bosses';
+import { createBossRuntime } from './bosses';
 import { HAND_FAMILY_FLAMES, PROGRESSIVE_FLAME_SEQUENCES } from './flames';
 
 const dice = (values: number[]): Die[] => values.map((value, index) => {
@@ -51,10 +51,11 @@ describe('Inferno bonus Hands', () => {
     }
   });
 
-  it('includes unlocked Hands in generic boss pools', () => {
+  it('includes unlocked Hands in generic boss pools without making Warden inspect Hand definitions', () => {
     const mugger = createBossRuntime('inferno-hands', 6, 'mugger', { eligibleHands: ['miniStraight'] });
     expect(mugger.type === 'mugger' && mugger.hiddenHand).toBe('miniStraight');
-    expect(wardenNaturalHands(6, ['pair', 'sixKind'])).toEqual(['pair', 'sixKind']);
+    expect(createBossRuntime('inferno-hands', 6, 'warden', { playerDieIds: [0, 1, 2, 3, 4, 5] }))
+      .toEqual({ type: 'warden', encounterDieIds: [0, 1, 2, 3, 4, 5], activeDieIds: [], startingDieId: null });
   });
 
   it('preserves every explicitly designed Flame identity and sequence', () => {

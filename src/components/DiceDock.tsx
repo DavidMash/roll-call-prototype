@@ -35,13 +35,11 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
   const dice = board.bustPresentationDice ? board.dice
     : board.phase === 'round' ? wardenDice ?? activeEncounterDice(board) : board.dice.filter(die => die.owner === 'player');
   const wardenLockedIds = wardenBoss && wardenDice ? wardenDice.filter(die => !wardenBoss.activeDieIds.includes(die.id)).map(die => die.id) : [];
-  const awaitingWardenChoice = !!wardenBoss && wardenBoss.pendingReinforcements > 0;
+  const awaitingWardenChoice = !!wardenBoss && wardenBoss.startingDieId === null;
   const selectedWardenDieId = awaitingWardenChoice && selection.dieIds.length === 1 && wardenLockedIds.includes(selection.dieIds[0])
     ? selection.dieIds[0] : null;
   const effectiveSelection = board.phase === 'round' && !awaitingWardenChoice
     ? normalizeBoardSelection(board, selection) : { dieIds: [], hand: null } satisfies Selection;
-  const lockedUntilByDieId = wardenBoss?.nextUnlockTarget === null || wardenBoss?.nextUnlockTarget === undefined
-    ? undefined : Object.fromEntries(wardenLockedIds.map(id => [id, wardenBoss.nextUnlockTarget!]));
   const chargeAction: Action = { type: 'TOGGLE_CHARGE', hand: effectiveSelection.hand, dieIds: effectiveSelection.dieIds };
   const canToggleCharge = validateAction(board, chargeAction) === null;
   const chargeAtMax = board.chargeXMult >= board.maxCharge - 1e-9;
@@ -94,7 +92,6 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
         eligibleIds={undefined}
         wardenLockedIds={wardenLockedIds} wardenSelectableIds={awaitingWardenChoice ? wardenLockedIds : []}
         wardenChoiceMode={awaitingWardenChoice}
-        lockedUntilByDieId={lockedUntilByDieId}
         onClick={clickDie} onDetails={openDetails} />
     </Paper>
   </>;

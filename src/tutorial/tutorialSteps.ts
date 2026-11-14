@@ -165,7 +165,7 @@ const candidates: Candidate[] = [
     s => s.game.round === 9 && s.game.phase === 'specialOffer' && !s.game.specialOffer?.acquired),
   info('c2-special-confirm', undefined, [], '[data-tutorial="special-offers"]',
     s => s.game.round === 9 && s.game.phase === 'specialOffer' && !!s.game.specialOffer?.acquired),
-  info('c2-warden', 'THE WARDEN', ['You start with one die. Score enough to unlock the rest.', "Locked dice keep their faces and build. You'll get them back as you score."], '[data-tutorial="boss"]',
+  info('c2-warden', 'THE WARDEN', ['You start with one active die. Each manual Hand Play releases one more.', 'Locked dice keep their faces and build. A released die is available for your next action.'], '[data-tutorial="boss"]',
     s => s.game.round === 12 && s.game.phase === 'round'),
   info('flame-selection-2', 'LOOK FOR SYNERGIES', ['Your build is starting to take shape.', 'See if one of these Flames works especially well with what you already have.'], '[data-tutorial="flame-offers"]',
     s => s.game.round === 12 && s.game.phase === 'flameSelection' && !s.game.flameSelection?.acquired),

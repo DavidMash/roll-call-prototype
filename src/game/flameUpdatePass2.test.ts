@@ -117,8 +117,7 @@ describe('Pass 2 Charge Flames', () => {
 
     const warden = game([2, 2, 2, 2, 2]);
     own(warden, 'allHandsOnDeck');
-    warden.boss = { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0, 1],
-      startingDieId: 0, nextUnlockTarget: null, unlockCosts: [], unlockTargets: [], pendingReinforcements: 0 };
+    warden.boss = { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0, 1], startingDieId: 0 };
     new Resolver(warden, constant()).play('pair', [0, 1]);
     expect(warden.chargeXMult).toBe(1.4);
 
@@ -410,8 +409,7 @@ describe('Round-start and preceding-Shop snapshots', () => {
     for (const boss of ['warden', 'magician'] as const) {
       const state = game(); own(state, 'blackHole'); state.roundStartRosterSize = 5;
       state.boss = boss === 'warden'
-        ? { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0], startingDieId: 0,
-          nextUnlockTarget: null, unlockCosts: [], unlockTargets: [], pendingReinforcements: 0 }
+        ? { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0], startingDieId: 0 }
         : { type: 'magician', missingDieId: 4, calledHands: [], completedHands: [], returned: false };
       state.dice[0].value = 1;
       new Resolver(state, constant()).play('ones', [0]);

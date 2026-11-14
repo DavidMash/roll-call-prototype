@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { BOSSES, isMiniBossType } from '../game/bosses';
 import { HANDS } from '../game/hands';
 import type { Board } from '../game/types';
-import { formatExactScore, formatPlayerNumber } from '../game/copy';
+import { formatPlayerNumber } from '../game/copy';
 import { chapterLabel } from '../game/chapters';
 import { InfoCircleIcon } from './InfoPopover';
 import { CurrencyAmount } from './CurrencyAmount';
@@ -19,8 +19,10 @@ export function BossPanel({ board }: { board: Board }) {
     if (board.bossSilenced) return 'SILENCED';
     switch (boss.type) {
       case 'caller': return `${HANDS[boss.calledHand].name} · ${formatPlayerNumber(boss.playsRemaining)} play${boss.playsRemaining === 1 ? '' : 's'} left`;
-      case 'warden': return boss.pendingReinforcements > 0 ? 'Choose a die to unlock'
-        : `${formatPlayerNumber(boss.activeDieIds.length)} of 5 dice unlocked`;
+      case 'warden': return boss.startingDieId === null ? 'Choose your initial active die'
+        : boss.activeDieIds.length === boss.encounterDieIds.length
+          ? `All ${formatPlayerNumber(boss.encounterDieIds.length)} dice active`
+          : `${formatPlayerNumber(boss.activeDieIds.length)} of ${formatPlayerNumber(boss.encounterDieIds.length)} dice active · Next Play frees one`;
       case 'hexer': return 'Cursed Die required';
       case 'marathon': return 'Hands return after 6 plays';
       case 'quickdraw': return boss.lowerShotUsed ? 'Later Lower Plays ×0.25' : 'First Lower Play scores normally';
@@ -42,7 +44,10 @@ export function BossPanel({ board }: { board: Board }) {
     if (board.bossSilenced) return 'This encounter rule is currently silenced.';
     switch (boss.type) {
       case 'caller': return `Current call: ${HANDS[boss.calledHand].name}. ${formatPlayerNumber(boss.playsRemaining)} play${boss.playsRemaining === 1 ? '' : 's'} remaining.`;
-      case 'warden': return `${formatPlayerNumber(boss.activeDieIds.length)} of 5 dice unlocked${boss.nextUnlockTarget === null ? '.' : `. Next unlock at ${formatExactScore(boss.nextUnlockTarget)} score.`}`;
+      case 'warden': return boss.startingDieId === null ? 'Choose the one die that begins active.'
+        : boss.activeDieIds.length === boss.encounterDieIds.length
+          ? `All ${formatPlayerNumber(boss.encounterDieIds.length)} Roster dice are active.`
+          : `${formatPlayerNumber(boss.activeDieIds.length)} of ${formatPlayerNumber(boss.encounterDieIds.length)} Roster dice are active. Your next manual Hand Play releases one locked die.`;
       case 'fly': return boss.caught ? 'The Fly has been caught.' : `Current catch hand: ${boss.flyHand ? HANDS[boss.flyHand].name : 'none'}.`;
       case 'magician': return `${formatPlayerNumber(boss.completedHands.length)} of ${formatPlayerNumber(boss.calledHands.length)} calls completed.`;
       case 'neglected': return boss.restored

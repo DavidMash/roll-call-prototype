@@ -231,8 +231,7 @@ describe('Hot Potato Clock', () => {
     expect(one.interactiveFlames).toMatchObject({ hotPotatoDieId: 0, hotPotatoStreak: 0 });
 
     const warden = game([1, 2, 3, 4, 5]); own(warden, 'hotPotatoClock');
-    warden.boss = { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [2], startingDieId: 2,
-      nextUnlockTarget: null, unlockCosts: [], unlockTargets: [], pendingReinforcements: 0 };
+    warden.boss = { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [2], startingDieId: 2 };
     warden.interactiveFlames.hotPotatoDieId = 0;
     new Resolver(warden, constant()).play('threes', [2], 'jumpingBean');
     expect(warden.historyV2.find(event => event.kind === 'flame_action' && event.flame === 'hotPotatoClock'))

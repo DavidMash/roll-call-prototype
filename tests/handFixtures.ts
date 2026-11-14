@@ -52,7 +52,7 @@ export function winningSettleRun() {
           action = { type: 'UNLOCK_SHOP_EXIT' };
         } else action = game.bust ? { type: 'RETRY_ROUND' } : { type: 'NEXT_ROUND' };
       } else {
-        if (game.boss?.type === 'warden' && game.boss.pendingReinforcements > 0) {
+        if (game.boss?.type === 'warden' && game.boss.startingDieId === null) {
           const activeDieIds = game.boss.activeDieIds;
           const die = game.dice.find(item => item.owner === 'player' && !activeDieIds.includes(item.id));
           if (!die) throw new Error('Warden fixture has no locked die to unlock');

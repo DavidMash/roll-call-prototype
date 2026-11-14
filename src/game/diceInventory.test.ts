@@ -238,16 +238,15 @@ describe('reduced-Roster boss safety', () => {
     }
   });
 
-  it.each([1, 2, 3, 4, 5])('derives Warden reinforcements from %i equipped dice', count => {
+  it.each([1, 2, 3, 4, 5])('derives Warden prison order from %i equipped dice', count => {
     const { state, resolver } = startBoss('warden', count);
     if (state.boss?.type !== 'warden') throw new Error('Warden fixture failed.');
     const ids = rosterDice(state).map(die => die.id);
     expect(state.boss.encounterDieIds).toEqual(ids);
-    expect(state.boss.unlockCosts).toHaveLength(count - 1);
     expect(activeEncounterDice(state)).toHaveLength(0);
     resolver.unlockWardenDie(ids[0]);
     expect(activeEncounterDice(state).map(die => die.id)).toEqual([ids[0]]);
-    if (count === 1) expect(state.boss.nextUnlockTarget).toBeNull();
+    expect(state.boss.startingDieId).toBe(ids[0]);
   });
 
   it('does not let Magician remove the final equipped die', () => {

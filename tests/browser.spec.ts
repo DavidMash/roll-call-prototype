@@ -42,7 +42,7 @@ function bestHand(game: GameState) {
       || (b.score > a.score ? 1 : b.score < a.score ? -1 : 0))[0];
 }
 function automaticAction(game: GameState): Action {
-  if (game.boss?.type === 'warden' && game.boss.pendingReinforcements > 0) {
+  if (game.boss?.type === 'warden' && game.boss.startingDieId === null) {
     const activeDieIds = game.boss.activeDieIds;
     const die = game.dice.find(item => item.owner === 'player' && !activeDieIds.includes(item.id))!;
     return { type: 'UNLOCK_WARDEN_DIE', dieId: die.id };
@@ -129,7 +129,7 @@ async function progressSpecialOffer(page: Page, game: GameState): Promise<GameSt
   return next;
 }
 async function playBest(page: Page, game: GameState): Promise<GameState> {
-  if (game.boss?.type === 'warden' && game.boss.pendingReinforcements > 0) {
+  if (game.boss?.type === 'warden' && game.boss.startingDieId === null) {
     const activeDieIds = game.boss.activeDieIds;
     const die = game.dice.find(item => item.owner === 'player' && !activeDieIds.includes(item.id))!;
     await page.getByRole('button', { name: new RegExp(`^${dieUiLabel(game.dice, die)},.*selectable to unlock$`) }).click();

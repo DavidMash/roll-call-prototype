@@ -174,6 +174,12 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     case 'inferno_evaluated': return `INFERNO EVALUATION · ${event.evaluation.success ? 'READY' : 'NOT YET'} · effective ×${number(event.evaluation.effectiveValue)} / ×${number(event.evaluation.threshold)} · meter ${number((event.evaluation.previousReadiness ?? 0) * 100)}% → ${number(event.evaluation.readiness * 100)}% · ${event.evaluation.flames.length} Flame${event.evaluation.flames.length === 1 ? '' : 's'}`;
     case 'inferno_suspension_changed': return `INFERNO · ${event.suspended ? 'SUSPENDED' : 'REACTIVATED'} · ${event.reason}`;
     case 'boss_state_changed': {
+      if (event.boss === 'warden' && event.change === 'warden_release') {
+        const die = event.dieIds[0] === undefined ? 'unknown die' : `die ${event.dieIds[0]}`;
+        if (event.state === 'initial') return `BOSS · Warden initial ${die} active`;
+        if (event.hand) return `BOSS · Warden released ${die} after ${HANDS[event.hand].name} · ${number(event.amount ?? 0)} active`;
+        return `BOSS · Warden released ${die}`;
+      }
       if (event.boss === 'caller' && event.change === 'called' && event.hand) return `BOSS · Caller called ${HANDS[event.hand].name}`;
       if (event.boss === 'fly' && event.change === 'target' && event.hand) return `BOSS · Fly moved to ${HANDS[event.hand].name}`;
       if (event.boss === 'fly' && event.change === 'caught' && event.hand) return `BOSS · Fly caught on ${HANDS[event.hand].name}`;

@@ -107,10 +107,6 @@ export interface WardenBossState {
   encounterDieIds: number[];
   activeDieIds: number[];
   startingDieId: number | null;
-  nextUnlockTarget: ExactScore | null;
-  unlockCosts: ExactScore[];
-  unlockTargets: ExactScore[];
-  pendingReinforcements: number;
 }
 export interface HexerBossState { type: 'hexer'; cursedDieId: number }
 export interface MarathonBossState { type: 'marathon'; cooldowns: Partial<Record<HandId, number>> }
@@ -812,8 +808,10 @@ export interface CallerEventRecord {
   satisfied: boolean; source: HandPlaySource; expired: boolean;
 }
 export interface WardenEventRecord {
-  round: number; attempt: number; kind: 'starting_die' | 'target' | 'reinforcement';
-  threshold?: ExactScore; dieId?: number; activeDice: number;
+  round: number; attempt: number;
+  /** target/reinforcement are retained so imported telemetry from the former score-gate mechanic remains readable. */
+  kind: 'starting_die' | 'release' | 'target' | 'reinforcement';
+  threshold?: ExactScore; dieId?: number; activeDice: number; hand?: HandId; playId?: string;
 }
 export interface HexerEventRecord {
   round: number; attempt: number;
@@ -948,7 +946,7 @@ export type EventType =
   | 'FETCH_TARGET_CHANGED'
   | 'JUMPING_BEAN_FREE_PLAY' | 'JUMPING_BEAN_FOLLOWUP'
   | 'ROUND_BUST' | 'SHOP_REOPENED_AFTER_BUST' | 'ROUND_RETRY_STARTED' | 'LIFE_RESTORED' | 'FLAME_TUTORIAL_COMPLETED'
-  | 'CALLER_CALLED' | 'CALLER_CHANGED' | 'WARDEN_UNLOCK_TARGET' | 'WARDEN_REINFORCEMENT' | 'CURSED_DIE_ROLLED'
+  | 'CALLER_CALLED' | 'CALLER_CHANGED' | 'WARDEN_UNLOCK_TARGET' | 'WARDEN_REINFORCEMENT' | 'WARDEN_DIE_RELEASED' | 'CURSED_DIE_ROLLED'
   | 'BOSS_HAND_CHANGED' | 'BOSS_FACE_CHANGED'
   | 'RUN_LOST' | 'RESOLUTION_ERROR' | 'MANUAL_REROLL_STARTED' | 'DEAD_BOARD' | 'DEAD_BOARD_RESCUED'
   | 'TUTORIAL_SAFEGUARD' | 'INFERNO_EVALUATED' | 'INFERNO_REWARD_OFFERED' | 'INFERNO_REWARD_CLAIMED'

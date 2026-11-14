@@ -2,7 +2,6 @@ import { Die } from './Die';
 import type { CSSProperties } from 'react';
 import type { Die as PhysicalDie, GameEvent, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
-import type { ExactScore } from '../game/scoreMath';
 
 interface Props {
   dice: PhysicalDie[];
@@ -17,7 +16,6 @@ interface Props {
   actionableIneligibleIds?: number[];
   lockedIds?: number[];
   lockedReasons?: Record<number, string>;
-  lockedUntilByDieId?: Record<number, ExactScore>;
   wardenLockedIds?: number[];
   wardenSelectableIds?: number[];
   wardenChoiceMode?: boolean;
@@ -29,7 +27,7 @@ interface Props {
   onDropOffer?: (offerId: number, dieId: number) => void;
 }
 export function DiceRow({ dice, rosterSlotById = {}, display, selected = [], event, disabled, eligibleIds, restrictToEligible = false,
-  ineligibleReasons = {}, actionableIneligibleIds = [], lockedIds = [], lockedReasons = {}, lockedUntilByDieId = {}, detailsDisabled = false,
+  ineligibleReasons = {}, actionableIneligibleIds = [], lockedIds = [], lockedReasons = {}, detailsDisabled = false,
   wardenLockedIds = [], wardenSelectableIds = [], wardenChoiceMode = false,
   onClick, onDetails, onDropOffer, fetchTarget, hotPotatoDieId }: Props) {
   return <div className="dice-row" data-dice-count={dice.length}
@@ -49,7 +47,6 @@ export function DiceRow({ dice, rosterSlotById = {}, display, selected = [], eve
       ability={involved ? event?.dieType : undefined} flameAbility={involved ? event?.flame : undefined}
       disabled={disabled || (wardenChoiceMode && !wardenLockedIds.includes(die.id))} eligible={eligibleIds?.includes(die.id)}
       wardenLocked={wardenLockedIds.includes(die.id)} wardenSelectable={wardenSelectableIds.includes(die.id)}
-      unlockAt={lockedUntilByDieId[die.id]}
       lockedReason={lockedIds.includes(die.id) ? lockedReasons[die.id] ?? 'This die is required.' : undefined}
       ineligibleReason={restrictToEligible && !eligibleIds?.includes(die.id) ? ineligibleReasons[die.id] ?? 'This face is not eligible.' : undefined}
       allowIneligibleClick={actionableIneligibleIds.includes(die.id)} onClick={() => onClick(die.id)}

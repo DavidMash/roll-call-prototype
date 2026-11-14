@@ -39,7 +39,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const wardenLockedIds = wardenBoss && wardenDice
     ? wardenDice.filter(die => !wardenBoss.activeDieIds.includes(die.id)).map(die => die.id)
     : [];
-  const awaitingWardenChoice = !!wardenBoss && wardenBoss.pendingReinforcements > 0;
+  const awaitingWardenChoice = !!wardenBoss && wardenBoss.startingDieId === null;
   const doubleOrNothingWager = board.scoreWagers.doubleOrNothing;
   const allInFactor = allInMultiplier(flameByType(board, 'allIn')?.investedGold ?? 0);
   const roundBusy = busy;
@@ -196,7 +196,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     <RunActionPortal><Paper className="gameplay-actions-panel" p="xs">
         <div className="gameplay-actions">
           {awaitingWardenChoice && <Text size="xs" c="dimmed" className="selection-preview">
-            {selectedWardenDieId === null ? 'Choose a Locked Die to Unlock'
+            {selectedWardenDieId === null ? 'Choose Your Initial Active Die'
               : `D${board.dice.filter(die => die.owner === 'player').findIndex(die => die.id === selectedWardenDieId) + 1} will keep its current Face`}
           </Text>}
           <RunActionLayout className="round-action-layout"
@@ -215,7 +215,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
             </> : undefined}
             right={awaitingWardenChoice
               ? <Button className="unlock-action" size="sm" color="cyan" disabled={roundBusy || selectedWardenDieId === null}
-                onClick={() => submit({ type: 'UNLOCK_WARDEN_DIE', dieId: selectedWardenDieId! })}>UNLOCK DIE</Button>
+                onClick={() => submit({ type: 'UNLOCK_WARDEN_DIE', dieId: selectedWardenDieId! })}>CHOOSE ACTIVE DIE</Button>
               : <Button className="play-action" size="sm" aria-label={preview ? playActionLabel(preview.danger, preview.guaranteedWin) : 'PLAY'} disabled={roundBusy || !valid}
                 data-testid="play-action" data-tutorial="play-action" onClick={submitPlay}>
                 {speedEquation ?? (preview ? `${formatScoreEquation(preview.pips, preview.multiplier, preview.effectiveXMult,
