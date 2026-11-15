@@ -1,7 +1,7 @@
 import { bossRewardForEncounter, CONFIG, interestForGoldAtCap, roundReward } from './config';
 import { activeFace, createCollectibleDie, faceOutcomeIdentity, rollPhysicalDie, sameOutcomeIdentity, scoringPips, weightedSelectedFaceWeight, wholeDieEffectSuppressed } from './dice';
 import {
-  captureHandStart, currentFlameInstanceId, eligibleFlameIds, flameByType, flameInstances, flameSlotOf, FLAMES, handXMultContributions,
+  captureHandStart, currentFlameInstanceId, eligibleFlameIds, flameBaseMultiplier, flameByType, flameInstances, flameSlotOf, FLAMES, handXMultContributions,
   allHandsOnDeckChargeGain, countScoringDiceEnhancementComponents, fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, HOT_STREAK_SEQUENCE,
   initialHandFamilyFlameStages, jumpStartChargeGain, momentumChargeGain, normalizeFlameInstanceRuntime, ownedFlameIds, recalculateMaxCharge,
   potentialEnergyChargeGain, removeFlameInstance,
@@ -100,6 +100,32 @@ const NORMAL_SHOP_SPEND = new Set<GoldSpendSource>([
 const UPPER_HAND_BY_FACE: Partial<Record<import('./types').Rank, HandId>> = {
   1: 'ones', 2: 'twos', 3: 'threes', 4: 'fours', 5: 'fives', 6: 'sixes',
 };
+
+export function selectFlameRewardTypes(pool: readonly Flame[], rng: RandomSource): Flame[] {
+  const low = pool.filter(id => flameBaseMultiplier(id) <= 5);
+  const high = pool.filter(id => flameBaseMultiplier(id) >= 5);
+  const viableLow = low.filter(lowId => high.some(highId => highId !== lowId));
+  if (!viableLow.length) return rarityFirstSelection(pool, 3, id => FLAMES[id].rarity, OFFER_RARITY_WEIGHTS.flame, rng);
+
+  const rarityCompatibleLow = viableLow.filter(lowId => high.some(highId => highId !== lowId
+    && (FLAMES[lowId].rarity !== 'rare' || FLAMES[highId].rarity !== 'rare')));
+  const selectedLow = rarityFirstSelection(rarityCompatibleLow.length ? rarityCompatibleLow : viableLow,
+    1, id => FLAMES[id].rarity, OFFER_RARITY_WEIGHTS.flame, rng)[0]!;
+  const distinctHigh = high.filter(id => id !== selectedLow);
+  const rarityCompatibleHigh = distinctHigh.filter(id => FLAMES[selectedLow].rarity !== 'rare' || FLAMES[id].rarity !== 'rare');
+  const viableHigh = rarityCompatibleHigh.length ? rarityCompatibleHigh : distinctHigh;
+  const selectedHigh = rarityFirstSelection(viableHigh, 1, id => FLAMES[id].rarity, OFFER_RARITY_WEIGHTS.flame, rng)[0]!;
+  const selected = [selectedLow, selectedHigh];
+  const rareSelected = selected.some(id => FLAMES[id].rarity === 'rare');
+  const remaining = pool.filter(id => !selected.includes(id) && (!rareSelected || FLAMES[id].rarity !== 'rare'));
+  selected.push(...rarityFirstSelection(remaining, 1, id => FLAMES[id].rarity, OFFER_RARITY_WEIGHTS.flame, rng));
+
+  for (let index = selected.length - 1; index > 0; index--) {
+    const swapIndex = randomIndex(rng, index + 1);
+    [selected[index], selected[swapIndex]] = [selected[swapIndex], selected[index]];
+  }
+  return selected;
+}
 
 // Rules resolve synchronously into immutable snapshots. Playback speed only changes how React reads them.
 export class Resolver {
@@ -2557,7 +2583,7 @@ export class Resolver {
   freshFlameOffers(): void {
     const owned = ownedFlameIds(this.state);
     const pool = eligibleFlameIds(this.state).filter(id => !owned.has(id));
-    const selected = rarityFirstSelection(pool, 3, id => FLAMES[id].rarity, OFFER_RARITY_WEIGHTS.flame, this.rng);
+    const selected = selectFlameRewardTypes(pool, this.rng);
     this.state.flameSelection!.offers = selected.map(flame => ({ id: this.state.nextOfferId++, flame }));
     const offerSet = selected.map(id => ({ name: FLAMES[id].name, rarity: FLAMES[id].rarity }));
     this.log({ type: 'FLAME_OFFERS_REFRESHED', offerSet,

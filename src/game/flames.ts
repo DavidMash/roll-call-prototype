@@ -228,6 +228,42 @@ export const progressiveSequenceMultiplier = (id: ProgressiveSequenceFlame, inve
   const bonfireFactor = rewards[Math.max(0, Math.min(rewards.length - 1, Math.floor(stepIndex)))] ?? 1;
   return Number((1 + (bonfireFactor - 1) * flameProgress(investedGold)).toFixed(12));
 };
+
+/** Representative base factor, derived from the same full-strength formulas used by Flame details. */
+export function flameBaseMultiplier(id: Flame, investedGold = 100): number {
+  const investment = Math.max(0, Math.min(100, investedGold));
+  if (isChargeFlame(id)) return maxChargeContribution(investment);
+  if (id === 'hotStreak') return hotStreakMultiplier(investment, HOT_STREAK_SEQUENCE.length);
+  if (id === 'topDown' || id === 'countDown')
+    return progressiveSequenceMultiplier(id, investment, PROGRESSIVE_FLAME_SEQUENCES[id].hands.length - 1);
+  if (id === 'bribery') return briberyFactor(investment, BRIBERY_ROUND_GOLD_CAP);
+  return id === 'targetPractice' ? targetPracticeMultiplier(investment)
+    : id === 'speedDemon' ? speedDemonMultiplier(investment, 0)
+      : id === 'sixPack' ? sixPackStartingMultiplier(investment)
+        : id === 'minigun' ? minigunMultiplier(investment, FLAME_SCALING.minigun.cappedStreak)
+          : isHandFamilyFlame(id) ? handFamilyFlameMultiplier(id, investment)
+            : id === 'lowball' ? lowballMultiplier(investment)
+              : id === 'fatCat' ? fatCatMultiplier(investment, FLAME_SCALING.fatCat.maximumPlayedDice)
+                : id === 'vineyard' ? vineyardMultiplier(investment, FLAME_SCALING.vineyard.maximumPlayedDice)
+                  : id === 'missingPair' ? missingPairMultiplier(investment)
+                    : id === 'oneShort' ? oneShortMultiplier(investment)
+                      : id === 'casual' ? casualMultiplier(investment)
+                        : id === 'freeRealEstate' ? freeRealEstateMultiplier(investment)
+                          : id === 'heavyHitters' ? heavyHittersMultiplier(investment)
+                            : id === 'frankenstein' ? frankensteinMultiplier(investment)
+                              : id === 'highRoller' ? highRollerMultiplier(investment)
+                                : id === 'cleanSweep' ? cleanSweepMultiplier(investment)
+                                  : id === 'benchWarmer' ? benchWarmerMultiplier(investment)
+                                    : id === 'epinephrine' ? epinephrineMultiplier(investment)
+                                      : id === 'punchCard' ? punchCardMultiplier(investment)
+                                        : id === 'blackHole' ? blackHoleMultiplier(investment, 4)
+                                          : id === 'assemblyLine' ? assemblyLineMultiplier(investment, 5)
+                                            : id === 'gymBros' ? gymBrosMultiplier(investment, 5)
+                                              : id === 'dareDevil' ? dareDevilMultiplier(investment, 4)
+                                                : id === 'doubleOrNothing' ? doubleOrNothingMultiplier(investment)
+                                                  : id === 'allIn' ? allInMultiplier(investment)
+                                                    : standardFlameMultiplier(investment);
+}
 type FlameDisplayContext = Pick<Board, 'gold' | 'lifetimeNormalShopGoldSpent'>;
 export function flameEffectText(id: Flame, investedGold: number, _board: FlameDisplayContext): string {
   switch (id) {
@@ -326,32 +362,7 @@ export function flameDetailsPresentation(id: Flame, investedGold: number, board:
         : `+${formatPlayerNumber(briberyXMultPerGold(investment))} per Gold · ${BRIBERY_ROUND_GOLD_CAP} Gold Round cap`,
       maxChargeContribution: null };
   }
-  const multiplier = id === 'targetPractice' ? targetPracticeMultiplier(investment)
-    : id === 'speedDemon' ? speedDemonMultiplier(investment, 0)
-    : id === 'sixPack' ? sixPackStartingMultiplier(investment)
-      : id === 'minigun' ? minigunMultiplier(investment, FLAME_SCALING.minigun.cappedStreak)
-      : isHandFamilyFlame(id) ? handFamilyFlameMultiplier(id, investment)
-        : id === 'lowball' ? lowballMultiplier(investment)
-          : id === 'fatCat' ? fatCatMultiplier(investment, FLAME_SCALING.fatCat.maximumPlayedDice)
-            : id === 'vineyard' ? vineyardMultiplier(investment, FLAME_SCALING.vineyard.maximumPlayedDice)
-              : id === 'missingPair' ? missingPairMultiplier(investment)
-                : id === 'oneShort' ? oneShortMultiplier(investment)
-                : id === 'casual' ? casualMultiplier(investment)
-                  : id === 'freeRealEstate' ? freeRealEstateMultiplier(investment)
-                    : id === 'heavyHitters' ? heavyHittersMultiplier(investment)
-                      : id === 'frankenstein' ? frankensteinMultiplier(investment)
-                        : id === 'highRoller' ? highRollerMultiplier(investment)
-                          : id === 'cleanSweep' ? cleanSweepMultiplier(investment)
-                            : id === 'benchWarmer' ? benchWarmerMultiplier(investment)
-                              : id === 'epinephrine' ? epinephrineMultiplier(investment)
-                                : id === 'punchCard' ? punchCardMultiplier(investment)
-                                  : id === 'blackHole' ? blackHoleMultiplier(investment, 4)
-                                    : id === 'assemblyLine' ? assemblyLineMultiplier(investment, 5)
-                                      : id === 'gymBros' ? gymBrosMultiplier(investment, 5)
-                                        : id === 'dareDevil' ? dareDevilMultiplier(investment, 4)
-                                          : id === 'doubleOrNothing' ? doubleOrNothingMultiplier(investment)
-                                            : id === 'allIn' ? allInMultiplier(investment)
-                                              : standardFlameMultiplier(investment);
+  const multiplier = flameBaseMultiplier(id, investment);
   return { currentLabel: 'Current XMult', currentValue: `up to ×${formatPlayerNumber(multiplier)}`,
     maxChargeContribution: null };
 }
