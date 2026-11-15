@@ -79,7 +79,7 @@ describe('Charge-family generation', () => {
     expect(state.stats.flameTriggers.thirdRail).toBeUndefined();
   });
 
-  it('scales Jump Start and awards the actual number of Rerolls spent', () => {
+  it('scales Jump Start and awards once per manually rerolled die', () => {
     expect([0, 25, 50, 100].map(jumpStartChargeGain)).toEqual([1, 1.125, 1.25, 1.5]);
     const state = game([1, 2, 3, 4, 5]);
     flame(state, 4, 'jumpStart', 50);

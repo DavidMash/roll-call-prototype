@@ -1081,7 +1081,6 @@ export type Action =
       qualificationClaims?: { dieId: DieId; effect: 'mirror' | 'missingLink' | 'conjoined'; effectInstanceId?: string }[] }
   | { type: 'MANUAL_REROLL'; dieIds: number[] }
   | { type: 'INVOKE_CHAMELEON'; dieId: DieId }
-  | { type: 'INVOKE_FLYWHEEL'; dieId: DieId }
   | { type: 'ARM_MAGIC'; dieId: DieId; face: Exclude<Rank, 7> }
   | { type: 'DISARM_MAGIC'; dieId: DieId }
   | { type: 'FEED_FURNACE'; dieId: DieId; amount: number }

@@ -18,7 +18,7 @@ import { appendCriticalDiagnostic, appendDebugTrace, createDebugTrace, normalize
 import { isRollbackState } from './rollback';
 import { assertDiceInventory, collectibleDieById, ownedDice, rosterDice, rosterDieLabel, syncActiveDiceProjection } from './inventory';
 import { effectInstanceId, effectOf, effectRuntime, hasEffect, normalizeDieRoundRuntime, requireEffect, resetDieRoundState, SPECIAL_DICE } from './specialDice';
-import { dicePurchaseIsFree, initialSpecialOfferEffects, usableManualRerolls } from './specialOffers';
+import { dicePurchaseIsFree, initialSpecialOfferEffects } from './specialOffers';
 import { createTrainingSession, quoteTraining } from './training';
 import { firstPurchaseSlot, purchaseDie, setSlotValue, slotExists, slotValue } from './diceEconomy';
 import { dieForgeRating, dieSellBreakdown, forgeRevealEligible, formatForgeValue, mergedEffects, previewForge } from './forge';
@@ -28,7 +28,7 @@ import { attachLedger, chunkForResolution, cloneGameState, createRunLedger, sess
 import { getEncounterGoalBreakdown, NORMAL_STARTING_TARGET, startingTargetForScenario, targetForRound } from './goals';
 import { applyScenarioStart, scenarioById, type ScenarioDefinition } from './scenarios';
 import { initialInfernoRewardState, INFERNO_REWARD_IDS, infernoRewardEligible } from './infernoRewards';
-import { resolveManualRerollCost } from './manualRerolls';
+import { canAffordManualReroll } from './manualRerolls';
 import { eligibleFetchTargets, fetchTargetIsEligible } from './fetchTarget';
 import { createInfernoEvaluation, evaluateEngulfmentOffering, infernoDieInterest, infernoEvidenceInsights, ownedEngulfmentAssets } from './engulfment';
 import type { Action, Board, DiceInventory, FlameSlotIndex, GameState, RandomSource, Resolution, ScenarioRunState, Shop, ShopStage } from './types';
@@ -653,7 +653,7 @@ function validateManualReroll(state: Board | GameState, dieIds: readonly number[
   if (new Set(dieIds).size !== dieIds.length
     || dieIds.some(id => !Number.isInteger(id) || !activeEncounterDice(state).some(die => die.id === id)))
     return 'Select distinct unlocked dice that are on the board.';
-  if (resolveManualRerollCost(state, dieIds).resourceCost > usableManualRerolls(state))
+  if (!canAffordManualReroll(state, dieIds))
     return 'Not enough manual rerolls for these dice.';
   return null;
 }
@@ -773,13 +773,12 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (currentlyPlayableManualHands(state).length === 0) return 'No manual Hand is currently playable.';
     return null;
   }
-  if (action.type === 'INVOKE_CHAMELEON' || action.type === 'INVOKE_FLYWHEEL'
-    || action.type === 'ARM_MAGIC' || action.type === 'DISARM_MAGIC' || action.type === 'FEED_FURNACE') {
+  if (action.type === 'INVOKE_CHAMELEON' || action.type === 'ARM_MAGIC'
+    || action.type === 'DISARM_MAGIC' || action.type === 'FEED_FURNACE') {
     if (state.phase !== 'round') return 'Special die commands can only be used during an active Round.';
     const die = 'diceInventory' in state ? collectibleDieById(state, action.dieId)
       : state.dice.find(item => item.id === action.dieId && item.owner === 'player');
     if (!die || die.owner !== 'player') return 'Choose an equipped collectible die.';
-    if (action.type === 'INVOKE_FLYWHEEL') return 'Flywheel activates automatically during Manual Rerolls.';
     const expected = action.type === 'INVOKE_CHAMELEON' ? 'chameleon'
       : action.type === 'ARM_MAGIC' || action.type === 'DISARM_MAGIC' ? 'magic' : 'furnace';
     const effect = effectOf(die, expected);
@@ -1153,7 +1152,6 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
       case 'TOGGLE_ALL_IN': resolver.toggleAllIn(); break;
       case 'RETREAT': resolver.retreat(); break;
       case 'INVOKE_CHAMELEON': resolver.invokeChameleon(action.dieId); break;
-      case 'INVOKE_FLYWHEEL': resolver.invokeFlywheel(action.dieId); break;
       case 'ARM_MAGIC': resolver.armMagic(action.dieId, action.face); break;
       case 'DISARM_MAGIC': {
         const die = collectibleDieById(next, action.dieId)!;

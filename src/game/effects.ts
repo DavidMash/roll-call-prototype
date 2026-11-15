@@ -46,7 +46,7 @@ import type { ChargeFlame, HandStartSnapshot } from './flames';
 import type { CollectibleDie, DiceSlotRef, DieEffectInstance, EventRecord, Face, Flame, FlameInstanceId, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, InfernoRewardOfferId, LightningStrikePrediction, RandomSource, Rank, ResolvedDiePips, RunNode, ScorePackage, ScoreSource, SpecialDieType, SpecialOffer, TemperSource, TemperSpendSource } from './types';
 import type {
   FlameOrigin, HandSideEffect, HistoryDieState, MultContribution, PipsContribution,
-  RollEffect, RollReason, RunHistoryV2Event, RunHistoryV2EventInput, XMultContribution,
+  RollBatchEvent, RollEffect, RollReason, RunHistoryV2Event, RunHistoryV2EventInput, XMultContribution,
 } from './runHistoryV2';
 import { Decimal, exactRatioNumber, roundPositiveScoreHalf, type ExactScore } from './scoreMath';
 import { createPlayIntent, createRollBatchIntent, createRollIntent } from './resolution';
@@ -57,7 +57,7 @@ import {
   applyStructuralInfernoReward, createCuratedRewardDie, CURATED_DIE_BUILDS, generateInfernoRewardSelection,
   INFERNO_HAND_BY_OFFER, INFERNO_REWARD_OFFERS, placeCuratedRewardDie,
 } from './infernoRewards';
-import { resolveManualRerollCost } from './manualRerolls';
+import { hasLegalManualReroll, resolveManualRerollCost } from './manualRerolls';
 import { eligibleFetchTargets, fetchTargetIsEligible, type FetchRetargetReason } from './fetchTarget';
 
 type RollTrigger = { dieId: number; face: Face; kind: 'jumpingBean'; rerollEventId: string; selectedNumber: Exclude<Rank, 7> };
@@ -917,8 +917,10 @@ export class Resolver {
     const specialAllowed = intent.context === 'gameplay' || intent.context === 'settle' || intent.context === 'wardenSetup';
     const ownEffectActive = !!collectible && !wholeDieEffectSuppressed(collectible);
     const forced = (controller: RollResolution['controller'], target: Rank, controllerDieId: number,
-      locked = true): RollResolution => {
-      const physicalFace = (die.faces.findIndex(face => face.rank === target) + 1 || target) as Rank;
+      locked = true): RollResolution | null => {
+      const targetIndex = die.faces.findIndex(face => face.rank === target);
+      if (targetIndex < 0) return null;
+      const physicalFace = (targetIndex + 1) as Rank;
       return { intent, dieId: die.id, before, beforePhysical, physicalFace, value: target,
         weighted: false, attracted: false, controller, controllerDieId, locked, origin,
         specialDieType: collectible?.effects[0]?.type };
@@ -930,30 +932,38 @@ export class Resolver {
     if (specialAllowed && collectible && magic && magicRuntime && intent.reroll && magicRuntime.magicArmedFace !== null
       && magicRuntime.invocationsRemaining > 0) {
       const target = magicRuntime.magicArmedFace;
-      magicRuntime.magicArmedFace = null;
-      this.spendInvocation(collectible, magic, `Magic forced Reroll to ${target}`, 'roll_controller');
-      return forced('magicDie', target, die.id);
+      const result = forced('magicDie', target, die.id);
+      if (result) {
+        magicRuntime.magicArmedFace = null;
+        this.spendInvocation(collectible, magic, `Magic forced Reroll to ${target}`, 'roll_controller');
+        return result;
+      }
     }
     if (specialAllowed) {
       const magnetic = activeEncounterDice(this.state).find((candidate): candidate is CollectibleDie => candidate.owner === 'player'
         && hasEffect(candidate, 'magnetic') && !rolling.has(candidate.id) && !wholeDieEffectSuppressed(candidate)
-        && (this.specialRuntime(candidate, 'magnetic')?.invocationsRemaining ?? 0) > 0);
+        && (this.specialRuntime(candidate, 'magnetic')?.invocationsRemaining ?? 0) > 0
+        && die.faces.some(face => face.rank === activeFace(candidate).rank));
       if (magnetic) {
         const magneticEffect = requireEffect(magnetic, 'magnetic');
         const target = activeFace(magnetic).rank;
+        const result = forced('magneticDie', target, magnetic.id, false)!;
         this.spendInvocation(magnetic, magneticEffect, `Magnetic forced ${this.dieLabel(die.id)} to ${target}`, 'external_roll_controller');
-        return { ...forced('magneticDie', target, magnetic.id, false), attracted: true, specialDieType: magneticEffect.type };
+        return { ...result, attracted: true, specialDieType: magneticEffect.type };
       }
     }
     const clockwork = collectible && ownEffectActive ? effectOf(collectible, 'clockwork') : undefined;
     const clockworkRuntime = collectible ? this.specialRuntime(collectible, 'clockwork') : undefined;
     if (specialAllowed && collectible && clockwork && clockworkRuntime && intent.reroll
       && clockworkRuntime.clockworkRolls < 3 * clockwork.level) {
-      clockworkRuntime.clockworkRolls++;
       const target = (before === 6 ? 1 : before + 1) as Rank;
-      this.emitSpecial(collectible, clockwork, `Clockwork advanced ${before} → ${target} (${clockworkRuntime.clockworkRolls}/${3 * clockwork.level})`,
-        'roll_controller');
-      return forced('clockworkDie', target, die.id);
+      const result = forced('clockworkDie', target, die.id);
+      if (result) {
+        clockworkRuntime.clockworkRolls++;
+        this.emitSpecial(collectible, clockwork, `Clockwork advanced ${before} → ${target} (${clockworkRuntime.clockworkRolls}/${3 * clockwork.level})`,
+          'roll_controller');
+        return result;
+      }
     }
     const tank = collectible && ownEffectActive ? effectOf(collectible, 'tank') : undefined;
     const tankRuntime = collectible ? this.specialRuntime(collectible, 'tank') : undefined;
@@ -962,7 +972,7 @@ export class Resolver {
       tankRuntime.temporaryPips += CONFIG.tankPipsPerTrigger * tank.level;
       this.emitSpecial(collectible, tank, `Tank intercepted Reroll; future Pips ${beforePips} → ${tankRuntime.temporaryPips}`,
         'reroll_intercept');
-      return { ...forced('tank', before, die.id), physicalFace: beforePhysical, intercepted: true };
+      return { ...forced('tank', before, die.id)!, physicalFace: beforePhysical, intercepted: true };
     }
     const previousFaceExcluded = intent.excludeStartingFace;
     const weighted = specialAllowed && collectible && ownEffectActive ? effectOf(collectible, 'weighted') : undefined;
@@ -1024,9 +1034,9 @@ export class Resolver {
   }
 
   rollBatch(dieIds: number[], reason: string, context: RollContext, _excludeStartingFace = false,
-    reasonId: RollReason = 'other'): void {
+    reasonId: RollReason = 'other'): RollBatchEvent | null {
     const ids = orderDieIdsByEncounter(this.state, [...new Set(dieIds)]);
-    if (!ids.length) return;
+    if (!ids.length) return null;
     const batchId = `${this.state.historyV2TimelineId}:${this.state.round}:${this.state.nextActionId}:${this.state.nextHistorySeq}`;
     const batch = createRollBatchIntent(batchId, ids, reason, context, reasonId);
     if (batch.manual) this.resolveCurtainCallsBeforeManualReroll(batch);
@@ -1040,7 +1050,7 @@ export class Resolver {
     const magician = !this.state.bossSilenced && this.state.boss?.type === 'magician' ? this.state.boss : null;
     const finalOpportunity = (reasonId === 'manual' || reasonId === 'post_hand')
       && magician && magician.completedHands.length < magician.calledHands.length
-      && usableManualRerolls(this.state) === 0 && currentlyPlayableManualHands(this.state).length === 0;
+      && !hasLegalManualReroll(this.state) && currentlyPlayableManualHands(this.state).length === 0;
     if (finalOpportunity) {
       const outstanding = magician.calledHands.filter(hand => !magician.completedHands.includes(hand))
         .map(hand => HANDS[hand].rank!).filter((rank): rank is Rank => rank !== undefined);
@@ -1062,7 +1072,7 @@ export class Resolver {
     this.applyPostRollReactions(batch, results);
     const effects = this.v2Roll.effects;
     this.v2Roll = null;
-    const event = this.emitV2({ kind: 'roll_batch', parentSeq, reason: reasonId,
+    const emitted = this.emitV2({ kind: 'roll_batch', parentSeq, reason: reasonId,
       context: context === 'wardenSetup' ? 'warden_setup' : context === 'flameSelection' ? 'flame_selection' : context,
       dieIds: ids, heldDieIds: [...new Set(results.flatMap(result => result.controller === 'magneticDie' && result.controllerDieId !== undefined
         ? [result.controllerDieId] : []))], spend: this.v2ManualSpend, effects,
@@ -1085,10 +1095,13 @@ export class Resolver {
           ...(result.intercepted === undefined ? {} : { intercepted: result.intercepted }),
           };
       }) });
+    if (emitted.kind !== 'roll_batch') throw new Error('Roll resolution did not emit a roll batch.');
+    const event = emitted;
     this.v2ManualSpend = null;
     this.lastV2RollSeq = event.seq;
     if (event.kind === 'roll_batch') this.trace({ kind: 'roll_batch', reason: reasonId, dieIds: [...ids],
       results: event.results.map(result => ({ dieId: result.dieId, before: result.beforeFace, after: result.afterFace })) });
+    return event;
   }
   drain(): void {
     let cursor = 0;
@@ -1969,17 +1982,6 @@ export class Resolver {
     return this.resolvePostPlayRerolls(resolution, winning, beanRecordIndex);
   }
 
-  invokeFlywheel(dieId: number): void {
-    const die = this.collectible(dieId);
-    if (!die || !hasEffect(die, 'flywheel')) throw new Error('Flywheel command requires its equipped die.');
-    const effect = requireEffect(die, 'flywheel');
-    if (wholeDieEffectSuppressed(die)) throw new Error('Flywheel is suppressed while its infected face is exposed.');
-    this.spendInvocation(die, effect, 'Flywheel free Reroll', 'on_command');
-    this.rollBatch([die.id], 'Flywheel free reroll', 'gameplay', false, 'other');
-    this.drain();
-    this.evaluate();
-  }
-
   invokeChameleon(dieId: number): void {
     const die = this.collectible(dieId);
     if (!die || !hasEffect(die, 'chameleon')) throw new Error('Chameleon command requires its equipped die.');
@@ -2091,11 +2093,11 @@ export class Resolver {
     const normalSpent = Math.min(this.state.manualRerollsRemaining, cost);
     const carePackageSpent = cost - normalSpent;
     const requested = lightningStrikeChargeGain(flame.investment);
-    this.manualReroll(dieIds);
+    const manualBatch = this.manualReroll(dieIds);
+    const outcomes = new Map(manualBatch.results.map(result => [result.dieId, faceOutcomeIdentity({ rank: result.afterFace })]));
     const results = predictions.map(prediction => {
-      const die = this.state.dice.find(item => item.id === prediction.dieId);
-      if (!die) throw new Error('A Lightning Strike die disappeared during its Manual Reroll.');
-      const actualOutcome = faceOutcomeIdentity(activeFace(die));
+      const actualOutcome = outcomes.get(prediction.dieId);
+      if (!actualOutcome) throw new Error('A Lightning Strike die had no result in its Manual Reroll batch.');
       return { dieId: prediction.dieId, predictedOutcome: prediction.outcome, actualOutcome,
         hit: sameOutcomeIdentity(prediction.outcome, actualOutcome) };
     });
@@ -2196,7 +2198,7 @@ export class Resolver {
     this.state.decisionId++;
   }
 
-  manualReroll(dieIds: number[]): void {
+  manualReroll(dieIds: number[]): RollBatchEvent {
     const ids = orderDieIdsByEncounter(this.state, [...dieIds]);
     const reroll = resolveManualRerollCost(this.state, ids);
     const requiredDieIds = requiredEncounterDieIds(this.state);
@@ -2230,15 +2232,13 @@ export class Resolver {
       : `Manual reroll · ${this.format(normalRemaining)} Rerolls left · Care Package ${this.format(carePackageRemaining)}`;
     this.emit({ type: 'MANUAL_REROLL_STARTED', dieIds: ids, amount: ids.length, message });
     const jumpStart = this.chargeFlameSource('jumpStart');
-    const uncoveredIds = ids.filter(id => !reroll.flywheelDieIds.includes(id));
-    const paidAttributionIds = reroll.flywheelDieIds.length ? uncoveredIds.slice(0, reroll.resourceCost)
-      : ids.slice(0, reroll.resourceCost);
-    if (jumpStart) for (const dieId of paidAttributionIds)
+    if (jumpStart) for (const dieId of ids)
       this.growCharge('jumpStart', jumpStartChargeGain(jumpStart.investment),
-        `1 Reroll spent on ${this.dieLabel(dieId)}`, [dieId]);
+        `${this.dieLabel(dieId)} manually rerolled`, [dieId]);
     this.v2ManualSpend = { normalCharges: normalSpent, carePackageCharges: carePackageSpent,
       remaining: this.state.manualRerollsRemaining, flywheelDieIds: [...reroll.flywheelDieIds] };
-    this.rollBatch(ids, 'Manual gameplay reroll', 'gameplay', true, 'manual');
+    const manualBatch = this.rollBatch(ids, 'Manual gameplay reroll', 'gameplay', true, 'manual');
+    if (!manualBatch) throw new Error('A Manual Reroll must resolve at least one die.');
     this.drain();
     if (startedDeadBoard && (this.state.score >= this.state.target || hasPlayableHand(activeEncounterDice(this.state),
       unavailableEncounterHands(this.state), requiredDieIds, this.state.dieRoundState))) {
@@ -2247,6 +2247,7 @@ export class Resolver {
     }
     this.evaluate();
     if (this.state.phase === 'round') this.state.decisionId++;
+    return manualBatch;
   }
   private captureRoundCheckpoint(): void {
     const checkpoint = captureRollbackState(this.state);
@@ -3050,7 +3051,12 @@ export class Resolver {
       if (hasPlayableHand(activeEncounterDice(this.state), unavailableEncounterHands(this.state),
         requiredEncounterDieIds(this.state), this.state.dieRoundState)) return;
       const rerolls = usableManualRerolls(this.state);
-      if (rerolls > 0) { this.emit({ type: 'DEAD_BOARD', message: `No playable hands — ${this.format(rerolls)} rerolls remain` }); return; }
+      if (hasLegalManualReroll(this.state)) {
+        this.emit({ type: 'DEAD_BOARD', message: rerolls > 0
+          ? `No playable hands — ${this.format(rerolls)} rerolls remain`
+          : 'No playable hands — a free Flywheel reroll remains' });
+        return;
+      }
       if (this.state.scoreWagers.pendingDoubleOrNothing) return;
       if (this.state.specialOfferEffects.bottledFairyRounds > 0 && !this.state.specialOfferEffects.bottledFairyTriggeredThisRound) {
         this.state.manualRerollsRemaining = this.state.infernoRewards.upgrades.manualRerolls;

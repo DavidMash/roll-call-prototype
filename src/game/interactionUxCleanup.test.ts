@@ -48,13 +48,13 @@ describe('automatic Flywheel Manual Rerolls', () => {
     expect(result.state.stats.manualRerolls.at(-1)?.charges).toBe(0);
   });
 
-  it('uses one paid reroll for a mixed selection and consumes only available Flywheel uses', () => {
+  it('charges once per uncovered die in a mixed selection and consumes only available Flywheel uses', () => {
     const state = flywheelRound([1, 1, 0, 0, 0]);
     effectRuntime(state.dieRoundState[1], effectOf(state.diceInventory.instances[1], 'flywheel'))!.invocationsRemaining = 0;
     const result = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0, 1, 2] }, constant(.7));
-    expect(result.state.manualRerollsRemaining).toBe(2);
+    expect(result.state.manualRerollsRemaining).toBe(1);
     expect([uses(result.state, 0), uses(result.state, 1)]).toEqual([0, 0]);
-    expect(result.state.stats.manualRerolls.at(-1)).toMatchObject({ charges: 1, flywheelDieIds: [0] });
+    expect(result.state.stats.manualRerolls.at(-1)).toMatchObject({ charges: 2, flywheelDieIds: [0] });
   });
 
   it('permits zero-resource all-Flywheel selections but rejects mixed selections', () => {
@@ -68,10 +68,8 @@ describe('automatic Flywheel Manual Rerolls', () => {
     expect(validateAction(mixed, { type: 'MANUAL_REROLL', dieIds: [0, 1] })).toContain('Not enough');
   });
 
-  it('is automatic metadata and no longer accepts the legacy command', () => {
-    const state = flywheelRound([1, 0, 0, 0, 0]);
+  it('is automatic metadata without a standalone command', () => {
     expect(SPECIAL_DICE.flywheel.activation).toBe('automatic');
-    expect(validateAction(state, { type: 'INVOKE_FLYWHEEL', dieId: 0 })).toContain('automatically');
   });
 });
 

@@ -111,6 +111,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     && validateAction(board, lightningAction) === null;
   const selectedRerollDice = effectiveSelection.dieIds.length;
   const rerollCost = resolveManualRerollCost(board, effectiveSelection.dieIds);
+  const mixedFlywheelCoverage = rerollCost.flywheelDieIds.length > 0 && !rerollCost.fullyCoveredByFlywheel;
   const carePackageRerolls = board.specialOfferEffects.carePackageRerolls;
   const manualRerolls = usableManualRerolls(board);
   const rerollMainText = rerollCost.fullyCoveredByFlywheel ? 'FLYWHEEL' : selectedRerollDice === 0 ? 'REROLL'
@@ -261,13 +262,13 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
           <RunActionLayout className={`round-action-layout${allIn || bribery ? ' has-play-modifiers' : ''}`}
             left={!awaitingWardenChoice ? <>
               <Button className="reroll-action" size="sm" variant="default" disabled={roundBusy || !canReroll} data-tutorial="reroll-button"
-                aria-label={`${rerollMainText} · ${rerollResourceText}${lightningEligible ? ' · Opens Lightning Strike prediction' : ''}`} data-testid="manual-reroll"
+                aria-label={`${rerollMainText}${mixedFlywheelCoverage ? ` · COST ${rerollCost.resourceCost}` : ''} · ${rerollResourceText}${lightningEligible ? ' · Opens Lightning Strike prediction' : ''}`} data-testid="manual-reroll"
                 data-normal-fill-percent={Math.round(normalRerollFill * 100)} onClick={submitReroll}>
                 <span className="reroll-resource-fill" style={{ transform: `scaleX(${normalRerollFill})` }} aria-hidden="true" />
                 <span className="reroll-action-copy">
                   <span className="reroll-action-main">{rerollCost.fullyCoveredByFlywheel ? 'FLYWHEEL' : 'REROLL'}</span>
                   <span className="reroll-action-resource">{selectedRerollDice > 0
-                    ? `${selectedRerollDice} ${selectedRerollDice === 1 ? 'DIE' : 'DICE'} · ${rerollVisualResourceText}${lightningEligible ? ' · STRIKE' : ''}`
+                    ? `${selectedRerollDice} ${selectedRerollDice === 1 ? 'DIE' : 'DICE'}${mixedFlywheelCoverage ? ` · COST ${rerollCost.resourceCost}` : ''} · ${rerollVisualResourceText}${lightningEligible ? ' · STRIKE' : ''}`
                     : rerollVisualResourceText}</span>
                 </span>
               </Button>

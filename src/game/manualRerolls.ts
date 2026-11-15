@@ -1,5 +1,7 @@
 import { wholeDieEffectSuppressed } from './dice';
 import { effectOf, effectRuntime } from './specialDice';
+import { activeEncounterDice } from './bosses';
+import { usableManualRerolls } from './specialOffers';
 import type { Board, DieId } from './types';
 
 export interface ManualRerollResolution {
@@ -23,8 +25,18 @@ export function resolveManualRerollCost(
     })
     .map(die => die.id);
   const fullyCoveredByFlywheel = dieIds.length > 0 && flywheelDieIds.length === dieIds.length;
-  // Preserve ordinary per-die reroll pricing. Once Flywheel participates, the
-  // mixed selection is one paid Manual Reroll plus the automatically covered dice.
-  const resourceCost = fullyCoveredByFlywheel ? 0 : flywheelDieIds.length > 0 ? 1 : dieIds.length;
+  const resourceCost = Math.max(0, dieIds.length - flywheelDieIds.length);
   return { flywheelDieIds, fullyCoveredByFlywheel, resourceCost };
+}
+
+/** Whether the submitted Manual Reroll selection can be paid after automatic coverage. */
+export function canAffordManualReroll(state: Board, dieIds: readonly DieId[]): boolean {
+  return resolveManualRerollCost(state, dieIds).resourceCost <= usableManualRerolls(state);
+}
+
+/** Whether the player can currently submit at least one legal Manual Reroll selection. */
+export function hasLegalManualReroll(state: Board): boolean {
+  if (state.phase !== 'round') return false;
+  if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.startingDieId === null) return false;
+  return activeEncounterDice(state).some(die => canAffordManualReroll(state, [die.id]));
 }

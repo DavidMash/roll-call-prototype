@@ -7,7 +7,7 @@ import {
 import { dispatch, newRun, validateAction } from './engine';
 import { Resolver } from './effects';
 import { handIsStructurallyImpossible, HANDS, HAND_IDS, upperBaselineLevel } from './hands';
-import { createDieEffect, resetDieRoundState } from './specialDice';
+import { createDieEffect, effectOf, effectRuntime, resetDieRoundState } from './specialDice';
 import { renderRunHistoryV2Event } from './runHistoryV2Renderer';
 import type { BossType, GameState, RandomSource, Rank } from './types';
 
@@ -26,9 +26,9 @@ function encounter(type: BossType, values: Rank[] = [1, 2, 3, 5, 6]): GameState 
 }
 
 describe('boss fairness roster and structural availability', () => {
-  it('explains doubled Magician and Fly rerolls without exposing hidden assistance', () => {
+  it('explains doubled normal Magician and Fly rerolls without exposing hidden assistance', () => {
     for (const type of ['magician', 'fly'] as const) {
-      expect(BOSSES[type].shortRule).toMatch(/twice as many Manual Rerolls/i);
+      expect(BOSSES[type].shortRule).toMatch(/twice as many normal Manual Rerolls/i);
       expect(BOSSES[type].shortRule).not.toMatch(/mercy|rig|assistance|qualified-hand/i);
     }
   });
@@ -183,6 +183,23 @@ describe('revised encounter mechanics', () => {
     expect(result.state.boss).toMatchObject({ type: 'fly', mercyActive: true, flyHand: 'pair' });
     const movement = [...result.state.historyV2].reverse().find(event => event.kind === 'boss_state_changed' && event.boss === 'fly');
     expect(movement && renderRunHistoryV2Event(movement)).toContain('Fly moved to Pair');
+  });
+
+  it('activates Fly mercy at zero normal rerolls even while Care Package and Flywheel opportunities remain', () => {
+    const state = encounter('fly', [1, 2, 2, 4, 5]);
+    if (state.boss?.type !== 'fly' || state.dice[1].owner !== 'player') throw new Error('Expected Fly and player die.');
+    state.boss.flyHand = 'threeKind';
+    state.manualRerollsRemaining = 0;
+    state.specialOfferEffects.carePackageRerolls = 2;
+    state.dice[1].effects = [createDieEffect(state.dice[1].id, 'flywheel', 1)];
+    state.dieRoundState = resetDieRoundState(state.dice.filter(die => die.owner === 'player'));
+
+    const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(0));
+    expect(result.state.boss).toMatchObject({ type: 'fly', mercyActive: true, flyHand: 'pair' });
+    expect(result.state.specialOfferEffects.carePackageRerolls).toBe(2);
+    const flywheel = result.state.dice.find(die => die.id === 1);
+    if (!flywheel || flywheel.owner !== 'player') throw new Error('Expected Flywheel die.');
+    expect(effectRuntime(result.state.dieRoundState[1], effectOf(flywheel, 'flywheel'))?.invocationsRemaining).toBe(1);
   });
 
   it('routes Free Plays through Warden and Hexer legality while retaining encounter score rules', () => {

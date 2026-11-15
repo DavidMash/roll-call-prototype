@@ -60,7 +60,7 @@ test('Flywheel makes a fully covered Manual Reroll visibly free and has no comma
   await expect(page.getByTestId('manual-reroll')).toBeEnabled();
   await page.getByRole('button', { name: 'View details for Flywheel' }).click();
   await expect(page.getByRole('button', { name: 'USE FLYWHEEL' })).toHaveCount(0);
-  await expect(page.getByTestId('die-details-modal')).toContainText('automatically cover');
+  await expect(page.getByTestId('die-details-modal')).toContainText('covers only its own one-die Reroll cost');
   await page.getByTestId('die-details-modal').getByRole('button', { name: 'CLOSE' }).click();
   await page.getByTestId('manual-reroll').click();
   await expect.poll(async () => (await readRunState(page))?.manualRerollsRemaining).toBe(0);
@@ -69,6 +69,22 @@ test('Flywheel makes a fully covered Manual Reroll visibly free and has no comma
     const die = saved?.diceInventory.instances[0];
     return die && saved ? effectRuntime(saved.dieRoundState[0], effectOf(die, 'flywheel'))?.invocationsRemaining : undefined;
   }).toBe(0);
+});
+
+test('mixed Flywheel selections preview the authoritative uncovered-die cost', async ({ page }) => {
+  const game = newRun('flywheel-mixed-cost-ui', { next: () => .2 }).state;
+  game.target = 1_000_000n; game.stats.rounds.at(-1)!.target = game.target;
+  game.diceInventory.instances[0].effects = [createDieEffect(0, 'flywheel')];
+  syncActiveDiceProjection(game); game.dieRoundState = resetDieRoundState(rosterDice(game));
+  await page.goto('/?seed=flywheel-mixed-cost-ui&speed=instant');
+  await installRun(page, game);
+  await page.getByRole('button', { name: /^Die 1,/ }).click();
+  await page.getByRole('button', { name: /^Die 2,/ }).click();
+  await page.getByRole('button', { name: /^Die 3,/ }).click();
+
+  const reroll = page.getByTestId('manual-reroll');
+  await expect(reroll.locator('.reroll-action-resource')).toHaveText('3 DICE · COST 2 · 3 LEFT');
+  await expect(reroll).toHaveAccessibleName('REROLL 3 DICE · COST 2 · 3 REROLLS LEFT');
 });
 function deadBoardRun(rescue: boolean) {
   for (let i = 0; i < 1000; i++) {

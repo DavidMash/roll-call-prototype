@@ -32,7 +32,7 @@ export const FLAMES: Record<Flame, FlameDefinition> = {
   fullOfGrace: flameDefinition('fullOfGrace', 'Full of Grace', 'GRACE', 'common', 'Last Play gains up to ×5 XMult.'),
   momentum: flameDefinition('momentum', 'Momentum', 'MOM', 'common', 'Playing a hand builds Charge.'),
   thirdRail: flameDefinition('thirdRail', 'Third Rail', 'RAIL', 'uncommon', 'Rolling 3s builds Charge.'),
-  jumpStart: flameDefinition('jumpStart', 'Jump Start', 'JUMP', 'uncommon', 'Rerolls build Charge.'),
+  jumpStart: flameDefinition('jumpStart', 'Jump Start', 'JUMP', 'uncommon', 'Each manually rerolled die builds Charge.'),
   powerSurge: flameDefinition('powerSurge', 'Power Surge', 'SURGE', 'rare'),
   speedDemon: flameDefinition('speedDemon', 'Speed Demon', 'SPEED', 'rare', 'Play within 5 seconds for up to ×4 XMult.'),
   sixPack: flameDefinition('sixPack', 'Six Pack', 'SIX', 'rare', 'Starts at up to ×4 XMult and weakens after Upper Hands.'),
