@@ -56,13 +56,13 @@ const transactionDone = (transaction: IDBTransaction) => new Promise<void>((reso
 });
 
 async function cleanupOrphanedChunks(database: IDBDatabase): Promise<void> {
-  const read = database.transaction(SESSION_STORE, 'readonly');
-  const readDone = transactionDone(read);
-  const sessions = await requestValue(read.objectStore(SESSION_STORE).getAll()) as SessionRecord[];
-  await readDone;
-  const liveRunIds = new Set(sessions.map(record => record.runId));
-  const transaction = database.transaction(LEDGER_STORE, 'readwrite');
+  // Keep the live-session read and ledger scan in one transaction. Besides
+  // avoiding an extra transaction, this prevents a cleanup from observing an
+  // old session list and then deleting chunks committed by a newer session.
+  const transaction = database.transaction([SESSION_STORE, LEDGER_STORE], 'readwrite');
   const done = transactionDone(transaction);
+  const sessions = await requestValue(transaction.objectStore(SESSION_STORE).getAll()) as SessionRecord[];
+  const liveRunIds = new Set(sessions.map(record => record.runId));
   const store = transaction.objectStore(LEDGER_STORE);
   const request = store.openCursor();
   request.onsuccess = () => {
@@ -73,6 +73,36 @@ async function cleanupOrphanedChunks(database: IDBDatabase): Promise<void> {
     cursor.continue();
   };
   await done;
+}
+
+let maintenanceDatabase: IDBDatabase | null = null;
+let maintenanceRequested = false;
+let maintenanceScheduled = false;
+let maintenanceRunning = false;
+
+function scheduleOrphanCleanup(database: IDBDatabase): void {
+  maintenanceDatabase = database;
+  maintenanceRequested = true;
+  if (maintenanceScheduled || maintenanceRunning) return;
+  maintenanceScheduled = true;
+  const start = () => {
+    maintenanceScheduled = false;
+    if (maintenanceRunning || !maintenanceRequested || !maintenanceDatabase) return;
+    const target = maintenanceDatabase;
+    maintenanceRequested = false;
+    maintenanceRunning = true;
+    void cleanupOrphanedChunks(target).catch(() => {
+      // Orphan cleanup is maintenance. The active run was committed before it
+      // was scheduled, so a maintenance failure must not block gameplay or
+      // change save status.
+    }).finally(() => {
+      maintenanceRunning = false;
+      if (maintenanceRequested && maintenanceDatabase) scheduleOrphanCleanup(maintenanceDatabase);
+    });
+  };
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window)
+    window.requestIdleCallback(start, { timeout: 5_000 });
+  else setTimeout(start, 1_000);
 }
 
 function compactCore(state: GameState): GameState {
@@ -94,7 +124,7 @@ function compactCore(state: GameState): GameState {
   return compact;
 }
 
-class IndexedDbRunRepository implements RunRepository {
+export class IndexedDbRunRepository implements RunRepository {
   private database: Promise<IDBDatabase> | null = null;
 
   private open(): Promise<IDBDatabase> {
@@ -113,7 +143,8 @@ class IndexedDbRunRepository implements RunRepository {
       };
       request.onsuccess = () => {
         const database = request.result;
-        void cleanupOrphanedChunks(database).then(() => resolve(database), reject);
+        resolve(database);
+        scheduleOrphanCleanup(database);
       };
       request.onerror = () => reject(request.error ?? new Error('Unable to open IndexedDB.'));
     });
@@ -158,6 +189,8 @@ class IndexedDbRunRepository implements RunRepository {
     const database = await this.open();
     const transaction = database.transaction([SESSION_STORE, LEDGER_STORE], 'readwrite');
     const chunkStore = transaction.objectStore(LEDGER_STORE);
+    const sessionStore = transaction.objectStore(SESSION_STORE);
+    const previousRequest = sessionStore.get(slot);
     const ledger = session.ledger;
     for (const chunk of chunks) chunkStore.put({ ...structuredClone(chunk), key: [chunk.runId, chunk.ordinal] } satisfies StoredChunk);
     const record: SessionRecord = {
@@ -167,11 +200,12 @@ class IndexedDbRunRepository implements RunRepository {
       committedHistorySeq: session.state.nextHistorySeq,
       ...(scenario === undefined ? {} : { scenario: structuredClone(scenario) }),
     };
-    transaction.objectStore(SESSION_STORE).put(record);
+    sessionStore.put(record);
     await transactionDone(transaction);
     ledger.committedActionId = record.committedActionId;
     ledger.committedHistorySeq = record.committedHistorySeq;
-    await cleanupOrphanedChunks(database);
+    const previous = previousRequest.result as SessionRecord | undefined;
+    if (previous && previous.runId !== record.runId) scheduleOrphanCleanup(database);
   }
 
   async remove(slot: RunSlot): Promise<void> {
@@ -193,6 +227,7 @@ class IndexedDbRunRepository implements RunRepository {
       };
     }
     await transactionDone(transaction);
+    scheduleOrphanCleanup(database);
   }
 
   async recentHistory(runId: string, limit = 200): Promise<RunHistoryV2Event[]> {

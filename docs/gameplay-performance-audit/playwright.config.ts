@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: '.',
-  testMatch: 'profiling-harness.spec.ts',
+  testMatch: ['profiling-harness.spec.ts', 'complex-resolution-profile.spec.ts'],
   workers: 1,
   timeout: 420_000,
   reporter: 'line',

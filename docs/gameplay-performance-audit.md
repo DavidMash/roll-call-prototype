@@ -514,3 +514,283 @@ Validation completed:
 Selection still causes two root React commits because transient selection remains in `App`. The measured browser cost after the Boolean change is small enough that introducing a new ownership boundary now would add complexity without evidence of a worthwhile gain. Revisit only if future mechanics make the remaining 17 ms desktop task budget grow materially.
 
 The largest updated supporting sample is the complex multi-Flame Play under 4x CPU throttling (453.6 ms task, 206.8 ms script median). The next optimization pass should profile effect-chain event generation and repeated Board snapshot/history construction inside that Play, preserving deterministic event order and persistence guarantees. Lightning Strike initialization remains a secondary target. Neither was changed in Phase 1.
+
+## 15. Phase 2 complex-effect profiling (2026-11-14)
+
+### Executive result
+
+This read-only pass confirms that Board snapshot construction is the dominant engine cost in a large effect chain. The 434-event Jumping Bean fixture took 72.40 ms median in direct dispatch. A separately instrumented `Resolver` run spent 48.95 ms cloning Board snapshots, 69.6% of its 70.34 ms total. Event construction excluding the snapshot clone was only 3.59 ms median. Game-state cloning, ledger construction/freezing, ledger serialization, and in-memory persistence were individually small by comparison.
+
+The same fixture created 5.32 MB of serialized Board snapshots. Only 134 of 434 snapshots were unique, and 300 of 433 adjacent pairs (69.3%) were byte-identical. The unique snapshot payload was 1.62 MB, 30.5% of the emitted payload. This proves substantial duplication, but it does not by itself prove that snapshots can be removed: playback currently consumes the Board attached to every event.
+
+Browser profiling found a second confirmed delay outside the engine. `IndexedDbRunRepository.commit` waits for `cleanupOrphanedChunks` after the durable session/chunk transaction (`src/game/runRepository.ts:157-174`), and `useGame.commit` waits for that entire promise before publishing the resolution (`src/useGame.ts:153-176`). Under 4x CPU throttling, the elapsed cleanup gate took 109.5 ms median for the high fixture and publication's first subsequent DOM mutation occurred 410.5 ms after click capture. Cleanup is not effect calculation, but it is on the effect-to-visible-playback critical path.
+
+No production source was changed in this pass.
+
+### Method
+
+The new harness is `docs/gameplay-performance-audit/complex-resolution-profile.spec.ts`. It uses deterministic saved states and constant or seeded random sources for five fixtures:
+
+- Low: a one-die upper-hand Play.
+- Medium: a five-die Play with five simultaneous Flames and four effects on every die.
+- Medium: a Curtain Call/free-Play reroll with seven effects on the rerolled die and five Flames.
+- High: three Jumping Bean dice, each with four effects, plus five Flames; the fixture searches 80 deterministic seeds and retains the largest valid chain.
+- Boss coverage: the multi-Flame fixture with Juggler active.
+
+The engine probe collected 15 post-warmup samples per fixture. It timed dispatch, state cloning, direct Resolver work, `Resolver.emit`, direct V2 emission, categorized `structuredClone` calls, `chunkForResolution`, exact-JSON serialization, and `MemoryRunRepository.commit`. Snapshot counts and bytes are exact for each deterministic resolution; equality is exact serialized Board equality.
+
+The production-browser probe collected five samples per fixture on desktop and at a 360x740 viewport with Chrome's 4x CPU throttle. It measured Chrome task/script/layout/style counters, long tasks, read-write IndexedDB transaction boundaries, DOM mutation boundaries, and heap before/after forced collection. Browser task/script counters include the click and a fixed 300 ms observation window; they are not pure engine timings. The cleanup gate is elapsed time from completion of the durable write to completion of cleanup's ledger transaction, so it includes cleanup's uninstrumented read-only session scan. The first DOM mutation at or after the last persistence transaction is reported as a publication bound because instant playback can publish and finish without exposing an `EVENT n / total` marker. This is an inference from the measured transaction and mutation sequence, not a direct React commit marker.
+
+Raw artifacts:
+
+- `docs/gameplay-performance-audit/phase2-engine-stages.json`
+- `docs/gameplay-performance-audit/phase2-browser-stages.json`
+
+Reproduce with:
+
+```powershell
+npx playwright test --config docs/gameplay-performance-audit/playwright.config.ts -g "complex engine"
+npx playwright test --config docs/gameplay-performance-audit/playwright.config.ts -g "complex browser"
+```
+
+### Engine timing breakdown
+
+Times are median / p95 / worst in milliseconds across 15 samples. Resolver was measured in a separate run from dispatch, so small inversions such as the boss Resolver median exceeding dispatch are sampling noise, not hidden negative overhead. "Effect body" is Resolver total minus `emit` and direct `emitV2`; it includes qualification, controller, scoring, and chained-effect calculations.
+
+| Fixture | Playback / V2 events | Dispatch | Resolver | Board snapshot clone | Event construction excluding snapshot | Effect body | State clone | Ledger clone/freeze | Ledger serialize | Memory persistence |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Simple upper Play | 8 / 3 | 2.04 / 3.34 / 3.34 | 1.29 / 3.02 / 3.02 | 0.48 / 0.61 / 0.61 | 0.06 median | 0.75 median | 0.22 median | 0.05 median | 0.02 median | 0.05 median |
+| Multi-Flame + special dice | 61 / 34 | 10.82 / 14.80 / 14.80 | 9.63 / 14.83 / 14.83 | 6.94 / 11.81 / 11.81 | 0.46 median | 1.36 median | 0.30 median | 0.35 median | 0.21 median | 0.31 median |
+| Curtain Call / Free Play | 25 / 15 | 4.26 / 4.95 / 4.95 | 3.34 / 4.69 / 4.69 | 1.87 / 2.69 / 2.69 | 0.23 median | 1.12 median | 0.26 median | 0.14 median | 0.08 median | 0.12 median |
+| Jumping Bean chain | 434 / 208 | 72.40 / 78.72 / 78.72 | 70.34 / 81.87 / 81.87 | 48.95 / 53.41 / 53.41 | 3.59 median | 17.94 median | 0.27 median | 2.26 median | 1.45 median | 1.92 median |
+| Juggler + multi-Flame Play | 61 / 34 | 9.30 / 10.78 / 10.78 | 9.48 / 11.00 / 11.00 | 6.93 / 8.34 / 8.34 | 0.40 median | 1.31 median | 0.30 median | 0.36 median | 0.21 median | 0.30 median |
+
+Dispatch scales nearly linearly over the measured 8, 25, 61, and 434 playback-event fixtures: 2.04, 4.26, 10.82, and 72.40 ms median. The richer high fixture costs approximately 0.167 ms per playback event in this Node-based probe. That is a characterization, not a universal per-event constant, because Board size and effect work differ by fixture.
+
+The Juggler fixture emitted the same number of events as the equivalent non-boss fixture and was not slower. This verifies that boss plumbing was present, but it does not establish the cost of bosses that generate additional events or controller work. Such bosses remain an unmeasured scaling risk rather than a confirmed bottleneck.
+
+### Snapshot construction and allocation pressure
+
+`Resolver.emit` calls `boardSnapshot(this.state)` for every applicable playback event (`src/game/effects.ts:445-454`). `boardSnapshot` selects most mutable Board fields and immediately `structuredClone`s the object (`src/game/telemetry.ts:28-36`). The following payload sizes are exact UTF-8 byte counts of the serialized snapshots in each deterministic resolution.
+
+| Fixture | Snapshots | Total snapshot bytes | Unique snapshots | Unique snapshot bytes | Adjacent identical | Duplicate payload reduction if perfectly interned |
+|---|---:|---:|---:|---:|---:|---:|
+| Simple upper Play | 8 | 35,164 | 3 | 13,225 | 5 / 7 (71.4%) | 62.4% |
+| Curtain Call / Free Play | 25 | 180,606 | 10 | 72,498 | 15 / 24 (62.5%) | 59.9% |
+| Multi-Flame + special dice | 61 | 725,260 | 25 | 297,071 | 36 / 60 (60.0%) | 59.0% |
+| Juggler + multi-Flame Play | 61 | 726,724 | 25 | 297,671 | 36 / 60 (60.0%) | 59.0% |
+| Jumping Bean chain | 434 | 5,317,996 | 134 | 1,621,742 | 300 / 433 (69.3%) | 69.5% |
+
+The snapshot payload per event also grows with Board richness: approximately 4.4 KB in the simple fixture versus 11.9 KB in the high fixture. Event count and Board size therefore multiply one another.
+
+After forced garbage collection in the production browser, the high fixture retained a median 2.4 MB in both environments. Median peak deltas were 2.5 MB desktop and 4.3 MB under 4x throttling. The medium multi-Flame fixture retained about 1.0 MB. These heap deltas include React, persistence, and playback allocations and should not be attributed solely to snapshots. The Node per-dispatch heap deltas were non-monotonic without per-sample forced GC, so they are retained in the raw artifact but not used as evidence.
+
+### Browser critical-path timing
+
+Values are median / p95 / worst milliseconds across five production-build samples. "To IDB write" is click capture to the start of the durable transaction and includes input dispatch, engine work, React scheduling, and repository preparation. "Publish bound" is the first DOM mutation at or after cleanup completes. Chrome task/script totals cover the fixed observation window. Long task is the largest PerformanceObserver entry over 50 ms.
+
+| Environment / fixture | To IDB write | Durable write | Orphan cleanup | Publish bound | Chrome task / script median | Largest long task median |
+|---|---:|---:|---:|---:|---:|---:|
+| Desktop, simple | 37.2 / 47.5 / 47.5 | 5.6 / 6.4 / 6.4 | 0.9 / 4.1 / 4.1 | 50.3 / 57.0 / 57.0 | 49.6 / 19.0 | none |
+| Desktop, multi-Flame | 57.5 / 62.3 / 62.3 | 16.6 / 23.2 / 23.2 | 1.4 / 6.1 / 6.1 | 80.7 / 85.3 / 85.3 | 91.3 / 33.0 | none |
+| Desktop, Curtain Call | 50.6 / 52.7 / 52.7 | 10.8 / 26.5 / 26.5 | 0.9 / 1.3 / 1.3 | 65.8 / 84.8 / 84.8 | 71.8 / 27.9 | none |
+| Desktop, Jumping Bean | 58.0 / 61.3 / 61.3 | 10.2 / 10.9 / 10.9 | 1.2 / 1.4 / 1.4 | 73.2 / 75.6 / 75.6 | 103.0 / 51.5 | none |
+| 4x CPU, simple | 103.4 / 105.5 / 105.5 | 23.5 / 25.3 / 25.3 | 3.9 / 4.1 / 4.1 | 154.6 / 157.7 / 157.7 | 237.4 / 110.2 | 73 ms |
+| 4x CPU, multi-Flame | 135.0 / 169.3 / 169.3 | 58.9 / 103.2 / 103.2 | 50.1 / 104.3 / 104.3 | 274.4 / 370.6 / 370.6 | 384.0 / 170.3 | 106 ms |
+| 4x CPU, Curtain Call | 123.2 / 125.5 / 125.5 | 53.0 / 57.5 / 57.5 | 36.9 / 44.0 / 44.0 | 236.6 / 243.8 / 243.8 | 338.4 / 147.9 | 91 ms |
+| 4x CPU, Jumping Bean | 219.2 / 228.9 / 228.9 | 52.9 / 55.5 / 55.5 | 109.5 / 113.6 / 113.6 | 410.5 / 418.6 / 418.6 | 512.2 / 270.2 | 206 ms |
+| 4x CPU, Juggler + multi-Flame | 150.7 / 163.1 / 163.1 | 63.2 / 85.7 / 85.7 | 56.5 / 57.8 / 57.8 | 294.9 / 331.4 / 331.4 | 406.5 / 184.4 | 111 ms |
+
+The desktop high-chain browser result reaches the IndexedDB transaction sooner than the direct 72.4 ms Node dispatch median. These are different processes, random-source paths, fixtures after browser setup, and timing boundaries; they must not be subtracted from one another. The within-harness comparisons and stage proportions are the reliable conclusions.
+
+### Most expensive functions and root causes
+
+1. **Confirmed: `boardSnapshot` cloning in `Resolver.emit` — high severity for large chains.** Every playback event clones a broad Board. It accounts for 48.95 ms median and 69.6% of direct Resolver time in the 434-event fixture. Adjacent events frequently have identical Boards because several presentation events are emitted between state mutations.
+
+2. **Confirmed: effect/controller/scoring work — moderate secondary cost.** Resolver work outside emission was 17.94 ms median in the high fixture. This bucket contains real mechanics and was not subdivided further because snapshot work already dominates. It should be profiled by function only after snapshot pressure is removed; changing it first carries greater deterministic-gameplay risk.
+
+3. **Confirmed: orphan cleanup on the publication path — high severity on throttled devices.** `cleanupOrphanedChunks` reads every session and scans the ledger store (`src/game/runRepository.ts:58-75`). The repository awaits it after every commit, and publication waits on the repository. Its elapsed gate was 109.5 ms median in the high throttled fixture, work unrelated to whether the active chunk is already durable.
+
+4. **Confirmed but small: ledger cloning/freezing.** `chunkForResolution` clones the action and new V2 events, then recursively freezes the result (`src/game/ledger.ts:75-90`). It cost 2.26 ms median at 208 V2 events, 3.1% of dispatch. It is not a priority bottleneck.
+
+5. **Confirmed but small: serialization and in-memory persistence.** Exact ledger serialization was 1.45 ms and `MemoryRunRepository.commit` 1.92 ms median in the high fixture. IndexedDB's durable write is materially larger in the browser, but it also includes browser storage scheduling and structured cloning. The measurements do not justify changing the ledger format solely for CPU time.
+
+6. **Not confirmed: full GameState clone.** `cloneGameState` uses `structuredClone` (`src/game/ledger.ts:64-68`) but cost only 0.27 ms median in the high fixture. It is not responsible for the measured pause.
+
+### Ranked optimization candidates
+
+| Rank | Candidate | Evidence-based expected benefit | Risk |
+|---:|---|---|---|
+| 1 | Add an explicit `reuse previous Board` path only at emission call sites proven to have no intervening Board mutation, while continuing to attach a Board to every playback event | The high fixture has 300 byte-identical adjacent pairs. Avoiding those clones has a measured upper bound of about 33.8 ms (300/434 of the 48.95 ms clone bucket) and about 3.70 MB of duplicate serialized payload. | Medium. An incorrect annotation would corrupt playback, but the scope can be kept to audited call sites and checked against legacy fresh snapshots in tests. |
+| 2 | Remove orphan cleanup from the action-to-publication critical path after the active transaction commits; retain cleanup at startup and lifecycle-safe maintenance points | Avoids 36.9-109.5 ms median under 4x throttling in the measured complex fixtures without changing active-run serialization. | Low-moderate. Must prove cleanup failures cannot affect save acknowledgement and that abandoned chunks remain bounded and are eventually removed. |
+| 3 | Intern identical snapshots in stored/history representation while preserving per-event playback access | Up to 59-69.5% snapshot payload reduction in these fixtures; likely reduces IndexedDB clone/allocation and GC pressure. It does not avoid initial snapshot construction unless paired with mutation-aware reuse. | Medium-high. Requires a versioned storage/recovery format and equivalent playback reconstruction; not suitable as the first change. |
+| 4 | Profile the remaining effect-body bucket and eliminate only proven repeated qualification/controller calculations | At most 17.94 ms median in the high fixture before any snapshot improvement; likely a smaller practical gain. | High. This is authoritative mechanics and RNG/controller ordering is sensitive. |
+| 5 | Reduce ledger clone/freeze or serialization work | Combined measured median is about 3.7 ms in the high fixture. | Medium for small benefit. Immutable ledger and recovery guarantees make shortcuts unattractive. |
+
+Blanket memoization, removal of per-event Boards, a worker, or a new state architecture is not supported by these measurements.
+
+### Recommended narrow Phase 2 implementation plan
+
+1. First move orphan cleanup out of `IndexedDbRunRepository.commit`'s awaited publication path, keeping the active session/chunk transaction unchanged. Add repository tests for successful save despite deferred-cleanup failure, eventual orphan removal, replacement/removal, and reload/recovery. Re-run the browser fixture to verify that publication follows the durable transaction rather than cleanup.
+
+2. In a separate change, give `Resolver.emit` an internal, explicit option to reuse the preceding event's already-immutable Board. Apply it only to audited adjacent emission sequences where no state mutation occurs between events; fall back to a fresh snapshot when no prior event exists. Do not add a global cache, serialized equality check, or broad mutation-version system in this pass.
+
+3. For every annotated reuse path, add a test-only shadow check that constructs the legacy fresh snapshot and asserts exact equality. Run it across the full correctness suite, deterministic replay fixtures, all bosses/controllers, shop/round transitions, and curated 1,000-event-cap chains. Also assert event sequence, final state, RNG state, V2 ledger, and playback frames are byte-equivalent. Expand reuse only when another call site is independently proven safe.
+
+4. Benchmark each change independently using this harness. Success criteria should be distribution-based: a material reduction in high-chain Resolver time and snapshot bytes for snapshot reuse, and publication no longer waiting for cleanup in the persistence change. Do not proceed to effect-body optimization unless a fresh profile shows it has become the dominant long task.
+
+This ordering separates a low-mechanics-risk persistence latency change from the higher-integrity snapshot change and makes any replay discrepancy attributable to one optimization.
+
+### Validation of this profiling pass
+
+- Engine stage profile: passed, five deterministic fixtures x 15 samples.
+- Production browser profile: passed, five fixtures x two environments x five samples.
+- The harness compiled through Playwright and produced both raw JSON artifacts.
+- No production gameplay, persistence, scoring, RNG, event ordering, or playback code was modified.
+
+## 16. Phase 2 implementation results (2026-11-14)
+
+### Outcome and production changes
+
+Both measured bottlenecks were addressed without changing gameplay, event payloads, event order, RNG use, scoring, or the durable save boundary.
+
+- `IndexedDbRunRepository.commit` now resolves after the active session and ledger chunks complete their existing atomic read-write transaction. It no longer performs a global orphan scan after every action. See `src/game/runRepository.ts:187-208`.
+- Orphan cleanup is coalesced and scheduled through `requestIdleCallback` (with a delayed fallback) at repository initialization, run replacement, and run deletion. Failures are isolated from gameplay and a later lifecycle can retry. See `src/game/runRepository.ts:83-104`, `src/game/runRepository.ts:146-147`, and `src/game/runRepository.ts:208-230`.
+- Cleanup now reads live sessions and scans ledger chunks inside one transaction across both stores. This removes the stale-live-set race in which a cleanup could read old sessions, wait behind a new commit, and then delete the new run's chunks. See `src/game/runRepository.ts:58-76`.
+- Playback snapshot reuse is opt-in at explicit emission sites through `emitWithPreviousBoard`; ordinary `emit` still constructs a fresh Board. If no previous playback event exists, the mechanism falls back to a fresh snapshot. See `src/game/effects.ts:452-478`.
+- The public `GameEvent` format is unchanged: every event still has a complete Board. Reused Boards are already-detached `structuredClone` results, so subsequent authoritative-state mutations cannot modify them.
+
+### Revised persistence-maintenance lifecycle
+
+The active save remains authoritative and ordered as before:
+
+1. Clone the pending chunks and compact session state.
+2. Write the active session and all pending chunks in one IndexedDB transaction.
+3. Await transaction completion.
+4. Advance committed ledger counters and allow `useGame` to publish.
+
+Global orphan maintenance is not part of those steps. Initialization requests one idle cleanup. Replacing a slot with a different run ID and deleting a run request maintenance again. Module-level scheduled/running/requested flags coalesce competing requests and guarantee only one cleanup operation is active. A request arriving during cleanup produces at most one subsequent run. Routine same-run gameplay commits do not request cleanup.
+
+Replacement is crash-safe: the replacement session and chunks become durable together, while old chunks may temporarily remain orphaned until idle maintenance. Cleanup derives the live run IDs and deletes orphaned chunks within one transaction, so it cannot delete chunks belonging to the consistent session snapshot observed by that transaction. Cleanup failure is best-effort and does not change the already-completed active save's status.
+
+### Persistence before/after measurements
+
+The persistence-only after run was captured before snapshot reuse was implemented. Values are median / p95 / worst milliseconds across five production samples. Publication is the first DOM mutation after the last awaited read-write transaction. Durable-write time remains independently visible and is still awaited.
+
+| Environment / fixture | Durable write before | Durable write after | Publication before | Publication after | Median publication improvement |
+|---|---:|---:|---:|---:|---:|
+| Desktop, Jumping Bean high chain | 10.2 / 10.9 / 10.9 | 8.9 / 10.8 / 10.8 | 73.2 / 75.6 / 75.6 | 70.5 / 83.0 / 83.0 | 3.7%; tail noise |
+| 4x CPU, simple Play | 23.5 / 25.3 / 25.3 | 22.9 / 23.5 / 23.5 | 154.6 / 157.7 / 157.7 | 140.9 / 149.4 / 149.4 | 8.9% |
+| 4x CPU, multi-Flame Play | 58.9 / 103.2 / 103.2 | 63.2 / 63.5 / 63.5 | 274.4 / 370.6 / 370.6 | 225.7 / 243.6 / 243.6 | 17.7% |
+| 4x CPU, Curtain Call | 53.0 / 57.5 / 57.5 | 55.0 / 59.0 / 59.0 | 236.6 / 243.8 / 243.8 | 196.4 / 208.2 / 208.2 | 17.0% |
+| 4x CPU, Jumping Bean high chain | 52.9 / 55.5 / 55.5 | 53.6 / 55.5 / 55.5 | 410.5 / 418.6 / 418.6 | 299.2 / 308.4 / 308.4 | 27.1% |
+| 4x CPU, boss fixture | 63.2 / 85.7 / 85.7 | 64.2 / 78.0 / 78.0 | 294.9 / 331.4 / 331.4 | 240.8 / 242.5 / 242.5 | 18.3% |
+
+The high-chain durable write was effectively unchanged (52.9 to 53.6 ms median), while publication improved by 111.3 ms. This supports the intended conclusion: recovery durability was preserved and only unrelated maintenance was removed from the publication gate. Desktop cleanup was already inexpensive, so desktop publication changes are small and noisy.
+
+The archived-ledger profile uses an ordinary one-die Manual Reroll after loading 0, 200, or 1,000 empty chunks belonging to the active run. Setup/load time is excluded. Values are median / p95 / worst milliseconds.
+
+| Environment | Archived chunks | Durable write | Publication |
+|---|---:|---:|---:|
+| Desktop | 0 | 7.2 / 8.1 / 8.1 | 47.2 / 49.3 / 49.3 |
+| Desktop | 200 | 7.6 / 7.8 / 7.8 | 48.5 / 49.1 / 49.1 |
+| Desktop | 1,000 | 7.4 / 7.9 / 7.9 | 48.2 / 48.5 / 48.5 |
+| 4x CPU | 0 | 21.5 / 21.9 / 21.9 | 122.9 / 127.5 / 127.5 |
+| 4x CPU | 200 | 22.5 / 23.5 / 23.5 | 127.2 / 133.1 / 133.1 |
+| 4x CPU | 1,000 | 22.8 / 23.4 / 23.4 | 129.0 / 136.3 / 136.3 |
+
+Publication remains nearly flat as archived chunks grow because gameplay commits no longer scan them.
+
+### Snapshot reuse and validity rules
+
+Reuse is deliberately local rather than a general cache. `emitWithPreviousBoard` may reuse only the immediately preceding event's detached Board. The audited sites are:
+
+- Golden's `GOLD_ADDED` to its immediately following special-die presentation.
+- Completed per-die Pips presentation and the following hand-Mult presentation, where intervening changes are accumulator/history data excluded from Board.
+- Flame trigger to its immediately following XMult or Charge presentation.
+- Subsequent base-roll events after all physical results are committed; any intervening roll reaction either does not change Board or emits its own fresh current snapshot.
+- Jumping Bean's Free Play presentation to its immediate hand/opening-roll presentation.
+- The finalized hand-score presentation after the previous scoring presentation, where intervening changes are stats/history rather than Board fields.
+
+No reusable reference survives past the immediately preceding event, and sites that cannot prove the absence of an intervening presentation-relevant mutation retain ordinary fresh cloning. `disableSnapshotReuse` provides the legacy path, and `verifySnapshotReuse` constructs a shadow fresh snapshot and requires exact serialized equality at every optimized site (`src/game/effects.ts:97-99`, `src/game/effects.ts:461-470`).
+
+### Snapshot before/after measurements
+
+Values are median / p95 / worst milliseconds across 15 samples. The before and after rows are generated in the same harness run from identical states; the before path explicitly disables reuse.
+
+| Fixture | Events | Dispatch before | Dispatch after | Snapshot clone before | Snapshot clone after | Constructed / reused after | Median dispatch improvement |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Simple Play | 8 | 2.09 / 2.91 / 2.91 | 1.21 / 1.95 / 1.95 | 0.46 / 0.63 / 0.63 | 0.28 / 0.38 / 0.38 | 5 / 3 | 42.1% |
+| Ordinary Manual Reroll | 3 | 1.00 / 1.81 / 1.81 | 0.74 / 1.40 / 1.40 | 0.16 / 0.22 / 0.22 | 0.16 / 0.25 / 0.25 | 3 / 0 | no attributable clone gain |
+| Multi-Flame special-die Play | 61 | 10.33 / 14.44 / 14.44 | 6.76 / 8.02 / 8.02 | 7.21 / 9.36 / 9.36 | 3.68 / 4.65 / 4.65 | 35 / 26 | 34.6% |
+| Curtain Call / Free Play | 25 | 4.43 / 5.40 / 5.40 | 2.99 / 4.23 / 4.23 | 1.82 / 2.56 / 2.56 | 1.15 / 2.16 / 2.16 | 16 / 9 | 32.6% |
+| Jumping Bean ~70 events | 72 | 10.23 / 13.62 / 13.62 | 7.31 / 7.76 / 7.76 | 5.27 / 6.03 / 6.03 | 2.94 / 3.67 / 3.67 | 39 / 33 | 28.5% |
+| Jumping Bean ~200 events | 210 | 30.66 / 38.36 / 38.36 | 22.02 / 24.14 / 24.14 | 17.61 / 19.17 / 19.17 | 9.43 / 10.71 / 10.71 | 111 / 99 | 28.2% |
+| Jumping Bean 400+ events | 454 | 75.21 / 101.76 / 101.76 | 53.64 / 66.77 / 66.77 | 50.56 / 65.29 / 65.29 | 27.58 / 33.00 / 33.00 | 237 / 217 | 28.7% |
+| Juggler + multi-Flame Play | 25 | 4.32 / 6.31 / 6.31 | 3.31 / 4.27 / 4.27 | 2.69 / 3.65 / 3.65 | 1.83 / 2.63 / 2.63 | 15 / 10 | 23.2% |
+
+For the 454-event chain, distinct runtime Board references fell from 454 to 237 (47.8%), and median snapshot cloning fell 45.5%. The exact serialized public event payload remains 5,248,455 bytes before and after because each event still serializes a complete Board. Ledger construction was also intentionally unchanged (2.01 ms before versus 2.24 ms after median in this noisy sample), and playback Boards are not part of V2 ledger chunks. No storage-size reduction is claimed.
+
+Forced-GC browser heap measurements after optimization retained 3.72 MB desktop and 4.04 MB under 4x throttling for the 454-event fixture. There is no identically configured pre-change browser heap sample, so reference-count reduction is the supported allocation result; a browser heap percentage improvement is not claimed.
+
+### Final production-browser scaling
+
+The deterministic Jumping Bean fixtures use invariant faces so the same 72, 210, and 454 events resolve in engine and browser paths. Final median production results were:
+
+| Environment | Events | Publication | Chrome task | Chrome script | Largest long task | Retained heap |
+|---|---:|---:|---:|---:|---:|---:|
+| Desktop | 72 | 68.2 ms | 76.3 ms | 32.4 ms | none | 0.92 MB |
+| Desktop | 210 | 80.0 ms | 98.8 ms | 43.3 ms | none | 1.83 MB |
+| Desktop | 454 | 101.6 ms | 144.0 ms | 70.2 ms | 54 ms | 3.72 MB |
+| 4x CPU | 72 | 215.0 ms | 369.0 ms | 161.5 ms | 106 ms | 0.82 MB |
+| 4x CPU | 210 | 284.2 ms | 464.7 ms | 233.6 ms | 177 ms | 1.75 MB |
+| 4x CPU | 454 | 405.2 ms | 641.6 ms | 351.8 ms | 293 ms | 4.04 MB |
+
+These task windows include React publication, playback initialization, browser rendering, persistence, and a fixed observation interval. The paired direct-engine measurements above isolate snapshot improvement. A comparison between the persistence-only browser run and final run was noisy on throttled medium fixtures, so no additional browser percentage is claimed for snapshot reuse.
+
+### Playback and persistence equivalence evidence
+
+`src/game/snapshotReuse.test.ts` runs optimized and legacy snapshot modes from identical deterministic fixtures covering multi-Flame scoring, special dice, Curtain Call, generated Free Plays, a large Jumping Bean chain, Juggler, and Round starts. It asserts:
+
+- exact event payload and ordering equality;
+- exact Board content through the shadow fresh-snapshot check;
+- exact final authoritative state, RNG state, and ledger chunk;
+- preservation of shared references through whole-event `structuredClone`;
+- no change to emitted Boards after later authoritative-state mutation.
+
+The full browser suite additionally covers normal/fast/instant playback, scoring feedback, boss transitions, rerolls, Round transitions, save/reload, and tutorial-authored Board adjustments.
+
+`tests/persistenceMaintenance.spec.ts` uses real IndexedDB to verify:
+
+- an aborted active transaction leaves no partial session or chunks and does not advance committed counters;
+- deferred cleanup failure neither removes the live run nor blocks later recovery;
+- a later lifecycle removes abandoned chunks;
+- competing repository maintenance requests coalesce;
+- replacement preserves and reloads the new run before old chunks are removed;
+- explicit run deletion removes the session and its chunks.
+
+### Artifacts
+
+- `docs/gameplay-performance-audit/phase2-persistence-before.json`
+- `docs/gameplay-performance-audit/phase2-persistence-after.json`
+- `docs/gameplay-performance-audit/phase2-snapshot-before.json`
+- `docs/gameplay-performance-audit/phase2-snapshot-after.json`
+- `docs/gameplay-performance-audit/phase2-engine-stages.json` (optimized alias)
+- `docs/gameplay-performance-audit/phase2-browser-stages.json`
+- `docs/gameplay-performance-audit/phase2-persistence-scaling.json`
+
+### Validation
+
+- Focused snapshot/effect/playback/persistence/tutorial tests: 96 passed.
+- Full unit and integration suite: 77 files, 836 tests passed.
+- Full Playwright browser suite: 163 tests passed.
+- Phase 2 profiling suite: three profiles passed; corrected final engine/browser rerun: two profiles passed.
+- TypeScript typecheck: passed.
+- Production build: passed. The existing large-chunk warning remains.
+
+### Remaining risks
+
+- Snapshot cloning is still the largest single direct-engine bucket in the 454-event fixture at 27.58 ms median. Another 237 fresh snapshots remain; further reuse should be added only after separately auditing and shadow-verifying each site.
+- A 454-event chain still produces a 293 ms median largest long task under 4x throttling. The remaining Resolver effect body, React publication/playback setup, and browser rendering now merit a fresh profile before any further change.
+- Idle orphan cleanup still scans the global ledger store when it runs. It is no longer player-blocking or per-action, but very large installations may benefit from bounded/indexed maintenance in a later pass if idle traces demonstrate a problem.
+- Snapshot sharing assumes playback consumers treat Boards as immutable. Existing tutorial code performs controlled field patching; the complete tutorial/browser suite passes because those patches are consistent across the shared snapshots it touches. Future code should continue avoiding in-place mutation of emitted playback Boards.

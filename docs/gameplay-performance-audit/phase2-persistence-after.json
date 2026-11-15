@@ -1,0 +1,1371 @@
+{
+  "generatedAt": "2026-11-15T04:10:17.035Z",
+  "notes": "Five production-build samples per fixture/environment after moving orphan cleanup outside gameplay publication, with snapshot reuse not yet implemented. One read-write transaction records the active durable save; publication is bounded by the first following DOM mutation.",
+  "rows": [
+    {
+      "fixture": "simple-upper-play",
+      "complexity": "low",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "clickRoundTripMs": 54.83609999999999,
+          "syncEnd": 37,
+          "firstMutation": 46.5,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 46,
+              "completed": 50.5
+            }
+          ],
+          "mutationTimes": [
+            46.5,
+            54.5,
+            58.10000002384186
+          ],
+          "longTasks": [],
+          "taskMs": 51.873999999999995,
+          "scriptMs": 18.291,
+          "layoutMs": 5.745,
+          "styleMs": 4.851,
+          "heapPeakDeltaBytes": 2646452,
+          "heapRetainedDeltaBytes": 581736
+        },
+        {
+          "clickRoundTripMs": 41.301200000000335,
+          "syncEnd": 29.80000001192093,
+          "firstMutation": 38.89999997615814,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 38.39999997615814,
+              "completed": 44.39999997615814
+            }
+          ],
+          "mutationTimes": [
+            38.89999997615814,
+            49.09999996423721,
+            53.19999998807907
+          ],
+          "longTasks": [],
+          "taskMs": 46.957,
+          "scriptMs": 18.566000000000003,
+          "layoutMs": 1.039,
+          "styleMs": 4.069999999999999,
+          "heapPeakDeltaBytes": 2330924,
+          "heapRetainedDeltaBytes": 557456
+        },
+        {
+          "clickRoundTripMs": 40.47699999999986,
+          "syncEnd": 28.900000035762787,
+          "firstMutation": 38.10000002384186,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 37.60000002384186,
+              "completed": 43.19999998807907
+            }
+          ],
+          "mutationTimes": [
+            38.10000002384186,
+            48.10000002384186,
+            51.5
+          ],
+          "longTasks": [],
+          "taskMs": 47.010000000000005,
+          "scriptMs": 18.634,
+          "layoutMs": 1.116,
+          "styleMs": 4.109,
+          "heapPeakDeltaBytes": 2299644,
+          "heapRetainedDeltaBytes": 556716
+        },
+        {
+          "clickRoundTripMs": 48.159599999999955,
+          "syncEnd": 28.399999976158142,
+          "firstMutation": 38.69999998807907,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 38.30000001192093,
+              "completed": 42.89999997615814
+            }
+          ],
+          "mutationTimes": [
+            38.69999998807907,
+            47.59999996423721,
+            51.59999996423721
+          ],
+          "longTasks": [],
+          "taskMs": 48.875,
+          "scriptMs": 20.351,
+          "layoutMs": 1.0690000000000002,
+          "styleMs": 4.197,
+          "heapPeakDeltaBytes": 2614184,
+          "heapRetainedDeltaBytes": 556400
+        },
+        {
+          "clickRoundTripMs": 41.88709999999992,
+          "syncEnd": 27.30000001192093,
+          "firstMutation": 37,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 36.60000002384186,
+              "completed": 41.700000047683716
+            }
+          ],
+          "mutationTimes": [
+            37,
+            46,
+            49.40000003576279
+          ],
+          "longTasks": [],
+          "taskMs": 46.536,
+          "scriptMs": 18.139,
+          "layoutMs": 1.0510000000000002,
+          "styleMs": 3.98,
+          "heapPeakDeltaBytes": 2582996,
+          "heapRetainedDeltaBytes": 552328
+        }
+      ]
+    },
+    {
+      "fixture": "multi-flame-special-dice-play",
+      "complexity": "medium",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "clickRoundTripMs": 71.08789999999954,
+          "syncEnd": 36.89999997615814,
+          "firstMutation": 55,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 54.19999998807907,
+              "completed": 70.80000001192093
+            }
+          ],
+          "mutationTimes": [
+            55,
+            62.30000001192093,
+            75.10000002384186,
+            79.10000002384186
+          ],
+          "longTasks": [],
+          "taskMs": 91.298,
+          "scriptMs": 31.468000000000004,
+          "layoutMs": 2.538,
+          "styleMs": 8.853,
+          "heapPeakDeltaBytes": 1169364,
+          "heapRetainedDeltaBytes": 1074872
+        },
+        {
+          "clickRoundTripMs": 58.08550000000014,
+          "syncEnd": 30.80000001192093,
+          "firstMutation": 47.89999997615814,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 47.10000002384186,
+              "completed": 57.60000002384186
+            }
+          ],
+          "mutationTimes": [
+            47.89999997615814,
+            55.80000001192093,
+            61.80000001192093,
+            69.30000001192093
+          ],
+          "longTasks": [],
+          "taskMs": 78.73,
+          "scriptMs": 31.044999999999998,
+          "layoutMs": 1.7799999999999998,
+          "styleMs": 8.315,
+          "heapPeakDeltaBytes": 1117516,
+          "heapRetainedDeltaBytes": 1014024
+        },
+        {
+          "clickRoundTripMs": 66.15700000000015,
+          "syncEnd": 32.90000003576279,
+          "firstMutation": 49.40000003576279,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 48.69999998807907,
+              "completed": 66.5
+            }
+          ],
+          "mutationTimes": [
+            49.40000003576279,
+            57.40000003576279,
+            70.30000001192093,
+            74.10000002384186
+          ],
+          "longTasks": [],
+          "taskMs": 85.69399999999999,
+          "scriptMs": 29.848,
+          "layoutMs": 1.431,
+          "styleMs": 7.767,
+          "heapPeakDeltaBytes": 1117660,
+          "heapRetainedDeltaBytes": 1013152
+        },
+        {
+          "clickRoundTripMs": 74.04200000000037,
+          "syncEnd": 29.69999998807907,
+          "firstMutation": 46.80000001192093,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 45.90000003576279,
+              "completed": 78.90000003576279
+            }
+          ],
+          "mutationTimes": [
+            46.80000001192093,
+            54.69999998807907,
+            83.30000001192093,
+            87
+          ],
+          "longTasks": [],
+          "taskMs": 107.128,
+          "scriptMs": 30.474,
+          "layoutMs": 1.444,
+          "styleMs": 8.8,
+          "heapPeakDeltaBytes": 1118484,
+          "heapRetainedDeltaBytes": 1013080
+        },
+        {
+          "clickRoundTripMs": 70.84050000000025,
+          "syncEnd": 31.80000001192093,
+          "firstMutation": 48.19999998807907,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 47.40000003576279,
+              "completed": 74.19999998807907
+            }
+          ],
+          "mutationTimes": [
+            48.19999998807907,
+            55.19999998807907,
+            79,
+            85.69999998807907
+          ],
+          "longTasks": [],
+          "taskMs": 92.625,
+          "scriptMs": 29.915999999999997,
+          "layoutMs": 1.596,
+          "styleMs": 7.686999999999999,
+          "heapPeakDeltaBytes": 1126536,
+          "heapRetainedDeltaBytes": 1029024
+        }
+      ]
+    },
+    {
+      "fixture": "curtain-call-free-play-reroll",
+      "complexity": "medium",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "clickRoundTripMs": 63.015300000000934,
+          "syncEnd": 38.10000002384186,
+          "firstMutation": 51.5,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 50.69999998807907,
+              "completed": 62.90000003576279
+            }
+          ],
+          "mutationTimes": [
+            51.5,
+            58.5,
+            67.40000003576279,
+            77.60000002384186
+          ],
+          "longTasks": [],
+          "taskMs": 75.282,
+          "scriptMs": 27.029,
+          "layoutMs": 2.527,
+          "styleMs": 8.147,
+          "heapPeakDeltaBytes": 3628620,
+          "heapRetainedDeltaBytes": 675932
+        },
+        {
+          "clickRoundTripMs": 60.012800000000425,
+          "syncEnd": 34.80000001192093,
+          "firstMutation": 49.30000001192093,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 48.60000002384186,
+              "completed": 56.5
+            }
+          ],
+          "mutationTimes": [
+            49.30000001192093,
+            55.700000047683716,
+            59.80000001192093,
+            62.90000003576279
+          ],
+          "longTasks": [],
+          "taskMs": 66.85199999999999,
+          "scriptMs": 25.879,
+          "layoutMs": 1.191,
+          "styleMs": 6.17,
+          "heapPeakDeltaBytes": 3635116,
+          "heapRetainedDeltaBytes": 667584
+        },
+        {
+          "clickRoundTripMs": 63.805099999999584,
+          "syncEnd": 40.39999997615814,
+          "firstMutation": 53.5,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 52.89999997615814,
+              "completed": 60.5
+            }
+          ],
+          "mutationTimes": [
+            53.5,
+            59.59999996423721,
+            63.59999996423721,
+            66.69999998807907
+          ],
+          "longTasks": [],
+          "taskMs": 65.76199999999999,
+          "scriptMs": 24.137,
+          "layoutMs": 1.3719999999999999,
+          "styleMs": 6.117,
+          "heapPeakDeltaBytes": 3649956,
+          "heapRetainedDeltaBytes": 669820
+        },
+        {
+          "clickRoundTripMs": 75.32699999999932,
+          "syncEnd": 36.10000002384186,
+          "firstMutation": 56.60000002384186,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 55.80000001192093,
+              "completed": 74.80000001192093
+            }
+          ],
+          "mutationTimes": [
+            56.60000002384186,
+            63.60000002384186,
+            78.80000001192093,
+            82.89999997615814
+          ],
+          "longTasks": [],
+          "taskMs": 88.637,
+          "scriptMs": 33.452000000000005,
+          "layoutMs": 1.841,
+          "styleMs": 8.02,
+          "heapPeakDeltaBytes": 3618692,
+          "heapRetainedDeltaBytes": 678228
+        },
+        {
+          "clickRoundTripMs": 61.477100000000064,
+          "syncEnd": 36.69999998807907,
+          "firstMutation": 50.5,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 49.69999998807907,
+              "completed": 57.90000003576279
+            }
+          ],
+          "mutationTimes": [
+            50.5,
+            57,
+            61.40000003576279,
+            64.5
+          ],
+          "longTasks": [],
+          "taskMs": 70.788,
+          "scriptMs": 25.738,
+          "layoutMs": 1.4189999999999998,
+          "styleMs": 7.082,
+          "heapPeakDeltaBytes": 3656696,
+          "heapRetainedDeltaBytes": 670400
+        }
+      ]
+    },
+    {
+      "fixture": "jumping-bean-automatic-chain",
+      "complexity": "high",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "clickRoundTripMs": 65.8724000000002,
+          "syncEnd": 24.69999998807907,
+          "firstMutation": 58.60000002384186,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 56.90000003576279,
+              "completed": 65.80000001192093
+            }
+          ],
+          "mutationTimes": [
+            58.60000002384186,
+            64.90000003576279,
+            68.80000001192093,
+            72.90000003576279
+          ],
+          "longTasks": [],
+          "taskMs": 106.688,
+          "scriptMs": 50.46000000000001,
+          "layoutMs": 3.1510000000000002,
+          "styleMs": 8.206,
+          "heapPeakDeltaBytes": 2638244,
+          "heapRetainedDeltaBytes": 2545244
+        },
+        {
+          "clickRoundTripMs": 79.76429999999891,
+          "syncEnd": 38.5,
+          "firstMutation": 70.69999998807907,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 69.19999998807907,
+              "completed": 79.19999998807907
+            }
+          ],
+          "mutationTimes": [
+            70.69999998807907,
+            77.69999998807907,
+            83,
+            87
+          ],
+          "longTasks": [],
+          "taskMs": 100.138,
+          "scriptMs": 49.522000000000006,
+          "layoutMs": 2.248,
+          "styleMs": 8.004,
+          "heapPeakDeltaBytes": 2631088,
+          "heapRetainedDeltaBytes": 2538544
+        },
+        {
+          "clickRoundTripMs": 67.83220000000074,
+          "syncEnd": 25.19999998807907,
+          "firstMutation": 57.299999952316284,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 55.89999997615814,
+              "completed": 64.59999996423721
+            }
+          ],
+          "mutationTimes": [
+            57.299999952316284,
+            63.799999952316284,
+            67.59999996423721,
+            70.69999998807907
+          ],
+          "longTasks": [],
+          "taskMs": 95.278,
+          "scriptMs": 48.13099999999999,
+          "layoutMs": 2.205,
+          "styleMs": 7.099,
+          "heapPeakDeltaBytes": 2638252,
+          "heapRetainedDeltaBytes": 2545300
+        },
+        {
+          "clickRoundTripMs": 68.52579999999944,
+          "syncEnd": 26.69999998807907,
+          "firstMutation": 60,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 58.69999998807907,
+              "completed": 68.40000003576279
+            }
+          ],
+          "mutationTimes": [
+            60,
+            66.69999998807907,
+            71.80000001192093,
+            78
+          ],
+          "longTasks": [],
+          "taskMs": 100.053,
+          "scriptMs": 50.358,
+          "layoutMs": 2.469,
+          "styleMs": 8.071,
+          "heapPeakDeltaBytes": 2630300,
+          "heapRetainedDeltaBytes": 2537368
+        },
+        {
+          "clickRoundTripMs": 67.58469999999943,
+          "syncEnd": 27.19999998807907,
+          "firstMutation": 60.30000001192093,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 58.89999997615814,
+              "completed": 67.30000001192093
+            }
+          ],
+          "mutationTimes": [
+            60.30000001192093,
+            66.19999998807907,
+            70.5,
+            74.19999998807907
+          ],
+          "longTasks": [],
+          "taskMs": 97.218,
+          "scriptMs": 48.441,
+          "layoutMs": 2.385,
+          "styleMs": 7.717,
+          "heapPeakDeltaBytes": 2602236,
+          "heapRetainedDeltaBytes": 2514436
+        }
+      ]
+    },
+    {
+      "fixture": "boss-juggler-multi-flame-play",
+      "complexity": "high",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "clickRoundTripMs": 64.08970000000045,
+          "syncEnd": 31.19999998807907,
+          "firstMutation": 48.19999998807907,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 47.30000001192093,
+              "completed": 57.09999996423721
+            }
+          ],
+          "mutationTimes": [
+            48.19999998807907,
+            56.30000001192093,
+            60.89999997615814,
+            67.89999997615814
+          ],
+          "longTasks": [],
+          "taskMs": 72.848,
+          "scriptMs": 30.900000000000002,
+          "layoutMs": 1.81,
+          "styleMs": 7.078,
+          "heapPeakDeltaBytes": 1216424,
+          "heapRetainedDeltaBytes": 1111592
+        },
+        {
+          "clickRoundTripMs": 70.20669999999882,
+          "syncEnd": 35,
+          "firstMutation": 51.89999997615814,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 51.09999996423721,
+              "completed": 70.29999995231628
+            }
+          ],
+          "mutationTimes": [
+            51.89999997615814,
+            59.69999998807907,
+            74.29999995231628,
+            78.59999996423721
+          ],
+          "longTasks": [],
+          "taskMs": 86.66600000000001,
+          "scriptMs": 30.751,
+          "layoutMs": 1.3860000000000001,
+          "styleMs": 6.944,
+          "heapPeakDeltaBytes": 1253180,
+          "heapRetainedDeltaBytes": 1153764
+        },
+        {
+          "clickRoundTripMs": 76.98860000000059,
+          "syncEnd": 46.799999952316284,
+          "firstMutation": 63.59999996423721,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 62.799999952316284,
+              "completed": 73.39999997615814
+            }
+          ],
+          "mutationTimes": [
+            63.59999996423721,
+            72.5,
+            76.89999997615814,
+            80.69999998807907
+          ],
+          "longTasks": [],
+          "taskMs": 105.36999999999999,
+          "scriptMs": 30.197,
+          "layoutMs": 1.7550000000000001,
+          "styleMs": 9.079,
+          "heapPeakDeltaBytes": 1262128,
+          "heapRetainedDeltaBytes": 1157168
+        },
+        {
+          "clickRoundTripMs": 74.48489999999947,
+          "syncEnd": 31.19999998807907,
+          "firstMutation": 48.69999998807907,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 47.69999998807907,
+              "completed": 74.5
+            }
+          ],
+          "mutationTimes": [
+            48.69999998807907,
+            57.40000003576279,
+            80,
+            87.60000002384186
+          ],
+          "longTasks": [],
+          "taskMs": 101.127,
+          "scriptMs": 32.978,
+          "layoutMs": 1.7049999999999998,
+          "styleMs": 8.543000000000001,
+          "heapPeakDeltaBytes": 1211320,
+          "heapRetainedDeltaBytes": 1111640
+        },
+        {
+          "clickRoundTripMs": 67.95370000000185,
+          "syncEnd": 28.899999976158142,
+          "firstMutation": 51.39999997615814,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 50.19999998807907,
+              "completed": 67
+            }
+          ],
+          "mutationTimes": [
+            51.39999997615814,
+            65.69999998807907,
+            76.59999996423721,
+            86.19999998807907
+          ],
+          "longTasks": [],
+          "taskMs": 106.916,
+          "scriptMs": 46.05199999999999,
+          "layoutMs": 2.026,
+          "styleMs": 10.297,
+          "heapPeakDeltaBytes": 1262168,
+          "heapRetainedDeltaBytes": 1157944
+        }
+      ]
+    },
+    {
+      "fixture": "simple-upper-play",
+      "complexity": "low",
+      "environment": "mobile 360x740, 4x CPU throttle",
+      "samples": [
+        {
+          "clickRoundTripMs": 122.25209999999788,
+          "syncEnd": 40.700000047683716,
+          "firstMutation": 101.40000003576279,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 98.90000003576279,
+              "completed": 121.10000002384186
+            }
+          ],
+          "mutationTimes": [
+            101.40000003576279,
+            145.60000002384186,
+            192.70000004768372
+          ],
+          "longTasks": [
+            71
+          ],
+          "taskMs": 243.33599999999998,
+          "scriptMs": 113.52,
+          "layoutMs": 10.848999999999998,
+          "styleMs": 17.694,
+          "heapPeakDeltaBytes": 2275320,
+          "heapRetainedDeltaBytes": 563272
+        },
+        {
+          "clickRoundTripMs": 119.02340000000186,
+          "syncEnd": 38.5,
+          "firstMutation": 97.80000001192093,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 95.19999998807907,
+              "completed": 118.19999998807907
+            }
+          ],
+          "mutationTimes": [
+            97.80000001192093,
+            140.89999997615814,
+            177.60000002384186
+          ],
+          "longTasks": [
+            71
+          ],
+          "taskMs": 229.18199999999996,
+          "scriptMs": 108.558,
+          "layoutMs": 8.125,
+          "styleMs": 16.017,
+          "heapPeakDeltaBytes": 2285452,
+          "heapRetainedDeltaBytes": 569224
+        },
+        {
+          "clickRoundTripMs": 114.824099999998,
+          "syncEnd": 38.30000001192093,
+          "firstMutation": 95.10000002384186,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 92.30000001192093,
+              "completed": 114
+            }
+          ],
+          "mutationTimes": [
+            95.10000002384186,
+            138,
+            175.30000001192093
+          ],
+          "longTasks": [
+            71
+          ],
+          "taskMs": 226.014,
+          "scriptMs": 106.49600000000001,
+          "layoutMs": 9.422,
+          "styleMs": 16.445,
+          "heapPeakDeltaBytes": 2291080,
+          "heapRetainedDeltaBytes": 570168
+        },
+        {
+          "clickRoundTripMs": 128.83369999999923,
+          "syncEnd": 48.80000001192093,
+          "firstMutation": 107.5,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 104.5,
+              "completed": 128
+            }
+          ],
+          "mutationTimes": [
+            107.5,
+            149.4000000357628,
+            194.10000002384186
+          ],
+          "longTasks": [
+            74
+          ],
+          "taskMs": 243.25,
+          "scriptMs": 107.178,
+          "layoutMs": 8.282,
+          "styleMs": 17.926000000000002,
+          "heapPeakDeltaBytes": 2299372,
+          "heapRetainedDeltaBytes": 568948
+        },
+        {
+          "clickRoundTripMs": 113.03779999999824,
+          "syncEnd": 36,
+          "firstMutation": 92.09999996423721,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 89.19999998807907,
+              "completed": 112.09999996423721
+            }
+          ],
+          "mutationTimes": [
+            92.09999996423721,
+            133.5,
+            168.5
+          ],
+          "longTasks": [
+            69
+          ],
+          "taskMs": 244.89499999999998,
+          "scriptMs": 101.596,
+          "layoutMs": 11.419,
+          "styleMs": 17.833,
+          "heapPeakDeltaBytes": 2320960,
+          "heapRetainedDeltaBytes": 570188
+        }
+      ]
+    },
+    {
+      "fixture": "multi-flame-special-dice-play",
+      "complexity": "medium",
+      "environment": "mobile 360x740, 4x CPU throttle",
+      "samples": [
+        {
+          "clickRoundTripMs": 187.07930000000124,
+          "syncEnd": 41.60000002384186,
+          "firstMutation": 132.80000001192093,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 128.4000000357628,
+              "completed": 191.60000002384186
+            }
+          ],
+          "mutationTimes": [
+            132.69999998807907,
+            175.80000001192093,
+            218,
+            266.10000002384186
+          ],
+          "longTasks": [
+            107
+          ],
+          "taskMs": 378.043,
+          "scriptMs": 170.867,
+          "layoutMs": 13.485000000000001,
+          "styleMs": 32.477,
+          "heapPeakDeltaBytes": 1157148,
+          "heapRetainedDeltaBytes": 1068736
+        },
+        {
+          "clickRoundTripMs": 191.71500000000015,
+          "syncEnd": 43.10000002384186,
+          "firstMutation": 136,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 132,
+              "completed": 195.5
+            }
+          ],
+          "mutationTimes": [
+            136,
+            180.9000000357628,
+            225.70000004768372,
+            267.30000001192093
+          ],
+          "longTasks": [
+            110
+          ],
+          "taskMs": 387.932,
+          "scriptMs": 169.99800000000002,
+          "layoutMs": 12.077,
+          "styleMs": 34.71,
+          "heapPeakDeltaBytes": 1162660,
+          "heapRetainedDeltaBytes": 1073540
+        },
+        {
+          "clickRoundTripMs": 210.81489999999758,
+          "syncEnd": 50.5,
+          "firstMutation": 155.9000000357628,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 151.30000001192093,
+              "completed": 214.10000002384186
+            }
+          ],
+          "mutationTimes": [
+            155.9000000357628,
+            201.9000000357628,
+            243.60000002384186,
+            293.60000002384186
+          ],
+          "longTasks": [
+            122
+          ],
+          "taskMs": 415.14700000000005,
+          "scriptMs": 192.07399999999998,
+          "layoutMs": 14.399000000000001,
+          "styleMs": 34.138000000000005,
+          "heapPeakDeltaBytes": 1154984,
+          "heapRetainedDeltaBytes": 1085236
+        },
+        {
+          "clickRoundTripMs": 201.02539999999863,
+          "syncEnd": 50,
+          "firstMutation": 146.39999997615814,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 141.39999997615814,
+              "completed": 204.69999998807907
+            }
+          ],
+          "mutationTimes": [
+            146.39999997615814,
+            191.39999997615814,
+            231.0999999642372,
+            280.19999998807907
+          ],
+          "longTasks": [
+            111
+          ],
+          "taskMs": 397.83399999999995,
+          "scriptMs": 175.614,
+          "layoutMs": 11.998999999999999,
+          "styleMs": 40.403,
+          "heapPeakDeltaBytes": 1129728,
+          "heapRetainedDeltaBytes": 1043996
+        },
+        {
+          "clickRoundTripMs": 191.07170000000042,
+          "syncEnd": 42,
+          "firstMutation": 136,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 131.69999998807907,
+              "completed": 194.10000002384186
+            }
+          ],
+          "mutationTimes": [
+            136,
+            180.39999997615814,
+            224.30000001192093,
+            269
+          ],
+          "longTasks": [
+            106
+          ],
+          "taskMs": 388.266,
+          "scriptMs": 172.881,
+          "layoutMs": 12.338,
+          "styleMs": 36.032,
+          "heapPeakDeltaBytes": 1164052,
+          "heapRetainedDeltaBytes": 1073808
+        }
+      ]
+    },
+    {
+      "fixture": "curtain-call-free-play-reroll",
+      "complexity": "medium",
+      "environment": "mobile 360x740, 4x CPU throttle",
+      "samples": [
+        {
+          "clickRoundTripMs": 162.93959999999788,
+          "syncEnd": 41.89999997615814,
+          "firstMutation": 115.69999998807907,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 111.30000001192093,
+              "completed": 164.89999997615814
+            }
+          ],
+          "mutationTimes": [
+            115.69999998807907,
+            153.69999998807907,
+            187.5999999642372,
+            227.19999998807907
+          ],
+          "longTasks": [
+            90
+          ],
+          "taskMs": 325.966,
+          "scriptMs": 143.03,
+          "layoutMs": 14.115,
+          "styleMs": 31.306,
+          "heapPeakDeltaBytes": 3517804,
+          "heapRetainedDeltaBytes": 691740
+        },
+        {
+          "clickRoundTripMs": 173.16969999999856,
+          "syncEnd": 46.700000047683716,
+          "firstMutation": 123.40000003576279,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 120.20000004768372,
+              "completed": 175.20000004768372
+            }
+          ],
+          "mutationTimes": [
+            123.40000003576279,
+            162.70000004768372,
+            196.4000000357628,
+            235
+          ],
+          "longTasks": [
+            94
+          ],
+          "taskMs": 337.418,
+          "scriptMs": 146.03199999999998,
+          "layoutMs": 12.085,
+          "styleMs": 32.30200000000001,
+          "heapPeakDeltaBytes": 773420,
+          "heapRetainedDeltaBytes": 699944
+        },
+        {
+          "clickRoundTripMs": 173.1955999999991,
+          "syncEnd": 45.700000047683716,
+          "firstMutation": 120.30000001192093,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 116.30000001192093,
+              "completed": 175.30000001192093
+            }
+          ],
+          "mutationTimes": [
+            120.30000001192093,
+            163.4000000357628,
+            200.5,
+            242.10000002384186
+          ],
+          "longTasks": [
+            91
+          ],
+          "taskMs": 340.871,
+          "scriptMs": 152.95,
+          "layoutMs": 12.91,
+          "styleMs": 30.741,
+          "heapPeakDeltaBytes": 3480348,
+          "heapRetainedDeltaBytes": 669904
+        },
+        {
+          "clickRoundTripMs": 179.2341000000015,
+          "syncEnd": 52.5,
+          "firstMutation": 130.39999997615814,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 126.39999997615814,
+              "completed": 181.39999997615814
+            }
+          ],
+          "mutationTimes": [
+            130.39999997615814,
+            171.19999998807907,
+            208.19999998807907,
+            247.69999998807907
+          ],
+          "longTasks": [
+            91
+          ],
+          "taskMs": 348.53299999999996,
+          "scriptMs": 151.226,
+          "layoutMs": 11.440000000000001,
+          "styleMs": 34.823,
+          "heapPeakDeltaBytes": 772808,
+          "heapRetainedDeltaBytes": 700668
+        },
+        {
+          "clickRoundTripMs": 170.24409999999625,
+          "syncEnd": 48.200000047683716,
+          "firstMutation": 123,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 119.10000002384186,
+              "completed": 172
+            }
+          ],
+          "mutationTimes": [
+            123,
+            160.70000004768372,
+            192.5,
+            232.60000002384186
+          ],
+          "longTasks": [
+            88
+          ],
+          "taskMs": 329.648,
+          "scriptMs": 142.683,
+          "layoutMs": 12.924,
+          "styleMs": 35.458999999999996,
+          "heapPeakDeltaBytes": 3407940,
+          "heapRetainedDeltaBytes": 682208
+        }
+      ]
+    },
+    {
+      "fixture": "jumping-bean-automatic-chain",
+      "complexity": "high",
+      "environment": "mobile 360x740, 4x CPU throttle",
+      "samples": [
+        {
+          "clickRoundTripMs": 272.4096999999965,
+          "syncEnd": 37.69999998807907,
+          "firstMutation": 227.89999997615814,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 220.5999999642372,
+              "completed": 275
+            }
+          ],
+          "mutationTimes": [
+            227.89999997615814,
+            263.39999997615814,
+            297.39999997615814,
+            338.69999998807907
+          ],
+          "longTasks": [
+            206,
+            68
+          ],
+          "taskMs": 486.42100000000005,
+          "scriptMs": 255.59300000000002,
+          "layoutMs": 15.247,
+          "styleMs": 31.563000000000002,
+          "heapPeakDeltaBytes": 2630624,
+          "heapRetainedDeltaBytes": 2551064
+        },
+        {
+          "clickRoundTripMs": 279.5072,
+          "syncEnd": 42.19999998807907,
+          "firstMutation": 233.5,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 225.5,
+              "completed": 281
+            }
+          ],
+          "mutationTimes": [
+            233.5,
+            271.80000001192093,
+            308.4000000357628,
+            354
+          ],
+          "longTasks": [
+            208,
+            69
+          ],
+          "taskMs": 489.359,
+          "scriptMs": 261.701,
+          "layoutMs": 15.803,
+          "styleMs": 28.891,
+          "heapPeakDeltaBytes": 2630440,
+          "heapRetainedDeltaBytes": 2553740
+        },
+        {
+          "clickRoundTripMs": 276.61469999999827,
+          "syncEnd": 44.89999997615814,
+          "firstMutation": 234,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 225.89999997615814,
+              "completed": 278.80000001192093
+            }
+          ],
+          "mutationTimes": [
+            234,
+            267.39999997615814,
+            299.19999998807907,
+            339.80000001192093
+          ],
+          "longTasks": [
+            205,
+            67
+          ],
+          "taskMs": 477.544,
+          "scriptMs": 249.039,
+          "layoutMs": 14.489,
+          "styleMs": 30.44,
+          "heapPeakDeltaBytes": 2630616,
+          "heapRetainedDeltaBytes": 2557984
+        },
+        {
+          "clickRoundTripMs": 277.11909999999625,
+          "syncEnd": 48.30000001192093,
+          "firstMutation": 233.10000002384186,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 225.60000002384186,
+              "completed": 279.2000000476837
+            }
+          ],
+          "mutationTimes": [
+            233.10000002384186,
+            268.5,
+            300.9000000357628,
+            340.4000000357628
+          ],
+          "longTasks": [
+            202,
+            66
+          ],
+          "taskMs": 468.946,
+          "scriptMs": 248.307,
+          "layoutMs": 13.937,
+          "styleMs": 29.743000000000002,
+          "heapPeakDeltaBytes": 2632884,
+          "heapRetainedDeltaBytes": 2565140
+        },
+        {
+          "clickRoundTripMs": 272.0570999999982,
+          "syncEnd": 42.69999998807907,
+          "firstMutation": 229.19999998807907,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 221.30000001192093,
+              "completed": 274
+            }
+          ],
+          "mutationTimes": [
+            229.19999998807907,
+            262.5999999642372,
+            295.0999999642372,
+            335.19999998807907
+          ],
+          "longTasks": [
+            202,
+            65
+          ],
+          "taskMs": 470.98699999999997,
+          "scriptMs": 246.87699999999998,
+          "layoutMs": 13.483,
+          "styleMs": 29.921999999999997,
+          "heapPeakDeltaBytes": 2629768,
+          "heapRetainedDeltaBytes": 2568588
+        }
+      ]
+    },
+    {
+      "fixture": "boss-juggler-multi-flame-play",
+      "complexity": "high",
+      "environment": "mobile 360x740, 4x CPU throttle",
+      "samples": [
+        {
+          "clickRoundTripMs": 205.64790000000357,
+          "syncEnd": 52.80000001192093,
+          "firstMutation": 149.10000002384186,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 144.5,
+              "completed": 208.70000004768372
+            }
+          ],
+          "mutationTimes": [
+            149.10000002384186,
+            195.60000002384186,
+            235.4000000357628,
+            284
+          ],
+          "longTasks": [
+            115
+          ],
+          "taskMs": 400.98900000000003,
+          "scriptMs": 179.982,
+          "layoutMs": 14.015,
+          "styleMs": 34.183,
+          "heapPeakDeltaBytes": 1238816,
+          "heapRetainedDeltaBytes": 1130904
+        },
+        {
+          "clickRoundTripMs": 193.09659999999712,
+          "syncEnd": 43.5,
+          "firstMutation": 137.69999998807907,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 132.5,
+              "completed": 193.30000001192093
+            }
+          ],
+          "mutationTimes": [
+            137.69999998807907,
+            182.30000001192093,
+            223.4000000357628,
+            276.80000001192093
+          ],
+          "longTasks": [
+            110
+          ],
+          "taskMs": 403.56600000000003,
+          "scriptMs": 181.786,
+          "layoutMs": 12.38,
+          "styleMs": 36.403999999999996,
+          "heapPeakDeltaBytes": 1297576,
+          "heapRetainedDeltaBytes": 1177956
+        },
+        {
+          "clickRoundTripMs": 212.5289000000048,
+          "syncEnd": 57.5,
+          "firstMutation": 154.89999997615814,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 149.69999998807907,
+              "completed": 215.19999998807907
+            }
+          ],
+          "mutationTimes": [
+            154.89999997615814,
+            201.5999999642372,
+            241.39999997615814,
+            295.5
+          ],
+          "longTasks": [
+            111
+          ],
+          "taskMs": 401.51300000000003,
+          "scriptMs": 183.57899999999998,
+          "layoutMs": 13.493,
+          "styleMs": 34.405,
+          "heapPeakDeltaBytes": 1288096,
+          "heapRetainedDeltaBytes": 1177464
+        },
+        {
+          "clickRoundTripMs": 212.89949999999953,
+          "syncEnd": 62.30000001192093,
+          "firstMutation": 159.89999997615814,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 154.39999997615814,
+              "completed": 215.39999997615814
+            }
+          ],
+          "mutationTimes": [
+            159.89999997615814,
+            203.10000002384186,
+            240.80000001192093,
+            289
+          ],
+          "longTasks": [
+            113
+          ],
+          "taskMs": 410.806,
+          "scriptMs": 180.06900000000002,
+          "layoutMs": 11.897,
+          "styleMs": 39.675000000000004,
+          "heapPeakDeltaBytes": 1282116,
+          "heapRetainedDeltaBytes": 1172424
+        },
+        {
+          "clickRoundTripMs": 210.2960000000021,
+          "syncEnd": 42.80000001192093,
+          "firstMutation": 139.80000001192093,
+          "firstPlaybackMutation": null,
+          "transactions": [
+            {
+              "started": 135.4000000357628,
+              "completed": 213.4000000357628
+            }
+          ],
+          "mutationTimes": [
+            139.80000001192093,
+            200.19999998807907,
+            242.5,
+            294.60000002384186
+          ],
+          "longTasks": [
+            118
+          ],
+          "taskMs": 421.705,
+          "scriptMs": 189.973,
+          "layoutMs": 14.315,
+          "styleMs": 37.699,
+          "heapPeakDeltaBytes": 1227632,
+          "heapRetainedDeltaBytes": 1136052
+        }
+      ]
+    }
+  ]
+}

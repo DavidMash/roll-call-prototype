@@ -48,7 +48,7 @@ import type {
   FlameOrigin, HandSideEffect, HistoryDieState, MultContribution, PipsContribution,
   RollBatchEvent, RollEffect, RollReason, RunHistoryV2Event, RunHistoryV2EventInput, XMultContribution,
 } from './runHistoryV2';
-import { Decimal, exactRatioNumber, roundPositiveScoreHalf, type ExactScore } from './scoreMath';
+import { Decimal, exactRatioNumber, roundPositiveScoreHalf, stringifyExactJson, type ExactScore } from './scoreMath';
 import { createPlayIntent, createRollBatchIntent, createRollIntent } from './resolution';
 import { activeDieLabel, orderDieIdsByEncounter, rosterDice, rosterSlotOf, syncActiveDiceProjection } from './inventory';
 import type { PlayIntent, QualificationPlan, RollBatchIntent, RollContext, RollIntent, RollResolution, ScoreOccurrence } from './resolution';
@@ -93,6 +93,10 @@ export interface ResolverOptions {
   nonPayingManualRerolls?: number;
   /** Test-only parity switch; gameplay and playback instrumentation must remain identical when V2 is disabled. */
   disableHistoryV2?: boolean;
+  /** Test-only legacy path used to prove optimized playback snapshots are equivalent. */
+  disableSnapshotReuse?: boolean;
+  /** Test-only shadow check that compares every reused snapshot with a fresh legacy snapshot. */
+  verifySnapshotReuse?: boolean;
 }
 const NORMAL_SHOP_SPEND = new Set<GoldSpendSource>([
   'dicePurchase', 'diceOfferReroll', 'handTraining', 'lifeRestore',
@@ -130,6 +134,7 @@ export function selectFlameRewardTypes(pool: readonly Flame[], rng: RandomSource
 // Rules resolve synchronously into immutable snapshots. Playback speed only changes how React reads them.
 export class Resolver {
   readonly events: GameEvent[] = [];
+  readonly snapshotCounts = { constructed: 0, reused: 0 };
   rngStateAfterResolution: number | null = null;
   private queue: RollTrigger[] = [];
   private handAccumulator: HandScoreAccumulator | null = null;
@@ -163,7 +168,7 @@ export class Resolver {
   }
 
   private emitSpecial(die: CollectibleDie, effect: DieEffectInstance, detail: string, effectCause: string,
-    invocationBefore?: number, invocationAfter?: number, extra: Partial<EventRecord> = {}): void {
+    invocationBefore?: number, invocationAfter?: number, extra: Partial<EventRecord> = {}, reusePreviousBoard = false): void {
     this.v2Hand?.sideEffects.push({ type: 'special_die', dieId: die.id, dieType: effect.type, effectInstanceId: effect.id, detail,
       ...(invocationBefore === undefined ? {} : { invocationBefore }),
       ...(invocationAfter === undefined ? {} : { invocationAfter }) });
@@ -172,8 +177,10 @@ export class Resolver {
       effectCause, detail,
       ...(invocationBefore === undefined ? {} : { invocationBefore }),
       ...(invocationAfter === undefined ? {} : { invocationAfter }) });
-    this.emit({ type: 'SPECIAL_DIE_EFFECT', dieIds: [die.id], dieType: effect.type, effectInstanceId: effect.id, dieLevel: effect.level,
-      effectCause, invocationBefore, invocationAfter, message: `${this.dieLabel(die.id)} ${detail}`, ...extra });
+    const event = { type: 'SPECIAL_DIE_EFFECT' as const, dieIds: [die.id], dieType: effect.type,
+      effectInstanceId: effect.id, dieLevel: effect.level, effectCause, invocationBefore, invocationAfter,
+      message: `${this.dieLabel(die.id)} ${detail}`, ...extra };
+    if (reusePreviousBoard) this.emitWithPreviousBoard(event); else this.emit(event);
   }
 
   private spendInvocation(die: CollectibleDie, effect: DieEffectInstance, detail: string, effectCause: string): void {
@@ -442,7 +449,7 @@ export class Resolver {
     return typeof value === 'bigint' ? formatExactScore(value)
       : typeof value === 'string' ? formatExactDecimal(value) : formatPlayerNumber(value);
   }
-  emit(event: Omit<EventRecord, 'id' | 'round'>): void {
+  private emitRecord(event: Omit<EventRecord, 'id' | 'round'>, reusePreviousBoard: boolean): void {
     if (++this.resolutionEventCount > CONFIG.resolutionEventCap) throw new Error(`Resolution exceeded ${CONFIG.resolutionEventCap} events. Check for an infinite ability chain.`);
     const record = { ...event, ...(this.handAccumulator ? { handScore: structuredClone(this.handAccumulator) } : {}),
       id: this.state.nextPlaybackEventId++, round: this.state.round };
@@ -450,8 +457,25 @@ export class Resolver {
     const structuralPresentation = record.type === 'MAP_TRANSITION' || record.type === 'CHAPTER_STARTED';
     const immediatePhase = this.state.phase === 'shop' || this.state.phase === 'infernoReward'
       || this.state.phase === 'specialOffer' || this.state.phase === 'flameSelection';
-    if (!immediatePhase || structuralPresentation)
-      this.events.push({ ...record, board: boardSnapshot(this.state) });
+    if (!immediatePhase || structuralPresentation) {
+      const previous = reusePreviousBoard && !this.options.disableSnapshotReuse ? this.events.at(-1)?.board : undefined;
+      if (previous) {
+        if (this.options.verifySnapshotReuse
+          && stringifyExactJson(previous) !== stringifyExactJson(boardSnapshot(this.state)))
+          throw new Error(`Reused Board snapshot diverged before ${record.type}.`);
+        this.snapshotCounts.reused++;
+        this.events.push({ ...record, board: previous });
+      } else {
+        this.snapshotCounts.constructed++;
+        this.events.push({ ...record, board: boardSnapshot(this.state) });
+      }
+    }
+  }
+  emit(event: Omit<EventRecord, 'id' | 'round'>): void {
+    this.emitRecord(event, false);
+  }
+  private emitWithPreviousBoard(event: Omit<EventRecord, 'id' | 'round'>): void {
+    this.emitRecord(event, true);
   }
   mapTransition(node: RunNode, direction: 'forward' | 'backward' = 'forward'): void {
     const fromNode = this.state.currentNodeId || null;
@@ -649,7 +673,8 @@ export class Resolver {
       if (golden && goldenRuntime && goldenRuntime.goldenGoldEarned < golden.level * 3) {
         goldenRuntime.goldenGoldEarned++;
         this.addGold(1, `${this.dieLabel(collectible.id)} Golden: +1 Gold`, 'golden', collectible.id);
-        this.emitSpecial(collectible, golden, `Golden earned 1 Gold (${goldenRuntime.goldenGoldEarned}/${golden.level * 3})`, 'score');
+        this.emitSpecial(collectible, golden, `Golden earned 1 Gold (${goldenRuntime.goldenGoldEarned}/${golden.level * 3})`,
+          'score', undefined, undefined, {}, true);
       }
       const workout = effectOf(collectible, 'workout');
       const workoutRuntime = this.specialRuntime(collectible, 'workout');
@@ -753,7 +778,7 @@ export class Resolver {
       };
       resolution.resolvedDicePips.push(resolved);
       this.v2Hand!.resolvedDicePips.push(structuredClone(resolved));
-      this.emit({ type: 'DIE_PIPS_RESOLVED', hand: intent.hand, dieIds: [participant.id], face: participant.face.rank,
+      this.emitWithPreviousBoard({ type: 'DIE_PIPS_RESOLVED', hand: intent.hand, dieIds: [participant.id], face: participant.face.rank,
         amount: resolved.totalPips, pips: resolved.runningPipsAfter, multiplier: this.handAccumulator!.currentMultiplier,
         playSource: intent.source, resolvedDiePips: structuredClone(resolved),
         message: `${this.dieLabel(participant.id)}${participant.role === 'hitchhiker' ? ' Hitchhiker' : ''} contributed ${this.format(resolved.totalPips)} Pips` });
@@ -809,7 +834,7 @@ export class Resolver {
       chargeFactorApplied: factorApplied, chargeMaximum: this.state.maxCharge, chargeFactorLostToCap: factorLostToCap };
     this.triggerFlame(flame, `${detail} · Charge ×${this.format(factorApplied)} → ×${this.format(after)}`, undefined, undefined,
       flameDiagnostics);
-    this.emit({ type: 'CHARGE_CHANGED', flame, dieIds, xMult: after, flameDiagnostics,
+    this.emitWithPreviousBoard({ type: 'CHARGE_CHANGED', flame, dieIds, xMult: after, flameDiagnostics,
       message: `${FLAMES[flame].name}: Charge ×${this.format(factorApplied)} → ×${this.format(after)}` });
     return gain;
   }
@@ -1019,14 +1044,18 @@ export class Resolver {
 
   private applyPostRollReactions(batch: RollBatchIntent, results: RollResolution[]): void {
     const triggers: RollTrigger[] = [];
+    let rollEventEmitted = false;
     for (const result of results) {
       const die = this.state.dice.find(item => item.id === result.dieId)!;
       const face = structuredClone(activeFace(die));
       if (result.intercepted) continue;
-      this.emit({ type: 'DIE_ROLLED', dieIds: [die.id], face: face.rank,
-        rollSource: batch.manual ? 'manual_reroll' : 'automatic', previousFace: result.before, resultFace: face.rank,
+      const event = { type: 'DIE_ROLLED' as const, dieIds: [die.id], face: face.rank,
+        rollSource: batch.manual ? 'manual_reroll' as const : 'automatic' as const,
+        previousFace: result.before, resultFace: face.rank,
         sameFaceExcluded: batch.manual,
-        message: `${this.dieLabel(die.id)} rolled: ${result.before} → ${face.rank}${result.controller === 'rng' && result.previousFaceExcluded ? ' · previous face excluded' : ''}` });
+        message: `${this.dieLabel(die.id)} rolled: ${result.before} → ${face.rank}${result.controller === 'rng' && result.previousFaceExcluded ? ' · previous face excluded' : ''}` };
+      if (rollEventEmitted) this.emitWithPreviousBoard(event); else this.emit(event);
+      rollEventEmitted = true;
       if ((batch.context === 'gameplay' || batch.context === 'wardenSetup') && face.rank === 3) {
         const source = this.chargeFlameSource('thirdRail');
         if (source) this.growCharge('thirdRail', thirdRailChargeGain(source.investment), `${this.dieLabel(die.id)} rolled a 3`, [die.id]);
@@ -1060,7 +1089,7 @@ export class Resolver {
   }
 
   rollBatch(dieIds: number[], reason: string, context: RollContext, _excludeStartingFace = false,
-    reasonId: RollReason = 'other'): RollBatchEvent | null {
+    reasonId: RollReason = 'other', reuseOpeningBoard = false): RollBatchEvent | null {
     const ids = orderDieIdsByEncounter(this.state, [...new Set(dieIds)]);
     if (!ids.length) return null;
     const batchId = `${this.state.historyV2TimelineId}:${this.state.round}:${this.state.nextActionId}:${this.state.nextHistorySeq}`;
@@ -1069,8 +1098,9 @@ export class Resolver {
     const parentSeq = this.v2ParentSeq;
     this.v2ParentSeq = undefined;
     this.v2Roll = { effects: [] };
-    this.emit({ type: 'DICE_REROLL_STARTED', dieIds: ids, rollReason: reasonId,
-      message: `${reason}: ${ids.map(id => this.dieLabel(id)).join(', ')}` });
+    const openingEvent = { type: 'DICE_REROLL_STARTED' as const, dieIds: ids, rollReason: reasonId,
+      message: `${reason}: ${ids.map(id => this.dieLabel(id)).join(', ')}` };
+    if (reuseOpeningBoard) this.emitWithPreviousBoard(openingEvent); else this.emit(openingEvent);
     const rolling = new Set(ids);
     const results = ids.map(dieId => this.resolveRoll(createRollIntent(batch, dieId), rolling));
     const magician = !this.state.bossSilenced && this.state.boss?.type === 'magician' ? this.state.boss : null;
@@ -1141,7 +1171,7 @@ export class Resolver {
         this.emit({ type: 'JUMPING_BEAN_FREE_PLAY', dieType: 'jumpingBean', hand, dieIds: [item.dieId],
           playSource: 'jumpingBean', handConsumed: false,
           message: `Jumping Bean ${item.selectedNumber}: Free Played ${HANDS[hand].name}; automatic follow-up Roll` });
-        this.rollBatch([item.dieId], 'Jumping Bean automatic follow-up Roll', 'gameplay', false, 'jumping_bean_followup');
+        this.rollBatch([item.dieId], 'Jumping Bean automatic follow-up Roll', 'gameplay', false, 'jumping_bean_followup', true);
       }
     }
     this.queue = [];
@@ -1468,10 +1498,12 @@ export class Resolver {
       applyXMult(resolution.accumulator, factor);
       if (factor.source !== 'charge')
         this.triggerFlame(factor.source, `factor ×${this.format(factor.value)}`, hand, factor.value, factor.diagnostics);
-      this.emit({ type: 'HAND_XMULT_CHANGED', flame: factor.source === 'charge' ? undefined : factor.source, hand,
+      const event = { type: 'HAND_XMULT_CHANGED' as const,
+        flame: factor.source === 'charge' ? undefined : factor.source, hand,
         dieIds: factor.dieId === null ? undefined : [factor.dieId], xMult: resolution.accumulator.currentXMult,
         xMultFactor: factor,
-        message: `${factor.source === 'charge' ? 'Charge' : FLAMES[factor.source].name}: XMult ×${this.format(beforeXMult)} × factor ×${this.format(factor.value)} = ×${this.format(resolution.accumulator.currentXMult)}` });
+        message: `${factor.source === 'charge' ? 'Charge' : FLAMES[factor.source].name}: XMult ×${this.format(beforeXMult)} × factor ×${this.format(factor.value)} = ×${this.format(resolution.accumulator.currentXMult)}` };
+      if (factor.source === 'charge') this.emit(event); else this.emitWithPreviousBoard(event);
     }
     if (xMultFactors.some(factor => factor.source === 'fetch')) {
       const completed = this.state.fetchTarget;
@@ -1862,8 +1894,10 @@ export class Resolver {
         chargesRemaining: remaining });
     }
     handStart.cleanSweepCompletesCycle = wouldCompleteScorecardCycle(this.state, hand, resolution.consumesHand);
-    this.emit({ type: 'HAND_STARTED', hand, dieIds: ids, playSource, handConsumed: resolution.consumesHand,
-      message: `${freePlay ? 'Free-played' : 'Played'} ${HANDS[hand].name} Lv. ${this.format(handLevel)}` });
+    const handStarted = { type: 'HAND_STARTED' as const, hand, dieIds: ids, playSource,
+      handConsumed: resolution.consumesHand,
+      message: `${freePlay ? 'Free-played' : 'Played'} ${HANDS[hand].name} Lv. ${this.format(handLevel)}` };
+    if (freeBean) this.emitWithPreviousBoard(handStarted); else this.emit(handStarted);
     for (const claim of resolution.qualification.resourceClaims) {
       const die = this.collectible(claim.dieId);
       if (!die) throw new Error('Qualification claim references a non-collectible die.');
@@ -1879,7 +1913,7 @@ export class Resolver {
       }
     }
     this.resolveScoreOccurrences(resolution);
-    this.emit({ type: 'HAND_MULTIPLIER_CHANGED', hand, dieIds: scoringIds, multiplier: this.handAccumulator.currentMultiplier,
+    this.emitWithPreviousBoard({ type: 'HAND_MULTIPLIER_CHANGED', hand, dieIds: scoringIds, multiplier: this.handAccumulator.currentMultiplier,
       message: `${HANDS[hand].name} applies ×${this.format(this.handAccumulator.currentMultiplier)} Mult` });
     handStart.playedDiceScoringPips = this.v2Hand.pipsContributions
       .filter(contribution => contribution.role === 'selected' && contribution.dieId !== undefined
@@ -1903,7 +1937,7 @@ export class Resolver {
     const effectiveXMult = Number((xMult * bossFactor).toFixed(12));
     this.log({ type: 'SCORE_ROUNDING_AUDIT', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score, source: scoreSource, playSource,
       message: `Final: ${this.format(pips)} Pips × ${this.format(multiplier)} Mult${effectiveXMult !== 1 ? ` × ${this.format(effectiveXMult)} XMult` : ''}${currentInfernoMultiplier > 1n ? ` × ${this.format(currentInfernoMultiplier)} Inferno` : ''} = ${this.format(rawScore)}; rounded ${this.format(score)}` });
-    this.emit({ type: 'HAND_SCORE_FINALIZED', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score,
+    this.emitWithPreviousBoard({ type: 'HAND_SCORE_FINALIZED', hand, dieIds: scoringIds, pips, multiplier, xMult, rawScore, amount: score,
       resolvedDicePips: structuredClone(resolution.resolvedDicePips),
       source: scoreSource, playSource, handConsumed: resolution.consumesHand, message: `Final awarded hand score: ${this.format(score)}` });
     this.addScore(score, scoreSource, `${freePlay ? 'Free play: ' : ''}${HANDS[hand].name}: round score +${this.format(score)}`, scoringIds, hand);
