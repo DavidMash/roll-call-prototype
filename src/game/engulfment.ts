@@ -116,6 +116,15 @@ export function flameInterest(power: number): number {
   return 30 * Math.log(power / ENGULFMENT_REQUIRED_MULTIPLIER);
 }
 
+/** Exact inverse of Flame Interest, used only to plot evaluator values on the presentation meter. */
+export const infernoPowerForInterest = (interest: number): number =>
+  ENGULFMENT_REQUIRED_MULTIPLIER * Math.exp(interest / 30);
+
+/** Perceived-power boundaries at which the existing six offer tiers begin. */
+export const INFERNO_TIER_POWER_THRESHOLDS = Object.freeze(
+  INFERNO_TIER_FACTORS.map((_, index) => infernoPowerForInterest(index * 15)),
+);
+
 export function infernoTier(interest: number): number {
   return Math.max(1, Math.min(6, 1 + Math.floor(interest / 15)));
 }

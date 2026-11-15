@@ -7,8 +7,8 @@ import type { BadDreamCheckpoint, GameState } from './types';
 import { cloneGameState } from './ledger';
 
 export const RUN_STORAGE_KEY = 'roll-call:active-run';
-export const RUN_STORAGE_VERSION = 31;
-const MIGRATABLE_RUN_STORAGE_VERSIONS = new Set([28, 29, 30, RUN_STORAGE_VERSION]);
+export const RUN_STORAGE_VERSION = 32;
+const MIGRATABLE_RUN_STORAGE_VERSIONS = new Set([28, 29, 30, 31, RUN_STORAGE_VERSION]);
 
 type RunStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
@@ -17,7 +17,7 @@ interface PersistedRun {
   state: GameState;
 }
 
-const PHASES = new Set(['round', 'roundSummary', 'inferno', 'infernoReward', 'scenarioComplete', 'bust', 'flameSelection', 'specialOffer', 'shop', 'lost', 'error']);
+const PHASES = new Set(['round', 'roundSummary', 'infernoMeter', 'inferno', 'infernoReward', 'scenarioComplete', 'bust', 'flameSelection', 'specialOffer', 'shop', 'lost', 'error']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

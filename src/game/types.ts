@@ -58,7 +58,7 @@ export type HandId =
 export type UpperHandId = 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes' | 'sevens'
   | 'odds' | 'evens' | 'chance';
 export type LowerHandId = Exclude<HandId, UpperHandId>;
-export type Phase = 'round' | 'roundSummary' | 'inferno' | 'infernoReward' | 'scenarioComplete' | 'bust' | 'flameSelection' | 'specialOffer' | 'shop' | 'lost' | 'error';
+export type Phase = 'round' | 'roundSummary' | 'infernoMeter' | 'inferno' | 'infernoReward' | 'scenarioComplete' | 'bust' | 'flameSelection' | 'specialOffer' | 'shop' | 'lost' | 'error';
 export type ScoreSource = 'hand' | 'curtainCall' | 'jumpingBean' | 'hitchhiker' | 'boss';
 export type HandPlaySource = 'manual' | 'jumpingBean' | 'freePlay';
 export type RunMode = 'normal' | 'tutorial' | 'scenario';
@@ -559,6 +559,41 @@ export interface InfernoProgressState {
   /** Evidence clear identity at which a deal was declined; a newer clear is required. */
   declinedAtEvidenceRoundId: string | null;
 }
+export interface InfernoMeterSnapshot {
+  round: number;
+  /** Latest factual all-Flame power, even while the presentation is frozen. */
+  actualFlamePower: number;
+  startFlamePower: number;
+  displayedFlamePower: number;
+  dieBasePower: number | null;
+  dieFinalPower: number | null;
+  startCheckpointCount: number;
+  checkpointCount: number;
+  startScaleMaxPower: number;
+  scaleMaxPower: number;
+  maximumPotential: number;
+  dormant: boolean;
+  /** The blocked completed Round represented by this screen (3, then 2, then 1). */
+  cooldownRounds: number;
+  reconciling: boolean;
+}
+export interface FrozenInfernoMeterState {
+  flamePower: number;
+  dieBasePower: number | null;
+  dieFinalPower: number | null;
+  checkpointCount: number;
+  scaleMaxPower: number;
+}
+export interface InfernoMeterPresentationState {
+  /** Count of leading offer checkpoints permanently discovered by this run. */
+  revealedCheckpointCount: number;
+  lastPresentedFlamePower: number;
+  lastPresentedDieBasePower: number | null;
+  lastPresentedDieFinalPower: number | null;
+  lastScaleMaxPower: number;
+  frozen: FrozenInfernoMeterState | null;
+  current: InfernoMeterSnapshot | null;
+}
 export interface InfernoFlameDiagnostic {
   asset: EngulfmentAssetRef;
   status: 'ember' | 'bonfire';
@@ -719,6 +754,10 @@ export interface Board {
   infernoProgress: InfernoProgressState;
   infernoEvaluation: InfernoEvaluationState | null;
   infernoEvaluationSuspendedUntilNewFlame: boolean;
+  /** Number of future completed Rounds for which a deal remains blocked after rejection. */
+  infernoDealCooldownRounds: number;
+  /** Durable presentation-only state; never participates in scoring or offer selection. */
+  infernoMeter: InfernoMeterPresentationState;
   chargeXMult: number;
   maxCharge: number;
   chargeArmed: boolean;
@@ -1105,6 +1144,7 @@ export type Action =
   | { type: 'CHOOSE_FLAME'; offerId: number; replaceSlot?: FlameSlotIndex }
   | { type: 'STOKE_FLAME'; flameInstanceId: FlameInstanceId; amount: number }
   | { type: 'CONTINUE_ROUND_SUMMARY' }
+  | { type: 'CONTINUE_INFERNO_METER' }
   | { type: 'CONTINUE_INFERNO_EVALUATION' }
   | { type: 'CONTINUE_SCENARIO_RUN' }
   | { type: 'ENGULF_NOW' }

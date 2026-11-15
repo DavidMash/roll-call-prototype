@@ -31,6 +31,7 @@ import { initialInfernoRewardState, INFERNO_REWARD_IDS, infernoRewardEligible } 
 import { canAffordManualReroll } from './manualRerolls';
 import { eligibleFetchTargets, fetchTargetIsEligible } from './fetchTarget';
 import { createInfernoEvaluation, evaluateEngulfmentOffering, infernoDieInterest, infernoEvidenceInsights, ownedEngulfmentAssets } from './engulfment';
+import { initialInfernoMeterPresentation, normalizeInfernoMeterPresentation } from './infernoMeter';
 import type { Action, Board, DiceInventory, FlameSlotIndex, GameState, RandomSource, Resolution, ScenarioRunState, Shop, ShopStage } from './types';
 
 const exact = (value: unknown, fallback: ExactScore = 0n): ExactScore => value === undefined || value === null
@@ -448,6 +449,8 @@ export function normalizeGameState(state: GameState): GameState {
   next.infernoProgress.declinedAtEvidenceRoundId ??= null;
   next.infernoEvaluation ??= null;
   next.infernoEvaluationSuspendedUntilNewFlame = !!next.infernoEvaluationSuspendedUntilNewFlame;
+  next.infernoDealCooldownRounds = Math.max(0, Math.min(3, Math.floor(next.infernoDealCooldownRounds ?? 0)));
+  next.infernoMeter = normalizeInfernoMeterPresentation(next.infernoMeter);
   next.bustPresentationDice ??= null;
   if (next.infernoEvaluation?.dealVersion !== 1 && next.infernoEvaluation) {
     next.infernoEvaluation = createInfernoEvaluation(next);
@@ -522,6 +525,9 @@ export function normalizeGameState(state: GameState): GameState {
       die.lineage = [...new Set((die.lineage?.length ? die.lineage : [die.id]).filter(Number.isSafeInteger))];
     }
     checkpoint.infernoEvaluationSuspendedUntilNewFlame = !!checkpoint.infernoEvaluationSuspendedUntilNewFlame;
+    checkpoint.infernoDealCooldownRounds = Math.max(0, Math.min(3,
+      Math.floor(checkpoint.infernoDealCooldownRounds ?? next.infernoDealCooldownRounds)));
+    checkpoint.infernoMeter = normalizeInfernoMeterPresentation(checkpoint.infernoMeter ?? next.infernoMeter);
     checkpoint.bustPresentationDice ??= null;
     checkpoint.nextShopVisitId = Math.max(1, Math.floor(checkpoint.nextShopVisitId ?? 1));
     checkpoint.nextFlameInstanceId = Math.max(1, Math.floor(checkpoint.nextFlameInstanceId ?? next.nextFlameInstanceId));
@@ -685,6 +691,8 @@ export function validateAction(state: Board | GameState, action: Action): string
   }
   if (action.type === 'CONTINUE_ROUND_SUMMARY') return state.phase === 'roundSummary' && !!state.roundSummary
     ? null : 'A completed encounter summary is required.';
+  if (action.type === 'CONTINUE_INFERNO_METER') return state.phase === 'infernoMeter' && !!state.infernoMeter.current
+    ? null : 'An Inferno meter presentation is required.';
   if (action.type === 'CONTINUE_INFERNO_EVALUATION') return state.phase === 'inferno' && !!state.infernoEvaluation
     && (!state.infernoEvaluation.success || state.infernoEvaluation.engulfed)
     ? null : 'A completed or insufficient Inferno evaluation is required.';
@@ -1089,7 +1097,8 @@ export function newRun(seed: string, random?: RandomSource, options?: NewRunOpti
     bust: null, bustPresentationDice: null, flameTutorial: { pendingFlameInstanceId: null, completed: false },
     diceInventory, encounterDice: [], dice: [], dieRoundState: resetDieRoundState(Object.values(diceInventory.instances)), flameSlots: emptyFlameSlots(),
     chargeAttribution: {}, chargeEvents: [], infernoProgress: { evaluationIndex: 0, previousReadiness: null, recentMessageIds: [], recentAction: 'none', declinedAtEvidenceRoundId: null },
-    infernoEvaluation: null, infernoEvaluationSuspendedUntilNewFlame: false, chargeXMult: 1, maxCharge: 1,
+    infernoEvaluation: null, infernoEvaluationSuspendedUntilNewFlame: false,
+    infernoDealCooldownRounds: 0, infernoMeter: initialInfernoMeterPresentation(), chargeXMult: 1, maxCharge: 1,
     chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, minigunUpperStreak: 0,
     roundPlayCount: 0, roundStartLives: CONFIG.maxLives, roundStartRosterSize: CONFIG.diceCount, precedingShopDiePurchase: false,
     interactiveFlames: { burnItDownUses: 0, greaseTheEngineUses: 0,
@@ -1334,6 +1343,7 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
         break;
       }
       case 'CONTINUE_ROUND_SUMMARY': resolver.continueRoundSummary(); break;
+      case 'CONTINUE_INFERNO_METER': resolver.continueInfernoMeter(); break;
       case 'CONTINUE_INFERNO_EVALUATION': resolver.continueInfernoEvaluation(); break;
       case 'CONTINUE_SCENARIO_RUN': resolver.continueScenarioRun(); break;
       case 'ENGULF_NOW': resolver.engulfNow(); break;

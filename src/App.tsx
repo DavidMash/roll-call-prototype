@@ -35,6 +35,7 @@ import type { OnboardingMetadata, TutorialBeat } from './tutorial/types';
 import { isChapterMapTransition } from './game/playback';
 import { RunActionRow, RunActionRowContext } from './components/RunActionRow';
 import { InfernoEvaluationScreen } from './components/InfernoEvaluationScreen';
+import { InfernoMeterScreen } from './components/InfernoMeterScreen';
 import { InfernoRewardScreen } from './components/InfernoRewardScreen';
 import type { FlamePresentation } from './game/flamePresentation';
 import { ScenarioBrowser } from './components/ScenarioBrowser';
@@ -278,6 +279,7 @@ export default function App() {
       {event?.type === 'CHAPTER_STARTED' ? <ChapterSplash key={event.id} event={event} onComplete={game.continuePlayback} />
         : showingMap ? <RunMapTransition key={event!.id} seed={state.seed} event={event!} onContinue={game.continuePlayback} />
         : board.phase === 'roundSummary' && board.roundSummary ? <RoundSummaryScreen board={board} busy={busy} submit={submit} />
+        : board.phase === 'infernoMeter' && board.infernoMeter.current ? <InfernoMeterScreen board={board} submit={submit} />
         : board.phase === 'inferno' && board.infernoEvaluation ? <InfernoEvaluationScreen board={board} inventory={state.diceInventory} submit={submit} />
         : board.phase === 'infernoReward' && board.infernoRewards.pending ? <InfernoRewardScreen board={board}
           inventory={state.diceInventory} busy={busy} submit={submit} />

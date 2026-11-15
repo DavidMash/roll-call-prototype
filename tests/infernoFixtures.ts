@@ -1,6 +1,9 @@
-import { createInfernoEvaluation } from '../src/game/engulfment';
+import { createInfernoEvaluation, evaluateEngulfmentOffering, maximumPossibleEngulfmentReadiness,
+  ownedEngulfmentAssets } from '../src/game/engulfment';
 import { newRun } from '../src/game/engine';
 import { placeFlameInstance } from '../src/game/flames';
+import { freezeInfernoMeter, prepareInfernoMeterPresentation } from '../src/game/infernoMeter';
+import { createDieEffect } from '../src/game/specialDice';
 import type { GameState } from '../src/game/types';
 import type { RunHistoryV2Event } from '../src/game/runHistoryV2';
 
@@ -25,5 +28,33 @@ export function readyInfernoDeal(seed: string, factor = 25): GameState {
   }
   state.infernoEvaluation = createInfernoEvaluation(state)!;
   state.phase = 'inferno';
+  return state;
+}
+
+export function readyInfernoMeter(seed: string, factor = 25, withDie = false): GameState {
+  const state = readyInfernoDeal(seed, factor);
+  if (withDie) state.diceInventory.instances[1].effects = [createDieEffect(1, 'doubleTime', 10)];
+  state.infernoEvaluation = createInfernoEvaluation(state);
+  const assets = ownedEngulfmentAssets(state);
+  const offering = evaluateEngulfmentOffering(state, assets);
+  state.infernoMeter = prepareInfernoMeterPresentation(state.infernoMeter, {
+    round: state.round, actualFlamePower: offering.offeringMultiplier,
+    maximumPotential: maximumPossibleEngulfmentReadiness(state, assets),
+    evaluation: state.infernoEvaluation, cooldownRounds: 0,
+  });
+  state.phase = 'infernoMeter';
+  return state;
+}
+
+export function readyDormantInfernoMeter(seed: string): GameState {
+  const state = readyInfernoMeter(seed, 25);
+  state.infernoMeter = freezeInfernoMeter(state.infernoMeter);
+  state.infernoEvaluation = null;
+  state.infernoDealCooldownRounds = 2;
+  state.infernoMeter = prepareInfernoMeterPresentation(state.infernoMeter, {
+    round: state.round + 1, actualFlamePower: 2, maximumPotential: 30,
+    evaluation: null, cooldownRounds: 3,
+  });
+  state.phase = 'infernoMeter';
   return state;
 }

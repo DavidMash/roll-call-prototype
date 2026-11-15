@@ -30,10 +30,13 @@ import { chapterRoundForRound } from './chapters';
 import { RUN_HISTORY_V2_RULESET, RUN_HISTORY_V2_SCHEMA_VERSION } from './runHistoryV2';
 import {
   createInfernoEvaluation,
+  evaluateEngulfmentOffering,
   engulfmentAssetKey,
   infernoEvidenceRoundId,
+  maximumPossibleEngulfmentReadiness,
   ownedEngulfmentAssets,
 } from './engulfment';
+import { freezeInfernoMeter, prepareInfernoMeterPresentation } from './infernoMeter';
 import { appendCriticalDiagnostic, appendDebugTrace } from './debugTrace';
 import { captureRollbackState, restoreRollbackState } from './rollback';
 import {
@@ -2660,7 +2663,24 @@ export class Resolver {
       message: `Target Practice: ${HANDS[this.state.targetPracticeHand].name}` });
   }
   private performInfernoEvaluation(): void {
-    const evaluation = createInfernoEvaluation(this.state);
+    const blockedCooldownRound = this.state.infernoDealCooldownRounds;
+    const assets = ownedEngulfmentAssets(this.state);
+    if (!assets.length) {
+      this.state.infernoEvaluation = null;
+      this.state.infernoMeter.current = null;
+      if (blockedCooldownRound > 0) this.state.infernoDealCooldownRounds--;
+      return;
+    }
+    const offering = evaluateEngulfmentOffering(this.state, assets);
+    const evaluation = blockedCooldownRound > 0 ? null : createInfernoEvaluation(this.state);
+    this.state.infernoMeter = prepareInfernoMeterPresentation(this.state.infernoMeter, {
+      round: this.state.round,
+      actualFlamePower: offering.offeringMultiplier,
+      maximumPotential: maximumPossibleEngulfmentReadiness(this.state, assets),
+      evaluation,
+      cooldownRounds: blockedCooldownRound,
+    });
+    if (blockedCooldownRound > 0) this.state.infernoDealCooldownRounds--;
     if (!evaluation) { this.state.infernoEvaluation = null; return; }
     this.state.infernoProgress.evaluationIndex = evaluation.evaluationIndex;
     this.state.infernoProgress.previousReadiness = evaluation.readiness;
@@ -2849,6 +2869,8 @@ export class Resolver {
     this.emit({ type: 'INFERNO_EVALUATED', message: 'Engulfment postponed; the current build was preserved' });
     const latest = evaluation.evidenceRounds.at(-1);
     this.state.infernoProgress.declinedAtEvidenceRoundId = latest ? infernoEvidenceRoundId(latest) : null;
+    this.state.infernoDealCooldownRounds = 3;
+    this.state.infernoMeter = freezeInfernoMeter(this.state.infernoMeter);
     this.state.infernoEvaluation = null;
     this.continuePostRoundFlow();
   }
@@ -2998,6 +3020,12 @@ export class Resolver {
   continueRoundSummary(): void {
     const summary = this.state.roundSummary;
     if (!summary) throw new Error('Round Summary is not available.');
+    if (this.state.infernoMeter.current) this.state.phase = 'infernoMeter';
+    else this.continuePostRoundFlow();
+  }
+  continueInfernoMeter(): void {
+    const meter = this.state.infernoMeter.current;
+    if (!meter) throw new Error('Inferno meter is not available.');
     if (this.state.infernoEvaluation) this.state.phase = 'inferno';
     else this.continuePostRoundFlow();
   }
