@@ -1,5 +1,5 @@
 import { Alert, Button, Container, Group, Paper, Stack, Text, Title } from '@mantine/core';
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { RunInfoModal } from './components/DebugPanel';
 import { DiceDock } from './components/DiceDock';
 import { BustScreen } from './components/BustScreen';
@@ -43,6 +43,7 @@ import { ScenarioCompleteScreen } from './components/ScenarioCompleteScreen';
 import { SCENARIOS, scenarioById, type ScenarioDefinition } from './game/scenarios';
 import { emptyScenarioProgress, loadScenarioProgress, recordScenarioCompletion } from './game/scenarioProgress';
 import { newRun } from './game/engine';
+import { DecisionTimer } from './game/decisionTimer';
 
 const freshSeed = () => `roll-${Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join('-')}`;
 const query = new URLSearchParams(window.location.search);
@@ -73,6 +74,7 @@ export default function App() {
   const [flameDetails, setFlameDetails] = useState<FlameDetailsTarget | null>(null);
   const [actionRowTarget, setActionRowTarget] = useState<HTMLDivElement | null>(null);
   const [flamePresentation, setFlamePresentation] = useState<FlamePresentation[]>([]);
+  const decisionTimer = useRef(new DecisionTimer()).current;
   const updateFlamePresentation = useCallback((next: FlamePresentation[]) => {
     setFlamePresentation(current => JSON.stringify(current) === JSON.stringify(next) ? current : next);
   }, []);
@@ -254,7 +256,7 @@ export default function App() {
     className={`app-container screen-theme ${board.phase === 'round' ? 'active-gameplay' : ''}`}
     data-screen-theme={theme.id} data-playback-speed={speed}
     style={{ '--screen-primary': theme.accent, '--screen-secondary': theme.accentStrong } as React.CSSProperties}>
-    {!showingChapterSplash && <TopHud board={board} event={event} flamePresentation={board.phase === 'round' ? flamePresentation : []} speed={speed} setSpeed={setSpeed} diceDisplay={diceDisplay} setDiceDisplay={setDiceDisplay}
+    {!showingChapterSplash && <TopHud board={board} event={event} flamePresentation={board.phase === 'round' ? flamePresentation : []} decisionTimer={decisionTimer} speed={speed} setSpeed={setSpeed} diceDisplay={diceDisplay} setDiceDisplay={setDiceDisplay}
       openRunInfo={() => setRunInfoOpen(true)} openHelp={() => setHelpOpen(true)}
       openRestoreLives={() => setRestoreLivesOpen(true)} openFlameDetails={openFlameDetails} onMenuOpenChange={setGameMenuOpen}
       returnToTitle={returnToTitle} />}
@@ -304,7 +306,7 @@ export default function App() {
           </Paper>
         </Stack>
         : <RoundScreen board={board} event={event} busy={busy} inputBlocked={busy || gameMenuOpen || runInfoOpen || helpOpen || restoreLivesOpen || faceDetails !== null || flameDetails !== null}
-          selection={selection} setSelection={setSelection} submit={submit} skip={game.skip} diceDisplay={diceDisplay}
+          selection={selection} setSelection={setSelection} submit={submit} skip={game.skip} diceDisplay={diceDisplay} decisionTimer={decisionTimer}
           onFlamePresentationChange={updateFlamePresentation} />}
     </main>
     {(board.phase === 'round' || board.phase === 'flameSelection') && <DiceDock board={diceBoard} event={event} busy={busy} actionsEnabled={dockActionsEnabled} cinematic={showingChapterSplash}

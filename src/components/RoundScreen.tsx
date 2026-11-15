@@ -31,10 +31,11 @@ import { exactRatioNumber } from '../game/scoreMath';
 import type { DiceDisplay } from '../uiSettings';
 import { DisabledActionReason } from './DisabledActionReason';
 
-export function RoundScreen({ board, event, busy, inputBlocked, selection, setSelection, submit, skip, diceDisplay, onFlamePresentationChange }: {
+export function RoundScreen({ board, event, busy, inputBlocked, selection, setSelection, submit, skip, diceDisplay, decisionTimer, onFlamePresentationChange }: {
   board: Board; event: GameEvent | null; busy: boolean; inputBlocked: boolean;
   selection: Selection; setSelection: (selection: Selection) => void; submit: (action: Action) => void; skip: () => void;
   onFlamePresentationChange?: (presentation: FlamePresentation[]) => void;
+  decisionTimer: DecisionTimer;
   diceDisplay: DiceDisplay;
 }) {
   const encounterDice = activeEncounterDice(board);
@@ -50,28 +51,23 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const allInFactor = allInMultiplier(flameByType(board, 'allIn')?.investedGold ?? 0);
   const roundBusy = busy;
   const speedDemonOwned = hasOwnedFlame(board, 'speedDemon');
-  const decisionTimer = useRef(new DecisionTimer());
   const flameCandidateGate = useRef(new CandidateFlamePresentationPlaybackGate());
-  const [decisionMs, setDecisionMs] = useState(0);
+  const [timerDecisionId, setTimerDecisionId] = useState(board.decisionId);
   const [qualificationChoiceOpen, setQualificationChoiceOpen] = useState(false);
   const [lightningOpen, setLightningOpen] = useState(false);
   const [dareDevilOpen, setDareDevilOpen] = useState(false);
   const blocked = inputBlocked || awaitingWardenChoice || qualificationChoiceOpen || lightningOpen || dareDevilOpen;
   useLayoutEffect(() => {
     const now = performance.now();
-    decisionTimer.current.reset(now, blocked);
-    setDecisionMs(0);
+    decisionTimer.reset(now, blocked);
+    setTimerDecisionId(board.decisionId);
   }, [board.decisionId]);
   useLayoutEffect(() => {
     const now = performance.now();
-    decisionTimer.current.setBlocked(blocked, now);
-    setDecisionMs(decisionTimer.current.elapsed(now));
+    decisionTimer.setBlocked(blocked, now);
   }, [blocked]);
-  useEffect(() => {
-    if (blocked || !speedDemonOwned) return;
-    const interval = window.setInterval(() => setDecisionMs(decisionTimer.current.elapsed(performance.now())), 50);
-    return () => window.clearInterval(interval);
-  }, [blocked, speedDemonOwned]);
+  const decisionMs = speedDemonOwned && timerDecisionId === board.decisionId
+    ? decisionTimer.elapsed(performance.now()) : 0;
   const requiredDieIds = requiredEncounterDieIds(board);
   const unavailableHands = unavailableEncounterHands(board);
   const selectedWardenDieId = awaitingWardenChoice && selection.dieIds.length === 1 && wardenLockedIds.includes(selection.dieIds[0])
@@ -92,11 +88,11 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   })() : null;
   const flameCandidateKey = roundBusy ? null : flameCandidatePresentationKey(board);
   const candidateFlamePresentation = useMemo(() => flameCandidateGate.current.resolve(roundBusy,
-    () => deriveFlamePresentations(board, null, decisionMs)), [roundBusy, flameCandidateKey, decisionMs]);
+    () => deriveFlamePresentations(board, null, decisionMs)), [roundBusy, flameCandidateKey]);
   const flamePresentation = useMemo(() => roundBusy || !preview ? candidateFlamePresentation
     : deriveFlamePresentations(board, preview, decisionMs),
   [roundBusy, candidateFlamePresentation, board, preview?.hand, preview?.score, preview?.effectiveXMult,
-    effectiveSelection.dieIds.join(','), decisionMs]);
+    effectiveSelection.dieIds.join(',')]);
   useEffect(() => onFlamePresentationChange?.(flamePresentation), [flamePresentation, onFlamePresentationChange]);
   const manualAction: Action = { type: 'MANUAL_REROLL', dieIds: effectiveSelection.dieIds };
   const canReroll = validateAction(board, manualAction) === null;
@@ -156,7 +152,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   function commitPlay(claims?: { dieId: number; effect: 'mirror' | 'missingLink' | 'conjoined' }[]) {
     const action: Action = { type: 'PLAY', hand: effectiveSelection.hand!, dieIds: effectiveSelection.dieIds,
       ...(claims ? { qualificationClaims: claims } : {}) };
-    if (speedDemonOwned) action.decisionMs = decisionTimer.current.freeze(performance.now());
+    if (speedDemonOwned) action.decisionMs = decisionTimer.freeze(performance.now());
     submit(action);
     setQualificationChoiceOpen(false);
   }

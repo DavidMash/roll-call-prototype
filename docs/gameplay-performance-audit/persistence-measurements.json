@@ -1,0 +1,55 @@
+{
+  "rows": [
+    {
+      "archivedChunks": 0,
+      "samples": [
+        {
+          "clickReturnMs": 51.67280000000005,
+          "durableCompletionMs": 62.297000000000025
+        },
+        {
+          "clickReturnMs": 46.86850000000004,
+          "durableCompletionMs": 61.83609999999999
+        },
+        {
+          "clickReturnMs": 34.4547,
+          "durableCompletionMs": 45.654399999999896
+        }
+      ]
+    },
+    {
+      "archivedChunks": 200,
+      "samples": [
+        {
+          "clickReturnMs": 36.6567,
+          "durableCompletionMs": 52.48630000000003
+        },
+        {
+          "clickReturnMs": 39.27449999999999,
+          "durableCompletionMs": 55.47260000000006
+        },
+        {
+          "clickReturnMs": 43.1242000000002,
+          "durableCompletionMs": 59.96590000000015
+        }
+      ]
+    },
+    {
+      "archivedChunks": 1000,
+      "samples": [
+        {
+          "clickReturnMs": 38.42500000000018,
+          "durableCompletionMs": 66.23770000000013
+        },
+        {
+          "clickReturnMs": 39.593999999999596,
+          "durableCompletionMs": 70.08989999999994
+        },
+        {
+          "clickReturnMs": 38.76130000000012,
+          "durableCompletionMs": 69.42300000000068
+        }
+      ]
+    }
+  ]
+}

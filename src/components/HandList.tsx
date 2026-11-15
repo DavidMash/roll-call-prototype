@@ -37,9 +37,11 @@ function SendIcon() {
   </svg>;
 }
 
-function ScorecardSection({ title, hands, board, selection, availability, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }: {
+function ScorecardSection({ title, hands, board, selection, availability, activeDiceCount, currentlyUnavailable,
+  busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }: {
   title: string; hands: HandId[]; board: Board; selection: Selection; busy: boolean; canSubmit: boolean; submitPreview: HandSubmitPreview | null;
   availability: ScorecardAvailability;
+  activeDiceCount: number; currentlyUnavailable: ReadonlySet<HandId>;
   onSelect: (hand: HandId) => void; onSubmit: () => void; onAcceptDoubleOrNothing: () => void;
 }) {
   const annotations = scorecardHandAnnotations(board);
@@ -47,7 +49,6 @@ function ScorecardSection({ title, hands, board, selection, availability, busy, 
   const doubleOrNothingTargets = new Set(doubleOrNothing && doubleOrNothing.investedGold > 0
     && board.scoreWagers.doubleOrNothing === null ? doubleOrNothingEligibleHands(board) : []);
   const strengthTiers = relativeHandStrengthTiers(board.handLevels, hands);
-  const currentlyUnavailable = new Set(unavailableEncounterHands(board));
   const pendulumRequested = !board.bossSilenced && board.boss?.type === 'pendulum'
     && board.boss.requestedSection === title.toLowerCase();
   return <section className={`scorecard-section${pendulumRequested ? ' pendulum-requested' : ''}`}
@@ -61,7 +62,7 @@ function ScorecardSection({ title, hands, board, selection, availability, busy, 
         const cooldown = !board.bossSilenced && board.boss?.type === 'marathon' ? board.boss.cooldowns[hand] ?? 0 : 0;
         const neglected = !board.bossSilenced && board.boss?.type === 'neglected' && !board.boss.restored
           && board.boss.neglectedHands.includes(hand);
-        const impossible = handIsStructurallyImpossible(hand, activeEncounterDice(board).length);
+        const impossible = handIsStructurallyImpossible(hand, activeDiceCount);
         const playable = availability.playableHands.has(hand) && !currentlyUnavailable.has(hand);
         const selected = selection.hand === hand;
         const handAnnotations = annotations[hand] ?? [];
@@ -165,10 +166,12 @@ export function HandScorecardView({ board, selection, busy, canSubmit, submitPre
   const activeHands = encounterHandIds(board);
   const upperHands = activeHands.filter(upperHand);
   const lowerHands = activeHands.filter(hand => !upperHand(hand));
+  const activeDiceCount = activeEncounterDice(board).length;
+  const currentlyUnavailable = new Set(unavailableEncounterHands(board));
   return <div className="scorecard" data-tutorial="scorecard">
     <div className="scorecard-grid">
-      <ScorecardSection title="Upper" hands={upperHands} {...{ board, selection, availability, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }} />
-      <ScorecardSection title="Lower" hands={lowerHands} {...{ board, selection, availability, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }} />
+      <ScorecardSection title="Upper" hands={upperHands} {...{ board, selection, availability, activeDiceCount, currentlyUnavailable, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }} />
+      <ScorecardSection title="Lower" hands={lowerHands} {...{ board, selection, availability, activeDiceCount, currentlyUnavailable, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }} />
     </div>
     {selection.intent === 'manual' && selection.dieIds.length > 0 && !availability.hasExactHand && <Text size="xs" c="orange" className="scorecard-hint">
       {board.boss?.type === 'hexer' ? 'This selection does not form a hand with the Cursed Die.' : 'Selected dice do not form one complete available hand.'}

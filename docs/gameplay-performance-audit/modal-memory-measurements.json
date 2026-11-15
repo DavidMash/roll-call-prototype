@@ -1,0 +1,18 @@
+{
+  "cycles": 60,
+  "elapsedMs": 27984.3155,
+  "snapshots": [
+    {
+      "cycles": 0,
+      "heapBytes": 6240700
+    },
+    {
+      "cycles": 30,
+      "heapBytes": 7808640
+    },
+    {
+      "cycles": 60,
+      "heapBytes": 8136220
+    }
+  ]
+}

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createCursedDie } from './bosses';
 import { newRun } from './engine';
 import {
-  boardHandAvailable, emptySelection, hasLegalCombination, legalHandCombinations, selectBoardHand, toggleBoardDie,
+  boardHandAvailable, emptySelection, hasLegalCombination, legalHandCombinations, normalizeBoardSelection,
+  selectBoardHand, toggleBoardDie,
 } from './selection';
 import type { Selection } from './selection';
 import type { GameState, Rank } from './types';
@@ -116,6 +117,18 @@ describe('board-based hand availability and scorecard cycling', () => {
 });
 
 describe('manual dice -> hand selection', () => {
+  it('normalizes and toggles exact selections without invoking ranked score previews', () => {
+    const state = game([2, 2, 4, 5, 6]);
+    Object.defineProperty(state, 'score', { configurable: true,
+      get: () => { throw new Error('canonical preview reached'); } });
+    expect(normalizeBoardSelection(state, { dieIds: [0, 1], hand: 'pair', intent: 'manual' }))
+      .toMatchObject({ dieIds: [0, 1], hand: 'pair' });
+    expect(normalizeBoardSelection(state, { dieIds: [0, 2], hand: 'pair', intent: 'manual' }))
+      .toMatchObject({ dieIds: [0, 2], hand: null });
+    expect(toggleBoardDie(state, { dieIds: [0], hand: 'twos', intent: 'manual' }, 1))
+      .toMatchObject({ dieIds: [0, 1], hand: 'twos', intent: 'manual' });
+  });
+
   it('infers one exact hand, preserves a valid current hand, and leaves ambiguity unresolved', () => {
     const state = game([2, 2, 4, 5, 6]);
     const sixes = toggleBoardDie(state, emptySelection(), 4);
@@ -135,6 +148,16 @@ describe('manual dice -> hand selection', () => {
     let selection = toggleBoardDie(state, emptySelection(), 0);
     selection = toggleBoardDie(state, selection, 4);
     expect(selection).toMatchObject({ dieIds: [0, 4], hand: null, intent: 'manual' });
+  });
+
+  it('infers a special-die-qualified hand with the same exact predicate', () => {
+    const state = game([1, 2, 3, 6, 6]);
+    rosterDice(state)[3].effects = [createDieEffect(rosterDice(state)[3].id, 'missingLink')];
+    syncActiveDiceProjection(state);
+    state.dieRoundState = resetDieRoundState(rosterDice(state));
+    let selection: Selection = { dieIds: [0, 1, 2], hand: null, intent: 'manual' };
+    selection = toggleBoardDie(state, selection, 3);
+    expect(selection).toMatchObject({ dieIds: [0, 1, 2, 3], hand: 'smallStraight', intent: 'manual' });
   });
 });
 

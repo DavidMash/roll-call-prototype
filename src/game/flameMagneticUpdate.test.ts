@@ -46,6 +46,15 @@ describe('Speed Demon', () => {
     expect(speedDemonMultiplier(0, 0)).toBe(1);
   });
 
+  it('keeps exact qualification behavior at both timing boundaries', () => {
+    expect(speedDemonMultiplier(100, 999)).toBe(4);
+    expect(speedDemonMultiplier(100, 1000)).toBe(4);
+    expect(speedDemonMultiplier(100, 1001)).toBeLessThan(4);
+    expect(speedDemonMultiplier(100, 4999)).toBeGreaterThan(1);
+    expect(speedDemonMultiplier(100, 5000)).toBe(1);
+    expect(speedDemonMultiplier(100, 5001)).toBe(1);
+  });
+
   it('counts only unblocked time and freezes the exact Play-time snapshot', () => {
     const timer = new DecisionTimer();
     timer.reset(100);

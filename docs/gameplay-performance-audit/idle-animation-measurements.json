@@ -1,0 +1,24 @@
+{
+  "rows": [
+    {
+      "speedDemon": false,
+      "observationMs": 2000,
+      "taskMs": 2.0589999999999997,
+      "scriptMs": 0.089,
+      "layoutMs": 0,
+      "styleMs": 0,
+      "layoutCount": 0,
+      "styleCount": 0
+    },
+    {
+      "speedDemon": true,
+      "observationMs": 2000,
+      "taskMs": 155.383,
+      "scriptMs": 123.59,
+      "layoutMs": 1.611,
+      "styleMs": 6.849,
+      "layoutCount": 8,
+      "styleCount": 44
+    }
+  ]
+}

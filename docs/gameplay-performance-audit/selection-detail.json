@@ -1,0 +1,423 @@
+{
+  "clickReturnMs": 177.41750000000002,
+  "taskMs": 133.13,
+  "scriptMs": 117.88,
+  "layoutMs": 3.2520000000000002,
+  "styleMs": 2.508,
+  "layoutCount": 1,
+  "styleCount": 11,
+  "commits": [
+    {
+      "at": 290.69999998807907,
+      "rootDuration": 0,
+      "fibers": [
+        {
+          "name": "@mantine/core/MantineProvider",
+          "actualDuration": 0,
+          "flags": 12582912
+        },
+        {
+          "name": "@mantine/CssVariables",
+          "actualDuration": 0,
+          "flags": 1310720
+        },
+        {
+          "name": "vn",
+          "actualDuration": 0,
+          "flags": 1310720
+        },
+        {
+          "name": "TM",
+          "actualDuration": 0,
+          "flags": 13631489
+        },
+        {
+          "name": "@mantine/core/Container",
+          "actualDuration": 0,
+          "flags": 524289
+        },
+        {
+          "name": "@mantine/core/Box",
+          "actualDuration": 0,
+          "flags": 524289
+        },
+        {
+          "name": "Gn",
+          "actualDuration": 0,
+          "flags": 1572865
+        },
+        {
+          "name": "style",
+          "actualDuration": 0,
+          "flags": 4
+        },
+        {
+          "name": "div",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "yO",
+          "actualDuration": 0,
+          "flags": 1048577
+        },
+        {
+          "name": "@mantine/core/Box",
+          "actualDuration": 0,
+          "flags": 1572865
+        },
+        {
+          "name": "header",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "@mantine/core/Group",
+          "actualDuration": 0,
+          "flags": 1572865
+        },
+        {
+          "name": "@mantine/core/Box",
+          "actualDuration": 0,
+          "flags": 524289
+        },
+        {
+          "name": "div",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "@mantine/core/Text",
+          "actualDuration": 0,
+          "flags": 1572865
+        },
+        {
+          "name": "@mantine/core/Box",
+          "actualDuration": 0,
+          "flags": 524289
+        },
+        {
+          "name": "p",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "@mantine/core/Group",
+          "actualDuration": 0,
+          "flags": 1572865
+        },
+        {
+          "name": "@mantine/core/Box",
+          "actualDuration": 0,
+          "flags": 524289
+        },
+        {
+          "name": "div",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "div",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "strong",
+          "actualDuration": 0,
+          "flags": 4
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "vO",
+          "actualDuration": 0,
+          "flags": 1048577
+        },
+        {
+          "name": "div",
+          "actualDuration": 0,
+          "flags": 4
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "strong",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "SD",
+          "actualDuration": 0,
+          "flags": 1
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 4
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "vO",
+          "actualDuration": 0,
+          "flags": 1048577
+        },
+        {
+          "name": "div",
+          "actualDuration": 0,
+          "flags": 4
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "strong",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "SD",
+          "actualDuration": 0,
+          "flags": 1
+        }
+      ]
+    },
+    {
+      "at": 297.89999997615814,
+      "rootDuration": 0,
+      "fibers": [
+        {
+          "name": "@mantine/core/MantineProvider",
+          "actualDuration": 0,
+          "flags": 12582912
+        },
+        {
+          "name": "@mantine/CssVariables",
+          "actualDuration": 0,
+          "flags": 1310720
+        },
+        {
+          "name": "vn",
+          "actualDuration": 0,
+          "flags": 1310720
+        },
+        {
+          "name": "TM",
+          "actualDuration": 0,
+          "flags": 13893632
+        },
+        {
+          "name": "@mantine/core/Container",
+          "actualDuration": 0,
+          "flags": 524289
+        },
+        {
+          "name": "@mantine/core/Box",
+          "actualDuration": 0,
+          "flags": 524289
+        },
+        {
+          "name": "Gn",
+          "actualDuration": 0,
+          "flags": 1572865
+        },
+        {
+          "name": "style",
+          "actualDuration": 0,
+          "flags": 4
+        },
+        {
+          "name": "div",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "yO",
+          "actualDuration": 0,
+          "flags": 1048577
+        },
+        {
+          "name": "@mantine/core/Box",
+          "actualDuration": 0,
+          "flags": 1572865
+        },
+        {
+          "name": "header",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "@mantine/core/Group",
+          "actualDuration": 0,
+          "flags": 1572865
+        },
+        {
+          "name": "@mantine/core/Box",
+          "actualDuration": 0,
+          "flags": 524289
+        },
+        {
+          "name": "div",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "@mantine/core/Text",
+          "actualDuration": 0,
+          "flags": 1572865
+        },
+        {
+          "name": "@mantine/core/Box",
+          "actualDuration": 0,
+          "flags": 524289
+        },
+        {
+          "name": "p",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "@mantine/core/Group",
+          "actualDuration": 0,
+          "flags": 1572865
+        },
+        {
+          "name": "@mantine/core/Box",
+          "actualDuration": 0,
+          "flags": 524289
+        },
+        {
+          "name": "div",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "div",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "strong",
+          "actualDuration": 0,
+          "flags": 4
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "vO",
+          "actualDuration": 0,
+          "flags": 1048577
+        },
+        {
+          "name": "div",
+          "actualDuration": 0,
+          "flags": 4
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "strong",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "SD",
+          "actualDuration": 0,
+          "flags": 1
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 4
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "vO",
+          "actualDuration": 0,
+          "flags": 1048577
+        },
+        {
+          "name": "div",
+          "actualDuration": 0,
+          "flags": 4
+        },
+        {
+          "name": "span",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "strong",
+          "actualDuration": 0,
+          "flags": 1048580
+        },
+        {
+          "name": "SD",
+          "actualDuration": 0,
+          "flags": 1
+        }
+      ]
+    }
+  ]
+}

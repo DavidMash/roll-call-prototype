@@ -1,7 +1,7 @@
 import { ActionIcon, Badge, Box, Button, Divider, Drawer, Group, Progress, SegmentedControl, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
-import type { Board, GameEvent } from '../game/types';
+import type { Board, FlameInstance, GameEvent } from '../game/types';
 import { flameInstances, FLAMES, FLAME_SLOT_COUNT } from '../game/flames';
 import type { PlaybackSpeed } from '../useGame';
 import type { DiceDisplay } from '../uiSettings';
@@ -12,7 +12,8 @@ import type { FlameDetailsTarget } from './FlameDetailsModal';
 import { infernoRoman } from '../game/engulfment';
 import { exactRatioNumber } from '../game/scoreMath';
 import { CurrencyAmount, type Currency } from './CurrencyAmount';
-import type { FlamePresentation } from '../game/flamePresentation';
+import { withSpeedDemonDecisionTime, type FlamePresentation } from '../game/flamePresentation';
+import type { DecisionTimer } from '../game/decisionTimer';
 
 const CONTEXTUAL_FLAME_TYPES = new Set<string>([
   'burnItDown', 'greaseTheEngine', 'lightningStrike', 'dareDevil', 'allIn', 'bribery',
@@ -26,10 +27,53 @@ function HudStat({ testId, currency, label, value }: { testId: string; currency:
   </div>;
 }
 
-export function TopHud({ board, event, flamePresentation = [], speed, setSpeed, diceDisplay, setDiceDisplay, openRunInfo, openHelp, openRestoreLives, openFlameDetails, returnToTitle, onMenuOpenChange }: {
+interface FlameBadgeProps {
+  flame: FlameInstance;
+  presentation?: FlamePresentation;
+  resolved: { text: string; eventId: number } | null;
+  openFlameDetails: (target: FlameDetailsTarget) => void;
+}
+
+function FlameBadgeView({ flame, presentation, resolved, openFlameDetails }: FlameBadgeProps) {
+  const state = presentation?.state ?? 'normal';
+  return <span className="flame-badge-wrap" style={{ '--flame-progress': presentation?.progress ?? 0 } as CSSProperties}>
+    <Badge component="button" type="button" data-testid={`active-flame-${flame.instanceId}`}
+      data-flame-state={state} data-flame-progress={presentation?.progress} size="xs"
+      color={flame.stage === 'bonfire' ? 'red' : 'orange'} variant="light"
+      className={`flame-detail-trigger flame-state-${state}`}
+      aria-label={`View ${FLAMES[flame.type].name} ${flame.stage} details. ${presentation?.accessibleLabel ?? 'Normal'}`}
+      onClick={() => openFlameDetails({ flameInstanceId: flame.instanceId, kind: flame.stage })}>
+      <span>🔥 {FLAMES[flame.type].shortName}</span>
+      {presentation?.statusText && !CONTEXTUAL_FLAME_TYPES.has(flame.type)
+        && <span className="flame-badge-status">{presentation.statusText}</span>}
+    </Badge>
+    {resolved && <span key={`${resolved.eventId}:${flame.instanceId}`} className="resolution-pop flame-resolution-pop"
+      role="status" aria-live="polite">{resolved.text}</span>}
+  </span>;
+}
+
+/** Owns the frequent visual clock update so it cannot invalidate TopHud or RoundScreen. */
+function SpeedDemonFlameBadge({ flame, presentation, resolved, openFlameDetails, decisionTimer, decisionId }:
+  FlameBadgeProps & { decisionTimer: DecisionTimer; decisionId: number }) {
+  const [decisionMs, setDecisionMs] = useState(() => decisionTimer.elapsed(performance.now()));
+  useEffect(() => {
+    const update = () => setDecisionMs(decisionTimer.elapsed(performance.now()));
+    const frame = window.requestAnimationFrame(update);
+    const interval = window.setInterval(update, 50);
+    return () => { window.cancelAnimationFrame(frame); window.clearInterval(interval); };
+  }, [decisionTimer, decisionId]);
+  const base = presentation ?? { instanceId: flame.instanceId, flame: flame.type, state: 'normal',
+    accessibleLabel: `${FLAMES.speedDemon.name}: normal` };
+  return <FlameBadgeView flame={flame}
+    presentation={withSpeedDemonDecisionTime(base, flame.investedGold, decisionMs)}
+    resolved={resolved} openFlameDetails={openFlameDetails} />;
+}
+
+export function TopHud({ board, event, flamePresentation = [], decisionTimer, speed, setSpeed, diceDisplay, setDiceDisplay, openRunInfo, openHelp, openRestoreLives, openFlameDetails, returnToTitle, onMenuOpenChange }: {
   board: Board;
   event?: GameEvent | null;
   flamePresentation?: FlamePresentation[];
+  decisionTimer?: DecisionTimer;
   speed: PlaybackSpeed;
   setSpeed: (speed: PlaybackSpeed) => void;
   diceDisplay: DiceDisplay;
@@ -102,6 +146,9 @@ export function TopHud({ board, event, flamePresentation = [], speed, setSpeed, 
         const presentation = presentationByInstance.get(flame.instanceId);
         const state = presentation?.state ?? 'normal';
         const resolved = resolvedContribution(flame.instanceId, flame.type);
+        if (flame.type === 'speedDemon' && board.phase === 'round' && decisionTimer) return [<SpeedDemonFlameBadge
+          key={flame.instanceId} flame={flame} presentation={presentation} resolved={resolved}
+          openFlameDetails={openFlameDetails} decisionTimer={decisionTimer} decisionId={board.decisionId} />];
         return [<span className="flame-badge-wrap" key={flame.instanceId}
           style={{ '--flame-progress': presentation?.progress ?? 0 } as CSSProperties}>
           <Badge component="button" type="button" data-testid={`active-flame-${flame.instanceId}`}

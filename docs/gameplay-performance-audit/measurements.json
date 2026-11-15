@@ -1,0 +1,710 @@
+{
+  "generatedAt": "2026-11-15T02:52:00.135Z",
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+  "results": [
+    {
+      "interaction": "select die",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 123.40740000000005,
+          "inputToFeedbackMs": 123.40740000000005,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 123.40740000000005,
+          "domMutations": 0,
+          "longTasks": [
+            {
+              "startTime": 1024.7427,
+              "duration": 123.40740000000005
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 123.40740000000005,
+          "scriptMs": 123.40740000000005
+        },
+        {
+          "inputToFirstMutationMs": 16.02890000000002,
+          "inputToFeedbackMs": 16.02890000000002,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 16.02890000000002,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 16.02890000000002,
+          "scriptMs": 16.02890000000002
+        },
+        {
+          "inputToFirstMutationMs": 103.27070000000003,
+          "inputToFeedbackMs": 103.27070000000003,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 103.27070000000003,
+          "domMutations": 0,
+          "longTasks": [
+            {
+              "startTime": 1688.1793,
+              "duration": 103.27070000000003
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 103.27070000000003,
+          "scriptMs": 103.27070000000003
+        }
+      ]
+    },
+    {
+      "interaction": "deselect die",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 27.909100000000308,
+          "inputToFeedbackMs": 27.909100000000308,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 27.909100000000308,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 27.909100000000308,
+          "scriptMs": 27.909100000000308
+        },
+        {
+          "inputToFirstMutationMs": 92.60799999999972,
+          "inputToFeedbackMs": 92.60799999999972,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 92.60799999999972,
+          "domMutations": 0,
+          "longTasks": [
+            {
+              "startTime": 2337.6669,
+              "duration": 92.60799999999972
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 92.60799999999972,
+          "scriptMs": 92.60799999999972
+        },
+        {
+          "inputToFirstMutationMs": 19.63460000000032,
+          "inputToFeedbackMs": 19.63460000000032,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 19.63460000000032,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 19.63460000000032,
+          "scriptMs": 19.63460000000032
+        }
+      ]
+    },
+    {
+      "interaction": "normal manual reroll",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 48.10179999999991,
+          "inputToFeedbackMs": 48.10179999999991,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 48.10179999999991,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 48.10179999999991,
+          "scriptMs": 48.10179999999991
+        },
+        {
+          "inputToFirstMutationMs": 40.73459999999977,
+          "inputToFeedbackMs": 40.73459999999977,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 40.73459999999977,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 40.73459999999977,
+          "scriptMs": 40.73459999999977
+        },
+        {
+          "inputToFirstMutationMs": 46.104700000001685,
+          "inputToFeedbackMs": 46.104700000001685,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 46.104700000001685,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 46.104700000001685,
+          "scriptMs": 46.104700000001685
+        }
+      ]
+    },
+    {
+      "interaction": "Flywheel-assisted reroll",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 45.02570000000014,
+          "inputToFeedbackMs": 45.02570000000014,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 45.02570000000014,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 45.02570000000014,
+          "scriptMs": 45.02570000000014
+        },
+        {
+          "inputToFirstMutationMs": 42.27240000000165,
+          "inputToFeedbackMs": 42.27240000000165,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 42.27240000000165,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 42.27240000000165,
+          "scriptMs": 42.27240000000165
+        },
+        {
+          "inputToFirstMutationMs": 48.97049999999945,
+          "inputToFeedbackMs": 48.97049999999945,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 48.97049999999945,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 48.97049999999945,
+          "scriptMs": 48.97049999999945
+        }
+      ]
+    },
+    {
+      "interaction": "open Lightning Strike",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 191.59170000000086,
+          "inputToFeedbackMs": 191.59170000000086,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 191.59170000000086,
+          "domMutations": 0,
+          "longTasks": [
+            {
+              "startTime": 23605.4303,
+              "duration": 191.59170000000086
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 191.59170000000086,
+          "scriptMs": 191.59170000000086
+        },
+        {
+          "inputToFirstMutationMs": 153.63660000000164,
+          "inputToFeedbackMs": 153.63660000000164,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 153.63660000000164,
+          "domMutations": 0,
+          "longTasks": [
+            {
+              "startTime": 24564.2397,
+              "duration": 153.63660000000164
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 153.63660000000164,
+          "scriptMs": 153.63660000000164
+        },
+        {
+          "inputToFirstMutationMs": 176.1790000000001,
+          "inputToFeedbackMs": 176.1790000000001,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 176.1790000000001,
+          "domMutations": 0,
+          "longTasks": [
+            {
+              "startTime": 25462.9068,
+              "duration": 176.1790000000001
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 176.1790000000001,
+          "scriptMs": 176.1790000000001
+        }
+      ]
+    },
+    {
+      "interaction": "confirm Lightning Strike",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 42.10009999999966,
+          "inputToFeedbackMs": 42.10009999999966,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 42.10009999999966,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 42.10009999999966,
+          "scriptMs": 42.10009999999966
+        },
+        {
+          "inputToFirstMutationMs": 265.8626000000004,
+          "inputToFeedbackMs": 265.8626000000004,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 265.8626000000004,
+          "domMutations": 0,
+          "longTasks": [
+            {
+              "startTime": 30322.3105,
+              "duration": 265.8626000000004
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 265.8626000000004,
+          "scriptMs": 265.8626000000004
+        },
+        {
+          "inputToFirstMutationMs": 34.973400000002584,
+          "inputToFeedbackMs": 34.973400000002584,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 34.973400000002584,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 34.973400000002584,
+          "scriptMs": 34.973400000002584
+        }
+      ]
+    },
+    {
+      "interaction": "normal Hand play",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 44.25140000000101,
+          "inputToFeedbackMs": 44.25140000000101,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 44.25140000000101,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 44.25140000000101,
+          "scriptMs": 44.25140000000101
+        },
+        {
+          "inputToFirstMutationMs": 51.27769999999873,
+          "inputToFeedbackMs": 51.27769999999873,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 51.27769999999873,
+          "domMutations": 0,
+          "longTasks": [
+            {
+              "startTime": 40864.3543,
+              "duration": 51.27769999999873
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 51.27769999999873,
+          "scriptMs": 51.27769999999873
+        },
+        {
+          "inputToFirstMutationMs": 35.80460000000312,
+          "inputToFeedbackMs": 35.80460000000312,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 35.80460000000312,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 35.80460000000312,
+          "scriptMs": 35.80460000000312
+        }
+      ]
+    },
+    {
+      "interaction": "multi-Flame multi-effect Hand play",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 61.2986000000019,
+          "inputToFeedbackMs": 61.2986000000019,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 61.2986000000019,
+          "domMutations": 0,
+          "longTasks": [
+            {
+              "startTime": 47553.184,
+              "duration": 61.2986000000019
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 61.2986000000019,
+          "scriptMs": 61.2986000000019
+        },
+        {
+          "inputToFirstMutationMs": 48.2300000000032,
+          "inputToFeedbackMs": 48.2300000000032,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 48.2300000000032,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 48.2300000000032,
+          "scriptMs": 48.2300000000032
+        },
+        {
+          "inputToFirstMutationMs": 47.754000000000815,
+          "inputToFeedbackMs": 47.754000000000815,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 47.754000000000815,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 47.754000000000815,
+          "scriptMs": 47.754000000000815
+        }
+      ]
+    },
+    {
+      "interaction": "Round Summary to Shop",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 34.80539999999746,
+          "inputToFeedbackMs": 34.80539999999746,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 34.80539999999746,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 34.80539999999746,
+          "scriptMs": 34.80539999999746
+        },
+        {
+          "inputToFirstMutationMs": 24.86779999999999,
+          "inputToFeedbackMs": 24.86779999999999,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 24.86779999999999,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 24.86779999999999,
+          "scriptMs": 24.86779999999999
+        },
+        {
+          "inputToFirstMutationMs": 42.83400000000256,
+          "inputToFeedbackMs": 42.83400000000256,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 42.83400000000256,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 42.83400000000256,
+          "scriptMs": 42.83400000000256
+        }
+      ]
+    },
+    {
+      "interaction": "Shop stage navigation",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 111.09680000000662,
+          "inputToFeedbackMs": 111.09680000000662,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 111.09680000000662,
+          "domMutations": 0,
+          "longTasks": [
+            {
+              "startTime": 58825.4097,
+              "duration": 111.09680000000662
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 111.09680000000662,
+          "scriptMs": 111.09680000000662
+        },
+        {
+          "inputToFirstMutationMs": 33.66670000000158,
+          "inputToFeedbackMs": 33.66670000000158,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 33.66670000000158,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 33.66670000000158,
+          "scriptMs": 33.66670000000158
+        },
+        {
+          "inputToFirstMutationMs": 41.37190000000555,
+          "inputToFeedbackMs": 41.37190000000555,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 41.37190000000555,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 41.37190000000555,
+          "scriptMs": 41.37190000000555
+        }
+      ]
+    },
+    {
+      "interaction": "open Shop die management",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 39.33009999999922,
+          "inputToFeedbackMs": 39.33009999999922,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 39.33009999999922,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 39.33009999999922,
+          "scriptMs": 39.33009999999922
+        },
+        {
+          "inputToFirstMutationMs": 31.28399999999965,
+          "inputToFeedbackMs": 31.28399999999965,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 31.28399999999965,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 31.28399999999965,
+          "scriptMs": 31.28399999999965
+        },
+        {
+          "inputToFirstMutationMs": 32.29740000000311,
+          "inputToFeedbackMs": 32.29740000000311,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 32.29740000000311,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 32.29740000000311,
+          "scriptMs": 32.29740000000311
+        }
+      ]
+    },
+    {
+      "interaction": "manual reroll after archived actions",
+      "environment": "0 IndexedDB ledger chunks",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 42.07540000000154,
+          "inputToFeedbackMs": 42.07540000000154,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 42.07540000000154,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 42.07540000000154,
+          "scriptMs": 42.07540000000154
+        },
+        {
+          "inputToFirstMutationMs": 45.85709999999381,
+          "inputToFeedbackMs": 45.85709999999381,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 45.85709999999381,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 45.85709999999381,
+          "scriptMs": 45.85709999999381
+        },
+        {
+          "inputToFirstMutationMs": 37.05019999999786,
+          "inputToFeedbackMs": 37.05019999999786,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 37.05019999999786,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 37.05019999999786,
+          "scriptMs": 37.05019999999786
+        }
+      ]
+    },
+    {
+      "interaction": "manual reroll after archived actions",
+      "environment": "200 IndexedDB ledger chunks",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 42.29159999999683,
+          "inputToFeedbackMs": 42.29159999999683,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 42.29159999999683,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 42.29159999999683,
+          "scriptMs": 42.29159999999683
+        },
+        {
+          "inputToFirstMutationMs": 42.260800000003655,
+          "inputToFeedbackMs": 42.260800000003655,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 42.260800000003655,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 42.260800000003655,
+          "scriptMs": 42.260800000003655
+        },
+        {
+          "inputToFirstMutationMs": 40.125499999994645,
+          "inputToFeedbackMs": 40.125499999994645,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 40.125499999994645,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 40.125499999994645,
+          "scriptMs": 40.125499999994645
+        }
+      ]
+    },
+    {
+      "interaction": "manual reroll after archived actions",
+      "environment": "1000 IndexedDB ledger chunks",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 30.45440000000235,
+          "inputToFeedbackMs": 30.45440000000235,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 30.45440000000235,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 30.45440000000235,
+          "scriptMs": 30.45440000000235
+        },
+        {
+          "inputToFirstMutationMs": 37.57530000001134,
+          "inputToFeedbackMs": 37.57530000001134,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 37.57530000001134,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 37.57530000001134,
+          "scriptMs": 37.57530000001134
+        },
+        {
+          "inputToFirstMutationMs": 32.876799999998184,
+          "inputToFeedbackMs": 32.876799999998184,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 32.876799999998184,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 32.876799999998184,
+          "scriptMs": 32.876799999998184
+        }
+      ]
+    },
+    {
+      "interaction": "select die",
+      "environment": "mobile 360x740, 4x CPU throttle",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 566.1606000000029,
+          "inputToFeedbackMs": 566.1606000000029,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 566.1606000000029,
+          "domMutations": 0,
+          "longTasks": [
+            {
+              "startTime": 92648.2314,
+              "duration": 566.1606000000029
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 566.1606000000029,
+          "scriptMs": 566.1606000000029
+        },
+        {
+          "inputToFirstMutationMs": 582.2880000000005,
+          "inputToFeedbackMs": 582.2880000000005,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 582.2880000000005,
+          "domMutations": 0,
+          "longTasks": [
+            {
+              "startTime": 93975.2629,
+              "duration": 582.2880000000005
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 582.2880000000005,
+          "scriptMs": 582.2880000000005
+        },
+        {
+          "inputToFirstMutationMs": 551.4971000000078,
+          "inputToFeedbackMs": 551.4971000000078,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 551.4971000000078,
+          "domMutations": 0,
+          "longTasks": [
+            {
+              "startTime": 95365.0851,
+              "duration": 551.4971000000078
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 551.4971000000078,
+          "scriptMs": 551.4971000000078
+        }
+      ]
+    },
+    {
+      "interaction": "normal manual reroll",
+      "environment": "mobile 360x740, 4x CPU throttle",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 123.11320000000705,
+          "inputToFeedbackMs": 123.11320000000705,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 123.11320000000705,
+          "domMutations": 0,
+          "longTasks": [
+            {
+              "startTime": 97224.5682,
+              "duration": 123.11320000000705
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 123.11320000000705,
+          "scriptMs": 123.11320000000705
+        },
+        {
+          "inputToFirstMutationMs": 99.9936999999918,
+          "inputToFeedbackMs": 99.9936999999918,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 99.9936999999918,
+          "domMutations": 0,
+          "longTasks": [
+            {
+              "startTime": 101430.8714,
+              "duration": 99.9936999999918
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 99.9936999999918,
+          "scriptMs": 99.9936999999918
+        },
+        {
+          "inputToFirstMutationMs": 99.94920000000275,
+          "inputToFeedbackMs": 99.94920000000275,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 99.94920000000275,
+          "domMutations": 0,
+          "longTasks": [
+            {
+              "startTime": 105568.9803,
+              "duration": 99.94920000000275
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 99.94920000000275,
+          "scriptMs": 99.94920000000275
+        }
+      ]
+    }
+  ]
+}

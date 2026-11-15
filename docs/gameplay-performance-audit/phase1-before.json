@@ -1,0 +1,2297 @@
+{
+  "generatedAt": "2026-11-15T03:17:34.853Z",
+  "phase": "before",
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+  "measurementNotes": "inputToFeedbackMs is Playwright click round-trip; task/script/layout/style are Chrome process deltas over the click plus settle window.",
+  "rows": [
+    {
+      "interaction": "select die",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 142.61929999999984,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 217.61929999999984,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 136.059,
+          "scriptMs": 122.81400000000001,
+          "layoutMs": 2.353,
+          "styleMs": 1.6039999999999999,
+          "layoutCount": 1,
+          "styleCount": 8,
+          "heapDeltaKb": 936.56640625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 332.2473,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 407.2473,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 107.024,
+          "scriptMs": 88.942,
+          "layoutMs": 0.494,
+          "styleMs": 2.081,
+          "layoutCount": 2,
+          "styleCount": 19,
+          "heapDeltaKb": 4019.82421875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 348.5516,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 423.5516,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 120.07100000000001,
+          "scriptMs": 102.343,
+          "layoutMs": 0.5289999999999999,
+          "styleMs": 1.883,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": -5023.71484375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 320.4641999999999,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 395.4641999999999,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 90.501,
+          "scriptMs": 73.967,
+          "layoutMs": 0.457,
+          "styleMs": 1.8339999999999999,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 1583.08203125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 322.2145999999998,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 397.2145999999998,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 95.094,
+          "scriptMs": 77.60799999999999,
+          "layoutMs": 0.499,
+          "styleMs": 2.056,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 943.02734375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 332.68939999999975,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 407.68939999999975,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 116.86300000000001,
+          "scriptMs": 88.327,
+          "layoutMs": 0.47,
+          "styleMs": 2.163,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": -15517.06640625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 333.02880000000005,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 408.02880000000005,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 105.05199999999999,
+          "scriptMs": 87.881,
+          "layoutMs": 0.48700000000000004,
+          "styleMs": 1.813,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": -875.59765625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 353.54039999999986,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 428.54039999999986,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 125.35199999999999,
+          "scriptMs": 108.253,
+          "layoutMs": 0.484,
+          "styleMs": 1.98,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 7490.50390625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 319.3123999999998,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 394.3123999999998,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 91.001,
+          "scriptMs": 75.452,
+          "layoutMs": 0.451,
+          "styleMs": 1.766,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": -8468.76953125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 319.7440999999999,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 394.7440999999999,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 89.515,
+          "scriptMs": 74.409,
+          "layoutMs": 0.45,
+          "styleMs": 1.754,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 7534.359375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 323.70600000000013,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 398.70600000000013,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 93.44999999999999,
+          "scriptMs": 77.496,
+          "layoutMs": 0.47100000000000003,
+          "styleMs": 1.761,
+          "layoutCount": 2,
+          "styleCount": 19,
+          "heapDeltaKb": -8958.27734375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 319.7370000000001,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 394.7370000000001,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 90.431,
+          "scriptMs": 74.517,
+          "layoutMs": 0.46599999999999997,
+          "styleMs": 1.868,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 7356.86328125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 324.4831000000004,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 399.4831000000004,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 94.73500000000001,
+          "scriptMs": 77.64999999999999,
+          "layoutMs": 0.513,
+          "styleMs": 2.008,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": -9262.33203125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 324.8824999999997,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 399.8824999999997,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 98.944,
+          "scriptMs": 78.25999999999999,
+          "layoutMs": 0.458,
+          "styleMs": 1.841,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": -11721.4140625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 327.77299999999923,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 402.77299999999923,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 98.92799999999998,
+          "scriptMs": 81.943,
+          "layoutMs": 0.5289999999999999,
+          "styleMs": 1.946,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 8541.421875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 319.21380000000136,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 394.21380000000136,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 92.325,
+          "scriptMs": 74.737,
+          "layoutMs": 0.496,
+          "styleMs": 2.1519999999999997,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 6649.8046875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 319.7399000000005,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 394.7399000000005,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 95.28900000000002,
+          "scriptMs": 76.89999999999999,
+          "layoutMs": 0.47300000000000003,
+          "styleMs": 2.221,
+          "layoutCount": 2,
+          "styleCount": 19,
+          "heapDeltaKb": 6614.51171875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 350.4511999999995,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 425.4511999999995,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 119.781,
+          "scriptMs": 100.70800000000001,
+          "layoutMs": 0.45899999999999996,
+          "styleMs": 2.161,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": -20469.53515625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 318.3083999999999,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 393.3083999999999,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 113.599,
+          "scriptMs": 90.30000000000001,
+          "layoutMs": 0.5670000000000001,
+          "styleMs": 2.09,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": -4009.54296875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 328.3077999999987,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 403.3077999999987,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 99.553,
+          "scriptMs": 82.774,
+          "layoutMs": 0.433,
+          "styleMs": 1.907,
+          "layoutCount": 2,
+          "styleCount": 17,
+          "heapDeltaKb": 6593.94921875
+        }
+      ]
+    },
+    {
+      "interaction": "deselect die",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 229.28679999999986,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 304.28679999999986,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 21.733999999999998,
+          "scriptMs": 4.042,
+          "layoutMs": 0.36000000000000004,
+          "styleMs": 2.303,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 2114.59375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 229.77980000000025,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 304.77980000000025,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 20.240000000000002,
+          "scriptMs": 3.121,
+          "layoutMs": 0.35,
+          "styleMs": 2.2929999999999997,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 2130.12109375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 237.14730000000054,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 312.14730000000054,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 25.052,
+          "scriptMs": 3.856,
+          "layoutMs": 0.45399999999999996,
+          "styleMs": 2.234,
+          "layoutCount": 2,
+          "styleCount": 19,
+          "heapDeltaKb": -10540.9296875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 234.44040000000132,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 309.4404000000013,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 18.417999999999996,
+          "scriptMs": 3.025,
+          "layoutMs": 0.33599999999999997,
+          "styleMs": 1.9400000000000002,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 2117.08984375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 254.99379999999837,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 329.9937999999984,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 18.306,
+          "scriptMs": 3.1380000000000003,
+          "layoutMs": 0.37,
+          "styleMs": 1.898,
+          "layoutCount": 2,
+          "styleCount": 17,
+          "heapDeltaKb": 2100.734375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 257.8824999999997,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 332.8824999999997,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 21.744999999999997,
+          "scriptMs": 3.005,
+          "layoutMs": 0.332,
+          "styleMs": 2.417,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": -24251.546875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 229.90259999999944,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 304.90259999999944,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 22.197000000000003,
+          "scriptMs": 3.2070000000000003,
+          "layoutMs": 0.47600000000000003,
+          "styleMs": 2.3040000000000003,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 2086.25
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 235.6237000000001,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 310.6237000000001,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 24.119,
+          "scriptMs": 4.135,
+          "layoutMs": 0.322,
+          "styleMs": 2.786,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 2103.31640625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 229.3698000000004,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 304.3698000000004,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 20.724,
+          "scriptMs": 3.162,
+          "layoutMs": 0.39399999999999996,
+          "styleMs": 2.15,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 2085.671875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 235.09600000000137,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 310.09600000000137,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 20.547,
+          "scriptMs": 3.1020000000000003,
+          "layoutMs": 0.386,
+          "styleMs": 2.161,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": -25305.46875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 258.7413000000015,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 333.7413000000015,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 23.144000000000002,
+          "scriptMs": 3.487,
+          "layoutMs": 0.404,
+          "styleMs": 2.6519999999999997,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 2082.421875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 237.84889999999723,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 312.84889999999723,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 25.117,
+          "scriptMs": 3.934,
+          "layoutMs": 0.359,
+          "styleMs": 2.12,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": -35093.8125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 233.5485000000008,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 308.5485000000008,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 20.288,
+          "scriptMs": 3.117,
+          "layoutMs": 0.373,
+          "styleMs": 2.2079999999999997,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 2086.4921875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 238.2537999999986,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 313.2537999999986,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 20.910999999999998,
+          "scriptMs": 3.2239999999999998,
+          "layoutMs": 0.422,
+          "styleMs": 2.231,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 2076.4765625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 257.5820999999996,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 332.5820999999996,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 21.37,
+          "scriptMs": 3.316,
+          "layoutMs": 0.44,
+          "styleMs": 2.229,
+          "layoutCount": 2,
+          "styleCount": 17,
+          "heapDeltaKb": -23955.18359375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 234.5630999999994,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 309.5630999999994,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 21.208000000000002,
+          "scriptMs": 3.22,
+          "layoutMs": 0.373,
+          "styleMs": 2.153,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 2080.28515625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 259.3773999999976,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 334.3773999999976,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 25.056,
+          "scriptMs": 3.798,
+          "layoutMs": 0.365,
+          "styleMs": 3.04,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 2120.34375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 237.53559999999925,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 312.53559999999925,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 26.505,
+          "scriptMs": 4.271999999999999,
+          "layoutMs": 0.42700000000000005,
+          "styleMs": 3.265,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 2066.13671875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 234.8804999999993,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 309.8804999999993,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 22.091,
+          "scriptMs": 3.1180000000000003,
+          "layoutMs": 0.39599999999999996,
+          "styleMs": 2.497,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 2063.2578125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 233.81139999999868,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 308.8113999999987,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 24.225,
+          "scriptMs": 3.6830000000000003,
+          "layoutMs": 0.361,
+          "styleMs": 2.9160000000000004,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 2067.7265625
+        }
+      ]
+    },
+    {
+      "interaction": "select all five dice",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "inputToFirstMutationMs": 111.80000001192093,
+          "inputToFeedbackMs": 414.30000001192093,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 414.30000001192093,
+          "domMutations": 57,
+          "longTasks": [
+            {
+              "startTime": 83.30000001192093,
+              "duration": 107
+            },
+            {
+              "startTime": 198.89999997615814,
+              "duration": 61
+            },
+            {
+              "startTime": 266.5,
+              "duration": 53
+            },
+            {
+              "startTime": 334,
+              "duration": 58
+            },
+            {
+              "startTime": 401.69999998807907,
+              "duration": 55
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 366.85200000000003,
+          "scriptMs": 335.579,
+          "layoutMs": 3.655,
+          "styleMs": 2.347,
+          "layoutCount": 5,
+          "styleCount": 12,
+          "heapDeltaKb": -18985.15234375
+        },
+        {
+          "inputToFirstMutationMs": 107.89999997615814,
+          "inputToFeedbackMs": 433.30000001192093,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 433.30000001192093,
+          "domMutations": 57,
+          "longTasks": [
+            {
+              "startTime": 106.80000001192093,
+              "duration": 103
+            },
+            {
+              "startTime": 219,
+              "duration": 62
+            },
+            {
+              "startTime": 304.39999997615814,
+              "duration": 54
+            },
+            {
+              "startTime": 368.5,
+              "duration": 57
+            },
+            {
+              "startTime": 435.30000001192093,
+              "duration": 53
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 363.33299999999997,
+          "scriptMs": 332.248,
+          "layoutMs": 1.597,
+          "styleMs": 2.9099999999999997,
+          "layoutCount": 5,
+          "styleCount": 15,
+          "heapDeltaKb": 6888.1796875
+        },
+        {
+          "inputToFirstMutationMs": 113.20000004768372,
+          "inputToFeedbackMs": 427.5,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 427.5,
+          "domMutations": 57,
+          "longTasks": [
+            {
+              "startTime": 74.80000001192093,
+              "duration": 107
+            },
+            {
+              "startTime": 190.10000002384186,
+              "duration": 61
+            },
+            {
+              "startTime": 265.4000000357628,
+              "duration": 53
+            },
+            {
+              "startTime": 325.5,
+              "duration": 53
+            },
+            {
+              "startTime": 395.30000001192093,
+              "duration": 60
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 370.862,
+          "scriptMs": 336.275,
+          "layoutMs": 1.7129999999999999,
+          "styleMs": 2.548,
+          "layoutCount": 5,
+          "styleCount": 13,
+          "heapDeltaKb": -10927.6171875
+        },
+        {
+          "inputToFirstMutationMs": 111.30000001192093,
+          "inputToFeedbackMs": 412.2000000476837,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 412.2000000476837,
+          "domMutations": 57,
+          "longTasks": [
+            {
+              "startTime": 106.39999997615814,
+              "duration": 106
+            },
+            {
+              "startTime": 220.39999997615814,
+              "duration": 63
+            },
+            {
+              "startTime": 289.10000002384186,
+              "duration": 57
+            },
+            {
+              "startTime": 352.5,
+              "duration": 54
+            },
+            {
+              "startTime": 415.89999997615814,
+              "duration": 56
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 363.361,
+          "scriptMs": 338.457,
+          "layoutMs": 1.494,
+          "styleMs": 2.2569999999999997,
+          "layoutCount": 5,
+          "styleCount": 13,
+          "heapDeltaKb": 2202.68359375
+        },
+        {
+          "inputToFirstMutationMs": 112.69999998807907,
+          "inputToFeedbackMs": 412.19999998807907,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 412.19999998807907,
+          "domMutations": 57,
+          "longTasks": [
+            {
+              "startTime": 72.90000003576279,
+              "duration": 108
+            },
+            {
+              "startTime": 188,
+              "duration": 59
+            },
+            {
+              "startTime": 253.30000001192093,
+              "duration": 56
+            },
+            {
+              "startTime": 329.5,
+              "duration": 53
+            },
+            {
+              "startTime": 392.7000000476837,
+              "duration": 53
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 358.146,
+          "scriptMs": 332.10499999999996,
+          "layoutMs": 1.474,
+          "styleMs": 2.468,
+          "layoutCount": 5,
+          "styleCount": 11,
+          "heapDeltaKb": 7032.265625
+        },
+        {
+          "inputToFirstMutationMs": 119.69999998807907,
+          "inputToFeedbackMs": 478.19999998807907,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 478.19999998807907,
+          "domMutations": 57,
+          "longTasks": [
+            {
+              "startTime": 109.30000001192093,
+              "duration": 114
+            },
+            {
+              "startTime": 240,
+              "duration": 81
+            },
+            {
+              "startTime": 330.30000001192093,
+              "duration": 65
+            },
+            {
+              "startTime": 405.10000002384186,
+              "duration": 60
+            },
+            {
+              "startTime": 476.89999997615814,
+              "duration": 58
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 423.564,
+          "scriptMs": 381.653,
+          "layoutMs": 1.9949999999999999,
+          "styleMs": 2.494,
+          "layoutCount": 5,
+          "styleCount": 13,
+          "heapDeltaKb": -18095.83203125
+        },
+        {
+          "inputToFirstMutationMs": 132.29999995231628,
+          "inputToFeedbackMs": 458.69999998807907,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 458.69999998807907,
+          "domMutations": 57,
+          "longTasks": [
+            {
+              "startTime": 128.4000000357628,
+              "duration": 125
+            },
+            {
+              "startTime": 263.60000002384186,
+              "duration": 58
+            },
+            {
+              "startTime": 332,
+              "duration": 56
+            },
+            {
+              "startTime": 397.7000000476837,
+              "duration": 59
+            },
+            {
+              "startTime": 473.60000002384186,
+              "duration": 62
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 393.932,
+          "scriptMs": 362.182,
+          "layoutMs": 1.5,
+          "styleMs": 2.76,
+          "layoutCount": 5,
+          "styleCount": 15,
+          "heapDeltaKb": -534.8203125
+        },
+        {
+          "inputToFirstMutationMs": 129.39999997615814,
+          "inputToFeedbackMs": 502.39999997615814,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 502.39999997615814,
+          "domMutations": 57,
+          "longTasks": [
+            {
+              "startTime": 109.09999996423721,
+              "duration": 125
+            },
+            {
+              "startTime": 239.80000001192093,
+              "duration": 69
+            },
+            {
+              "startTime": 320.0999999642372,
+              "duration": 73
+            },
+            {
+              "startTime": 406.19999998807907,
+              "duration": 94
+            },
+            {
+              "startTime": 508.69999998807907,
+              "duration": 64
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 455.95199999999994,
+          "scriptMs": 425.879,
+          "layoutMs": 1.7730000000000001,
+          "styleMs": 2.6359999999999997,
+          "layoutCount": 5,
+          "styleCount": 10,
+          "heapDeltaKb": 6718.09765625
+        },
+        {
+          "inputToFirstMutationMs": 117.39999997615814,
+          "inputToFeedbackMs": 454.30000001192093,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 454.30000001192093,
+          "domMutations": 57,
+          "longTasks": [
+            {
+              "startTime": 102.80000001192093,
+              "duration": 113
+            },
+            {
+              "startTime": 226.39999997615814,
+              "duration": 61
+            },
+            {
+              "startTime": 299.69999998807907,
+              "duration": 61
+            },
+            {
+              "startTime": 369.30000001192093,
+              "duration": 58
+            },
+            {
+              "startTime": 448.89999997615814,
+              "duration": 61
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 388.467,
+          "scriptMs": 357.643,
+          "layoutMs": 2.099,
+          "styleMs": 2.892,
+          "layoutCount": 5,
+          "styleCount": 12,
+          "heapDeltaKb": 7353.63671875
+        },
+        {
+          "inputToFirstMutationMs": 124.10000002384186,
+          "inputToFeedbackMs": 445.9000000357628,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 445.9000000357628,
+          "domMutations": 57,
+          "longTasks": [
+            {
+              "startTime": 113.09999996423721,
+              "duration": 119
+            },
+            {
+              "startTime": 241.0999999642372,
+              "duration": 65
+            },
+            {
+              "startTime": 312.0999999642372,
+              "duration": 56
+            },
+            {
+              "startTime": 380.5,
+              "duration": 62
+            },
+            {
+              "startTime": 450.89999997615814,
+              "duration": 63
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 398.075,
+          "scriptMs": 368.39300000000003,
+          "layoutMs": 2.064,
+          "styleMs": 2.846,
+          "layoutCount": 5,
+          "styleCount": 11,
+          "heapDeltaKb": 1663.328125
+        },
+        {
+          "inputToFirstMutationMs": 119.20000004768372,
+          "inputToFeedbackMs": 442.2000000476837,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 442.2000000476837,
+          "domMutations": 57,
+          "longTasks": [
+            {
+              "startTime": 113.10000002384186,
+              "duration": 114
+            },
+            {
+              "startTime": 249.9000000357628,
+              "duration": 67
+            },
+            {
+              "startTime": 325.10000002384186,
+              "duration": 56
+            },
+            {
+              "startTime": 391,
+              "duration": 55
+            },
+            {
+              "startTime": 461.7000000476837,
+              "duration": 58
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 397.368,
+          "scriptMs": 352.56399999999996,
+          "layoutMs": 1.951,
+          "styleMs": 2.754,
+          "layoutCount": 5,
+          "styleCount": 14,
+          "heapDeltaKb": -63936.171875
+        },
+        {
+          "inputToFirstMutationMs": 119.09999996423721,
+          "inputToFeedbackMs": 426,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 426,
+          "domMutations": 57,
+          "longTasks": [
+            {
+              "startTime": 108.09999996423721,
+              "duration": 114
+            },
+            {
+              "startTime": 228.69999998807907,
+              "duration": 59
+            },
+            {
+              "startTime": 302.5,
+              "duration": 58
+            },
+            {
+              "startTime": 369.0999999642372,
+              "duration": 55
+            },
+            {
+              "startTime": 434,
+              "duration": 55
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 371.324,
+          "scriptMs": 344.051,
+          "layoutMs": 1.415,
+          "styleMs": 2.44,
+          "layoutCount": 5,
+          "styleCount": 16,
+          "heapDeltaKb": 6929.66015625
+        },
+        {
+          "inputToFirstMutationMs": 114.5,
+          "inputToFeedbackMs": 450.39999997615814,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 450.39999997615814,
+          "domMutations": 57,
+          "longTasks": [
+            {
+              "startTime": 79.19999998807907,
+              "duration": 107
+            },
+            {
+              "startTime": 194.30000001192093,
+              "duration": 63
+            },
+            {
+              "startTime": 277.80000001192093,
+              "duration": 57
+            },
+            {
+              "startTime": 343.80000001192093,
+              "duration": 60
+            },
+            {
+              "startTime": 414.30000001192093,
+              "duration": 59
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 382.16,
+          "scriptMs": 349.669,
+          "layoutMs": 2.242,
+          "styleMs": 3.2720000000000002,
+          "layoutCount": 5,
+          "styleCount": 14,
+          "heapDeltaKb": 1979.21875
+        },
+        {
+          "inputToFirstMutationMs": 115.09999996423721,
+          "inputToFeedbackMs": 445.39999997615814,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 445.39999997615814,
+          "domMutations": 57,
+          "longTasks": [
+            {
+              "startTime": 101,
+              "duration": 111
+            },
+            {
+              "startTime": 218.60000002384186,
+              "duration": 67
+            },
+            {
+              "startTime": 296.60000002384186,
+              "duration": 62
+            },
+            {
+              "startTime": 376.10000002384186,
+              "duration": 58
+            },
+            {
+              "startTime": 446,
+              "duration": 59
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 389.56,
+          "scriptMs": 359.402,
+          "layoutMs": 1.759,
+          "styleMs": 2.454,
+          "layoutCount": 5,
+          "styleCount": 12,
+          "heapDeltaKb": 7072.5859375
+        },
+        {
+          "inputToFirstMutationMs": 120.30000001192093,
+          "inputToFeedbackMs": 431.30000001192093,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 431.30000001192093,
+          "domMutations": 57,
+          "longTasks": [
+            {
+              "startTime": 105.5,
+              "duration": 116
+            },
+            {
+              "startTime": 229,
+              "duration": 63
+            },
+            {
+              "startTime": 302.89999997615814,
+              "duration": 55
+            },
+            {
+              "startTime": 369.89999997615814,
+              "duration": 59
+            },
+            {
+              "startTime": 437.5999999642372,
+              "duration": 59
+            }
+          ],
+          "timedOut": false,
+          "taskMs": 384.018,
+          "scriptMs": 355.23199999999997,
+          "layoutMs": 1.599,
+          "styleMs": 2.441,
+          "layoutCount": 5,
+          "styleCount": 11,
+          "heapDeltaKb": 3160.1171875
+        }
+      ]
+    },
+    {
+      "interaction": "select die with complex Flames",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 106.99339999999938,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 181.99339999999938,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 44.92099999999999,
+          "scriptMs": 22.747,
+          "layoutMs": 1.406,
+          "styleMs": 2.7950000000000004,
+          "layoutCount": 2,
+          "styleCount": 10,
+          "heapDeltaKb": -2170.75
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 43.60819999999876,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 118.60819999999876,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 39.159,
+          "scriptMs": 22.171,
+          "layoutMs": 0.665,
+          "styleMs": 3.056,
+          "layoutCount": 2,
+          "styleCount": 11,
+          "heapDeltaKb": 370.66796875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 46.22019999999975,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 121.22019999999975,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 38.799,
+          "scriptMs": 21.639,
+          "layoutMs": 0.652,
+          "styleMs": 2.643,
+          "layoutCount": 2,
+          "styleCount": 9,
+          "heapDeltaKb": -990.3828125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 48.875599999999395,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 123.8755999999994,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 30.296,
+          "scriptMs": 18.383,
+          "layoutMs": 0.641,
+          "styleMs": 2.2729999999999997,
+          "layoutCount": 2,
+          "styleCount": 10,
+          "heapDeltaKb": -2351.90625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 44.59109999999782,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 119.59109999999782,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 31.68,
+          "scriptMs": 18.672,
+          "layoutMs": 0.828,
+          "styleMs": 2.552,
+          "layoutCount": 2,
+          "styleCount": 9,
+          "heapDeltaKb": -796.17578125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 78.04909999999654,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 153.04909999999654,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 43.736,
+          "scriptMs": 28.878,
+          "layoutMs": 0.921,
+          "styleMs": 3.0109999999999997,
+          "layoutCount": 2,
+          "styleCount": 9,
+          "heapDeltaKb": -1583.0078125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 37.87299999999959,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 112.87299999999959,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 30.083,
+          "scriptMs": 16.316,
+          "layoutMs": 0.523,
+          "styleMs": 2.44,
+          "layoutCount": 2,
+          "styleCount": 10,
+          "heapDeltaKb": 372.78125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 43.61490000000049,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 118.61490000000049,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 29.219,
+          "scriptMs": 17.843,
+          "layoutMs": 0.508,
+          "styleMs": 2.315,
+          "layoutCount": 2,
+          "styleCount": 10,
+          "heapDeltaKb": -809.48828125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 38.61750000000029,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 113.61750000000029,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 29.225,
+          "scriptMs": 17.513,
+          "layoutMs": 0.57,
+          "styleMs": 2.3089999999999997,
+          "layoutCount": 2,
+          "styleCount": 10,
+          "heapDeltaKb": -2350.42578125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 32.714899999999034,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 107.71489999999903,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 29.138,
+          "scriptMs": 17.424,
+          "layoutMs": 0.585,
+          "styleMs": 2.39,
+          "layoutCount": 2,
+          "styleCount": 9,
+          "heapDeltaKb": -2285.66796875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 39.909099999997125,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 114.90909999999712,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 30.834999999999997,
+          "scriptMs": 17.034,
+          "layoutMs": 0.496,
+          "styleMs": 2.296,
+          "layoutCount": 2,
+          "styleCount": 9,
+          "heapDeltaKb": -646.94921875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 32.864599999993516,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 107.86459999999352,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 30.807,
+          "scriptMs": 17.645,
+          "layoutMs": 0.5419999999999999,
+          "styleMs": 2.2279999999999998,
+          "layoutCount": 2,
+          "styleCount": 10,
+          "heapDeltaKb": -1521.0234375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 39.04060000000027,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 114.04060000000027,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 32.078,
+          "scriptMs": 16.215,
+          "layoutMs": 0.562,
+          "styleMs": 2.3,
+          "layoutCount": 2,
+          "styleCount": 9,
+          "heapDeltaKb": 281.00390625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 43.24659999999858,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 118.24659999999858,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 36.689,
+          "scriptMs": 16.602,
+          "layoutMs": 0.638,
+          "styleMs": 2.4650000000000003,
+          "layoutCount": 2,
+          "styleCount": 10,
+          "heapDeltaKb": -819.24609375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 42.28899999999703,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 117.28899999999703,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 36.019000000000005,
+          "scriptMs": 18.166999999999998,
+          "layoutMs": 0.785,
+          "styleMs": 2.287,
+          "layoutCount": 2,
+          "styleCount": 9,
+          "heapDeltaKb": -2264.96875
+        }
+      ]
+    },
+    {
+      "interaction": "select die with Speed Demon",
+      "environment": "desktop production",
+      "samples": [
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 129.5210999999981,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 204.5210999999981,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 157.465,
+          "scriptMs": 146.458,
+          "layoutMs": 0.34299999999999997,
+          "styleMs": 1.4580000000000002,
+          "layoutCount": 1,
+          "styleCount": 11,
+          "heapDeltaKb": -5796.140625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 159.49839999999676,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 234.49839999999676,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 171.077,
+          "scriptMs": 149.621,
+          "layoutMs": 0.34600000000000003,
+          "styleMs": 1.349,
+          "layoutCount": 1,
+          "styleCount": 10,
+          "heapDeltaKb": 2251.11328125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 138.70279999999912,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 213.70279999999912,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 157.38,
+          "scriptMs": 147.184,
+          "layoutMs": 0.315,
+          "styleMs": 1.297,
+          "layoutCount": 1,
+          "styleCount": 10,
+          "heapDeltaKb": -2563.984375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 129.00120000000607,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 204.00120000000607,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 164.548,
+          "scriptMs": 153.622,
+          "layoutMs": 0.279,
+          "styleMs": 1.4020000000000001,
+          "layoutCount": 1,
+          "styleCount": 11,
+          "heapDeltaKb": -785.1015625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 165.2650999999969,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 240.2650999999969,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 221.994,
+          "scriptMs": 209.543,
+          "layoutMs": 0.486,
+          "styleMs": 1.822,
+          "layoutCount": 1,
+          "styleCount": 11,
+          "heapDeltaKb": 14110.796875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 135.54789999999775,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 210.54789999999775,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 171.405,
+          "scriptMs": 160.749,
+          "layoutMs": 0.32899999999999996,
+          "styleMs": 1.381,
+          "layoutCount": 1,
+          "styleCount": 10,
+          "heapDeltaKb": -4734.09375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 138.6475999999966,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 213.6475999999966,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 172.209,
+          "scriptMs": 161.65099999999998,
+          "layoutMs": 0.39,
+          "styleMs": 1.527,
+          "layoutCount": 1,
+          "styleCount": 10,
+          "heapDeltaKb": -4394.50390625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 137.4077000000034,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 212.4077000000034,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 153.90099999999998,
+          "scriptMs": 144.294,
+          "layoutMs": 0.325,
+          "styleMs": 1.3110000000000002,
+          "layoutCount": 1,
+          "styleCount": 10,
+          "heapDeltaKb": -4769.78515625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 142.71600000000035,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 217.71600000000035,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 159.916,
+          "scriptMs": 150.312,
+          "layoutMs": 0.36000000000000004,
+          "styleMs": 1.266,
+          "layoutCount": 1,
+          "styleCount": 11,
+          "heapDeltaKb": -2011.8125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 141.30109999999695,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 216.30109999999695,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 161.38,
+          "scriptMs": 151.566,
+          "layoutMs": 0.306,
+          "styleMs": 1.365,
+          "layoutCount": 1,
+          "styleCount": 11,
+          "heapDeltaKb": -4015.31640625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 136.14850000000297,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 211.14850000000297,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 161.913,
+          "scriptMs": 151.13,
+          "layoutMs": 0.328,
+          "styleMs": 1.436,
+          "layoutCount": 1,
+          "styleCount": 10,
+          "heapDeltaKb": -2096.8359375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 146.2242000000042,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 221.2242000000042,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 164.50599999999997,
+          "scriptMs": 153.842,
+          "layoutMs": 0.49,
+          "styleMs": 1.577,
+          "layoutCount": 1,
+          "styleCount": 10,
+          "heapDeltaKb": -4545.125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 141.28450000000157,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 216.28450000000157,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 161.248,
+          "scriptMs": 151.32999999999998,
+          "layoutMs": 0.358,
+          "styleMs": 1.653,
+          "layoutCount": 1,
+          "styleCount": 10,
+          "heapDeltaKb": -4995.62890625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 134.54200000000128,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 209.54200000000128,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 159.495,
+          "scriptMs": 150.645,
+          "layoutMs": 0.311,
+          "styleMs": 1.228,
+          "layoutCount": 1,
+          "styleCount": 10,
+          "heapDeltaKb": -5709.6953125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 158.70430000000488,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 233.70430000000488,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 168.602,
+          "scriptMs": 157.414,
+          "layoutMs": 0.315,
+          "styleMs": 1.484,
+          "layoutCount": 1,
+          "styleCount": 10,
+          "heapDeltaKb": 2904.43359375
+        }
+      ]
+    },
+    {
+      "interaction": "select die",
+      "environment": "mobile 360x740, 4x CPU throttle",
+      "samples": [
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 565.4609999999957,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 640.4609999999957,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 552.412,
+          "scriptMs": 496.674,
+          "layoutMs": 3.628,
+          "styleMs": 8.061,
+          "layoutCount": 1,
+          "styleCount": 10,
+          "heapDeltaKb": -1844.7734375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 666.0636000000013,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 741.0636000000013,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 480.80300000000005,
+          "scriptMs": 414.659,
+          "layoutMs": 3.813,
+          "styleMs": 8.396,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 10339.1640625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 791.5899999999965,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 866.5899999999965,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 463.86100000000005,
+          "scriptMs": 397.372,
+          "layoutMs": 3.2750000000000004,
+          "styleMs": 9.334999999999999,
+          "layoutCount": 2,
+          "styleCount": 17,
+          "heapDeltaKb": -18308.9296875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 709.4190000000017,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 784.4190000000017,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 463.099,
+          "scriptMs": 398.077,
+          "layoutMs": 3.801,
+          "styleMs": 9.924000000000001,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 7984.48828125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 734.9673999999941,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 809.9673999999941,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 494.39,
+          "scriptMs": 414.341,
+          "layoutMs": 7.136,
+          "styleMs": 9.667,
+          "layoutCount": 2,
+          "styleCount": 17,
+          "heapDeltaKb": 7601.21875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 591.0717000000004,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 666.0717000000004,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 509.7389999999999,
+          "scriptMs": 431.87399999999997,
+          "layoutMs": 4.029999999999999,
+          "styleMs": 10.005,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 7208.0078125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 683.4962999999989,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 758.4962999999989,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 478.897,
+          "scriptMs": 401.10699999999997,
+          "layoutMs": 3.391,
+          "styleMs": 10.561,
+          "layoutCount": 2,
+          "styleCount": 17,
+          "heapDeltaKb": 8621.328125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 769.7375000000029,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 844.7375000000029,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 464.787,
+          "scriptMs": 391.276,
+          "layoutMs": 3.346,
+          "styleMs": 10.594,
+          "layoutCount": 2,
+          "styleCount": 17,
+          "heapDeltaKb": 6410.4296875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 757.8366999999998,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 832.8366999999998,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 460.032,
+          "scriptMs": 392.424,
+          "layoutMs": 5.274,
+          "styleMs": 8.871,
+          "layoutCount": 2,
+          "styleCount": 16,
+          "heapDeltaKb": 6168.60546875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 662.8863000000056,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 737.8863000000056,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 472.007,
+          "scriptMs": 399.62199999999996,
+          "layoutMs": 3.8409999999999997,
+          "styleMs": 11.368,
+          "layoutCount": 2,
+          "styleCount": 17,
+          "heapDeltaKb": -23133.7578125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 757.3014999999941,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 832.3014999999941,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 491.093,
+          "scriptMs": 409.884,
+          "layoutMs": 5.53,
+          "styleMs": 10.581999999999999,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 6076.62890625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 737.9055000000008,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 812.9055000000008,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 528.019,
+          "scriptMs": 441.153,
+          "layoutMs": 4.314,
+          "styleMs": 11.453,
+          "layoutCount": 2,
+          "styleCount": 17,
+          "heapDeltaKb": 6231.80859375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 808.3305000000037,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 883.3305000000037,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 497.572,
+          "scriptMs": 411.42,
+          "layoutMs": 4.64,
+          "styleMs": 11.351999999999999,
+          "layoutCount": 2,
+          "styleCount": 17,
+          "heapDeltaKb": 5544.1875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 792.3254000000015,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 867.3254000000015,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 491.408,
+          "scriptMs": 408.37600000000003,
+          "layoutMs": 7.338,
+          "styleMs": 11.676,
+          "layoutCount": 2,
+          "styleCount": 17,
+          "heapDeltaKb": -21636.15625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 688.1419999999998,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 763.1419999999998,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 478.426,
+          "scriptMs": 396.67999999999995,
+          "layoutMs": 4.019,
+          "styleMs": 14.161,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 5496.359375
+        }
+      ]
+    },
+    {
+      "interaction": "deselect die",
+      "environment": "mobile 360x740, 4x CPU throttle",
+      "samples": [
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 330.61559999999736,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 405.61559999999736,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 98.65800000000002,
+          "scriptMs": 18.57,
+          "layoutMs": 7.042,
+          "styleMs": 11.964,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 1961.8671875
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 533.3448999999964,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 608.3448999999964,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 125.25500000000001,
+          "scriptMs": 25.58,
+          "layoutMs": 7.066,
+          "styleMs": 15.059,
+          "layoutCount": 2,
+          "styleCount": 20,
+          "heapDeltaKb": 1963.26953125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 325.2615000000005,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 400.2615000000005,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 107.27099999999999,
+          "scriptMs": 16.125,
+          "layoutMs": 7.117,
+          "styleMs": 11.783999999999999,
+          "layoutCount": 2,
+          "styleCount": 20,
+          "heapDeltaKb": -25174.34375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 566.5792000000001,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 641.5792000000001,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 87.04100000000001,
+          "scriptMs": 18.448,
+          "layoutMs": 5.216,
+          "styleMs": 10.050999999999998,
+          "layoutCount": 2,
+          "styleCount": 19,
+          "heapDeltaKb": 2026.6015625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 401.9230000000025,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 476.9230000000025,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 84.77000000000001,
+          "scriptMs": 16.238,
+          "layoutMs": 6.011,
+          "styleMs": 8.945,
+          "layoutCount": 2,
+          "styleCount": 19,
+          "heapDeltaKb": 1966.5078125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 326.0456000000049,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 401.0456000000049,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 89.817,
+          "scriptMs": 14.973,
+          "layoutMs": 5.226,
+          "styleMs": 9.558,
+          "layoutCount": 2,
+          "styleCount": 19,
+          "heapDeltaKb": 1965.37109375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 416.1097000000009,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 491.1097000000009,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 100.46,
+          "scriptMs": 19.89,
+          "layoutMs": 5.665,
+          "styleMs": 10.491,
+          "layoutCount": 2,
+          "styleCount": 18,
+          "heapDeltaKb": 1975.5
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 263.9495999999999,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 338.9495999999999,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 95.623,
+          "scriptMs": 17.634,
+          "layoutMs": 7.697,
+          "styleMs": 10.138,
+          "layoutCount": 2,
+          "styleCount": 19,
+          "heapDeltaKb": 1956.578125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 577.2036999999982,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 652.2036999999982,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 88.87100000000001,
+          "scriptMs": 16.721,
+          "layoutMs": 6.295,
+          "styleMs": 10.822999999999999,
+          "layoutCount": 2,
+          "styleCount": 19,
+          "heapDeltaKb": 1955.3359375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 443.6478000000061,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 518.6478000000061,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 92.5,
+          "scriptMs": 17.666999999999998,
+          "layoutMs": 6.4799999999999995,
+          "styleMs": 11.503,
+          "layoutCount": 2,
+          "styleCount": 19,
+          "heapDeltaKb": 1957.5859375
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 677.9245000000083,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 752.9245000000083,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 89.52499999999999,
+          "scriptMs": 17.433,
+          "layoutMs": 6.033,
+          "styleMs": 8.692,
+          "layoutCount": 2,
+          "styleCount": 20,
+          "heapDeltaKb": 1965.08203125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 385.8836999999912,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 460.8836999999912,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 84.331,
+          "scriptMs": 14.014000000000001,
+          "layoutMs": 5.445,
+          "styleMs": 9.908,
+          "layoutCount": 2,
+          "styleCount": 20,
+          "heapDeltaKb": -24164.2578125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 317.0841999999975,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 392.0841999999975,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 81.158,
+          "scriptMs": 15.673,
+          "layoutMs": 6.261,
+          "styleMs": 8.235,
+          "layoutCount": 2,
+          "styleCount": 20,
+          "heapDeltaKb": 1954.09765625
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 606.6571999999869,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 681.6571999999869,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 84.22800000000001,
+          "scriptMs": 17.038,
+          "layoutMs": 5.617999999999999,
+          "styleMs": 7.672,
+          "layoutCount": 2,
+          "styleCount": 20,
+          "heapDeltaKb": 1954.1328125
+        },
+        {
+          "inputToFirstMutationMs": null,
+          "inputToFeedbackMs": 337.10629999999946,
+          "inputToPlaybackMs": null,
+          "observationWindowMs": 412.10629999999946,
+          "domMutations": 0,
+          "longTasks": [],
+          "timedOut": false,
+          "taskMs": 85.81800000000001,
+          "scriptMs": 17.462,
+          "layoutMs": 5.596,
+          "styleMs": 8.539,
+          "layoutCount": 2,
+          "styleCount": 20,
+          "heapDeltaKb": 1956.58984375
+        }
+      ]
+    }
+  ],
+  "idleRows": [
+    {
+      "environment": "desktop production",
+      "sample": 0,
+      "observationMs": 2000,
+      "taskMs": 181.879,
+      "scriptMs": 117.397,
+      "layoutMs": 1.647,
+      "styleMs": 6.623
+    },
+    {
+      "environment": "desktop production",
+      "sample": 1,
+      "observationMs": 2000,
+      "taskMs": 184.57199999999997,
+      "scriptMs": 111.4,
+      "layoutMs": 1.4729999999999999,
+      "styleMs": 6.751
+    },
+    {
+      "environment": "desktop production",
+      "sample": 2,
+      "observationMs": 2000,
+      "taskMs": 189.90099999999998,
+      "scriptMs": 116.424,
+      "layoutMs": 1.366,
+      "styleMs": 6.898
+    },
+    {
+      "environment": "desktop production",
+      "sample": 3,
+      "observationMs": 2000,
+      "taskMs": 188.185,
+      "scriptMs": 116.146,
+      "layoutMs": 1.1460000000000001,
+      "styleMs": 6.124
+    },
+    {
+      "environment": "desktop production",
+      "sample": 4,
+      "observationMs": 2000,
+      "taskMs": 200.731,
+      "scriptMs": 123.704,
+      "layoutMs": 1.203,
+      "styleMs": 7.9159999999999995
+    },
+    {
+      "environment": "mobile 360x740, 4x CPU throttle",
+      "sample": 0,
+      "observationMs": 2000,
+      "taskMs": 482.146,
+      "scriptMs": 384.698,
+      "layoutMs": 0,
+      "styleMs": 22.142
+    },
+    {
+      "environment": "mobile 360x740, 4x CPU throttle",
+      "sample": 1,
+      "observationMs": 2000,
+      "taskMs": 494.768,
+      "scriptMs": 419.828,
+      "layoutMs": 0,
+      "styleMs": 25.017
+    },
+    {
+      "environment": "mobile 360x740, 4x CPU throttle",
+      "sample": 2,
+      "observationMs": 2000,
+      "taskMs": 594.7600000000001,
+      "scriptMs": 503.378,
+      "layoutMs": 0,
+      "styleMs": 29.686
+    },
+    {
+      "environment": "mobile 360x740, 4x CPU throttle",
+      "sample": 3,
+      "observationMs": 2000,
+      "taskMs": 484.099,
+      "scriptMs": 415.859,
+      "layoutMs": 0,
+      "styleMs": 22.554000000000002
+    },
+    {
+      "environment": "mobile 360x740, 4x CPU throttle",
+      "sample": 4,
+      "observationMs": 2000,
+      "taskMs": 834.898,
+      "scriptMs": 574.866,
+      "layoutMs": 0,
+      "styleMs": 26.381
+    }
+  ]
+}

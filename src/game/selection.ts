@@ -74,8 +74,7 @@ export function normalizeBoardSelection(board: Board, selection: Selection): Sel
   const dice = activeEncounterDice(board);
   const active = new Set(dice.map(die => die.id));
   const dieIds = orderedIds(dice, selection.dieIds.filter(id => active.has(id)));
-  const hand = selection.hand && legalHandCombinations(board, selection.hand)
-    .some(combination => sameDice(combination, dieIds)) ? selection.hand : null;
+  const hand = selection.hand && hasLegalCombination(board, selection.hand, dieIds) ? selection.hand : null;
   return { dieIds, hand, intent: selection.intent };
 }
 
@@ -99,12 +98,10 @@ export function toggleBoardDie(board: Board, selection: Selection, id: number): 
     ? selection.dieIds.filter(dieId => dieId !== id)
     : orderedIds(activeEncounterDice(board), [...selection.dieIds, id]);
   if (!dieIds.length) return emptySelection();
-  if (selection.hand && legalHandCombinations(board, selection.hand)
-    .some(combination => sameDice(combination, dieIds))) {
+  if (selection.hand && hasLegalCombination(board, selection.hand, dieIds)) {
     return { dieIds, hand: selection.hand, intent: 'manual' };
   }
-  const completed = encounterHandIds(board).filter(hand => legalHandCombinations(board, hand)
-    .some(combination => sameDice(combination, dieIds)));
+  const completed = encounterHandIds(board).filter(hand => hasLegalCombination(board, hand, dieIds));
   return { dieIds, hand: completed.length === 1 ? completed[0] : null, intent: 'manual' };
 }
 

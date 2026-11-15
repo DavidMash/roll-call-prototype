@@ -38,6 +38,20 @@ export class CandidateFlamePresentationPlaybackGate {
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
+/** Refreshes only Speed Demon's clock-driven visual fields. Gameplay still commits an exact DecisionTimer value. */
+export function withSpeedDemonDecisionTime(presentation: FlamePresentation, investedGold: number,
+  decisionMs: number): FlamePresentation {
+  const current = speedDemonMultiplier(investedGold, decisionMs);
+  const maximum = speedDemonMultiplier(investedGold, 0);
+  const progress = clamp01((current - 1) / Math.max(.0001, maximum - 1));
+  const active = current > 1;
+  const statusText = active ? `×${current.toFixed(1).replace(/\.0$/, '')}` : undefined;
+  const state = active ? 'active' : 'normal';
+  return { ...presentation, state, progress, statusText,
+    contribution: active ? { kind: 'xmult', value: current } : undefined,
+    accessibleLabel: `${FLAMES.speedDemon.name}: ${state}${statusText ? `. ${statusText}` : ''}` };
+}
+
 /** Semantic inputs for interactive candidate analysis; intentionally excludes playback object identity. */
 export const flameCandidatePresentationKey = (board: Board) => JSON.stringify(board,
   (_key, value) => typeof value === 'bigint' ? `${value}n` : value);
@@ -177,17 +191,6 @@ export function deriveFlamePresentations(board: Board, preview: CanonicalPlayPre
         statusText ??= `${board.interactiveFlames.hotPotatoStreak} AVOIDED`;
       }
     }
-    if (flame.type === 'speedDemon') {
-      const current = speedDemonMultiplier(flame.investedGold, decisionMs);
-      const maximum = speedDemonMultiplier(flame.investedGold, 0);
-      progress = clamp01((current - 1) / Math.max(.0001, maximum - 1));
-      if (current <= 1) { state = 'normal'; contribution = undefined; statusText = undefined; }
-      else if (factor === undefined) {
-        state = 'active';
-        contribution = { kind: 'xmult', value: current };
-        statusText = `×${current.toFixed(1).replace(/\.0$/, '')}`;
-      }
-    }
     if (flame.type === 'sixPack') {
       progress = clamp01((board.sixPackXMult - 1) / Math.max(.0001, 3));
       statusText ??= board.sixPackXMult > 1 ? `×${formatPlayerNumber(board.sixPackXMult)}` : undefined;
@@ -197,7 +200,10 @@ export function deriveFlamePresentations(board: Board, preview: CanonicalPlayPre
       statusText ??= `${board.minigunUpperStreak}/6`;
     }
     const label = `${FLAMES[flame.type].name}: ${state}${statusText ? `. ${statusText}` : ''}`;
-    return { instanceId: flame.instanceId, flame: flame.type, state, progress, statusText, contribution, targetHand,
+    const presentation = { instanceId: flame.instanceId, flame: flame.type, state, progress, statusText, contribution, targetHand,
       accessibleLabel: label };
+    return flame.type === 'speedDemon'
+      ? withSpeedDemonDecisionTime(presentation, flame.investedGold, decisionMs)
+      : presentation;
   });
 }

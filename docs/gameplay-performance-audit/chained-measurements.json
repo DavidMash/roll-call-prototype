@@ -1,0 +1,49 @@
+{
+  "interaction": "Jumping Bean chained Free Plays and automatic rolls",
+  "playbackEventCount": 43,
+  "samples": [
+    {
+      "inputToFirstMutationMs": 77.79770000000008,
+      "inputToFeedbackMs": 77.79770000000008,
+      "inputToPlaybackMs": null,
+      "observationWindowMs": 77.79770000000008,
+      "domMutations": 0,
+      "longTasks": [
+        {
+          "startTime": 2974.1279,
+          "duration": 77.79770000000008
+        }
+      ],
+      "timedOut": false,
+      "taskMs": 77.79770000000008,
+      "scriptMs": 77.79770000000008
+    },
+    {
+      "inputToFirstMutationMs": 50.826499999999214,
+      "inputToFeedbackMs": 50.826499999999214,
+      "inputToPlaybackMs": null,
+      "observationWindowMs": 50.826499999999214,
+      "domMutations": 0,
+      "longTasks": [
+        {
+          "startTime": 6367.3208,
+          "duration": 50.826499999999214
+        }
+      ],
+      "timedOut": false,
+      "taskMs": 50.826499999999214,
+      "scriptMs": 50.826499999999214
+    },
+    {
+      "inputToFirstMutationMs": 40.71780000000035,
+      "inputToFeedbackMs": 40.71780000000035,
+      "inputToPlaybackMs": null,
+      "observationWindowMs": 40.71780000000035,
+      "domMutations": 0,
+      "longTasks": [],
+      "timedOut": false,
+      "taskMs": 40.71780000000035,
+      "scriptMs": 40.71780000000035
+    }
+  ]
+}
