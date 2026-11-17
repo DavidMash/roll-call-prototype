@@ -386,7 +386,7 @@ describe('Dare Devil', () => {
     expect(state.manualRerollsUsedThisRound).toBe(0);
     state.dice.forEach(die => { die.value = 1; });
     new Resolver(state, constant()).play('fiveKind', [0, 1, 2, 3, 4]);
-    expect(factor(state, 'casual')).toBe(4);
+    expect(factor(state, 'casual')).toBe(3);
     state.interactiveFlames.dareDevilCount = 3;
     startFromShop(state, true);
     expect(state.interactiveFlames.dareDevilCount).toBe(0);

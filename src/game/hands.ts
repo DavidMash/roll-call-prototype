@@ -66,6 +66,7 @@ export const availableLowerHandIds = (state: Parameters<typeof availableHandIds>
 export const upperHand = (hand: HandId) => FINAL_UPPER_HAND_ORDER.includes(hand) || hand === 'sevens';
 export const lowerHand = (hand: HandId) => FINAL_LOWER_HAND_ORDER.includes(hand);
 export const ULTIMATE_HAND_COUNT = 1;
+export const CASUAL_HAND_COUNT = 3;
 
 export interface HandStats {
   level: number;
@@ -159,6 +160,8 @@ export function rankedHands(handLevels: HandLevels, hands: readonly HandId[] = H
 }
 export const ultimateHands = (handLevels: HandLevels, hands: readonly HandId[] = HAND_IDS): HandId[] =>
   rankedHands(handLevels, hands).slice(0, ULTIMATE_HAND_COUNT);
+export const casualHands = (handLevels: HandLevels, hands: readonly HandId[] = HAND_IDS): HandId[] =>
+  rankedHands(handLevels, hands).slice(0, CASUAL_HAND_COUNT);
 export function rankedBenchWarmerHands(handLevels: HandLevels, hands: readonly HandId[] = HAND_IDS): HandId[] {
   return [...hands].sort((a, b) => {
     const levelDifference = handLevels[a] - handLevels[b];

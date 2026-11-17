@@ -183,14 +183,18 @@ describe('Flame and Engulfment systems update', () => {
     expect(factors).toEqual([2, undefined]);
   });
 
-  it('derives one authoritative scorecard annotation set from every Ultimate-referencing Flame', () => {
+  it('derives authoritative Ultimate and Casual scorecard annotations', () => {
     const state = newRun('scorecard-annotations', constant).state;
     placeFlameInstance(state, 'potentialEnergy', 50);
     placeFlameInstance(state, 'targetPractice', 50, 1);
     placeFlameInstance(state, 'benchWarmer', 50, 2);
+    placeFlameInstance(state, 'casual', 50, 3);
     state.targetPracticeHand = 'pair';
     const annotations = scorecardHandAnnotations(state);
     expect(annotations.fiveKind).toContainEqual(expect.objectContaining({ kind: 'ultimate' }));
+    for (const hand of ['fiveKind', 'fourKind', 'fullHouse'] as const)
+      expect(annotations[hand]).toContainEqual(expect.objectContaining({ kind: 'casual', source: 'Casual' }));
+    expect(annotations.largeStraight ?? []).not.toContainEqual(expect.objectContaining({ kind: 'casual' }));
     expect(annotations.pair).toContainEqual(expect.objectContaining({ kind: 'target', source: 'Target Practice' }));
     expect(annotations.ones).toContainEqual(expect.objectContaining({ kind: 'benchWarmer' }));
     expect(annotations.fiveKind?.filter(item => item.kind === 'ultimate')).toHaveLength(1);

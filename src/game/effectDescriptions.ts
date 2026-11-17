@@ -79,7 +79,7 @@ export function flameVerboseDescription(id: Flame): RichText {
     oneShort: [text('Small Straight and Four of a Kind both gain extra '), term('xMult'), text('. The bonus can increase up to ×6.')],
     potentialEnergy: [text('While your Ultimate Hand is playable, manually Playing a different Hand multiplies your current '), term('charge'), text(', up to ×2.')],
     allHandsOnDeck: [text('When every currently available die is Played in the same Hand, multiply your current '), term('charge'), text(' based on the number of available dice, up to ×2 with five dice.')],
-    casual: [text('Your Ultimate Hand gains extra '), term('xMult'), text(', up to ×4, if you have not used a '), term('manualReroll'), text(' this Round.')],
+    casual: [text('Your three highest-ranked Hands gain extra '), term('xMult'), text(', up to ×3, if you have not used a '), term('manualReroll'), text(' this Round.')],
     freeRealEstate: [term('freePlay', 'Free Plays'), text(' gain extra '), term('xMult'), text(', up to ×3.')],
     heavyHitters: [text('If your Played dice contribute more scoring '), term('pips'), text(' than their visible face values, the Hand gains extra '), term('xMult'), text(', up to ×3.')],
     frankenstein: [text('If the scoring dice have more than twice as many enhancements as the number of dice you Played, the Hand gains extra '), term('xMult'), text(', up to ×5.')],

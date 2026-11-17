@@ -157,6 +157,7 @@ export interface FlameActivationDiagnostics {
   matchingPlayedDiceCount?: number;
   decisionMs?: number;
   ultimateHand?: HandId;
+  qualifyingHands?: HandId[];
   alternativeHand?: HandId;
   chargeGained?: number;
   chargeFactorRequested?: number;

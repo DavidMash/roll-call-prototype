@@ -1,8 +1,8 @@
-import { availableHandIds, benchWarmerHand, ultimateHands } from './hands';
+import { availableHandIds, benchWarmerHand, casualHands, ultimateHands } from './hands';
 import { HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, hasOwnedFlame, PROGRESSIVE_FLAME_SEQUENCES } from './flames';
 import type { Board, HandId } from './types';
 
-export type ScorecardAnnotationKind = 'ultimate' | 'target' | 'benchWarmer' | 'next' | 'setup' | 'payoff';
+export type ScorecardAnnotationKind = 'ultimate' | 'casual' | 'target' | 'benchWarmer' | 'next' | 'setup' | 'payoff';
 export interface ScorecardAnnotation {
   kind: ScorecardAnnotationKind;
   label: string;
@@ -11,7 +11,7 @@ export interface ScorecardAnnotation {
 
 /** Flames whose trigger text directly references the authoritative Ultimate hand identity. */
 export const ULTIMATE_REFERENCING_FLAMES = [
-  'ultimate', 'powerSurge', 'potentialEnergy', 'casual', 'dareDevil',
+  'ultimate', 'powerSurge', 'potentialEnergy', 'dareDevil',
 ] as const;
 
 export function scorecardHandAnnotations(board: Board): Partial<Record<HandId, ScorecardAnnotation[]>> {
@@ -22,6 +22,10 @@ export function scorecardHandAnnotations(board: Board): Partial<Record<HandId, S
   if (ULTIMATE_REFERENCING_FLAMES.some(flame => hasOwnedFlame(board, flame))) {
     for (const hand of ultimateHands(board.handLevels, availableHandIds(board))) add(hand,
       { kind: 'ultimate', label: 'ULTIMATE', source: 'Ultimate-referencing Flame' });
+  }
+  if (hasOwnedFlame(board, 'casual')) {
+    for (const hand of casualHands(board.handLevels, availableHandIds(board))) add(hand,
+      { kind: 'casual', label: 'CASUAL', source: 'Casual' });
   }
   // The stored target is authoritative while score playback is still resolving;
   // Flame removal clears it once the resolver reaches its cleanup boundary.

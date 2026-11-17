@@ -1,6 +1,6 @@
 import { activeFace, wholeDieEffectSuppressed } from './dice';
 import { activeEncounterDice, availablePlayableDice, currentlyPlayableManualHands, lastPlayDanger } from './bosses';
-import { availableHandIds, benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, HANDS,
+import { availableHandIds, benchWarmerHand, casualHands, encounterHandIds, handIsStructurallyImpossible, HANDS,
   lowerHand as isLowerHand, rankedHands, ultimateHands, upperHand } from './hands';
 import type { Board, Flame, FlameActivationDiagnostics, FlameInstance, FlameInstanceId, FlameSlotIndex, FlameSlots, GameState, HandId, Rarity, SpecialDieType, XMultFactor } from './types';
 import { formatPlayerNumber } from './copy';
@@ -109,7 +109,7 @@ export const FLAME_SCALING = {
   handFamily: { doubleDown: 6, threesCompany: 8, straightShooter: 8, boxSet: 11 },
   potentialEnergy: { chargeFactorBonus: 1 },
   allHandsOnDeck: { chargeFactorBonusPerDie: .2 },
-  casual: { fullBonus: 3 },
+  casual: { fullBonus: 2 },
   freeRealEstate: { fullBonus: 2 },
   heavyHitters: { fullBonus: 2 },
   frankenstein: { fullBonus: 4 },
@@ -289,7 +289,7 @@ export function flameEffectText(id: Flame, investedGold: number, _board: FlameDi
     case 'oneShort': return `Small Straight and Four of a Kind gain ×${formatPlayerNumber(oneShortMultiplier(investedGold))} XMult.`;
     case 'potentialEnergy': return `Playing a different Hand while Ultimate is playable multiplies Charge by ×${formatPlayerNumber(potentialEnergyChargeGain(investedGold))}.`;
     case 'allHandsOnDeck': return `Playing every available die multiplies Charge by ×${formatPlayerNumber(allHandsOnDeckChargeGain(investedGold, 5))} with five available dice.`;
-    case 'casual': return `Ultimate gains ×${formatPlayerNumber(casualMultiplier(investedGold))} XMult before any Manual Reroll is used.`;
+    case 'casual': return `Your three highest-ranked Hands gain ×${formatPlayerNumber(casualMultiplier(investedGold))} XMult before any Manual Reroll is used.`;
     case 'freeRealEstate': return `Free Plays gain ×${formatPlayerNumber(freeRealEstateMultiplier(investedGold))} XMult.`;
     case 'heavyHitters': return `Enhanced Played-die Pips grant ×${formatPlayerNumber(heavyHittersMultiplier(investedGold))} XMult.`;
     case 'frankenstein': return `A sufficiently enhancement-dense scoring group gains ×${formatPlayerNumber(frankensteinMultiplier(investedGold))} XMult.`;
@@ -500,6 +500,7 @@ export interface HandStartSnapshot {
   doubleOrNothingRedemption: boolean;
   previousPlays: number;
   ultimateHands: HandId[];
+  casualHands: HandId[];
   ultimatePlayable: boolean;
   benchWarmerHand: HandId;
   targetPracticeHand: HandId | null;
@@ -549,6 +550,7 @@ export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'in
     doubleOrNothingRedemption: wager.doubleOrNothingRedemption === true,
     previousPlays: state.handPlayCounts[hand],
     ultimateHands: ultimate,
+    casualHands: casualHands(state.handLevels, hands),
     ultimatePlayable: ultimate.some(target => currentlyPlayableManualHands(state).includes(target)),
     benchWarmerHand: benchWarmerHand(state.handLevels, hands),
     targetPracticeHand: state.targetPracticeHand,
@@ -637,7 +639,7 @@ const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId, scoring
     case 'boxSet': return snapshot.handFamilyFlameStages[id] === 'payoff' && hand === HAND_FAMILY_FLAMES[id].payoff;
     case 'missingPair': return hand === 'pair' || hand === 'threeKind';
     case 'oneShort': return hand === 'smallStraight' || hand === 'fourKind';
-    case 'casual': return snapshot.ultimateHands.includes(hand) && snapshot.manualRerollsUsed === 0;
+    case 'casual': return snapshot.casualHands.includes(hand) && snapshot.manualRerollsUsed === 0;
     case 'freeRealEstate': return snapshot.playSource !== 'manual';
     case 'heavyHitters': return snapshot.playedDiceScoringPips > playedDice(snapshot)
       .reduce((sum, die) => sum + die.faceValue, 0);
@@ -732,7 +734,7 @@ function factorInput(id: Flame, snapshot: HandStartSnapshot, _scoringDieIds: num
     return { input: counts.high, detail: `${counts.high} of ${counts.played} Played dice showed 4–6`, diagnostics: {
       playedDiceCount: counts.played, qualifyingHighFaceCount: counts.high } };
   }
-  if (id === 'casual') return { diagnostics: { ultimateHand: snapshot.ultimateHands[0],
+  if (id === 'casual') return { diagnostics: { qualifyingHands: snapshot.casualHands,
     manualRerollsUsed: snapshot.manualRerollsUsed } };
   if (id === 'freeRealEstate') return { diagnostics: { freePlaySource: snapshot.playSource } };
   if (id === 'heavyHitters') return { diagnostics: {

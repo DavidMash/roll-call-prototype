@@ -68,7 +68,7 @@ function ScorecardSection({ title, hands, board, selection, availability, active
         const handAnnotations = annotations[hand] ?? [];
         const targeted = handAnnotations.some(annotation => annotation.kind === 'target');
         const inlineAnnotations = handAnnotations.filter(annotation =>
-          annotation.kind === 'target' || annotation.kind === 'next'
+          annotation.kind === 'target' || annotation.kind === 'casual' || annotation.kind === 'next'
           || annotation.kind === 'setup' || annotation.kind === 'payoff');
         const isUltimate = handAnnotations.some(annotation => annotation.kind === 'ultimate');
         const isDoubleOrNothingTarget = doubleOrNothingTargets.has(hand);

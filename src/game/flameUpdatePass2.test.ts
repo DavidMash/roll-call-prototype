@@ -11,7 +11,7 @@ import {
   potentialEnergyChargeGain, punchCardMultiplier, recalculateMaxCharge, assemblyLineMultiplier, FLAME_IDS,
   captureHandStart,
 } from './flames';
-import { benchWarmerHand, HAND_IDS, initialHandLevels } from './hands';
+import { benchWarmerHand, casualHands, HAND_IDS, initialHandLevels } from './hands';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
 import { createDieEffect, effectOf, effectRuntime, resetDieRoundState } from './specialDice';
 import type { Flame, GameState, RandomSource, Rank, SpecialDieType } from './types';
@@ -151,12 +151,23 @@ describe('Pass 2 Charge Flames', () => {
 });
 
 describe('Ultimate, Free Play, and face-condition Flames', () => {
-  it('Casual uses shared Manual Reroll accounting for normal and Care Package charges', () => {
-    expect(casualMultiplier(100)).toBe(4);
+  it('Casual buffs the three highest-ranked Hands and uses shared Manual Reroll accounting', () => {
+    expect(casualMultiplier(100)).toBe(3);
+    expect(casualHands(initialHandLevels())).toEqual(['fiveKind', 'fourKind', 'fullHouse']);
     const clean = game([5, 5, 5, 5, 5]);
     own(clean, 'casual');
     new Resolver(clean, constant()).play('fiveKind', [0, 1, 2, 3, 4]);
-    expect(flameFactor(clean, 'casual')).toBe(4);
+    expect(flameFactor(clean, 'casual')).toBe(3);
+
+    const third = game([5, 5, 5, 2, 2]);
+    own(third, 'casual');
+    new Resolver(third, constant()).play('fullHouse', [0, 1, 2, 3, 4]);
+    expect(flameFactor(third, 'casual')).toBe(3);
+
+    const fourth = game([1, 2, 3, 4, 5]);
+    own(fourth, 'casual');
+    new Resolver(fourth, constant()).play('largeStraight', [0, 1, 2, 3, 4]);
+    expect(flameFactor(fourth, 'casual')).toBeUndefined();
 
     for (const carePackage of [false, true]) {
       const rerolled = game([5, 5, 5, 5, 5]);
@@ -176,7 +187,7 @@ describe('Ultimate, Free Play, and face-condition Flames', () => {
     new Resolver(automatic, constant()).rollBatch([0], 'automatic', 'gameplay');
     automatic.dice.forEach(die => { die.value = 5; });
     new Resolver(automatic, constant()).play('fiveKind', [0, 1, 2, 3, 4]);
-    expect(flameFactor(automatic, 'casual')).toBe(4);
+    expect(flameFactor(automatic, 'casual')).toBe(3);
     automatic.phase = 'shop'; automatic.shop = { stage: 'shop', offers: [], offerRerolls: 0, lifeRestores: 0 };
     new Resolver(automatic, constant()).startRound(true);
     expect(automatic.manualRerollsUsedThisRound).toBe(0);
