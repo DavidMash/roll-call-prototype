@@ -1,12 +1,13 @@
 import { Paper, Text } from '@mantine/core';
 import type { ReactNode } from 'react';
 import { activeFace, scoringPips } from '../game/dice';
-import type { Die as PhysicalDie, DieType, Flame, Rank } from '../game/types';
+import type { Die as PhysicalDie, DieRoundRuntime, DieType, Flame, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
 import { PipFace } from './PipFace';
 import { formatPlayerNumber } from '../game/copy';
 import { DieEffectsLabel, diePresentationStyle } from './DieTypeLabel';
 import { SPECIAL_DICE } from '../game/specialDice';
+import { dieVisualPresentation } from '../game/specialDiePresentation';
 
 interface Props {
   die: PhysicalDie;
@@ -33,12 +34,13 @@ interface Props {
   hotPotato?: boolean;
   pipsPop?: { eventId: number; amount: number };
   directActions?: ReactNode;
+  roundRuntime?: DieRoundRuntime;
 }
 
 export function Die({ die, rosterSlot, display, selected, highlighted, rolling, resolving = false, ability, flameAbility, disabled,
   detailsDisabled = false, eligible, wardenLocked = false, wardenSelectable = false, ineligibleReason,
   lockedReason, allowIneligibleClick = false, onClick, onDetails, onDropOffer, fetchTarget, hotPotato = false, pipsPop,
-  directActions }: Props) {
+  directActions, roundRuntime }: Props) {
   const face = activeFace(die);
   const pips = scoringPips(face);
   const mutation = face.bossMutation;
@@ -51,6 +53,7 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
   const isFetchTarget = fetchTarget?.dieId === die.id && fetchTarget.physicalFace === die.value;
   const collectible = die.owner === 'player' ? die : null;
   const specialName = collectible?.effects.map(effect => SPECIAL_DICE[effect.type].name).join(' + ') || null;
+  const activeEffectColor = collectible ? dieVisualPresentation(collectible, roundRuntime).activeEffectColor : false;
   const effectSuppressed = mutation?.kind === 'infected' && !!collectible?.effects.length;
   const hasDetails = die.owner === 'boss' || !!collectible?.effects.length || mutation !== undefined || isFetchTarget;
   const dieDetails = `${dieLabel}, face ${formatPlayerNumber(face.rank)}, ${formatPlayerNumber(pips)} Pips`
@@ -67,8 +70,9 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
     {pipsPop && pipsPop.amount > 0 && <span key={`${pipsPop.eventId}:${die.id}`} className="resolution-pop die-pips-pop"
       role="status" aria-live="polite">+{formatPlayerNumber(pipsPop.amount)} PIPS</span>}
     <Paper component="button" type="button" withBorder
-      className={`die die-selection-target ${die.owner === 'boss' ? 'cursed-die' : ''}${specialName ? ' special-die' : ''} ${mutation?.kind === 'snakeEyes' ? 'snake-eyed-face' : ''} ${mutation?.kind === 'infected' ? 'infected-face' : ''}${selected ? ' selected is-die-selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${resolving ? 'resolving' : ''} ${triggered ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''} ${wardenLocked ? 'warden-locked' : ''}`}
-      style={collectible ? diePresentationStyle(collectible) : undefined} data-effect-count={collectible?.effects.length ?? undefined}
+      className={`die die-selection-target ${die.owner === 'boss' ? 'cursed-die' : ''}${specialName && activeEffectColor ? ' special-die' : ''} ${mutation?.kind === 'snakeEyes' ? 'snake-eyed-face' : ''} ${mutation?.kind === 'infected' ? 'infected-face' : ''}${selected ? ' selected is-die-selected' : ''} ${highlighted ? 'scoring' : ''} ${rolling ? 'rolling' : ''} ${resolving ? 'resolving' : ''} ${triggered ? 'pulse' : ''} ${eligible ? 'eligible' : ''} ${ineligibleReason ? 'ineligible' : ''} ${lockedReason ? 'locked-selection' : ''} ${wardenLocked ? 'warden-locked' : ''}`}
+      style={collectible ? diePresentationStyle(collectible, roundRuntime) : undefined} data-effect-count={collectible?.effects.length ?? undefined}
+      data-effect-color-active={collectible?.effects.length ? activeEffectColor : undefined}
       disabled={interactionDisabled} aria-disabled={interactionDisabled} aria-pressed={selected}
       title={wardenLocked ? `${dieLabel} locked${wardenSelectable ? ' · choose as initial active die' : ' · next manual Hand Play releases one'}` : lockedReason ?? ineligibleReason}
       aria-label={accessibilityLabel} data-resolving={resolving || undefined}

@@ -1,6 +1,6 @@
 import { Die } from './Die';
 import type { CSSProperties, ReactNode } from 'react';
-import type { Die as PhysicalDie, GameEvent, Rank } from '../game/types';
+import type { Die as PhysicalDie, DieRoundState, GameEvent, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
 
 interface Props {
@@ -27,11 +27,12 @@ interface Props {
   onDropOffer?: (offerId: number, dieId: number) => void;
   directActionRows?: number;
   renderDirectActions?: (die: PhysicalDie) => ReactNode;
+  roundState?: DieRoundState;
 }
 export function DiceRow({ dice, rosterSlotById = {}, display, selected = [], event, disabled, eligibleIds, restrictToEligible = false,
   ineligibleReasons = {}, actionableIneligibleIds = [], lockedIds = [], lockedReasons = {}, detailsDisabled = false,
   wardenLockedIds = [], wardenSelectableIds = [], wardenChoiceMode = false,
-  onClick, onDetails, onDropOffer, fetchTarget, hotPotatoDieId, directActionRows = 0, renderDirectActions }: Props) {
+  onClick, onDetails, onDropOffer, fetchTarget, hotPotatoDieId, directActionRows = 0, renderDirectActions, roundState }: Props) {
   return <div className="dice-row" data-dice-count={dice.length}
     style={{ '--dice-columns': dice.length, '--die-action-rows': directActionRows } as CSSProperties}>{dice.map(die => {
     const involved = event?.dieIds?.includes(die.id) ?? false;
@@ -40,6 +41,7 @@ export function DiceRow({ dice, rosterSlotById = {}, display, selected = [], eve
     const resolvedPips = event?.type === 'DIE_PIPS_RESOLVED' && event.resolvedDiePips?.dieId === die.id
       ? event.resolvedDiePips : undefined;
     return <Die key={die.id} die={die} rosterSlot={rosterSlotById[die.id]} display={display}
+      roundRuntime={roundState?.[die.id]}
       fetchTarget={fetchTarget}
       pipsPop={resolvedPips && resolvedPips.totalPips > 0 ? { eventId: event!.id, amount: resolvedPips.totalPips } : undefined}
       hotPotato={hotPotatoDieId === die.id}

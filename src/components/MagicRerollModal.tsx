@@ -57,6 +57,7 @@ export function MagicRerollModal({ board, dieIds, display, opened, selections, o
           const slot = roster.findIndex(candidate => candidate.id === die.id);
           return <Paper withBorder p="xs" className="magic-die-choice" key={die.id} data-testid={`magic-choice-${die.id}`}>
             <div className="magic-die-art"><Die die={preview} rosterSlot={slot} display={display} selected={false}
+              roundRuntime={board.dieRoundState[die.id]}
               highlighted={false} rolling={false} disabled detailsDisabled onClick={() => undefined} onDetails={() => undefined} /></div>
             <Stack gap={5} className="magic-choice-controls">
               <Group justify="space-between" gap="xs"><Text size="xs" fw={850}>D{slot + 1} · MAGIC {effect.level > 1 ? `LV ${effect.level}` : ''}</Text>

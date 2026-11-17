@@ -7,9 +7,10 @@ import { rosterDice } from '../game/inventory';
 import { placeFlameInstance } from '../game/flames';
 import type { GameState } from '../game/types';
 import { Die } from './Die';
+import { DiceRow } from './DiceRow';
 import { ShopScreen } from './ShopScreen';
 import { CollectibleDieVisual } from './CollectibleDieVisual';
-import { createDieEffect, SPECIAL_DICE } from '../game/specialDice';
+import { createDieEffect, initialDieRoundRuntime, SPECIAL_DICE } from '../game/specialDice';
 import { DieEffectsLabel, DieTypeLabel } from './DieTypeLabel';
 
 const fixed = { next: () => .2 };
@@ -69,6 +70,25 @@ describe('collectible Dice presentation', () => {
     expect(wrap(<Die die={state.dice[0]} {...props} selected />)).toContain('is-die-selected');
     expect(wrap(<Die die={{ ...rosterDice(state)[0], effects: [createDieEffect(0, 'magic')] }} {...props} selected />)).toContain('is-die-selected');
     expect(wrap(<Die die={state.dice[0]} {...props} selected={false} />)).not.toContain('is-die-selected');
+  });
+
+  it('uses round runtime to neutralize exhausted live dice while retaining effect identity', () => {
+    const die = rosterDice(newRun('exhausted-die-color', fixed).state)[0];
+    die.effects = [createDieEffect(die.id, 'magic', 2)];
+    const runtime = initialDieRoundRuntime(die);
+    runtime.effects[die.effects[0].id].invocationsRemaining = 0;
+    const html = wrap(<DiceRow dice={[die]} display="pips" event={null} disabled={false}
+      roundState={{ [die.id]: runtime }} onClick={() => {}} onDetails={() => {}} />);
+    expect(html).toContain('data-effect-color-active="false"');
+    expect(html).not.toMatch(/class="[^"]*die-selection-target[^"]*special-die/);
+    expect(html).toContain('aria-label="Magic II"');
+
+    runtime.effects[die.effects[0].id].invocationsRemaining = 1;
+    const partialHtml = wrap(<DiceRow dice={[die]} display="pips" event={null} disabled={false}
+      roundState={{ [die.id]: runtime }} onClick={() => {}} onDetails={() => {}} />);
+    expect(partialHtml).toContain('data-effect-color-active="true"');
+    expect(partialHtml).toContain('special-die');
+    expect(partialHtml).toContain('color-mix(in srgb');
   });
 
   it('renders three die-first offers plus aligned five-slot Storage and Roster rows', () => {

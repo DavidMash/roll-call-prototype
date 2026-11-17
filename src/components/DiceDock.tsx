@@ -105,6 +105,7 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
         </Group>
       </Group>}
       <DiceRow dice={dice} display={display} event={event} disabled={busy || !actionsEnabled}
+        roundState={board.dieRoundState}
         rosterSlotById={rosterSlotById}
         fetchTarget={board.fetchTarget}
         hotPotatoDieId={board.interactiveFlames.hotPotatoDieId}

@@ -5,6 +5,14 @@ import { SPECIAL_DICE, effectRuntime, invocationCapacity } from './specialDice';
 import type { CollectibleDie, DieEffectInstance, DieEffectRoundRuntime, DieRoundRuntime, SpecialDieType } from './types';
 import { CONFIG } from './config';
 
+export const NORMAL_DIE_COLOR = '#adb5bd';
+const NORMAL_DIE_PRESENTATION = {
+  accent: NORMAL_DIE_COLOR,
+  tint: 'rgba(173, 181, 189, .035)',
+  background: 'rgba(173, 181, 189, .035)',
+  activeEffectColor: false,
+} as const;
+
 export const saturationFactor = (level: number): number => Math.min(1, .8 + .03 * (Math.max(1, level) - 1));
 
 function adjustedColor(hex: string, level: number): string {
@@ -29,15 +37,42 @@ function adjustedColor(hex: string, level: number): string {
 
 export const effectColor = (effect: DieEffectInstance): string => adjustedColor(SPECIAL_DICE[effect.type].color, effect.level);
 
+const clampUnit = (value: number): number => Math.max(0, Math.min(1, value));
+
+export function effectColorAvailability(effect: DieEffectInstance, dieRuntime?: DieRoundRuntime): number {
+  if (!dieRuntime) return 1;
+  const runtime = effectRuntime(dieRuntime, effect);
+  if (!runtime) return 1;
+  if (effect.type === 'clockwork') {
+    const capacity = 3 * effect.level;
+    return clampUnit((capacity - runtime.clockworkRolls) / capacity);
+  }
+  const capacity = invocationCapacity(effect);
+  return capacity > 0 ? clampUnit(runtime.invocationsRemaining / capacity) : 1;
+}
+
+export function availableEffectColor(effect: DieEffectInstance, dieRuntime?: DieRoundRuntime): string {
+  const availability = effectColorAvailability(effect, dieRuntime);
+  if (availability <= 0) return NORMAL_DIE_COLOR;
+  const color = effectColor(effect);
+  if (availability >= 1) return color;
+  return `color-mix(in srgb, ${color} ${Number((availability * 100).toFixed(4))}%, ${NORMAL_DIE_COLOR})`;
+}
+
 export interface DieVisualPresentation {
   accent: string;
   tint: string;
   background: string;
+  activeEffectColor: boolean;
 }
 
-export function dieVisualPresentation(die: Pick<CollectibleDie, 'effects'>): DieVisualPresentation {
-  if (!die.effects.length) return { accent: '#adb5bd', tint: 'rgba(173, 181, 189, .035)', background: 'rgba(173, 181, 189, .035)' };
-  const colors = die.effects.map(effectColor);
+export function dieVisualPresentation(die: Pick<CollectibleDie, 'effects'>,
+  dieRuntime?: DieRoundRuntime): DieVisualPresentation {
+  if (!die.effects.length) return NORMAL_DIE_PRESENTATION;
+  const availability = die.effects.map(effect => effectColorAvailability(effect, dieRuntime));
+  const activeEffectColor = availability.some(value => value > 0);
+  if (!activeEffectColor) return NORMAL_DIE_PRESENTATION;
+  const colors = die.effects.map(effect => availableEffectColor(effect, dieRuntime));
   const stops = colors.map((color, index) =>
     `color-mix(in srgb, ${color} 24%, #17191f) ${Math.round(index * 100 / (colors.length - 1))}%`);
   return {
@@ -46,6 +81,7 @@ export function dieVisualPresentation(die: Pick<CollectibleDie, 'effects'>): Die
     background: colors.length === 1
       ? `linear-gradient(145deg, color-mix(in srgb, ${colors[0]} 15%, #17191f), #17191f 72%)`
       : `linear-gradient(135deg, ${stops.join(', ')})`,
+    activeEffectColor,
   };
 }
 

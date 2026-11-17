@@ -2,10 +2,10 @@ import type { CSSProperties } from 'react';
 import { formatEffectLevel } from '../game/effectLevel';
 import { dieVisualPresentation, effectColor } from '../game/specialDiePresentation';
 import { SPECIAL_DICE } from '../game/specialDice';
-import type { CollectibleDie, DieEffectInstance, SpecialDieType } from '../game/types';
+import type { CollectibleDie, DieEffectInstance, DieRoundRuntime, SpecialDieType } from '../game/types';
 
-export function diePresentationStyle(die: Pick<CollectibleDie, 'effects'>): CSSProperties {
-  const { accent, tint, background } = dieVisualPresentation(die);
+export function diePresentationStyle(die: Pick<CollectibleDie, 'effects'>, dieRuntime?: DieRoundRuntime): CSSProperties {
+  const { accent, tint, background } = dieVisualPresentation(die, dieRuntime);
   return { '--die-accent': accent, '--die-tint': tint, '--die-background': background } as CSSProperties;
 }
 

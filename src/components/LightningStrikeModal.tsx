@@ -107,6 +107,7 @@ export function LightningStrikeModal({ board, dieIds, display, opened, onClose, 
             <ActionIcon className="lightning-prediction-arrow" size={44} variant="subtle" color="orange" aria-label={`Next prediction for ${label}`}
               onClick={() => cycle(die.id, 1)}><IconChevronUp size={18} /></ActionIcon>
             <Die die={preview} rosterSlot={slot} display={display} selected={false} highlighted={false} rolling={false}
+              roundRuntime={board.dieRoundState[die.id]}
               disabled detailsDisabled onClick={() => undefined} onDetails={() => undefined} />
             <ActionIcon className="lightning-prediction-arrow" size={44} variant="subtle" color="orange" aria-label={`Previous prediction for ${label}`}
               onClick={() => cycle(die.id, -1)}><IconChevronDown size={18} /></ActionIcon>
