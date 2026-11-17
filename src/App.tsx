@@ -226,9 +226,9 @@ export default function App() {
       onBack={() => setScenarioView('browser')} onStart={() => startScenario(selectedScenario)} />
   </Container>;
   function openFlameDetails(target: FlameDetailsTarget) {
-    if (target.kind === 'ember' && target.flameInstanceId === state.flameTutorial.pendingFlameInstanceId && !state.flameTutorial.completed) {
+    if ((target.kind === 'ember' || target.kind === 'info') && target.flameInstanceId === state.flameTutorial.pendingFlameInstanceId && !state.flameTutorial.completed) {
       submit({ type: 'DISMISS_FLAME_TUTORIAL' });
-    } else if (runMode === 'tutorial' && target.kind === 'ember'
+    } else if (runMode === 'tutorial' && (target.kind === 'ember' || target.kind === 'info')
       && target.flameInstanceId === tutorialGame.session.scenario.firstFlameInstanceId
       && !tutorialGame.session.scenario.completedBeatIds.includes('flame-details')) {
       tutorialGame.completeBeat('flame-details');
@@ -243,7 +243,9 @@ export default function App() {
       const selector = closing.kind === 'offer'
         ? `[data-testid="flame-offer-${closing.flame}"] .flame-offer-info`
         : closing.flameInstanceId !== undefined
-          ? `[data-testid="fire-keeping-flame-${closing.flameInstanceId}"]`
+          ? closing.kind === 'info'
+            ? `[data-testid="fire-keeping-flame-${closing.flameInstanceId}"] .fire-keeping-info`
+            : `[data-testid="active-flame-${closing.flameInstanceId}"]`
           : null;
       if (selector) document.querySelector<HTMLElement>(selector)?.focus();
     }, 0);

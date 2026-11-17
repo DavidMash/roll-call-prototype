@@ -362,7 +362,7 @@ test('first global Flame selection claims directly without a carrier-die step', 
   await expect(page.locator('.driver-popover')).toContainText('Review Dice first, then continue to Training.');
 });
 
-test('first Stoke highlights only the Flame badge and moves focus into modal controls', async ({ page }) => {
+test('first Stoke explains the Flame, restores focus, then moves to the direct card controls', async ({ page }) => {
   const session = shopOneSession();
   session.game.round = 6;
   session.game.gold = 20;
@@ -376,21 +376,21 @@ test('first Stoke highlights only the Flame badge and moves focus into modal con
   await resumeSession(page, session);
 
   const badge = page.getByTestId(`fire-keeping-flame-${flame.instanceId}`);
-  await expect(badge).toHaveClass(/driver-active-element/);
-  const manage = badge.getByRole('button', { name: 'MANAGE FLAME' });
-  await expect(manage).toBeFocused();
-  await manage.click();
-  await expect(page.locator('.driver-popover-title')).toHaveText('STOKE');
-  const controls = page.getByTestId('stoke-flame-controls');
-  await expect(controls.getByRole('button', { name: 'Increase investment', exact: true })).toBeFocused();
-  await expect(page.getByRole('dialog', { name: 'Double Down' }).locator('button').first()).toHaveAttribute('aria-disabled', 'true');
-  await controls.getByRole('button', { name: 'Increase investment', exact: true }).click();
-  await expectPopoverAndTargetSeparated(page, '[data-tutorial="stoke"]');
-  await controls.getByRole('button', { name: 'STOKE 1 Gold', exact: true }).click();
+  await expect(page.locator('.driver-popover')).toContainText('Tap your Flame to see its details.');
+  await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(1);
+  const info = badge.getByRole('button', { name: 'Info about Double Down' });
+  await expect(info).toBeFocused();
+  await info.click();
+  await expect(page.getByRole('dialog', { name: 'Double Down' })).toBeVisible();
   await expect(page.locator('.driver-popover')).toHaveCount(0);
-  const close = page.getByRole('dialog', { name: 'Double Down' }).locator('button').first();
-  await expect(close).not.toHaveAttribute('aria-disabled', 'true');
-  await close.click();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.driver-popover-title')).toHaveText('STOKE');
+  const controls = badge.locator('[data-tutorial="stoke"]');
+  const stokeOne = badge.getByTestId(`stoke-flame-${flame.instanceId}-1`);
+  await expect(stokeOne).toBeFocused();
+  await expectPopoverAndTargetSeparated(page, '[data-tutorial="stoke"]');
+  await expect(controls.getByRole('button')).toHaveCount(2);
+  await stokeOne.click();
   await expect(page.locator('.driver-popover-title')).toHaveText('BONFIRES');
 });
 

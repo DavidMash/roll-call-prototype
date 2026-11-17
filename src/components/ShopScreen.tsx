@@ -7,7 +7,7 @@ import { formatPlayerNumber } from '../game/copy';
 import { firstPurchaseSlot, slotValue } from '../game/diceEconomy';
 import { availableShopStages } from '../game/engine';
 import { chameleonTieDetail } from '../game/effectDescriptions';
-import { flameEffectText, flameInstances, FLAMES, FLAME_SLOT_COUNT } from '../game/flames';
+import { flameEffectText, flameInstances, flameStokeLimits, FLAMES, FLAME_SLOT_COUNT } from '../game/flames';
 import { dieForgeRating, dieSellBreakdown, formatForgeValue, previewForge } from '../game/forge';
 import { createDieEffect, SPECIAL_DICE } from '../game/specialDice';
 import { dicePurchaseIsFree } from '../game/specialOffers';
@@ -307,12 +307,38 @@ export function ShopScreen({ board, inventory, event, busy, submit, openFlameDet
 
     {stage === 'flames' && <Paper p="xs" className="shop-section fire-keeping-section" data-testid="fire-keeping-shop"><Group justify="space-between" className="section-heading"><div><Text fw={700} size="sm" tt="uppercase" lts=".08em">Flames</Text>
       <Text size="xs" c="dimmed">Feed Gold to your Flames to make them stronger. At 100 Gold, an Ember becomes a Bonfire.</Text></div><Badge color="orange" variant="light">{ownedFlames.length} / {FLAME_SLOT_COUNT} FLAMES</Badge></Group>
-      <div className="fire-keeping-grid" data-testid="global-flame-slots">{ownedFlames.map(flame => <Card key={`flame-${flame.instanceId}`} withBorder p="sm" className={`fire-keeping-card ${flame.stage}`} data-testid={`fire-keeping-flame-${flame.instanceId}`}>
-        <Group justify="space-between"><Text fw={850}>{FLAMES[flame.type].name}</Text><Badge color={flame.stage === 'bonfire' ? 'red' : 'orange'} variant="light">{flame.stage.toUpperCase()}</Badge></Group>
-        <Text size="xs" c="dimmed" mt={4}>{flameEffectText(flame.type, flame.investedGold, board)}</Text><Group justify="space-between" mt="xs"><Text size="xs">Investment</Text><Text size="xs" fw={800}><CurrencyAmount currency="gold" value={flame.investedGold} /> / <CurrencyAmount currency="gold" value={100} /></Text></Group>
-        {flame.stage === 'ember' && <Text size="xs" fw={850} c="orange" mt={4}>Complete this Bonfire: <CurrencyAmount currency="temper" value={10} sign="+" /></Text>}
-        <Progress value={flame.investedGold} color={flame.stage === 'bonfire' ? 'red' : 'orange'} size="sm" mt={4} /><Button mt="sm" color={flame.stage === 'bonfire' ? 'red' : 'orange'} variant="light" disabled={busy}
-          onClick={() => openFlameDetails({ flameInstanceId: flame.instanceId, kind: flame.stage })}>{flame.stage === 'bonfire' ? 'VIEW BONFIRE' : 'MANAGE FLAME'}</Button></Card>)}</div>
+      <div className="fire-keeping-grid" data-testid="global-flame-slots">{ownedFlames.map(flame => {
+        const definition = FLAMES[flame.type];
+        const stoke = flameStokeLimits(board, flame.instanceId);
+        const rightAmount = Math.min(5, stoke.remainingCapacity);
+        return <Card key={`flame-${flame.instanceId}`} withBorder p="sm" className={`fire-keeping-card ${flame.stage}`} data-testid={`fire-keeping-flame-${flame.instanceId}`}>
+          <Group justify="space-between" align="flex-start" wrap="nowrap"><Group gap={4} wrap="nowrap"><Text fw={850}>{definition.name}</Text>
+            <Button className="fire-keeping-info" size="compact-xs" variant="subtle" disabled={busy}
+              aria-label={`Info about ${definition.name}`}
+              onClick={() => openFlameDetails({ flameInstanceId: flame.instanceId, kind: 'info' })}>INFO</Button></Group>
+            <Badge color={flame.stage === 'bonfire' ? 'red' : 'orange'} variant="light">{flame.stage.toUpperCase()}</Badge></Group>
+          <Text size="xs" c="dimmed" mt={4} data-testid={`flame-effect-${flame.instanceId}`}>{flameEffectText(flame.type, flame.investedGold, board)}</Text>
+          <Group justify="space-between" mt="xs"><Text size="xs">Investment</Text><Text size="xs" fw={800}><CurrencyAmount currency="gold" value={flame.investedGold} /> / <CurrencyAmount currency="gold" value={100} /></Text></Group>
+          <div className="fire-keeping-reward">{flame.stage === 'ember'
+            && <Text size="xs" fw={850} c="orange">Complete this Bonfire: <CurrencyAmount currency="temper" value={10} sign="+" /></Text>}</div>
+          <Progress value={flame.investedGold} color={flame.stage === 'bonfire' ? 'red' : 'orange'} size="sm" mt={4}
+            aria-label={`${definition.name} investment: ${flame.investedGold} of 100 Gold`} />
+          <div className="fire-keeping-stoke-slot">
+            {flame.stage === 'bonfire' ? <Text className="bonfire-complete" fw={900} c="red">BONFIRE COMPLETE</Text>
+              : <div className="fire-keeping-stoke" data-tutorial="stoke">
+                <Text className="fire-keeping-stoke-label" size="xs" fw={900}>STOKE</Text>
+                <div className="fire-keeping-stoke-buttons">
+                  {[1, rightAmount].map((amount, index) => <Button key={index} color="orange" variant="light"
+                    data-testid={index === 0 ? `stoke-flame-${flame.instanceId}-1` : `stoke-flame-${flame.instanceId}-right`}
+                    disabled={busy || board.gold < amount}
+                    aria-label={`Stoke ${definition.name} for ${amount} Gold.`}
+                    onClick={() => submit({ type: 'STOKE_FLAME', flameInstanceId: flame.instanceId, amount })}>
+                    <CurrencyAmount currency="gold" value={amount} accessible={false} />
+                  </Button>)}</div>
+              </div>}
+          </div>
+        </Card>;
+      })}</div>
     </Paper>}
 
     <RunActionPortal><RunActionLayout className="shop-action-dock"

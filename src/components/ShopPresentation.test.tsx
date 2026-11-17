@@ -162,5 +162,10 @@ describe('responsive Shop-stage presentation', () => {
     expect(ownedHtml).not.toContain('>EMPTY<');
     expect(ownedHtml).not.toContain('global Flames');
     expect(ownedHtml).not.toContain('written conditions');
+    expect(ownedHtml).toContain('Info about Double Down');
+    expect(ownedHtml).toContain(`Stoke Double Down for 1 Gold.`);
+    expect(ownedHtml).toContain(`Stoke Double Down for 5 Gold.`);
+    expect(ownedHtml).toContain('fire-keeping-stoke-buttons');
+    expect(ownedHtml).not.toContain('MANAGE FLAME');
   });
 });

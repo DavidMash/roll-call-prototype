@@ -137,7 +137,7 @@ const candidates: Candidate[] = [
     s => s.game.phase === 'shop' && s.game.shop?.stage === 'flames' && s.game.round === 6 && !!s.scenario.firstFlame && !s.game.flameTutorial.completed,
     { gateInteractions: false }),
   required('flame-stoke', 'STOKE', ["Investing Gold makes a Flame's XMult effect stronger.", 'Stoke it once so you can see the effect grow.'], '[data-tutorial="stoke"]',
-    'Stoke the Flame once.', (s, ui) => s.game.phase === 'shop' && s.game.round === 6 && has(s, 'flame-details') && ui.flameDetailsOpen && s.game.stats.flameStokes.length === 0,
+    'Stoke the Flame once.', (s, ui) => s.game.phase === 'shop' && s.game.round === 6 && has(s, 'flame-details') && !ui.flameDetailsOpen && s.game.stats.flameStokes.length === 0,
     { side: 'right', highlightTargets: ['[data-tutorial="stoke"]'], interactiveTargets: ['[data-tutorial="stoke"] button'] }),
   info('bonfire-explainer', 'BONFIRES', ['At 100 Gold, an Ember becomes a Bonfire.', 'It remains yours and reaches full strength.'], flameCard(),
     s => s.game.phase === 'shop' && s.game.round === 6 && s.game.stats.flameStokes.length > 0, { side: 'top' }),
@@ -204,7 +204,7 @@ const candidates: Candidate[] = [
 function contextualCopy(beat: TutorialBeat, session: TutorialSession): TutorialBeat {
   if (beat.id === 'flame-details' && session.scenario.firstFlameInstanceId !== null) {
     const card = flameCard(session.scenario.firstFlameInstanceId);
-    const target = `${card} button`;
+    const target = `${card} .fire-keeping-info`;
     return { ...beat, target, highlightTargets: [card], interactiveTargets: [target] };
   }
   if (beat.id === 'c1-special-confirm') {

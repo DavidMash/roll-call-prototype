@@ -101,16 +101,134 @@ test('Fire Keeping renders only owned Flames and stokes an instance in place int
   await expect(card).toContainText('EMBER');
   await expect(card).toContainText('Complete this Bonfire: +10T');
   await page.screenshot({ path: test.info().outputPath('fire-keeping-one-flame-mobile.png'), fullPage: true });
-  await card.getByRole('button', { name: 'MANAGE FLAME' }).click();
+  const info = card.getByRole('button', { name: 'Info about Double Down' });
+  await info.focus();
+  await page.keyboard.press('Enter');
   const dialog = page.getByRole('dialog', { name: 'Double Down' });
-  await expect(dialog).toContainText('Complete this Bonfire: +10T');
-  await dialog.getByRole('button', { name: 'Increase investment' }).click();
-  await dialog.getByRole('button', { name: 'STOKE 1 Gold' }).click();
+  await expect(dialog).toContainText('Play a Pair to set up Two Pair');
+  await expect(dialog).not.toContainText('Investment:');
+  await expect(dialog.getByRole('spinbutton')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(info).toBeFocused();
+  const left = card.getByTestId(`stoke-flame-${flame.instanceId}-1`);
+  await page.keyboard.press('Tab');
+  await expect(left).toBeFocused();
+  await expect(left).toHaveAccessibleName('Stoke Double Down for 1 Gold.');
+  await expect(card.getByTestId(`stoke-flame-${flame.instanceId}-right`)).toHaveAccessibleName('Stoke Double Down for 1 Gold.');
+  await card.getByTestId(`stoke-flame-${flame.instanceId}-right`).click();
   await expect(card).toContainText('BONFIRE');
+  await expect(card).toContainText('BONFIRE COMPLETE');
+  await expect(card.getByText('STOKE', { exact: true })).toHaveCount(0);
 
   const saved = (await readRunState(page))!;
   expect(saved.flameSlots[3]).toMatchObject({ instanceId: flame.instanceId, type: 'doubleDown', investedGold: 100, stage: 'bonfire' });
   expect(saved.flameSlots[0]).toBeNull();
+});
+
+function fireKeepingState(seed: string, investedGold: number, gold: number) {
+  const state = newRun(seed).state;
+  state.gold = gold;
+  const flame = placeFlameInstance(state, 'doubleDown', investedGold, 0);
+  state.phase = 'shop';
+  state.shop = { visitId: 1, stage: 'flames', offers: [], offerRerolls: 0, lifeRestores: 0 };
+  state.nextShopVisitId = 2;
+  return { state, flame };
+}
+
+test('right-hand Stoke target stays fixed as 5G reduces to the exact completion amount', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  const { state, flame } = fireKeepingState('fixed-stoke-target', 91, 9);
+  await installRunState(page, state);
+  await enterRun(page);
+
+  const card = page.getByTestId(`fire-keeping-flame-${flame.instanceId}`);
+  const left = card.getByTestId(`stoke-flame-${flame.instanceId}-1`);
+  const right = card.getByTestId(`stoke-flame-${flame.instanceId}-right`);
+  await expect(right).toHaveAccessibleName('Stoke Double Down for 5 Gold.');
+  const mobileRight = await right.boundingBox();
+  const mobileLeft = await left.boundingBox();
+  expect(mobileRight).not.toBeNull();
+  expect(mobileLeft).not.toBeNull();
+  expect(Math.abs(mobileRight!.width - mobileLeft!.width)).toBeLessThanOrEqual(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 1024, height: 800 });
+  const initial = await right.boundingBox();
+  const leftBox = await left.boundingBox();
+  expect(initial).not.toBeNull();
+  expect(leftBox).not.toBeNull();
+  expect(Math.abs(initial!.width - leftBox!.width)).toBeLessThanOrEqual(1);
+  const cardHeight = (await card.boundingBox())!.height;
+  const effectBefore = await card.getByTestId(`flame-effect-${flame.instanceId}`).textContent();
+
+  await right.click();
+  await expect(right).toHaveAccessibleName('Stoke Double Down for 4 Gold.');
+  await expect(page.getByTestId('stat-gold')).toHaveAttribute('aria-label', 'Gold 4');
+  await expect(card).toContainText('96G / 100G');
+  await expect(card.getByRole('progressbar', { name: 'Double Down investment: 96 of 100 Gold' })).toHaveAttribute('aria-valuenow', '96');
+  expect(await card.getByTestId(`flame-effect-${flame.instanceId}`).textContent()).not.toBe(effectBefore);
+  const reduced = await right.boundingBox();
+  expect(reduced).not.toBeNull();
+  expect(Math.abs(reduced!.x - initial!.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(reduced!.width - initial!.width)).toBeLessThanOrEqual(1);
+  await right.click();
+  await expect(card).toContainText('BONFIRE COMPLETE');
+  expect(Math.abs((await card.boundingBox())!.height - cardHeight)).toBeLessThanOrEqual(1);
+
+  const saved = (await readRunState(page))!;
+  expect(saved.gold).toBe(0);
+  expect(saved.flameSlots[0]).toMatchObject({ investedGold: 100, stage: 'bonfire' });
+  expect(saved.temper).toBe(10);
+  expect(saved.stats.temperBySource.bonfire).toBe(10);
+});
+
+test('Stoke affordability is independent at 96/100 and the 4G action rewards once', async ({ page }) => {
+  let setup = fireKeepingState('stoke-affordability-3', 96, 3);
+  await installRunState(page, setup.state);
+  await enterRun(page);
+  let card = page.getByTestId(`fire-keeping-flame-${setup.flame.instanceId}`);
+  await expect(card.getByTestId(`stoke-flame-${setup.flame.instanceId}-right`)).toBeDisabled();
+  await expect(card.getByTestId(`stoke-flame-${setup.flame.instanceId}-1`)).toBeEnabled();
+  await card.getByTestId(`stoke-flame-${setup.flame.instanceId}-1`).click();
+  let saved = (await readRunState(page))!;
+  expect(saved.gold).toBe(2);
+  expect(saved.flameSlots[0]).toMatchObject({ investedGold: 97, stage: 'ember' });
+
+  setup = fireKeepingState('stoke-affordability-4', 96, 4);
+  await installRunState(page, setup.state);
+  await enterRun(page);
+  card = page.getByTestId(`fire-keeping-flame-${setup.flame.instanceId}`);
+  const right = card.getByTestId(`stoke-flame-${setup.flame.instanceId}-right`);
+  await expect(right).toBeEnabled();
+  await right.evaluate(button => {
+    (button as HTMLButtonElement).click();
+    (button as HTMLButtonElement).click();
+    (button as HTMLButtonElement).click();
+  });
+  await expect(card).toContainText('BONFIRE COMPLETE');
+  saved = (await readRunState(page))!;
+  expect(saved.gold).toBe(0);
+  expect(saved.flameSlots[0]).toMatchObject({ investedGold: 100, stage: 'bonfire' });
+  expect(saved.actionJournal.filter(action => action.type === 'STOKE_FLAME'
+    && action.flameInstanceId === setup.flame.instanceId)).toHaveLength(1);
+  expect(saved.stats.temperBySource.bonfire).toBe(10);
+});
+
+test('either 1G control can independently finish a Flame at 99/100', async ({ page }) => {
+  for (const side of ['1', 'right'] as const) {
+    const setup = fireKeepingState(`finish-with-${side}`, 99, 1);
+    await installRunState(page, setup.state);
+    await enterRun(page);
+    const card = page.getByTestId(`fire-keeping-flame-${setup.flame.instanceId}`);
+    const button = card.getByTestId(`stoke-flame-${setup.flame.instanceId}-${side}`);
+    await expect(button).toHaveAccessibleName('Stoke Double Down for 1 Gold.');
+    await expect(button).toBeEnabled();
+    await button.click();
+    await expect(card).toContainText('BONFIRE COMPLETE');
+    const saved = (await readRunState(page))!;
+    expect(saved.gold).toBe(0);
+    expect(saved.flameSlots[0]).toMatchObject({ investedGold: 100, stage: 'bonfire' });
+    expect(saved.stats.temperBySource.bonfire).toBe(10);
+  }
 });
 
 test('global Flame details remain available during a Round without appearing on a die', async ({ page }) => {

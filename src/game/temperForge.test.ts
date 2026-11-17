@@ -67,6 +67,11 @@ describe('Temper economy', () => {
     expect(result.error).toBeUndefined();
     expect(result.state.temper).toBe(10);
     expect(result.state.stats.temperBySource.bonfire).toBe(10);
+
+    const repeated = dispatch(result.state, { type: 'STOKE_FLAME', flameInstanceId: flame.instanceId, amount: 1 });
+    expect(repeated.error).toBe('That Flame is already a Bonfire.');
+    expect(repeated.state.temper).toBe(10);
+    expect(repeated.state.stats.temperBySource.bonfire).toBe(10);
   });
 });
 
