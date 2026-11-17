@@ -101,7 +101,7 @@ export function flameVerboseDescription(id: Flame): RichText {
     allIn: [term('onCommand'), text(", arm your next manual Play for up to ×12 "), term('xMult'), text(". If that Play and its resulting Free Plays do not clear the Round, their Score is removed.")],
     topDown: [text('Play '), term('lowerSectionHand', 'Lower Section Hands'), text(' from Five of a Kind down to Pair. Each correct step gains increasingly large '), term('xMult'), text(', up to ×12. Unrelated Plays do not break the sequence.')],
     countDown: [text('Play '), term('upperHand', 'Upper Hands'), text(' in order from Sixes down to Ones. Each correct step gains increasingly large '), term('xMult'), text(', up to ×12. Unrelated Plays do not break the sequence.')],
-    bribery: [text('Beside Play, invest Gold one at a time to add '), term('xMult'), text(' to your next manual Play. Each Gold adds more XMult as this Flame grows stronger. You can invest up to 20 Gold per Round; pending investment is spent by the next manual Play and cannot be refunded.')],
+    bribery: [text('Invest 1 Gold at a time. Each Gold increases the '), term('xMult'), text(' on your next manual Play, with a larger increase as this Flame grows stronger. You can invest up to 20 Gold per Round.')],
   };
   return descriptions[id];
 }

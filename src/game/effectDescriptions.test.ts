@@ -80,4 +80,9 @@ describe('structured beginner-facing effect copy', () => {
   it('keeps deprecated Invocation wording out of all player descriptions', () => {
     expect(effectCopies().map(plainDescription).join('\n')).not.toMatch(/Invocation/i);
   });
+
+  it('describes effects without referring to UI controls or layout', () => {
+    expect(effectCopies().map(plainDescription).join('\n'))
+      .not.toMatch(/\b(?:click|button|hover|panel|tab|menu)\b|\bbeside (?:the )?(?:Play|Reroll)\b/i);
+  });
 });

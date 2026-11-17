@@ -1,5 +1,7 @@
+import { Button } from '@mantine/core';
+import type { ButtonProps } from '@mantine/core';
 import { createContext, useContext, useSyncExternalStore } from 'react';
-import type { ReactNode } from 'react';
+import type { ComponentPropsWithoutRef, CSSProperties, ReactNode } from 'react';
 import type { Action, GameEvent, GameState, GoldSource, GoldSpendSource, RoundSummary, TemperSource, TemperSpendSource } from '../game/types';
 
 export type TransferCurrency = 'gold' | 'temper';
@@ -15,6 +17,16 @@ interface TransferPlan {
   source?: Anchor;
   destination?: Anchor;
   sourceName: string;
+  spendTargetId?: string;
+}
+
+export interface PendingSpendPresentation {
+  actionType: 'BUY_DIE' | 'CONFIRM_FORGE' | 'RESTORE_LIFE';
+  before: GameState;
+  currency: TransferCurrency;
+  targetId: string;
+  total: number;
+  landed: number;
 }
 
 export interface CurrencyParticle {
@@ -32,6 +44,36 @@ interface CurrencySnapshot {
   temper: number;
   particles: CurrencyParticle[];
   active: boolean;
+  pendingSpend: PendingSpendPresentation | null;
+}
+
+export const currencySpendTarget = {
+  buyDie: (offerId: number) => `buy-die-${offerId}`,
+  forge: 'forge-confirm',
+  restoreLife: 'restore-life',
+} as const;
+
+export function revealCurrencySpendTarget(targetId: string) {
+  document.querySelector(`[data-currency-spend-target="${targetId}"]`)
+    ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+interface DelayedSpendTarget {
+  actionType: PendingSpendPresentation['actionType'];
+  currency: TransferCurrency;
+  id: string;
+  selector: string;
+}
+
+function delayedSpendTarget(action: Action): DelayedSpendTarget | null {
+  const target = action.type === 'BUY_DIE'
+    ? { actionType: action.type, currency: 'gold' as const, id: currencySpendTarget.buyDie(action.offerId) }
+    : action.type === 'CONFIRM_FORGE'
+      ? { actionType: action.type, currency: 'temper' as const, id: currencySpendTarget.forge }
+      : action.type === 'RESTORE_LIFE'
+        ? { actionType: action.type, currency: 'gold' as const, id: currencySpendTarget.restoreLife }
+        : null;
+  return target ? { ...target, selector: `[data-currency-spend-target="${target.id}"]` } : null;
 }
 
 const GOLD_SOURCES: GoldSource[] = ['golden', 'jackpot', 'diceSale', 'roundBase', 'unusedRerolls', 'interest', 'bossReward', 'specialOffer', 'infernoReward'];
@@ -46,6 +88,7 @@ const TRANSFER_TIMING = {
   minStaggerMs: 7,
   maxStaggerMs: 70,
   largeTransferThreshold: 40,
+  fillSettleMs: 100,
 } as const;
 
 const navigationActions = new Set<Action['type']>([
@@ -59,6 +102,16 @@ function pointForElement(element: Element | null): Point | null {
   if (!(element instanceof HTMLElement) && !(element instanceof SVGElement)) return null;
   const rect = element.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) return null;
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
+
+function visiblePointForSelector(selector: string): Point | null {
+  if (typeof document === 'undefined') return null;
+  const element = document.querySelector(selector);
+  if (!(element instanceof HTMLElement) && !(element instanceof SVGElement)) return null;
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0 || rect.right <= 0 || rect.bottom <= 0
+    || rect.left >= window.innerWidth || rect.top >= window.innerHeight) return null;
   return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
 }
 
@@ -79,17 +132,23 @@ function sourceAnchor(action: Action, event: GameEvent | undefined, activation: 
 
 function eventPlans(action: Action, events: GameEvent[], activation: Point | null): TransferPlan[] {
   const plans: TransferPlan[] = [];
+  const delayedTarget = delayedSpendTarget(action);
   for (const event of events) {
     const amount = typeof event.amount === 'number' ? Math.max(0, Math.floor(event.amount)) : 0;
     if (!amount) continue;
     if (event.type === 'GOLD_SPENT') plans.push({ currency: 'gold', direction: 'spend', amount,
-      destination: activation ? { point: activation } : undefined, sourceName: event.goldSpendSource ?? 'goldSpend' });
+      destination: delayedTarget?.currency === 'gold' ? { selector: delayedTarget.selector }
+        : activation ? { point: activation } : undefined,
+      sourceName: event.goldSpendSource ?? 'goldSpend',
+      ...(delayedTarget?.currency === 'gold' ? { spendTargetId: delayedTarget.id } : {}) });
     if (event.type === 'GOLD_ADDED') plans.push({ currency: 'gold', direction: 'gain', amount,
       source: sourceAnchor(action, event, activation, 'gold', event.goldSource ?? 'goldReward'), sourceName: event.goldSource ?? 'goldReward' });
     if (event.type === 'TEMPER_CHANGED') {
       const direction: TransferDirection = event.temperSpendSource ? 'spend' : 'gain';
       plans.push({ currency: 'temper', direction, amount,
-        ...(direction === 'spend' ? { destination: activation ? { point: activation } : undefined }
+        ...(direction === 'spend' ? { destination: delayedTarget?.currency === 'temper' ? { selector: delayedTarget.selector }
+          : activation ? { point: activation } : undefined,
+          ...(delayedTarget?.currency === 'temper' ? { spendTargetId: delayedTarget.id } : {}) }
           : { source: sourceAnchor(action, event, activation, 'temper', event.temperSource ?? 'temperReward') }),
         sourceName: event.temperSpendSource ?? event.temperSource ?? 'temperChange' });
     }
@@ -99,10 +158,13 @@ function eventPlans(action: Action, events: GameEvent[], activation: Point | nul
 
 function statPlans(before: GameState, next: GameState, action: Action, activation: Point | null): TransferPlan[] {
   const plans: TransferPlan[] = [];
+  const delayedTarget = delayedSpendTarget(action);
   for (const source of GOLD_SPEND_SOURCES) {
     const amount = (next.stats.goldSpentBySource[source] ?? 0) - (before.stats.goldSpentBySource[source] ?? 0);
     if (amount > 0) plans.push({ currency: 'gold', direction: 'spend', amount,
-      destination: activation ? { point: activation } : undefined, sourceName: source });
+      destination: delayedTarget?.currency === 'gold' ? { selector: delayedTarget.selector }
+        : activation ? { point: activation } : undefined,
+      sourceName: source, ...(delayedTarget?.currency === 'gold' ? { spendTargetId: delayedTarget.id } : {}) });
   }
   for (const source of GOLD_SOURCES) {
     const amount = (next.stats.goldBySource[source] ?? 0) - (before.stats.goldBySource[source] ?? 0);
@@ -112,7 +174,9 @@ function statPlans(before: GameState, next: GameState, action: Action, activatio
   for (const source of TEMPER_SPEND_SOURCES) {
     const amount = (next.stats.temperSpentBySource[source] ?? 0) - (before.stats.temperSpentBySource[source] ?? 0);
     if (amount > 0) plans.push({ currency: 'temper', direction: 'spend', amount,
-      destination: activation ? { point: activation } : undefined, sourceName: source });
+      destination: delayedTarget?.currency === 'temper' ? { selector: delayedTarget.selector }
+        : activation ? { point: activation } : undefined,
+      sourceName: source, ...(delayedTarget?.currency === 'temper' ? { spendTargetId: delayedTarget.id } : {}) });
   }
   for (const source of TEMPER_SOURCES) {
     const amount = (next.stats.temperBySource[source] ?? 0) - (before.stats.temperBySource[source] ?? 0);
@@ -150,7 +214,7 @@ export class CurrencyTransferController {
   private preserveNextSceneChange = false;
 
   constructor(gold: number, temper: number) {
-    this.snapshot = { gold, temper, particles: [], active: false };
+    this.snapshot = { gold, temper, particles: [], active: false, pendingSpend: null };
     this.committed = { gold, temper };
     this.presentationTarget = { gold, temper };
   }
@@ -205,7 +269,11 @@ export class CurrencyTransferController {
     this.deferredRound = { gold: 0, temper: 0 };
     this.committed = { gold, temper };
     this.presentationTarget = { gold, temper };
-    this.publish({ gold, temper, particles: [], active: false });
+    this.publish({ gold, temper, particles: [], active: false, pendingSpend: null });
+  }
+
+  cancelAndSnapCommitted() {
+    this.cancelAndSnap(this.committed.gold, this.committed.temper);
   }
 
   prepareResolution(before: GameState, next: GameState, action: Action, events: GameEvent[], activation: Point | null) {
@@ -249,6 +317,19 @@ export class CurrencyTransferController {
     // Some committed reward actions advance atomically (for example, Special Offers). Keep the
     // captured source point alive for that resulting scene change; any later navigation still cancels.
     this.preserveNextSceneChange = sceneChanged;
+    const delayedTarget = delayedSpendTarget(action);
+    if (delayedTarget) {
+      const targetPoint = visiblePointForSelector(delayedTarget.selector);
+      if (!targetPoint) {
+        plans = plans.map(plan => plan.spendTargetId === delayedTarget.id
+          ? { ...plan, destination: undefined, spendTargetId: undefined } : plan);
+      } else {
+        const spend = plans.find(plan => plan.direction === 'spend' && plan.currency === delayedTarget.currency
+          && plan.spendTargetId === delayedTarget.id && plan.amount > 0);
+        if (!reducedMotion && spend) this.publish({ pendingSpend: { actionType: delayedTarget.actionType,
+          before, currency: delayedTarget.currency, targetId: delayedTarget.id, total: spend.amount, landed: 0 } });
+      }
+    }
     this.schedule(plans, presentationGold, presentationTemper);
   }
 
@@ -310,7 +391,18 @@ export class CurrencyTransferController {
           if (generation !== this.generation) return;
           if (item.plan.direction === 'gain') this.tick(item.plan.currency, 1);
           const particles = this.snapshot.particles.filter(current => current.id !== particle.id);
-          this.publish({ particles, active: this.pendingTicks > 0 || particles.length > 0 });
+          const pendingSpend = this.snapshot.pendingSpend;
+          const landedSpend = pendingSpend && item.plan.spendTargetId === pendingSpend.targetId
+            ? { ...pendingSpend, landed: Math.min(pendingSpend.total, pendingSpend.landed + 1) } : pendingSpend;
+          const spendComplete = !!landedSpend && landedSpend.landed >= landedSpend.total;
+          this.publish({ particles, active: this.pendingTicks > 0 || particles.length > 0 || spendComplete,
+            pendingSpend: landedSpend });
+          if (spendComplete) this.timeout(() => {
+            if (generation !== this.generation || this.snapshot.pendingSpend?.targetId !== landedSpend.targetId
+              || this.snapshot.pendingSpend.landed < landedSpend.total) return;
+            this.publish({ pendingSpend: null,
+              active: this.pendingTicks > 0 || this.snapshot.particles.length > 0 });
+          }, TRANSFER_TIMING.fillSettleMs);
         }, duration);
       }, delay);
     }
@@ -332,24 +424,52 @@ export function CurrencyTransferProvider({ controller, children }: { controller:
 export function useCurrencyPresentation(currency: TransferCurrency, fallback: number): number {
   const controller = useContext(CurrencyTransferContext);
   const snapshot = useSyncExternalStore(controller?.subscribe ?? (() => () => undefined),
-    controller?.getSnapshot ?? (() => ({ gold: fallback, temper: fallback, particles: [], active: false })),
-    controller?.getSnapshot ?? (() => ({ gold: fallback, temper: fallback, particles: [], active: false })));
+    controller?.getSnapshot ?? (() => ({ gold: fallback, temper: fallback, particles: [], active: false, pendingSpend: null })),
+    controller?.getSnapshot ?? (() => ({ gold: fallback, temper: fallback, particles: [], active: false, pendingSpend: null })));
   return controller ? snapshot[currency] : fallback;
 }
 
 export function useCurrencyPlaybackActive(): boolean {
   const controller = useContext(CurrencyTransferContext);
   const snapshot = useSyncExternalStore(controller?.subscribe ?? (() => () => undefined),
-    controller?.getSnapshot ?? (() => ({ gold: 0, temper: 0, particles: [], active: false })),
-    controller?.getSnapshot ?? (() => ({ gold: 0, temper: 0, particles: [], active: false })));
+    controller?.getSnapshot ?? (() => ({ gold: 0, temper: 0, particles: [], active: false, pendingSpend: null })),
+    controller?.getSnapshot ?? (() => ({ gold: 0, temper: 0, particles: [], active: false, pendingSpend: null })));
   return controller ? snapshot.active : false;
+}
+
+export function usePendingSpendPresentation(): PendingSpendPresentation | null {
+  const controller = useContext(CurrencyTransferContext);
+  const snapshot = useSyncExternalStore(controller?.subscribe ?? (() => () => undefined),
+    controller?.getSnapshot ?? (() => ({ gold: 0, temper: 0, particles: [], active: false, pendingSpend: null })),
+    controller?.getSnapshot ?? (() => ({ gold: 0, temper: 0, particles: [], active: false, pendingSpend: null })));
+  return controller ? snapshot.pendingSpend : null;
+}
+
+export function useCancelCurrencyPlayback(): () => void {
+  const controller = useContext(CurrencyTransferContext);
+  return () => controller?.cancelAndSnapCommitted();
+}
+
+type CurrencySpendButtonProps = ButtonProps
+  & Omit<ComponentPropsWithoutRef<'button'>, keyof ButtonProps>
+  & { targetId: string };
+
+export function CurrencySpendButton({ targetId, className, children, ...props }: CurrencySpendButtonProps) {
+  const pending = usePendingSpendPresentation();
+  const current = pending?.targetId === targetId ? pending : null;
+  const progress = current ? current.landed / current.total : 0;
+  return <Button {...props} data-currency-spend-target={targetId}
+    data-currency-fill={current?.currency} data-currency-fill-landed={current?.landed}
+    data-currency-fill-total={current?.total} aria-busy={current ? true : undefined}
+    className={`${className ?? ''} currency-spend-button${current ? ' is-currency-filling' : ''}`.trim()}
+    style={{ '--currency-spend-progress': progress } as CSSProperties}>{children}</Button>;
 }
 
 export function CurrencyTransferLayer() {
   const controller = useContext(CurrencyTransferContext);
   const snapshot = useSyncExternalStore(controller?.subscribe ?? (() => () => undefined),
-    controller?.getSnapshot ?? (() => ({ gold: 0, temper: 0, particles: [], active: false })),
-    controller?.getSnapshot ?? (() => ({ gold: 0, temper: 0, particles: [], active: false })));
+    controller?.getSnapshot ?? (() => ({ gold: 0, temper: 0, particles: [], active: false, pendingSpend: null })),
+    controller?.getSnapshot ?? (() => ({ gold: 0, temper: 0, particles: [], active: false, pendingSpend: null })));
   return <div className="currency-transfer-layer" aria-hidden="true" data-testid="currency-transfer-layer">
     {snapshot.particles.map(particle => <span key={particle.id}
       className={`currency-particle currency-particle-${particle.currency}`}

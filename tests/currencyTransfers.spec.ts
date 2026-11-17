@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { newRun } from '../src/game/engine';
+import { Resolver } from '../src/game/effects';
 import { placeFlameInstance } from '../src/game/flames';
 import { rosterDice, syncActiveDiceProjection } from '../src/game/inventory';
 import { createDieEffect, resetDieRoundState } from '../src/game/specialDice';
@@ -52,6 +53,15 @@ function flameShop(seed: string, investedGold: number, gold: number): { state: G
   state.shop = { visitId: 1, stage: 'flames', offers: [], offerRerolls: 0, lifeRestores: 0 };
   state.nextShopVisitId = 2;
   return { state, instanceId: flame.instanceId };
+}
+
+const fixed = { next: () => .2 };
+function diceShop(seed: string): GameState {
+  const state = newRun(seed, fixed).state;
+  state.gold = 100;
+  new Resolver(state, fixed).openShop();
+  state.shop!.exitUnlocked = true;
+  return state;
 }
 
 test('1G keyboard Stoke and 5G final Stoke tick per unit and preserve cost/reward directions', async ({ page }) => {
@@ -115,6 +125,104 @@ test('Forge Temper spend animates once and an unaffordable Stoke emits nothing',
   expect(recorded.gold).toEqual([3]);
 });
 
+test('a paid die remains unpurchased until its Buy button finishes filling', async ({ page }) => {
+  const state = diceShop('currency-delayed-buy');
+  const offer = state.shop!.offers[0];
+  await installRunState(page, state); await enterRun(page); await installTrace(page);
+  const card = page.getByTestId(`dice-offer-${offer.id}`);
+  const buy = page.getByTestId(`buy-die-${offer.id}`);
+  await buy.click();
+
+  await expect(buy).toHaveAttribute('data-currency-fill', 'gold');
+  await expect(buy).toHaveAttribute('data-currency-fill-total', String(offer.price));
+  await expect(card).not.toContainText('PURCHASED');
+  await expect(page.locator('.storage-grid .collection-slot.occupied')).toHaveCount(0);
+  await expect.poll(async () => Number(await buy.getAttribute('data-currency-fill-landed'))).toBeGreaterThan(0);
+  await expect(buy).toHaveAttribute('data-currency-fill-landed', String(offer.price));
+  await expect(card).not.toContainText('PURCHASED');
+  await expect(page.getByTestId('currency-particle')).toHaveCount(0);
+
+  await expect(card).toContainText('PURCHASED');
+  await expect(page.locator('.storage-grid .collection-slot.occupied')).toHaveCount(1);
+  await expect(buy).not.toHaveAttribute('data-currency-fill');
+});
+
+test('navigating away cancels a pending Buy fill and reveals the committed purchase on return', async ({ page }) => {
+  const state = diceShop('currency-buy-navigation-cancel');
+  const offer = state.shop!.offers[0];
+  await installRunState(page, state); await enterRun(page); await installTrace(page);
+  await page.getByTestId(`buy-die-${offer.id}`).click();
+  await expect(page.getByTestId(`buy-die-${offer.id}`)).toHaveAttribute('data-currency-fill', 'gold');
+
+  await page.getByTestId('shop-stage-train').click();
+  await expect(page.getByTestId('currency-particle')).toHaveCount(0);
+  await page.getByTestId('shop-stage-shop').click();
+  await expect(page.getByTestId(`dice-offer-${offer.id}`)).toContainText('PURCHASED');
+  await expect(page.getByTestId(`buy-die-${offer.id}`)).not.toHaveAttribute('data-currency-fill');
+});
+
+test('free and reduced-motion die purchases register immediately without a fill', async ({ page }) => {
+  let state = diceShop('currency-free-buy');
+  state.shop!.freeDicePurchaseAvailable = true;
+  let offer = state.shop!.offers[0];
+  await installRunState(page, state); await enterRun(page); await installTrace(page);
+  await page.getByTestId(`buy-die-${offer.id}`).click();
+  await expect(page.getByTestId(`dice-offer-${offer.id}`)).toContainText('PURCHASED');
+  await expect(page.getByTestId('currency-particle')).toHaveCount(0);
+  expect((await trace(page)).particles).toHaveLength(0);
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  state = diceShop('currency-reduced-buy'); offer = state.shop!.offers[0];
+  await installRunState(page, state); await enterRun(page); await installTrace(page);
+  await page.getByTestId(`buy-die-${offer.id}`).click();
+  await expect(page.getByTestId(`dice-offer-${offer.id}`)).toContainText('PURCHASED');
+  await expect(page.getByTestId('currency-particle')).toHaveCount(0);
+  expect((await trace(page)).particles).toHaveLength(0);
+});
+
+test('dragging a Forge result sends Temper to the Forge button and delays placement', async ({ page }) => {
+  const state = diceShop('currency-delayed-drag-forge');
+  state.temper = 10; state.forgeUnlocked = true; state.shop!.stage = 'forge';
+  state.shop!.forgeSelection = { dieAId: 0, dieBId: 1 };
+  await installRunState(page, state); await enterRun(page); await installTrace(page);
+  const forge = page.getByTestId('forge-confirm');
+  const center = await forge.boundingBox();
+  await page.evaluate(() => {
+    const button = document.querySelector('[data-testid="forge-confirm"]')!;
+    const layer = document.querySelector('[data-testid="currency-transfer-layer"]')!;
+    const forgeTrace = { currencies: [] as string[], landed: [] as number[], destinations: [] as { x: number; y: number }[] };
+    new MutationObserver(() => {
+      const currency = button.getAttribute('data-currency-fill');
+      if (currency) forgeTrace.currencies.push(currency);
+      const landed = Number(button.getAttribute('data-currency-fill-landed'));
+      if (landed > 0) forgeTrace.landed.push(landed);
+    }).observe(button, { attributes: true, attributeFilter: ['data-currency-fill', 'data-currency-fill-landed'] });
+    new MutationObserver(records => records.forEach(record => record.addedNodes.forEach(node => {
+      if (!(node instanceof HTMLElement) || !node.matches('[data-testid="currency-particle"]')) return;
+      const style = node.getAttribute('style') ?? '';
+      forgeTrace.destinations.push({
+        x: Number(style.match(/--currency-to-x:\s*([\d.]+)px/)?.[1]),
+        y: Number(style.match(/--currency-to-y:\s*([\d.]+)px/)?.[1]),
+      });
+    }))).observe(layer, { childList: true });
+    (window as unknown as { forgeTrace: typeof forgeTrace }).forgeTrace = forgeTrace;
+  });
+  await page.getByTestId('forge-result-preview').dragTo(page.getByTestId('collection-slot-storage-0'));
+
+  await expect.poll(async () => (await trace(page)).particles.length).toBe(2);
+  const forgeTrace = await page.evaluate(() => (window as unknown as {
+    forgeTrace: { currencies: string[]; landed: number[]; destinations: { x: number; y: number }[] };
+  }).forgeTrace);
+  expect(forgeTrace.currencies).toContain('temper');
+  const destination = forgeTrace.destinations[0];
+  expect(Math.abs(destination.x - (center!.x + center!.width / 2))).toBeLessThan(2);
+  expect(Math.abs(destination.y - (center!.y + center!.height / 2))).toBeLessThan(2);
+  await expect(page.getByTestId('currency-particle')).toHaveCount(0);
+
+  await expect(page.locator('.forge-staged')).toHaveCount(0);
+  await expect(page.getByTestId('collection-slot-storage-0')).toContainText('Basic II');
+});
+
 test('a portal confirmation uses its clicked control as the Gold destination', async ({ page }) => {
   const state = newRun('currency-portal-confirmation').state;
   state.phase = 'shop'; state.gold = 100; state.lives = state.infernoRewards.upgrades.maxLives - 1;
@@ -130,6 +238,29 @@ test('a portal confirmation uses its clicked control as the Gold destination', a
   expect(recorded.particles).toHaveLength(cost);
   expect(recorded.particles.every(item => item.currency === 'gold' && item.direction === 'spend'
     && item.source === 'lifeRestore')).toBe(true);
+});
+
+test('life restoration stays visually pending and closing its modal snaps to the committed result', async ({ page }) => {
+  const state = diceShop('currency-delayed-life-restore');
+  state.lives = state.infernoRewards.upgrades.maxLives - 1;
+  await installRunState(page, state); await enterRun(page); await installTrace(page);
+  const livesBefore = await page.getByTestId('stat-lives').getAttribute('aria-label');
+  await page.getByTestId('stat-lives').click();
+  const modal = page.getByRole('dialog', { name: 'RESTORE LIVES' });
+  const restore = page.getByTestId('restore-life');
+  const nextPriceBefore = await modal.getByText(/Next restore:/).textContent();
+  await restore.click();
+
+  await expect(restore).toHaveAttribute('data-currency-fill', 'gold');
+  await expect(page.getByTestId('stat-lives')).toHaveAttribute('aria-label', livesBefore!);
+  await expect(modal.getByText(/Next restore:/)).toHaveText(nextPriceBefore!);
+  await expect.poll(async () => Number(await restore.getAttribute('data-currency-fill-landed'))).toBeGreaterThan(0);
+  await modal.getByRole('button', { name: 'Close', exact: true }).click();
+
+  await expect(modal).toBeHidden();
+  await expect(page.getByTestId('currency-particle')).toHaveCount(0);
+  await expect(page.getByTestId('stat-lives')).toHaveAttribute('aria-label',
+    `${state.infernoRewards.upgrades.maxLives} of ${state.infernoRewards.upgrades.maxLives} lives; restore lives`);
 });
 
 test('shop-tab cancellation clears queued spend particles and prevents delayed ticks', async ({ page }) => {

@@ -50,6 +50,15 @@ button { font: inherit; }
 .currency-gold .currency-symbol { color: var(--mantine-color-yellow-4); }
 .currency-temper .currency-symbol { color: var(--mantine-color-orange-4); }
 .button-currency-label { display: inline-flex; align-items: baseline; gap: .35em; white-space: nowrap; }
+.currency-spend-button { position: relative; isolation: isolate; overflow: hidden; }
+.currency-spend-button::before { content: ''; position: absolute; z-index: 0; inset: 0; pointer-events: none;
+  transform: scaleX(var(--currency-spend-progress, 0)); transform-origin: left center; transition: transform 80ms linear; }
+.currency-spend-button .mantine-Button-inner { position: relative; z-index: 1; }
+.currency-spend-button[data-currency-fill="gold"]::before {
+  background: linear-gradient(90deg, rgba(255,212,59,.58), rgba(250,176,5,.42)); }
+.currency-spend-button[data-currency-fill="temper"]::before {
+  background: linear-gradient(90deg, rgba(255,146,43,.62), rgba(240,62,62,.46)); }
+.currency-spend-button.is-currency-filling:disabled { opacity: 1; }
 .hud-stat-label { color: var(--mantine-color-dimmed); font-size: .65rem; text-transform: uppercase; letter-spacing: .04em; }
 .hud-stage-value { display: inline-flex; gap: 6px; }
 .hud-stage-segment { display: inline-flex; gap: 1px; }

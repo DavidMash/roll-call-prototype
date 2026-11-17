@@ -14,7 +14,7 @@ import { exactRatioNumber } from '../game/scoreMath';
 import { CurrencyAmount, type Currency } from './CurrencyAmount';
 import { withSpeedDemonDecisionTime, type FlamePresentation } from '../game/flamePresentation';
 import type { DecisionTimer } from '../game/decisionTimer';
-import { useCurrencyPresentation } from './CurrencyTransfers';
+import { useCurrencyPresentation, usePendingSpendPresentation } from './CurrencyTransfers';
 
 const CONTEXTUAL_FLAME_TYPES = new Set<string>([
   'burnItDown', 'greaseTheEngine', 'lightningStrike', 'dareDevil', 'allIn', 'bribery',
@@ -75,7 +75,7 @@ function SpeedDemonFlameBadge({ flame, presentation, resolved, openFlameDetails,
     resolved={resolved} openFlameDetails={openFlameDetails} />;
 }
 
-export function TopHud({ board, event, flamePresentation = [], decisionTimer, speed, setSpeed, diceDisplay, setDiceDisplay, openRunInfo, openHelp, openRestoreLives, openFlameDetails, returnToTitle, onMenuOpenChange }: {
+export function TopHud({ board: resolvedBoard, event, flamePresentation = [], decisionTimer, speed, setSpeed, diceDisplay, setDiceDisplay, openRunInfo, openHelp, openRestoreLives, openFlameDetails, returnToTitle, onMenuOpenChange }: {
   board: Board;
   event?: GameEvent | null;
   flamePresentation?: FlamePresentation[];
@@ -91,6 +91,8 @@ export function TopHud({ board, event, flamePresentation = [], decisionTimer, sp
   returnToTitle: () => void;
   onMenuOpenChange?: (opened: boolean) => void;
 }) {
+  const pendingSpend = usePendingSpendPresentation();
+  const board = pendingSpend?.actionType === 'RESTORE_LIFE' ? pendingSpend.before : resolvedBoard;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const maxLives = board.infernoRewards.upgrades.maxLives;
   const hearts = Array.from({ length: maxLives }, (_, index) => index < board.lives ? '♥' : '♡').join(' ');
