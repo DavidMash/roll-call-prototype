@@ -267,6 +267,9 @@ button { font: inherit; }
 .fire-keeping-stoke-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
 .fire-keeping-stoke-buttons .mantine-Button-root { width: 100%; min-width: 0; }
 .bonfire-complete { width: 100%; min-height: 60px; display: grid; place-items: center; text-align: center; letter-spacing: .06em; }
+@media (min-width: 721px) {
+  .fire-keeping-card:only-child { width: calc((100% - 7px) / 2); justify-self: start; }
+}
 .bust-shop-banner { background: rgba(250,82,82,.08); border: 1px solid rgba(250,82,82,.26); }
 .round-summary-screen { max-width: 620px; margin: clamp(12px, 5vh, 54px) auto 0; border: 1px solid color-mix(in srgb, var(--screen-primary) 44%, transparent); background: #151b20; box-shadow: 0 22px 60px rgba(0,0,0,.34); }
 .round-summary-heading { text-align: center; }

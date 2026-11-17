@@ -100,6 +100,13 @@ test('Fire Keeping renders only owned Flames and stokes an instance in place int
   const card = page.getByTestId(`fire-keeping-flame-${flame.instanceId}`);
   await expect(card).toContainText('EMBER');
   await expect(card).toContainText('Complete this Bonfire: +10T');
+  const grid = page.getByTestId('global-flame-slots');
+  const mobileWidths = await Promise.all([grid, card].map(async element => (await element.boundingBox())!.width));
+  expect(Math.abs(mobileWidths[0] - mobileWidths[1])).toBeLessThan(2);
+  await page.setViewportSize({ width: 1180, height: 844 });
+  const desktopWidths = await Promise.all([grid, card].map(async element => (await element.boundingBox())!.width));
+  expect(Math.abs(desktopWidths[1] - (desktopWidths[0] - 7) / 2)).toBeLessThan(2);
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: test.info().outputPath('fire-keeping-one-flame-mobile.png'), fullPage: true });
   const info = card.getByRole('button', { name: 'Info about Double Down' });
   await info.focus();
