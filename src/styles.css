@@ -1159,16 +1159,30 @@ body, #root { overflow: hidden; }
 .dice-dock .dice-row { width: min(100%, 620px); margin: 0 auto; grid-template-columns: repeat(var(--dice-columns, 5), minmax(0, 1fr)); gap: 6px; }
 .die-slot { min-width: 0; display: grid; grid-template-rows: auto auto 24px; align-items: center; }
 .die-direct-action-slot {
-  width: 100%; min-width: 0; min-height: calc(var(--die-action-rows, 0) * 44px);
+  width: 100%; min-width: 0; min-height: calc(var(--die-action-rows, 0) * 38px);
   display: flex; align-items: flex-end; justify-content: center;
 }
 .die-direct-actions { width: 100%; min-width: 0; display: grid; gap: 2px; align-self: end; }
 .die-direct-action.mantine-Button-root {
-  width: 100%; min-width: 44px; min-height: 44px; height: 44px; padding-inline: 3px;
-  border-radius: 6px 6px 3px 3px; font-size: clamp(.52rem, 1.55vw, .67rem); line-height: 1;
+  position: relative; isolation: isolate; overflow: hidden;
+  width: 100%; min-width: 44px; min-height: 36px; height: 36px; padding-inline: 3px;
+  border: 1px solid color-mix(in srgb, var(--die-action-accent) 58%, transparent);
+  border-radius: 6px 6px 3px 3px;
+  background: color-mix(in srgb, var(--die-action-accent) 10%, var(--mantine-color-dark-8));
+  color: color-mix(in srgb, var(--die-action-accent) 82%, white);
+  font-size: clamp(.52rem, 1.55vw, .67rem); line-height: 1;
 }
-.die-direct-action .mantine-Button-label { min-width: 0; display: grid; justify-items: center; gap: 2px; }
-.die-direct-action small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: .48rem; white-space: nowrap; }
+.die-direct-action.mantine-Button-root::before {
+  position: absolute; z-index: 0; inset: 0; content: ''; pointer-events: none;
+  background: color-mix(in srgb, var(--die-action-accent) 38%, transparent);
+  transform: scaleX(var(--die-action-progress, 0)); transform-origin: left;
+  transition: transform .16s ease;
+}
+.die-direct-action .mantine-Button-inner { position: relative; z-index: 1; }
+.die-direct-action .mantine-Button-label {
+  min-width: 0; display: flex; align-items: center; justify-content: center; gap: 3px; white-space: nowrap;
+}
+.die-direct-action .die-type-icon { flex: 0 0 auto; }
 .die-face-details:focus-visible, .flame-detail-trigger:focus-visible {
   outline: 2px solid var(--mantine-color-orange-4); outline-offset: 1px;
 }
@@ -1360,7 +1374,6 @@ body, #root { overflow: hidden; }
   .die-slot .die { min-height: 46px; max-height: 55px; }
   .die-slot .die > .die-number { font-size: 1.45rem; }
   .die-direct-action.mantine-Button-root { padding-inline: 1px; font-size: .48rem; }
-  .die-direct-action small { font-size: .41rem; }
   .dice-dock:has(.dice-row[data-dice-count="7"]) { margin-inline: -6px; padding-inline: 0 !important; overflow-x: clip; }
   .dice-dock .dice-row[data-dice-count="7"] { width: calc(100% - 1px); gap: 1px; }
 }

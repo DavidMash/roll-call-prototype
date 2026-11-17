@@ -51,6 +51,35 @@ test('stacked direct controls remain independent, touchable, and responsive at a
   await expect(page.getByTestId('chameleon-action-0')).toBeDisabled();
   await expect(page.getByTestId('furnace-action-1')).toBeDisabled();
   await expect(page.getByTestId('furnace-action-0')).toBeEnabled();
+  await expect(page.getByTestId('chameleon-action-1')).toHaveText('USE');
+  await expect(page.getByTestId('chameleon-action-1').locator('.die-type-icon')).toHaveCount(1);
+  await expect(page.getByTestId('furnace-action-0')).toHaveText('FEED');
+  await expect(page.getByTestId('furnace-action-0').locator('.die-type-icon')).toHaveCount(1);
+  await expect(page.getByTestId('chameleon-action-0')).toHaveAccessibleName(/0 of 2 Uses remaining.*no Uses remaining/i);
+  await expect(page.getByTestId('furnace-action-1')).toHaveAccessibleName(/0 of 5 feeds remaining.*at most 5 Gold/i);
+  await expect(page.getByTestId('chameleon-action-1')).toHaveAttribute('data-action-remaining', '2');
+  await expect(page.getByTestId('chameleon-action-1')).toHaveAttribute('data-action-capacity', '2');
+  await expect(page.getByTestId('chameleon-action-1')).toHaveAttribute('title', /2 of 2 Uses remaining/);
+  await expect(page.getByTestId('furnace-action-0')).toHaveAttribute('data-action-remaining', '5');
+  await expect(page.getByTestId('furnace-action-0')).toHaveAttribute('title', /5 of 5 feeds remaining/);
+  expect(await page.getByTestId('chameleon-action-0').evaluate(element =>
+    Number(getComputedStyle(element).getPropertyValue('--die-action-progress')))).toBe(0);
+  expect(await page.getByTestId('chameleon-action-1').evaluate(element =>
+    Number(getComputedStyle(element).getPropertyValue('--die-action-progress')))).toBe(1);
+  expect(await page.getByTestId('furnace-action-1').evaluate(element =>
+    Number(getComputedStyle(element).getPropertyValue('--die-action-progress')))).toBe(0);
+
+  await page.getByTestId('chameleon-action-2').click();
+  await expect(page.getByTestId('chameleon-action-2')).toHaveAttribute('data-action-remaining', '1');
+  expect(await page.getByTestId('chameleon-action-2').evaluate(element =>
+    Number(getComputedStyle(element).getPropertyValue('--die-action-progress')))).toBe(.5);
+  await page.getByTestId('chameleon-action-2').click();
+  await expect(page.getByTestId('chameleon-action-2')).toHaveAttribute('data-action-remaining', '0');
+  await expect(page.getByTestId('chameleon-action-2')).toBeDisabled();
+  expect(await page.getByTestId('chameleon-action-2').evaluate(element =>
+    Number(getComputedStyle(element).getPropertyValue('--die-action-progress')))).toBe(0);
+  await page.getByTestId('chameleon-action-3').click();
+  await expect(page.getByTestId('chameleon-action-3')).toHaveAttribute('data-action-remaining', '1');
 
   for (const viewport of [
     { width: 320, height: 720 }, { width: 375, height: 812 }, { width: 430, height: 932 },
@@ -59,26 +88,40 @@ test('stacked direct controls remain independent, touchable, and responsive at a
     await page.setViewportSize(viewport);
     const audit = await page.getByTestId('dice-dock').evaluate(element => {
       const buttons = [...element.querySelectorAll<HTMLElement>('.die-direct-action')];
+      const slotHeights = [...element.querySelectorAll<HTMLElement>('.die-direct-action-slot')]
+        .map(slot => slot.getBoundingClientRect().height);
       return {
         bodyOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
         dockOverflow: element.scrollWidth > element.clientWidth,
         minimumWidth: Math.min(...buttons.map(button => button.getBoundingClientRect().width)),
         minimumHeight: Math.min(...buttons.map(button => button.getBoundingClientRect().height)),
+        maximumHeight: Math.max(...buttons.map(button => button.getBoundingClientRect().height)),
+        slotHeightVariance: Math.max(...slotHeights) - Math.min(...slotHeights),
       };
     });
-    expect(audit).toMatchObject({ bodyOverflow: false, dockOverflow: false });
+    expect(audit).toMatchObject({ bodyOverflow: false, dockOverflow: false, slotHeightVariance: 0 });
     expect(audit.minimumWidth).toBeGreaterThanOrEqual(44);
-    expect(audit.minimumHeight).toBeGreaterThanOrEqual(44);
+    expect(audit.minimumHeight).toBeGreaterThanOrEqual(36);
+    expect(audit.maximumHeight).toBeLessThanOrEqual(36.5);
     await page.screenshot({ path: path.join(screenshotDir, `${viewport.width}-five-forged-direct-controls.png`), fullPage: true });
   }
 
   await page.setViewportSize({ width: 430, height: 932 });
   await page.getByTestId('furnace-action-0').click();
+  await expect(page.getByTestId('furnace-action-0')).toHaveAttribute('data-action-remaining', '4');
+  expect(await page.getByTestId('furnace-action-0').evaluate(element =>
+    Number(getComputedStyle(element).getPropertyValue('--die-action-progress')))).toBe(.8);
   await expect(page.locator('.die.is-die-selected')).toHaveCount(0);
   await expect.poll(async () => (await readRunState(page))?.gold).toBe(19);
   await page.getByTestId('flame-die-0').getByRole('button', { name: /View details/ }).click();
   const details = page.getByTestId('die-details-modal');
   await expect(details.locator('.die-details-actions')).toHaveCount(0);
+  await expect(details).toContainText('0 / 2');
+  await expect(details).toContainText('1 / 5');
+  await expect(page.getByTestId('furnace-action-0')).toBeDisabled();
+  await expect(page.getByTestId('furnace-action-0')).toHaveAccessibleName(/4 of 5 feeds remaining.*temporarily unavailable/i);
+  expect(await page.getByTestId('furnace-action-0').evaluate(element =>
+    Number(getComputedStyle(element).getPropertyValue('--die-action-progress')))).toBe(.8);
   await page.screenshot({ path: path.join(screenshotDir, '430-informational-die-details.png'), fullPage: true });
 
   const seven = sevenForgedDice();
@@ -93,10 +136,16 @@ test('stacked direct controls remain independent, touchable, and responsive at a
     dockScrollWidth: element.scrollWidth,
     minimumWidth: Math.min(...[...element.querySelectorAll<HTMLElement>('.die-direct-action')]
       .map(button => button.getBoundingClientRect().width)),
+    minimumHeight: Math.min(...[...element.querySelectorAll<HTMLElement>('.die-direct-action')]
+      .map(button => button.getBoundingClientRect().height)),
+    actionSlotHeights: [...element.querySelectorAll<HTMLElement>('.die-direct-action-slot')]
+      .map(slot => slot.getBoundingClientRect().height),
   }));
   expect(sevenAudit.bodyOverflow).toBe(false);
   expect(sevenAudit.dockOverflowPixels, JSON.stringify(sevenAudit)).toBeLessThanOrEqual(1);
   expect(sevenAudit.minimumWidth).toBeGreaterThanOrEqual(44);
+  expect(sevenAudit.minimumHeight).toBeGreaterThanOrEqual(36);
+  expect(new Set(sevenAudit.actionSlotHeights).size).toBe(1);
   await page.screenshot({ path: path.join(screenshotDir, '320-seven-forged-direct-controls.png'), fullPage: true });
 });
 
