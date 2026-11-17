@@ -45,6 +45,7 @@ import { SCENARIOS, scenarioById, type ScenarioDefinition } from './game/scenari
 import { emptyScenarioProgress, loadScenarioProgress, recordScenarioCompletion } from './game/scenarioProgress';
 import { newRun } from './game/engine';
 import { DecisionTimer } from './game/decisionTimer';
+import { CurrencyTransferController, CurrencyTransferLayer, CurrencyTransferProvider } from './components/CurrencyTransfers';
 
 const freshSeed = () => `roll-${Array.from(crypto.getRandomValues(new Uint32Array(2)), n => n.toString(36)).join('-')}`;
 const query = new URLSearchParams(window.location.search);
@@ -84,6 +85,7 @@ export default function App() {
   const scenarioGame = useGame(null, `scenario-${initialSeed}`, speed,
     runMode === 'scenario' && scenarioView === 'playing', initialDebugTraceMode, undefined, 'scenario');
   const game = runMode === 'tutorial' ? tutorialGame : runMode === 'scenario' ? scenarioGame : normalGame;
+  const [currencyTransfers] = useState(() => new CurrencyTransferController(game.state.gold, game.state.temper));
   const [onboarding, setOnboarding] = useState<OnboardingMetadata>(() => {
     try { return loadOnboardingMetadata(window.localStorage); }
     catch { return defaultOnboardingMetadata(); }
@@ -116,6 +118,25 @@ export default function App() {
       blocking: false, gateInteractions: false, actionLabel: 'GOT IT',
       completion: { kind: 'acknowledge' },
     } : null;
+  const visibleCurrencyScene = `${runMode ?? 'landing'}:${scenarioView}:${board.phase}:${board.shop?.stage ?? ''}`;
+  const previousCurrencyScene = useRef(visibleCurrencyScene);
+  useEffect(() => {
+    const pointer = (event: PointerEvent) => currencyTransfers.capturePointer(event);
+    const click = (event: MouseEvent) => currencyTransfers.captureClick(event);
+    document.addEventListener('pointerdown', pointer, true);
+    document.addEventListener('click', click, true);
+    return () => {
+      document.removeEventListener('pointerdown', pointer, true);
+      document.removeEventListener('click', click, true);
+    };
+  }, [currencyTransfers]);
+  useLayoutEffect(() => { currencyTransfers.syncCommitted(state.gold, state.temper); }, [currencyTransfers, state.gold, state.temper]);
+  useLayoutEffect(() => {
+    if (previousCurrencyScene.current === visibleCurrencyScene) return;
+    previousCurrencyScene.current = visibleCurrencyScene;
+    if (board.phase === 'roundSummary' && board.roundSummary) currencyTransfers.playPendingSummary(board.roundSummary);
+    else currencyTransfers.handleSceneChange(board.gold, board.temper);
+  }, [board.gold, board.phase, board.roundSummary, board.shop?.stage, board.temper, currencyTransfers, visibleCurrencyScene]);
   useLayoutEffect(() => setSeedInput(state.seed), [state.seed]);
   useEffect(() => saveDiceDisplay(diceDisplay), [diceDisplay]);
   useEffect(() => { saveOnboardingMetadata(window.localStorage, onboarding); }, [onboarding]);
@@ -136,7 +157,10 @@ export default function App() {
   }, [scenarioGame.state.scenario, scenarioGame.runSession.ledger.runId]);
   function submit(action: Action) {
     if (busy) return;
-    if (!game.submit(action)) return;
+    const before = state;
+    const activation = currencyTransfers.consumeActivation();
+    if (!game.submit(action, resolution => currencyTransfers.prepareResolution(before, resolution.state, action,
+      resolution.events, activation))) return;
     if (!['BUY_DIE', 'MOVE_DIE', 'SELL_DIE', 'STOKE_FLAME', 'RESTORE_LIFE', 'DISMISS_FLAME_TUTORIAL', 'UNLOCK_SHOP_EXIT'].includes(action.type)) setSelectedOffer(null);
     setSelectedFlameOffer(null);
     if (!['TOGGLE_CHARGE', 'TOGGLE_ALL_IN', 'ACTIVATE_BRIBERY', 'ACTIVATE_BURN_IT_DOWN',
@@ -255,7 +279,7 @@ export default function App() {
       onContinue={() => setRunMode('normal')} onTutorial={startTutorialFromLanding} onNewRun={startNewRunFromLanding}
       onScenarios={openScenarios} />
   </Container>;
-  return <RunActionRowContext.Provider value={actionRowTarget}><Container size={1180} px={{ base: 6, sm: 'sm' }} py={8}
+  return <CurrencyTransferProvider controller={currencyTransfers}><RunActionRowContext.Provider value={actionRowTarget}><Container size={1180} px={{ base: 6, sm: 'sm' }} py={8}
     className={`app-container screen-theme ${board.phase === 'round' ? 'active-gameplay' : ''}`}
     data-screen-theme={theme.id} data-playback-speed={speed}
     style={{ '--screen-primary': theme.accent, '--screen-secondary': theme.accentStrong } as React.CSSProperties}>
@@ -340,5 +364,6 @@ export default function App() {
         || faceDetails !== null || flameDetails !== null}
       onAcknowledge={() => submit({ type: 'DISMISS_FLAME_TUTORIAL' })}
       onRecover={() => submit({ type: 'DISMISS_FLAME_TUTORIAL' })} onFinish={() => undefined} />}
-  </Container></RunActionRowContext.Provider>;
+    <CurrencyTransferLayer />
+  </Container></RunActionRowContext.Provider></CurrencyTransferProvider>;
 }

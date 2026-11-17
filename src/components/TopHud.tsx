@@ -14,17 +14,23 @@ import { exactRatioNumber } from '../game/scoreMath';
 import { CurrencyAmount, type Currency } from './CurrencyAmount';
 import { withSpeedDemonDecisionTime, type FlamePresentation } from '../game/flamePresentation';
 import type { DecisionTimer } from '../game/decisionTimer';
+import { useCurrencyPresentation } from './CurrencyTransfers';
 
 const CONTEXTUAL_FLAME_TYPES = new Set<string>([
   'burnItDown', 'greaseTheEngine', 'lightningStrike', 'dareDevil', 'allIn', 'bribery',
 ]);
 
-function HudStat({ testId, currency, label, value }: { testId: string; currency: Currency; label: string; value: number }) {
-  const formatted = formatPlayerNumber(value);
+function HudStat({ testId, currency, label, value, accessibleValue = value }: { testId: string; currency: Currency; label: string; value: number; accessibleValue?: number }) {
+  const formatted = formatPlayerNumber(accessibleValue);
   return <div className="hud-stat" data-testid={testId} aria-label={`${label} ${formatted}`}>
     <span className="hud-stat-label">{label}</span>
     <strong><CurrencyAmount currency={currency} value={value} accessible={false} /></strong>
   </div>;
+}
+
+function CurrencyHudStat({ currency, label, committed }: { currency: 'gold' | 'temper'; label: string; committed: number }) {
+  const presented = useCurrencyPresentation(currency, committed);
+  return <HudStat testId={`stat-${currency}`} currency={currency} label={label} value={presented} accessibleValue={committed} />;
 }
 
 interface FlameBadgeProps {
@@ -124,8 +130,8 @@ export function TopHud({ board, event, flamePresentation = [], decisionTimer, sp
                 <span className="hud-stage-segment"><span className="hud-stage-letter">R</span>{formatPlayerNumber(chapter.chapterRound)}</span></>}
           </strong>
         </div>
-        <HudStat testId="stat-gold" currency="gold" label="Gold" value={board.gold} />
-        <HudStat testId="stat-temper" currency="temper" label="Temper" value={board.temper} />
+        <CurrencyHudStat currency="gold" label="Gold" committed={board.gold} />
+        <CurrencyHudStat currency="temper" label="Temper" committed={board.temper} />
         {board.phase === 'shop'
           ? <Tooltip label="Restore lost lives" withArrow><UnstyledButton className="hud-lives interactive" data-testid="stat-lives"
             data-tutorial="lives"

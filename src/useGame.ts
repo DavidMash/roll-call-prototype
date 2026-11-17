@@ -197,7 +197,7 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
     busy, error,
     hasStoredRun, persistenceStatus, retryPersistence, repository, session: result.session, runSession: result.session,
     progress: { current: Math.min(index + 1, result.events.length), total: result.events.length },
-    submit: (action: Action) => {
+    submit: (action: Action, onAccepted?: (resolution: Resolution) => void) => {
       if (busy || submitting.current) return false;
       submitting.current = true;
       const next = dispatch(result.state, action);
@@ -206,6 +206,7 @@ export function useGame(requestedSeed: string | null, fallbackSeed: string, spee
         setError(next.error);
         return false;
       }
+      onAccepted?.(next);
       commit(next);
       return true;
     },

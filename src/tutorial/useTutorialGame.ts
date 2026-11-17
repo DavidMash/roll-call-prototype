@@ -195,11 +195,12 @@ export function useTutorialGame(speed: PlaybackSpeed, active = true, suppliedRep
     event: playbackBusy ? result.events[index] : null,
     busy, error, hasStoredRun, persistenceStatus, retryPersistence, repository, runSession: result.session,
     progress: { current: Math.min(index + 1, result.events.length), total: result.events.length },
-    submit: (action: Action) => {
+    submit: (action: Action, onAccepted?: (resolution: Resolution) => void) => {
       if (busy || submitting.current) return false;
       submitting.current = true;
       const next = dispatchTutorial(session, action);
       if (next.error) { submitting.current = false; setError(next.error); return false; }
+      onAccepted?.(next.resolution);
       commit(next.session, next.resolution);
       return true;
     },

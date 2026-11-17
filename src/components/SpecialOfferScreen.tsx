@@ -9,6 +9,7 @@ import { useEffect, useRef } from 'react';
 import { RichDescription } from './RichDescription';
 import { specialOfferCopy } from '../game/effectDescriptions';
 import { HANDS } from '../game/hands';
+import { useCurrencyPlaybackActive } from './CurrencyTransfers';
 
 export function SpecialOfferScreen({ board, busy, submit }: {
   board: Board;
@@ -16,13 +17,14 @@ export function SpecialOfferScreen({ board, busy, submit }: {
   submit: (action: Action) => void;
 }) {
   const selection = board.specialOffer!;
+  const currencyPlaybackActive = useCurrencyPlaybackActive();
   const resumedLegacyClaim = useRef(false);
   useEffect(() => {
-    if (!busy && selection.acquired && !resumedLegacyClaim.current) {
+    if (!busy && !currencyPlaybackActive && selection.acquired && !resumedLegacyClaim.current) {
       resumedLegacyClaim.current = true;
       submit({ type: 'CONTINUE_SPECIAL_OFFER' });
     }
-  }, [busy, selection.acquired, submit]);
+  }, [busy, currencyPlaybackActive, selection.acquired, submit]);
   return <Stack gap="md" className="special-offer-screen">
     <Paper p="lg" className="special-offer-heading">
       <Group justify="space-between" align="flex-start">
