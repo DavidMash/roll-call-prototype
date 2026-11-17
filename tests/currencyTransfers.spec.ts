@@ -171,6 +171,50 @@ test('Great Fairy Gold launches from its visible offer and lands before automati
   await expect.poll(async () => (await readRunState(page))?.gold).toBe(17);
 });
 
+function scoringRewardState(seed: string, effect: 'golden' | 'jackpot', effectCount = 1,
+  target = 100_000n): { state: GameState; dieIds: number[] } {
+  const state = newRun(seed, { next: () => .99 }).state;
+  state.target = target; state.stats.rounds[0].target = target; state.gold = 4;
+  state.dice.forEach(die => { die.value = 6; });
+  const dice = rosterDice(state).slice(0, effectCount);
+  for (const die of dice) die.effects = [createDieEffect(die.id, effect)];
+  syncActiveDiceProjection(state); state.dieRoundState = resetDieRoundState(rosterDice(state));
+  return { state, dieIds: dice.map(die => die.id) };
+}
+
+async function playScoringRow(page: Page, row: 'sixes') {
+  await page.getByTestId(`scorecard-row-${row}`).click();
+  await page.getByTestId('play-action').click();
+}
+
+test('Golden rewards fly from the scoring die and tick the header on each landing', async ({ page }) => {
+  const { state, dieIds } = scoringRewardState('currency-golden-immediate', 'golden', 2);
+  await installRunState(page, state); await enterRun(page); await installTrace(page);
+  const dieBounds = await Promise.all(dieIds.map(dieId => page.locator(`[data-die-id="${dieId}"]`).boundingBox()));
+  await playScoringRow(page, 'sixes');
+  await expect(page.getByTestId('stat-gold')).toHaveAttribute('aria-label', 'Gold 6');
+  await expect.poll(async () => (await trace(page)).particles.length).toBe(2);
+  const particles = page.getByTestId('currency-particle');
+  const origins = await particles.evaluateAll(elements => elements.map(element => ({
+    x: Number(element.getAttribute('style')?.match(/--currency-from-x:\s*([\d.]+)px/)?.[1]),
+    y: Number(element.getAttribute('style')?.match(/--currency-from-y:\s*([\d.]+)px/)?.[1]),
+  })));
+  for (let index = 0; index < origins.length; index++) {
+    expect(Math.abs(origins[index].x - (dieBounds[index]!.x + dieBounds[index]!.width / 2))).toBeLessThan(2);
+    expect(Math.abs(origins[index].y - (dieBounds[index]!.y + dieBounds[index]!.height / 2))).toBeLessThan(2);
+  }
+  await expect(page.getByTestId('stat-gold')).toHaveText('Gold4G');
+  await expect(particles).toHaveCount(0);
+  await waitForParticles(page, 2);
+  const recorded = await trace(page);
+  expect(recorded.gold).toEqual([4, 5, 6]);
+  expect(recorded.particles).toEqual([
+    { currency: 'gold', direction: 'gain', source: 'golden' },
+    { currency: 'gold', direction: 'gain', source: 'golden' },
+  ]);
+  expect((await readRunState(page))!.gold).toBe(6);
+});
+
 function payoutState(priorRoundSpend = false): GameState {
   const state = newRun('currency-round-payout', { next: () => .99 }).state;
   state.target = 1n; state.stats.rounds[0].target = 1n;
@@ -189,29 +233,30 @@ async function playPayout(page: Page) {
   await expect(page.getByTestId('round-summary')).toBeVisible();
 }
 
-test('round payout counts each contributing row once and gains tick only on landing', async ({ page }) => {
+test('round summary is static and immediately reconciles Gold and Temper', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 800 });
   await installRunState(page, payoutState(true)); await enterRun(page); await installTrace(page);
   await playPayout(page);
   const saved = (await readRunState(page))!;
-  const expected = saved.roundSummary!.totalGoldEarned + saved.roundSummary!.temper.total;
-  await waitForParticles(page, expected);
+  await expect(page.getByTestId('currency-particle')).toHaveCount(0);
+  await expect(page.getByTestId('stat-gold')).toHaveText(`Gold${saved.gold}G`);
+  await expect(page.getByTestId('stat-temper')).toHaveText(`Temper${saved.temper}T`);
+  await expect(page.getByTestId('summary-gold-breakdown')).toContainText('Golden');
+  await expect(page.getByTestId('summary-gold-breakdown')).toContainText('Jackpot');
+  expect(saved.roundSummary!.sources.goldenGold).toBeGreaterThan(0);
+  expect(saved.roundSummary!.sources.jackpotGold).toBeGreaterThan(0);
+  await page.waitForTimeout(1000);
   const recorded = await trace(page);
-  expect(recorded.particles).toHaveLength(expected);
-  const goldSources = new Set(recorded.particles.filter(item => item.currency === 'gold').map(item => item.source));
-  expect(goldSources).toEqual(new Set(['summary-base', 'summary-rerolls', 'summary-interest', 'summary-golden', 'summary-jackpot']));
-  expect(recorded.particles.some(item => item.source.includes('total'))).toBe(false);
-  expect(recorded.gold[0]).toBe(7);
-  expect(recorded.gold).toEqual(Array.from({ length: saved.roundSummary!.totalGoldEarned + 1 }, (_, index) => 7 + index));
-  expect(recorded.gold.at(-1)).toBe(saved.roundSummary!.goldAfter);
+  expect(recorded.particles).toHaveLength(0);
+  expect(recorded.gold.at(-1)).toBe(saved.gold);
   expect(recorded.temper.at(-1)).toBe(saved.temper);
 });
 
-test('continuing during a round payout cancels flights and leaves committed counters stable', async ({ page }) => {
+test('continuing past the static round summary leaves committed counters stable', async ({ page }) => {
   await installRunState(page, payoutState()); await enterRun(page); await installTrace(page);
   await playPayout(page);
-  await expect.poll(async () => (await trace(page)).particles.length).toBeGreaterThan(0);
   const committed = (await readRunState(page))!;
+  await expect(page.getByTestId('currency-particle')).toHaveCount(0);
   await page.getByRole('button', { name: /CONTINUE/ }).click();
   await expect(page.getByTestId('currency-particle')).toHaveCount(0);
   await expect(page.getByTestId('stat-gold')).toHaveText(`Gold${committed.gold}G`);

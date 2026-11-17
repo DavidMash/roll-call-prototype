@@ -39,6 +39,15 @@ const GOLD_SPEND_SOURCES: GoldSpendSource[] = ['dicePurchase', 'diceOfferReroll'
 const TEMPER_SOURCES: TemperSource[] = ['overkill', 'boardRefresh', 'miniBoss', 'boss', 'bonfire', 'engulfment', 'infernoReward'];
 const TEMPER_SPEND_SOURCES: TemperSpendSource[] = ['fusion', 'forge'];
 
+const TRANSFER_TIMING = {
+  flightMs: 520,
+  largeFlightMs: 400,
+  burstWindowMs: 750,
+  minStaggerMs: 7,
+  maxStaggerMs: 70,
+  largeTransferThreshold: 40,
+} as const;
+
 const navigationActions = new Set<Action['type']>([
   'SET_SHOP_STAGE', 'SHOP_BACK', 'CONTINUE_ROUND_SUMMARY', 'CONTINUE_INFERNO_METER',
   'CONTINUE_INFERNO_EVALUATION', 'CONTINUE_SCENARIO_RUN', 'NEXT_ROUND', 'NEXT_CHAPTER',
@@ -220,7 +229,7 @@ export class CurrencyTransferController {
     if (residualTemper) plans.push({ currency: 'temper', direction: residualTemper > 0 ? 'gain' : 'spend',
       amount: Math.abs(residualTemper), sourceName: 'unanchoredBalanceChange' });
     if (next.phase === 'round') {
-      const deferredGoldSources = new Set(['golden', 'jackpot']);
+      const deferredGoldSources = new Set(['jackpot']);
       const deferredTemperSources = new Set(['overkill', 'boardRefresh', 'miniBoss', 'boss']);
       plans = plans.filter(plan => {
         const deferred = plan.direction === 'gain' && (plan.currency === 'gold'
@@ -257,27 +266,7 @@ export class CurrencyTransferController {
       this.cancelAndSnap(this.committed.gold, this.committed.temper);
       return;
     }
-    this.pendingSummary = null;
     this.cancelAndSnap(pending.gold, pending.temper);
-    this.publish({ gold: summary.goldAfter - summary.totalGoldEarned,
-      temper: pending.temper - summary.temper.total });
-    const plans: TransferPlan[] = [
-      ['base', summary.sources.baseRewardGold], ['rerolls', summary.sources.unusedRerollGold],
-      ['interest', summary.sources.interestGold], ['golden', summary.sources.goldenGold],
-      ['jackpot', summary.sources.jackpotGold], ['other', summary.sources.otherGold],
-      ['boss', summary.sources.bossRewardGold],
-    ].flatMap(([source, raw]) => {
-      const amount = Number(raw);
-      return amount > 0 ? [{ currency: 'gold' as const, direction: 'gain' as const, amount,
-        source: { selector: `[data-currency-source="summary-gold-${source}"]` }, sourceName: `summary-${source}` }] : [];
-    });
-    const temperRows = [
-      ['overkill', summary.temper.overkill], ['boardRefresh', summary.temper.boardRefresh],
-      ['miniBoss', summary.temper.miniBoss], ['boss', summary.temper.boss],
-    ] as const;
-    for (const [source, amount] of temperRows) if (amount > 0) plans.push({ currency: 'temper', direction: 'gain', amount,
-      source: { selector: `[data-currency-source="summary-temper-${source}"]` }, sourceName: `summary-${source}` });
-    this.schedule(plans, pending.gold, pending.temper);
   }
 
   private schedule(plans: TransferPlan[], gold: number, temper: number) {
@@ -301,8 +290,10 @@ export class CurrencyTransferController {
     }
     const total = animated.reduce((sum, item) => sum + item.plan.amount, 0);
     if (!total) { this.publish({ gold, temper, active: false }); return; }
-    const stagger = total <= 1 ? 0 : Math.max(5, Math.min(48, 520 / (total - 1)));
-    const duration = total > 40 ? 280 : 360;
+    const stagger = total <= 1 ? 0 : Math.max(TRANSFER_TIMING.minStaggerMs,
+      Math.min(TRANSFER_TIMING.maxStaggerMs, TRANSFER_TIMING.burstWindowMs / (total - 1)));
+    const duration = total > TRANSFER_TIMING.largeTransferThreshold
+      ? TRANSFER_TIMING.largeFlightMs : TRANSFER_TIMING.flightMs;
     const generation = this.generation;
     let ordinal = 0;
     this.pendingTicks += total;

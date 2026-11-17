@@ -12,20 +12,20 @@ export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy
   const labels = fullChapterLabels(summary.round);
   const displayLabels = board.runMode === 'scenario'
     ? { chapter: 'SCENARIO', round: `ROUND ${formatPlayerNumber(summary.round)}` } : labels;
-  const rows: { source: string; label: string; amount: number }[] = [
-    { source: 'base', label: 'Base Reward', amount: summary.sources.baseRewardGold },
-    { source: 'rerolls', label: 'Unused Rerolls', amount: summary.sources.unusedRerollGold },
-    { source: 'interest', label: 'Interest', amount: summary.sources.interestGold },
-    { source: 'golden', label: 'Golden', amount: summary.sources.goldenGold },
-    { source: 'jackpot', label: 'Jackpot', amount: summary.sources.jackpotGold },
-    { source: 'other', label: 'Other Gold', amount: summary.sources.otherGold },
-    { source: 'boss', label: miniBoss ? 'Mini-Boss Reward' : 'Boss Reward', amount: summary.sources.bossRewardGold },
+  const rows: { label: string; amount: number }[] = [
+    { label: 'Base Reward', amount: summary.sources.baseRewardGold },
+    { label: 'Unused Rerolls', amount: summary.sources.unusedRerollGold },
+    { label: 'Interest', amount: summary.sources.interestGold },
+    { label: 'Golden', amount: summary.sources.goldenGold },
+    { label: 'Jackpot', amount: summary.sources.jackpotGold },
+    { label: 'Other Gold', amount: summary.sources.otherGold },
+    { label: miniBoss ? 'Mini-Boss Reward' : 'Boss Reward', amount: summary.sources.bossRewardGold },
   ];
   const temperRows = [
-    { source: 'overkill', label: 'Overkill', amount: summary.temper.overkill },
-    { source: 'boardRefresh', label: 'Board Refresh', amount: summary.temper.boardRefresh },
-    { source: 'miniBoss', label: 'Mini-Boss', amount: summary.temper.miniBoss },
-    { source: 'boss', label: 'Boss', amount: summary.temper.boss },
+    { label: 'Overkill', amount: summary.temper.overkill },
+    { label: 'Board Refresh', amount: summary.temper.boardRefresh },
+    { label: 'Mini-Boss', amount: summary.temper.miniBoss },
+    { label: 'Boss', amount: summary.temper.boss },
   ];
   return <Paper className="round-summary-screen" p={{ base: 'md', sm: 'xl' }} data-testid="round-summary">
     <Stack gap="md">
@@ -42,8 +42,7 @@ export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy
           <Text className="summary-total" fw={950} size="xl" data-testid="summary-gold-earned"><CurrencyAmount currency="gold" value={summary.totalGoldEarned} sign="+" /></Text>
         </Group>
         <div className="summary-gold-rows" data-testid="summary-gold-breakdown">
-          {rows.filter((row, index) => row.amount > 0 || index < 3).map(({ source, label, amount }) => <div className="summary-gold-row" key={label}
-            data-currency-source={`summary-gold-${source}`}
+          {rows.filter((row, index) => row.amount > 0 || index < 3).map(({ label, amount }) => <div className="summary-gold-row" key={label}
             data-tutorial={label === 'Unused Rerolls' ? 'payout-rerolls' : label === 'Interest' ? 'payout-interest' : undefined}>
             <Text size="sm">{label}</Text><Text size="sm" fw={850}><CurrencyAmount currency="gold" value={amount} sign="+" /></Text>
           </div>)}
@@ -55,8 +54,7 @@ export function RoundSummaryScreen({ board, busy, submit }: { board: Board; busy
       <Paper className="summary-gold-card summary-temper-card" p="md" data-testid="summary-temper">
         <Group justify="space-between" align="baseline"><Text fw={900}>TEMPER EARNED</Text>
           <Text c="orange" fw={950} size="xl" data-testid="summary-temper-earned"><CurrencyAmount currency="temper" value={summary.temper.total} sign="+" /></Text></Group>
-        <div className="summary-gold-rows">{temperRows.filter(row => row.amount > 0).map(row => <div className="summary-gold-row" key={row.label}
-          data-currency-source={`summary-temper-${row.source}`}>
+        <div className="summary-gold-rows">{temperRows.filter(row => row.amount > 0).map(row => <div className="summary-gold-row" key={row.label}>
           <Text size="sm">{row.label}</Text><Text size="sm" fw={850} c="orange"><CurrencyAmount currency="temper" value={row.amount} sign="+" /></Text></div>)}</div>
         {summary.temper.total === 0 && <Text size="sm" c="dimmed" mt="xs">No Temper earned this Round.</Text>}
       </Paper>
