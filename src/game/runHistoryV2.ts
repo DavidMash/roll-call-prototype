@@ -136,7 +136,7 @@ export interface RollResult {
   afterFace: Rank;
   previousFaceExcluded: boolean;
   weighted: null | { sourceFace: Rank; stacks: number; destinationWeight: number;
-    selectedNumber?: Exclude<Rank, 7>; matchingPhysicalFaces?: number };
+    selectedNumber?: Rank; matchingPhysicalFaces?: number };
   magneticAnchorIds: number[];
   controller: import('./resolution').RollController;
   controllerDieId?: number;

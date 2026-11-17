@@ -194,8 +194,7 @@ describe('Lightning Strike', () => {
     expect(curtain.stats.handScores.some(score => score.playSource === 'freePlay')).toBe(true);
 
     const magic = game(); effects(magic, 0, [['magic', 1]]); own(magic, 'lightningStrike');
-    effectRuntime(magic.dieRoundState[0], effectOf(rosterDice(magic)[0], 'magic'))!.magicArmedFace = 6;
-    new Resolver(magic, constant()).lightningStrike(prediction(0, 6));
+    new Resolver(magic, constant()).lightningStrike(prediction(0, 6), [{ dieId: 0, outcome: { kind: 'rank', rank: 6 } }]);
     expect(activeFace(magic.dice[0]).rank).toBe(6);
     expect(magic.chargeXMult).toBe(3);
   });
@@ -381,9 +380,9 @@ describe('Dare Devil', () => {
   it('uses canonical Roll controllers, keeps Casual eligible, and resets on retry', () => {
     const state = game([5, 5, 5, 5, 5]); effects(state, 0, [['magic', 1]]);
     own(state, 'dareDevil'); own(state, 'casual');
-    effectRuntime(state.dieRoundState[0], effectOf(rosterDice(state)[0], 'magic'))!.magicArmedFace = 6;
     new Resolver(state, constant()).dareDevil();
-    expect(activeFace(state.dice[0]).rank).toBe(6);
+    expect(activeFace(state.dice[0]).rank).toBe(1);
+    expect(effectRuntime(state.dieRoundState[0], effectOf(rosterDice(state)[0], 'magic'))!.invocationsRemaining).toBe(1);
     expect(state.manualRerollsUsedThisRound).toBe(0);
     state.dice.forEach(die => { die.value = 1; });
     new Resolver(state, constant()).play('fiveKind', [0, 1, 2, 3, 4]);

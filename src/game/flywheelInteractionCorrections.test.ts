@@ -254,11 +254,8 @@ describe('forced controller missing-rank safety', () => {
     die.faces.forEach((face, index) => { face.rank = ([2, 2, 3, 3, 4, 4] as Rank[])[index]; });
     die.value = 6;
     const magic = effectRuntime(state.dieRoundState[die.id], effectOf(die, 'magic'))!;
-    magic.magicArmedFace = 2;
-
-    new Resolver(state, constant(.9)).manualReroll([die.id]);
+    new Resolver(state, constant(.9)).manualReroll([die.id], [{ dieId: die.id, outcome: { kind: 'rank', rank: 2 } }]);
     expect(manualBatch(state)?.results[0]).toMatchObject({ controller: 'magicDie', afterPhysicalFace: 1, afterFace: 2 });
-    expect(magic.magicArmedFace).toBeNull();
     expect(magic.invocationsRemaining).toBe(0);
   });
 

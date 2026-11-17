@@ -1,4 +1,5 @@
 import { Paper, Text } from '@mantine/core';
+import type { ReactNode } from 'react';
 import { activeFace, scoringPips } from '../game/dice';
 import type { Die as PhysicalDie, DieType, Flame, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
@@ -31,11 +32,13 @@ interface Props {
   fetchTarget?: { dieId: number; physicalFace: Rank } | null;
   hotPotato?: boolean;
   pipsPop?: { eventId: number; amount: number };
+  directActions?: ReactNode;
 }
 
 export function Die({ die, rosterSlot, display, selected, highlighted, rolling, resolving = false, ability, flameAbility, disabled,
   detailsDisabled = false, eligible, wardenLocked = false, wardenSelectable = false, ineligibleReason,
-  lockedReason, allowIneligibleClick = false, onClick, onDetails, onDropOffer, fetchTarget, hotPotato = false, pipsPop }: Props) {
+  lockedReason, allowIneligibleClick = false, onClick, onDetails, onDropOffer, fetchTarget, hotPotato = false, pipsPop,
+  directActions }: Props) {
   const face = activeFace(die);
   const pips = scoringPips(face);
   const mutation = face.bossMutation;
@@ -60,6 +63,7 @@ export function Die({ die, rosterSlot, display, selected, highlighted, rolling, 
   return <div className={`die-wrap die-slot${detailsDisabled ? ' details-disabled' : ''}${effectSuppressed ? ' effect-suppressed' : ''}`} data-die-id={die.id}
     data-tutorial={die.owner === 'player' ? `die-${(rosterSlot ?? 0) + 1}` : undefined}
     data-testid={die.owner === 'player' ? `flame-die-${die.id}` : 'cursed-die-slot'}>
+    <div className="die-direct-action-slot">{directActions}</div>
     {pipsPop && pipsPop.amount > 0 && <span key={`${pipsPop.eventId}:${die.id}`} className="resolution-pop die-pips-pop"
       role="status" aria-live="polite">+{formatPlayerNumber(pipsPop.amount)} PIPS</span>}
     <Paper component="button" type="button" withBorder

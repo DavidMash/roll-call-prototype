@@ -35,10 +35,9 @@ describe('special-die presentation', () => {
     const die = createCollectibleDie(8, 'magic', 2);
     die.effects.push(createDieEffect(8, 'furnace', 3));
     const runtime = initialDieRoundRuntime(die);
-    runtime.effects['8:magic'].magicArmedFace = 5;
     runtime.effects['8:furnace'].furnaceGoldFed = 4;
     runtime.effects['8:furnace'].furnacePips = 36;
-    expect(effectDetails(die, die.effects[0], runtime).status).toContainEqual({ label: 'Next Reroll', value: '5' });
+    expect(effectDetails(die, die.effects[0], runtime).status).toContainEqual({ label: 'Activation', value: 'Manual Reroll' });
     expect(effectDetails(die, die.effects[1], runtime).status).toContainEqual({ label: 'Furnace reserve', value: '+36 Pips' });
   });
 
@@ -51,7 +50,7 @@ describe('special-die presentation', () => {
       status: [{ label: 'Manual Reroll Free Play', value: '×3 die Pips' }],
     });
     expect(effectDetails(die, die.effects[1], runtime).status).toEqual([
-      { label: 'Jumping Bean Number', value: '1' },
+      { label: 'Automatic lowest rank', value: '1' },
       { label: 'Uses Remaining', value: '6' },
     ]);
   });

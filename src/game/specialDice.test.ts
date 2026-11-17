@@ -98,11 +98,9 @@ describe('composable roll controllers', () => {
   it('lets Magic win over another controller on the same die and only spends Magic', () => {
     const state = game();
     const die = setEffects(state, 0, [['magic', 1], ['weighted', 1]]);
-    effectOf(die, 'weighted')!.persistent.weightedFace = 6;
     const magic = effectRuntime(state.dieRoundState[die.id], effectOf(die, 'magic'))!;
     const weighted = effectRuntime(state.dieRoundState[die.id], effectOf(die, 'weighted'))!;
-    magic.magicArmedFace = 4;
-    new Resolver(state, constant(.2)).manualReroll([die.id]);
+    new Resolver(state, constant(.2)).manualReroll([die.id], [{ dieId: die.id, outcome: { kind: 'rank', rank: 4 } }]);
     expect(activeFace(die).rank).toBe(4);
     expect(magic.invocationsRemaining).toBe(0);
     expect(weighted.invocationsRemaining).toBe(0);

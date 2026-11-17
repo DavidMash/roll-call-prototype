@@ -1,4 +1,4 @@
-import { activeFace, weightedNumberProbability } from './dice';
+import { activeFace, highestAvailableRank, lowestAvailableRank, weightedNumberProbability } from './dice';
 import { dieEffectDescription, fusionEffectSummary } from './diceEconomy';
 import { dieSellBreakdown } from './forge';
 import { SPECIAL_DICE, effectRuntime, invocationCapacity } from './specialDice';
@@ -78,12 +78,12 @@ export function effectDetails(die: CollectibleDie, effect: DieEffectInstance,
     case 'flywheel': case 'conjoined': case 'sustainable':
       status.push({ label: 'Uses Remaining', value: usesRemaining(effect, runtime) }); break;
     case 'weighted': {
-      const number = effect.persistent.weightedFace;
-      status.push({ label: 'Weighted Number', value: String(number) },
+      const number = highestAvailableRank(die);
+      status.push({ label: 'Automatic highest rank', value: String(number) },
         { label: `Chance to Roll ${number}`, value: `${(weightedNumberProbability(die, number, level) * 100).toFixed(1)}%` });
       break;
     }
-    case 'jumpingBean': status.push({ label: 'Jumping Bean Number', value: String(effect.persistent.jumpingBeanNumber) },
+    case 'jumpingBean': status.push({ label: 'Automatic lowest rank', value: String(lowestAvailableRank(die)) },
       { label: 'Uses Remaining', value: String(runtime?.invocationsRemaining ?? invocationCapacity(effect)) }); break;
     case 'clockwork': {
       const capacity = 3 * level, used = runtime?.clockworkRolls ?? 0;
@@ -101,7 +101,7 @@ export function effectDetails(die: CollectibleDie, effect: DieEffectInstance,
     case 'freePlay': status.push({ label: 'Manual Reroll Free Play', value: `×${level} die Pips` }); break;
     case 'doubleTime': status.push({ label: 'Additional Score chance', value: fusionEffectSummary('doubleTime', level, level).before }); break;
     case 'magic': status.push({ label: 'Uses Remaining', value: usesRemaining(effect, runtime) },
-      { label: 'Next Reroll', value: runtime?.magicArmedFace == null ? 'Not armed' : String(runtime.magicArmedFace) }); break;
+      { label: 'Activation', value: 'Manual Reroll' }); break;
     case 'furnace': {
       const goldFed = runtime?.furnaceGoldFed ?? 0;
       status.push({ label: 'Gold fed this Round', value: `${goldFed} / ${CONFIG.furnaceMaxGoldPerRound}` },

@@ -1254,7 +1254,7 @@ test('settled progress resumes across reloads and return visits with seed-aware 
   await matchBoard(page, generated);
 });
 
-test('configurable effects share independent compact number selectors', async ({ page }) => {
+test('Die Details is informational and Magic moves into the Manual Reroll flow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const game = newRun('shared-number-selector-browser').state;
   rosterDice(game)[0].effects = [
@@ -1269,16 +1269,22 @@ test('configurable effects share independent compact number selectors', async ({
   const bean = page.getByTestId('flame-die-0');
   await bean.getByRole('button', { name: /View details for Weighted.*Jumping Bean.*Magic/ }).click();
   const details = page.getByTestId('die-details-modal');
-  await expect(details.locator('.die-number-selector')).toHaveCount(3);
-  await expect(details.getByRole('button', { name: 'USE JUMPING BEAN' })).toHaveCount(0);
-  await details.getByRole('button', { name: 'Weighted · choose a number: 4' }).click();
-  await details.getByRole('button', { name: 'Jumping Bean · choose a number: 3' }).click();
-  await details.getByRole('button', { name: 'Magic · choose the next Reroll: 5' }).click();
-  await expect(details.getByRole('button', { name: 'Weighted · choose a number: 4' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(details.getByRole('button', { name: 'Jumping Bean · choose a number: 3' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(details.getByRole('button', { name: 'Magic · choose the next Reroll: 5' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(details.locator('.die-number-selector')).toHaveCount(0);
+  await expect(details.locator('.die-details-actions')).toHaveCount(0);
+  await expect(details).toContainText('Automatic highest rank');
+  await expect(details).toContainText('Automatic lowest rank');
+  await expect(details).toContainText('Manual Reroll');
   expect(await details.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-  await page.screenshot({ path: test.info().outputPath('shared-number-selectors-mobile.png'), fullPage: true });
+  await details.getByRole('button', { name: 'Close', exact: true }).click();
+  await bean.locator('.die').click();
+  await page.getByTestId('manual-reroll').click();
+  const magic = page.getByRole('dialog', { name: /Magic/ });
+  await expect(magic).toBeVisible();
+  await magic.getByRole('button', { name: 'Force die 1 to 5' }).click();
+  await expect(magic.getByRole('button', { name: 'Force die 1 to 5' })).toHaveAttribute('aria-pressed', 'true');
+  await page.screenshot({ path: test.info().outputPath('magic-manual-reroll-mobile.png'), fullPage: true });
+  await magic.getByRole('button', { name: 'ROLL DICE!', exact: true }).click();
+  await expect(magic).toHaveCount(0);
 });
 
 test('active mobile gameplay stays inside the viewport with a two-column scorecard', async ({ page }) => {

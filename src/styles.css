@@ -1125,7 +1125,18 @@ body, #root { overflow: hidden; }
 .run-action-row .map-continue { align-self: center; }
 .dice-dock.cinematic { opacity: .42; filter: saturate(.6); pointer-events: none; }
 .dice-dock .dice-row { width: min(100%, 620px); margin: 0 auto; grid-template-columns: repeat(var(--dice-columns, 5), minmax(0, 1fr)); gap: 6px; }
-.die-slot { min-width: 0; display: grid; grid-template-rows: auto 24px; align-items: center; }
+.die-slot { min-width: 0; display: grid; grid-template-rows: auto auto 24px; align-items: center; }
+.die-direct-action-slot {
+  width: 100%; min-width: 0; min-height: calc(var(--die-action-rows, 0) * 44px);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.die-direct-actions { width: 100%; min-width: 0; display: grid; gap: 2px; align-self: end; }
+.die-direct-action.mantine-Button-root {
+  width: 100%; min-width: 44px; min-height: 44px; height: 44px; padding-inline: 3px;
+  border-radius: 6px 6px 3px 3px; font-size: clamp(.52rem, 1.55vw, .67rem); line-height: 1;
+}
+.die-direct-action .mantine-Button-label { min-width: 0; display: grid; justify-items: center; gap: 2px; }
+.die-direct-action small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: .48rem; white-space: nowrap; }
 .die-face-details:focus-visible, .flame-detail-trigger:focus-visible {
   outline: 2px solid var(--mantine-color-orange-4); outline-offset: 1px;
 }
@@ -1208,6 +1219,14 @@ body, #root { overflow: hidden; }
 .lightning-prediction-die .die:disabled { opacity: 1; }
 .lightning-prediction-die .die-face-details:disabled { opacity: 1; }
 .lightning-scroll-guidance { min-height: 18px; }
+.magic-dice-list { display: grid; gap: 8px; max-height: min(58dvh, 520px); overflow-y: auto; }
+.magic-die-choice { min-width: 0; display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: center; gap: 10px; }
+.magic-die-art { min-width: 0; }
+.magic-die-art .die-slot { width: 100%; }
+.magic-die-art .die:disabled, .magic-die-art .die-face-details:disabled { opacity: 1; }
+.magic-choice-controls { min-width: 0; }
+.magic-outcome-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); gap: 4px; }
+.magic-outcome-options .mantine-Button-root { min-width: 44px; min-height: 44px; padding-inline: 4px; }
 @media (max-width: 520px) {
   .active-gameplay .bonfire-strip { overflow-x: auto; scrollbar-width: none; }
   .active-gameplay .bonfire-strip::-webkit-scrollbar { display: none; }
@@ -1238,6 +1257,8 @@ body, #root { overflow: hidden; }
   .active-gameplay .round-action-layout .mantine-Button-root { min-height: 44px; }
   .lightning-prediction-die { flex-basis: 106px; }
   .lightning-scroll-guidance .mantine-Text-root { font-size: .58rem; }
+  .magic-die-choice { grid-template-columns: 72px minmax(0, 1fr); gap: 6px; padding: 6px !important; }
+  .magic-outcome-options { grid-template-columns: repeat(4, minmax(44px, 1fr)); }
 }
 .flame-detail-trigger { cursor: pointer; text-transform: none; }
 @media (prefers-reduced-motion: reduce) {
@@ -1270,7 +1291,7 @@ body, #root { overflow: hidden; }
   .shop-action-dock .run-action-right .mantine-Button-root { padding-inline: 8px; font-size: clamp(.65rem, 2.7vw, .78rem); }
   .run-action-row .gameplay-actions { gap: 3px; }
   .dice-dock .dice-row { gap: 3px; }
-  .die-slot { grid-template-rows: auto minmax(22px, auto); }
+  .die-slot { grid-template-rows: auto auto minmax(22px, auto); }
   .die-slot .die { width: 100%; min-height: 50px; max-height: 62px; padding: 2px; }
   .die-slot .die > .die-number { font-size: clamp(1.55rem, 8vw, 2rem); }
   .die-slot .die > .pip-face { width: min(62%, 38px); }
@@ -1306,6 +1327,10 @@ body, #root { overflow: hidden; }
   .dice-dock .dice-row { gap: 2px; }
   .die-slot .die { min-height: 46px; max-height: 55px; }
   .die-slot .die > .die-number { font-size: 1.45rem; }
+  .die-direct-action.mantine-Button-root { padding-inline: 1px; font-size: .48rem; }
+  .die-direct-action small { font-size: .41rem; }
+  .dice-dock:has(.dice-row[data-dice-count="7"]) { margin-inline: -6px; padding-inline: 0 !important; overflow-x: clip; }
+  .dice-dock .dice-row[data-dice-count="7"] { width: calc(100% - 1px); gap: 1px; }
 }
 .inferno-evaluation-screen { min-height: min(72vh, 680px); padding: clamp(1rem, 4vw, 3rem); text-align: center; border: 1px solid rgba(235, 70, 40, .34); border-radius: 14px; background: radial-gradient(circle at 50% 100%, #32100c, #121014 56%); }
 .inferno-meter-screen {

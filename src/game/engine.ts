@@ -17,7 +17,7 @@ import { formatPlayerNumber } from './copy';
 import { appendCriticalDiagnostic, appendDebugTrace, createDebugTrace, normalizeDebugTrace, type DebugTraceMode } from './debugTrace';
 import { isRollbackState } from './rollback';
 import { assertDiceInventory, collectibleDieById, ownedDice, rosterDice, rosterDieLabel, syncActiveDiceProjection } from './inventory';
-import { effectInstanceId, effectOf, effectRuntime, hasEffect, normalizeDieRoundRuntime, requireEffect, resetDieRoundState, SPECIAL_DICE } from './specialDice';
+import { effectInstanceId, effectOf, effectRuntime, normalizeDieRoundRuntime, requireEffect, resetDieRoundState, SPECIAL_DICE } from './specialDice';
 import { dicePurchaseIsFree, initialSpecialOfferEffects } from './specialOffers';
 import { createTrainingSession, quoteTraining } from './training';
 import { firstPurchaseSlot, purchaseDie, setSlotValue, slotExists, slotValue } from './diceEconomy';
@@ -32,7 +32,7 @@ import { canAffordManualReroll } from './manualRerolls';
 import { eligibleFetchTargets, fetchTargetIsEligible } from './fetchTarget';
 import { createInfernoEvaluation, evaluateEngulfmentOffering, infernoDieInterest, infernoEvidenceInsights, ownedEngulfmentAssets } from './engulfment';
 import { initialInfernoMeterPresentation, normalizeInfernoMeterPresentation } from './infernoMeter';
-import type { Action, Board, DiceInventory, FlameSlotIndex, GameState, RandomSource, Resolution, ScenarioRunState, Shop, ShopStage } from './types';
+import type { Action, Board, DiceInventory, FlameSlotIndex, GameState, MagicRerollChoice, RandomSource, Resolution, ScenarioRunState, Shop, ShopStage } from './types';
 
 const exact = (value: unknown, fallback: ExactScore = 0n): ExactScore => value === undefined || value === null
   ? fallback : scoreFromUnknown(value);
@@ -651,7 +651,28 @@ export function availableShopStages(state: Pick<Board, 'forgeUnlocked' | 'flameS
     ...(state.flameSlots.some(Boolean) ? ['flames' as const] : [])];
 }
 
-function validateManualReroll(state: Board | GameState, dieIds: readonly number[]): string | null {
+function validateMagicRerollChoices(state: Board | GameState, dieIds: readonly number[],
+  choices: readonly MagicRerollChoice[] = []): string | null {
+  if (new Set(choices.map(choice => choice.dieId)).size !== choices.length)
+    return 'Submit at most one Magic choice for each selected die.';
+  const selected = new Set(dieIds);
+  for (const choice of choices) {
+    if (!selected.has(choice.dieId)) return 'Magic choices must belong to the pending Manual Reroll.';
+    const die = activeEncounterDice(state).find(candidate => candidate.id === choice.dieId);
+    if (!die || die.owner !== 'player') return 'Choose an equipped Magic die.';
+    const effect = effectOf(die, 'magic');
+    const runtime = effectRuntime(state.dieRoundState[die.id], effect);
+    if (!effect || !runtime) return 'Choose a die with an active Magic effect.';
+    if (wholeDieEffectSuppressed(die)) return "That die's Magic effect is suppressed while its infected face is exposed.";
+    if (runtime.invocationsRemaining <= 0) return 'That Magic effect has no Uses remaining.';
+    if (!distinctDieOutcomes(die).some(outcome => sameOutcomeIdentity(outcome, choice.outcome)))
+      return 'Choose a Magic outcome currently defined by that die.';
+  }
+  return null;
+}
+
+function validateManualReroll(state: Board | GameState, dieIds: readonly number[],
+  magicChoices: readonly MagicRerollChoice[] = []): string | null {
   if (state.phase !== 'round') return 'Manual rerolls can only be used during a gameplay round.';
   if (!state.bossSilenced && state.boss?.type === 'warden' && state.boss.startingDieId === null)
     return "Choose The Warden's initial active die before taking another action.";
@@ -661,7 +682,7 @@ function validateManualReroll(state: Board | GameState, dieIds: readonly number[
     return 'Select distinct unlocked dice that are on the board.';
   if (!canAffordManualReroll(state, dieIds))
     return 'Not enough manual rerolls for these dice.';
-  return null;
+  return validateMagicRerollChoices(state, dieIds, magicChoices);
 }
 
 function validateInteractiveFlame(state: Board | GameState, flame: import('./types').Flame): string | null {
@@ -722,7 +743,7 @@ export function validateAction(state: Board | GameState, action: Action): string
   if (action.type === 'CANCEL_INFERNO_MAKE_ROOM') return state.phase === 'infernoReward'
     && !!state.infernoRewards.pending?.makeRoomOfferId ? null : 'Make Room is not active.';
   if (action.type === 'MANUAL_REROLL') {
-    return validateManualReroll(state, action.dieIds);
+    return validateManualReroll(state, action.dieIds, action.magicChoices);
   }
   if (action.type === 'ACTIVATE_BURN_IT_DOWN') {
     const invalid = validateInteractiveFlame(state, 'burnItDown');
@@ -761,7 +782,7 @@ export function validateAction(state: Board | GameState, action: Action): string
       if (!die || !distinctDieOutcomes(die).some(outcome => sameOutcomeIdentity(outcome, prediction.outcome)))
         return 'Choose an outcome defined by each selected die.';
     }
-    return validateManualReroll(state, dieIds);
+    return validateManualReroll(state, dieIds, action.magicChoices);
   }
   if (action.type === 'ACTIVATE_DARE_DEVIL') {
     const invalid = validateInteractiveFlame(state, 'dareDevil');
@@ -781,44 +802,31 @@ export function validateAction(state: Board | GameState, action: Action): string
     if (currentlyPlayableManualHands(state).length === 0) return 'No manual Hand is currently playable.';
     return null;
   }
-  if (action.type === 'INVOKE_CHAMELEON' || action.type === 'ARM_MAGIC'
-    || action.type === 'DISARM_MAGIC' || action.type === 'FEED_FURNACE') {
+  if (action.type === 'ARM_MAGIC' || action.type === 'DISARM_MAGIC')
+    return 'Magic is chosen as part of a player-initiated Manual Reroll.';
+  if (action.type === 'SET_DIE_EFFECT_NUMBER')
+    return `${SPECIAL_DICE[action.effect].name} now determines its rank automatically.`;
+  if (action.type === 'INVOKE_CHAMELEON' || action.type === 'FEED_FURNACE') {
     if (state.phase !== 'round') return 'Special die commands can only be used during an active Round.';
     const die = 'diceInventory' in state ? collectibleDieById(state, action.dieId)
       : state.dice.find(item => item.id === action.dieId && item.owner === 'player');
     if (!die || die.owner !== 'player') return 'Choose an equipped collectible die.';
-    const expected = action.type === 'INVOKE_CHAMELEON' ? 'chameleon'
-      : action.type === 'ARM_MAGIC' || action.type === 'DISARM_MAGIC' ? 'magic' : 'furnace';
+    const expected = action.type === 'INVOKE_CHAMELEON' ? 'chameleon' : 'furnace';
     const effect = effectOf(die, expected);
     if (!effect) return `That die cannot perform ${action.type}.`;
     const runtime = effectRuntime(state.dieRoundState[die.id], effect);
     if (!runtime) return 'That die has no active Round state.';
-    if (action.type !== 'DISARM_MAGIC' && wholeDieEffectSuppressed(die))
+    if (wholeDieEffectSuppressed(die))
       return "That die's special effect is suppressed while its infected face is exposed.";
-    if (action.type !== 'FEED_FURNACE' && action.type !== 'DISARM_MAGIC' && runtime.invocationsRemaining <= 0) return 'That die has no Uses remaining.';
+    if (action.type !== 'FEED_FURNACE' && runtime.invocationsRemaining <= 0) return 'That die has no Uses remaining.';
     if (action.type === 'INVOKE_CHAMELEON' && !state.dice.some(item => item.owner === 'player' && item.id !== die.id))
       return 'Chameleon requires another equipped die.';
-    if (action.type === 'ARM_MAGIC') {
-      if (![1, 2, 3, 4, 5, 6].includes(action.face)) return 'Choose a valid Magic face.';
-      if (runtime.magicArmedFace !== null) return 'Magic is already armed for its next Reroll.';
-    }
-    if (action.type === 'DISARM_MAGIC' && runtime.magicArmedFace === null) return 'Magic is not armed.';
     if (action.type === 'FEED_FURNACE') {
       if (!Number.isSafeInteger(action.amount) || action.amount <= 0) return 'Feed Furnace a positive whole Gold amount.';
       if (runtime.furnaceGoldFed + action.amount > CONFIG.furnaceMaxGoldPerRound)
         return `Furnace can be fed at most ${CONFIG.furnaceMaxGoldPerRound} Gold per Round.`;
       if (state.gold < action.amount) return 'Not enough Gold to feed Furnace.';
     }
-    return null;
-  }
-  if (action.type === 'SET_DIE_EFFECT_NUMBER') {
-    if (state.phase !== 'round') return 'Choose effect numbers during an active Round.';
-    const die = 'diceInventory' in state ? collectibleDieById(state, action.dieId)
-      : state.dice.find(item => item.id === action.dieId && item.owner === 'player');
-    const effectType = action.effect;
-    const number = action.number;
-    if (!die || die.owner !== 'player' || !hasEffect(die, effectType)) return `Choose an equipped ${SPECIAL_DICE[effectType].name} die.`;
-    if (![1, 2, 3, 4, 5, 6].includes(number)) return 'Choose a number from 1 through 6.';
     return null;
   }
   if (action.type === 'PLAY') {
@@ -1150,11 +1158,11 @@ export function dispatch(state: GameState, action: Action, random?: RandomSource
           return { ...claim, effectInstanceId: claim.effectInstanceId ?? requireEffect(die, claim.effect).id,
             resource: 'invocation' as const, amount: 1 };
         }) ?? []); break;
-      case 'MANUAL_REROLL': resolver.manualReroll(action.dieIds); break;
+      case 'MANUAL_REROLL': resolver.manualReroll(action.dieIds, action.magicChoices); break;
       case 'ACTIVATE_BURN_IT_DOWN': resolver.burnItDown(); break;
       case 'ACTIVATE_GREASE_THE_ENGINE': resolver.greaseTheEngine(); break;
       case 'ACTIVATE_BRIBERY': resolver.investBriberyGold(); break;
-      case 'ACTIVATE_LIGHTNING_STRIKE': resolver.lightningStrike(action.predictions); break;
+      case 'ACTIVATE_LIGHTNING_STRIKE': resolver.lightningStrike(action.predictions, action.magicChoices); break;
       case 'ACTIVATE_DARE_DEVIL': resolver.dareDevil(); break;
       case 'ACCEPT_DOUBLE_OR_NOTHING': resolver.acceptDoubleOrNothing(); break;
       case 'DECLINE_DOUBLE_OR_NOTHING': resolver.declineDoubleOrNothing(action.reason); break;

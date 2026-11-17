@@ -11,6 +11,7 @@ import type { FaceDetailsTarget } from './FaceDetailsModal';
 import type { FlameDetailsTarget } from './FlameDetailsModal';
 import { formatPlayerNumber } from '../game/copy';
 import { DisabledActionReason } from './DisabledActionReason';
+import { DieDirectActions, directActionCount } from './DieDirectActions';
 
 export function DiceDock({ board, event, busy, actionsEnabled, cinematic, display, selection, setSelection,
   selectedFlameOffer: _selectedFlameOffer, submit, openFaceDetails, openFlameDetails: _openFlameDetails }: {
@@ -48,6 +49,7 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
   const greaseAction: Action = { type: 'ACTIVATE_GREASE_THE_ENGINE' };
   const greaseReason = grease ? validateAction(board, greaseAction) : null;
   const greaseCost = greaseTheEngineCost(board.interactiveFlames.greaseTheEngineUses);
+  const directActionRows = board.phase === 'round' ? Math.max(0, ...dice.map(die => die.owner === 'player' ? directActionCount(die) : 0)) : 0;
 
   function changeRoundSelection(next: Selection) {
     setSelection(next);
@@ -110,6 +112,9 @@ export function DiceDock({ board, event, busy, actionsEnabled, cinematic, displa
         eligibleIds={undefined}
         wardenLockedIds={wardenLockedIds} wardenSelectableIds={awaitingWardenChoice ? wardenLockedIds : []}
         wardenChoiceMode={awaitingWardenChoice}
+        directActionRows={directActionRows}
+        renderDirectActions={die => die.owner === 'player' ? <DieDirectActions board={board} die={die}
+          busy={busy} actionsEnabled={actionsEnabled} submit={submit} /> : null}
         onClick={clickDie} onDetails={openDetails} />
     </Paper>
   </>;

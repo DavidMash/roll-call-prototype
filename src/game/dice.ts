@@ -19,6 +19,14 @@ export function distinctDieOutcomes(die: Die): DieOutcomeIdentity[] {
   }
   return [...outcomes.values()];
 }
+export function highestAvailableRank(die: Die): Rank {
+  if (!die.faces.length) throw new Error('A die must define at least one face.');
+  return Math.max(...die.faces.map(face => face.rank)) as Rank;
+}
+export function lowestAvailableRank(die: Die): Rank {
+  if (!die.faces.length) throw new Error('A die must define at least one face.');
+  return Math.min(...die.faces.map(face => face.rank)) as Rank;
+}
 export const isInfectedFace = (face: Face): boolean => face.bossMutation?.kind === 'infected';
 export const isSnakeEyesFace = (face: Face): boolean => face.bossMutation?.kind === 'snakeEyes';
 /** Infected suppresses the whole-die effect only while that physical face is exposed. */
@@ -50,7 +58,7 @@ export function createDiceInventory(): DiceInventory {
     nextDieId: dice.length,
   };
 }
-export interface PlayerWeightedRollConfig { selectedNumber: Exclude<Rank, 7>; level: number }
+export interface PlayerWeightedRollConfig { selectedNumber: Rank; level: number }
 
 /** Weight assigned to every physical face currently showing Weighted's selected number. */
 export const weightedSelectedFaceWeight = (level: number): number => 1 + (4 * Math.max(1, level) / (Math.max(1, level) + 2));
@@ -59,7 +67,7 @@ export const rollWeights = (die: Die, excludedFace?: Rank, weighted?: PlayerWeig
   ? die.faces.map(() => 1)
   : die.faces.map(face => weighted && face.rank === weighted.selectedNumber ? weightedSelectedFaceWeight(weighted.level) : 1))
   .map((weight, index) => index + 1 === excludedFace ? 0 : weight);
-export function weightedNumberProbability(die: CollectibleDie, selectedNumber: Exclude<Rank, 7>, level: number,
+export function weightedNumberProbability(die: CollectibleDie, selectedNumber: Rank, level: number,
   excludedFace?: Rank): number {
   const weights = rollWeights(die, excludedFace, { selectedNumber, level });
   const total = weights.reduce((sum, weight) => sum + weight, 0);

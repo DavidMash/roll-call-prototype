@@ -7,7 +7,7 @@ import { availableHandIds, HANDS, planQualification, ultimateHands } from '../ga
 import { finalizeScore } from '../game/scoring';
 import { canPlay, normalizeBoardSelection, selectBoardHand } from '../game/selection';
 import type { Selection } from '../game/selection';
-import type { Action, Board, GameEvent } from '../game/types';
+import type { Action, Board, GameEvent, MagicRerollChoice } from '../game/types';
 import { HandScorecard } from './HandList';
 import { ScoreResolution } from './ScoreResolution';
 import { CurrencyAmount } from './CurrencyAmount';
@@ -30,6 +30,14 @@ import { distinctDieOutcomes } from '../game/dice';
 import { exactRatioNumber } from '../game/scoreMath';
 import type { DiceDisplay } from '../uiSettings';
 import { DisabledActionReason } from './DisabledActionReason';
+import { eligibleMagicDice, MagicRerollModal, type MagicSelectionMap } from './MagicRerollModal';
+
+interface PendingReroll {
+  dieIds: number[];
+  stage: 'magic' | 'lightning';
+  magicSelections: MagicSelectionMap;
+  magicChoices: MagicRerollChoice[];
+}
 
 export function RoundScreen({ board, event, busy, inputBlocked, selection, setSelection, submit, skip, diceDisplay, decisionTimer, onFlamePresentationChange }: {
   board: Board; event: GameEvent | null; busy: boolean; inputBlocked: boolean;
@@ -52,11 +60,12 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const roundBusy = busy;
   const speedDemonOwned = hasOwnedFlame(board, 'speedDemon');
   const flameCandidateGate = useRef(new CandidateFlamePresentationPlaybackGate());
+  const rerollButtonRef = useRef<HTMLButtonElement>(null);
   const [timerDecisionId, setTimerDecisionId] = useState(board.decisionId);
   const [qualificationChoiceOpen, setQualificationChoiceOpen] = useState(false);
-  const [lightningOpen, setLightningOpen] = useState(false);
+  const [pendingReroll, setPendingReroll] = useState<PendingReroll | null>(null);
   const [dareDevilOpen, setDareDevilOpen] = useState(false);
-  const blocked = inputBlocked || awaitingWardenChoice || qualificationChoiceOpen || lightningOpen || dareDevilOpen;
+  const blocked = inputBlocked || awaitingWardenChoice || qualificationChoiceOpen || pendingReroll !== null || dareDevilOpen;
   useLayoutEffect(() => {
     const now = performance.now();
     decisionTimer.reset(now, blocked);
@@ -105,6 +114,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
   const lightningAction: Action = { type: 'ACTIVATE_LIGHTNING_STRIKE', predictions: lightningPredictions };
   const lightningEligible = !!lightning && lightningPredictions.length === effectiveSelection.dieIds.length
     && validateAction(board, lightningAction) === null;
+  const selectedMagicDice = eligibleMagicDice(board, effectiveSelection.dieIds);
   const selectedRerollDice = effectiveSelection.dieIds.length;
   const rerollCost = resolveManualRerollCost(board, effectiveSelection.dieIds);
   const mixedFlywheelCoverage = rerollCost.flywheelDieIds.length > 0 && !rerollCost.fullyCoveredByFlywheel;
@@ -165,8 +175,26 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     continuePlay();
   }
   function submitReroll() {
-    if (lightningEligible) setLightningOpen(true);
-    else submit(manualAction);
+    const dieIds = [...effectiveSelection.dieIds];
+    if (selectedMagicDice.length) {
+      setPendingReroll({ dieIds, stage: 'magic', magicChoices: [],
+        magicSelections: Object.fromEntries(selectedMagicDice.map(die => [die.id, null])) });
+    } else if (lightningEligible) {
+      setPendingReroll({ dieIds, stage: 'lightning', magicChoices: [], magicSelections: {} });
+    } else submit(manualAction);
+  }
+  function continueMagicReroll(magicChoices: MagicRerollChoice[]) {
+    if (!pendingReroll) return;
+    if (lightningEligible) setPendingReroll({ ...pendingReroll, stage: 'lightning', magicChoices });
+    else {
+      submit({ type: 'MANUAL_REROLL', dieIds: pendingReroll.dieIds,
+        ...(magicChoices.length ? { magicChoices } : {}) });
+      setPendingReroll(null);
+    }
+  }
+  function cancelPendingReroll() {
+    setPendingReroll(null);
+    requestAnimationFrame(() => rerollButtonRef.current?.focus());
   }
   function changeSelection(next: Selection) {
     setSelection(next);
@@ -257,8 +285,8 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
           </Text>}
           <RunActionLayout className={`round-action-layout${allIn || bribery ? ' has-play-modifiers' : ''}`}
             left={!awaitingWardenChoice ? <>
-              <Button className="reroll-action" size="sm" variant="default" disabled={roundBusy || !canReroll} data-tutorial="reroll-button"
-                aria-label={`${rerollMainText}${mixedFlywheelCoverage ? ` · COST ${rerollCost.resourceCost}` : ''} · ${rerollResourceText}${lightningEligible ? ' · Opens Lightning Strike prediction' : ''}`} data-testid="manual-reroll"
+              <Button ref={rerollButtonRef} className="reroll-action" size="sm" variant="default" disabled={roundBusy || !canReroll} data-tutorial="reroll-button"
+                aria-label={`${rerollMainText}${mixedFlywheelCoverage ? ` · COST ${rerollCost.resourceCost}` : ''} · ${rerollResourceText}${selectedMagicDice.length ? ' · Opens Magic choices' : ''}${lightningEligible ? ' · Opens Lightning Strike prediction' : ''}`} data-testid="manual-reroll"
                 data-normal-fill-percent={Math.round(normalRerollFill * 100)} onClick={submitReroll}>
                 <span className="reroll-resource-fill" style={{ transform: `scaleX(${normalRerollFill})` }} aria-hidden="true" />
                 <span className="reroll-action-copy">
@@ -298,8 +326,15 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
               </div>} />
         </div>
     </Paper></RunActionPortal>
-    <LightningStrikeModal board={board} dieIds={effectiveSelection.dieIds} display={diceDisplay}
-      opened={lightningOpen} onClose={() => setLightningOpen(false)} submit={submit} />
+    <MagicRerollModal board={board} dieIds={pendingReroll?.dieIds ?? []} display={diceDisplay}
+      opened={pendingReroll?.stage === 'magic'} selections={pendingReroll?.magicSelections ?? {}}
+      onSelectionsChange={magicSelections => setPendingReroll(current => current ? { ...current, magicSelections } : current)}
+      onClose={cancelPendingReroll} onContinue={continueMagicReroll} continuesToLightning={lightningEligible} />
+    <LightningStrikeModal board={board} dieIds={pendingReroll?.dieIds ?? []} display={diceDisplay}
+      opened={pendingReroll?.stage === 'lightning'} magicChoices={pendingReroll?.magicChoices ?? []}
+      onBack={pendingReroll && Object.keys(pendingReroll.magicSelections).length
+        ? () => setPendingReroll(current => current ? { ...current, stage: 'magic' } : current) : undefined}
+      onClose={cancelPendingReroll} submit={submit} />
     <Modal opened={dareDevilOpen} onClose={() => setDareDevilOpen(false)} centered className="dare-devil-modal"
       title={<Stack gap={0}><Text fw={900}>Dare Devil</Text><Text size="sm" c="dimmed">Up the ante by rerolling all dice?</Text></Stack>}
       closeButtonProps={{ 'aria-label': 'Close Dare Devil choice' }}>

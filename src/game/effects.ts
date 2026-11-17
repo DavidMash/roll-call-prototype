@@ -1,5 +1,5 @@
 import { bossRewardForEncounter, CONFIG, interestForGoldAtCap, roundReward } from './config';
-import { activeFace, createCollectibleDie, faceOutcomeIdentity, rollPhysicalDie, sameOutcomeIdentity, scoringPips, weightedSelectedFaceWeight, wholeDieEffectSuppressed } from './dice';
+import { activeFace, createCollectibleDie, faceOutcomeIdentity, highestAvailableRank, lowestAvailableRank, rollPhysicalDie, sameOutcomeIdentity, scoringPips, weightedSelectedFaceWeight, wholeDieEffectSuppressed } from './dice';
 import {
   captureHandStart, currentFlameInstanceId, eligibleFlameIds, flameBaseMultiplier, flameByType, flameInstances, flameSlotOf, FLAMES, handXMultContributions,
   allHandsOnDeckChargeGain, countScoringDiceEnhancementComponents, fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, HOT_STREAK_SEQUENCE,
@@ -46,7 +46,7 @@ import {
 import { createTrainingSession } from './training';
 import { forgeRevealEligible } from './forge';
 import type { ChargeFlame, HandStartSnapshot } from './flames';
-import type { CollectibleDie, DiceSlotRef, DieEffectInstance, EventRecord, Face, Flame, FlameInstanceId, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, InfernoRewardOfferId, LightningStrikePrediction, RandomSource, Rank, ResolvedDiePips, RunNode, ScorePackage, ScoreSource, SpecialDieType, SpecialOffer, TemperSource, TemperSpendSource } from './types';
+import type { CollectibleDie, DiceSlotRef, DieEffectInstance, EventRecord, Face, Flame, FlameInstanceId, GameEvent, GameState, GoldSource, GoldSpendSource, HandId, HandPlaySource, HandScoreAccumulator, InfernoRewardOfferId, LightningStrikePrediction, MagicRerollChoice, RandomSource, Rank, ResolvedDiePips, RunNode, ScorePackage, ScoreSource, SpecialDieType, SpecialOffer, TemperSource, TemperSpendSource } from './types';
 import type {
   FlameOrigin, HandSideEffect, HistoryDieState, MultContribution, PipsContribution,
   RollBatchEvent, RollEffect, RollReason, RunHistoryV2Event, RunHistoryV2EventInput, XMultContribution,
@@ -63,7 +63,7 @@ import {
 import { hasLegalManualReroll, resolveManualRerollCost } from './manualRerolls';
 import { eligibleFetchTargets, fetchTargetIsEligible, type FetchRetargetReason } from './fetchTarget';
 
-type RollTrigger = { dieId: number; face: Face; kind: 'jumpingBean'; rerollEventId: string; selectedNumber: Exclude<Rank, 7> };
+type RollTrigger = { dieId: number; face: Face; kind: 'jumpingBean'; rerollEventId: string; selectedNumber: Rank };
 type CurtainCallContext = { dieId: number; multiplier: number; manualRerollEventId: string };
 type V2HandDraft = {
   parentSeq?: number;
@@ -983,13 +983,12 @@ export class Resolver {
     // Weighted is applied only inside the final randomized physical-face selection.
     const magic = collectible && ownEffectActive ? effectOf(collectible, 'magic') : undefined;
     const magicRuntime = collectible ? this.specialRuntime(collectible, 'magic') : undefined;
-    if (specialAllowed && collectible && magic && magicRuntime && intent.reroll && magicRuntime.magicArmedFace !== null
-      && magicRuntime.invocationsRemaining > 0) {
-      const target = magicRuntime.magicArmedFace;
+    if (specialAllowed && intent.manual && collectible && magic && magicRuntime
+      && intent.magicOutcome?.kind === 'rank' && magicRuntime.invocationsRemaining > 0) {
+      const target = intent.magicOutcome.rank;
       const result = forced('magicDie', target, die.id);
       if (result) {
-        magicRuntime.magicArmedFace = null;
-        this.spendInvocation(collectible, magic, `Magic forced Reroll to ${target}`, 'roll_controller');
+        this.spendInvocation(collectible, magic, `Magic forced Manual Reroll to ${target}`, 'roll_controller');
         return result;
       }
     }
@@ -1030,7 +1029,7 @@ export class Resolver {
     }
     const previousFaceExcluded = intent.excludeStartingFace;
     const weighted = specialAllowed && collectible && ownEffectActive ? effectOf(collectible, 'weighted') : undefined;
-    const weightedConfig = weighted ? { selectedNumber: weighted.persistent.weightedFace, level: weighted.level } : undefined;
+    const weightedConfig = weighted ? { selectedNumber: highestAvailableRank(collectible!), level: weighted.level } : undefined;
     const randomResult = rollPhysicalDie(die, this.rng, previousFaceExcluded ? beforePhysical : undefined, weightedConfig);
     const matchingPhysicalFaces = weightedConfig
       ? die.faces.filter(face => face.rank === weightedConfig.selectedNumber).length : 0;
@@ -1070,9 +1069,10 @@ export class Resolver {
           message: `Cursed Die rolled ${face.rank}` });
       }
       const jumpingBean = die.owner === 'player' ? effectOf(die, 'jumpingBean') : undefined;
+      const jumpingBeanNumber = die.owner === 'player' ? lowestAvailableRank(die) : undefined;
       const jumpingBeanRoll = batch.context === 'gameplay' || batch.context === 'wardenSetup' || batch.context === 'settle';
       if (jumpingBeanRoll && die.owner === 'player' && jumpingBean && !wholeDieEffectSuppressed(die)
-        && face.rank !== 7 && face.rank === jumpingBean.persistent.jumpingBeanNumber) {
+        && jumpingBeanNumber !== undefined && face.rank === jumpingBeanNumber) {
         const runtime = this.specialRuntime(die, 'jumpingBean');
         if (runtime && runtime.invocationsRemaining > 0) {
           const beforeUses = runtime.invocationsRemaining;
@@ -1081,7 +1081,7 @@ export class Resolver {
             `Jumping Bean rolled selected number ${face.rank}; use ${beforeUses} to ${runtime.invocationsRemaining}`,
             'post_roll', beforeUses, runtime.invocationsRemaining, { face: face.rank });
           triggers.push({ dieId: die.id, face, kind: 'jumpingBean', rerollEventId: batch.id,
-            selectedNumber: jumpingBean.persistent.jumpingBeanNumber });
+            selectedNumber: jumpingBeanNumber });
         }
       }
     }
@@ -1092,11 +1092,11 @@ export class Resolver {
   }
 
   rollBatch(dieIds: number[], reason: string, context: RollContext, _excludeStartingFace = false,
-    reasonId: RollReason = 'other', reuseOpeningBoard = false): RollBatchEvent | null {
+    reasonId: RollReason = 'other', reuseOpeningBoard = false, magicChoices: readonly MagicRerollChoice[] = []): RollBatchEvent | null {
     const ids = orderDieIdsByEncounter(this.state, [...new Set(dieIds)]);
     if (!ids.length) return null;
     const batchId = `${this.state.historyV2TimelineId}:${this.state.round}:${this.state.nextActionId}:${this.state.nextHistorySeq}`;
-    const batch = createRollBatchIntent(batchId, ids, reason, context, reasonId);
+    const batch = createRollBatchIntent(batchId, ids, reason, context, reasonId, magicChoices);
     if (batch.manual) this.resolveCurtainCallsBeforeManualReroll(batch);
     const parentSeq = this.v2ParentSeq;
     this.v2ParentSeq = undefined;
@@ -2148,7 +2148,7 @@ export class Resolver {
     this.state.decisionId++;
   }
 
-  lightningStrike(predictions: LightningStrikePrediction[]): void {
+  lightningStrike(predictions: LightningStrikePrediction[], magicChoices: readonly MagicRerollChoice[] = []): void {
     const flame = this.chargeFlameSource('lightningStrike');
     if (!flame) throw new Error('Lightning Strike requires its active Flame.');
     const dieIds = predictions.map(prediction => prediction.dieId);
@@ -2156,7 +2156,7 @@ export class Resolver {
     const normalSpent = Math.min(this.state.manualRerollsRemaining, cost);
     const carePackageSpent = cost - normalSpent;
     const requested = lightningStrikeChargeGain(flame.investment);
-    const manualBatch = this.manualReroll(dieIds);
+    const manualBatch = this.manualReroll(dieIds, magicChoices);
     const outcomes = new Map(manualBatch.results.map(result => [result.dieId, faceOutcomeIdentity({ rank: result.afterFace })]));
     const results = predictions.map(prediction => {
       const actualOutcome = outcomes.get(prediction.dieId);
@@ -2261,7 +2261,7 @@ export class Resolver {
     this.state.decisionId++;
   }
 
-  manualReroll(dieIds: number[]): RollBatchEvent {
+  manualReroll(dieIds: number[], magicChoices: readonly MagicRerollChoice[] = []): RollBatchEvent {
     const ids = orderDieIdsByEncounter(this.state, [...dieIds]);
     const reroll = resolveManualRerollCost(this.state, ids);
     const requiredDieIds = requiredEncounterDieIds(this.state);
@@ -2300,7 +2300,7 @@ export class Resolver {
         `${this.dieLabel(dieId)} manually rerolled`, [dieId]);
     this.v2ManualSpend = { normalCharges: normalSpent, carePackageCharges: carePackageSpent,
       remaining: this.state.manualRerollsRemaining, flywheelDieIds: [...reroll.flywheelDieIds] };
-    const manualBatch = this.rollBatch(ids, 'Manual gameplay reroll', 'gameplay', true, 'manual');
+    const manualBatch = this.rollBatch(ids, 'Manual gameplay reroll', 'gameplay', true, 'manual', false, magicChoices);
     if (!manualBatch) throw new Error('A Manual Reroll must resolve at least one die.');
     this.drain();
     if (startedDeadBoard && (this.state.score >= this.state.target || hasPlayableHand(activeEncounterDice(this.state),

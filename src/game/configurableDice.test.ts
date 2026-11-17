@@ -50,17 +50,15 @@ describe('Weighted physical-face probability', () => {
     expect(weightedNumberProbability(die, 6, 3)).toBe(1);
   });
 
-  it('changes future random Rolls without mutating faces and reports the same probability', () => {
-    let state = stateWithEffects([['weighted', 2]]);
-    const beforeFaces = structuredClone(state.diceInventory.instances[0].faces);
-    state = dispatch(state, { type: 'SET_DIE_EFFECT_NUMBER', dieId: 0, effect: 'weighted', number: 2 }).state;
+  it('automatically favors the current highest rank and reports the same probability', () => {
+    const state = stateWithEffects([['weighted', 2]]);
     const die = state.diceInventory.instances[0];
-    expect(die.faces).toEqual(beforeFaces);
+    die.faces = [{ rank: 1 }, { rank: 2 }, { rank: 3 }, { rank: 4 }, { rank: 4 }, { rank: 2 }];
     new Resolver(state, constant(.3)).rollBatch([0], 'Weighted random test', 'gameplay');
-    expect(activeFace(die).rank).toBe(2);
+    expect(activeFace(die).rank).toBe(4);
     const weighted = effectOf(die, 'weighted')!;
     expect(effectDetails(die, weighted, state.dieRoundState[0]).status).toContainEqual({
-      label: 'Chance to Roll 2', value: `${(weightedNumberProbability(die, 2, 2) * 100).toFixed(1)}%`,
+      label: 'Chance to Roll 4', value: `${(weightedNumberProbability(die, 4, 2) * 100).toFixed(1)}%`,
     });
   });
 
@@ -82,17 +80,16 @@ describe('automatic Jumping Bean', () => {
     expect(initialEffectRoundRuntime(effect).invocationsRemaining).toBe(uses);
   });
 
-  it('defaults to 1 and changes independently from Weighted and Magic', () => {
+  it('ignores legacy configurations and rejects obsolete configuration commands', () => {
     let state = stateWithEffects([['weighted', 1], ['jumpingBean', 2], ['magic', 1]]);
     const die = state.diceInventory.instances[0];
-    expect(effectOf(die, 'jumpingBean')!.persistent.jumpingBeanNumber).toBe(1);
-    state = dispatch(state, { type: 'SET_DIE_EFFECT_NUMBER', dieId: 0, effect: 'weighted', number: 6 }).state;
-    state = dispatch(state, { type: 'SET_DIE_EFFECT_NUMBER', dieId: 0, effect: 'jumpingBean', number: 3 }).state;
-    state = dispatch(state, { type: 'ARM_MAGIC', dieId: 0, face: 5 }).state;
-    const updated = state.diceInventory.instances[0];
-    expect(effectOf(updated, 'weighted')!.persistent.weightedFace).toBe(6);
-    expect(effectOf(updated, 'jumpingBean')!.persistent.jumpingBeanNumber).toBe(3);
-    expect(effectRuntime(state.dieRoundState[0], effectOf(updated, 'magic'))!.magicArmedFace).toBe(5);
+    effectOf(die, 'weighted')!.persistent.weightedFace = 2;
+    effectOf(die, 'jumpingBean')!.persistent.jumpingBeanNumber = 6;
+    expect(dispatch(state, { type: 'SET_DIE_EFFECT_NUMBER', dieId: 0, effect: 'jumpingBean', number: 3 }).error)
+      .toMatch(/determines its rank automatically/);
+    expect(dispatch(state, { type: 'ARM_MAGIC', dieId: 0, face: 5 }).error).toMatch(/Manual Reroll/);
+    state = dispatch(state, { type: 'MANUAL_REROLL', dieIds: [0], magicChoices: [{ dieId: 0, outcome: { kind: 'rank', rank: 5 } }] }, constant()).state;
+    expect(activeFace(state.diceInventory.instances[0]).rank).toBe(5);
   });
 
   it.each(['initial_round', 'post_hand', 'manual', 'other'] as const)(
@@ -125,14 +122,14 @@ describe('automatic Jumping Bean', () => {
   it('does not trigger on Chameleon mutation, then triggers when a later Roll lands on that physical face', () => {
     let state = stateWithEffects([['jumpingBean', 1], ['chameleon', 1]]);
     const die = state.diceInventory.instances[0];
-    effectOf(die, 'jumpingBean')!.persistent.jumpingBeanNumber = 3;
+    die.value = 1;
     state.diceInventory.instances[1].value = 3;
     state.diceInventory.instances[2].value = 3;
     syncActiveDiceProjection(state);
     state = dispatch(state, { type: 'INVOKE_CHAMELEON', dieId: 0 }, constant()).state;
     const bean = effectOf(state.diceInventory.instances[0], 'jumpingBean')!;
     expect(effectRuntime(state.dieRoundState[0], bean)!.invocationsRemaining).toBe(3);
-    const resolver = new Resolver(state, constant(.99));
+    const resolver = new Resolver(state, constant(.2));
     resolver.rollBatch([0], 'Roll mutated face', 'gameplay');
     resolver.drain();
     expect(state.stats.jumpingBeanFreePlays).toHaveLength(3);

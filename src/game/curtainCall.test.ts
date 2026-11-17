@@ -76,8 +76,7 @@ describe('Curtain Call Manual Reroll trigger', () => {
   it('uses canonical Manual Reroll classification when Magic controls the resulting face', () => {
     const state = stateWithEffects([['freePlay', 1], ['magic', 1]], 5);
     const die = state.diceInventory.instances[0];
-    effectRuntime(state.dieRoundState[0], effectOf(die, 'magic'))!.magicArmedFace = 3;
-    new Resolver(state, constant(.8)).manualReroll([0]);
+    new Resolver(state, constant(.8)).manualReroll([0], [{ dieId: 0, outcome: { kind: 'rank', rank: 3 } }]);
     expect(curtainHands(state)).toHaveLength(1);
     expect(activeFace(die).rank).toBe(3);
   });

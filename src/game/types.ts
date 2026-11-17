@@ -342,6 +342,11 @@ export interface LightningStrikePrediction {
   dieId: DieId;
   outcome: DieOutcomeIdentity;
 }
+/** Optional per-die controller choices committed atomically with one Manual Reroll. */
+export interface MagicRerollChoice {
+  dieId: DieId;
+  outcome: DieOutcomeIdentity;
+}
 
 /** Hexer-only authored face rules, separate from collectible whole-die effects. */
 export type HexerFaceEffect =
@@ -380,9 +385,9 @@ export interface CollectibleDie {
 export interface DieEffectPersistentState {
   /** Persistent value added to this die's future sale price by Vintage. */
   vintageAppreciation: number;
-  /** Persistent player configuration for Weighted's selected number. */
+  /** Legacy save field. Weighted now derives its target from the die's current faces. */
   weightedFace: Exclude<Rank, 7>;
-  /** Persistent player configuration for Jumping Bean's selected number. */
+  /** Legacy save field. Jumping Bean now derives its trigger from the die's current faces. */
   jumpingBeanNumber: Exclude<Rank, 7>;
 }
 export interface DieEffectInstance {
@@ -417,6 +422,7 @@ export interface DieEffectRoundRuntime {
   clockworkRolls: number;
   furnaceGoldFed: number;
   furnacePips: number;
+  /** Legacy save field. New Magic choices exist only inside a committed Manual Reroll action. */
   magicArmedFace: Exclude<Rank, 7> | null;
   weightedFace: Exclude<Rank, 7>;
   jumpingBeanNumber: Exclude<Rank, 7>;
@@ -1118,7 +1124,7 @@ export interface EngulfmentAssetRef {
 export type Action =
   | { type: 'PLAY'; hand: HandId; dieIds: number[]; decisionMs?: number;
       qualificationClaims?: { dieId: DieId; effect: 'mirror' | 'missingLink' | 'conjoined'; effectInstanceId?: string }[] }
-  | { type: 'MANUAL_REROLL'; dieIds: number[] }
+  | { type: 'MANUAL_REROLL'; dieIds: number[]; magicChoices?: MagicRerollChoice[] }
   | { type: 'INVOKE_CHAMELEON'; dieId: DieId }
   | { type: 'ARM_MAGIC'; dieId: DieId; face: Exclude<Rank, 7> }
   | { type: 'DISARM_MAGIC'; dieId: DieId }
@@ -1129,7 +1135,7 @@ export type Action =
   | { type: 'ACTIVATE_BURN_IT_DOWN' }
   | { type: 'ACTIVATE_GREASE_THE_ENGINE' }
   | { type: 'ACTIVATE_BRIBERY' }
-  | { type: 'ACTIVATE_LIGHTNING_STRIKE'; predictions: LightningStrikePrediction[] }
+  | { type: 'ACTIVATE_LIGHTNING_STRIKE'; predictions: LightningStrikePrediction[]; magicChoices?: MagicRerollChoice[] }
   | { type: 'ACTIVATE_DARE_DEVIL' }
   | { type: 'ACCEPT_DOUBLE_OR_NOTHING' }
   | { type: 'DECLINE_DOUBLE_OR_NOTHING'; reason: 'expired' | 'ignored' }

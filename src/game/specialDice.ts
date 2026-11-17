@@ -157,7 +157,9 @@ export function normalizeDieRoundRuntime(die: CollectibleDie, runtime: DieRoundR
     target.furnaceGoldFed = Math.max(0, Math.min(CONFIG.furnaceMaxGoldPerRound, Math.floor(target.furnaceGoldFed ?? 0)));
     target.furnacePips = Math.max(0, Math.floor(target.furnacePips ?? 0));
     delete (target as unknown as Record<string, unknown>).furnaceUnits;
-    target.magicArmedFace = [1, 2, 3, 4, 5, 6].includes(target.magicArmedFace as number) ? target.magicArmedFace : null;
+    // Pre-redesign saves may contain a future-Reroll Magic arm. It is intentionally
+    // discarded because Magic choices are now atomic Manual Reroll input.
+    target.magicArmedFace = null;
     target.weightedFace = [1, 2, 3, 4, 5, 6].includes(target.weightedFace as number)
       ? target.weightedFace : effect.persistent.weightedFace;
     target.jumpingBeanNumber = [1, 2, 3, 4, 5, 6].includes(target.jumpingBeanNumber as number)

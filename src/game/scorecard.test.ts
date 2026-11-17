@@ -102,7 +102,8 @@ describe('authoritative current-round scorecard totals', () => {
     rosterDice(game)[0].effects = [createDieEffect(rosterDice(game)[0].id, 'jumpingBean')];
     syncActiveDiceProjection(game);
     game.dieRoundState = resetDieRoundState(rosterDice(game));
-    rosterDice(game)[0].effects[0].persistent.jumpingBeanNumber = 6;
+    rosterDice(game)[0].faces.forEach(face => { face.rank = 6; });
+    game.dieRoundState[0].effects['0:jumpingBean'].invocationsRemaining = 1;
     const resolver = new Resolver(game, sequence(0.99, 0));
     resolver.rollBatch([0], 'Jumping Bean trigger test', 'gameplay');
     resolver.drain();

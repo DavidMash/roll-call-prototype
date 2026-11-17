@@ -1,5 +1,5 @@
 import { Die } from './Die';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { Die as PhysicalDie, GameEvent, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
 
@@ -25,13 +25,15 @@ interface Props {
   fetchTarget?: { dieId: number; physicalFace: Rank } | null;
   hotPotatoDieId?: number | null;
   onDropOffer?: (offerId: number, dieId: number) => void;
+  directActionRows?: number;
+  renderDirectActions?: (die: PhysicalDie) => ReactNode;
 }
 export function DiceRow({ dice, rosterSlotById = {}, display, selected = [], event, disabled, eligibleIds, restrictToEligible = false,
   ineligibleReasons = {}, actionableIneligibleIds = [], lockedIds = [], lockedReasons = {}, detailsDisabled = false,
   wardenLockedIds = [], wardenSelectableIds = [], wardenChoiceMode = false,
-  onClick, onDetails, onDropOffer, fetchTarget, hotPotatoDieId }: Props) {
+  onClick, onDetails, onDropOffer, fetchTarget, hotPotatoDieId, directActionRows = 0, renderDirectActions }: Props) {
   return <div className="dice-row" data-dice-count={dice.length}
-    style={{ '--dice-columns': dice.length } as CSSProperties}>{dice.map(die => {
+    style={{ '--dice-columns': dice.length, '--die-action-rows': directActionRows } as CSSProperties}>{dice.map(die => {
     const involved = event?.dieIds?.includes(die.id) ?? false;
     const resolving = involved && (event?.type === 'DIE_PIPS_RESOLVED'
       || event?.type === 'HAND_XMULT_CHANGED' || event?.type === 'SPECIAL_DIE_EFFECT');
@@ -50,6 +52,7 @@ export function DiceRow({ dice, rosterSlotById = {}, display, selected = [], eve
       lockedReason={lockedIds.includes(die.id) ? lockedReasons[die.id] ?? 'This die is required.' : undefined}
       ineligibleReason={restrictToEligible && !eligibleIds?.includes(die.id) ? ineligibleReasons[die.id] ?? 'This face is not eligible.' : undefined}
       allowIneligibleClick={actionableIneligibleIds.includes(die.id)} onClick={() => onClick(die.id)}
+      directActions={renderDirectActions?.(die)}
       detailsDisabled={detailsDisabled} onDetails={() => onDetails(die.id)}
       onDropOffer={onDropOffer ? offerId => onDropOffer(offerId, die.id) : undefined} />;
   })}</div>;

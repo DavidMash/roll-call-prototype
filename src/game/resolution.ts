@@ -1,5 +1,5 @@
 import type { RollReason } from './runHistoryV2';
-import type { DieType, Face, HandId, HandPlaySource, Rank } from './types';
+import type { DieOutcomeIdentity, DieType, Face, HandId, HandPlaySource, MagicRerollChoice, Rank } from './types';
 
 export type PlayCause = 'player' | 'free_play_effect' | 'jumping_bean';
 
@@ -92,6 +92,7 @@ export interface RollBatchIntent {
   manual: boolean;
   postPlay: boolean;
   effectGenerated: boolean;
+  magicChoices: MagicRerollChoice[];
 }
 
 /** One die's request to Roll, retaining its batch and semantic cause. */
@@ -106,6 +107,7 @@ export interface RollIntent {
   postPlay: boolean;
   effectGenerated: boolean;
   excludeStartingFace: boolean;
+  magicOutcome?: DieOutcomeIdentity;
 }
 
 /** Result arbitration output, before the exposed face is installed and landing reactions run. */
@@ -124,7 +126,7 @@ export interface RollResolution {
   locked?: boolean;
   intercepted?: boolean;
   specialDieType?: DieType;
-  weightedBias?: { selectedNumber: Exclude<Rank, 7>; matchingPhysicalFaces: number; selectedFaceWeight: number };
+  weightedBias?: { selectedNumber: Rank; matchingPhysicalFaces: number; selectedFaceWeight: number };
   previousFaceExcluded?: boolean;
 }
 
@@ -163,6 +165,7 @@ export function createRollBatchIntent(
   reasonText: string,
   context: RollContext,
   reason: RollReason,
+  magicChoices: readonly MagicRerollChoice[] = [],
 ): RollBatchIntent {
   const initialRoundRoll = reason === 'initial_round' || reason === 'warden_opening';
   return {
@@ -176,6 +179,7 @@ export function createRollBatchIntent(
     manual: reason === 'manual',
     postPlay: reason === 'post_hand' || reason === 'winning_settle' || reason === 'juggler',
     effectGenerated: reason === 'jumping_bean_followup' || reason === 'magician_return' || reason === 'dare_devil',
+    magicChoices: structuredClone([...magicChoices]),
   };
 }
 
@@ -190,4 +194,5 @@ export const createRollIntent = (batch: RollBatchIntent, dieId: number): RollInt
   postPlay: batch.postPlay,
   effectGenerated: batch.effectGenerated,
   excludeStartingFace: batch.manual,
+  magicOutcome: batch.magicChoices.find(choice => choice.dieId === dieId)?.outcome,
 });

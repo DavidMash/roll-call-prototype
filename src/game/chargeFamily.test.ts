@@ -127,9 +127,8 @@ describe('Power Surge', () => {
     rosterDice(state)[0].effects = [createDieEffect(rosterDice(state)[0].id, 'jumpingBean')];
     syncActiveDiceProjection(state);
     state.dieRoundState = resetDieRoundState(rosterDice(state));
-    const effect = rosterDice(state)[0].effects[0];
-    effect.persistent.jumpingBeanNumber = 3;
-    const resolver = new Resolver(state, sequence(.34, .99));
+    rosterDice(state)[0].faces.forEach((face, index) => { face.rank = ([3, 3, 4, 5, 6, 6] as const)[index]; });
+    const resolver = new Resolver(state, sequence(0, .99));
     resolver.rollBatch([0], 'Jumping Bean trigger test', 'gameplay');
     resolver.drain();
     expect(ultimateHands(state.handLevels)).toEqual(['threes']);

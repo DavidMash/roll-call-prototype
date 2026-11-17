@@ -5,16 +5,18 @@ import { activeFace, distinctDieOutcomes, outcomeIdentityKey } from '../game/dic
 import { validateAction } from '../game/engine';
 import { flameByType, lightningStrikeChargeGain } from '../game/flames';
 import { formatPlayerNumber } from '../game/copy';
-import type { Action, Board, DieOutcomeIdentity, LightningStrikePrediction, Rank } from '../game/types';
+import type { Action, Board, DieOutcomeIdentity, LightningStrikePrediction, MagicRerollChoice, Rank } from '../game/types';
 import type { DiceDisplay } from '../uiSettings';
 import { Die } from './Die';
 
-export function LightningStrikeModal({ board, dieIds, display, opened, onClose, submit }: {
+export function LightningStrikeModal({ board, dieIds, display, opened, onClose, onBack, magicChoices = [], submit }: {
   board: Board;
   dieIds: number[];
   display: DiceDisplay;
   opened: boolean;
   onClose: () => void;
+  onBack?: () => void;
+  magicChoices?: MagicRerollChoice[];
   submit: (action: Action) => void;
 }) {
   const dice = useMemo(() => dieIds.flatMap(id => {
@@ -39,12 +41,15 @@ export function LightningStrikeModal({ board, dieIds, display, opened, onClose, 
   }, [updateScrollPosition]);
   useEffect(() => {
     if (!opened) return;
+    const magicByDie = new Map(magicChoices.map(choice => [choice.dieId, choice.outcome]));
     setSelected(Object.fromEntries(dice.map(die => {
       const outcomes = distinctDieOutcomes(die);
+      const magic = magicByDie.get(die.id);
+      if (magic && outcomes.some(outcome => outcomeIdentityKey(outcome) === outcomeIdentityKey(magic))) return [die.id, magic];
       const current = outcomes.find(outcome => outcome.kind === 'rank' && outcome.rank === activeFace(die).rank);
       return [die.id, current ?? outcomes[0]];
     }).filter((entry): entry is [number, DieOutcomeIdentity] => entry[1] !== undefined)));
-  }, [opened, dice]);
+  }, [opened, dice, magicChoices.map(choice => `${choice.dieId}:${outcomeIdentityKey(choice.outcome)}`).join('|')]);
   useEffect(() => {
     if (!opened) return;
     const row = predictionRow.current;
@@ -60,7 +65,8 @@ export function LightningStrikeModal({ board, dieIds, display, opened, onClose, 
 
   const predictions: LightningStrikePrediction[] = dice.flatMap(die => selected[die.id]
     ? [{ dieId: die.id, outcome: selected[die.id] }] : []);
-  const action: Action = { type: 'ACTIVATE_LIGHTNING_STRIKE', predictions };
+  const action: Action = { type: 'ACTIVATE_LIGHTNING_STRIKE', predictions,
+    ...(magicChoices.length ? { magicChoices } : {}) };
   const reason = predictions.length === dice.length ? validateAction(board, action) : 'Choose one prediction for every die.';
   const roster = board.dice.filter(die => die.owner === 'player');
   const flame = flameByType(board, 'lightningStrike');
@@ -79,6 +85,7 @@ export function LightningStrikeModal({ board, dieIds, display, opened, onClose, 
   }
 
   return <Modal opened={opened} onClose={onClose} centered size="lg" className="lightning-prediction-modal"
+    transitionProps={{ duration: 0 }}
     title={<Stack gap={0}><Text fw={900}>Lightning Strike</Text><Text size="sm" c="dimmed">Submit your prediction</Text></Stack>}
     closeButtonProps={{ 'aria-label': 'Close Lightning Strike prediction' }}>
     <Stack gap="md">
@@ -115,7 +122,8 @@ export function LightningStrikeModal({ board, dieIds, display, opened, onClose, 
         </Text>}
       </Group>
       {reason && <Text size="xs" c="dimmed" role="status">{reason}</Text>}
-      <Group justify="flex-end"><Button variant="subtle" color="gray" onClick={onClose}>CANCEL</Button>
+      <Group justify="flex-end">{onBack && <Button variant="default" onClick={onBack}>BACK</Button>}
+        <Button variant="subtle" color="gray" onClick={onClose}>CANCEL</Button>
         <Button color="orange" disabled={reason !== null} data-testid="confirm-lightning-strike"
           onClick={() => { if (reason === null) { submit(action); onClose(); } }}>ROLL DICE!</Button></Group>
     </Stack>
