@@ -170,7 +170,16 @@ describe('Full of Grace Last Play semantics', () => {
     expect(factor(result)).toMatchObject({ source: 'fullOfGrace', value: 5 });
   });
 
-  it('requires exactly one playable manual Hand and supports a later recurring Last Play', () => {
+  it('applies when rolling the selected dice risks every alternative Hand', () => {
+    const state = game([1, 1, 2, 3, 4]);
+    ownFlame(state, 'fullOfGrace');
+    state.consumed = ['twos', 'threes', 'fours', 'fives', 'sixes', 'twoPair', 'threeKind',
+      'fourKind', 'fiveKind', 'fullHouse', 'smallStraight', 'largeStraight'];
+    const result = dispatch(state, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant()).state;
+    expect(factor(result)).toMatchObject({ source: 'fullOfGrace', value: 5 });
+  });
+
+  it('does not apply with a safe alternative and supports later recurring Last Plays', () => {
     const many = game();
     ownFlame(many, 'fullOfGrace');
     expect(handXMultContributions(captureHandStart(many, 'ones', [0]), 'ones', 1, [0]))

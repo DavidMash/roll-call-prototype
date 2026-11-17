@@ -57,7 +57,7 @@ export function flameVerboseDescription(id: Flame): RichText {
     ultimate: [text('When you '), term('play'), text(' your highest-level '), term('hand'), text(', that Hand gains extra '), term('xMult'), text('. The bonus increases as this Flame gets stronger, up to ×5 XMult.')],
     minigun: [text('Consecutive '), term('upperHand', 'Upper Hand'), text(' Plays spin this Flame up through six steps, increasing their '), term('xMult'), text(' up to ×5. Playing a Lower Hand resets the chain.')],
     hailMary: [text('If you '), term('play'), text(' a '), term('hand'), text(' after using all of your normal '), term('manualReroll', 'Manual Rerolls'), text(', that Hand gains extra '), term('xMult'), text(', up to ×5.')],
-    fullOfGrace: [text('When exactly one Hand is currently playable, Playing that '), term('lastPlay', 'Last Play'), text(' gains extra '), term('xMult'), text(', up to ×5.')],
+    fullOfGrace: [term('lastPlay', 'Last Plays'), text(' and Plays that risk leaving no playable Hands gain extra '), term('xMult'), text(', up to ×5.')],
     momentum: [text('Each time you '), term('play'), text(' a '), term('hand'), text(', this Flame multiplies your current '), term('charge'), text(', up to ×1.25.')],
     thirdRail: [text('Whenever a die is '), term('roll', 'Rolled'), text(' and its '), term('exposedFace'), text(' is a 3, this Flame multiplies your current '), term('charge'), text(', up to ×1.25 per die.')],
     jumpStart: [text('Each die participating in a '), term('manualReroll'), text(' multiplies your current '), term('charge'), text(' sequentially, up to ×1.5 per die, including dice covered by Flywheel.')],

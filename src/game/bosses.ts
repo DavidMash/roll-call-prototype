@@ -351,13 +351,28 @@ export function wouldCompleteScorecardCycle(
   return relevant.length > 0 && relevant.every(id => cycle.has(id));
 }
 
-export function lastPlayDanger(state: Pick<Board, 'boss' | 'consumed' | 'dice' | 'dieRoundState'> & { bossSilenced?: boolean }, hand: HandId): LastPlayDanger {
-  const playable = currentlyPlayableManualHands(state);
-  return playable.length === 1 && playable[0] === hand ? 'definite' : 'none';
+export function lastPlayDanger(
+  state: Pick<Board, 'boss' | 'consumed' | 'dice' | 'dieRoundState'> & { bossSilenced?: boolean },
+  hand: HandId,
+  selectedDieIds: readonly number[] = [],
+): LastPlayDanger {
+  const dice = activeEncounterDice(state);
+  const unavailable = unavailableEncounterHands(state);
+  const options = handOptions(dice, unavailable, requiredEncounterDieIds(state), state.dieRoundState, encounterHandIds(state))
+    .filter(option => !option.consumed && !handIsStructurallyImpossible(option.id, dice.length));
+  if (!options.some(option => option.id === hand)) return 'none';
+  if (options.length === 1) return 'definite';
+  if (!selectedDieIds.length) return 'none';
+
+  const rolling = new Set(selectedDieIds);
+  const alternatives = options.filter(option => option.id !== hand);
+  return alternatives.length > 0 && alternatives.every(option =>
+    option.combinations.every(combination => combination.some(dieId => rolling.has(dieId))))
+    ? 'possible' : 'none';
 }
 
-export const isLastPlay = (state: Pick<Board, 'boss' | 'consumed' | 'dice' | 'dieRoundState'> & { bossSilenced?: boolean }, hand: HandId) =>
-  lastPlayDanger(state, hand) !== 'none';
+export const isLastPlay = (state: Pick<Board, 'boss' | 'consumed' | 'dice' | 'dieRoundState'> & { bossSilenced?: boolean }, hand: HandId,
+  selectedDieIds: readonly number[] = []) => lastPlayDanger(state, hand, selectedDieIds) !== 'none';
 
 export function cleanupTemporaryBossFaces(dice: Die[]): void {
   for (const die of dice.filter(item => item.owner === 'player')) die.faces.forEach((face, index) => {

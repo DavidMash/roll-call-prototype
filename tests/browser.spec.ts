@@ -5,7 +5,7 @@ import { activeFace } from '../src/game/dice';
 import { handOptions, handStats, HANDS, HAND_IDS, LOWER_HAND_IDS, relativeHandStrengthTiers, UPPER_HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import { CONFIG } from '../src/game/config';
-import type { Action, GameState, SpecialDieType } from '../src/game/types';
+import type { Action, GameState, Rank, SpecialDieType } from '../src/game/types';
 import { activeEncounterDice, unavailableEncounterHands } from '../src/game/bosses';
 import { enterRun, goToShopStage, installRunState, openGameMenu, openMenuItem, readRunState, setDiceDisplay, setPlaybackSpeed } from './uiHelpers';
 import { specialOfferName } from '../src/game/specialOffers';
@@ -331,6 +331,26 @@ test('Play action distinguishes possible, definite, and guaranteed final chances
   state.target = 500n;
 
   await page.goto('/?seed=last-play-language&speed=instant');
+  const possible = newRun('possible-last-play-language').state;
+  [1, 1, 2, 3, 4].forEach((value, index) => { possible.dice[index].value = value as Rank; });
+  possible.consumed = HAND_IDS.filter(hand => hand !== 'pair' && hand !== 'ones');
+  possible.target = 1_000_000n;
+  await installRunState(page, possible);
+  await page.reload();
+  await ready(page);
+  await page.getByTestId('scorecard-row-pair').click();
+  await expect(page.getByRole('button', { name: 'LAST PLAY?', exact: true })).toBeVisible();
+
+  const safe = newRun('safe-alternate-language').state;
+  [1, 1, 1, 2, 3].forEach((value, index) => { safe.dice[index].value = value as Rank; });
+  safe.consumed = HAND_IDS.filter(hand => hand !== 'pair' && hand !== 'ones');
+  safe.target = 1_000_000n;
+  await installRunState(page, safe);
+  await page.reload();
+  await ready(page);
+  await page.getByTestId('scorecard-row-pair').click();
+  await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeVisible();
+
   async function load(consumed: typeof HAND_IDS, score: bigint) {
     state.consumed = [...consumed];
     state.score = score;

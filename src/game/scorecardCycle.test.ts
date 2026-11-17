@@ -65,6 +65,24 @@ describe('authoritative scorecard cycles', () => {
     expect(lastPlayDanger(state, 'ones')).toBe('definite');
   });
 
+  it('labels a Play as possibly last when its rolling dice support every alternative', () => {
+    const state = newRun('possible-last-play', constant()).state;
+    [1, 1, 2, 3, 4].forEach((value, index) => { state.dice[index].value = value as Rank; });
+    state.consumed = HAND_IDS.filter(hand => hand !== 'pair' && hand !== 'ones');
+    const selected = [state.dice[0].id, state.dice[1].id];
+
+    expect(lastPlayDanger(state, 'pair', selected)).toBe('possible');
+  });
+
+  it('keeps a Play safe when an alternative has an untouched legal combination', () => {
+    const state = newRun('safe-alternate-play', constant()).state;
+    [1, 1, 1, 2, 3].forEach((value, index) => { state.dice[index].value = value as Rank; });
+    state.consumed = HAND_IDS.filter(hand => hand !== 'pair' && hand !== 'ones');
+    const selected = [state.dice[0].id, state.dice[1].id];
+
+    expect(lastPlayDanger(state, 'pair', selected)).toBe('none');
+  });
+
   it('does not refresh when the final hand clears the Round', () => {
     const state = finalHandState();
     state.target = 74n;

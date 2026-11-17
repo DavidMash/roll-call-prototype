@@ -93,7 +93,7 @@ export function RoundScreen({ board, event, busy, inputBlocked, selection, setSe
     const hand = effectiveSelection.hand!;
     const canonical = canonicalPlayPreview(board, hand, effectiveSelection.dieIds, decisionMs);
     return { ...canonical, hasXMult: canonical.effectiveXMult !== 1,
-      danger: lastPlayDanger(board, hand), guaranteedWin: board.score + canonical.score >= board.target };
+      danger: lastPlayDanger(board, hand, effectiveSelection.dieIds), guaranteedWin: board.score + canonical.score >= board.target };
   })() : null;
   const flameCandidateKey = roundBusy ? null : flameCandidatePresentationKey(board);
   const candidateFlamePresentation = useMemo(() => flameCandidateGate.current.resolve(roundBusy,

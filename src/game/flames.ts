@@ -29,7 +29,7 @@ export const FLAMES: Record<Flame, FlameDefinition> = {
   ultimate: flameDefinition('ultimate', 'Ultimate', 'ULT', 'uncommon', 'Your highest level hand gains up to ×5 XMult.'),
   minigun: flameDefinition('minigun', 'Minigun', 'MINI', 'common', 'Consecutive Upper Hands spin up to ×5 XMult.'),
   hailMary: flameDefinition('hailMary', 'Hail Mary', 'HAIL', 'common', 'Hands played with no Rerolls left gain up to ×5 XMult.'),
-  fullOfGrace: flameDefinition('fullOfGrace', 'Full of Grace', 'GRACE', 'common', 'Last Play gains up to ×5 XMult.'),
+  fullOfGrace: flameDefinition('fullOfGrace', 'Full of Grace', 'GRACE', 'common', 'Last Plays and Plays that risk leaving no playable Hands gain up to ×5 XMult.'),
   momentum: flameDefinition('momentum', 'Momentum', 'MOM', 'common', 'Playing a hand builds Charge.'),
   thirdRail: flameDefinition('thirdRail', 'Third Rail', 'RAIL', 'uncommon', 'Rolling 3s builds Charge.'),
   jumpStart: flameDefinition('jumpStart', 'Jump Start', 'JUMP', 'uncommon', 'Each manually rerolled die builds Charge.'),
@@ -276,6 +276,7 @@ export function flameEffectText(id: Flame, investedGold: number, _board: FlameDi
     case 'sixPack': return `Each Round starts at ×${formatPlayerNumber(sixPackStartingMultiplier(investedGold))} XMult and loses ×${formatPlayerNumber(FLAME_SCALING.sixPack.upperDecay * flameProgress(investedGold))} after each Upper Hand.`;
     case 'minigun': return `Consecutive Upper Hands spin up from ×${formatPlayerNumber(minigunMultiplier(investedGold, 1))} to ×${formatPlayerNumber(minigunMultiplier(investedGold, 6))} XMult.`;
     case 'targetPractice': return `Target Hand gains ×${formatPlayerNumber(targetPracticeMultiplier(investedGold))} XMult.`;
+    case 'fullOfGrace': return `Last Plays and Plays that risk leaving no playable Hands gain ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult.`;
     case 'fatCat': return `Five Played Golden or Jackpot dice reach ×${formatPlayerNumber(fatCatMultiplier(investedGold, 5))} XMult.`;
     case 'vineyard': return `Five Played Vintage dice reach ×${formatPlayerNumber(vineyardMultiplier(investedGold, 5))} XMult.`;
     case 'fetch': return `The marked FETCH face grants ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult, then moves.`;
@@ -564,7 +565,7 @@ export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'in
     sixPackXMult: state.sixPackXMult,
     sixPackUpperHandsPlayed: state.sixPackUpperHandsPlayed,
     minigunUpperStreak: state.minigunUpperStreak,
-    lastPlayDanger: lastPlayDanger(state, hand),
+    lastPlayDanger: lastPlayDanger(state, hand, selectedDieIds),
     selectedDieIds: [...selectedDieIds],
     availablePlayableDieIds: availableDice.map(die => die.id),
     playedDiceScoringPips: 0,
