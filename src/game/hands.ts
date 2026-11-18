@@ -22,7 +22,7 @@ export const HANDS: Record<HandId, HandDefinition> = {
   sevens: { name: 'Sevens', rank: 7, startingMultiplier: 1 },
   odds: { name: 'Odds', size: 3, startingMultiplier: 2 },
   evens: { name: 'Evens', size: 3, startingMultiplier: 2 },
-  chance: { name: 'Chance', size: 1, startingMultiplier: 1.5 },
+  chance: { name: 'Chance', size: 1, startingMultiplier: 1 },
   pair: { name: 'Pair', size: 2, groups: [2], startingMultiplier: 2 },
   twoPair: { name: 'Two Pair', size: 4, groups: [2, 2], startingMultiplier: 2 },
   miniStraight: { name: 'Mini Straight', size: 3, startingMultiplier: 2.5 },
@@ -43,12 +43,12 @@ export const HANDS: Record<HandId, HandDefinition> = {
 };
 /** Normal scorecard hands. Sevens is encounter-scoped and never leaks into Shops or other Rounds. */
 export const HAND_IDS: HandId[] = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes',
-  'pair', 'twoPair', 'threeKind', 'smallStraight', 'fullHouse', 'fourKind', 'largeStraight', 'fiveKind'];
-export const LEFT_HAND_IDS = HAND_IDS.filter(id => HANDS[id].rank) as HandId[];
+  'chance', 'pair', 'threeKind', 'smallStraight', 'fullHouse', 'fourKind', 'largeStraight', 'fiveKind'];
+export const LEFT_HAND_IDS = HAND_IDS.filter(id => HANDS[id].rank || id === 'chance') as HandId[];
 export const HEXER_HAND_IDS: HandId[] = [...HAND_IDS.slice(0, LEFT_HAND_IDS.length), 'sevens', ...HAND_IDS.slice(LEFT_HAND_IDS.length)];
-export const RIGHT_HAND_IDS = HAND_IDS.filter(id => !HANDS[id].rank) as HandId[];
-export const BONUS_LEFT_HAND_IDS: HandId[] = ['odds', 'evens', 'chance'];
-export const BONUS_RIGHT_HAND_IDS: HandId[] = ['miniStraight', 'oddStraight', 'evenStraight', 'threePair',
+export const RIGHT_HAND_IDS = HAND_IDS.filter(id => !LEFT_HAND_IDS.includes(id)) as HandId[];
+export const BONUS_LEFT_HAND_IDS: HandId[] = ['odds', 'evens'];
+export const BONUS_RIGHT_HAND_IDS: HandId[] = ['twoPair', 'miniStraight', 'oddStraight', 'evenStraight', 'threePair',
   'wideStraight', 'doubleTriple', 'fullerHouse', 'xlStraight', 'sixKind'];
 export const ALL_HAND_IDS: HandId[] = [...HAND_IDS, ...BONUS_LEFT_HAND_IDS, ...BONUS_RIGHT_HAND_IDS];
 export const FINAL_LEFT_HAND_ORDER: HandId[] = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes', 'odds', 'evens', 'chance'];

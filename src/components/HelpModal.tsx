@@ -21,6 +21,9 @@ const RIGHT_HAND_RULES: Partial<Record<HandId, string>> = {
   largeStraight: 'Five consecutive Faces.',
   fiveKind: 'Five matching Faces.',
 };
+const LEFT_HAND_RULES: Partial<Record<HandId, string>> = {
+  chance: 'Scores every active Roster die.',
+};
 
 function RuleSection({ title, children }: { title: string; children: React.ReactNode }) {
   return <div className="help-item"><Title order={4}>{title}</Title><Text size="sm" mt={3}>{children}</Text></div>;
@@ -47,8 +50,8 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
         <Text size="sm">XMult comes from effects such as Flames.</Text>
       </Stack></Tabs.Panel>
       <Tabs.Panel value="hands" pt="md"><Stack gap="md">
-        <div><Title order={4}>LEFT HANDS</Title><Text size="sm">Left hands score any number of matching Faces.</Text>
-          <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="xs" mt="xs">{LEFT_HAND_IDS.map(hand => <div key={hand} className="help-item"><Text size="sm" fw={700}>{HANDS[hand].name}</Text></div>)}</SimpleGrid></div>
+        <div><Title order={4}>LEFT HANDS</Title><Text size="sm">Number hands score any number of matching Faces. Chance scores the whole active Roster.</Text>
+          <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="xs" mt="xs">{LEFT_HAND_IDS.map(hand => <div key={hand} className="help-item"><Text size="sm" fw={700}>{HANDS[hand].name}</Text>{LEFT_HAND_RULES[hand] && <Text size="xs" c="dimmed">{LEFT_HAND_RULES[hand]}</Text>}</div>)}</SimpleGrid></div>
         <div><Title order={4}>RIGHT HANDS</Title><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" mt="xs">{RIGHT_HAND_IDS.map(hand => <div key={hand} className="help-item">
           <Text size="sm" fw={700}>{HANDS[hand].name}</Text><Text size="xs" c="dimmed">{RIGHT_HAND_RULES[hand]}</Text>
         </div>)}</SimpleGrid></div>

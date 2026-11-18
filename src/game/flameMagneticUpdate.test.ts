@@ -138,7 +138,7 @@ describe('Six Pack', () => {
     flame(state, 0, 'sixPack', 100);
     state.sixPackXMult = 2.5;
     state.sixPackLeftHandsPlayed = 3;
-    state.consumed = ['twos', 'threes', 'fours', 'fives', 'sixes', 'pair', 'twoPair', 'threeKind',
+    state.consumed = ['twos', 'threes', 'fours', 'fives', 'sixes', 'chance', 'pair', 'threeKind',
       'fourKind', 'fiveKind', 'fullHouse', 'smallStraight', 'largeStraight'];
     state.scorecardCycleConsumed = [...state.consumed];
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.8)).state;

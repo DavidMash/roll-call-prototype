@@ -48,10 +48,10 @@ export function curateTutorialOffers(state: GameState, scenario: TutorialScenari
   }
 
   if (state.phase === 'flameSelection' && state.flameSelection && !state.flameSelection.acquired) {
-    if (state.round === 6) state.flameSelection.offers = flameOffers(state, ['minigun', 'doubleDown', 'straightShooter']);
+    if (state.round === 6) state.flameSelection.offers = flameOffers(state, ['minigun', 'threesCompany', 'straightShooter']);
     if (state.round === 12) {
       const pools: Partial<Record<Flame, Flame[]>> = {
-        doubleDown: ['missingPair', 'threesCompany', 'minigun'],
+        threesCompany: ['missingPair', 'minigun', 'oneShort'],
         straightShooter: ['oneShort', 'threesCompany', 'minigun'],
         minigun: ['threesCompany', 'missingPair', 'oneShort'],
       };

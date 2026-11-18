@@ -15,7 +15,7 @@ const expectedLevelOne: Record<HandId, number> = {
   ones: 1, twos: 1, threes: 1, fours: 1, fives: 1, sixes: 1, sevens: 1,
   pair: 2, twoPair: 2, threeKind: 3, smallStraight: 4,
   fullHouse: 5, fourKind: 6, largeStraight: 7, fiveKind: 8,
-  odds: 2, evens: 2, chance: 1.5, miniStraight: 2.5, oddStraight: 3, evenStraight: 3,
+  odds: 2, evens: 2, chance: 1, miniStraight: 2.5, oddStraight: 3, evenStraight: 3,
   threePair: 5, wideStraight: 7, doubleTriple: 7, fullerHouse: 8, xlStraight: 10, sixKind: 12,
 };
 
@@ -103,12 +103,12 @@ describe('derived hand levels', () => {
 describe('frozen relative-level Training', () => {
   it('captures complete independent family snapshots with rounded arithmetic means', () => {
     const levels = newRun('baselines').state.handLevels;
-    Object.assign(levels, { ones: 8, twos: 9, threes: 10, fours: 11, fives: 12, sixes: 13,
+    Object.assign(levels, { ones: 8, twos: 9, threes: 10, fours: 11, fives: 12, sixes: 13, chance: 14,
       pair: 6, twoPair: 8, threeKind: 9, smallStraight: 10, fullHouse: 11, fourKind: 12, largeStraight: 13, fiveKind: 15 });
     const session = createTrainingSession(levels);
     expect(session.leftLevelsAtEntry).toEqual(Object.fromEntries(LEFT_HAND_IDS.map(hand => [hand, levels[hand]])));
     expect(session.rightLevelsAtEntry).toEqual(Object.fromEntries(RIGHT_HAND_IDS.map(hand => [hand, levels[hand]])));
-    expect(session.leftBaseline).toBe(11); // 10.5 rounds upward deterministically.
+    expect(session.leftBaseline).toBe(11);
     expect(session.rightBaseline).toBe(11);
     expect(roundedTrainingBaseline({ a: 1, b: 2 })).toBe(2);
   });

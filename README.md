@@ -56,7 +56,7 @@ Special Offers and Flame Selection are post-Boss rewards outside the normal stag
 
 ## Training
 
-At semantic Shop creation, Training freezes all six Left and all eight Right entry levels. Each family's baseline is its rounded arithmetic mean. A hand at or below its frozen baseline costs 2 Gold; each level above the baseline doubles the next cost:
+At semantic Shop creation, Training freezes every currently available Left and Right entry level. Each family's baseline is its rounded arithmetic mean. A hand at or below its frozen baseline costs 2 Gold; each level above the baseline doubles the next cost:
 
 ```text
 relativeTier = max(0, currentLevel - frozenBaseline)

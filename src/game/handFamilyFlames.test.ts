@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dispatch, newRun, validateAction } from './engine';
-import { HAND_IDS } from './hands';
+import { availableHandIds } from './hands';
 import {
   flameByType, handFamilyFlameTargets, handFamilyFlameMultiplier, placeFlameInstance, standardFlameMultiplier,
 } from './flames';
@@ -10,6 +10,7 @@ const constant = (value = .8): RandomSource => ({ next: () => value });
 
 function game(values: Rank[] = [1, 2, 3, 4, 5]): GameState {
   const state = newRun('hand-family-flames', constant()).state;
+  state.infernoRewards.unlockedHands.push('twoPair');
   state.target = 1_000_000n;
   state.stats.rounds[0].target = state.target;
   setValues(state, values);
@@ -130,7 +131,7 @@ describe('hand-family setup and payoff Flames', () => {
     let state = game([1, 2, 3, 4, 5]);
     attach(state, sequence.id, 100);
     state.handFamilyFlameStages[sequence.id] = 'spent';
-    state.consumed = HAND_IDS.filter(hand => hand !== 'ones');
+    state.consumed = availableHandIds(state).filter(hand => hand !== 'ones');
     state.scorecardCycleConsumed = [...state.consumed];
     state = play(state, 'ones', [0]);
     expect(state.scorecardCycleConsumed).toEqual([]);

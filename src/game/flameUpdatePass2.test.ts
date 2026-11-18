@@ -447,11 +447,14 @@ describe('new density Flames and offer prerequisites', () => {
   it('gates only structurally dependent new Flames through canonical build capabilities', () => {
     const state = game();
     expect(buildCanProduceFreePlays(state)).toBe(false);
+    expect(eligibleFlameIds(state)).not.toContain('doubleDown');
     expect(eligibleFlameIds(state)).not.toEqual(expect.arrayContaining(['freeRealEstate', 'assemblyLine', 'gymBros']));
     effects(state, 0, [['freePlay', 1], ['clockwork', 1], ['workout', 1]]);
     expect(buildCanProduceFreePlays(state)).toBe(true);
     expect(eligibleFlameIds(state)).toEqual(expect.arrayContaining(['freeRealEstate', 'assemblyLine', 'gymBros',
       'potentialEnergy', 'casual', 'benchWarmer', 'blackHole']));
+    state.infernoRewards.unlockedHands.push('twoPair');
+    expect(eligibleFlameIds(state)).toContain('doubleDown');
   });
 
   it('shares Played-only and active-effect suppression semantics with Pass 1 density Flames', () => {

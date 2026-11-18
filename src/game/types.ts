@@ -513,7 +513,7 @@ export type InfernoRewardOfferId =
   | 'maxHeart' | 'maxHeart2' | 'higherInterest' | 'higherInterest2'
   | 'freeShopReroll' | 'freeShopReroll2' | 'temperCapacity' | 'temperCapacity2'
   | 'goldWindfall' | 'temperWindfall'
-  | 'handOdds' | 'handEvens' | 'handChance' | 'handMiniStraight' | 'handOddStraight'
+  | 'handOdds' | 'handEvens' | 'handTwoPair' | 'handMiniStraight' | 'handOddStraight'
   | 'handEvenStraight' | 'handThreePair' | 'handWideStraight' | 'handDoubleTriple'
   | 'handFullerHouse' | 'handXlStraight' | 'handSixKind'
   | 'dieInvestor' | 'dieMagicMirror' | 'dieGroundAssault' | 'dieSustainableIndustry'

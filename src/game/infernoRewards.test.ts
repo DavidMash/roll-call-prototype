@@ -132,12 +132,15 @@ describe('Inferno Reward effects and persistence', () => {
 
   it('initializes unlocked Hands at their current section baselines', () => {
     let state = newRun('inferno-hands', constant()).state;
-    for (const hand of ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes']) state.handLevels[hand] = 7;
-    for (const hand of ['pair', 'twoPair', 'threeKind', 'smallStraight', 'fullHouse', 'fourKind', 'largeStraight', 'fiveKind']) state.handLevels[hand] = 4;
+    for (const hand of ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes', 'chance']) state.handLevels[hand] = 7;
+    for (const hand of ['pair', 'threeKind', 'smallStraight', 'fullHouse', 'fourKind', 'largeStraight', 'fiveKind']) state.handLevels[hand] = 4;
     state = claim(state, 'handOdds');
+    state = claim(state, 'handTwoPair');
     state = claim(state, 'handMiniStraight');
     expect(state.handLevels.odds).toBe(7);
+    expect(state.handLevels.twoPair).toBe(4);
     expect(state.handLevels.miniStraight).toBe(4);
+    expect(infernoRewardEligible(state, 'handTwoPair')).toBe(false);
   });
 
   it('defines every curated die exactly and makes full inventory placement cancellable and atomic', () => {

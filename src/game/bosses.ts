@@ -171,9 +171,12 @@ export const handIsPhysicallyAttainable = (hand: HandId, dieCount: number): bool
   return !handIsStructurallyImpossible(hand, dieCount);
 };
 
-export function callerHandForRound(seed: string, round: number, dieCount: number = CONFIG.diceCount): HandId {
+export function callerHandForRound(seed: string, round: number, dieCount: number = CONFIG.diceCount,
+  availableHands: readonly HandId[] = CALLER_HAND_POOL): HandId {
   const rng = new SeededRng(hashSeed(`${seed}:boss:${round}:caller-hand`));
-  const eligible = CALLER_HAND_POOL.filter(hand => handIsPhysicallyAttainable(hand, dieCount));
+  const available = new Set(availableHands);
+  const eligible = CALLER_HAND_POOL.filter(hand => available.has(hand) && handIsPhysicallyAttainable(hand, dieCount));
+  if (!eligible.length) throw new Error('The Caller requires at least one available authored Hand.');
   return eligible[Math.floor(rng.next() * eligible.length)];
 }
 
@@ -238,7 +241,8 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
     }
     case 'caller': return {
       type,
-      calledHand: callerHandForRound(seed, round, context.playerDieIds?.length ?? CONFIG.diceCount),
+      calledHand: callerHandForRound(seed, round, context.playerDieIds?.length ?? CONFIG.diceCount,
+        context.eligibleHands ?? CALLER_HAND_POOL),
       playsRemaining: 3,
       satisfied: false,
       satisfyingSource: null,

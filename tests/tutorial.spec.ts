@@ -50,7 +50,8 @@ async function resumeSession(page: import('@playwright/test').Page, session: Tut
 
 function chapterTwoSession(flame: Flame) {
   const { session } = newTutorialSession();
-  const values: Rank[] = flame === 'straightShooter' ? [1, 2, 3, 4, 6] : [6, 6, 2, 4, 5];
+  const values: Rank[] = flame === 'straightShooter' ? [1, 2, 3, 4, 6]
+    : flame === 'threesCompany' ? [6, 6, 6, 2, 4] : [6, 6, 2, 4, 5];
   session.game.round = 7;
   session.game.phase = 'round';
   session.game.score = 0n;
@@ -335,7 +336,7 @@ test('first global Flame selection claims directly without a carrier-die step', 
   session.game.flameSelection = {
     offers: [
       { id: 71, flame: 'minigun' },
-      { id: 72, flame: 'doubleDown' },
+      { id: 72, flame: 'threesCompany' },
       { id: 73, flame: 'straightShooter' },
     ],
     acquired: false,
@@ -366,8 +367,8 @@ test('first Stoke explains the Flame, restores focus, then moves to the direct c
   const session = shopOneSession();
   session.game.round = 6;
   session.game.gold = 20;
-  const flame = placeFlameInstance(session.game, 'doubleDown');
-  session.scenario.firstFlame = 'doubleDown';
+  const flame = placeFlameInstance(session.game, 'threesCompany');
+  session.scenario.firstFlame = 'threesCompany';
   session.scenario.firstFlameInstanceId = flame.instanceId;
   session.game.flameTutorial = { pendingFlameInstanceId: flame.instanceId, completed: false };
   session.game.shop!.stage = 'flames';
@@ -378,10 +379,10 @@ test('first Stoke explains the Flame, restores focus, then moves to the direct c
   const badge = page.getByTestId(`fire-keeping-flame-${flame.instanceId}`);
   await expect(page.locator('.driver-popover')).toContainText('Tap your Flame to see its details.');
   await expect(page.getByTestId('tutorial-highlight-region')).toHaveCount(1);
-  const info = badge.getByRole('button', { name: 'Info about Double Down' });
+  const info = badge.getByRole('button', { name: 'Info about Three’s Company' });
   await expect(info).toBeFocused();
   await info.click();
-  await expect(page.getByRole('dialog', { name: 'Double Down' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Three’s Company' })).toBeVisible();
   await expect(page.locator('.driver-popover')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(page.locator('.driver-popover-title')).toHaveText('STOKE');
@@ -451,7 +452,7 @@ test('Shop progression nudge is not used in a normal run', async ({ page }) => {
 });
 
 for (const branch of [
-  { flame: 'doubleDown' as const, setup: 'pair' as const, payoff: 'twoPair' as const },
+  { flame: 'threesCompany' as const, setup: 'threeKind' as const, payoff: 'fullHouse' as const },
   { flame: 'straightShooter' as const, setup: 'smallStraight' as const, payoff: 'largeStraight' as const },
   { flame: 'minigun' as const, setup: null, payoff: 'sixes' as const },
 ]) {

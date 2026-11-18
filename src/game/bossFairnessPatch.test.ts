@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cloneGameState } from './ledger';
 import {
-  activeEncounterDice, bossTypeForRound, BOSSES, BOSS_TYPES, createBossRuntime, createCursedDie,
+  activeEncounterDice, bossTypeForRound, BOSSES, BOSS_TYPES, callerHandForRound, createBossRuntime, createCursedDie,
   currentlyPlayableManualHands, isBigBossType, isMiniBossType, MINI_BOSS_TYPES,
 } from './bosses';
 import { dispatch, newRun, validateAction } from './engine';
@@ -122,6 +122,11 @@ describe('revised encounter mechanics', () => {
     expect(called && renderRunHistoryV2Event(called)).toContain(`Caller called ${HANDS[state.boss.calledHand].name}`);
   });
 
+  it('restricts Caller to its authored pool intersected with unlocked Hands', () => {
+    expect(callerHandForRound('caller-locked-two-pair', 6, 5, ['pair', 'chance'])).toBe('pair');
+    expect(callerHandForRound('caller-unlocked-two-pair', 6, 5, ['twoPair', 'chance'])).toBe('twoPair');
+  });
+
   it('rigs only Magician final manual and post-Play random opportunities to existing called faces', () => {
     const finalManual = encounter('magician', [1, 2, 3, 4, 5]);
     if (finalManual.boss?.type !== 'magician') throw new Error('Expected Magician.');
@@ -235,7 +240,7 @@ describe('last play and Retreat', () => {
   it('allows Retreat only on a current dead board and reuses Bust rollback', () => {
     const state = newRun('retreat', constant()).state;
     state.dice.forEach((die, index) => { die.value = [1, 2, 3, 5, 6][index] as Rank; });
-    state.consumed = ['ones', 'twos', 'threes', 'fives', 'sixes'];
+    state.consumed = ['ones', 'twos', 'threes', 'fives', 'sixes', 'chance'];
     state.scorecardCycleConsumed = [...state.consumed];
     expect(currentlyPlayableManualHands(state)).toEqual([]);
     expect(validateAction(state, { type: 'RETREAT' })).toBeNull();

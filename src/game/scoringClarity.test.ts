@@ -16,6 +16,7 @@ import type { Flame, GameState, RandomSource, Rank } from './types';
 const constant = (value = .99): RandomSource => ({ next: () => value });
 function stateWith(...flames: Flame[]): GameState {
   const state = newRun(`clarity-${flames.join('-')}`, constant()).state;
+  if (flames.includes('doubleDown')) state.infernoRewards.unlockedHands.push('twoPair');
   state.target = 10n ** 20n;
   state.stats.rounds.at(-1)!.target = state.target;
   flames.forEach(flame => placeFlameInstance(state, flame, 100));

@@ -94,14 +94,14 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     featuredHands: ['threePair', 'wideStraight'],
   },
   {
-    id: 'house-rules', version: 3, name: 'House Rules',
+    id: 'house-rules', version: 4, name: 'House Rules',
     tagline: 'Start with a normal Basic roster but an expanded scorecard. Use the extra scoring options to build toward Engulfment.',
     startingTarget: 2_000n, startingGold: 0, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'basic', level: 1 }]),
     flames: [],
-    startingInfernoRewards: ['handOdds', 'handEvens', 'handChance', 'handMiniStraight', 'handOddStraight', 'handEvenStraight'],
+    startingInfernoRewards: ['handOdds', 'handEvens', 'handTwoPair', 'handMiniStraight', 'handOddStraight', 'handEvenStraight'],
     handTraining: { left: 5, right: 5 },
-    featuredHands: ['odds', 'evens', 'chance', 'miniStraight', 'oddStraight', 'evenStraight'],
+    featuredHands: ['odds', 'evens', 'twoPair', 'miniStraight', 'oddStraight', 'evenStraight'],
   },
 ] as const;
 

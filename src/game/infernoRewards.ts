@@ -30,7 +30,7 @@ export const INFERNO_REWARD_OFFERS: Record<InfernoRewardOfferId, InfernoRewardOf
   temperWindfall: offer('temperWindfall', 'Temper Windfall', 'resource', 'common', 'Immediately gain 100 Temper.'),
   handOdds: offer('handOdds', 'New Hand: Odds', 'hand', 'uncommon', 'Unlock Odds at ×2 Mult. Score all eligible odd dice; at least 3 are required.'),
   handEvens: offer('handEvens', 'New Hand: Evens', 'hand', 'uncommon', 'Unlock Evens at ×2 Mult. Score all eligible even dice; at least 3 are required.'),
-  handChance: offer('handChance', 'New Hand: Chance', 'hand', 'uncommon', 'Unlock Chance at ×1.5 Mult. It scores every active Roster die.'),
+  handTwoPair: offer('handTwoPair', 'New Hand: Two Pair', 'hand', 'uncommon', 'Unlock Two Pair at ×2 Mult: two different pairs.'),
   handMiniStraight: offer('handMiniStraight', 'New Hand: Mini Straight', 'hand', 'uncommon', 'Unlock Mini Straight at ×2.5 Mult: any 3 consecutive faces.'),
   handOddStraight: offer('handOddStraight', 'New Hand: Odd Straight', 'hand', 'uncommon', 'Unlock Odd Straight at ×3 Mult: one each of 1, 3, and 5.'),
   handEvenStraight: offer('handEvenStraight', 'New Hand: Even Straight', 'hand', 'uncommon', 'Unlock Even Straight at ×3 Mult: one each of 2, 4, and 6.'),
@@ -51,7 +51,7 @@ export const INFERNO_REWARD_OFFERS: Record<InfernoRewardOfferId, InfernoRewardOf
 export const INFERNO_REWARD_IDS = Object.keys(INFERNO_REWARD_OFFERS) as InfernoRewardOfferId[];
 
 export const INFERNO_HAND_BY_OFFER: Partial<Record<InfernoRewardOfferId, HandId>> = {
-  handOdds: 'odds', handEvens: 'evens', handChance: 'chance', handMiniStraight: 'miniStraight',
+  handOdds: 'odds', handEvens: 'evens', handTwoPair: 'twoPair', handMiniStraight: 'miniStraight',
   handOddStraight: 'oddStraight', handEvenStraight: 'evenStraight', handThreePair: 'threePair',
   handWideStraight: 'wideStraight', handDoubleTriple: 'doubleTriple', handFullerHouse: 'fullerHouse',
   handXlStraight: 'xlStraight', handSixKind: 'sixKind',
@@ -175,7 +175,7 @@ export function placeCuratedRewardDie(state: Pick<GameState, 'diceInventory'>, d
 
 export function unlockInfernoHand(state: Pick<GameState, 'infernoRewards' | 'handLevels' | 'handPlayCounts'>,
   hand: HandId): number {
-  const left = ['odds', 'evens', 'chance'].includes(hand);
+  const left = ['odds', 'evens'].includes(hand);
   const baseline = left ? leftBaselineLevel(state.handLevels, state.infernoRewards.unlockedHands)
     : rightBaselineLevel(state.handLevels, state.infernoRewards.unlockedHands);
   state.handLevels[hand] = baseline;
@@ -198,5 +198,5 @@ offerId: InfernoRewardOfferId): string | null {
   const hand = INFERNO_HAND_BY_OFFER[offerId];
   if (!hand) return null;
   const baseline = unlockInfernoHand(state, hand);
-  return `${hand} unlocked at the current ${['odds', 'evens', 'chance'].includes(hand) ? 'Left' : 'Right'} baseline, Level ${baseline}.`;
+  return `${hand} unlocked at the current ${['odds', 'evens'].includes(hand) ? 'Left' : 'Right'} baseline, Level ${baseline}.`;
 }

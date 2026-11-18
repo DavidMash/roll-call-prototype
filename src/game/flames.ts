@@ -800,7 +800,8 @@ export const FREE_PLAY_EFFECT_TYPES = ['freePlay', 'jumpingBean'] as const satis
 export const buildCanProduceFreePlays = (state: Pick<GameState, 'dice'>) => hasBuildDie(state, FREE_PLAY_EFFECT_TYPES);
 
 /** Build prerequisites required by actual Flame activation paths. Self-enabling Flames remain unrestricted. */
-export function flameEligible(state: Pick<GameState, 'dice' | 'flameSlots'>, id: Flame): boolean {
+export function flameEligible(state: Pick<GameState, 'dice' | 'flameSlots' | 'infernoRewards'>, id: Flame): boolean {
+  if (id === 'doubleDown') return availableHandIds(state).includes('twoPair');
   if (id === 'fatCat') return hasBuildDie(state, ['golden', 'jackpot']);
   if (id === 'vineyard') return hasBuildDie(state, ['vintage']);
   if (id === 'fluxCapacitor') return hasBuildDie(state, ['magnetic']);
@@ -810,7 +811,7 @@ export function flameEligible(state: Pick<GameState, 'dice' | 'flameSlots'>, id:
   return true;
 }
 
-export const eligibleFlameIds = (state: Pick<GameState, 'dice' | 'flameSlots'>): Flame[] =>
+export const eligibleFlameIds = (state: Pick<GameState, 'dice' | 'flameSlots' | 'infernoRewards'>): Flame[] =>
   FLAME_IDS.filter(id => flameEligible(state, id));
 export const isHandFamilyFlame = (id: Flame | null | undefined): id is HandFamilyFlame =>
   id !== null && id !== undefined && Object.hasOwn(HAND_FAMILY_FLAMES, id);

@@ -53,10 +53,9 @@ function sourceForAction(session: TutorialSession, action: Action): EventAddress
     if (action.type === 'PLAY' && action.hand === 'smallStraight' && !done(scenario, REQUIRED_BEATS.straight)) targets = targetMap([2, 4, 5, 1], [0, 1, 2, 3]);
   }
   if (state.round === 7 && action.type === 'PLAY' && !done(scenario, REQUIRED_BEATS.flameDemoSetup)) {
-    const primaryDie = action.dieIds[0] ?? 0;
-    if (scenario.firstFlame === 'doubleDown' && action.hand === 'pair') {
-      const other = action.dieIds.find(id => id !== primaryDie) ?? action.dieIds[0];
-      targets = targetMap([2, 4], [primaryDie, other]);
+    if (scenario.firstFlame === 'threesCompany' && action.hand === 'threeKind') {
+      const sorted = [...action.dieIds].sort((a, b) => a - b);
+      targets = targetMap([2, 2, 4], sorted);
     } else if (scenario.firstFlame === 'straightShooter' && action.hand === 'smallStraight') {
       const sorted = [...action.dieIds].sort((a, b) => a - b);
       targets = targetMap([2, 3, 4, 5], sorted);
@@ -73,12 +72,13 @@ function openingTargetsForRound(session: TutorialSession, nextRound: number): Ma
     const result = targetMap([1, 2, 3, 4, 6]);
     return result;
   }
+  if (scenario.firstFlame === 'threesCompany') return targetMap([6, 6, 6, 2, 4]);
   const other = [0, 1, 2, 3, 4].find(id => id !== primaryDie)!;
   const result = new Map<number, Rank>();
   result.set(primaryDie, 6);
   result.set(other, 6);
   const remaining = [0, 1, 2, 3, 4].filter(id => id !== primaryDie && id !== other);
-  const held: Rank[] = scenario.firstFlame === 'doubleDown' ? [2, 4, 5] : [1, 3, 4];
+  const held: Rank[] = [1, 3, 4];
   remaining.forEach((id, index) => result.set(id, held[index]));
   return result;
 }
@@ -88,10 +88,10 @@ function recoverImpossibleLesson(session: TutorialSession): void {
   const playerDice = state.dice.filter(die => die.owner === 'player');
   if (state.round === 7 && state.phase === 'round') {
     if (!done(scenario, REQUIRED_BEATS.flameDemoSetup)) {
-      const setup = scenario.firstFlame === 'doubleDown' ? 'pair' : scenario.firstFlame === 'straightShooter' ? 'smallStraight' : null;
+      const setup = scenario.firstFlame === 'threesCompany' ? 'threeKind' : scenario.firstFlame === 'straightShooter' ? 'smallStraight' : null;
       if (setup && combinationsForHand(playerDice, setup).length === 0) { complete(scenario, REQUIRED_BEATS.flameDemoSetup); complete(scenario, REQUIRED_BEATS.flameDemoPayoff); }
     } else if (!done(scenario, REQUIRED_BEATS.flameDemoPayoff)) {
-      const payoff = scenario.firstFlame === 'doubleDown' ? 'twoPair' : scenario.firstFlame === 'straightShooter' ? 'largeStraight' : null;
+      const payoff = scenario.firstFlame === 'threesCompany' ? 'fullHouse' : scenario.firstFlame === 'straightShooter' ? 'largeStraight' : null;
       const minigunPlayable = scenario.firstFlame === 'minigun' && LEFT_HAND_IDS.some(hand => combinationsForHand(playerDice, hand).length > 0);
       if ((payoff && combinationsForHand(playerDice, payoff).length === 0) || (scenario.firstFlame === 'minigun' && !minigunPlayable)) complete(scenario, REQUIRED_BEATS.flameDemoPayoff);
     }
@@ -122,9 +122,9 @@ function synchronizeScenario(previous: TutorialSession, action: Action, next: Tu
     || ((action.type === 'NEXT_ROUND' || action.type === 'NEXT_CHAPTER') && previous.game.phase === 'shop'
       && !!previous.scenario.firstFlame && !done(previous.scenario, 'flame-details'))) complete(scenario, 'flame-details');
   if (previous.game.round === 7 && action.type === 'PLAY') {
-    if ((scenario.firstFlame === 'doubleDown' && action.hand === 'pair')
+    if ((scenario.firstFlame === 'threesCompany' && action.hand === 'threeKind')
       || (scenario.firstFlame === 'straightShooter' && action.hand === 'smallStraight')) complete(scenario, REQUIRED_BEATS.flameDemoSetup);
-    if ((scenario.firstFlame === 'doubleDown' && action.hand === 'twoPair')
+    if ((scenario.firstFlame === 'threesCompany' && action.hand === 'fullHouse')
       || (scenario.firstFlame === 'straightShooter' && action.hand === 'largeStraight')
       || (scenario.firstFlame === 'minigun' && ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'].includes(action.hand))) {
       complete(scenario, REQUIRED_BEATS.flameDemoPayoff);
@@ -179,14 +179,14 @@ export function tutorialActionError(session: TutorialSession, action: Action): s
     } else if (requires(REQUIRED_BEATS.training) && (action.type !== 'TRAIN_HAND' || action.hand !== 'fullHouse')) return 'Train Full House once.';
   }
   if (state.round === 7 && state.phase === 'round') {
-    if (requires(REQUIRED_BEATS.flameDemoSetup) && scenario.firstFlame === 'doubleDown'
-      && (action.type !== 'PLAY' || action.hand !== 'pair')) return 'Play Pair to set up Double Down.';
+    if (requires(REQUIRED_BEATS.flameDemoSetup) && scenario.firstFlame === 'threesCompany'
+      && (action.type !== 'PLAY' || action.hand !== 'threeKind')) return 'Play Three of a Kind to set up Three’s Company.';
     if (requires(REQUIRED_BEATS.flameDemoSetup) && scenario.firstFlame === 'straightShooter'
       && (action.type !== 'PLAY' || action.hand !== 'smallStraight')) return 'Play Small Straight to set up Straight Shooter.';
     if ((!requires(REQUIRED_BEATS.flameDemoSetup) || scenario.firstFlame === 'minigun') && requires(REQUIRED_BEATS.flameDemoPayoff)) {
-      if (scenario.firstFlame === 'doubleDown' && (action.type !== 'PLAY' || action.hand !== 'twoPair')) return 'Play Two Pair for Double Down.';
+      if (scenario.firstFlame === 'threesCompany' && (action.type !== 'PLAY' || action.hand !== 'fullHouse')) return 'Play Full House for Three’s Company.';
       if (scenario.firstFlame === 'straightShooter' && (action.type !== 'PLAY' || action.hand !== 'largeStraight')) return 'Play Large Straight for Straight Shooter.';
-      if (scenario.firstFlame === 'minigun' && (action.type !== 'PLAY' || !['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'].includes(action.hand))) return 'Play an Left hand for Minigun.';
+      if (scenario.firstFlame === 'minigun' && (action.type !== 'PLAY' || !['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'].includes(action.hand))) return 'Play a Left hand for Minigun.';
     }
   }
   if (state.round === 6 && state.phase === 'flameSelection' && action.type === 'CONTINUE_FLAME_SELECTION' && !state.flameSelection?.acquired)

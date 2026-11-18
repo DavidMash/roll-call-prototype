@@ -31,7 +31,7 @@ const selected = (ui: TutorialUiState, selectedHand: HandId, dieIds?: number[]) 
   ui.selection.hand === selectedHand
   && (!dieIds || (ui.selection.dieIds.length === dieIds.length && dieIds.every(id => ui.selection.dieIds.includes(id))));
 const flameDemoHand = (session: TutorialSession, payoff: boolean): HandId => {
-  if (session.scenario.firstFlame === 'doubleDown') return payoff ? 'twoPair' : 'pair';
+  if (session.scenario.firstFlame === 'threesCompany') return payoff ? 'fullHouse' : 'threeKind';
   if (session.scenario.firstFlame === 'straightShooter') return payoff ? 'largeStraight' : 'smallStraight';
   return 'sixes';
 };
@@ -222,11 +222,11 @@ function contextualCopy(beat: TutorialBeat, session: TutorialSession): TutorialB
     const selectedHand = flameDemoHand(session, !setup);
     const handTarget = hand(selectedHand);
     const flameTarget = activeFlame(session.scenario.firstFlameInstanceId);
-    const title = flame === 'doubleDown' ? (setup ? 'DOUBLE DOWN' : "NOW IT'S READY")
+    const title = flame === 'threesCompany' ? (setup ? 'THREE’S COMPANY' : "NOW IT'S READY")
       : flame === 'straightShooter' ? (setup ? 'STRAIGHT SHOOTER' : "NOW IT'S READY") : 'MINIGUN';
-    const body = flame === 'doubleDown' ? (setup
-      ? [`Pair is marked because it sets up your Flame. ${selecting ? 'Select' : 'Play'} Pair first.`]
-      : ['Two Pair is the payoff. The Flame activates when you meet its condition.'])
+    const body = flame === 'threesCompany' ? (setup
+      ? [`Three of a Kind is marked because it sets up your Flame. ${selecting ? 'Select' : 'Play'} it first.`]
+      : ['Full House is the payoff. The Flame activates when you meet its condition.'])
       : flame === 'straightShooter' ? (setup
         ? [`Small Straight is marked because it sets up your Flame. ${selecting ? 'Select' : 'Play'} it first.`]
         : ['Large Straight is the payoff. The Flame activates when you meet its condition.'])
@@ -242,7 +242,7 @@ function contextualCopy(beat: TutorialBeat, session: TutorialSession): TutorialB
   }
   if (beat.id === 'flame-synergy-hint') {
     const flame = session.scenario.firstFlame;
-    const body = flame === 'doubleDown' ? ['Missing Pair strengthens Pair, and Pair is what sets up Double Down.']
+    const body = flame === 'threesCompany' ? ["Missing Pair strengthens Three of a Kind, which sets up Three’s Company."]
       : flame === 'straightShooter' ? ['One Short strengthens Small Straight, and Small Straight sets up Straight Shooter.']
         : ["You trained Full House back in Chapter 1. Three's Company gives you another way to build around it."];
     return { ...beat, body };

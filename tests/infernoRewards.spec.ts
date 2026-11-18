@@ -72,7 +72,7 @@ test('full collection curated die Make Room can cancel or replace without sale G
 
 test('unlocked scorecard order and seven-die roster remain usable on mobile', async ({ page }) => {
   const state = newRun('inferno-expanded-mobile').state;
-  const unlocked: HandId[] = ['odds', 'evens', 'chance', 'miniStraight', 'oddStraight', 'evenStraight', 'threePair',
+  const unlocked: HandId[] = ['odds', 'evens', 'twoPair', 'miniStraight', 'oddStraight', 'evenStraight', 'threePair',
     'wideStraight', 'doubleTriple', 'fullerHouse', 'xlStraight', 'sixKind'];
   state.infernoRewards.unlockedHands = unlocked;
   state.infernoRewards.upgrades.rosterCap = 7;
@@ -89,6 +89,10 @@ test('unlocked scorecard order and seven-die roster remain usable on mobile', as
   const left = await page.locator('#scorecard-left').locator('..').locator('[data-testid^="scorecard-row-"]')
     .evaluateAll(rows => rows.map(row => row.getAttribute('data-testid')));
   expect(left.slice(-3)).toEqual(['scorecard-row-odds', 'scorecard-row-evens', 'scorecard-row-chance']);
+  const right = await page.locator('#scorecard-right').locator('..').locator('[data-testid^="scorecard-row-"]')
+    .evaluateAll(rows => rows.map(row => row.getAttribute('data-testid')));
+  expect(right.indexOf('scorecard-row-pair')).toBeLessThan(right.indexOf('scorecard-row-twoPair'));
+  expect(right.indexOf('scorecard-row-twoPair')).toBeLessThan(right.indexOf('scorecard-row-threeKind'));
   const dice = page.getByTestId('dice-dock').locator('.die-slot');
   await expect(dice).toHaveCount(7);
   const viewportWidth = page.viewportSize()!.width;

@@ -77,6 +77,11 @@ async function ready(page: Page) {
     break;
   }
 }
+async function clickSelectedPlay(page: Page) {
+  const primary = page.getByTestId('play-action');
+  if (await primary.isVisible()) await primary.click();
+  else await page.locator('.scorecard-quick-play').click();
+}
 async function matchBoard(page: Page, game: GameState) {
   await ready(page);
   await expect(page.getByTestId('stat-round')).toContainText(chapterLabel(game.round));
@@ -253,6 +258,17 @@ test('scorecard keeps all fourteen categories visible with simplified actionable
   await page.goto('/?seed=persistent-scorecard&speed=instant');
   await ready(page);
   await expect(page.locator('[data-testid^="scorecard-row-"]')).toHaveCount(14);
+  await expect(page.getByTestId('scorecard-row-chance')).toBeVisible();
+  await expect(page.getByTestId('scorecard-stats-chance')).toContainText('×1MULT');
+  await expect(page.getByTestId('scorecard-row-twoPair')).toHaveCount(0);
+  const leftRows = await page.locator('#scorecard-left').locator('..').locator('[data-testid^="scorecard-row-"]')
+    .evaluateAll(rows => rows.map(row => row.getAttribute('data-testid')));
+  expect(leftRows).toEqual(['scorecard-row-ones', 'scorecard-row-twos', 'scorecard-row-threes',
+    'scorecard-row-fours', 'scorecard-row-fives', 'scorecard-row-sixes', 'scorecard-row-chance']);
+  const rightRows = await page.locator('#scorecard-right').locator('..').locator('[data-testid^="scorecard-row-"]')
+    .evaluateAll(rows => rows.map(row => row.getAttribute('data-testid')));
+  expect(rightRows).toEqual(['scorecard-row-pair', 'scorecard-row-threeKind', 'scorecard-row-smallStraight',
+    'scorecard-row-fullHouse', 'scorecard-row-fourKind', 'scorecard-row-largeStraight', 'scorecard-row-fiveKind']);
   for (const hand of HAND_IDS) {
     const row = page.getByTestId(`scorecard-row-${hand}`);
     const stats = handStats(hand, 1);
@@ -1134,7 +1150,7 @@ test('ambiguous physical dice can be changed and filtering never ends the run', 
   await page.getByRole('button', { name: /^Three of a Kind / }).click();
   await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeEnabled();
   const dieIds = option.combinations[0].filter(id => id !== removed).concat(replacement);
-  await page.getByRole('button', { name: 'PLAY', exact: true }).click();
+  await clickSelectedPlay(page);
   game = dispatch(game!, { type: 'PLAY', hand: 'threeKind', dieIds }).state;
   await matchBoard(page, game);
   if (game.phase === 'round') {
@@ -1196,7 +1212,7 @@ test('fast event playback and skipping produce the same outcome as instant playb
   const choice = bestHand(game);
   const expected = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds });
   await page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) }).click();
-  await page.getByRole('button', { name: 'PLAY', exact: true }).click();
+  await clickSelectedPlay(page);
   await expect(page.getByRole('button', { name: 'Skip playback' })).toBeVisible();
   await page.getByRole('button', { name: 'Skip playback' }).click();
   const finalized = expected.events.find(event => event.type === 'HAND_SCORE_FINALIZED')!;
@@ -1224,7 +1240,7 @@ test('settled progress resumes across reloads and return visits with seed-aware 
   await ready(page);
   const choice = bestHand(game);
   await page.getByRole('button', { name: new RegExp(`^${HANDS[choice.hand].name} `) }).click();
-  await page.getByRole('button', { name: 'PLAY', exact: true }).click();
+  await clickSelectedPlay(page);
   game = dispatch(game, { type: 'PLAY', hand: choice.hand, dieIds: choice.dieIds }).state;
   await expect(page.getByRole('button', { name: 'Skip playback' })).toBeVisible();
   await expect(page.getByTestId('round-score-progress')).toHaveText(`0 / ${game.target}`);
@@ -1264,7 +1280,7 @@ test('settled progress resumes across reloads and return visits with seed-aware 
   const generated = newRun(generatedSeed!).state;
   const generatedChoice = bestHand(generated);
   await page.getByRole('button', { name: new RegExp(`^${HANDS[generatedChoice.hand].name} `) }).click();
-  await page.getByRole('button', { name: 'PLAY', exact: true }).click();
+  await clickSelectedPlay(page);
   await matchBoard(page, dispatch(generated, { type: 'PLAY', hand: generatedChoice.hand, dieIds: generatedChoice.dieIds }).state);
   await openMenuItem(page, 'Run Info');
   runInfo = page.getByRole('dialog', { name: 'Run Info' });

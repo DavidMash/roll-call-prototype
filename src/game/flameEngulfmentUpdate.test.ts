@@ -174,13 +174,21 @@ describe('Flame and Engulfment systems update', () => {
     state.dice[0].value = 2; state.dice[1].value = 2;
     const resolver = new Resolver(state, constant);
     resolver.play('pair', [0, 1], 'jumpingBean');
-    expect(state.hotStreakGoal).toBe('twoPair');
+    expect(state.hotStreakGoal).toBe('threeKind');
     expect(state.hotStreakCharges).toBe(1);
     resolver.play('pair', [0, 1], 'freePlay');
     expect(state.hotStreakCharges).toBe(1);
     const factors = state.stats.handScores.map(score => score.xMultFactors
       .find(factor => factor.source === 'hotStreak')?.value);
     expect(factors).toEqual([2, undefined]);
+
+    const unlocked = newRun('hot-streak-unlocked-two-pair', constant).state;
+    placeFlameInstance(unlocked, 'hotStreak', 100);
+    unlocked.infernoRewards.unlockedHands.push('twoPair');
+    unlocked.hotStreakGoal = 'pair';
+    unlocked.dice[0].value = 2; unlocked.dice[1].value = 2;
+    new Resolver(unlocked, constant).play('pair', [0, 1], 'jumpingBean');
+    expect(unlocked.hotStreakGoal).toBe('twoPair');
   });
 
   it('derives authoritative Ultimate and Casual scorecard annotations', () => {

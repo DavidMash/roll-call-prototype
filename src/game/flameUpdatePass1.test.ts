@@ -56,7 +56,7 @@ describe('Minigun consecutive Left streak', () => {
     resolver.rollBatch([0], 'non-Play action', 'gameplay');
     expect(state.minigunLeftStreak).toBe(2);
 
-    state.scorecardCycleConsumed = ['twos', 'threes', 'fours', 'fives', 'sixes', 'pair', 'twoPair',
+    state.scorecardCycleConsumed = ['twos', 'threes', 'fours', 'fives', 'sixes', 'chance', 'pair',
       'threeKind', 'fourKind', 'fiveKind', 'fullHouse', 'smallStraight', 'largeStraight'];
     state.consumed = [...state.scorecardCycleConsumed];
     state.dice[0].value = 1;

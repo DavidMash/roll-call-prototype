@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { newRun } from './engine';
-import { compactGameStateForPersistence, isResumableRun, loadPersistedRun, RUN_STORAGE_KEY, savePersistedRun } from './persistence';
+import { compactGameStateForPersistence, isResumableRun, loadPersistedRun, RUN_STORAGE_KEY, RUN_STORAGE_VERSION, savePersistedRun } from './persistence';
 import { stringifyExactJson } from './scoreMath';
 import { createInfernoEvaluation } from './engulfment';
 import { placeFlameInstance } from './flames';
@@ -49,20 +49,10 @@ describe('run persistence', () => {
     expect(loadPersistedRun(storage, null)).toBeNull();
   });
 
-  it('migrates v28 Inferno levels deterministically to the authoritative cumulative multiplier', () => {
+  it('rejects a well-formed save from the previous storage version', () => {
     const storage = new MemoryStorage();
-    const legacy = newRun('v28-inferno').state;
-    legacy.engulfmentLevel = 3;
-    delete (legacy as unknown as { infernoMultiplier?: bigint }).infernoMultiplier;
-    delete (legacy as unknown as { chargeEvents?: unknown[] }).chargeEvents;
-    if (legacy.roundCheckpoint) {
-      delete (legacy.roundCheckpoint.board as unknown as { infernoMultiplier?: bigint }).infernoMultiplier;
-      delete (legacy.roundCheckpoint.board as unknown as { chargeEvents?: unknown[] }).chargeEvents;
-      legacy.roundCheckpoint.board.engulfmentLevel = 3;
-    }
-    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: 28, state: legacy }));
-    const loaded = loadPersistedRun(storage, legacy.seed)!;
-    expect(loaded.infernoMultiplier).toBe(15_625n);
-    expect(loaded.chargeEvents).toEqual([]);
+    const previous = newRun('previous-version').state;
+    storage.setItem(RUN_STORAGE_KEY, stringifyExactJson({ version: RUN_STORAGE_VERSION - 1, state: previous }));
+    expect(loadPersistedRun(storage, previous.seed)).toBeNull();
   });
 });

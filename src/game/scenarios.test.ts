@@ -127,14 +127,14 @@ describe('Scenario definitions', () => {
 
   it('initializes House Rules through real Hand claims at section baselines without expanding its roster', () => {
     const state = newRun('scenario-house-rules', constant, { scenario: scenarioById('house-rules')! }).state;
-    const unlocked = ['odds', 'evens', 'chance', 'miniStraight', 'oddStraight', 'evenStraight'];
+    const unlocked = ['odds', 'evens', 'twoPair', 'miniStraight', 'oddStraight', 'evenStraight'];
     expect(state.infernoRewards.upgrades.rosterCap).toBe(5);
     expect(rosterDice(state)).toHaveLength(5);
     expect(rosterDice(state).every(die => die.effects.length === 1
       && die.effects[0].type === 'basic' && die.effects[0].level === 1)).toBe(true);
     expect(state.infernoRewards.unlockedHands).toEqual(unlocked);
     expect(state.infernoRewards.claimedOfferIds).toEqual([
-      'handOdds', 'handEvens', 'handChance', 'handMiniStraight', 'handOddStraight', 'handEvenStraight',
+      'handOdds', 'handEvens', 'handTwoPair', 'handMiniStraight', 'handOddStraight', 'handEvenStraight',
     ]);
     expect(unlocked.map(hand => state.handLevels[hand])).toEqual([5, 5, 5, 5, 5, 5]);
     const hands = availableHandIds(state);

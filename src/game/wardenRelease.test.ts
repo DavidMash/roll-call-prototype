@@ -182,7 +182,7 @@ describe('Warden compatibility and independence from Hand taxonomy', () => {
     ]);
   });
 
-  it('migrates a legacy active-Warden save from its current active and locked dice', () => {
+  it('rejects a legacy active-Warden save from an unsupported storage version', () => {
     const { state, resolver } = startWarden();
     chooseInitial(state, resolver, 2);
     manualLeftPlay(state, resolver, 0);
@@ -193,9 +193,7 @@ describe('Warden compatibility and independence from Hand taxonomy', () => {
     const boss = payload.state.boss as Record<string, unknown>;
     Object.assign(boss, { pendingReinforcements: 1, nextUnlockTarget: '999', unlockCosts: ['5'], unlockTargets: ['5'] });
     storage.setItem(RUN_STORAGE_KEY, JSON.stringify(payload));
-    const loaded = loadPersistedRun(storage, REPRO_SEED)!;
-    expect(loaded.boss).toEqual({ type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [2, 0], startingDieId: 2 });
-    expect(loaded.boss).not.toHaveProperty('nextUnlockTarget');
+    expect(loadPersistedRun(storage, REPRO_SEED)).toBeNull();
   });
 
   it('restores a fresh Warden on Bust rollback/retry without corrupting release state', () => {

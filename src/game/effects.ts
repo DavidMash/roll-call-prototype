@@ -1207,8 +1207,11 @@ export class Resolver {
     const qualified = flameByType(this.state, 'hotStreak') !== null;
     if (qualified) { this.state.hotStreakCharges++; this.state.stats.hotStreakCharges++; }
     let index = HOT_STREAK_SEQUENCE.indexOf(hand) + 1;
-    while (index < HOT_STREAK_SEQUENCE.length && this.state.consumed.includes(HOT_STREAK_SEQUENCE[index])) {
-      this.state.stats.hotStreakSkippedHands.push({ round: this.state.round, hand: HOT_STREAK_SEQUENCE[index] });
+    const available = new Set(availableHandIds(this.state));
+    while (index < HOT_STREAK_SEQUENCE.length
+      && (!available.has(HOT_STREAK_SEQUENCE[index]) || this.state.consumed.includes(HOT_STREAK_SEQUENCE[index]))) {
+      if (this.state.consumed.includes(HOT_STREAK_SEQUENCE[index]))
+        this.state.stats.hotStreakSkippedHands.push({ round: this.state.round, hand: HOT_STREAK_SEQUENCE[index] });
       index++;
     }
     this.state.hotStreakGoal = HOT_STREAK_SEQUENCE[index] ?? null;
@@ -1226,7 +1229,8 @@ export class Resolver {
     if (boss?.type !== 'caller') return;
     boss.manualHandsPlayed ??= Math.max(0, 3 - boss.playsRemaining);
     boss.callDeadline ??= boss.manualHandsPlayed + boss.playsRemaining;
-    let candidates = CALLER_HAND_POOL.filter(hand => !this.state.consumed.includes(hand)
+    const available = new Set(availableHandIds(this.state));
+    let candidates = CALLER_HAND_POOL.filter(hand => available.has(hand) && !this.state.consumed.includes(hand)
       && handIsPhysicallyAttainable(hand, rosterDice(this.state).length));
     if (previous && candidates.length > 1) candidates = candidates.filter(hand => hand !== previous);
     if (!candidates.length) return;
@@ -1337,7 +1341,9 @@ export class Resolver {
       let after = before;
       if (advanced) {
         after++;
-        while (after < definition.hands.length && this.state.consumed.includes(definition.hands[after])) after++;
+        const available = new Set(availableHandIds(this.state));
+        while (after < definition.hands.length
+          && (!available.has(definition.hands[after]) || this.state.consumed.includes(definition.hands[after]))) after++;
         this.state.progressiveFlames[id] = after;
       }
       this.emitV2({ kind: 'flame_sequence', flame: id, stepIndex: before,

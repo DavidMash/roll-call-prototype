@@ -24,7 +24,7 @@ const handTotal = (game: GameState) => Object.values(game.scoreByHand).reduce((s
 describe('intrinsic hand stats', () => {
   it('derives the clean Level 1 Mult ladder for all fourteen hands', () => {
     expect(HAND_IDS).toHaveLength(14);
-    expect(HAND_IDS.map(hand => handStats(hand, 1).handMultiplier)).toEqual([1, 1, 1, 1, 1, 1, 2, 2, 3, 4, 5, 6, 7, 8]);
+    expect(HAND_IDS.map(hand => handStats(hand, 1).handMultiplier)).toEqual([1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
   it.each<[HandId, Rank[], number[], bigint]>([
@@ -82,6 +82,17 @@ describe('authoritative current-round scorecard totals', () => {
     expect(result.state.effectScore).toBe(BigInt(0n));
     expect(result.state.consumed).toContain('pair');
     expect(result.state.stats.rounds[0].scoreByHand).toEqual({ pair: 16n });
+  });
+
+  it('scores Chance at ×1 from every active Roster die and rerolls them all after Play', () => {
+    const game = board([1, 2, 3, 4, 5]);
+    const dieIds = rosterDice(game).map(die => die.id);
+    const result = dispatch(game, { type: 'PLAY', hand: 'chance', dieIds }, constant());
+    expect(result.error).toBeUndefined();
+    expect(result.state.scoreByHand.chance).toBe(15n);
+    expect(result.state.stats.handScores.at(-1)).toMatchObject({ hand: 'chance', pips: 15, handMultiplier: 1 });
+    expect(result.events.filter(event => event.type === 'DIE_ROLLED')).toHaveLength(dieIds.length);
+    expect(result.state.consumed).toContain('chance');
   });
 
   it('keeps categories separate and resets the round-local breakdown next round', () => {

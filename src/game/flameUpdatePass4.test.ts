@@ -53,6 +53,7 @@ describe('Flame Update Pass 4 catalog and curves', () => {
 describe('Top Down', () => {
   it('advances once through the exact sequence and applies ×3 through ×12', () => {
     const state = game('topDown');
+    state.infernoRewards.unlockedHands.push('twoPair');
     const resolver = new Resolver(state, constant());
     const factors: number[] = [];
     for (const [hand, values] of TOP_PLAYS) {
@@ -60,6 +61,16 @@ describe('Top Down', () => {
       factors.push(lastFactor(state, 'topDown')!);
     }
     expect(factors).toEqual([3, 4, 5, 6, 7, 8, 10, 12]);
+    expect(state.progressiveFlames.topDown).toBe(8);
+  });
+
+  it('skips locked Two Pair without consuming its factor step', () => {
+    const state = game('topDown');
+    const resolver = new Resolver(state, constant());
+    for (const [hand, values] of TOP_PLAYS.filter(([hand]) => hand !== 'twoPair'))
+      resolver.play(hand, faces(state, values));
+    expect(state.stats.handScores.map(score => score.xMultFactors.find(factor => factor.source === 'topDown')?.value))
+      .toEqual([3, 4, 5, 6, 7, 8, 12]);
     expect(state.progressiveFlames.topDown).toBe(8);
   });
 
