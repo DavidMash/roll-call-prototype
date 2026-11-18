@@ -143,6 +143,7 @@ test('Special Offers apply and advance atomically under repeated input', async (
 });
 
 test('Shop exit stays disabled for one second and Shop interactions do not restart it', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   const clockStart = new Date('2026-10-12T12:00:00Z');
   await page.clock.install({ time: clockStart });
   await page.clock.pauseAt(clockStart);

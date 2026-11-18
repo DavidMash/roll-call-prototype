@@ -2,8 +2,8 @@ import type { Flame, SpecialDieType, SpecialOfferType } from './types';
 
 export type GlossaryTermId =
   | 'roll' | 'manualReroll' | 'exposedFace' | 'play' | 'hand' | 'handQualification'
-  | 'score' | 'pips' | 'mult' | 'xMult' | 'round' | 'roundTarget' | 'upperHand'
-  | 'lowerSectionHand' | 'lastPlay' | 'freePlay' | 'onCommand' | 'wild' | 'charge'
+  | 'score' | 'pips' | 'mult' | 'xMult' | 'round' | 'roundTarget' | 'leftHand'
+  | 'rightSectionHand' | 'lastPlay' | 'freePlay' | 'onCommand' | 'wild' | 'charge'
   | 'bust' | 'training' | 'life' | 'interest' | 'ember' | 'bonfire' | 'stoke'
   | 'build' | 'targetHand' | 'weightedFace' | 'sellValue' | 'bossEffect' | 'possibleHand'
   | 'engulfment';

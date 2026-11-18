@@ -5,7 +5,7 @@ import type { ResolverOptions } from './effects';
 import {
   createFlameInstance, emptyFlameSlots, flameByType, flameEffectText, flameInstances, flameStokeLimits, FLAMES, hasOwnedChargeFlame,
   HAND_FAMILY_FLAME_IDS, hasOwnedFlame, isFlame, ownedFlameIds, recalculateMaxCharge,
-  normalizeFlameInstanceRuntime, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier,
+  normalizeFlameInstanceRuntime, sixPackMultiplierAfterLeftHands, sixPackStartingMultiplier,
   greaseTheEngineCost, FLAME_SCALING, BRIBERY_ROUND_GOLD_CAP,
 } from './flames';
 import { ALL_HAND_IDS, availableHandIds, HANDS, initialHandLevels, initialHandPlayCounts, planQualification, ultimateHands } from './hands';
@@ -274,14 +274,14 @@ function normalizeChapterLifecycle(state: Board): void {
     lifecycle.specialOfferConsumed = !!lifecycle.specialOfferConsumed;
 }
 
-function normalizeSixPackRuntime(state: Pick<Board, 'flameSlots' | 'sixPackXMult' | 'sixPackUpperHandsPlayed'>): void {
+function normalizeSixPackRuntime(state: Pick<Board, 'flameSlots' | 'sixPackXMult' | 'sixPackLeftHandsPlayed'>): void {
   const startingFactor = sixPackStartingMultiplier(flameByType(state, 'sixPack')?.investedGold ?? 0);
-  const missingCount = state.sixPackUpperHandsPlayed === undefined;
+  const missingCount = state.sixPackLeftHandsPlayed === undefined;
   const progress = Math.max(0, (startingFactor - 1) / 3);
   const inferred = progress <= 0 ? 0
     : Math.round((startingFactor - Math.max(1, state.sixPackXMult ?? 1)) / (.5 * progress));
-  state.sixPackUpperHandsPlayed = Math.max(0, Math.min(6, Math.floor(missingCount ? inferred : state.sixPackUpperHandsPlayed)));
-  state.sixPackXMult = missingCount ? sixPackMultiplierAfterUpperHands(startingFactor, state.sixPackUpperHandsPlayed)
+  state.sixPackLeftHandsPlayed = Math.max(0, Math.min(6, Math.floor(missingCount ? inferred : state.sixPackLeftHandsPlayed)));
+  state.sixPackXMult = missingCount ? sixPackMultiplierAfterLeftHands(startingFactor, state.sixPackLeftHandsPlayed)
     : Math.max(1, state.sixPackXMult ?? 1);
 }
 
@@ -552,7 +552,7 @@ export function normalizeGameState(state: GameState): GameState {
     recalculateMaxCharge(checkpoint);
     checkpoint.decisionId = Math.max(0, Math.floor(checkpoint.decisionId ?? 0));
     normalizeSixPackRuntime(checkpoint);
-    checkpoint.minigunUpperStreak = Math.max(0, Math.floor(checkpoint.minigunUpperStreak ?? 0));
+    checkpoint.minigunLeftStreak = Math.max(0, Math.floor(checkpoint.minigunLeftStreak ?? 0));
     checkpoint.roundPlayCount = Math.max(0, Math.floor(checkpoint.roundPlayCount ?? 0));
     checkpoint.roundStartLives = Math.max(0, Math.floor(checkpoint.roundStartLives ?? checkpoint.lives));
     checkpoint.roundStartRosterSize = Math.max(0, Math.floor(checkpoint.roundStartRosterSize
@@ -630,7 +630,7 @@ export function normalizeGameState(state: GameState): GameState {
   next.stats.highestEffectCount ??= 0; next.stats.highestForgeRating ??= '0'; next.stats.mostValuableDieSold ??= 0;
   next.decisionId = Math.max(0, Math.floor(next.decisionId ?? 0));
   normalizeSixPackRuntime(next);
-  next.minigunUpperStreak = Math.max(0, Math.floor(next.minigunUpperStreak ?? 0));
+  next.minigunLeftStreak = Math.max(0, Math.floor(next.minigunLeftStreak ?? 0));
   next.roundPlayCount = Math.max(0, Math.floor(next.roundPlayCount ?? 0));
   next.roundStartLives = Math.max(0, Math.floor(next.roundStartLives ?? next.lives));
   next.roundStartRosterSize = Math.max(0, Math.floor(next.roundStartRosterSize ?? rosterDice(next).length));
@@ -1107,7 +1107,7 @@ export function newRun(seed: string, random?: RandomSource, options?: NewRunOpti
     chargeAttribution: {}, chargeEvents: [], infernoProgress: { evaluationIndex: 0, previousReadiness: null, recentMessageIds: [], recentAction: 'none', declinedAtEvidenceRoundId: null },
     infernoEvaluation: null, infernoEvaluationSuspendedUntilNewFlame: false,
     infernoDealCooldownRounds: 0, infernoMeter: initialInfernoMeterPresentation(), chargeXMult: 1, maxCharge: 1,
-    chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackUpperHandsPlayed: 0, minigunUpperStreak: 0,
+    chargeArmed: false, decisionId: 0, sixPackXMult: 1, sixPackLeftHandsPlayed: 0, minigunLeftStreak: 0,
     roundPlayCount: 0, roundStartLives: CONFIG.maxLives, roundStartRosterSize: CONFIG.diceCount, precedingShopDiePurchase: false,
     interactiveFlames: { burnItDownUses: 0, greaseTheEngineUses: 0,
       hotPotatoDieId: null, hotPotatoStreak: 0, dareDevilCount: 0,

@@ -261,7 +261,7 @@ describe('Lightning Strike', () => {
 });
 
 describe('Hot Potato Clock', () => {
-  const upperByFace: Partial<Record<Rank, HandId>> = {
+  const leftByFace: Partial<Record<Rank, HandId>> = {
     1: 'ones', 2: 'twos', 3: 'threes', 4: 'fours', 5: 'fives', 6: 'sixes',
   };
 
@@ -273,14 +273,14 @@ describe('Hot Potato Clock', () => {
       const alternative = state.dice.find(die => die.owner === 'player' && die.id !== target)!;
       const face = activeFace(alternative).rank as Exclude<Rank, 7>;
       const prior = target;
-      new Resolver(state, constant()).play(upperByFace[face]!, [alternative.id], 'jumpingBean');
+      new Resolver(state, constant()).play(leftByFace[face]!, [alternative.id], 'jumpingBean');
       expect(state.interactiveFlames.hotPotatoStreak).toBe(expectedStreak);
       expect(state.interactiveFlames.hotPotatoDieId).not.toBe(prior);
     }
     expect(state.chargeXMult).toBe(2.688);
     const target = state.interactiveFlames.hotPotatoDieId!;
     const targetDie = state.dice.find(die => die.id === target)!;
-    new Resolver(state, constant()).play(upperByFace[activeFace(targetDie).rank]!, [target], 'jumpingBean');
+    new Resolver(state, constant()).play(leftByFace[activeFace(targetDie).rank]!, [target], 'jumpingBean');
     expect(state.interactiveFlames.hotPotatoStreak).toBe(0);
     expect(state.chargeXMult).toBe(2.688);
     expect(state.historyV2.filter(event => event.kind === 'flame_action' && event.flame === 'hotPotatoClock')).toHaveLength(4);

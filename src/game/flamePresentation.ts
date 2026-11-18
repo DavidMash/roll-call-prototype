@@ -195,9 +195,9 @@ export function deriveFlamePresentations(board: Board, preview: CanonicalPlayPre
       progress = clamp01((board.sixPackXMult - 1) / Math.max(.0001, 3));
       statusText ??= board.sixPackXMult > 1 ? `×${formatPlayerNumber(board.sixPackXMult)}` : undefined;
     }
-    if (flame.type === 'minigun' && board.minigunUpperStreak > 0) {
-      progress = clamp01(board.minigunUpperStreak / 6);
-      statusText ??= `${board.minigunUpperStreak}/6`;
+    if (flame.type === 'minigun' && board.minigunLeftStreak > 0) {
+      progress = clamp01(board.minigunLeftStreak / 6);
+      statusText ??= `${board.minigunLeftStreak}/6`;
     }
     const label = `${FLAMES[flame.type].name}: ${state}${statusText ? `. ${statusText}` : ''}`;
     const presentation = { instanceId: flame.instanceId, flame: flame.type, state, progress, statusText, contribution, targetHand,

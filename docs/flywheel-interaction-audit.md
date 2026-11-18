@@ -146,7 +146,7 @@ For one player-initiated Flywheel-assisted Manual Reroll, the exact order is:
 6. **Manual-action event.** One `MANUAL_REROLL_STARTED` event is emitted ([`effects.ts:2231`](../src/game/effects.ts#L2231)).
 7. **Jump Start.** Charge triggers are attributed from paid resource cost, before any dice roll ([`effects.ts:2232-2238`](../src/game/effects.ts#L2232)).
 8. **Manual roll batch begins.** One batch is created with `reason='manual'`; its intent flags are `reroll=true`, `manual=true`, `effectGenerated=false`, and `excludeStartingFace=true` ([`resolution.ts:160-193`](../src/game/resolution.ts#L160)).
-9. **Curtain Call pre-roll Plays.** Each selected, unsuppressed Curtain Call die Free Plays its current Upper Hand before any selected face changes ([`effects.ts:1032`](../src/game/effects.ts#L1032), [`effects.ts:1111-1130`](../src/game/effects.ts#L1111)).
+9. **Curtain Call pre-roll Plays.** Each selected, unsuppressed Curtain Call die Free Plays its current Left Hand before any selected face changes ([`effects.ts:1032`](../src/game/effects.ts#L1032), [`effects.ts:1111-1130`](../src/game/effects.ts#L1111)).
 10. **Batch event.** One `DICE_REROLL_STARTED` event is emitted ([`effects.ts:1036-1037`](../src/game/effects.ts#L1036)).
 11. **One roll intent per selected die.** Duplicate IDs are removed and encounter order is used ([`effects.ts:1028-1039`](../src/game/effects.ts#L1028)).
 12. **Controller arbitration.** For each die the priority is Magic, external Magnetic, Clockwork, Tank, then randomized/Weighted selection ([`effects.ts:911-981`](../src/game/effects.ts#L911)).

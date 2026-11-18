@@ -61,7 +61,7 @@ const candidates: Candidate[] = [
     s => s.game.round === 1),
   info('goal', 'THE GOAL', ['Score enough points to reach the Goal and clear the Round.'], '[data-tutorial="goal"]',
     s => s.game.round === 1 && has(s, 'welcome'), { side: 'right' }),
-  info('scorecard', 'YOUR SCORECARD', ['Upper hands score matching numbers. Lower hands score patterns like Pairs, Straights, and Full Houses.'], '[data-tutorial="scorecard"]',
+  info('scorecard', 'YOUR SCORECARD', ['Left hands score matching numbers. Right hands score patterns like Pairs, Straights, and Full Houses.'], '[data-tutorial="scorecard"]',
     s => s.game.round === 1 && has(s, 'goal')),
   required('c1-r1-select-reroll-die', 'SELECT THIS DIE', ['Tap this 2.'], die(2), 'Select D2.',
     (s, ui) => s.game.round === 1 && s.game.phase === 'round' && has(s, 'scorecard') && !has(s, R.reroll)
@@ -94,7 +94,7 @@ const candidates: Candidate[] = [
     s => s.game.round === 1 && s.game.phase === 'roundSummary' && has(s, 'c1-r1-payout')),
   required('shop1-to-training', 'SHOP SECTIONS', ['Start with Dice, then continue when you are ready to spend on Training.'], '[data-testid="shop-stage-continue"]',
     'Continue to Train.', s => s.game.phase === 'shop' && s.game.round === 1 && s.game.shop?.stage === 'shop'),
-  info('shop1-training', 'HAND TRAINING', ['Every hand can be Trained. Training gets more expensive when a hand rises above the rest of its section.', 'Upper and Lower hands are compared separately, so a balanced scorecard stays affordable.'], '[data-tutorial="hand-training"]',
+  info('shop1-training', 'HAND TRAINING', ['Every hand can be Trained. Training gets more expensive when a hand rises above the rest of its section.', 'Left and Right hands are compared separately, so a balanced scorecard stays affordable.'], '[data-tutorial="hand-training"]',
     s => s.game.phase === 'shop' && s.game.round === 1 && s.game.shop?.stage === 'train'),
   required(R.training, undefined, ["Let's train Full House so it's stronger when we find one."], '[data-tutorial="training-fullHouse"] .training-action',
     'Train Full House once.', s => s.game.phase === 'shop' && s.game.round === 1 && has(s, 'shop1-training'),
@@ -106,7 +106,7 @@ const candidates: Candidate[] = [
       && has(s, 'shop1-training-result')),
   info('c1-mini-boss', 'MINI-BOSS', ['Round 3 has a Mini-Boss. Each one changes the rules for this Round.'], '[data-tutorial="boss"]',
     s => s.game.round === 3 && s.game.phase === 'round'),
-  info('c1-capital-return', 'CAPITAL RETURN', ['Playing a Lower hand costs 1 Gold this Round.'], '[data-tutorial="boss"]',
+  info('c1-capital-return', 'CAPITAL RETURN', ['Playing a Right hand costs 1 Gold this Round.'], '[data-tutorial="boss"]',
     s => s.game.round === 3 && s.game.phase === 'round' && has(s, 'c1-mini-boss')),
   info('c1-special-offer', 'SPECIAL OFFER', ['After beating a Mini-Boss, you get to claim one of three rewards.', 'Read the descriptions and pick your favorite.'], '[data-tutorial="special-offers"]',
     s => s.game.round === 3 && s.game.phase === 'specialOffer' && !s.game.specialOffer?.acquired),
@@ -115,7 +115,7 @@ const candidates: Candidate[] = [
 
   info('c1-boss-intro', 'BOSS', ['Round 6 ends the Chapter with a Boss. Bosses can change the rules in bigger ways.'], '[data-tutorial="boss"]',
     s => s.game.round === 6 && s.game.phase === 'round'),
-  info('c1-quickdraw', 'THE MAGICIAN', ['One die has disappeared. Complete the three called Upper hands to bring it back.'], '[data-tutorial="boss"]',
+  info('c1-quickdraw', 'THE MAGICIAN', ['One die has disappeared. Complete the three called Left hands to bring it back.'], '[data-tutorial="boss"]',
     s => s.game.round === 6 && s.game.phase === 'round' && has(s, 'c1-boss-intro')),
   info('flame-selection-1', 'FLAME SELECTION', ['After beating a Boss, you get to choose a Flame.', 'Read the descriptions and pick the one you like best.'], '[data-tutorial="flame-offers"]',
     s => s.game.round === 6 && s.game.phase === 'flameSelection' && !s.game.flameSelection?.acquired),
@@ -159,7 +159,7 @@ const candidates: Candidate[] = [
     (s, ui) => s.game.round === 7 && s.game.phase === 'round' && has(s, 'chapter-2')
       && (s.scenario.firstFlame === 'minigun' || has(s, R.flameDemoSetup)) && !has(s, R.flameDemoPayoff) && flameSelectionReady(s, ui, true),
     { interactiveTargets: [PLAY] }),
-  info('c2-juggler', 'QUICKDRAW', ['Your first Lower hand scores normally. Later Lower hands score at ×0.25.'], '[data-tutorial="boss"]',
+  info('c2-juggler', 'QUICKDRAW', ['Your first Right hand scores normally. Later Right hands score at ×0.25.'], '[data-tutorial="boss"]',
     s => s.game.round === 9 && s.game.phase === 'round'),
   info('c2-special-offer', 'LOOK AT YOUR BUILD', ['These rewards can strengthen things you already own.', 'Read all three and pick what fits your build.'], '[data-tutorial="special-offers"]',
     s => s.game.round === 9 && s.game.phase === 'specialOffer' && !s.game.specialOffer?.acquired),
@@ -230,7 +230,7 @@ function contextualCopy(beat: TutorialBeat, session: TutorialSession): TutorialB
       : flame === 'straightShooter' ? (setup
         ? [`Small Straight is marked because it sets up your Flame. ${selecting ? 'Select' : 'Play'} it first.`]
         : ['Large Straight is the payoff. The Flame activates when you meet its condition.'])
-        : ['Any Upper hand can trigger this Flame.', `${selecting ? 'Select' : 'Play'} an Upper hand and you'll get some extra XMult.`];
+        : ['Any Left hand can trigger this Flame.', `${selecting ? 'Select' : 'Play'} an Left hand and you'll get some extra XMult.`];
     return {
       ...beat,
       title,

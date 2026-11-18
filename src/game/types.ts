@@ -55,9 +55,10 @@ export type HandId =
   | 'pair' | 'twoPair' | 'miniStraight' | 'threeKind' | 'oddStraight' | 'evenStraight'
   | 'smallStraight' | 'threePair' | 'fullHouse' | 'fourKind' | 'wideStraight'
   | 'doubleTriple' | 'largeStraight' | 'fullerHouse' | 'fiveKind' | 'xlStraight' | 'sixKind';
-export type UpperHandId = 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes' | 'sevens'
+export type LeftHandId = 'ones' | 'twos' | 'threes' | 'fours' | 'fives' | 'sixes' | 'sevens'
   | 'odds' | 'evens' | 'chance';
-export type LowerHandId = Exclude<HandId, UpperHandId>;
+export type RightHandId = Exclude<HandId, LeftHandId>;
+export type HandSection = 'left' | 'right';
 export type Phase = 'round' | 'roundSummary' | 'infernoMeter' | 'inferno' | 'infernoReward' | 'scenarioComplete' | 'bust' | 'flameSelection' | 'specialOffer' | 'shop' | 'lost' | 'error';
 export type ScoreSource = 'hand' | 'curtainCall' | 'jumpingBean' | 'hitchhiker' | 'boss';
 export type HandPlaySource = 'manual' | 'jumpingBean' | 'freePlay';
@@ -110,8 +111,8 @@ export interface WardenBossState {
 }
 export interface HexerBossState { type: 'hexer'; cursedDieId: number }
 export interface MarathonBossState { type: 'marathon'; cooldowns: Partial<Record<HandId, number>> }
-export interface QuickdrawBossState { type: 'quickdraw'; lowerShotUsed: boolean; playedLowerHand: HandId | null }
-export interface PendulumBossState { type: 'pendulum'; requestedSection: 'upper' | 'lower'; switches: number }
+export interface QuickdrawBossState { type: 'quickdraw'; rightShotUsed: boolean; playedRightHand: HandId | null }
+export interface PendulumBossState { type: 'pendulum'; requestedSection: HandSection; switches: number }
 export interface FlyBossState { type: 'fly'; flyHand: HandId | null; caught: boolean; moves: number; mercyActive?: boolean }
 export interface SnakeEyesBossState { type: 'snakeEyes'; mutatedFaces: { dieId: number; physicalFace: Rank }[] }
 export interface InfectedBossState { type: 'infected'; infectedFaces: { dieId: number; physicalFace: Rank }[] }
@@ -149,8 +150,8 @@ export interface XMultFactor {
 }
 export interface FlameActivationDiagnostics {
   currentFactor?: number;
-  upperDecayStep?: number;
-  upperStreak?: number;
+  leftDecayStep?: number;
+  leftStreak?: number;
   streakReset?: boolean;
   playedDiceCount?: number;
   qualifyingLowFaceCount?: number;
@@ -444,10 +445,10 @@ export type DiceSlotRef = { area: 'roster' | 'storage'; index: number };
 export type ShopStage = 'shop' | 'forge' | 'train' | 'flames';
 export interface ForgeSelection { dieAId: DieId | null; dieBId: DieId | null }
 export interface FrozenTrainingSession {
-  upperLevelsAtEntry: Record<UpperHandId, number>;
-  lowerLevelsAtEntry: Record<LowerHandId, number>;
-  upperBaseline: number;
-  lowerBaseline: number;
+  leftLevelsAtEntry: Record<LeftHandId, number>;
+  rightLevelsAtEntry: Record<RightHandId, number>;
+  leftBaseline: number;
+  rightBaseline: number;
   purchasesByHand: Record<HandId, number>;
   /** On The House: the first individual Training purchase in this visit costs no Gold. */
   freeTrainingAvailable: boolean;
@@ -497,8 +498,8 @@ export interface SpecialOfferEffects {
   badDreamRounds: number;
 }
 
-export type ChallengeId = 'fiveAlive' | 'theLongWay' | 'upperClass' | 'lowerClass' | 'varietyPack'
-  | 'closeCall' | 'noTakebacks' | 'upperManagement' | 'rollCall' | 'lowProfile' | 'oppositesAttract'
+export type ChallengeId = 'fiveAlive' | 'theLongWay' | 'leftClass' | 'rightClass' | 'varietyPack'
+  | 'closeCall' | 'noTakebacks' | 'leftManagement' | 'rollCall' | 'lowProfile' | 'oppositesAttract'
   | 'beanSalad' | 'bonusRound' | 'goldRush' | 'agedToPerfection' | 'magneticPersonality'
   | 'jackpot' | 'getYourRepsIn' | 'fullyLoaded';
 export interface BadDreamCheckpoint {
@@ -648,8 +649,8 @@ export interface InfernoEvaluationState {
   infernoLevelAfter: number;
   infernoMultiplierBefore: ExactScore;
   infernoMultiplierAfter: ExactScore;
-  upper: { levelsBefore: { hand: HandId; level: number }[]; average: number; unifiedLevel: number };
-  lower: { levelsBefore: { hand: HandId; level: number }[]; average: number; unifiedLevel: number };
+  left: { levelsBefore: { hand: HandId; level: number }[]; average: number; unifiedLevel: number };
+  right: { levelsBefore: { hand: HandId; level: number }[]; average: number; unifiedLevel: number };
   consumedFinalFlame: boolean;
   /** Deterministic Inferno Deal v1 fields, frozen when this object is created. */
   dealVersion: 1;
@@ -770,8 +771,8 @@ export interface Board {
   chargeArmed: boolean;
   decisionId: number;
   sixPackXMult: number;
-  sixPackUpperHandsPlayed: number;
-  minigunUpperStreak: number;
+  sixPackLeftHandsPlayed: number;
+  minigunLeftStreak: number;
   /** Number of genuine Play events resolved in this Round attempt, including Free Plays. */
   roundPlayCount: number;
   roundStartLives: number;
@@ -886,7 +887,7 @@ export interface TrainingPurchase {
   toLevel?: number;
   cost: number;
   shopVisitId?: number;
-  family?: 'upper' | 'lower';
+  family?: HandSection;
   frozenBaseline?: number;
   relativeTier?: number;
   normalPrice?: number | null;

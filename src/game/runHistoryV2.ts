@@ -240,10 +240,10 @@ export interface ShopStageChangedEvent extends RunHistoryV2Envelope {
 export interface TrainingSessionStartedEvent extends RunHistoryV2Envelope {
   kind: 'training_session_started';
   shopVisitId: number;
-  upperLevelsAtEntry: Record<import('./types').UpperHandId, number>;
-  lowerLevelsAtEntry: Record<import('./types').LowerHandId, number>;
-  upperBaseline: number;
-  lowerBaseline: number;
+  leftLevelsAtEntry: Record<import('./types').LeftHandId, number>;
+  rightLevelsAtEntry: Record<import('./types').RightHandId, number>;
+  leftBaseline: number;
+  rightBaseline: number;
 }
 
 export interface TeamTrainingAppliedEvent extends RunHistoryV2Envelope {
@@ -293,8 +293,8 @@ export interface EngulfmentAttemptedEvent extends RunHistoryV2Envelope {
   requiredMultiplier: number;
   success: boolean;
   overqualification: number;
-  upper: { levelsBefore: { hand: HandId; level: number }[]; average: number; unifiedLevel: number };
-  lower: { levelsBefore: { hand: HandId; level: number }[]; average: number; unifiedLevel: number };
+  left: { levelsBefore: { hand: HandId; level: number }[]; average: number; unifiedLevel: number };
+  right: { levelsBefore: { hand: HandId; level: number }[]; average: number; unifiedLevel: number };
   flamesSnuffed: EngulfmentAssetRef[];
   questForfeited: boolean;
   forfeitedQuestId?: ChallengeId;
@@ -322,7 +322,7 @@ export type ShopTransaction =
   | { type: 'dice_fused'; ingredientIds: [number, number]; resultId: number; destination: DiceSlotRef;
       effects: import('./types').DieEffectInstance[]; temperCost: string; forgeRating: string; operation: 'fusion' | 'forge' }
   | { type: 'dice_offers_rerolled'; cost: number; oldOfferIds: number[]; newOfferIds: number[]; rerollCount: number }
-  | { type: 'training'; shopVisitId: number; hand: HandId; family: 'upper' | 'lower'; fromLevel: number; toLevel: number;
+  | { type: 'training'; shopVisitId: number; hand: HandId; family: import('./types').HandSection; fromLevel: number; toLevel: number;
       frozenBaseline: number; relativeTier: number; normalPrice: number | null; cost: number;
       waivedByOnTheHouse: boolean; purchaseCount: number }
   | { type: 'life_restored'; cost: number; livesBefore: number; livesAfter: number }
@@ -394,7 +394,7 @@ export interface FlameRuntimeChangedEvent extends RunHistoryV2Envelope {
   hand?: HandId;
   from?: import('./types').HandFamilyFlameStage | number;
   to?: import('./types').HandFamilyFlameStage | number;
-  reason: 'setup_play' | 'payoff_play' | 'scorecard_refresh' | 'marathon_reuse' | 'lower_play';
+  reason: 'setup_play' | 'payoff_play' | 'scorecard_refresh' | 'marathon_reuse' | 'right_play';
 }
 
 export interface FlameSequenceEvent extends RunHistoryV2Envelope {

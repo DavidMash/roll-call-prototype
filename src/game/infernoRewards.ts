@@ -1,7 +1,7 @@
 import { CONFIG } from './config';
 import { createCollectibleDie } from './dice';
 import { firstPurchaseSlot, setSlotValue } from './diceEconomy';
-import { lowerBaselineLevel, upperBaselineLevel } from './hands';
+import { rightBaselineLevel, leftBaselineLevel } from './hands';
 import { randomIndex } from './rng';
 import { createDieEffect } from './specialDice';
 import type {
@@ -175,9 +175,9 @@ export function placeCuratedRewardDie(state: Pick<GameState, 'diceInventory'>, d
 
 export function unlockInfernoHand(state: Pick<GameState, 'infernoRewards' | 'handLevels' | 'handPlayCounts'>,
   hand: HandId): number {
-  const upper = ['odds', 'evens', 'chance'].includes(hand);
-  const baseline = upper ? upperBaselineLevel(state.handLevels, state.infernoRewards.unlockedHands)
-    : lowerBaselineLevel(state.handLevels, state.infernoRewards.unlockedHands);
+  const left = ['odds', 'evens', 'chance'].includes(hand);
+  const baseline = left ? leftBaselineLevel(state.handLevels, state.infernoRewards.unlockedHands)
+    : rightBaselineLevel(state.handLevels, state.infernoRewards.unlockedHands);
   state.handLevels[hand] = baseline;
   state.handPlayCounts[hand] = 0;
   if (!state.infernoRewards.unlockedHands.includes(hand)) state.infernoRewards.unlockedHands.push(hand);
@@ -198,5 +198,5 @@ offerId: InfernoRewardOfferId): string | null {
   const hand = INFERNO_HAND_BY_OFFER[offerId];
   if (!hand) return null;
   const baseline = unlockInfernoHand(state, hand);
-  return `${hand} unlocked at the current ${['odds', 'evens', 'chance'].includes(hand) ? 'Upper' : 'Lower'} baseline, Level ${baseline}.`;
+  return `${hand} unlocked at the current ${['odds', 'evens', 'chance'].includes(hand) ? 'Left' : 'Right'} baseline, Level ${baseline}.`;
 }

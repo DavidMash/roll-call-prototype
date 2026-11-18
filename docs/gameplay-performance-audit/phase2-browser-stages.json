@@ -3,7 +3,7 @@
   "notes": "Five production-build samples per fixture/environment. Only read-write IndexedDB transactions are recorded relative to click capture. Optimized gameplay commits complete in one durable transaction; idle orphan maintenance is not awaited by publication. The first DOM mutation at or after durable completion is the publication bound.",
   "rows": [
     {
-      "fixture": "simple-upper-play",
+      "fixture": "simple-left-play",
       "complexity": "low",
       "environment": "desktop production",
       "samples": [
@@ -1059,7 +1059,7 @@
       ]
     },
     {
-      "fixture": "simple-upper-play",
+      "fixture": "simple-left-play",
       "complexity": "low",
       "environment": "mobile 360x740, 4x CPU throttle",
       "samples": [

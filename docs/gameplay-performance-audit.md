@@ -531,7 +531,7 @@ No production source was changed in this pass.
 
 The new harness is `docs/gameplay-performance-audit/complex-resolution-profile.spec.ts`. It uses deterministic saved states and constant or seeded random sources for five fixtures:
 
-- Low: a one-die upper-hand Play.
+- Low: a one-die left-hand Play.
 - Medium: a five-die Play with five simultaneous Flames and four effects on every die.
 - Medium: a Curtain Call/free-Play reroll with seven effects on the rerolled die and five Flames.
 - High: three Jumping Bean dice, each with four effects, plus five Flames; the fixture searches 80 deterministic seeds and retains the largest valid chain.
@@ -559,7 +559,7 @@ Times are median / p95 / worst in milliseconds across 15 samples. Resolver was m
 
 | Fixture | Playback / V2 events | Dispatch | Resolver | Board snapshot clone | Event construction excluding snapshot | Effect body | State clone | Ledger clone/freeze | Ledger serialize | Memory persistence |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Simple upper Play | 8 / 3 | 2.04 / 3.34 / 3.34 | 1.29 / 3.02 / 3.02 | 0.48 / 0.61 / 0.61 | 0.06 median | 0.75 median | 0.22 median | 0.05 median | 0.02 median | 0.05 median |
+| Simple left Play | 8 / 3 | 2.04 / 3.34 / 3.34 | 1.29 / 3.02 / 3.02 | 0.48 / 0.61 / 0.61 | 0.06 median | 0.75 median | 0.22 median | 0.05 median | 0.02 median | 0.05 median |
 | Multi-Flame + special dice | 61 / 34 | 10.82 / 14.80 / 14.80 | 9.63 / 14.83 / 14.83 | 6.94 / 11.81 / 11.81 | 0.46 median | 1.36 median | 0.30 median | 0.35 median | 0.21 median | 0.31 median |
 | Curtain Call / Free Play | 25 / 15 | 4.26 / 4.95 / 4.95 | 3.34 / 4.69 / 4.69 | 1.87 / 2.69 / 2.69 | 0.23 median | 1.12 median | 0.26 median | 0.14 median | 0.08 median | 0.12 median |
 | Jumping Bean chain | 434 / 208 | 72.40 / 78.72 / 78.72 | 70.34 / 81.87 / 81.87 | 48.95 / 53.41 / 53.41 | 3.59 median | 17.94 median | 0.27 median | 2.26 median | 1.45 median | 1.92 median |
@@ -575,7 +575,7 @@ The Juggler fixture emitted the same number of events as the equivalent non-boss
 
 | Fixture | Snapshots | Total snapshot bytes | Unique snapshots | Unique snapshot bytes | Adjacent identical | Duplicate payload reduction if perfectly interned |
 |---|---:|---:|---:|---:|---:|---:|
-| Simple upper Play | 8 | 35,164 | 3 | 13,225 | 5 / 7 (71.4%) | 62.4% |
+| Simple left Play | 8 | 35,164 | 3 | 13,225 | 5 / 7 (71.4%) | 62.4% |
 | Curtain Call / Free Play | 25 | 180,606 | 10 | 72,498 | 15 / 24 (62.5%) | 59.9% |
 | Multi-Flame + special dice | 61 | 725,260 | 25 | 297,071 | 36 / 60 (60.0%) | 59.0% |
 | Juggler + multi-Flame Play | 61 | 726,724 | 25 | 297,671 | 36 / 60 (60.0%) | 59.0% |

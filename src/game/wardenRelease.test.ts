@@ -3,7 +3,7 @@ import { activeEncounterDice, bossTypeForRound } from './bosses';
 import { createCollectibleDie } from './dice';
 import { Resolver } from './effects';
 import { availableShopStages, dispatch, newRun, validateAction } from './engine';
-import { availableHandIds, BONUS_LOWER_HAND_IDS, BONUS_UPPER_HAND_IDS, HANDS } from './hands';
+import { availableHandIds, BONUS_RIGHT_HAND_IDS, BONUS_LEFT_HAND_IDS, HANDS } from './hands';
 import { applyStructuralInfernoReward } from './infernoRewards';
 import { rosterDice, syncActiveDiceProjection } from './inventory';
 import { loadPersistedRun, RUN_STORAGE_KEY, savePersistedRun } from './persistence';
@@ -14,8 +14,8 @@ import type { BossStateChangedEvent } from './runHistoryV2';
 
 const REPRO_SEED = 'roll-jxczn1-sqole7';
 const constant = (value = 0): RandomSource => ({ next: () => value });
-const bonusHands = [...BONUS_UPPER_HAND_IDS, ...BONUS_LOWER_HAND_IDS];
-const upperHands = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'] as const;
+const bonusHands = [...BONUS_LEFT_HAND_IDS, ...BONUS_RIGHT_HAND_IDS];
+const leftHands = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'] as const;
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -54,8 +54,8 @@ function chooseInitial(state: GameState, resolver: Resolver, id = rosterDice(sta
   return id;
 }
 
-function manualUpperPlay(state: GameState, resolver: Resolver, index: number): void {
-  const hand = upperHands[index];
+function manualLeftPlay(state: GameState, resolver: Resolver, index: number): void {
+  const hand = leftHands[index];
   const rank = (index + 1) as Rank;
   const die = activeEncounterDice(state)[0];
   die.value = rank;
@@ -69,7 +69,7 @@ describe('Warden Hand-release progression', () => {
     const order = rosterDice(state).map(die => die.id).filter(id => id !== initial);
     for (let index = 0; index < releases; index++) {
       const before = activeEncounterDice(state).length;
-      manualUpperPlay(state, resolver, index);
+      manualLeftPlay(state, resolver, index);
       expect(activeEncounterDice(state)).toHaveLength(before + 1);
       expect(state.boss?.type === 'warden' ? state.boss.activeDieIds.at(-1) : null).toBe(order[index]);
     }
@@ -82,8 +82,8 @@ describe('Warden Hand-release progression', () => {
     const chosen = chooseInitial(first.state, first.resolver);
     chooseInitial(second.state, second.resolver, chosen);
     for (let index = 0; index < 6; index++) {
-      manualUpperPlay(first.state, first.resolver, index);
-      manualUpperPlay(second.state, second.resolver, index);
+      manualLeftPlay(first.state, first.resolver, index);
+      manualLeftPlay(second.state, second.resolver, index);
     }
     expect(first.state.boss).toEqual(second.state.boss);
     expect(first.state.boss?.type === 'warden' ? first.state.boss.activeDieIds : []).toEqual([
@@ -172,7 +172,7 @@ describe('Warden compatibility and independence from Hand taxonomy', () => {
   it('round-trips mid-Warden release state through persistence', () => {
     const { state, resolver } = startWarden(6, ['miniStraight', 'chance']);
     const initial = chooseInitial(state, resolver);
-    manualUpperPlay(state, resolver, 0);
+    manualLeftPlay(state, resolver, 0);
     const storage = new MemoryStorage();
     expect(savePersistedRun(storage, state)).toBe(true);
     const loaded = loadPersistedRun(storage, REPRO_SEED)!;
@@ -185,7 +185,7 @@ describe('Warden compatibility and independence from Hand taxonomy', () => {
   it('migrates a legacy active-Warden save from its current active and locked dice', () => {
     const { state, resolver } = startWarden();
     chooseInitial(state, resolver, 2);
-    manualUpperPlay(state, resolver, 0);
+    manualLeftPlay(state, resolver, 0);
     const storage = new MemoryStorage();
     savePersistedRun(storage, state);
     const payload = JSON.parse(storage.values.get(RUN_STORAGE_KEY)!) as { version: number; state: Record<string, unknown> };

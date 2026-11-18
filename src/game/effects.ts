@@ -5,7 +5,7 @@ import {
   allHandsOnDeckChargeGain, countScoringDiceEnhancementComponents, fluxCapacitorChargeMultiplier, HAND_FAMILY_FLAME_IDS, HAND_FAMILY_FLAMES, HOT_STREAK_SEQUENCE,
   initialHandFamilyFlameStages, jumpStartChargeGain, momentumChargeGain, normalizeFlameInstanceRuntime, ownedFlameIds, recalculateMaxCharge,
   potentialEnergyChargeGain, removeFlameInstance,
-  sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, thirdRailChargeGain,
+  sixPackMultiplierAfterLeftHands, sixPackStartingMultiplier, thirdRailChargeGain,
   burnItDownChargeGain, dareDevilMultiplier, FLAME_SCALING, greaseTheEngineChargeGain, greaseTheEngineCost,
   hotPotatoClockChargeGain, lightningStrikeChargeGain, allInMultiplier, doubleOrNothingMultiplier, hotStreakMultiplier,
   doubleOrNothingEligibleHands, PROGRESSIVE_FLAME_SEQUENCES, progressiveSequenceMultiplier, type ProgressiveSequenceFlame,
@@ -13,7 +13,7 @@ import {
   powerSurgeChargeMultiplier,
   isChargeFlame,
 } from './flames';
-import { availableHandIds, availableLowerHandIds, availableUpperHandIds, benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, handOptions, hasPlayableHand, HANDS, lowerHand, planQualification, ultimateHands, upperBaselineLevel, upperHand } from './hands';
+import { availableHandIds, availableRightHandIds, availableLeftHandIds, benchWarmerHand, encounterHandIds, handIsStructurallyImpossible, handOptions, hasPlayableHand, HANDS, rightHand, planQualification, ultimateHands, leftBaselineLevel, leftHand } from './hands';
 import { probabilityCheck, randomIndex } from './rng';
 import { OFFER_RARITY_WEIGHTS, rarityFirstSelection, rarityLabel } from './rarity';
 import { createDiceOffers, firstPurchaseSlot, setSlotValue } from './diceEconomy';
@@ -104,7 +104,7 @@ export interface ResolverOptions {
 const NORMAL_SHOP_SPEND = new Set<GoldSpendSource>([
   'dicePurchase', 'diceOfferReroll', 'handTraining', 'lifeRestore',
 ]);
-const UPPER_HAND_BY_FACE: Partial<Record<import('./types').Rank, HandId>> = {
+const LEFT_HAND_BY_FACE: Partial<Record<import('./types').Rank, HandId>> = {
   1: 'ones', 2: 'twos', 3: 'threes', 4: 'fours', 5: 'fives', 6: 'sixes',
 };
 
@@ -927,15 +927,15 @@ export class Resolver {
   }
   private advanceMinigun(hand: HandId): void {
     if (!ownedFlameIds(this.state).has('minigun')) return;
-    if (upperHand(hand)) {
-      this.state.minigunUpperStreak = Math.min(6, this.state.minigunUpperStreak + 1);
+    if (leftHand(hand)) {
+      this.state.minigunLeftStreak = Math.min(6, this.state.minigunLeftStreak + 1);
       return;
     }
-    const before = this.state.minigunUpperStreak;
+    const before = this.state.minigunLeftStreak;
     if (before <= 0) return;
-    this.state.minigunUpperStreak = 0;
+    this.state.minigunLeftStreak = 0;
     this.emitV2({ kind: 'flame_runtime_changed', flame: 'minigun', change: 'streak_reset', hand,
-      from: before, to: 0, reason: 'lower_play' });
+      from: before, to: 0, reason: 'right_play' });
   }
   private setHandFamilyFlameStage(id: (typeof HAND_FAMILY_FLAME_IDS)[number],
     to: import('./types').HandFamilyFlameStage,
@@ -1167,7 +1167,7 @@ export class Resolver {
     while (cursor < this.queue.length) {
       const item = this.queue[cursor++];
       if (item.kind === 'jumpingBean') {
-        const hand = UPPER_HAND_BY_FACE[item.selectedNumber];
+        const hand = LEFT_HAND_BY_FACE[item.selectedNumber];
         if (!hand) continue;
         this.v2ParentSeq = this.lastV2RollSeq;
         this.play(hand, [item.dieId], 'jumpingBean');
@@ -1186,7 +1186,7 @@ export class Resolver {
       const curtainCall = die ? effectOf(die, 'freePlay') : undefined;
       if (!die || !curtainCall || wholeDieEffectSuppressed(die)) continue;
       const face = structuredClone(activeFace(die));
-      const hand = UPPER_HAND_BY_FACE[face.rank];
+      const hand = LEFT_HAND_BY_FACE[face.rank];
       if (!hand) continue;
       const detail = `Curtain Call before Manual Reroll · Free Played ${HANDS[hand].name} · ×${curtainCall.level} die Pips`;
       this.emitSpecial(die, curtainCall, detail, 'manual_reroll', undefined, undefined, { face: face.rank });
@@ -1318,12 +1318,12 @@ export class Resolver {
   private resolveQuickdraw(hand: HandId, _source: HandPlaySource): void {
     if (this.state.bossSilenced) return;
     const boss = this.state.boss;
-    if (boss?.type !== 'quickdraw' || !lowerHand(hand)) return;
-    const first = !boss.lowerShotUsed;
-    boss.lowerShotUsed = true;
-    boss.playedLowerHand = hand;
+    if (boss?.type !== 'quickdraw' || !rightHand(hand)) return;
+    const first = !boss.rightShotUsed;
+    boss.rightShotUsed = true;
+    boss.playedRightHand = hand;
     this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'quickdraw', hand,
-      message: first ? `${HANDS[hand].name} used Quickdraw's full-value Lower Play`
+      message: first ? `${HANDS[hand].name} used Quickdraw's full-value Right Play`
         : `${HANDS[hand].name} scored with Quickdraw ×0.25` });
   }
   private advanceProgressiveFlames(hand: HandId, source: HandPlaySource): void {
@@ -1368,14 +1368,14 @@ export class Resolver {
 
   private resolvePendulum(hand: HandId): void {
     if (this.state.bossSilenced || this.state.boss?.type !== 'pendulum') return;
-    const section = upperHand(hand) ? 'upper' : 'lower';
+    const section = leftHand(hand) ? 'left' : 'right';
     if (section !== this.state.boss.requestedSection) {
       this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'pendulum', hand, amount: .5,
         bossState: `remained_${this.state.boss.requestedSection}`,
         message: `${HANDS[hand].name} missed the requested ${this.state.boss.requestedSection.toUpperCase()} section · Pendulum ×0.5` });
       return;
     }
-    this.state.boss.requestedSection = section === 'upper' ? 'lower' : 'upper';
+    this.state.boss.requestedSection = section === 'left' ? 'right' : 'left';
     this.state.boss.switches++;
     this.emit({ type: 'BOSS_HAND_CHANGED', boss: 'pendulum', hand, amount: 1,
       bossState: `requested_${this.state.boss.requestedSection}`,
@@ -1403,13 +1403,13 @@ export class Resolver {
     const previous = boss.flyHand;
     const activeDice = activeEncounterDice(this.state);
     boss.mercyActive ||= this.state.manualRerollsRemaining === 0
-      || availableUpperHandIds(this.state).filter(hand => this.state.consumed.includes(hand)).length >= 4;
-    const lowerHands = availableLowerHandIds(this.state);
-    let candidates = lowerHands.filter(hand => !unavailableEncounterHands(this.state).includes(hand)
+      || availableLeftHandIds(this.state).filter(hand => this.state.consumed.includes(hand)).length >= 4;
+    const rightHands = availableRightHandIds(this.state);
+    let candidates = rightHands.filter(hand => !unavailableEncounterHands(this.state).includes(hand)
       && handIsPhysicallyAttainable(hand, activeDice.length));
     if (boss.mercyActive) {
       const qualified = handOptions(activeDice, unavailableEncounterHands(this.state), [], this.state.dieRoundState)
-        .filter(option => lowerHands.includes(option.id) && !option.consumed && candidates.includes(option.id))
+        .filter(option => rightHands.includes(option.id) && !option.consumed && candidates.includes(option.id))
         .map(option => option.id);
       if (qualified.length) candidates = qualified;
     }
@@ -1425,7 +1425,7 @@ export class Resolver {
     if (this.state.bossSilenced) return false;
     const boss = this.state.boss;
     if (!boss) return false;
-    if (boss.type === 'capitalReturn' && lowerHand(hand)) {
+    if (boss.type === 'capitalReturn' && rightHand(hand)) {
       const lost = Math.min(1, this.state.gold);
       this.state.gold -= lost;
       this.emit({ type: 'BOSS_HAND_CHANGED', boss: boss.type, hand, amount: lost,
@@ -1463,7 +1463,7 @@ export class Resolver {
   private jugglerExtraReroll(hand: HandId, source: HandPlaySource,
     alreadyRolling: ReadonlySet<number>): number | null {
     if (source !== 'manual' || this.state.bossSilenced
-      || this.state.boss?.type !== 'juggler' || !upperHand(hand)) return null;
+      || this.state.boss?.type !== 'juggler' || !leftHand(hand)) return null;
     const eligible = rosterDice(this.state).map(die => die.id).filter(id => !alreadyRolling.has(id));
     if (!eligible.length) return null;
     const dieId = eligible[randomIndex(this.rng, eligible.length)];
@@ -1518,9 +1518,9 @@ export class Resolver {
     this.advanceHandFamilyFlames(hand, xMultFactors);
     const bossFactor = this.flyFactor(hand, playSource)
       * (!this.state.bossSilenced && this.state.boss?.type === 'quickdraw'
-        && lowerHand(hand) && this.state.boss.lowerShotUsed ? .25 : 1)
+        && rightHand(hand) && this.state.boss.rightShotUsed ? .25 : 1)
       * (!this.state.bossSilenced && this.state.boss?.type === 'pendulum'
-        && (upperHand(hand) ? 'upper' : 'lower') !== this.state.boss.requestedSection ? .5 : 1);
+        && (leftHand(hand) ? 'left' : 'right') !== this.state.boss.requestedSection ? .5 : 1);
     return { ...finalizeHandScore(resolution.accumulator, bossFactor), bossFactor };
   }
 
@@ -1972,14 +1972,14 @@ export class Resolver {
     this.addPotentialEnergyCharge(handStart, hand, playSource);
     this.addAllHandsOnDeckCharge(handStart);
     this.advanceMinigun(hand);
-    if (upperHand(hand) && ownedFlameIds(this.state).has('sixPack')) {
+    if (leftHand(hand) && ownedFlameIds(this.state).has('sixPack')) {
       const before = this.state.sixPackXMult;
       const startingFactor = sixPackStartingMultiplier(flameByType(this.state, 'sixPack')?.investedGold ?? 0);
-      this.state.sixPackUpperHandsPlayed = Math.min(6, this.state.sixPackUpperHandsPlayed + 1);
-      this.state.sixPackXMult = sixPackMultiplierAfterUpperHands(startingFactor, this.state.sixPackUpperHandsPlayed);
+      this.state.sixPackLeftHandsPlayed = Math.min(6, this.state.sixPackLeftHandsPlayed + 1);
+      this.state.sixPackXMult = sixPackMultiplierAfterLeftHands(startingFactor, this.state.sixPackLeftHandsPlayed);
       this.emit({ type: 'SIX_PACK_CHANGED', flame: 'sixPack', hand, xMult: this.state.sixPackXMult,
         flameDiagnostics: { currentFactor: this.state.sixPackXMult,
-          upperDecayStep: this.state.sixPackUpperHandsPlayed },
+          leftDecayStep: this.state.sixPackLeftHandsPlayed },
         message: `Six Pack ×${this.format(before)} → ×${this.format(this.state.sixPackXMult)}` });
     }
     this.advanceHotStreak(hand, scoringIds);
@@ -2489,7 +2489,7 @@ export class Resolver {
     this.state.manualRerollsUsedThisRound = 0;
     this.state.consumed = []; this.state.scorecardCycleConsumed = []; this.state.targetPracticeHand = null; this.state.lastRoundPayout = null; this.state.roundSummary = null;
     this.state.chargeXMult = 1; this.state.chargeArmed = false; this.state.chargeAttribution = {}; this.state.chargeEvents = []; this.state.hotStreakCharges = 0;
-    this.state.minigunUpperStreak = 0;
+    this.state.minigunLeftStreak = 0;
     this.state.roundPlayCount = 0;
     this.state.roundStartLives = roundStartLives;
     this.state.roundStartRosterSize = roundStartRosterSize;
@@ -2544,7 +2544,7 @@ export class Resolver {
     }
     const sixPackInvestment = flameByType(this.state, 'sixPack')?.investedGold ?? 0;
     this.state.sixPackXMult = sixPackStartingMultiplier(sixPackInvestment);
-    this.state.sixPackUpperHandsPlayed = 0;
+    this.state.sixPackLeftHandsPlayed = 0;
     this.state.hotStreakGoal = ownedFlameIds(this.state).has('hotStreak') ? 'pair' : null;
     this.state.handFamilyFlameStages = initialHandFamilyFlameStages(this.state);
     this.state.progressiveFlames = { topDown: 0, countDown: 0 };
@@ -2589,7 +2589,7 @@ export class Resolver {
       message: `Round ${this.format(this.state.round)} — Attempt ${this.format(this.state.roundAttemptNumber)} — goal ${this.format(this.state.target)}; Charge reset to ×1` });
     this.selectTargetPractice();
     if (!this.state.bossSilenced && this.state.boss?.type === 'hexer') {
-      this.state.handLevels.sevens = upperBaselineLevel(this.state.handLevels, this.state.infernoRewards.unlockedHands);
+      this.state.handLevels.sevens = leftBaselineLevel(this.state.handLevels, this.state.infernoRewards.unlockedHands);
       this.state.encounterDice.push(createCursedDie());
       syncActiveDiceProjection(this.state);
     }
@@ -2651,10 +2651,10 @@ export class Resolver {
   selectTargetPractice(): void {
     if (!ownedFlameIds(this.state).has('targetPractice')) return;
     const candidates: HandId[] = [];
-    const lowerHands = availableLowerHandIds(this.state);
-    const counts = [...new Set(lowerHands.map(hand => this.state.handPlayCounts[hand]))].sort((a, b) => a - b);
+    const rightHands = availableRightHandIds(this.state);
+    const counts = [...new Set(rightHands.map(hand => this.state.handPlayCounts[hand]))].sort((a, b) => a - b);
     for (const count of counts) {
-      const tied = lowerHands.filter(hand => this.state.handPlayCounts[hand] === count);
+      const tied = rightHands.filter(hand => this.state.handPlayCounts[hand] === count);
       while (tied.length && candidates.length < 3) candidates.push(tied.splice(randomIndex(this.rng, tied.length), 1)[0]);
       if (candidates.length === 3) break;
     }
@@ -2748,7 +2748,7 @@ export class Resolver {
       earnedInfernoFactor: evaluation.earnedInfernoFactor,
       requiredMultiplier: evaluation.threshold, success: true,
       overqualification: Math.max(0, evaluation.selectedEffectiveValue - evaluation.threshold),
-      upper: structuredClone(evaluation.upper), lower: structuredClone(evaluation.lower),
+      left: structuredClone(evaluation.left), right: structuredClone(evaluation.right),
       flamesSnuffed: structuredClone(evaluation.flamesSnuffed), questForfeited: false, returnedToShop: true });
     this.recordUltimateTargets('engulfment');
     this.recordBenchWarmerTarget('engulfment');
@@ -2776,7 +2776,7 @@ export class Resolver {
     const structuralEffect = applyStructuralInfernoReward(this.state, offerId);
     if (structuralEffect) {
       const hand = INFERNO_HAND_BY_OFFER[offerId];
-      return hand ? `${HANDS[hand].name} unlocked at the current ${upperHand(hand) ? 'Upper' : 'Lower'} baseline, Level ${this.state.handLevels[hand]}.`
+      return hand ? `${HANDS[hand].name} unlocked at the current ${leftHand(hand) ? 'Left' : 'Right'} baseline, Level ${this.state.handLevels[hand]}.`
         : structuralEffect;
     }
     const upgrades = this.state.infernoRewards.upgrades;
@@ -2902,10 +2902,10 @@ export class Resolver {
       reason: direction === 'backward' ? 'bad_dream' : 'normal', initialStage: 'shop' });
     const trainingSession = this.state.shop.trainingSession!;
     this.emitV2({ kind: 'training_session_started', shopVisitId: visitId,
-      upperLevelsAtEntry: structuredClone(trainingSession.upperLevelsAtEntry),
-      lowerLevelsAtEntry: structuredClone(trainingSession.lowerLevelsAtEntry),
-      upperBaseline: trainingSession.upperBaseline,
-      lowerBaseline: trainingSession.lowerBaseline });
+      leftLevelsAtEntry: structuredClone(trainingSession.leftLevelsAtEntry),
+      rightLevelsAtEntry: structuredClone(trainingSession.rightLevelsAtEntry),
+      leftBaseline: trainingSession.leftBaseline,
+      rightBaseline: trainingSession.rightBaseline });
     this.freshOffers();
     if (onTheHouse) {
       this.state.specialOfferEffects.onTheHouse = false;

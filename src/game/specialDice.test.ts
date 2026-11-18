@@ -246,7 +246,7 @@ describe('Conjoined qualification and real Score occurrences', () => {
       .toEqual(['play_selection', 'conjoined']);
   });
 
-  it('automatically claims an available Conjoined effect for an Upper Hand and exhausts cleanly', () => {
+  it('automatically claims an available Conjoined effect for an Left Hand and exhausts cleanly', () => {
     const state = game();
     values(state, [4, 2, 3, 5, 6]);
     const die = setEffects(state, 0, [['conjoined', 1]]);

@@ -1,7 +1,7 @@
 import { CONFIG } from './config';
 import { hashSeed, SeededRng } from './rng';
 import { encounterHandIds, handIsStructurallyImpossible, handOptions, HAND_IDS,
-  lowerHand, LOWER_HAND_IDS, upperHand, UPPER_HAND_IDS } from './hands';
+  rightHand, RIGHT_HAND_IDS, leftHand, LEFT_HAND_IDS } from './hands';
 import type { BigBossType, Board, BossRuntimeState, BossType, Die, HandId, MiniBossType, Rank } from './types';
 
 export interface BossDefinition {
@@ -14,13 +14,13 @@ export interface BossDefinition {
 export const BOSSES: Record<BossType, BossDefinition> = {
   juggler: {
     name: 'THE JUGGLER',
-    shortRule: 'After an Upper hand, one extra random equipped die Rolls.',
+    shortRule: 'After an Left hand, one extra random equipped die Rolls.',
     primary: '#2ED68F',
     secondary: '#86EFAC',
   },
   capitalReturn: {
     name: 'CAPITAL RETURN',
-    shortRule: 'Lose 1 Gold whenever you play a Lower hand.',
+    shortRule: 'Lose 1 Gold whenever you play a Right hand.',
     primary: '#D97706',
     secondary: '#FBBF24',
   },
@@ -44,13 +44,13 @@ export const BOSSES: Record<BossType, BossDefinition> = {
   },
   magician: {
     name: 'THE MAGICIAN',
-    shortRule: 'One die disappears until you play 3 called Upper hands, but you have twice as many normal Manual Rerolls.',
+    shortRule: 'One die disappears until you play 3 called Left hands, but you have twice as many normal Manual Rerolls.',
     primary: '#7C3AED',
     secondary: '#C4B5FD',
   },
   mugger: {
     name: 'THE MUGGER',
-    shortRule: 'One hidden Lower hand will steal 5 Gold if played.',
+    shortRule: 'One hidden Right hand will steal 5 Gold if played.',
     primary: '#BE123C',
     secondary: '#FDA4AF',
   },
@@ -80,13 +80,13 @@ export const BOSSES: Record<BossType, BossDefinition> = {
   },
   quickdraw: {
     name: 'QUICKDRAW',
-    shortRule: 'The first Lower hand scores normally. Later Lower hands score ×0.25.',
+    shortRule: 'The first Right hand scores normally. Later Right hands score ×0.25.',
     primary: '#EAB308',
     secondary: '#FDE047',
   },
   fly: {
     name: 'THE FLY',
-    shortRule: 'Your played hands are weakened until you catch The Fly on the marked Lower hand, but you have twice as many normal Manual Rerolls.',
+    shortRule: 'Your played hands are weakened until you catch The Fly on the marked Right hand, but you have twice as many normal Manual Rerolls.',
     primary: '#92400E',
     secondary: '#D97706',
   },
@@ -104,7 +104,7 @@ export const BOSSES: Record<BossType, BossDefinition> = {
   },
   pendulum: {
     name: 'THE PENDULUM',
-    shortRule: 'Alternate between the requested Upper and Lower sections. A wrong-section Play scores ×0.5.',
+    shortRule: 'Alternate between the requested Left and Right sections. A wrong-section Play scores ×0.5.',
     primary: '#38BDF8',
     secondary: '#F0ABFC',
   },
@@ -179,7 +179,7 @@ export function callerHandForRound(seed: string, round: number, dieCount: number
 
 export function flyHandForRound(seed: string, round: number, dieCount: number = CONFIG.diceCount): HandId | null {
   const rng = new SeededRng(hashSeed(`${seed}:boss:${round}:fly-hand`));
-  const eligible = LOWER_HAND_IDS.filter(hand => handIsPhysicallyAttainable(hand, dieCount));
+  const eligible = RIGHT_HAND_IDS.filter(hand => handIsPhysicallyAttainable(hand, dieCount));
   return eligible.length ? eligible[Math.floor(rng.next() * eligible.length)] : null;
 }
 
@@ -220,21 +220,21 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
     case 'crawler': return { type };
     case 'pendulum': {
       const rng = encounterRng(seed, round, type);
-      return { type, requestedSection: rng.next() < .5 ? 'upper' : 'lower', switches: 0 };
+      return { type, requestedSection: rng.next() < .5 ? 'left' : 'right', switches: 0 };
     }
     case 'magician': {
       const rng = encounterRng(seed, round, type);
       const dieIds = context.playerDieIds?.length ? [...context.playerDieIds]
         : Array.from({ length: CONFIG.diceCount }, (_, index) => index);
       const missingDieId = dieIds.length > 1 ? dieIds.splice(Math.floor(rng.next() * dieIds.length), 1)[0] : null;
-      const upper = (context.eligibleHands ?? UPPER_HAND_IDS).filter(upperHand);
-      const calledHands = Array.from({ length: 3 }, () => upper.splice(Math.floor(rng.next() * upper.length), 1)[0]);
+      const left = (context.eligibleHands ?? LEFT_HAND_IDS).filter(leftHand);
+      const calledHands = Array.from({ length: 3 }, () => left.splice(Math.floor(rng.next() * left.length), 1)[0]);
       return { type, missingDieId, calledHands, completedHands: [], returned: missingDieId === null };
     }
     case 'mugger': {
       const rng = encounterRng(seed, round, type);
-      const lower = (context.eligibleHands ?? LOWER_HAND_IDS).filter(lowerHand);
-      return { type, hiddenHand: lower[Math.floor(rng.next() * lower.length)], revealedHand: null, spent: false };
+      const right = (context.eligibleHands ?? RIGHT_HAND_IDS).filter(rightHand);
+      return { type, hiddenHand: right[Math.floor(rng.next() * right.length)], revealedHand: null, spent: false };
     }
     case 'caller': return {
       type,
@@ -255,12 +255,12 @@ export function createBossRuntime(seed: string, round: number, type: BossType, c
     };
     case 'hexer': return { type, cursedDieId: CURSED_DIE_ID };
     case 'marathon': return { type, cooldowns: {} };
-    case 'quickdraw': return { type, lowerShotUsed: false, playedLowerHand: null };
+    case 'quickdraw': return { type, rightShotUsed: false, playedRightHand: null };
     case 'fly': {
       const rng = encounterRng(seed, round, type);
-      const lower = (context.eligibleHands ?? LOWER_HAND_IDS).filter(hand => lowerHand(hand)
+      const right = (context.eligibleHands ?? RIGHT_HAND_IDS).filter(hand => rightHand(hand)
         && handIsPhysicallyAttainable(hand, context.playerDieIds?.length ?? CONFIG.diceCount));
-      return { type, flyHand: lower.length ? lower[Math.floor(rng.next() * lower.length)] : null,
+      return { type, flyHand: right.length ? right[Math.floor(rng.next() * right.length)] : null,
         caught: false, moves: 0, mercyActive: false };
     }
     case 'snakeEyes': return { type, mutatedFaces: [] };

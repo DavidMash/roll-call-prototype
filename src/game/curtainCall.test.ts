@@ -27,7 +27,7 @@ const curtainHands = (state: GameState) => state.historyV2.filter(event =>
   event.kind === 'hand_scored' && event.playSource === 'freePlay');
 
 describe('Curtain Call Manual Reroll trigger', () => {
-  it('Free Plays the current Upper Hand before the requested Manual Reroll changes the face', () => {
+  it('Free Plays the current Left Hand before the requested Manual Reroll changes the face', () => {
     const state = stateWithEffects([['freePlay', 2]], 5);
     const resolver = new Resolver(state, constant(0));
     resolver.manualReroll([0]);

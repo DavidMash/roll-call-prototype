@@ -34,8 +34,8 @@ function factor(state: GameState) {
   return state.stats.handScores.at(-1)?.xMultFactors.find(item => item.source !== 'charge');
 }
 
-describe('Minigun consecutive Upper streak', () => {
-  it('spins up through the exact Bonfire sequence, caps, and includes Upper Free Plays', () => {
+describe('Minigun consecutive Left streak', () => {
+  it('spins up through the exact Bonfire sequence, caps, and includes Left Free Plays', () => {
     const state = game([1, 2, 3, 4, 5]);
     ownFlame(state, 'minigun');
     const resolver = new Resolver(state, constant());
@@ -43,18 +43,18 @@ describe('Minigun consecutive Upper streak', () => {
     expect(state.stats.handScores.map(score => score.xMult)).toEqual([
       1.666666666667, 2.333333333333, 3, 3.666666666667, 4.333333333333, 5, 5,
     ]);
-    expect(state.minigunUpperStreak).toBe(6);
+    expect(state.minigunLeftStreak).toBe(6);
   });
 
-  it('resets on a Lower Play but not on rolls or scorecard refresh, and resets at Round start', () => {
+  it('resets on a Right Play but not on rolls or scorecard refresh, and resets at Round start', () => {
     const state = game([1, 2, 3, 4, 5]);
     ownFlame(state, 'minigun');
     const resolver = new Resolver(state, constant());
     resolver.play('ones', [0], 'jumpingBean');
     resolver.play('twos', [1], 'jumpingBean');
-    expect(state.minigunUpperStreak).toBe(2);
+    expect(state.minigunLeftStreak).toBe(2);
     resolver.rollBatch([0], 'non-Play action', 'gameplay');
-    expect(state.minigunUpperStreak).toBe(2);
+    expect(state.minigunLeftStreak).toBe(2);
 
     state.scorecardCycleConsumed = ['twos', 'threes', 'fours', 'fives', 'sixes', 'pair', 'twoPair',
       'threeKind', 'fourKind', 'fiveKind', 'fullHouse', 'smallStraight', 'largeStraight'];
@@ -62,21 +62,21 @@ describe('Minigun consecutive Upper streak', () => {
     state.dice[0].value = 1;
     const refreshed = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant()).state;
     expect(refreshed.scorecardCycleConsumed).toEqual([]);
-    expect(refreshed.minigunUpperStreak).toBe(3);
+    expect(refreshed.minigunLeftStreak).toBe(3);
 
     refreshed.dice[0].value = 2;
     refreshed.dice[1].value = 2;
-    const lower = dispatch(refreshed, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant()).state;
-    expect(lower.minigunUpperStreak).toBe(0);
-    expect(lower.historyV2).toContainEqual(expect.objectContaining({
-      kind: 'flame_runtime_changed', flame: 'minigun', change: 'streak_reset', reason: 'lower_play',
+    const right = dispatch(refreshed, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant()).state;
+    expect(right.minigunLeftStreak).toBe(0);
+    expect(right.historyV2).toContainEqual(expect.objectContaining({
+      kind: 'flame_runtime_changed', flame: 'minigun', change: 'streak_reset', reason: 'right_play',
     }));
 
-    lower.minigunUpperStreak = 4;
-    lower.phase = 'shop';
-    lower.shop = { stage: 'shop', offers: [], offerRerolls: 0, lifeRestores: 0 };
-    new Resolver(lower, constant()).startRound();
-    expect(lower.minigunUpperStreak).toBe(0);
+    right.minigunLeftStreak = 4;
+    right.phase = 'shop';
+    right.shop = { stage: 'shop', offers: [], offerRerolls: 0, lifeRestores: 0 };
+    new Resolver(right, constant()).startRound();
+    expect(right.minigunLeftStreak).toBe(0);
   });
 });
 

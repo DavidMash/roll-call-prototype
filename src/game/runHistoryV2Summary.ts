@@ -51,7 +51,7 @@ export interface FlameBalanceMetric {
   chargeFactorRequestedTotal: number;
   chargeFactorAppliedTotal: number;
   diagnostics: {
-    maxUpperDecay: number; maxStreak: number; sequenceAdvances: number; sequenceCompletions: number;
+    maxLeftDecay: number; maxStreak: number; sequenceAdvances: number; sequenceCompletions: number;
     sequenceResets: number; maxSequenceProgress: number; lightningHits: number; lightningMisses: number;
     burnItDownUses: number; burnItDownSacrificeFractionTotal: number;
     briberyPurchases: number; briberyGoldSpent: number; briberyPayoffHands: number;
@@ -208,7 +208,7 @@ const newFlameMetric = (): FlameBalanceMetric => ({
   averageAppliedFactor: null, maximumAppliedFactor: null,
   chargeRequested: 0, chargeGained: 0, chargeLostToCap: 0, chargeBuildConsumptions: 0,
   chargeMultiplicativeEvents: 0, chargeCappedEvents: 0, chargeFactorRequestedTotal: 0, chargeFactorAppliedTotal: 0,
-  diagnostics: { maxUpperDecay: 0, maxStreak: 0, sequenceAdvances: 0, sequenceCompletions: 0,
+  diagnostics: { maxLeftDecay: 0, maxStreak: 0, sequenceAdvances: 0, sequenceCompletions: 0,
     sequenceResets: 0, maxSequenceProgress: 0, lightningHits: 0, lightningMisses: 0,
     burnItDownUses: 0, burnItDownSacrificeFractionTotal: 0,
     briberyPurchases: 0, briberyGoldSpent: 0, briberyPayoffHands: 0, briberyMaxStack: 0, briberyMaxFactor: 1,
@@ -471,8 +471,8 @@ export function summarizeRunHistoryV2(events: readonly RunHistoryV2Event[], stat
             factorTotals.set(change.flame, (factorTotals.get(change.flame) ?? 0) + change.factor);
             metric.maximumAppliedFactor = Math.max(metric.maximumAppliedFactor ?? change.factor, change.factor);
           }
-          metric.diagnostics.maxUpperDecay = Math.max(metric.diagnostics.maxUpperDecay, change.diagnostics?.upperDecayStep ?? 0);
-          metric.diagnostics.maxStreak = Math.max(metric.diagnostics.maxStreak, change.diagnostics?.upperStreak ?? 0,
+          metric.diagnostics.maxLeftDecay = Math.max(metric.diagnostics.maxLeftDecay, change.diagnostics?.leftDecayStep ?? 0);
+          metric.diagnostics.maxStreak = Math.max(metric.diagnostics.maxStreak, change.diagnostics?.leftStreak ?? 0,
             change.diagnostics?.hotPotatoStreak ?? 0);
         }
         if (change.type === 'acquired') experienced.flameLifecycle.acquired++;

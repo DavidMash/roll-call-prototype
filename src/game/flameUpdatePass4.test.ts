@@ -88,7 +88,7 @@ describe('Top Down', () => {
 });
 
 describe('Count Down', () => {
-  it('accepts matching Upper Free Plays and advances exactly once per Play', () => {
+  it('accepts matching Left Free Plays and advances exactly once per Play', () => {
     const state = game('countDown');
     const resolver = new Resolver(state, constant());
     const factors: number[] = [];
@@ -165,7 +165,7 @@ describe('Flame balance summary telemetry', () => {
         flames: [{ instanceId: 1, type: 'minigun', investedGold: 100, stage: 'bonfire' },
           { instanceId: 2, type: 'lightningStrike', investedGold: 100, stage: 'bonfire' }] },
       { ...base, seq: 2, kind: 'flame_changed', change: { type: 'activated', flame: 'minigun', instanceId: 1,
-        slot: 0, origin: 'ember', factor: 3, diagnostics: { upperStreak: 4 } } },
+        slot: 0, origin: 'ember', factor: 3, diagnostics: { leftStreak: 4 } } },
       { ...base, seq: 3, kind: 'flame_charge_generated', flame: 'lightningStrike', requested: 3, gained: 1,
         lostToCap: 2, before: 4, after: 5 },
       { ...base, seq: 4, kind: 'flame_action', flame: 'lightningStrike', action: { type: 'lightning_strike',

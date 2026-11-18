@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { dispatch, newRun, validateAction } from './engine';
 import {
-  HAND_IDS, HAND_MULT_EXPONENT, handStats, LOWER_HAND_IDS, roundToNearestQuarter,
-  UPPER_HAND_IDS,
+  HAND_IDS, HAND_MULT_EXPONENT, handStats, RIGHT_HAND_IDS, roundToNearestQuarter,
+  LEFT_HAND_IDS,
 } from './hands';
 import { handScore } from './scoring';
 import { createTrainingSession, quoteTraining, roundedTrainingBaseline } from './training';
@@ -62,10 +62,10 @@ describe('derived hand levels', () => {
     }
   });
 
-  it('locks representative levels and gives every Upper Hand, including Sevens, one curve', () => {
+  it('locks representative levels and gives every Left Hand, including Sevens, one curve', () => {
     expect([1, 5, 10, 20, 50, 100].map(level => handStats('ones', level).handMultiplier))
       .toEqual([1, 5.5, 20.5, 111, 1497.25, 12648]);
-    expect(([...UPPER_HAND_IDS, 'sevens'] as HandId[]).every(hand => [1, 5, 10, 20, 50, 100]
+    expect(([...LEFT_HAND_IDS, 'sevens'] as HandId[]).every(hand => [1, 5, 10, 20, 50, 100]
       .every(level => handStats(hand, level).handMultiplier === handStats('ones', level).handMultiplier))).toBe(true);
   });
 
@@ -106,30 +106,30 @@ describe('frozen relative-level Training', () => {
     Object.assign(levels, { ones: 8, twos: 9, threes: 10, fours: 11, fives: 12, sixes: 13,
       pair: 6, twoPair: 8, threeKind: 9, smallStraight: 10, fullHouse: 11, fourKind: 12, largeStraight: 13, fiveKind: 15 });
     const session = createTrainingSession(levels);
-    expect(session.upperLevelsAtEntry).toEqual(Object.fromEntries(UPPER_HAND_IDS.map(hand => [hand, levels[hand]])));
-    expect(session.lowerLevelsAtEntry).toEqual(Object.fromEntries(LOWER_HAND_IDS.map(hand => [hand, levels[hand]])));
-    expect(session.upperBaseline).toBe(11); // 10.5 rounds upward deterministically.
-    expect(session.lowerBaseline).toBe(11);
+    expect(session.leftLevelsAtEntry).toEqual(Object.fromEntries(LEFT_HAND_IDS.map(hand => [hand, levels[hand]])));
+    expect(session.rightLevelsAtEntry).toEqual(Object.fromEntries(RIGHT_HAND_IDS.map(hand => [hand, levels[hand]])));
+    expect(session.leftBaseline).toBe(11); // 10.5 rounds upward deterministically.
+    expect(session.rightBaseline).toBe(11);
     expect(roundedTrainingBaseline({ a: 1, b: 2 })).toBe(2);
   });
 
   it.each([[8, 2], [9, 2], [10, 2], [11, 4], [12, 8], [13, 16], [14, 32], [15, 64]])
   ('prices a current level %s against baseline 10 at %s Gold', (level, price) => {
     const game = shopState(200, { pair: 10 });
-    game.shop!.trainingSession!.lowerBaseline = 10; game.handLevels.pair = level;
+    game.shop!.trainingSession!.rightBaseline = 10; game.handLevels.pair = level;
     expect(quoteTraining(game.shop!.trainingSession!, game.handLevels, 'pair').normalPrice).toBe(price);
   });
 
   it('treats theoretical prices beyond safe integer Gold as unaffordable', () => {
     const game = shopState(Number.MAX_SAFE_INTEGER, { pair: 63 });
-    game.shop!.trainingSession!.lowerBaseline = 10;
+    game.shop!.trainingSession!.rightBaseline = 10;
     expect(quoteTraining(game.shop!.trainingSession!, game.handLevels, 'pair').normalPrice).toBeNull();
     expect(validateAction(game, { type: 'TRAIN_HAND', hand: 'pair' })).toContain('too specialized');
   });
 
   it('supports repeated specialization and cheap catch-up against the unchanged baseline', () => {
     let game = shopState(100, { pair: 10, fullHouse: 8 });
-    game.shop!.trainingSession!.lowerBaseline = 10;
+    game.shop!.trainingSession!.rightBaseline = 10;
     const costs: number[] = [];
     for (let index = 0; index < 4; index++) {
       const before = game.gold; game = dispatch(game, { type: 'TRAIN_HAND', hand: 'fullHouse' }).state;
@@ -143,7 +143,7 @@ describe('frozen relative-level Training', () => {
 
   it('does not change any other hand price across or within families', () => {
     let game = shopState(100, { pair: 10, twoPair: 14, fullHouse: 8, ones: 12 });
-    game.shop!.trainingSession!.lowerBaseline = 10;
+    game.shop!.trainingSession!.rightBaseline = 10;
     const session = game.shop!.trainingSession!;
     const before = { pair: quoteTraining(session, game.handLevels, 'pair').normalPrice,
       twoPair: quoteTraining(session, game.handLevels, 'twoPair').normalPrice,
@@ -156,7 +156,7 @@ describe('frozen relative-level Training', () => {
 
   it('applies only the first On The House Training purchase for free and records the waived price', () => {
     let game = shopState(10, { pair: 11 });
-    game.shop!.trainingSession!.lowerBaseline = 10;
+    game.shop!.trainingSession!.rightBaseline = 10;
     game.shop!.trainingSession!.freeTrainingAvailable = true;
     game = dispatch(game, { type: 'TRAIN_HAND', hand: 'pair' }).state;
     expect(game.gold).toBe(10); expect(game.handLevels.pair).toBe(12);
@@ -179,7 +179,7 @@ describe('frozen relative-level Training', () => {
     const game = shopState(20);
     const trained = dispatch(game, { type: 'TRAIN_HAND', hand: 'pair' }).state;
     expect(trained.historyV2.find(event => event.kind === 'shop_transaction' && event.transaction.type === 'training'))
-      .toMatchObject({ transaction: { shopVisitId: 7, hand: 'pair', family: 'lower', fromLevel: 1, toLevel: 2,
+      .toMatchObject({ transaction: { shopVisitId: 7, hand: 'pair', family: 'right', fromLevel: 1, toLevel: 2,
         frozenBaseline: 1, relativeTier: 0, normalPrice: 2, cost: 2, waivedByOnTheHouse: false, purchaseCount: 1 } });
   });
 });

@@ -59,7 +59,7 @@ describe('structured beginner-facing effect copy', () => {
       expect(plainDescription(specialDieVerboseDescription(type, 1)), type).toContain(`${first} ${first === 1 ? 'time' : 'times'} per Round`);
       expect(plainDescription(specialDieVerboseDescription(type, 2)), type).toContain(`${second} times per Round`);
     }
-    expect(plainDescription(specialDieVerboseDescription('freePlay', 3))).toBe("Before you Manually Reroll this die, it Free Plays the Upper Hand matching its current Exposed Face. During that Free Play, this die's Pips are multiplied by its Curtain Call level.");
+    expect(plainDescription(specialDieVerboseDescription('freePlay', 3))).toBe("Before you Manually Reroll this die, it Free Plays the Left Hand matching its current Exposed Face. During that Free Play, this die's Pips are multiplied by its Curtain Call level.");
     expect(plainDescription(flameVerboseDescription('targetPractice'))).toContain('Target Hand');
     expect(plainDescription(flameVerboseDescription('lowball'))).toContain('1, 2, or 3');
     expect(plainDescription(flameVerboseDescription('hotStreak'))).toContain('top to bottom');

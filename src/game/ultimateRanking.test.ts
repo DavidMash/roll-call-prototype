@@ -22,7 +22,7 @@ describe('Ultimate Hand ranking', () => {
     expect(rankedHands(levels)[0]).toBe('ones');
   });
 
-  it('prefers Sixes through Ones for otherwise-identical Upper hands', () => {
+  it('prefers Sixes through Ones for otherwise-identical Left hands', () => {
     const levels = initialHandLevels();
     for (const hand of ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'] as const) levels[hand] = 2;
     expect(ultimateHands(levels)).toEqual(['sixes']);

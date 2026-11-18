@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import type { GameState } from '../src/game/types';
 import { ledgerForState } from '../src/game/ledger';
-import { RUN_DATABASE_NAME, RUN_DATABASE_VERSION } from '../src/game/runRepository';
+import { RUN_DATABASE_NAME, RUN_DATABASE_VERSION, SESSION_FORMAT_VERSION } from '../src/game/runRepository';
 
 export async function seedRunSession(page: Page, state: GameState, slot: 'normal' | 'tutorial' | 'scenario' = 'normal', scenario?: unknown) {
   const ledger = ledgerForState(state);
@@ -15,7 +15,7 @@ export async function seedRunSession(page: Page, state: GameState, slot: 'normal
     runId: ledger.runId, ordinal: actionId, actionId: actionId || null,
     action: actionId ? actionById.get(actionId) ?? null : null, events: grouped.get(actionId) ?? [],
   }));
-  await page.evaluate(async ({ databaseName, databaseVersion, slot, state, runId, coverage, chunks, scenario }) => {
+  await page.evaluate(async ({ databaseName, databaseVersion, sessionFormatVersion, slot, state, runId, coverage, chunks, scenario }) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open(databaseName, databaseVersion);
       request.onupgradeneeded = () => {
@@ -31,7 +31,7 @@ export async function seedRunSession(page: Page, state: GameState, slot: 'normal
     });
     await new Promise<void>((resolve, reject) => {
       const transaction = database.transaction(['sessions', 'ledgerChunks'], 'readwrite');
-      transaction.objectStore('sessions').put({ slot, formatVersion: 1, runId, state, coverage,
+      transaction.objectStore('sessions').put({ slot, formatVersion: sessionFormatVersion, runId, state, coverage,
         committedActionId: state.nextActionId, committedHistorySeq: state.nextHistorySeq,
         ...(scenario === undefined ? {} : { scenario }) });
       for (const chunk of chunks) transaction.objectStore('ledgerChunks').put({ ...chunk, key: [runId, chunk.ordinal] });
@@ -39,7 +39,7 @@ export async function seedRunSession(page: Page, state: GameState, slot: 'normal
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () => reject(transaction.error);
     });
-  }, { databaseName: RUN_DATABASE_NAME, databaseVersion: RUN_DATABASE_VERSION, slot, state,
+  }, { databaseName: RUN_DATABASE_NAME, databaseVersion: RUN_DATABASE_VERSION, sessionFormatVersion: SESSION_FORMAT_VERSION, slot, state,
     runId: ledger.runId, coverage: ledger.coverage, chunks, scenario });
 }
 

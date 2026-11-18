@@ -86,9 +86,9 @@ test('unlocked scorecard order and seven-die roster remain usable on mobile', as
   await page.setViewportSize({ width: 390, height: 844 });
   await installRunState(page, state); await enterRun(page);
   await expect(page.locator('[data-testid^="scorecard-row-"]')).toHaveCount(26);
-  const upper = await page.locator('#scorecard-upper').locator('..').locator('[data-testid^="scorecard-row-"]')
+  const left = await page.locator('#scorecard-left').locator('..').locator('[data-testid^="scorecard-row-"]')
     .evaluateAll(rows => rows.map(row => row.getAttribute('data-testid')));
-  expect(upper.slice(-3)).toEqual(['scorecard-row-odds', 'scorecard-row-evens', 'scorecard-row-chance']);
+  expect(left.slice(-3)).toEqual(['scorecard-row-odds', 'scorecard-row-evens', 'scorecard-row-chance']);
   const dice = page.getByTestId('dice-dock').locator('.die-slot');
   await expect(dice).toHaveCount(7);
   const viewportWidth = page.viewportSize()!.width;

@@ -7,19 +7,19 @@ Direct XMult Flames below produce an `XMultFactor`. Charge-family Flames instead
 | Flame | Category | Before | After | XMult? | Scalable? |
 |---|---|---|---|---:|---:|
 | Ultimate | Conditional highest-level hand | `1 + 2p`, max ×3 | `1 + 4p`, max ×5 | Yes | Yes |
-| Minigun | Conditional Upper hand | `1 + 2p`, max ×3 | `1 + 4p`, max ×5 | Yes | Yes |
+| Minigun | Conditional Left hand | `1 + 2p`, max ×3 | `1 + 4p`, max ×5 | Yes | Yes |
 | Hail Mary | Conditional zero-reroll hand | `1 + 2p`, max ×3 | `1 + 4p`, max ×5 | Yes | Yes |
 | Momentum | Charge generator | â€” | Played hands add `0.5p` Charge | Shared | Yes |
 | Third Rail | Charge generator | â€” | Gameplay dice rolling 3 add `0.5p` Charge | Shared | Yes |
 | Jump Start | Charge generator | â€” | Manual Rerolls spent add `2p` Charge | Shared | Yes |
 | Power Surge | Charge transformer | â€” | The Ultimate-ranked hand triples current Charge | Shared | Capacity |
 | Speed Demon | Decision-time factor | — | 1-second grace, then smooth decay from `1 + 8p` to ×1 by 10 seconds | Yes | Yes |
-| Six Pack | Round-depleting factor | — | Starts at `S = 1 + 5p`; six played Upper hands reduce the full bonus in equal steps after scoring | Yes | Yes |
+| Six Pack | Round-depleting factor | — | Starts at `S = 1 + 5p`; six played Left hands reduce the full bonus in equal steps after scoring | Yes | Yes |
 | Flux Capacitor | Charge multiplier | — | One source activation pulling `m` Magnetic faces multiplies current Charge by `1 + mp`, once | Shared | Yes |
 | Dragon's Hoard | Held-Gold factor | `1 + 2pg`, max ×3 | `1 + 4pg`, max ×5 | Yes | Yes |
 | Well Trained | Hand-history factor | `min(3, 1 + 0.1np)` | `min(5, 1 + 0.2np)` | Yes | Yes |
-| Target Practice | Targeted Lower-hand factor | `1 + 4p`, max ×5 | `1 + 8p`, max ×9 | Yes | Yes |
-| Hot Streak | Ordered Lower-sequence factor | `1 + 0.5cp` | `1 + cp` | Yes | Yes |
+| Target Practice | Targeted Right-hand factor | `1 + 4p`, max ×5 | `1 + 8p`, max ×9 | Yes | Yes |
+| Hot Streak | Ordered Right-sequence factor | `1 + 0.5cp` | `1 + cp` | Yes | Yes |
 | Money to Burn | Normal-shop-spend factor | `1 + 2ps`, max ×3 | `1 + 4ps`, max ×5 | Yes | Yes |
 | Lowball | Printed-face-average factor | `1 + (T − 1)p`, max ×3 | `1 + 2(T − 1)p`, max ×5 | Yes | Yes |
 | Straight Shooter | Small Straight setup → Large Straight payoff | `1 + 2p`, max ×3 | Once per Round after setup: `1 + 8p`, max ×9 | Yes | Yes |

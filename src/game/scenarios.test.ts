@@ -3,7 +3,7 @@ import { dispatch, newRun, normalizeGameState } from './engine';
 import { Resolver } from './effects';
 import { createInfernoEvaluation, maximumPossibleEngulfmentReadiness } from './engulfment';
 import { flameInstances, FLAMES, recalculateMaxCharge } from './flames';
-import { availableHandIds, FINAL_LOWER_HAND_ORDER, FINAL_UPPER_HAND_ORDER, trainedHandStrength } from './hands';
+import { availableHandIds, FINAL_RIGHT_HAND_ORDER, FINAL_LEFT_HAND_ORDER, trainedHandStrength } from './hands';
 import { rosterDice } from './inventory';
 import { SCENARIOS, handLevelsForScenario, scenarioById,
   validateScenarioDefinition, validateScenarioDefinitions } from './scenarios';
@@ -138,8 +138,8 @@ describe('Scenario definitions', () => {
     ]);
     expect(unlocked.map(hand => state.handLevels[hand])).toEqual([5, 5, 5, 5, 5, 5]);
     const hands = availableHandIds(state);
-    expect(hands.filter(hand => FINAL_UPPER_HAND_ORDER.includes(hand))).toEqual(FINAL_UPPER_HAND_ORDER);
-    expect(hands.filter(hand => FINAL_LOWER_HAND_ORDER.includes(hand))).toEqual([
+    expect(hands.filter(hand => FINAL_LEFT_HAND_ORDER.includes(hand))).toEqual(FINAL_LEFT_HAND_ORDER);
+    expect(hands.filter(hand => FINAL_RIGHT_HAND_ORDER.includes(hand))).toEqual([
       'pair', 'twoPair', 'miniStraight', 'threeKind', 'oddStraight', 'evenStraight',
       'smallStraight', 'fullHouse', 'fourKind', 'largeStraight', 'fiveKind',
     ]);

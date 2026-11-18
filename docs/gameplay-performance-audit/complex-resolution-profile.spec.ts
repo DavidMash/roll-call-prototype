@@ -91,7 +91,7 @@ function fixtures(): Fixture[] {
   const low = base('phase2-low');
   const reroll = base('phase2-reroll');
   return [
-    { name: 'simple-upper-play', complexity: 'low', state: low,
+    { name: 'simple-left-play', complexity: 'low', state: low,
       action: { type: 'PLAY', hand: 'ones', dieIds: [rosterDice(low)[0].id] } },
     { name: 'ordinary-manual-reroll', complexity: 'low', state: reroll,
       action: { type: 'MANUAL_REROLL', dieIds: [rosterDice(reroll)[0].id] } },

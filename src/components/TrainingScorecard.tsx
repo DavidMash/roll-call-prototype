@@ -1,5 +1,5 @@
 import { Badge, Button, Group, Text } from '@mantine/core';
-import { availableLowerHandIds, availableUpperHandIds, handStats, HANDS, relativeHandStrengthTiers } from '../game/hands';
+import { availableRightHandIds, availableLeftHandIds, handStats, HANDS, relativeHandStrengthTiers } from '../game/hands';
 import { createTrainingSession, quoteTraining } from '../game/training';
 import type { HandId, HandLevels, Shop } from '../game/types';
 import { formatPlayerNumber } from '../game/copy';
@@ -11,11 +11,11 @@ const COMPACT_HAND_NAMES: Partial<Record<HandId, string>> = {
 };
 
 function TrainingSection({ title, hands, levels, shop, gold, busy, onTrain }: {
-  title: 'Upper' | 'Lower'; hands: HandId[]; levels: HandLevels; shop: Shop; gold: number; busy: boolean;
+  title: 'Left' | 'Right'; hands: HandId[]; levels: HandLevels; shop: Shop; gold: number; busy: boolean;
   onTrain: (hand: HandId) => void;
 }) {
   const session = shop.trainingSession ?? createTrainingSession(levels);
-  const baseline = title === 'Upper' ? session.upperBaseline : session.lowerBaseline;
+  const baseline = title === 'Left' ? session.leftBaseline : session.rightBaseline;
   const strengthTiers = relativeHandStrengthTiers(levels, hands);
   return <section className="scorecard-section training-scorecard-section" aria-labelledby={`training-${title.toLowerCase()}`}>
     <Group justify="space-between" gap="xs" className="training-section-heading">
@@ -62,8 +62,8 @@ export function TrainingScorecard({ handLevels, unlockedHands, shop, gold, busy,
 }) {
   return <div className="scorecard training-scorecard" data-testid="training-scorecard">
     <div className="scorecard-grid">
-      <TrainingSection title="Upper" hands={availableUpperHandIds({ unlockedHands })} levels={handLevels} {...{ shop, gold, busy, onTrain }} />
-      <TrainingSection title="Lower" hands={availableLowerHandIds({ unlockedHands })} levels={handLevels} {...{ shop, gold, busy, onTrain }} />
+      <TrainingSection title="Left" hands={availableLeftHandIds({ unlockedHands })} levels={handLevels} {...{ shop, gold, busy, onTrain }} />
+      <TrainingSection title="Right" hands={availableRightHandIds({ unlockedHands })} levels={handLevels} {...{ shop, gold, busy, onTrain }} />
     </div>
   </div>;
 }

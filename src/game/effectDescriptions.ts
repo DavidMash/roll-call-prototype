@@ -30,7 +30,7 @@ export function specialDieVerboseDescription(type: SpecialDieType, level: number
     magnetic: sentenceWithUses([text('The next other die to be '), term('roll', 'Rolled'), text(' while this power is available will show the same '), term('exposedFace'), text(' as this die instead of being randomized.')], count),
     jackpot: [text(`If this die `), term('score', 'Scores'), text(` in the `), term('play'), text(` that reaches the `), term('roundTarget'), text(`, you earn ${3 * count} Gold.`)],
     freePlay: [text('Before you '), term('manualReroll', 'Manually Reroll'), text(' this die, it '), term('freePlay'), text('s the '),
-      term('upperHand'), text(' matching its current '), term('exposedFace'), text('. During that Free Play, this die\'s '),
+      term('leftHand'), text(' matching its current '), term('exposedFace'), text('. During that Free Play, this die\'s '),
       term('pips'), text(' are multiplied by its Curtain Call level.')],
     chameleon: sentenceWithUses([term('onCommand'), text(', permanently change this die\'s '), term('exposedFace'), text(' to match the face currently shown by most of your other dice.')], count),
     flywheel: sentenceWithUses([text('When selected for a '), term('manualReroll'), text(', this die covers only its own one-die Reroll cost. Every uncovered selected die still costs one Manual Reroll. If every selected die is covered, the whole action is free.')], count),
@@ -38,14 +38,14 @@ export function specialDieVerboseDescription(type: SpecialDieType, level: number
     mirror: sentenceWithUses([text('During '), term('handQualification'), text(' for a matching '), term('hand'), text(', this die can act as any face value you need. Its actual '), term('exposedFace'), text(' does not change.')], count),
     missingLink: sentenceWithUses([text('During '), term('handQualification'), text(' for a Straight, this die can act as any face value you need. Its actual '), term('exposedFace'), text(' does not change.')], count),
     doubleTime: doubleTimeCopy,
-    jumpingBean: sentenceWithUses([text('Whenever this die '), term('roll', 'Rolls'), text(' the lowest rank currently available on this die, it automatically '), term('freePlay'), text(' the matching '), term('upperHand'), text(', then Rolls again.')], count * 3),
+    jumpingBean: sentenceWithUses([text('Whenever this die '), term('roll', 'Rolls'), text(' the lowest rank currently available on this die, it automatically '), term('freePlay'), text(' the matching '), term('leftHand'), text(', then Rolls again.')], count * 3),
     furnace: [text(`Feed Furnace up to ${CONFIG.furnaceMaxGoldPerRound} Gold each Round. Each Gold adds `),
       text(`${CONFIG.furnacePipsPerGoldPerLevel * count} `), term('pips'), text(' to its reserve. The reserve is added whenever this die '),
       term('score', 'Scores'), text(' and loses 1 Pip after every Play.')],
     sustainable: sentenceWithUses([text('When you select this die for a '), term('play'), text(' and it '),
       term('score', 'Scores'), text(', that Hand remains available and can be Played again later in the '), term('round'), text('.')], count),
     magic: sentenceWithUses([text('Before a player-initiated '), term('manualReroll', 'Manual Reroll'), text(', you may choose which available outcome this die will show. Skipping Magic does not spend a Use.')], count),
-    conjoined: sentenceWithUses([text('This die acts like two dice showing the same face. For example, this die can be '), term('play', 'Played'), text(' by itself as a Pair, or '), term('score'), text(' in an '), term('upperHand'), text(' as if two dice were Played.')], count),
+    conjoined: sentenceWithUses([text('This die acts like two dice showing the same face. For example, this die can be '), term('play', 'Played'), text(' by itself as a Pair, or '), term('score'), text(' in an '), term('leftHand'), text(' as if two dice were Played.')], count),
   };
   return descriptions[type];
 }
@@ -55,7 +55,7 @@ export const chameleonTieDetail: RichText = [text('If multiple faces are tied fo
 export function flameVerboseDescription(id: Flame): RichText {
   const descriptions: Record<Flame, RichText> = {
     ultimate: [text('When you '), term('play'), text(' your highest-level '), term('hand'), text(', that Hand gains extra '), term('xMult'), text('. The bonus increases as this Flame gets stronger, up to ×5 XMult.')],
-    minigun: [text('Consecutive '), term('upperHand', 'Upper Hand'), text(' Plays spin this Flame up through six steps, increasing their '), term('xMult'), text(' up to ×5. Playing a Lower Hand resets the chain.')],
+    minigun: [text('Consecutive '), term('leftHand', 'Left Hand'), text(' Plays spin this Flame up through six steps, increasing their '), term('xMult'), text(' up to ×5. Playing a Right Hand resets the chain.')],
     hailMary: [text('If you '), term('play'), text(' a '), term('hand'), text(' after using all of your normal '), term('manualReroll', 'Manual Rerolls'), text(', that Hand gains extra '), term('xMult'), text(', up to ×5.')],
     fullOfGrace: [term('lastPlay', 'Last Plays'), text(' and Plays that risk leaving no playable Hands gain extra '), term('xMult'), text(', up to ×5.')],
     momentum: [text('Each time you '), term('play'), text(' a '), term('hand'), text(', this Flame multiplies your current '), term('charge'), text(', up to ×1.25.')],
@@ -63,13 +63,13 @@ export function flameVerboseDescription(id: Flame): RichText {
     jumpStart: [text('Each die participating in a '), term('manualReroll'), text(' multiplies your current '), term('charge'), text(' sequentially, up to ×1.5 per die, including dice covered by Flywheel.')],
     powerSurge: [text('When you '), term('play'), text(' your highest-level '), term('hand'), text(', multiply your current '), term('charge'), text(', up to ×5.')],
     speedDemon: [text('The faster you make a '), term('play'), text(', the more '), term('xMult'), text(' that Hand receives, up to ×4. The bonus fades after 1 second and expires after about 5 seconds.')],
-    sixPack: [text('Each '), term('round'), text(' begins with up to ×4 '), term('xMult'), text('. Every '), term('upperHand', 'Upper Hand'), text(' Play receives the current bonus, then weakens it. Lower Hands preserve it.')],
+    sixPack: [text('Each '), term('round'), text(' begins with up to ×4 '), term('xMult'), text('. Every '), term('leftHand', 'Left Hand'), text(' Play receives the current bonus, then weakens it. Right Hands preserve it.')],
     fluxCapacitor: [text('When a '), effect({ kind: 'die', id: 'magnetic' }, 'Magnetic'), text(' die activates its ability, this Flame multiplies your '), term('charge'), text(' based on how many other dice were affected.')],
     fatCat: [text('Playing more dice with an active '), effect({ kind: 'die', id: 'golden' }, 'Golden'), text(' or '), effect({ kind: 'die', id: 'jackpot' }, 'Jackpot'), text(' effect increases that Hand’s '), term('xMult'), text(', up to ×3.')],
     vineyard: [text('Playing more dice with an active '), effect({ kind: 'die', id: 'vintage' }, 'Vintage'), text(' effect increases that Hand’s '), term('xMult'), text(', up to ×3.5.')],
     fetch: [text('One specific die face is marked as FETCH. If that exact face '), term('score', 'Scores'), text(', the '), term('hand'), text(' gains extra '), term('xMult'), text(', up to ×5, and FETCH moves to another face.')],
     targetPractice: [text('When you '), term('play'), text(' your '), term('targetHand'), text(', that Hand gains extra '), term('xMult'), text(', up to ×9.')],
-    hotStreak: [text('Play '), term('lowerSectionHand', 'Lower Section Hands'), text(' sequentially from top to bottom to build an increasingly large '), term('xMult'), text(' bonus. Completing the full sequence can reach ×9 XMult.')],
+    hotStreak: [text('Play '), term('rightSectionHand', 'Right Section Hands'), text(' sequentially from top to bottom to build an increasingly large '), term('xMult'), text(' bonus. Completing the full sequence can reach ×9 XMult.')],
     lowball: [text('When the majority of your Played dice show 1, 2, or 3, the '), term('hand'), text(' gains extra '), term('xMult'), text(', up to ×3.5.')],
     straightShooter: [text('Play a Small Straight before a Large Straight. The following Large Straight gains extra '), term('xMult'), text(', up to ×9.')],
     doubleDown: [text('Play a Pair to set up Two Pair. The following Two Pair gains extra '), term('xMult'), text(', up to ×7.')],
@@ -99,8 +99,8 @@ export function flameVerboseDescription(id: Flame): RichText {
     doubleOrNothing: [text('After manually Playing one of your three highest-level '), term('possibleHand', 'Possible Hands'),
       text(", you may give up that Play's Score to reopen its Hand until your next manual Play. Manually replay that Hand later for up to ×9 "), term('xMult'), text('.')],
     allIn: [term('onCommand'), text(", arm your next manual Play for up to ×12 "), term('xMult'), text(". If that Play and its resulting Free Plays do not clear the Round, their Score is removed.")],
-    topDown: [text('Play '), term('lowerSectionHand', 'Lower Section Hands'), text(' from Five of a Kind down to Pair. Each correct step gains increasingly large '), term('xMult'), text(', up to ×12. Unrelated Plays do not break the sequence.')],
-    countDown: [text('Play '), term('upperHand', 'Upper Hands'), text(' in order from Sixes down to Ones. Each correct step gains increasingly large '), term('xMult'), text(', up to ×12. Unrelated Plays do not break the sequence.')],
+    topDown: [text('Play '), term('rightSectionHand', 'Right Section Hands'), text(' from Five of a Kind down to Pair. Each correct step gains increasingly large '), term('xMult'), text(', up to ×12. Unrelated Plays do not break the sequence.')],
+    countDown: [text('Play '), term('leftHand', 'Left Hands'), text(' in order from Sixes down to Ones. Each correct step gains increasingly large '), term('xMult'), text(', up to ×12. Unrelated Plays do not break the sequence.')],
     bribery: [text('Invest 1 Gold at a time. Each Gold increases the '), term('xMult'), text(' on your next manual Play, with a larger increase as this Flame grows stronger. You can invest up to 20 Gold per Round.')],
   };
   return descriptions[id];

@@ -56,7 +56,7 @@ Special Offers and Flame Selection are post-Boss rewards outside the normal stag
 
 ## Training
 
-At semantic Shop creation, Training freezes all six Upper and all eight Lower entry levels. Each family's baseline is its rounded arithmetic mean. A hand at or below its frozen baseline costs 2 Gold; each level above the baseline doubles the next cost:
+At semantic Shop creation, Training freezes all six Left and all eight Right entry levels. Each family's baseline is its rounded arithmetic mean. A hand at or below its frozen baseline costs 2 Gold; each level above the baseline doubles the next cost:
 
 ```text
 relativeTier = max(0, currentLevel - frozenBaseline)
@@ -69,7 +69,7 @@ Training one hand never changes another hand's quote during that visit. On The H
 
 The player has five global Flame slots. A Flame has stable instance identity, type, slot, investment, and Ember/Bonfire stage; it is never carried by a die. Acquisition fills the first empty slot or explicitly replaces a chosen occupied slot. Fire Keeping accepts positive whole-Gold investments. At 100 invested Gold an Ember becomes a Bonfire in the same slot and keeps its identity.
 
-A Flame's written condition is its complete activation condition. Investment scales strength without changing that condition. Charge gains are attributed to Flame instance IDs. Engulfment consumes selected Flame instances, advances permanent Inferno level on success, and unifies Upper and Lower hand levels as defined by the frozen evaluation. Inferno contributes an exact `25^level` multiplier.
+A Flame's written condition is its complete activation condition. Investment scales strength without changing that condition. Charge gains are attributed to Flame instance IDs. Engulfment consumes selected Flame instances, advances permanent Inferno level on success, and unifies Left and Right hand levels as defined by the frozen evaluation. Inferno contributes an exact `25^level` multiplier.
 
 ## Bosses
 
@@ -78,7 +78,7 @@ Boss selection is deterministic and stored in the Chapter plan. Every current Bo
 - Caller selects only physically attainable calls.
 - Warden starts with one player-chosen active die, then releases one locked die in stable Roster order after each manual Hand Play.
 - Hexer adds a tagged negative-ID Cursed Die with seven authored boss faces. Its face rules are dedicated encounter mechanics, not collectible effects.
-- Marathon applies hand cooldowns; Quickdraw permits one Lower shot; Fly targets attainable Lower hands.
+- Marathon applies hand cooldowns; Quickdraw permits one Right shot; Fly targets attainable Right hands.
 - Snake Eyes changes a scored physical face to 1 for the attempt.
 - Infected marks physical faces and suppresses the exposed collectible effect while applying its Pips penalty.
 - Juggler, Capital Return, Neglected, Tightrope, Crawler, Magician, and Mugger use explicit boss runtime state and current pipeline hooks.

@@ -127,7 +127,7 @@ describe('authoritative scorecard cycles', () => {
     ['Caller', { type: 'caller', calledHand: 'twos', playsRemaining: 2, satisfied: false,
       satisfyingSource: null, callsCompleted: 0, callsMissed: 0, manualHandsPlayed: 1, callDeadline: 3 }],
     ['Warden', { type: 'warden', encounterDieIds: [0, 1, 2, 3, 4], activeDieIds: [0, 1, 2, 3, 4], startingDieId: 0 }],
-    ['Quickdraw', { type: 'quickdraw', lowerShotUsed: false, playedLowerHand: null }],
+    ['Quickdraw', { type: 'quickdraw', rightShotUsed: false, playedRightHand: null }],
     ['Fly', { type: 'fly', flyHand: 'pair', caught: false, moves: 2 }],
   ])('preserves %s state while refreshing only ordinary Used hands', (_name, boss) => {
     const refreshing = finalHandState();

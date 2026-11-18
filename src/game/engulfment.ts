@@ -11,7 +11,7 @@ import {
   calculateMaxChargeForInstances,
   FLAMES,
 } from './flames';
-import { availableHandIds, availableLowerHandIds, availableUpperHandIds, upperHand } from './hands';
+import { availableHandIds, availableRightHandIds, availableLeftHandIds, leftHand } from './hands';
 import { canonicalRunHistoryV2Events } from './runHistoryV2Timeline';
 import { finalizeScore, infernoMultiplier, INFERNO_BASE, scoreWeightedMultiplier } from './scoring';
 import { exactRatioNumber, type ExactScore } from './scoreMath';
@@ -390,7 +390,7 @@ const HAND_FAMILY_PAYOFFS: Partial<Record<Flame, HandId>> = {
  */
 function maximumFlameFactorOnHand(flame: Flame, hand: HandId): number {
   if (isChargeFlame(flame)) return 1;
-  if (flame === 'minigun' && !upperHand(hand)) return 1;
+  if (flame === 'minigun' && !leftHand(hand)) return 1;
   if (flame === 'hotStreak' && !HOT_STREAK_SEQUENCE.includes(hand)) return 1;
   if (flame === 'missingPair' && hand !== 'pair' && hand !== 'threeKind') return 1;
   if (flame === 'oneShort' && hand !== 'smallStraight' && hand !== 'fourKind') return 1;
@@ -467,8 +467,8 @@ export function handLevelNormalization(levels: HandLevels, hands: readonly HandI
 }
 
 export function engulfmentTrainingNormalization(levels: HandLevels, unlockedHands: readonly HandId[] = []) {
-  return { upper: handLevelNormalization(levels, availableUpperHandIds({ unlockedHands })),
-    lower: handLevelNormalization(levels, availableLowerHandIds({ unlockedHands })) };
+  return { left: handLevelNormalization(levels, availableLeftHandIds({ unlockedHands })),
+    right: handLevelNormalization(levels, availableRightHandIds({ unlockedHands })) };
 }
 
 export function classifyInfernoTrend(readiness: number, previousReadiness: number | null): InfernoTrend {
@@ -578,7 +578,7 @@ export function createInfernoEvaluation(state: GameState): InfernoEvaluationStat
     infernoLevelBefore, infernoLevelAfter: infernoLevelBefore + 1,
     infernoMultiplierBefore: state.infernoMultiplier,
     infernoMultiplierAfter: state.infernoMultiplier * BigInt(earnedInfernoFactor),
-    upper: normalization.upper, lower: normalization.lower,
+    left: normalization.left, right: normalization.right,
     consumedFinalFlame: flamesSnuffed.length === assets.length,
     dealVersion: 1, perceivedFlamePower: full.offeringMultiplier, flameInterest: requested.interest,
     requestedDieId: requestedDie?.dieId ?? null, requestedDieInterest: requestedDie?.interest ?? 0,

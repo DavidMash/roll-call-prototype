@@ -4,7 +4,7 @@ import { boardSnapshot } from '../game/telemetry';
 import { chunkForResolution, cloneGameState, sessionForState } from '../game/ledger';
 import type { Action, GameState, Rank, Resolution } from '../game/types';
 import { chapterNumberForRound } from '../game/chapters';
-import { combinationsForHand, UPPER_HAND_IDS } from '../game/hands';
+import { combinationsForHand, LEFT_HAND_IDS } from '../game/hands';
 import { curateTutorialOffers } from './curatedOffers';
 import { scriptedRollSource, targetMap, type EventAddressedRollSource } from './scriptedRolls';
 import { initialTutorialScenario } from './tutorialPersistence';
@@ -92,7 +92,7 @@ function recoverImpossibleLesson(session: TutorialSession): void {
       if (setup && combinationsForHand(playerDice, setup).length === 0) { complete(scenario, REQUIRED_BEATS.flameDemoSetup); complete(scenario, REQUIRED_BEATS.flameDemoPayoff); }
     } else if (!done(scenario, REQUIRED_BEATS.flameDemoPayoff)) {
       const payoff = scenario.firstFlame === 'doubleDown' ? 'twoPair' : scenario.firstFlame === 'straightShooter' ? 'largeStraight' : null;
-      const minigunPlayable = scenario.firstFlame === 'minigun' && UPPER_HAND_IDS.some(hand => combinationsForHand(playerDice, hand).length > 0);
+      const minigunPlayable = scenario.firstFlame === 'minigun' && LEFT_HAND_IDS.some(hand => combinationsForHand(playerDice, hand).length > 0);
       if ((payoff && combinationsForHand(playerDice, payoff).length === 0) || (scenario.firstFlame === 'minigun' && !minigunPlayable)) complete(scenario, REQUIRED_BEATS.flameDemoPayoff);
     }
   }
@@ -186,7 +186,7 @@ export function tutorialActionError(session: TutorialSession, action: Action): s
     if ((!requires(REQUIRED_BEATS.flameDemoSetup) || scenario.firstFlame === 'minigun') && requires(REQUIRED_BEATS.flameDemoPayoff)) {
       if (scenario.firstFlame === 'doubleDown' && (action.type !== 'PLAY' || action.hand !== 'twoPair')) return 'Play Two Pair for Double Down.';
       if (scenario.firstFlame === 'straightShooter' && (action.type !== 'PLAY' || action.hand !== 'largeStraight')) return 'Play Large Straight for Straight Shooter.';
-      if (scenario.firstFlame === 'minigun' && (action.type !== 'PLAY' || !['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'].includes(action.hand))) return 'Play an Upper hand for Minigun.';
+      if (scenario.firstFlame === 'minigun' && (action.type !== 'PLAY' || !['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'].includes(action.hand))) return 'Play an Left hand for Minigun.';
     }
   }
   if (state.round === 6 && state.phase === 'flameSelection' && action.type === 'CONTINUE_FLAME_SELECTION' && !state.flameSelection?.acquired)

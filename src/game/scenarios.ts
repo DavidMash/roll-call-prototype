@@ -1,6 +1,6 @@
 import { createCollectibleDie } from './dice';
 import { createFlameInstance, emptyFlameSlots, FLAMES, recalculateMaxCharge } from './flames';
-import { HAND_IDS, LOWER_HAND_IDS, UPPER_HAND_IDS, initialHandLevels } from './hands';
+import { HAND_IDS, RIGHT_HAND_IDS, LEFT_HAND_IDS, initialHandLevels } from './hands';
 import { rosterTuple, storageTuple, STORAGE_SLOT_COUNT } from './inventory';
 import { applyStructuralInfernoReward, infernoRewardEligible, INFERNO_REWARD_OFFERS } from './infernoRewards';
 import { createDieEffect, SPECIAL_DICE } from './specialDice';
@@ -17,8 +17,8 @@ export interface ScenarioDieDefinition {
 export interface ScenarioFlameDefinition { key: Flame; investedGold: number }
 export interface ScenarioHandTrainingDefinition {
   all?: number;
-  upper?: number;
-  lower?: number;
+  left?: number;
+  right?: number;
   overrides?: Partial<Record<HandId, number>>;
 }
 export interface ScenarioDefinition {
@@ -72,7 +72,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     startingTarget: 9_000n, startingGold: 5, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'jumpingBean', level: 5 }, { key: 'chameleon', level: 1 }, { key: 'weighted', level: 1 }]),
     flames: [{ key: 'minigun', investedGold: 40 }, { key: 'hailMary', investedGold: 40 }],
-    handTraining: { upper: 6, lower: 4 },
+    handTraining: { left: 6, right: 4 },
     featuredHands: ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'],
   },
   {
@@ -81,7 +81,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     startingTarget: 4_000n, startingGold: 15, startingTemper: 0, startingLives: 3,
     roster: repeatedDice(5, [{ key: 'golden', level: 1 }, { key: 'jackpot', level: 1 }, { key: 'furnace', level: 3 }]),
     flames: [{ key: 'bribery', investedGold: 40 }, { key: 'fatCat', investedGold: 40 }],
-    handTraining: { upper: 4, lower: 5 },
+    handTraining: { left: 4, right: 5 },
   },
   {
     id: 'extra-die', version: 3, name: 'Extra Die!',
@@ -90,7 +90,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     roster: repeatedDice(6, [{ key: 'basic', level: 1 }]),
     flames: [],
     startingInfernoRewards: ['expandedRoster', 'handThreePair', 'handWideStraight'],
-    handTraining: { upper: 4, lower: 5 },
+    handTraining: { left: 4, right: 5 },
     featuredHands: ['threePair', 'wideStraight'],
   },
   {
@@ -100,7 +100,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     roster: repeatedDice(5, [{ key: 'basic', level: 1 }]),
     flames: [],
     startingInfernoRewards: ['handOdds', 'handEvens', 'handChance', 'handMiniStraight', 'handOddStraight', 'handEvenStraight'],
-    handTraining: { upper: 5, lower: 5 },
+    handTraining: { left: 5, right: 5 },
     featuredHands: ['odds', 'evens', 'chance', 'miniStraight', 'oddStraight', 'evenStraight'],
   },
 ] as const;
@@ -111,8 +111,8 @@ export const scenarioById = (id: string | null | undefined): ScenarioDefinition 
 export function handLevelsForScenario(definition: ScenarioDefinition): HandLevels {
   const levels = initialHandLevels();
   if (definition.handTraining.all !== undefined) for (const hand of HAND_IDS) levels[hand] = definition.handTraining.all;
-  if (definition.handTraining.upper !== undefined) for (const hand of UPPER_HAND_IDS) levels[hand] = definition.handTraining.upper;
-  if (definition.handTraining.lower !== undefined) for (const hand of LOWER_HAND_IDS) levels[hand] = definition.handTraining.lower;
+  if (definition.handTraining.left !== undefined) for (const hand of LEFT_HAND_IDS) levels[hand] = definition.handTraining.left;
+  if (definition.handTraining.right !== undefined) for (const hand of RIGHT_HAND_IDS) levels[hand] = definition.handTraining.right;
   for (const [hand, level] of Object.entries(definition.handTraining.overrides ?? {}) as [HandId, number][]) levels[hand] = level;
   return levels;
 }

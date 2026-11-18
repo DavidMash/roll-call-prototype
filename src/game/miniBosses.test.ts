@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { activeEncounterDice, BOSSES, bossSchedule, BOSS_TYPES, createBossRuntime, isBigBossRound, isMiniBossRound, MINI_BOSS_TYPES, unavailableEncounterHands } from './bosses';
 import { Resolver } from './effects';
 import { dispatch, newRun, validateAction } from './engine';
-import { HANDS, HAND_IDS, LOWER_HAND_IDS } from './hands';
+import { HANDS, HAND_IDS, RIGHT_HAND_IDS } from './hands';
 import { isChapterMapTransition, isPlaybackBarrier } from './playback';
 import { loadPersistedRun, savePersistedRun } from './persistence';
 import { postBossRewardForRound, routeThrough } from './progression';
@@ -30,7 +30,7 @@ function expose(state: GameState, values: Rank[]): void {
   values.forEach((value, index) => { state.dice[index].value = value; });
 }
 
-function lowerFixture(hand: HandId): { values: Rank[]; ids: number[] } {
+function rightFixture(hand: HandId): { values: Rank[]; ids: number[] } {
   switch (hand) {
     case 'pair': return { values: [2, 2], ids: [0, 1] };
     case 'twoPair': return { values: [2, 2, 3, 3], ids: [0, 1, 2, 3] };
@@ -40,7 +40,7 @@ function lowerFixture(hand: HandId): { values: Rank[]; ids: number[] } {
     case 'fourKind': return { values: [2, 2, 2, 2], ids: [0, 1, 2, 3] };
     case 'largeStraight': return { values: [1, 2, 3, 4, 5], ids: [0, 1, 2, 3, 4] };
     case 'fiveKind': return { values: [2, 2, 2, 2, 2], ids: [0, 1, 2, 3, 4] };
-    default: throw new Error(`${hand} is not a Lower hand.`);
+    default: throw new Error(`${hand} is not a Right hand.`);
   }
 }
 
@@ -87,7 +87,7 @@ describe('six-Round encounter cadence', () => {
 });
 
 describe('Mini-Boss mechanics', () => {
-  it('The Juggler adds one eligible die after Upper hands, after scoring, without spending a Reroll', () => {
+  it('The Juggler adds one eligible die after Left hands, after scoring, without spending a Reroll', () => {
     let state = miniBossRound('juggler');
     state.target = 1_000_000n;
     expose(state, [1, 2, 3, 4, 5]);
@@ -126,7 +126,7 @@ describe('Mini-Boss mechanics', () => {
       .toMatchObject({ context: 'settle' });
   });
 
-  it('The Juggler ignores Lower hands and remains deterministic', () => {
+  it('The Juggler ignores Right hands and remains deterministic', () => {
     let state = miniBossRound('juggler');
     state.target = 1_000_000n;
     expose(state, [2, 2, 3, 4, 5]);
@@ -150,7 +150,7 @@ describe('Mini-Boss mechanics', () => {
       .toEqual([...b.state.historyV2].reverse().find(event => event.kind === 'roll_batch' && event.reason === 'juggler'));
   });
 
-  it('The Juggler ignores generated Upper Free Plays while preserving their scoring', () => {
+  it('The Juggler ignores generated Left Free Plays while preserving their scoring', () => {
     for (const source of ['freePlay', 'jumpingBean'] as const) {
       const state = miniBossRound('juggler');
       state.target = 1_000_000n;
@@ -211,7 +211,7 @@ describe('Mini-Boss mechanics', () => {
     expect(state.historyV2.some(event => event.kind === 'roll_batch' && event.reason === 'juggler')).toBe(false);
   });
 
-  it('Capital Return charges once per Lower hand without taking Gold below zero', () => {
+  it('Capital Return charges once per Right hand without taking Gold below zero', () => {
     let state = miniBossRound('capitalReturn');
     state.target = 1_000_000n;
     state.gold = 1;
@@ -379,14 +379,14 @@ describe('Mini-Boss mechanics', () => {
     expect(activeEncounterDice(state)).toHaveLength(4);
   });
 
-  it('The Mugger reveals its hidden Lower hand, steals at most 5 Gold once, then remains spent', () => {
+  it('The Mugger reveals its hidden Right hand, steals at most 5 Gold once, then remains spent', () => {
     const state = miniBossRound('mugger');
     if (state.boss?.type !== 'mugger') throw new Error('Mugger fixture failed.');
     state.target = 1_000_000n;
     state.gold = 3;
     const hidden = state.boss.hiddenHand;
-    expect(LOWER_HAND_IDS).toContain(hidden);
-    const fixture = lowerFixture(hidden);
+    expect(RIGHT_HAND_IDS).toContain(hidden);
+    const fixture = rightFixture(hidden);
     expose(state, fixture.values);
     const resolver = new Resolver(state, constant(.2));
     resolver.play(hidden, fixture.ids);
@@ -400,12 +400,12 @@ describe('Mini-Boss mechanics', () => {
 
   it('keeps all canonical Mini-Boss rules centralized', () => {
     expect(Object.fromEntries(MINI_BOSS_TYPES.map(type => [type, BOSSES[type].shortRule]))).toEqual({
-      capitalReturn: 'Lose 1 Gold whenever you play a Lower hand.',
+      capitalReturn: 'Lose 1 Gold whenever you play a Right hand.',
       neglected: 'Two of your least played hands are unavailable until 6 hands have been played.',
       tightrope: 'Start with 0 Rerolls. Goal is halved.',
       crawler: 'After every hand, only one scoring die rerolls.',
-      quickdraw: 'The first Lower hand scores normally. Later Lower hands score ×0.25.',
-      pendulum: 'Alternate between the requested Upper and Lower sections. A wrong-section Play scores ×0.5.',
+      quickdraw: 'The first Right hand scores normally. Later Right hands score ×0.25.',
+      pendulum: 'Alternate between the requested Left and Right sections. A wrong-section Play scores ×0.5.',
     });
   });
 });

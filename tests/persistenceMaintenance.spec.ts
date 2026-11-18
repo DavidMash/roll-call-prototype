@@ -102,6 +102,30 @@ test('an interrupted durable transaction publishes no partial session or ledger'
   expect(await storedCounts(page)).toEqual({ sessions: 0, runIds: [] });
 });
 
+test('an old session format is ignored instead of partially loaded', async ({ page }) => {
+  await openModulePage(page);
+  await seedRunSession(page, newRun('obsolete-section-schema').state);
+  const ignored = await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('roll-call-runs', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction('sessions', 'readwrite');
+      const store = transaction.objectStore('sessions');
+      const request = store.get('normal');
+      request.onsuccess = () => store.put({ ...request.result, formatVersion: 1 });
+      transaction.oncomplete = () => { database.close(); resolve(); };
+      transaction.onerror = () => reject(transaction.error);
+    });
+    // @ts-expect-error Vite serves this browser-only module path.
+    const { IndexedDbRunRepository } = await import('/src/game/runRepository.ts');
+    return await new IndexedDbRunRepository().load('normal') === null;
+  });
+  expect(ignored).toBe(true);
+});
+
 test('cleanup failure is non-blocking and a later maintenance lifecycle removes abandoned chunks', async ({ page }) => {
   await openModulePage(page);
   const live = newRun('maintenance-live').state;

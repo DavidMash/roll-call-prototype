@@ -3,7 +3,7 @@
   "notes": "Five production-build samples per fixture/environment after moving orphan cleanup outside gameplay publication, with snapshot reuse not yet implemented. One read-write transaction records the active durable save; publication is bounded by the first following DOM mutation.",
   "rows": [
     {
-      "fixture": "simple-upper-play",
+      "fixture": "simple-left-play",
       "complexity": "low",
       "environment": "desktop production",
       "samples": [
@@ -658,7 +658,7 @@
       ]
     },
     {
-      "fixture": "simple-upper-play",
+      "fixture": "simple-left-play",
       "complexity": "low",
       "environment": "mobile 360x740, 4x CPU throttle",
       "samples": [

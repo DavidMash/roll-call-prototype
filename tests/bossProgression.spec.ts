@@ -170,8 +170,8 @@ test('Caller preview hides the call, then encounter reveals it and its counter',
 
 for (const testCase of [
   { type: 'marathon', name: 'THE MARATHON', preview: 'Extra large Goal. Played hands return after 6 other hands are played.', hud: 'Hands return after 6 plays' },
-  { type: 'magician', name: 'THE MAGICIAN', preview: 'One die disappears until you play 3 called Upper hands, but you have twice as many normal Manual Rerolls.', hud: 'calls completed' },
-  { type: 'fly', name: 'THE FLY', preview: 'Your played hands are weakened until you catch The Fly on the marked Lower hand, but you have twice as many normal Manual Rerolls.', hud: 'Catch:' },
+  { type: 'magician', name: 'THE MAGICIAN', preview: 'One die disappears until you play 3 called Left hands, but you have twice as many normal Manual Rerolls.', hud: 'calls completed' },
+  { type: 'fly', name: 'THE FLY', preview: 'Your played hands are weakened until you catch The Fly on the marked Right hand, but you have twice as many normal Manual Rerolls.', hud: 'Catch:' },
   { type: 'snakeEyes', name: 'SNAKE EYES', preview: 'Scored faces turn into 1s.', hud: 'Scored faces become 1s' },
   { type: 'infected', name: 'THE INFECTED', preview: "Infected faces suppress the die's special effects. Played faces become infected.", hud: 'infected face' },
 ] as const) {
@@ -196,7 +196,7 @@ test('every boss uses a readable compact mobile status without displacing core g
     ['caller', '3 plays left'],
     ['fly', 'Catch:'],
     ['marathon', 'Hands return after 6 plays'],
-    ['quickdraw', 'Later Lower Plays ×0.25'],
+    ['quickdraw', 'Later Right Plays ×0.25'],
     ['hexer', 'Cursed Die required'],
     ['snakeEyes', 'Scored faces become 1s'],
     ['infected', '2 infected faces'],
@@ -207,7 +207,7 @@ test('every boss uses a readable compact mobile status without displacing core g
     game.boss = createBossRuntime(seed, game.round, type);
     if (game.boss.type === 'warden') Object.assign(game.boss, { activeDieIds: [0, 1], startingDieId: 0 });
     if (game.boss.type === 'marathon') game.boss.cooldowns.pair = 5;
-    if (game.boss.type === 'quickdraw') Object.assign(game.boss, { lowerShotUsed: true, playedLowerHand: 'fullHouse' });
+    if (game.boss.type === 'quickdraw') Object.assign(game.boss, { rightShotUsed: true, playedRightHand: 'fullHouse' });
     if (game.boss.type === 'snakeEyes') game.boss.mutatedFaces = [{ dieId: 0, physicalFace: 1 }, { dieId: 1, physicalFace: 2 }];
     if (game.boss.type === 'infected') game.boss.infectedFaces = [{ dieId: 0, physicalFace: 1 }, { dieId: 1, physicalFace: 2 }];
     if (type === 'hexer') game.dice.push(createCursedDie());

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
 import { newRun, dispatch } from '../src/game/engine';
 import { activeFace } from '../src/game/dice';
-import { handOptions, handStats, HANDS, HAND_IDS, LOWER_HAND_IDS, relativeHandStrengthTiers, UPPER_HAND_IDS } from '../src/game/hands';
+import { handOptions, handStats, HANDS, HAND_IDS, RIGHT_HAND_IDS, relativeHandStrengthTiers, LEFT_HAND_IDS } from '../src/game/hands';
 import { handScore } from '../src/game/scoring';
 import { CONFIG } from '../src/game/config';
 import type { Action, GameState, Rank, SpecialDieType } from '../src/game/types';
@@ -231,7 +231,7 @@ function highInterestState() {
 }
 function nearStraightRun() {
   for (let i = 0; i < 5000; i++) {
-    const game = newRun(`upper-subset-${i}`).state;
+    const game = newRun(`left-subset-${i}`).state;
     if (game.dice.map(die => die.value).sort().join(',') !== '1,2,4,4,5') continue;
     const matches = game.dice.filter(die => die.value === 4).map(die => die.id);
     const next = dispatch(game, { type: 'PLAY', hand: 'fours', dieIds: [matches[1]] });
@@ -260,7 +260,7 @@ test('scorecard keeps all fourteen categories visible with simplified actionable
     await expect(page.getByTestId(`scorecard-stats-${hand}`)).toContainText(`Lv. ${stats.level}`);
     await expect(page.getByTestId(`scorecard-stats-${hand}`)).not.toContainText('PIPS');
     await expect(page.getByTestId(`scorecard-stats-${hand}`)).toContainText(`×${stats.handMultiplier}MULT`);
-    const section = UPPER_HAND_IDS.includes(hand) ? UPPER_HAND_IDS : LOWER_HAND_IDS;
+    const section = LEFT_HAND_IDS.includes(hand) ? LEFT_HAND_IDS : RIGHT_HAND_IDS;
     const expectedTier = relativeHandStrengthTiers(Object.fromEntries(HAND_IDS.map(id => [id, 1])) as GameState['handLevels'], section)[hand];
     await expect(row).toHaveAttribute('data-strength-tier', expectedTier!);
     await expect(page.getByTestId(`scorecard-score-${hand}`)).toHaveText('—');
@@ -645,7 +645,7 @@ test('Hand Training purchase persists into scorecard and trained scoring playbac
   await expect(page.getByTestId(`scorecard-stats-${hand}`)).toContainText(`Lv. 2`);
   await expect(page.getByTestId(`scorecard-stats-${hand}`)).not.toContainText('PIPS');
   await expect(page.getByTestId(`scorecard-stats-${hand}`)).toContainText(`×${level2.handMultiplier}MULT`);
-  const section = UPPER_HAND_IDS.includes(hand) ? UPPER_HAND_IDS : LOWER_HAND_IDS;
+  const section = LEFT_HAND_IDS.includes(hand) ? LEFT_HAND_IDS : RIGHT_HAND_IDS;
   const expectedTier = relativeHandStrengthTiers(game.handLevels, section)[hand];
   await expect(row).toHaveAttribute('data-strength-tier', expectedTier!);
 
@@ -1148,7 +1148,7 @@ test('ambiguous physical dice can be changed and filtering never ends the run', 
 });
 
 for (const direction of ['hand-first', 'dice-first'] as const) {
-  test(`upper subset ${direction}: reroll one duplicate and preserve the straight structure`, async ({ page }) => {
+  test(`left subset ${direction}: reroll one duplicate and preserve the straight structure`, async ({ page }) => {
     const { game, matches: [preserved, played], next } = nearStraightRun();
     await page.goto(`/?seed=${game.seed}&speed=instant`);
     await matchBoard(page, game);
@@ -1314,8 +1314,8 @@ test('active mobile gameplay stays inside the viewport with a two-column scoreca
   for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 667 }, { width: 320, height: 568 }]) {
     await page.setViewportSize(viewport);
     const measurements = await page.evaluate(() => {
-      const upper = document.querySelector<HTMLElement>('#scorecard-upper')!.closest<HTMLElement>('.scorecard-section')!.getBoundingClientRect();
-      const lower = document.querySelector<HTMLElement>('#scorecard-lower')!.closest<HTMLElement>('.scorecard-section')!.getBoundingClientRect();
+      const left = document.querySelector<HTMLElement>('#scorecard-left')!.closest<HTMLElement>('.scorecard-section')!.getBoundingClientRect();
+      const right = document.querySelector<HTMLElement>('#scorecard-right')!.closest<HTMLElement>('.scorecard-section')!.getBoundingClientRect();
       const rows = [...document.querySelectorAll<HTMLElement>('[data-testid^="scorecard-row-"]')].map(row => row.getBoundingClientRect());
       const dock = document.querySelector<HTMLElement>('[data-testid="dice-dock"]')!.getBoundingClientRect();
       const actionRow = document.querySelector<HTMLElement>('[data-testid="run-action-row"]')!.getBoundingClientRect();
@@ -1326,8 +1326,8 @@ test('active mobile gameplay stays inside the viewport with a two-column scoreca
         scrollHeight: document.documentElement.scrollHeight,
         innerWidth: window.innerWidth,
         innerHeight: window.innerHeight,
-        upper: { x: upper.x, width: upper.width },
-        lower: { x: lower.x, width: lower.width },
+        left: { x: left.x, width: left.width },
+        right: { x: right.x, width: right.width },
         rowsInside: rows.every(row => row.left >= 0 && row.right <= window.innerWidth && row.top >= 0 && row.bottom <= window.innerHeight),
         dockBottom: dock.bottom,
         actionRow: { top: actionRow.top, right: actionRow.right, bottom: actionRow.bottom },
@@ -1336,8 +1336,8 @@ test('active mobile gameplay stays inside the viewport with a two-column scoreca
     });
     expect(measurements.scrollWidth).toBeLessThanOrEqual(measurements.innerWidth);
     expect(measurements.scrollHeight).toBeLessThanOrEqual(measurements.innerHeight);
-    expect(measurements.lower.x).toBeGreaterThan(measurements.upper.x + measurements.upper.width - 1);
-    expect(Math.abs(measurements.upper.width - measurements.lower.width)).toBeLessThan(1);
+    expect(measurements.right.x).toBeGreaterThan(measurements.left.x + measurements.left.width - 1);
+    expect(Math.abs(measurements.left.width - measurements.right.width)).toBeLessThan(1);
     expect(measurements.rowsInside).toBe(true);
     expect(measurements.dockBottom).toBeLessThanOrEqual(measurements.actionRow.top + 1);
     expect(measurements.actionRow.bottom).toBeLessThanOrEqual(measurements.innerHeight);

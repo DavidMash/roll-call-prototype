@@ -6,7 +6,7 @@ import {
 } from './bosses';
 import { dispatch, newRun, validateAction } from './engine';
 import { Resolver } from './effects';
-import { handIsStructurallyImpossible, HANDS, HAND_IDS, upperBaselineLevel } from './hands';
+import { handIsStructurallyImpossible, HANDS, HAND_IDS, leftBaselineLevel } from './hands';
 import { createDieEffect, effectOf, effectRuntime, resetDieRoundState } from './specialDice';
 import { renderRunHistoryV2Event } from './runHistoryV2Renderer';
 import type { BossType, GameState, RandomSource, Rank } from './types';
@@ -29,7 +29,7 @@ describe('boss fairness roster and structural availability', () => {
   it('explains doubled normal Magician and Fly rerolls without exposing hidden assistance', () => {
     for (const type of ['magician', 'fly'] as const) {
       expect(BOSSES[type].shortRule).toMatch(/twice as many normal Manual Rerolls/i);
-      expect(BOSSES[type].shortRule).not.toMatch(/mercy|rig|assistance|qualified-hand/i);
+      expect(BOSSES[type].shortRule).not.toMatch(/mercy|\brig(?:ged)?\b|assistance|qualified-hand/i);
     }
   });
   it('uses the final active tier rosters and chapter unlock bands', () => {
@@ -69,7 +69,7 @@ describe('revised encounter mechanics', () => {
     state.bossSchedule[state.round] = 'hexer';
     state.handLevels.ones = 2; state.handLevels.twos = 2; state.handLevels.threes = 3;
     new Resolver(state, constant()).startRound();
-    expect(state.handLevels.sevens).toBe(upperBaselineLevel(state.handLevels));
+    expect(state.handLevels.sevens).toBe(leftBaselineLevel(state.handLevels));
     expect(activeEncounterDice(state)).toHaveLength(6);
   });
 
@@ -85,18 +85,18 @@ describe('revised encounter mechanics', () => {
 
     const pendulum = encounter('pendulum', [2, 2, 1, 4, 6]);
     if (pendulum.boss?.type !== 'pendulum') throw new Error('Expected Pendulum.');
-    pendulum.boss.requestedSection = 'upper';
+    pendulum.boss.requestedSection = 'left';
     new Resolver(pendulum, constant()).play('pair', [0, 1]);
     expect(pendulum.stats.handScores.at(-1)!.bossFactor).toBe(.5);
-    expect(pendulum.boss.requestedSection).toBe('upper');
+    expect(pendulum.boss.requestedSection).toBe('left');
     const wrong = pendulum.historyV2.filter(event => event.kind === 'hand_scored').at(-1)!;
-    expect(renderRunHistoryV2Event(wrong)).toContain('Pendulum ×0.5 · remained on UPPER');
-    expect(renderRunHistoryV2Event(wrong)).not.toContain('requested section: LOWER');
+    expect(renderRunHistoryV2Event(wrong)).toContain('Pendulum ×0.5 · remained on LEFT');
+    expect(renderRunHistoryV2Event(wrong)).not.toContain('requested section: RIGHT');
     new Resolver(pendulum, constant()).play('ones', [2]);
     expect(pendulum.stats.handScores.at(-1)!.bossFactor).toBe(1);
-    expect(pendulum.boss.requestedSection).toBe('lower');
+    expect(pendulum.boss.requestedSection).toBe('right');
     const correct = pendulum.historyV2.filter(event => event.kind === 'hand_scored').at(-1)!;
-    expect(renderRunHistoryV2Event(correct)).toContain('Pendulum requested section: LOWER');
+    expect(renderRunHistoryV2Event(correct)).toContain('Pendulum requested section: RIGHT');
   });
 
   it('doubles only normal rerolls for Magician and Fly', () => {
@@ -174,7 +174,7 @@ describe('revised encounter mechanics', () => {
     expect(noFabrication.events.find(event => event.type === 'DIE_ROLLED')?.face).toBe(2);
   });
 
-  it('latches Fly mercy and chooses an already-qualified available Lower hand after the Roll settles', () => {
+  it('latches Fly mercy and chooses an already-qualified available Right hand after the Roll settles', () => {
     const state = encounter('fly', [1, 2, 2, 4, 5]);
     if (state.boss?.type !== 'fly') throw new Error('Expected Fly.');
     state.boss.flyHand = 'threeKind';

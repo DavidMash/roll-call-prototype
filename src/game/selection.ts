@@ -111,7 +111,7 @@ export function toggleDie(dice: Die[], consumed: HandId[], selection: Selection,
     && option.combinations.some(set => requiredDieIds.every(required => set.includes(required))));
   const completed = options.filter(option => option.combinations.some(set => sameDice(set, dieIds)));
   const retained = selection.hand && options.some(option => option.id === selection.hand) ? selection.hand : null;
-  // Keep the chosen hand while editing a compatible subset, including incomplete lower hands.
+  // Keep the chosen hand while editing a compatible subset, including incomplete right hands.
   return { dieIds, hand: retained ?? (completed.length === 1 ? completed[0].id : null) };
 }
 export function selectHand(dice: Die[], consumed: HandId[], selection: Selection, hand: HandId, requiredDieIds: number[] = []): Selection {

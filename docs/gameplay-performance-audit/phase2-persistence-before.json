@@ -3,7 +3,7 @@
   "notes": "Five production-build samples per fixture/environment. syncEnd is a capture-click microtask and is not used as handler duration because React delegated handling may follow it. firstMutation is any DOM mutation; firstPlaybackMutation is the first observed EVENT n / total publication marker. Only read-write IndexedDB transactions are recorded, relative to browser click capture; cleanup elapsed time must be measured from the main transaction completion through the cleanup transaction completion so it includes the intervening read-only session scan.",
   "rows": [
     {
-      "fixture": "simple-upper-play",
+      "fixture": "simple-left-play",
       "complexity": "low",
       "environment": "desktop production",
       "samples": [
@@ -758,7 +758,7 @@
       ]
     },
     {
-      "fixture": "simple-upper-play",
+      "fixture": "simple-left-play",
       "complexity": "low",
       "environment": "mobile 360x740, 4x CPU throttle",
       "samples": [

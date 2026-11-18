@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dispatch, newRun } from './engine';
-import { handStats, HAND_IDS, LOWER_HAND_IDS, relativeHandStrengthTiers, UPPER_HAND_IDS } from './hands';
+import { handStats, HAND_IDS, RIGHT_HAND_IDS, relativeHandStrengthTiers, LEFT_HAND_IDS } from './hands';
 import { handScore } from './scoring';
 import type { GameState, HandId, Rank } from './types';
 import { createDieEffect, resetDieRoundState } from './specialDice';
@@ -44,27 +44,27 @@ describe('intrinsic hand stats', () => {
 });
 
 describe('scorecard strength tiers', () => {
-  it('uses authoritative Hand Mult and compares Upper and Lower independently', () => {
+  it('uses authoritative Hand Mult and compares Left and Right independently', () => {
     const levels = newRun('strength-sections').state.handLevels;
     levels.ones = 8;
-    const upper = relativeHandStrengthTiers(levels, UPPER_HAND_IDS);
-    const lower = relativeHandStrengthTiers(levels, LOWER_HAND_IDS);
+    const left = relativeHandStrengthTiers(levels, LEFT_HAND_IDS);
+    const right = relativeHandStrengthTiers(levels, RIGHT_HAND_IDS);
     expect(handStats('ones', levels.ones).handMultiplier)
       .toBeGreaterThan(handStats('fiveKind', levels.fiveKind).handMultiplier);
-    expect(upper.ones).toBe('strongest');
-    expect(lower.fiveKind).toBe('strongest');
+    expect(left.ones).toBe('strongest');
+    expect(right.fiveKind).toBe('strongest');
   });
 
   it('allows ties and recalculates tiers when current levels change', () => {
     const levels = newRun('strength-updates').state.handLevels;
-    const tied = relativeHandStrengthTiers(levels, UPPER_HAND_IDS);
+    const tied = relativeHandStrengthTiers(levels, LEFT_HAND_IDS);
     expect(tied.sixes).toBe('strongest');
     expect(tied.ones).toBe('normal');
 
     levels.ones = 10;
-    const trained = relativeHandStrengthTiers(levels, UPPER_HAND_IDS);
+    const trained = relativeHandStrengthTiers(levels, LEFT_HAND_IDS);
     expect(trained.ones).toBe('strongest');
-    expect(UPPER_HAND_IDS.filter(hand => hand !== 'ones').every(hand => trained[hand] === 'normal')).toBe(true);
+    expect(LEFT_HAND_IDS.filter(hand => hand !== 'ones').every(hand => trained[hand] === 'normal')).toBe(true);
   });
 });
 
@@ -97,7 +97,7 @@ describe('authoritative current-round scorecard totals', () => {
     expect(next.effectScore).toBe(BigInt(0n));
   });
 
-  it('attributes Jumping Bean free-play score to its Upper category, not Effect Score', () => {
+  it('attributes Jumping Bean free-play score to its Left category, not Effect Score', () => {
     const game = board([1, 2, 3, 4, 5]);
     rosterDice(game)[0].effects = [createDieEffect(rosterDice(game)[0].id, 'jumpingBean')];
     syncActiveDiceProjection(game);

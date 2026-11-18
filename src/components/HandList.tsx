@@ -1,6 +1,6 @@
 import { Badge, Button, Text, Tooltip } from '@mantine/core';
 import { useMemo, useRef } from 'react';
-import { encounterHandIds, handIsStructurallyImpossible, handStats, HANDS, relativeHandStrengthTiers, upperHand } from '../game/hands';
+import { encounterHandIds, handIsStructurallyImpossible, handStats, HANDS, relativeHandStrengthTiers, leftHand } from '../game/hands';
 import { doubleOrNothingEligibleHands, flameByType } from '../game/flames';
 import type { Selection } from '../game/selection';
 import type { Board, HandId } from '../game/types';
@@ -164,14 +164,14 @@ export function HandScorecardView({ board, selection, busy, canSubmit, submitPre
     availability: ScorecardAvailability;
   }) {
   const activeHands = encounterHandIds(board);
-  const upperHands = activeHands.filter(upperHand);
-  const lowerHands = activeHands.filter(hand => !upperHand(hand));
+  const leftHands = activeHands.filter(leftHand);
+  const rightHands = activeHands.filter(hand => !leftHand(hand));
   const activeDiceCount = activeEncounterDice(board).length;
   const currentlyUnavailable = new Set(unavailableEncounterHands(board));
   return <div className="scorecard" data-tutorial="scorecard">
     <div className="scorecard-grid">
-      <ScorecardSection title="Upper" hands={upperHands} {...{ board, selection, availability, activeDiceCount, currentlyUnavailable, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }} />
-      <ScorecardSection title="Lower" hands={lowerHands} {...{ board, selection, availability, activeDiceCount, currentlyUnavailable, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }} />
+      <ScorecardSection title="Left" hands={leftHands} {...{ board, selection, availability, activeDiceCount, currentlyUnavailable, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }} />
+      <ScorecardSection title="Right" hands={rightHands} {...{ board, selection, availability, activeDiceCount, currentlyUnavailable, busy, canSubmit, submitPreview, onSelect, onSubmit, onAcceptDoubleOrNothing }} />
     </div>
     {selection.intent === 'manual' && selection.dieIds.length > 0 && !availability.hasExactHand && <Text size="xs" c="orange" className="scorecard-hint">
       {board.boss?.type === 'hexer' ? 'This selection does not form a hand with the Cursed Die.' : 'Selected dice do not form one complete available hand.'}

@@ -4,7 +4,7 @@ import { Resolver } from './effects';
 import { dispatch, newRun } from './engine';
 import {
   calculateMaxCharge, captureHandStart, fluxCapacitorChargeMultiplier, handXMultContributions,
-  placeFlameInstance, sixPackMultiplierAfterUpperHands, sixPackStartingMultiplier, speedDemonMultiplier,
+  placeFlameInstance, sixPackMultiplierAfterLeftHands, sixPackStartingMultiplier, speedDemonMultiplier,
 } from './flames';
 import type { Flame, GameState, RandomSource, Rank } from './types';
 import { createDieEffect, resetDieRoundState, runtimeFor } from './specialDice';
@@ -87,12 +87,12 @@ describe('Six Pack', () => {
     expect(sixPackStartingMultiplier(0)).toBe(1);
     expect(sixPackStartingMultiplier(50)).toBe(2.5);
     expect(sixPackStartingMultiplier(100)).toBe(4);
-    expect(sixPackMultiplierAfterUpperHands(4, 1)).toBe(3.5);
-    expect(sixPackMultiplierAfterUpperHands(1.4, 1)).toBeCloseTo(1.333333333333);
-    expect(sixPackMultiplierAfterUpperHands(4, 6)).toBe(1);
+    expect(sixPackMultiplierAfterLeftHands(4, 1)).toBe(3.5);
+    expect(sixPackMultiplierAfterLeftHands(1.4, 1)).toBeCloseTo(1.333333333333);
+    expect(sixPackMultiplierAfterLeftHands(4, 6)).toBe(1);
   });
 
-  it('applies the current factor before six equal Upper-hand reductions and floors at ×1', () => {
+  it('applies the current factor before six equal Left-hand reductions and floors at ×1', () => {
     const state = game([1, 2, 3, 4, 5]);
     flame(state, 0, 'sixPack', 100);
     state.sixPackXMult = 4;
@@ -102,24 +102,24 @@ describe('Six Pack', () => {
       4, 3.5, 3, 2.5, 2, 1.5, 1,
     ]);
     expect(state.sixPackXMult).toBe(1);
-    expect(state.sixPackUpperHandsPlayed).toBe(6);
+    expect(state.sixPackLeftHandsPlayed).toBe(6);
   });
 
-  it('reduces after a manual Upper hand but not after a Lower hand', () => {
-    const upper = game([1, 2, 3, 4, 5]);
-    flame(upper, 0, 'sixPack', 100);
-    upper.sixPackXMult = 4;
-    const played = dispatch(upper, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.8));
+  it('reduces after a manual Left hand but not after a Right hand', () => {
+    const left = game([1, 2, 3, 4, 5]);
+    flame(left, 0, 'sixPack', 100);
+    left.sixPackXMult = 4;
+    const played = dispatch(left, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.8));
     expect(played.state.stats.handScores[0].xMult).toBe(4);
     expect(played.state.sixPackXMult).toBe(3.5);
 
-    const lower = game([2, 2, 3, 4, 5]);
-    flame(lower, 0, 'sixPack', 100);
-    lower.sixPackXMult = 4;
-    expect(dispatch(lower, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.8)).state.sixPackXMult).toBe(4);
+    const right = game([2, 2, 3, 4, 5]);
+    flame(right, 0, 'sixPack', 100);
+    right.sixPackXMult = 4;
+    expect(dispatch(right, { type: 'PLAY', hand: 'pair', dieIds: [0, 1] }, constant(.8)).state.sixPackXMult).toBe(4);
   });
 
-  it('counts Jumping Bean Upper free plays and resets to invested strength each Round', () => {
+  it('counts Jumping Bean Left free plays and resets to invested strength each Round', () => {
     const state = game([1, 2, 3, 4, 5]);
     flame(state, 0, 'sixPack', 50);
     state.sixPackXMult = 2.5;
@@ -130,21 +130,21 @@ describe('Six Pack', () => {
     state.shop = { offers: [], offerRerolls: 0, lifeRestores: 0 };
     new Resolver(state, constant(.8)).startRound();
     expect(state.sixPackXMult).toBe(2.5);
-    expect(state.sixPackUpperHandsPlayed).toBe(0);
+    expect(state.sixPackLeftHandsPlayed).toBe(0);
   });
 
   it('does not restore its spent strength on scorecard refresh', () => {
     const state = game([1, 2, 3, 4, 5]);
     flame(state, 0, 'sixPack', 100);
     state.sixPackXMult = 2.5;
-    state.sixPackUpperHandsPlayed = 3;
+    state.sixPackLeftHandsPlayed = 3;
     state.consumed = ['twos', 'threes', 'fours', 'fives', 'sixes', 'pair', 'twoPair', 'threeKind',
       'fourKind', 'fiveKind', 'fullHouse', 'smallStraight', 'largeStraight'];
     state.scorecardCycleConsumed = [...state.consumed];
     const result = dispatch(state, { type: 'PLAY', hand: 'ones', dieIds: [0] }, constant(.8)).state;
     expect(result.scorecardCycleConsumed).toEqual([]);
     expect(result.sixPackXMult).toBe(2);
-    expect(result.sixPackUpperHandsPlayed).toBe(4);
+    expect(result.sixPackLeftHandsPlayed).toBe(4);
   });
 });
 

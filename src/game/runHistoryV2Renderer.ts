@@ -116,7 +116,7 @@ export function renderRunHistoryV2Event(event: RunHistoryV2Event): string {
     case 'shop_visit_started': return `SHOP VISIT ${number(event.shopVisitId)} · ${event.reason} · ${label(event.initialStage)}`;
     case 'shop_stage_changed': return `SHOP ${number(event.shopVisitId)} · ${label(event.from)} → ${label(event.to)}`;
     case 'temper_changed': return `TEMPER · ${event.operation.toUpperCase()} · ${event.source === 'fusion' ? 'Forge' : label(event.source)} ${event.operation === 'earned' ? '+' : '−'}${number(event.amount)}T · balance ${number(event.balance)}T`;
-    case 'training_session_started': return `TRAINING SESSION · Shop ${number(event.shopVisitId)} · Upper baseline ${number(event.upperBaseline)} · Lower baseline ${number(event.lowerBaseline)}`;
+    case 'training_session_started': return `TRAINING SESSION · Shop ${number(event.shopVisitId)} · Left baseline ${number(event.leftBaseline)} · Right baseline ${number(event.rightBaseline)}`;
     case 'team_training_applied': return `TEAM TRAINING · Offer ${number(event.offerId)} · all hands +1`;
     case 'shop_visit_completed': return `SHOP ${number(event.shopVisitId)} COMPLETE · ${label(event.progression)}`;
     case 'shop_offers_presented': return `OFFERS · ${event.pool}${event.shopVisitId === undefined ? '' : ` · Shop ${number(event.shopVisitId)}`}`

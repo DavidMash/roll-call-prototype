@@ -1,7 +1,7 @@
 import { activeFace, wholeDieEffectSuppressed } from './dice';
 import { activeEncounterDice, availablePlayableDice, currentlyPlayableManualHands, lastPlayDanger } from './bosses';
 import { availableHandIds, benchWarmerHand, casualHands, encounterHandIds, handIsStructurallyImpossible, HANDS,
-  lowerHand as isLowerHand, rankedHands, ultimateHands, upperHand } from './hands';
+  rightHand as isRightHand, rankedHands, ultimateHands, leftHand } from './hands';
 import type { Board, Flame, FlameActivationDiagnostics, FlameInstance, FlameInstanceId, FlameSlotIndex, FlameSlots, GameState, HandId, Rarity, SpecialDieType, XMultFactor } from './types';
 import { formatPlayerNumber } from './copy';
 import { Decimal, type ExactScore } from './scoreMath';
@@ -27,7 +27,7 @@ const flameDefinition = (id: Flame, name: string, shortName: string, rarity: Rar
 };
 export const FLAMES: Record<Flame, FlameDefinition> = {
   ultimate: flameDefinition('ultimate', 'Ultimate', 'ULT', 'uncommon', 'Your highest level hand gains up to ×5 XMult.'),
-  minigun: flameDefinition('minigun', 'Minigun', 'MINI', 'common', 'Consecutive Upper Hands spin up to ×5 XMult.'),
+  minigun: flameDefinition('minigun', 'Minigun', 'MINI', 'common', 'Consecutive Left Hands spin up to ×5 XMult.'),
   hailMary: flameDefinition('hailMary', 'Hail Mary', 'HAIL', 'common', 'Hands played with no Rerolls left gain up to ×5 XMult.'),
   fullOfGrace: flameDefinition('fullOfGrace', 'Full of Grace', 'GRACE', 'common', 'Last Plays and Plays that risk leaving no playable Hands gain up to ×5 XMult.'),
   momentum: flameDefinition('momentum', 'Momentum', 'MOM', 'common', 'Playing a hand builds Charge.'),
@@ -35,7 +35,7 @@ export const FLAMES: Record<Flame, FlameDefinition> = {
   jumpStart: flameDefinition('jumpStart', 'Jump Start', 'JUMP', 'uncommon', 'Each manually rerolled die builds Charge.'),
   powerSurge: flameDefinition('powerSurge', 'Power Surge', 'SURGE', 'rare'),
   speedDemon: flameDefinition('speedDemon', 'Speed Demon', 'SPEED', 'rare', 'Play within 5 seconds for up to ×4 XMult.'),
-  sixPack: flameDefinition('sixPack', 'Six Pack', 'SIX', 'rare', 'Starts at up to ×4 XMult and weakens after Upper Hands.'),
+  sixPack: flameDefinition('sixPack', 'Six Pack', 'SIX', 'rare', 'Starts at up to ×4 XMult and weakens after Left Hands.'),
   fluxCapacitor: flameDefinition('fluxCapacitor', 'Flux Capacitor', 'FLUX', 'rare'),
   fatCat: flameDefinition('fatCat', 'Fat Cat', 'CAT', 'uncommon'),
   vineyard: flameDefinition('vineyard', 'Vineyard', 'VINE', 'uncommon'),
@@ -99,8 +99,8 @@ export type ProgressiveSequenceFlame = keyof typeof PROGRESSIVE_FLAME_SEQUENCES;
 export const flameProgress = (investedGold: number) => Math.max(0, Math.min(100, investedGold)) / 100;
 export const FLAME_SCALING = {
   speedDemon: { fullBonus: 3, fullThroughMs: 1000, expiresAtMs: 5000 },
-  sixPack: { fullBonus: 3, upperDecay: .5, exhaustionSteps: 6 },
-  minigun: { upperStep: 2 / 3, cappedStreak: 6 },
+  sixPack: { fullBonus: 3, leftDecay: .5, exhaustionSteps: 6 },
+  minigun: { leftStep: 2 / 3, cappedStreak: 6 },
   lowball: { fullBonus: 2.5 },
   fatCat: { perMatchingDie: .4, maximumPlayedDice: 5 },
   vineyard: { perMatchingDie: .5, maximumPlayedDice: 5 },
@@ -149,14 +149,14 @@ export const speedDemonMultiplier = (investedGold: number, decisionMs: number) =
 };
 export const sixPackStartingMultiplier = (investedGold: number) =>
   1 + FLAME_SCALING.sixPack.fullBonus * flameProgress(investedGold);
-export const sixPackMultiplierAfterUpperHands = (startingFactor: number, upperHandsPlayed: number) => {
+export const sixPackMultiplierAfterLeftHands = (startingFactor: number, leftHandsPlayed: number) => {
   const progress = Math.max(0, Math.min(1, (Math.max(1, startingFactor) - 1) / FLAME_SCALING.sixPack.fullBonus));
-  return Number(Math.max(1, startingFactor - Math.max(0, upperHandsPlayed)
-    * FLAME_SCALING.sixPack.upperDecay * progress).toFixed(12));
+  return Number(Math.max(1, startingFactor - Math.max(0, leftHandsPlayed)
+    * FLAME_SCALING.sixPack.leftDecay * progress).toFixed(12));
 };
 export const minigunMultiplier = (investedGold: number, streakAfterThisPlay: number) =>
   Number((1 + Math.min(Math.max(0, streakAfterThisPlay), FLAME_SCALING.minigun.cappedStreak)
-    * FLAME_SCALING.minigun.upperStep * flameProgress(investedGold)).toFixed(12));
+    * FLAME_SCALING.minigun.leftStep * flameProgress(investedGold)).toFixed(12));
 export const maxChargeContribution = (investedGold: number) => 1 + 4 * flameProgress(investedGold);
 export const hotStreakMultiplier = (investedGold: number, charges: number) => 1 + Math.max(0, charges) * flameProgress(investedGold);
 export const lowballMultiplier = (investedGold: number) =>
@@ -273,14 +273,14 @@ export function flameEffectText(id: Flame, investedGold: number, _board: FlameDi
     case 'powerSurge': return `Playing your highest-level Hand multiplies Charge by ×${formatPlayerNumber(powerSurgeChargeMultiplier(investedGold))}.`;
     case 'fluxCapacitor': return `A Magnetic activation multiplies Charge by 1 + (1.25 × ${formatPlayerNumber(flameProgress(investedGold))} × other dice affected).`;
     case 'speedDemon': return `A Play within 1 second reaches ×${formatPlayerNumber(speedDemonMultiplier(investedGold, 0))} XMult; the bonus expires after 5 seconds.`;
-    case 'sixPack': return `Each Round starts at ×${formatPlayerNumber(sixPackStartingMultiplier(investedGold))} XMult and loses ×${formatPlayerNumber(FLAME_SCALING.sixPack.upperDecay * flameProgress(investedGold))} after each Upper Hand.`;
-    case 'minigun': return `Consecutive Upper Hands spin up from ×${formatPlayerNumber(minigunMultiplier(investedGold, 1))} to ×${formatPlayerNumber(minigunMultiplier(investedGold, 6))} XMult.`;
+    case 'sixPack': return `Each Round starts at ×${formatPlayerNumber(sixPackStartingMultiplier(investedGold))} XMult and loses ×${formatPlayerNumber(FLAME_SCALING.sixPack.leftDecay * flameProgress(investedGold))} after each Left Hand.`;
+    case 'minigun': return `Consecutive Left Hands spin up from ×${formatPlayerNumber(minigunMultiplier(investedGold, 1))} to ×${formatPlayerNumber(minigunMultiplier(investedGold, 6))} XMult.`;
     case 'targetPractice': return `Target Hand gains ×${formatPlayerNumber(targetPracticeMultiplier(investedGold))} XMult.`;
     case 'fullOfGrace': return `Last Plays and Plays that risk leaving no playable Hands gain ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult.`;
     case 'fatCat': return `Five Played Golden or Jackpot dice reach ×${formatPlayerNumber(fatCatMultiplier(investedGold, 5))} XMult.`;
     case 'vineyard': return `Five Played Vintage dice reach ×${formatPlayerNumber(vineyardMultiplier(investedGold, 5))} XMult.`;
     case 'fetch': return `The marked FETCH face grants ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult, then moves.`;
-    case 'hotStreak': return `A full top-to-bottom Lower Section Hand sequence reaches ×${formatPlayerNumber(hotStreakMultiplier(investedGold, HOT_STREAK_SEQUENCE.length))} XMult.`;
+    case 'hotStreak': return `A full top-to-bottom Right Section Hand sequence reaches ×${formatPlayerNumber(hotStreakMultiplier(investedGold, HOT_STREAK_SEQUENCE.length))} XMult.`;
     case 'lowball': return `A majority of Played dice showing 1, 2, or 3 grants ×${formatPlayerNumber(lowballMultiplier(investedGold))} XMult.`;
     case 'straightShooter':
     case 'doubleDown':
@@ -310,8 +310,8 @@ export function flameEffectText(id: Flame, investedGold: number, _board: FlameDi
     case 'doubleOrNothing': return `Wager one of your three highest-level Possible Hands, then replay it later for ×${formatPlayerNumber(doubleOrNothingMultiplier(investedGold))} XMult.`;
     case 'allIn': return `Arm your next manual Play for ×${formatPlayerNumber(allInMultiplier(investedGold))} XMult; if it does not clear the Round, that Play's Score is removed.`;
     case 'bribery': return `Invest 1 Gold at a time to add +${formatPlayerNumber(briberyXMultPerGold(investedGold))} XMult per Gold to your next manual Play, up to ${BRIBERY_ROUND_GOLD_CAP} Gold per Round.`;
-    case 'topDown': return `Play Lower Section Hands from Five of a Kind down to Pair; the final step reaches ×${formatPlayerNumber(progressiveSequenceMultiplier('topDown', investedGold, 7))} XMult.`;
-    case 'countDown': return `Play Upper Hands from Sixes down to Ones; the final step reaches ×${formatPlayerNumber(progressiveSequenceMultiplier('countDown', investedGold, 5))} XMult.`;
+    case 'topDown': return `Play Right Section Hands from Five of a Kind down to Pair; the final step reaches ×${formatPlayerNumber(progressiveSequenceMultiplier('topDown', investedGold, 7))} XMult.`;
+    case 'countDown': return `Play Left Hands from Sixes down to Ones; the final step reaches ×${formatPlayerNumber(progressiveSequenceMultiplier('countDown', investedGold, 5))} XMult.`;
     default: return `The condition grants ×${formatPlayerNumber(standardFlameMultiplier(investedGold))} XMult.`;
   }
 }
@@ -513,8 +513,8 @@ export interface HandStartSnapshot {
   chargeArmed: boolean;
   speedDemonDecisionMs: number | null;
   sixPackXMult: number;
-  sixPackUpperHandsPlayed: number;
-  minigunUpperStreak: number;
+  sixPackLeftHandsPlayed: number;
+  minigunLeftStreak: number;
   lastPlayDanger: import('./bosses').LastPlayDanger;
   selectedDieIds: number[];
   availablePlayableDieIds: number[];
@@ -529,7 +529,7 @@ export interface HandStartSnapshot {
     activeEffects: SpecialDieType[]; enhancementCount: number }[];
 }
 
-export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'infernoMultiplier' | 'gold' | 'manualRerollsRemaining' | 'manualRerollsUsedThisRound' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'progressiveFlames' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackUpperHandsPlayed' | 'minigunUpperStreak' | 'flameSlots' | 'dice' | 'dieRoundState' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget' | 'roundPlayCount' | 'roundStartLives' | 'roundStartRosterSize' | 'precedingShopDiePurchase' | 'interactiveFlames' | 'infernoRewards'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null, playSource: import('./types').HandPlaySource = 'manual', wager: { allIn?: boolean; doubleOrNothingRedemption?: boolean } = {}): HandStartSnapshot {
+export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'infernoMultiplier' | 'gold' | 'manualRerollsRemaining' | 'manualRerollsUsedThisRound' | 'specialOfferEffects' | 'handPlayCounts' | 'handLevels' | 'targetPracticeHand' | 'hotStreakGoal' | 'hotStreakCharges' | 'handFamilyFlameStages' | 'progressiveFlames' | 'chargeXMult' | 'chargeArmed' | 'sixPackXMult' | 'sixPackLeftHandsPlayed' | 'minigunLeftStreak' | 'flameSlots' | 'dice' | 'dieRoundState' | 'lifetimeNormalShopGoldSpent' | 'boss' | 'bossSilenced' | 'consumed' | 'scorecardCycleConsumed' | 'fetchTarget' | 'roundPlayCount' | 'roundStartLives' | 'roundStartRosterSize' | 'precedingShopDiePurchase' | 'interactiveFlames' | 'infernoRewards'>, hand: HandId, selectedDieIds: number[], speedDemonDecisionMs: number | null = null, playSource: import('./types').HandPlaySource = 'manual', wager: { allIn?: boolean; doubleOrNothingRedemption?: boolean } = {}): HandStartSnapshot {
   const hands = availableHandIds(state);
   const ultimate = ultimateHands(state.handLevels, hands);
   const availableDice = availablePlayableDice(state);
@@ -563,8 +563,8 @@ export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'in
     chargeArmed: state.chargeArmed,
     speedDemonDecisionMs,
     sixPackXMult: state.sixPackXMult,
-    sixPackUpperHandsPlayed: state.sixPackUpperHandsPlayed,
-    minigunUpperStreak: state.minigunUpperStreak,
+    sixPackLeftHandsPlayed: state.sixPackLeftHandsPlayed,
+    minigunLeftStreak: state.minigunLeftStreak,
     lastPlayDanger: lastPlayDanger(state, hand, selectedDieIds),
     selectedDieIds: [...selectedDieIds],
     availablePlayableDieIds: availableDice.map(die => die.id),
@@ -573,9 +573,9 @@ export function captureHandStart(state: Pick<GameState, 'score' | 'target' | 'in
     scoringDiceEnhancementCount: 0,
     bossFactor: state.bossSilenced ? 1
       : state.boss?.type === 'fly' && !state.boss.caught && hand !== state.boss.flyHand ? .5
-        : state.boss?.type === 'quickdraw' && !HANDS[hand].rank && state.boss.lowerShotUsed ? .25
+        : state.boss?.type === 'quickdraw' && !HANDS[hand].rank && state.boss.rightShotUsed ? .25
           : state.boss?.type === 'pendulum'
-            && (HANDS[hand].rank ? 'upper' : 'lower') !== state.boss.requestedSection ? .5 : 1,
+            && (HANDS[hand].rank ? 'left' : 'right') !== state.boss.requestedSection ? .5 : 1,
     lifetimeNormalShopGoldSpent: state.lifetimeNormalShopGoldSpent,
     fetchTarget: state.fetchTarget ? { ...state.fetchTarget } : null,
     flames: structuredClone(flameInstances(state)),
@@ -624,7 +624,7 @@ export function countScoringDiceEnhancementComponents(snapshot: HandStartSnapsho
 const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId, scoringDieIds: number[]) => {
   switch (id) {
     case 'ultimate': return snapshot.ultimateHands.includes(hand);
-    case 'minigun': return upperHand(hand);
+    case 'minigun': return leftHand(hand);
     case 'hailMary': return snapshot.manualRerollsRemaining === 0;
     case 'fullOfGrace': return snapshot.lastPlayDanger !== 'none';
     case 'lowball': return lowballPlayedDiceCounts(snapshot).qualifies;
@@ -669,7 +669,7 @@ const qualifies = (id: Flame, snapshot: HandStartSnapshot, hand: HandId, scoring
 function factorValue(id: Flame, investedGold: number, snapshot: HandStartSnapshot, _scoringDieIds: number[]): number {
   switch (id) {
     case 'targetPractice': return targetPracticeMultiplier(investedGold);
-    case 'minigun': return minigunMultiplier(investedGold, snapshot.minigunUpperStreak + 1);
+    case 'minigun': return minigunMultiplier(investedGold, snapshot.minigunLeftStreak + 1);
     case 'lowball': return lowballMultiplier(investedGold);
     case 'fatCat': return fatCatMultiplier(investedGold, countPlayedDiceWithActiveEffects(snapshot, ['golden', 'jackpot']));
     case 'vineyard': return vineyardMultiplier(investedGold, countPlayedDiceWithActiveEffects(snapshot, ['vintage']));
@@ -755,10 +755,10 @@ function factorInput(id: Flame, snapshot: HandStartSnapshot, _scoringDieIds: num
     ultimateHand: snapshot.ultimateHands[0] } };
   if (id === 'bribery') return { input: snapshot.briberyPendingGold,
     detail: `${snapshot.briberyPendingGold} Gold pending` };
-  if (id === 'sixPack') return { input: snapshot.sixPackUpperHandsPlayed, diagnostics: {
-    currentFactor: snapshot.sixPackXMult, upperDecayStep: snapshot.sixPackUpperHandsPlayed } };
-  if (id === 'minigun') return { input: snapshot.minigunUpperStreak + 1, diagnostics: {
-    upperStreak: snapshot.minigunUpperStreak + 1 } };
+  if (id === 'sixPack') return { input: snapshot.sixPackLeftHandsPlayed, diagnostics: {
+    currentFactor: snapshot.sixPackXMult, leftDecayStep: snapshot.sixPackLeftHandsPlayed } };
+  if (id === 'minigun') return { input: snapshot.minigunLeftStreak + 1, diagnostics: {
+    leftStreak: snapshot.minigunLeftStreak + 1 } };
   if (id === 'speedDemon') return { input: snapshot.speedDemonDecisionMs ?? undefined,
     diagnostics: { decisionMs: snapshot.speedDemonDecisionMs ?? undefined } };
   if (id === 'hotStreak') return { input: snapshot.hotStreakCharges + 1, detail: `successful sequence charge ${formatPlayerNumber(snapshot.hotStreakCharges + 1)}` };
@@ -826,4 +826,4 @@ export function handFamilyFlameTargets(state: Pick<Board, 'flameSlots' | 'handFa
     return stage === 'setup' ? [HAND_FAMILY_FLAMES[id].setup] : stage === 'payoff' ? [HAND_FAMILY_FLAMES[id].payoff] : [];
   });
 }
-export const lowerHand = (hand: HandId) => isLowerHand(hand);
+export const rightHand = (hand: HandId) => isRightHand(hand);

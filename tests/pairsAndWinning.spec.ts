@@ -37,8 +37,8 @@ for (const hand of ['pair', 'twoPair'] as const) {
     const added = action.dieIds.find(id => !initial.includes(id))!;
     await die(page, removed).click();
     if (hand === 'pair') {
-      const upperName = ['Ones', 'Twos', 'Threes', 'Fours', 'Fives', 'Sixes'][game.dice[initial.find(id => id !== removed)!].value - 1];
-      await expect(page.getByRole('button', { name: new RegExp(`^${upperName} `) })).toHaveAttribute('aria-pressed', 'true');
+      const leftName = ['Ones', 'Twos', 'Threes', 'Fours', 'Fives', 'Sixes'][game.dice[initial.find(id => id !== removed)!].value - 1];
+      await expect(page.getByRole('button', { name: new RegExp(`^${leftName} `) })).toHaveAttribute('aria-pressed', 'true');
       await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeEnabled();
     } else await expect(page.getByRole('button', { name: 'PLAY', exact: true })).toBeDisabled();
     await die(page, added).click();

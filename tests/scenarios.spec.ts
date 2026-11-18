@@ -138,13 +138,13 @@ test.describe('Scenarios mode', () => {
     await expect(page.getByTestId('scorecard-row-odds')).toBeVisible();
     await expect(page.getByTestId('dice-dock').locator('.dice-row')).toHaveAttribute('data-dice-count', '5');
     await expect(page.getByTestId('stat-gold')).toHaveAttribute('aria-label', 'Gold 0');
-    const upper = await page.locator('#scorecard-upper').locator('..').locator('[data-testid^="scorecard-row-"]')
+    const left = await page.locator('#scorecard-left').locator('..').locator('[data-testid^="scorecard-row-"]')
       .evaluateAll(rows => rows.map(row => row.getAttribute('data-testid')));
-    expect(upper).toEqual(['scorecard-row-ones', 'scorecard-row-twos', 'scorecard-row-threes', 'scorecard-row-fours',
+    expect(left).toEqual(['scorecard-row-ones', 'scorecard-row-twos', 'scorecard-row-threes', 'scorecard-row-fours',
       'scorecard-row-fives', 'scorecard-row-sixes', 'scorecard-row-odds', 'scorecard-row-evens', 'scorecard-row-chance']);
-    const lower = await page.locator('#scorecard-lower').locator('..').locator('[data-testid^="scorecard-row-"]')
+    const right = await page.locator('#scorecard-right').locator('..').locator('[data-testid^="scorecard-row-"]')
       .evaluateAll(rows => rows.map(row => row.getAttribute('data-testid')));
-    expect(lower).toEqual(['scorecard-row-pair', 'scorecard-row-twoPair', 'scorecard-row-miniStraight',
+    expect(right).toEqual(['scorecard-row-pair', 'scorecard-row-twoPair', 'scorecard-row-miniStraight',
       'scorecard-row-threeKind', 'scorecard-row-oddStraight', 'scorecard-row-evenStraight',
       'scorecard-row-smallStraight', 'scorecard-row-fullHouse', 'scorecard-row-fourKind',
       'scorecard-row-largeStraight', 'scorecard-row-fiveKind']);

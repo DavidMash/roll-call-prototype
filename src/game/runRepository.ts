@@ -26,7 +26,7 @@ export interface RunRepository {
 
 export const RUN_DATABASE_NAME = 'roll-call-runs';
 export const RUN_DATABASE_VERSION = 1;
-const SESSION_FORMAT_VERSION = 1;
+export const SESSION_FORMAT_VERSION = 2;
 const SESSION_STORE = 'sessions';
 const LEDGER_STORE = 'ledgerChunks';
 const RUN_INDEX = 'runId';

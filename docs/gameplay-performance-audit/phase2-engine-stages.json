@@ -3,7 +3,7 @@
   "notes": "15 samples per deterministic fixture using audited snapshot reuse. Snapshot bytes serialize the public event shape and therefore include repeated content even when runtime Board references are shared.",
   "rows": [
     {
-      "fixture": "simple-upper-play",
+      "fixture": "simple-left-play",
       "complexity": "low",
       "action": "PLAY",
       "samples": [

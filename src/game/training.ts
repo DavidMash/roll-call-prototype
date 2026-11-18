@@ -1,9 +1,9 @@
-import { ALL_HAND_IDS, availableLowerHandIds, availableUpperHandIds, FINAL_UPPER_HAND_ORDER } from './hands';
+import { ALL_HAND_IDS, availableRightHandIds, availableLeftHandIds, FINAL_LEFT_HAND_ORDER } from './hands';
 import type {
-  FrozenTrainingSession, HandId, HandLevels, LowerHandId, UpperHandId,
+  FrozenTrainingSession, HandId, HandLevels, HandSection, RightHandId, LeftHandId,
 } from './types';
 
-export type TrainingFamily = 'upper' | 'lower';
+export type TrainingFamily = HandSection;
 
 const familySnapshot = <T extends HandId>(levels: HandLevels, hands: readonly T[]): Record<T, number> =>
   Object.fromEntries(hands.map(hand => [hand, levels[hand]])) as Record<T, number>;
@@ -17,26 +17,26 @@ export function roundedTrainingBaseline(levels: Readonly<Record<string, number>>
 
 export function createTrainingSession(levels: HandLevels, freeTrainingAvailable = false,
   unlockedHands: readonly HandId[] = []): FrozenTrainingSession {
-  const upper = availableUpperHandIds({ unlockedHands });
-  const lower = availableLowerHandIds({ unlockedHands });
-  const upperLevelsAtEntry = familySnapshot(levels, upper as readonly UpperHandId[]);
-  const lowerLevelsAtEntry = familySnapshot(levels, lower as readonly LowerHandId[]);
+  const left = availableLeftHandIds({ unlockedHands });
+  const right = availableRightHandIds({ unlockedHands });
+  const leftLevelsAtEntry = familySnapshot(levels, left as readonly LeftHandId[]);
+  const rightLevelsAtEntry = familySnapshot(levels, right as readonly RightHandId[]);
   return {
-    upperLevelsAtEntry,
-    lowerLevelsAtEntry,
-    upperBaseline: roundedTrainingBaseline(upperLevelsAtEntry),
-    lowerBaseline: roundedTrainingBaseline(lowerLevelsAtEntry),
+    leftLevelsAtEntry,
+    rightLevelsAtEntry,
+    leftBaseline: roundedTrainingBaseline(leftLevelsAtEntry),
+    rightBaseline: roundedTrainingBaseline(rightLevelsAtEntry),
     purchasesByHand: Object.fromEntries(ALL_HAND_IDS.map(hand => [hand, 0])) as Record<HandId, number>,
     freeTrainingAvailable,
   };
 }
 
 export function trainingFamily(hand: HandId): TrainingFamily {
-  return FINAL_UPPER_HAND_ORDER.includes(hand) ? 'upper' : 'lower';
+  return FINAL_LEFT_HAND_ORDER.includes(hand) ? 'left' : 'right';
 }
 
 export function trainingBaseline(session: FrozenTrainingSession, hand: HandId): number {
-  return trainingFamily(hand) === 'upper' ? session.upperBaseline : session.lowerBaseline;
+  return trainingFamily(hand) === 'left' ? session.leftBaseline : session.rightBaseline;
 }
 
 export interface TrainingQuote {

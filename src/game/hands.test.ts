@@ -18,7 +18,7 @@ describe('hand detection', () => {
     ['smallStraight', [1, 2, 3, 4, 6]], ['largeStraight', [2, 3, 4, 5, 6]],
   ])('finds a natural %s', (hand, values) => expect(defaultCombination(board(values), hand)).not.toBeNull());
 
-  it('supports all fourteen categories and physical upper subsets', () => {
+  it('supports all fourteen categories and physical left subsets', () => {
     const dice = board([2, 2, 2, 5, 6]);
     expect(HAND_IDS).toHaveLength(14);
     expect(combinationsForHand(dice, 'twos')).toEqual([[0, 1, 2], [0, 1], [0, 2], [1, 2], [0], [1], [2]]);

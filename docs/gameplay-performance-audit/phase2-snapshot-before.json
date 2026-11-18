@@ -3,7 +3,7 @@
   "notes": "15 samples per deterministic fixture using the legacy fresh-snapshot path. Direct Resolver timing excludes GameState clone and ledger chunk construction.",
   "rows": [
     {
-      "fixture": "simple-upper-play",
+      "fixture": "simple-left-play",
       "complexity": "low",
       "action": "PLAY",
       "samples": [

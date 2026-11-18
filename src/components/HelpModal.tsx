@@ -1,7 +1,7 @@
 import { Modal, SimpleGrid, Stack, Tabs, Text, Title } from '@mantine/core';
 import { CONFIG } from '../game/config';
 import { FLAMES, FLAME_IDS, isChargeFlame } from '../game/flames';
-import { HANDS, LOWER_HAND_IDS, UPPER_HAND_IDS } from '../game/hands';
+import { HANDS, RIGHT_HAND_IDS, LEFT_HAND_IDS } from '../game/hands';
 import { BOSSES, BOSS_TYPES, MINI_BOSS_TYPES } from '../game/bosses';
 import type { HandId } from '../game/types';
 import { SPECIAL_OFFERS, SPECIAL_OFFER_IDS } from '../game/specialOffers';
@@ -11,7 +11,7 @@ import { DieTypeLabel } from './DieTypeLabel';
 import { RichDescription } from './RichDescription';
 import { ENGULFMENT_EVIDENCE_ROUNDS, ENGULFMENT_REQUIRED_MULTIPLIER } from '../game/engulfment';
 
-const LOWER_HAND_RULES: Partial<Record<HandId, string>> = {
+const RIGHT_HAND_RULES: Partial<Record<HandId, string>> = {
   pair: 'Two matching Faces.',
   twoPair: 'Two different pairs.',
   threeKind: 'Three matching Faces.',
@@ -47,10 +47,10 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
         <Text size="sm">XMult comes from effects such as Flames.</Text>
       </Stack></Tabs.Panel>
       <Tabs.Panel value="hands" pt="md"><Stack gap="md">
-        <div><Title order={4}>UPPER HANDS</Title><Text size="sm">Upper hands score any number of matching Faces.</Text>
-          <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="xs" mt="xs">{UPPER_HAND_IDS.map(hand => <div key={hand} className="help-item"><Text size="sm" fw={700}>{HANDS[hand].name}</Text></div>)}</SimpleGrid></div>
-        <div><Title order={4}>LOWER HANDS</Title><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" mt="xs">{LOWER_HAND_IDS.map(hand => <div key={hand} className="help-item">
-          <Text size="sm" fw={700}>{HANDS[hand].name}</Text><Text size="xs" c="dimmed">{LOWER_HAND_RULES[hand]}</Text>
+        <div><Title order={4}>LEFT HANDS</Title><Text size="sm">Left hands score any number of matching Faces.</Text>
+          <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="xs" mt="xs">{LEFT_HAND_IDS.map(hand => <div key={hand} className="help-item"><Text size="sm" fw={700}>{HANDS[hand].name}</Text></div>)}</SimpleGrid></div>
+        <div><Title order={4}>RIGHT HANDS</Title><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" mt="xs">{RIGHT_HAND_IDS.map(hand => <div key={hand} className="help-item">
+          <Text size="sm" fw={700}>{HANDS[hand].name}</Text><Text size="xs" c="dimmed">{RIGHT_HAND_RULES[hand]}</Text>
         </div>)}</SimpleGrid></div>
       </Stack></Tabs.Panel>
       <Tabs.Panel value="dice" pt="md"><Stack gap="sm"><Text size="sm">Your collection begins with five Roster slots and five Storage slots. Inferno Rewards can expand the active Roster to six or seven; Storage dice stay out of the Round. Each special effect has a unique rule plus a consistent color and icon identity.</Text><Text size="sm">The Forge appears once you have Temper and at least two special dice. Choose two unordered dice to combine: shared effects gain levels, while different effects are carried into the forged result. After the Forge is revealed, Normal dice can contribute Basic levels.</Text><SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">{SPECIAL_DIE_TYPES.map(id => <div key={id} className="help-item" data-testid={`help-die-${id}`}>
@@ -75,7 +75,7 @@ export function HelpModal({ opened, onClose }: { opened: boolean; onClose: () =>
       </Stack></Tabs.Panel>
       <Tabs.Panel value="shop" pt="md"><Stack gap="xs"><Text size="sm" fw={700}>DICE | TRAINING | FIRE KEEPING</Text>
         <Text size="sm">Use the Shop tabs to move freely between sections without losing offers, purchases, Gold, Training prices, or Flame state. Fire Keeping appears after you acquire a Flame.</Text>
-        <Text size="sm">Training lets you improve any hand. A hand becomes more expensive as it rises above the rest of its Upper or Lower section; catching up lower hands stays inexpensive.</Text>
+        <Text size="sm">Training lets you improve any hand. A hand becomes more expensive as it rises above the rest of its Left or Right section; catching up right hands stays inexpensive.</Text>
       </Stack></Tabs.Panel>
     </Tabs>
   </Modal>;
